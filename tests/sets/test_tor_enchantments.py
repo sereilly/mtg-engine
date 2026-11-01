@@ -300,9 +300,10 @@ def test_w1g6_stupefying_touch_stops_mana_abilities_too(set_pool, catalog_by_nam
     forest, other = game.players[1].battlefield[1:]
     assert forest.is_creature
     _w1g6_touch(game, forest)
-    assert not game.tap_land_for_mana(1, "Forest", permanent_id=forest.permanent_id)
+    assert game.tap_land_for_mana_or_refusal(
+        1, "Forest", permanent_id=forest.permanent_id,
+    ) == "Forest's activated abilities can't be activated"
     assert game.players[1].mana_pool["G"] == 0 and not forest.tapped
-    assert game.log[-1] == "Forest's activated abilities can't be activated"
     # The Forest beside it, unenchanted, taps as ever.
     assert game.tap_land_for_mana(1, "Forest", permanent_id=other.permanent_id)
     assert game.players[1].mana_pool["G"] == 1

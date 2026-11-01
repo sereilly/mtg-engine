@@ -333,7 +333,10 @@ def _action_tap(session, req, seat_type):
     # ``has_type`` (CR 613 layer 4), not the printed line: which tap this is
     # depends on what the permanent is now.
     if permanent.has_type("land"):
-        tapped = session.game.tap_land_for_mana(
+        # The engine's own reason when it refuses — said to this seat alone,
+        # in this response (CR 733.1, ``engine/refusals.py``); the log every
+        # seat is sent no longer carries it.
+        refused = session.game.tap_land_for_mana_or_refusal(
             req.seat,
             permanent.card.name,
             # What the client asked for, or nothing: a colour named picks the
@@ -342,6 +345,9 @@ def _action_tap(session, req, seat_type):
             chosen_color=req.mana_color,
             permanent_index=permanent_index,
         )
+        if refused is not None:
+            raise HTTPException(status_code=400, detail=refused)
+        tapped = True
     else:
         # A payment prompt admits ``tap`` so that a land may be tapped for
         # mana (``ChoiceSpec.also_answers``, CR 605.3a). A bare tap of
@@ -476,15 +482,15 @@ def _action_activate(session, req, seat_type):
             land_as_mana_tap = False
 
     if land_as_mana_tap:
-        tapped = session.game.tap_land_for_mana(
+        refused = session.game.tap_land_for_mana_or_refusal(
             req.seat,
             permanent.card.name,
             chosen_color=req.mana_color,
             permanent_index=permanent_index,
             ability_index=seam_ability_index,
         )
-        if not tapped:
-            raise HTTPException(status_code=400, detail="failed to tap land for mana")
+        if refused is not None:
+            raise HTTPException(status_code=400, detail=refused)
     else:
         # CR 605.3a: a player may activate a mana ability "whenever a rule or
         # effect asks for a mana payment, even if it's in the middle of …

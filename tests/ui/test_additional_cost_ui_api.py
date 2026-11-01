@@ -116,7 +116,11 @@ def test_a_cost_id_naming_the_other_seats_creature_is_refused_not_slid_onto_ours
     assert [p.card.name for p in game.players[1].battlefield] == ["Hill Giant"]
     assert [c.name for c in game.players[0].hand] == ["Sacrifice"]
     assert not game.stack
-    assert any("Hill Giant cannot pay its additional cost" in line for line in game.log)
+    # The reason is the caster's, in the response to its own request — the
+    # log, which every seat is sent, is told nothing of the spell still in
+    # the hand (CR 733.1, ``engine/refusals.py``).
+    assert "Hill Giant cannot pay its additional cost" in resp.json()["detail"]
+    assert not any("cannot pay its additional cost" in line for line in game.log)
 
 
 def test_the_spell_is_refused_when_no_creature_can_pay():

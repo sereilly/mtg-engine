@@ -25,12 +25,12 @@ from ...activation_tallies import (
 )
 from ...cost_tap_records import record_tapped_to_pay
 from ...events import emit
-from ...game_types import SimulationResult
 from ...subject_filters import (
     card_matches_any, filter_head_noun, subject_matches,
 )
 from ...targeting import graveyard_target_spec
 from .activation_payment import COST_PERFORMING_KINDS, activation_cost_choice
+from ...refusals import refuse
 
 
 def _named_discard_positions(
@@ -165,8 +165,7 @@ class ActivationChargesMixin:
                     f"{permanent.card.name}: no card at hand position "
                     f"{cost_hand_index} to discard for its cost"
                 )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+                return refuse(permanent.card.name, "unsupported", details)
             if not ability.cost.discard_at_random:
                 # Collected by **hand position**, never by identity: a deck
                 # repeats one immutable definition per copy, so two Grizzly
@@ -187,9 +186,8 @@ class ActivationChargesMixin:
                 )
                 if denial is not None:
                     details = f"{permanent.card.name}: {denial}"
-                    self.log.append(details)
-                    return SimulationResult(
-                        permanent.card.name, False, "unsupported", details
+                    return refuse(
+                        permanent.card.name, "unsupported", details,
                     )
                 positions = named + [
                     i for i, held in enumerate(hand)
@@ -566,8 +564,7 @@ class ActivationChargesMixin:
                     f"{permanent.card.name}: no "
                     f"{filter_head_noun(described)} available to sacrifice"
                 )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+                return refuse(permanent.card.name, "unsupported", details)
             cost_candidates.extend(candidates)
             named = [
                 found
@@ -671,18 +668,16 @@ class ActivationChargesMixin:
             )
             if named_slot_refusal is not None:
                 details = f"{permanent.card.name}: {named_slot_refusal}"
-                self.log.append(details)
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", details
+                return refuse(
+                    permanent.card.name, "unsupported", details,
                 )
         named_cost_refusal = self._named_cost_refusal(
             permanent, controller, cost_candidates, cost_permanent_ids,
             None if cost_index_is_a_pile_slot else cost_permanent_index,
         )
         if named_cost_refusal is not None:
-            self.log.append(named_cost_refusal)
-            return SimulationResult(
-                permanent.card.name, False, "unsupported", named_cost_refusal
+            return refuse(
+                permanent.card.name, "unsupported", named_cost_refusal,
             )
         if ability.cost.exile_filter is not None:
             from ...ai_prompt_readers import reads_what_its_cost_exiled
@@ -710,9 +705,8 @@ class ActivationChargesMixin:
                 details = (
                     f"{permanent.card.name}: nothing available to exile as a cost"
                 )
-                self.log.append(details)
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", details
+                return refuse(
+                    permanent.card.name, "unsupported", details,
                 )
         # "Put three cards from your graveyard on the bottom of your library"
         # (Battlefield Scrounger). Resolved to the *cards* now, for the chosen
@@ -727,9 +721,8 @@ class ActivationChargesMixin:
             )
             if isinstance(chosen, str):
                 details = f"{permanent.card.name}: {chosen}"
-                self.log.append(details)
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", details
+                return refuse(
+                    permanent.card.name, "unsupported", details,
                 )
             library_bottom_cost_cards = chosen
         return (

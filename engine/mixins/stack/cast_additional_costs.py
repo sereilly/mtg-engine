@@ -32,7 +32,7 @@ from ...models import CardDefinition, Permanent
 from ...oracle import compile_card_oracle
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 from ...cost_modifiers import sacrifice_taxes
-from ...game_types import SimulationResult
+from ...refusals import refuse
 
 
 def _optional_cost_offers(
@@ -1268,8 +1268,7 @@ class AdditionalCastCostsMixin:
             spell_graveyard_slot=spell_graveyard_slot,
         )
         if unpayable is not None:
-            self.log.append(unpayable)
-            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
+            return refuse(card.name, classification.effect_kind, unpayable)
 
         # …and a payment the caster *named* is the payment, or the cast is
         # illegal (CR 601.2h: no partial payment, no unpayable one). Below the
@@ -1290,8 +1289,7 @@ class AdditionalCastCostsMixin:
                 spell_graveyard_slot=spell_graveyard_slot,
             )
         if unpayable is not None:
-            self.log.append(unpayable)
-            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
+            return refuse(card.name, classification.effect_kind, unpayable)
 
         # The announced alternative cost, checked in the same step and for the
         # same rule (CR 601.2h). Below the additional costs only in source
@@ -1319,8 +1317,7 @@ class AdditionalCastCostsMixin:
                 spell_graveyard_slot=spell_graveyard_slot,
             )
         if unpayable is not None:
-            self.log.append(unpayable)
-            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
+            return refuse(card.name, classification.effect_kind, unpayable)
 
         # "Spells cost an additional "Sacrifice a Swamp" to cast for each black
         # mana symbol in their mana costs." (Drought.) An additional cost
@@ -1334,6 +1331,5 @@ class AdditionalCastCostsMixin:
         owed = self._sacrifice_tax_victims(caster_index, sacrifice_demands)
         if isinstance(owed, str):
             details = f"{card.name} can't be cast: {owed} (CR 601.2h)"
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
+            return refuse(card.name, classification.effect_kind, details)
         return owed, resolved_x_value, spell_graveyard_slot

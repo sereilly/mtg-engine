@@ -132,7 +132,8 @@ def test_w1g4_vintara_snapper_is_untargetable_only_while_tapped_out(set_pool):
     )
     assert not refused.supported
     assert game.is_on_battlefield(snapper)
-    assert "Vintara Snapper is an illegal target for Lightning Bolt" in game.log
+    assert refused.details == "Vintara Snapper is an illegal target for Lightning Bolt"
+    assert not any("Lightning Bolt" in line for line in game.log), game.log
 
     game.become_untapped(forest)
     game.check_state_based_actions()

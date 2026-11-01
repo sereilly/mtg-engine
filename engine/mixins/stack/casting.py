@@ -61,6 +61,7 @@ from .cast_additional_costs import (_optional_cost_announcement,
                                     _optional_cost_totals, _taken_offers,
                                     optional_cost_taken)
 from .cast_announcement import _mode_announcements
+from ...refusals import refuse, take_back_refused_attempt
 
 
 class SpellCastingMixin:
@@ -219,9 +220,19 @@ class SpellCastingMixin:
         announcement rather than going on the stack in the middle. Goremand
         sacrifices a creature to be cast; Havoc Jester's answer to that belongs
         *above* the Demon, not under it. See ``deferring_triggers``.
+
+        A refusal is CR 733.1's reversal, and the announcement goes with it:
+        whatever the attempt wrote to the shared log before it was refused
+        ("chose Human to cast …", "… costs less to cast") is taken back
+        (``engine/refusals.py``), so the other seats learn nothing of a card
+        that never left its hidden zone.
         """
+        log_mark = len(self.log)
         with self.deferring_triggers():
             result = self._cast_onto_stack(*args, **kwargs)
+            # Inside the window: what it flushes on the way out is not the
+            # attempt's to take back.
+            take_back_refused_attempt(self, log_mark, result)
         if result.supported:
             # CR 704.3, the cast side of the sweep ``queue_permanent_ability``
             # runs for the same reason: CR 117.3c gives the caster priority
@@ -387,8 +398,7 @@ class SpellCastingMixin:
         card = spell_named(held, card_name)
         if card is None:
             details = choose_a_face_refusal(held) or f"{card_name} is not a spell"
-            self.log.append(details)
-            return SimulationResult(card_name, False, None, details)
+            return refuse(card_name, None, details)
         # **A morph cast turns the card face down before anything reads it**
         # (CR 702.37c: "turn it face down and announce that you're using a
         # morph ability … Any effects or prohibitions that would apply to
@@ -448,8 +458,7 @@ class SpellCastingMixin:
             refusal = self._land_play_refusal(caster_index)
             if refusal is not None:
                 details = refusal
-                self.log.append(details)
-                return SimulationResult(card.name, False, classification.effect_kind, details)
+                return refuse(card.name, classification.effect_kind, details)
 
         # **CR 601.3: no rule or effect prohibits this player from casting
         # it** (and CR 305.1's twin for a land being played). One predicate,
@@ -467,9 +476,8 @@ class SpellCastingMixin:
         # A new prohibition is a row in that module's table, never a block here.
         prohibition = cast_prohibition(self, caster_index, card, from_zone=from_zone)
         if prohibition is not None:
-            self.log.append(prohibition.details)
-            return SimulationResult(
-                card.name, False, classification.effect_kind, prohibition.details
+            return refuse(
+                card.name, classification.effect_kind, prohibition.details,
             )
 
         if (
@@ -636,9 +644,8 @@ class SpellCastingMixin:
                 f"{caster.name} cannot pay {life_owed} life to cast {card.name} "
                 f"({', '.join(life_taxing_names)})"
             )
-            self.log.append(details)
-            return SimulationResult(
-                card.name, False, classification.effect_kind, details
+            return refuse(
+                card.name, classification.effect_kind, details,
             )
 
         # CR 601.2f: increases first, then reductions.
@@ -661,13 +668,11 @@ class SpellCastingMixin:
                 if any(getattr(program, "triggered_abilities", ())):
                     if any(t.supported for t in program.triggered_abilities):
                         return SimulationResult(card.name, True, program.effect_kind, "supported triggered ability")
-            self.log.append(f"Unsupported card: {card.name} ({classification.reason})")
-            return SimulationResult(card.name, False, classification.effect_kind, classification.reason)
+            return refuse(card.name, classification.effect_kind, classification.reason)
 
         timing_denial = check_cast_timing(self, caster_index, card.oracle_text.lower())
         if timing_denial is not None:
-            self.log.append(timing_denial)
-            return SimulationResult(card.name, False, classification.effect_kind, timing_denial)
+            return refuse(card.name, classification.effect_kind, timing_denial)
 
         # A printed additional cost (CR 601.2b). Only the costs this *zone*
         # charges: Demonic Embrace prints one card with two prices —
@@ -693,9 +698,8 @@ class SpellCastingMixin:
             card, cast_costs, optional_cost_payments,
         )
         if optional_denial is not None:
-            self.log.append(optional_denial)
-            return SimulationResult(
-                card.name, False, classification.effect_kind, optional_denial,
+            return refuse(
+                card.name, classification.effect_kind, optional_denial,
             )
         # CR 601.2b's choice-shaped price, announced here — beside the optional
         # offers above and before any mana is spent, which is where CR 601.2b
@@ -724,9 +728,8 @@ class SpellCastingMixin:
                         f"{chosen_creature_type} is not a creature type "
                         f"(CR 601.2b, CR 205.3m)"
                     )
-                    self.log.append(denial)
-                    return SimulationResult(
-                        card.name, False, classification.effect_kind, denial,
+                    return refuse(
+                        card.name, classification.effect_kind, denial,
                     )
             else:
                 chosen_type_word = self._default_cast_creature_type(
@@ -790,9 +793,8 @@ class SpellCastingMixin:
                     f"{card.name}: X can't be {x_value} -- no more than one "
                     f"mana of each color may be spent on X"
                 )
-                self.log.append(refusal)
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, refusal,
+                return refuse(
+                    card.name, classification.effect_kind, refusal,
                 )
             else:
                 charged = offer.cost_at(0)
@@ -843,8 +845,7 @@ class SpellCastingMixin:
             x_value=x_value,
         )
         if cost_denial is not None:
-            self.log.append(cost_denial)
-            return SimulationResult(card.name, False, classification.effect_kind, cost_denial)
+            return refuse(card.name, classification.effect_kind, cost_denial)
 
         # The **alternative** cost (CR 118.9), announced in the same step as the
         # additional costs above (CR 601.2b) and resolved here for the same
@@ -899,9 +900,8 @@ class SpellCastingMixin:
                 )
             )
         if alternative_denial is not None:
-            self.log.append(alternative_denial)
-            return SimulationResult(
-                card.name, False, classification.effect_kind, alternative_denial
+            return refuse(
+                card.name, classification.effect_kind, alternative_denial,
             )
 
         # "Choose one or more —": the modes are chosen as the spell is cast
@@ -909,8 +909,7 @@ class SpellCastingMixin:
         # a card that does not print the head cannot be handed two modes.
         chosen_modes, mode_denial = self._resolve_chosen_modes(card, mode_choices)
         if mode_denial is not None:
-            self.log.append(mode_denial)
-            return SimulationResult(card.name, False, classification.effect_kind, mode_denial)
+            return refuse(card.name, classification.effect_kind, mode_denial)
         for mode in chosen_modes:
             # …and the same default for each mode of a "choose one or more"
             # cast that owes a target and named none (CR 601.2c, per mode).
@@ -978,11 +977,11 @@ class SpellCastingMixin:
             for entry in divided_targets:
                 seat, index, share = divided_entry(entry)
                 if not (isinstance(seat, int) and 0 <= seat < len(self.players)):
-                    return SimulationResult(card.name, False, classification.effect_kind, "invalid divided target seat")
+                    return refuse(card.name, classification.effect_kind, "invalid divided target seat")
                 if index is not None and not (
                     isinstance(index, int) and 0 <= index < len(self.players[seat].battlefield)
                 ):
-                    return SimulationResult(card.name, False, classification.effect_kind, "invalid divided target")
+                    return refuse(card.name, classification.effect_kind, "invalid divided target")
                 # **The chosen permanent's id, resolved now.** An index is not
                 # an address: the battlefield renumbers as soon as anything
                 # leaves it, so an index carried from CR 601.2c's announcement
@@ -1032,9 +1031,8 @@ class SpellCastingMixin:
             optional_cost_payments=optional_paid,
         )
         if required_refusal is not None:
-            self.log.append(required_refusal)
-            return SimulationResult(
-                card.name, False, classification.effect_kind, required_refusal
+            return refuse(
+                card.name, classification.effect_kind, required_refusal,
             )
 
         # "This spell costs {1} more to cast for each target beyond the first."
@@ -1086,9 +1084,8 @@ class SpellCastingMixin:
                         f"{caster.name} cannot pay {life_owed} life to cast "
                         f"{card.name} for {num_targets} target(s)"
                     )
-                    self.log.append(details)
-                    return SimulationResult(
-                        card.name, False, classification.effect_kind, details,
+                    return refuse(
+                        card.name, classification.effect_kind, details,
                     )
             else:
                 extra_generic_tax += owed

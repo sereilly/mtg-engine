@@ -545,7 +545,7 @@ def test_abeyance_stops_a_non_mana_activated_ability(set_pool):
     )
 
     assert not result.supported
-    assert "mana abilities" in game.log[-1], game.log[-1]
+    assert "mana abilities" in result.details, result.details
     assert not icy.tapped, "the cost was paid for a refused activation"
 
 

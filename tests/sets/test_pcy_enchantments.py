@@ -127,12 +127,14 @@ def test_w1g4_sheltering_prayers_turns_away_a_land_destruction_spell(set_pool):
 
     game.active_player_index = 1
     game.players[1].hand.append(lea["Stone Rain"])
-    assert not game.cast_from_hand(
+    refused = game.cast_from_hand(
         1, "Stone Rain", target_player_index=0,
         target_permanent_ids=[plains.permanent_id],
-    ).supported
+    )
+    assert not refused.supported
     assert game.is_on_battlefield(plains)
-    assert "Plains is an illegal target for Stone Rain" in game.log
+    assert refused.details == "Plains is an illegal target for Stone Rain"
+    assert not any("Stone Rain" in line for line in game.log), game.log
 
     game.active_player_index = 0
     game.players[0].hand.append(lea["Stone Rain"])

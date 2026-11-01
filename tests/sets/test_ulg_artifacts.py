@@ -525,7 +525,9 @@ def _w2g2_grid_board(pool, catalog, *, grid: bool, active: int, pool_mana: dict)
 
 def test_w2g2_defense_grid_taxes_a_spell_cast_on_somebody_elses_turn(set_pool):
     """CR 601.2f. {R} alone no longer pays for a Bolt on P1's turn, and the
-    Grid is named in the log so the charge is attributable."""
+    Grid is named in the log so the charge is attributable — on the cast that
+    is made. The refused one is reversed (CR 733.1) with its tax line, and the
+    table hears nothing of a Bolt still in the hand (``engine/refusals.py``)."""
     pool, catalog = set_pool("ULG"), _w2g2_pool()
     game = _w2g2_grid_board(pool, catalog, grid=True, active=0,
                             pool_mana={"R": 1, "C": 2})
@@ -534,8 +536,14 @@ def test_w2g2_defense_grid_taxes_a_spell_cast_on_somebody_elses_turn(set_pool):
 
     assert result.supported is False
     assert "insufficient mana" in result.details
-    assert any("taxed by Defense Grid" in line for line in game.log)
+    assert not any("Lightning Bolt" in line for line in game.log), game.log
     assert any(c.name == "Lightning Bolt" for c in game.players[1].hand)
+
+    game.players[1].mana_pool["C"] += 1
+    paid = game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
+    assert paid.supported, paid.details
+    assert any("taxed by Defense Grid" in line for line in game.log)
+    assert game.players[1].mana_pool["C"] == 0
 
 
 def test_w2g2_defense_grid_charges_exactly_three_generic(set_pool):

@@ -300,13 +300,15 @@ def test_w2g3_a_prohibited_cast_is_refused_unproposed_and_dark(
     assert not _w2g3_ai_proposes(game, hand_name)
     assert not _w2g3_glows_on_the_wire(session, hand_name)
 
-    # …and the cast path: refused in that row's words, with nothing spent.
+    # …and the cast path: refused in that row's words, with nothing spent —
+    # the words the caster's, and nothing written to the log every seat
+    # reads (CR 733.1, ``engine/refusals.py``).
     pool_before = dict(game.players[0].mana_pool)
     logged = len(game.log)
     refused = game.cast_from_hand(0, hand_name, **cast)
     assert not refused.supported
     assert refused.details == found.details
-    assert game.log[logged:] == [found.details]
+    assert game.log[logged:] == []
     assert [held.name for held in game.players[0].hand] == [hand_name]
     assert dict(game.players[0].mana_pool) == pool_before
     assert not game.stack

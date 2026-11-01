@@ -45,6 +45,7 @@ from ...handlers._chosen import CHOSEN_ABILITY
 from ...handlers._targets import attached_host
 from ...oracle import OracleInstruction
 from .activation_payment import activation_mana_per_counter
+from ...refusals import refuse, take_back_refused_attempt
 
 
 class AbilityActivationMixin:
@@ -178,12 +179,12 @@ class AbilityActivationMixin:
         controller = self.players[controller_index]
         emblems = controller.prevent_one_damage_emblems
         if not (0 <= emblem_index < len(emblems)):
-            return SimulationResult(label, False, "unsupported", "no prevention emblem available")
+            return refuse(label, "unsupported", "no prevention emblem available")
         entry = emblems[emblem_index]
 
         target_idx = entry.get("target_player_index")
         if target_idx is None or not (0 <= target_idx < len(self.players)):
-            return SimulationResult(label, False, "unsupported", "emblem target is no longer valid")
+            return refuse(label, "unsupported", "emblem target is no longer valid")
         target_player = self.players[target_idx]
         target_perm_idx = entry.get("target_permanent_index")
         # "That permanent" — if the original creature target has left play, the
@@ -191,7 +192,7 @@ class AbilityActivationMixin:
         if isinstance(target_perm_idx, int):
             if not (0 <= target_perm_idx < len(target_player.battlefield)
                     and target_player.battlefield[target_perm_idx].is_creature):
-                return SimulationResult(label, False, "unsupported", "emblem target is no longer in play")
+                return refuse(label, "unsupported", "emblem target is no longer in play")
 
         if self.enforce_mana_costs:
             required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 1}
@@ -201,7 +202,7 @@ class AbilityActivationMixin:
             if not self._pay_mana_cost(
                 controller, required, purpose=PaymentPurpose(ACTIVATE)
             ):
-                return SimulationResult(label, False, "unsupported", "insufficient mana to activate emblem")
+                return refuse(label, "unsupported", "insufficient mana to activate emblem")
 
         apply_prevention_shield(self, target_player, target_perm_idx, 1)
         return SimulationResult(label, True, "activated_prevent_one", "resolved")
@@ -226,11 +227,18 @@ class AbilityActivationMixin:
         # it is taken back. Undone here and in no other place: a refusal can
         # come from forty returns inside that function, and thirty-nine of them
         # would be a place to forget.
+        #
+        # The same reversal reaches the shared log (``engine/refusals.py``):
+        # what the attempt announced before it was refused ("…: chose
+        # flying") is taken back with it. Only a refusal — a mana ability
+        # whose own effect failed as it resolved inline has paid by then.
         ledger: list = []
+        log_mark = len(self.log)
         with self.deferring_triggers():
             result = self._activate_onto_stack(
                 *args, reversal_ledger=ledger, **kwargs
             )
+            take_back_refused_attempt(self, log_mark, result)
         if not result.supported:
             for permanent, had_record, prior in reversed(ledger):
                 if had_record:
@@ -448,9 +456,8 @@ class AbilityActivationMixin:
             permanent, ability, chosen_keyword, reversal_ledger
         )
         if keyword_refusal is not None:
-            self.log.append(keyword_refusal)
-            return SimulationResult(
-                permanent.card.name, False, "unsupported", keyword_refusal
+            return refuse(
+                permanent.card.name, "unsupported", keyword_refusal,
             )
 
         # CR 602.2b/601.2c, once, before any cost is paid: an ability that
@@ -479,8 +486,7 @@ class AbilityActivationMixin:
             chosen_keyword=chosen_keyword,
         )
         if target_refusal is not None:
-            self.log.append(target_refusal)
-            return SimulationResult(permanent.card.name, False, "unsupported", target_refusal)
+            return refuse(permanent.card.name, "unsupported", target_refusal)
         if seat_announced is not None:
             # The wire's half of the same rule: a client names every target an
             # ability owes, so one left unnamed is not an activation a browser
@@ -498,9 +504,8 @@ class AbilityActivationMixin:
                 x_value=int(x_value or 0),
             )
             if unannounced is not None:
-                self.log.append(unannounced)
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", unannounced
+                return refuse(
+                    permanent.card.name, "unsupported", unannounced,
                 )
 
         # **An activation that owes a target and named none names the first
@@ -656,9 +661,8 @@ class AbilityActivationMixin:
                     f"{permanent.card.name}: the mana cost it charges is the "
                     "attached permanent's, and there is none to read"
                 )
-                self.log.append(details)
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", details
+                return refuse(
+                    permanent.card.name, "unsupported", details,
                 )
             for symbol, count in (symbols or {}).items():
                 required_cost[symbol] = required_cost.get(symbol, 0) + count
@@ -696,8 +700,7 @@ class AbilityActivationMixin:
                 f"{permanent.card.name}: the value of X is defined by the card "
                 "and nothing here determines it"
             )
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
+            return refuse(permanent.card.name, "unsupported", details)
         if x_value and x_symbols:
             # "Spend only red mana on X." (Crimson Hellkite.) The X pips are
             # charged as that colour rather than as generic, which is the whole
@@ -741,8 +744,7 @@ class AbilityActivationMixin:
             details = (
                 f"{permanent.card.name}: {sacrifice_tax_victims} (CR 601.2h)"
             )
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
+            return refuse(permanent.card.name, "unsupported", details)
         # Ability cost taxes (Gloom: "Activated abilities of white enchantments
         # cost {3} more to activate"; the white-spell cast tax is applied
         # separately in cast_from_hand).
@@ -823,8 +825,7 @@ class AbilityActivationMixin:
                 purpose=PaymentPurpose(ACTIVATE, source=permanent),
             ):
                 details = f"insufficient mana to activate {permanent.card.name}"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+                return refuse(permanent.card.name, "unsupported", details)
         mana_spent_for_cost = {
             symbol: spent
             for symbol in ("W", "U", "B", "R", "G", "C")

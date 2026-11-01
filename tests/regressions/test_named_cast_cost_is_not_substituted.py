@@ -71,7 +71,9 @@ def test_diabolic_intent_told_to_sacrifice_a_forest_is_not_cast(catalog_by_name)
         "Diabolic Intent can't be cast: Forest cannot pay its additional cost "
         "(CR 601.2h)"
     )
-    assert refused.details in game.log
+    # The reason is the caster's, in the result, and the table is told
+    # nothing of a card still in a hand (CR 733.1, ``engine/refusals.py``).
+    assert not any("Diabolic Intent" in line for line in game.log), game.log
     assert _untouched(game, mine, "Diabolic Intent")
     assert game.players[0].graveyard == []
 
