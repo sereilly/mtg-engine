@@ -945,6 +945,13 @@ def evaluate_count(
         # say. Not a read of the pile: a token was in it for no time at all
         # (CR 111.7) and anything since could have moved a card out.
         return int(getattr(owner, "creatures_put_into_your_graveyard_this_turn", 0))
+    if history == "nontoken_creatures_into_your_graveyard":
+        # "…for each **nontoken** creature put into your graveyard from the
+        # battlefield this turn" (Caller of the Claw). The row above less the
+        # tokens, which CR 111.7 puts into the pile for no time at all.
+        return int(getattr(
+            owner, "nontoken_creatures_put_into_your_graveyard_this_turn", 0
+        ))
     if history is not None:
         return 0
     # A *named* board count rather than a count of objects in a zone: a player's

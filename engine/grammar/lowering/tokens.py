@@ -496,6 +496,39 @@ def _stamp_token_count(
             )
         payload["count"] = {"history": history}
         return payload["count"]
+    if isinstance(node.per_death, ast.CountOfDeaths):
+        # "…for each **nontoken** creature put into **your graveyard** from
+        # the battlefield this turn" (Caller of the Claw). One seat's tally,
+        # CR 400.3's owner (Asmira's ``creatures_into_your_graveyard``, read by
+        # the one evaluator through ``x_from_count``), with its nontoken twin
+        # for the sentence that names cards: a token is put into the graveyard
+        # and *then* ceases to exist (CR 111.7), so the two numbers differ by
+        # every token that died. Only the owner scope — the controller one
+        # ("died under your control") has no nontoken tally to read.
+        filt = node.per_death.filter
+        leftover = _restrictions_beyond(filt, frozenset({"card_types", "nontoken"}))
+        if (
+            leftover or filt.card_types != ("creature",)
+            or node.per_death.scope != "into_your_graveyard"
+        ):
+            raise LoweringError(
+                "the into-your-graveyard tally counts creatures, nontoken or "
+                "not, and nothing narrower",
+                node=node,
+            )
+        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+            raise LoweringError(
+                "a per-death token count multiplies one token, not several",
+                node=node,
+            )
+        payload["count"] = "x"
+        payload["x_from_count"] = {
+            "history": (
+                "nontoken_creatures_into_your_graveyard" if filt.nontoken
+                else "creatures_into_your_graveyard"
+            ),
+        }
+        return payload["count"]
     if node.per_source_regeneration:
         # "…for each time it regenerated this turn" (Spiny Starfish). The count
         # is a record on the ability's own source, so the payload names the key

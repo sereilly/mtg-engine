@@ -283,6 +283,63 @@ def test_w1g5_berserk_murlodont_watches_the_opponents_beasts_too(set_pool):
     _w1g5_resolve_stack(game)
     assert (beast.effective_power, beast.effective_toughness) == (8, 7)
 
+
+def _w1g5_bears(game, seat):
+    return [
+        perm for perm in game.controlled_by(seat) if perm.card.name == "Bear Token"
+    ]
+
+
+def test_w1g5_caller_of_the_claw_counts_the_nontoken_creatures_that_died_yours(
+    set_pool,
+):
+    """"When this creature enters, create a 2/2 green Bear creature token for
+    each nontoken creature put into your graveyard from the battlefield this
+    turn." Two of Alice's cards die; so do a token of hers (CR 111.7 puts it
+    in the graveyard, but it is no card), Bob's creature (Bob's graveyard),
+    and Alice's creature that Bob had stolen (Alice's graveyard, CR 400.3).
+    The Caller enters: three Bears, each a 2/2 green Bear."""
+    from engine.control import change_control
+
+    game, alice, bob, card = _w1g5_table(set_pool, "Caller of the Claw")
+    mine = [_w1g5_put(game, 0, card("Birchlore Rangers")) for _ in range(2)]
+    token = _w1g5_put(game, 0, card("Wellwisher"))
+    token.metadata["is_token"] = True
+    bobs = _w1g5_put(game, 1, card("Wellwisher"))
+    stolen = _w1g5_put(game, 0, card("Severed Legion"))
+    change_control(stolen, 1, source=bobs)
+    game._sync_control()
+    assert game.controller_index_of(stolen) == 1
+    for victim in (*mine, token, stolen, bobs):
+        game.sacrifice_permanent(victim)
+    assert alice.nontoken_creatures_put_into_your_graveyard_this_turn == 3
+    assert alice.creatures_put_into_your_graveyard_this_turn == 4
+    assert bob.nontoken_creatures_put_into_your_graveyard_this_turn == 1
+
+    assert game.queue_from_hand(0, "Caller of the Claw").supported
+    _w1g5_resolve_stack(game)
+    bears = _w1g5_bears(game, 0)
+    assert len(bears) == 3
+    assert all(
+        (bear.effective_power, bear.effective_toughness) == (2, 2)
+        and bear.has_type("bear") and "G" in bear.effective_colors
+        for bear in bears
+    )
+
+
+def test_w1g5_caller_of_the_claw_counts_this_turn_only(set_pool):
+    """The tally is the turn's: a death last turn makes no Bear, and with no
+    death this turn the Caller enters alone."""
+    game, alice, bob, card = _w1g5_table(set_pool, "Caller of the Claw")
+    game.sacrifice_permanent(_w1g5_put(game, 0, card("Birchlore Rangers")))
+    assert alice.nontoken_creatures_put_into_your_graveyard_this_turn == 1
+    game.start_next_turn()
+    assert alice.nontoken_creatures_put_into_your_graveyard_this_turn == 0
+    assert game.queue_from_hand(0, "Caller of the Claw").supported
+    _w1g5_resolve_stack(game)
+    assert _w1g5_bears(game, 0) == []
+    assert any(p.card.name == "Caller of the Claw" for p in game.controlled_by(0))
+
 # ==== end W1G5 ======================================================
 
 

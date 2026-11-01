@@ -1204,6 +1204,13 @@ class PlayerState:
     # Neither is a reading of the graveyard itself, which forgets a token
     # (CR 111.7) and everything anything has since removed.
     creatures_put_into_your_graveyard_this_turn: int = 0
+    # The same tally without the tokens: "…for each **nontoken** creature put
+    # into your graveyard from the battlefield this turn" (Caller of the
+    # Claw). A token is put into the graveyard before it ceases to exist
+    # (CR 111.7), so the tally above counts it and this must not — a
+    # different number whenever a token died, for the reason the game-wide
+    # pair (``Game.creatures_died_this_turn`` / its nontoken twin) is two.
+    nontoken_creatures_put_into_your_graveyard_this_turn: int = 0
     # The **cards** behind that tally, for the sentence that names them rather
     # than counting them: "return to your hand all creature cards in your
     # graveyard **that were put there from the battlefield this turn**" (No Rest

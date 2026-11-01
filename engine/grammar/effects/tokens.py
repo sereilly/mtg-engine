@@ -29,6 +29,8 @@ from ..lexer import PT, PUNCT, QUOTE, SELF, WORD
 from ..phrases import (_parse_for_each, _parse_per_each_counters,
                        _parse_per_each_objects)
 from ..back_references import parse_bound_subject
+from ..nouns import parse_object_filter
+from ..records import _parse_for_each_history
 from ..references import parse_target_spec
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, KEYWORD_INDEX, SUBTYPE_INDEX,
@@ -630,8 +632,20 @@ def _finish_create_token(
             raise stream.error("a per-seat token count multiplies one token")
         count = per_seat
     per_counter = _parse_per_each_counters(stream)
+    # "…create a 2/2 green Bear creature token **for each nontoken creature
+    # put into your graveyard from the battlefield this turn**." (Caller of
+    # the Claw.) A history of the turn, not a set any board holds — so it is
+    # asked before the board reader below, which would claim "for each
+    # nontoken creature" and leave the history clause as unconsumed text. The
+    # one dispatcher the sacrifice and the counter placement already ask
+    # (``records._parse_for_each_history``), so the three positions read one
+    # set of spellings; it declines with the cursor unmoved.
+    per_history = (
+        _parse_for_each_history(stream, parse_object_filter)
+        if per_counter is None else None
+    )
     per_each, per_each_beyond_first = (
-        (None, False) if per_counter is not None
+        (None, False) if per_counter is not None or per_history is not None
         else _parse_per_each_objects(stream)
     )
     if per_each_beyond_first:
@@ -665,7 +679,7 @@ def _finish_create_token(
         # multiply a token count, and which one a card got would depend on
         # where it printed the words. (`_parse_token_colors` is called twice for
         # exactly this reason.)
-        if per_each is None:
+        if per_each is None and per_history is None:
             per_each, per_each_beyond_first = _parse_per_each_objects(stream)
             if per_each_beyond_first:
                 raise stream.error("no token count discounts the first of the set")
@@ -742,6 +756,7 @@ def _finish_create_token(
         per_source_regeneration=per_source_regeneration,
         per_each=per_each,
         per_counter=per_counter,
+        per_death=per_history,
         from_chosen=tuple(from_chosen),
     )
 
