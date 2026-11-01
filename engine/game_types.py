@@ -206,6 +206,11 @@ CHOICE_KEYS = (
     # activation's, so with two on the stack the earlier one resolved with the
     # later one's word. Written only for an ability whose cost chooses one.
     "chosen_ability",
+    # The producer's split of "Add three mana in any combination of {R}
+    # and/or {G}" (Goblin Clearcutter; Burnt Offering on a cast), announced
+    # with the activation or the cast — ``mana_combination.MANA_COMBINATION``
+    # names the key, ``handlers/mana._split_mana_combination`` reads it.
+    "mana_combination",
 )
 
 
