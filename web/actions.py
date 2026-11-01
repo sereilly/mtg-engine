@@ -22,6 +22,7 @@ from engine.activation_permissions import card_widens_activation
 from engine.ai_rehearsal import mid_resolution
 from engine.cast_permissions import permission_for
 from engine.cast_timing import casts_at_instant_speed
+from engine.face_down import cast_timing_card
 from engine.faces import choose_a_face_refusal, holds_spell_named, spell_named
 from engine.mana_payment import is_mana_ability, taps_for_payment
 from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
@@ -293,11 +294,35 @@ def _action_cast(session, req, seat_type):
     # grants itself flash (Mirage's five Auras) — and this question is asked in
     # two places: a card castable in the picker and refused by the action is the
     # shape a second copy produces.
-    instant_speed = casts_at_instant_speed(card, session.game, req.seat)
+    #
+    # **Asked of what this cast announces** (CR 702.37c, CR 708.4): a morph
+    # cast is judged as the face-down 2/2 it becomes, which has no creature
+    # types and no text — so Quick Sliver's "cast Sliver spells as though they
+    # had flash" does not cover a Sliver cast face down, and neither does the
+    # card's own printed flash. The permission an announced alternative cost
+    # is looked for under is the engine's own order (``_spell_source``): one
+    # that requires a cost first (CR 118.9b), then any.
+    permission = None
+    if req.alternative_cost and req.from_zone in ("graveyard", "exile", "library"):
+        permission = next(
+            (
+                found for costed in (True, None)
+                if (found := permission_for(
+                    session.game, req.seat, card, req.from_zone,
+                    as_land=card.primary_type == "land", spell=card, costed=costed,
+                )) is not None
+            ),
+            None,
+        )
+    timed = cast_timing_card(
+        session.game, req.seat, card,
+        alternative_cost=bool(req.alternative_cost), permission=permission,
+    )
+    instant_speed = casts_at_instant_speed(timed, session.game, req.seat)
     if req.seat != session.current_turn and not instant_speed:
         raise HTTPException(status_code=400, detail="non-instant spells can only be cast on your turn")
 
-    if card.primary_type in {"land", "sorcery", "creature", "artifact", "enchantment"} and not instant_speed:
+    if timed.primary_type in {"land", "sorcery", "creature", "artifact", "enchantment"} and not instant_speed:
         if req.seat != session.current_turn:
             raise HTTPException(status_code=400, detail="can only cast this card on your turn")
         if session.game.current_phase != "main":

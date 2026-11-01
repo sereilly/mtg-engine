@@ -368,6 +368,31 @@ def announced_morph_cost(
     return None
 
 
+def cast_timing_card(
+    game: "Game", seat: int, card, *, alternative_cost, permission=None,
+):
+    """The object a cast's **timing** is judged by: the face-down 2/2 for a
+    morph cast, *card* for every other.
+
+    CR 702.37c: "Any effects or prohibitions that would apply to casting a
+    card with these characteristics (and not the face-up card's
+    characteristics) are applied to casting this card" (and CR 708.4, CR
+    601.3e). A flash grant scoped by type is one of those effects: "Any player
+    may cast Sliver spells as though they had flash" (Quick Sliver) covers a
+    Sliver cast face up and not the same card cast face down, which has no
+    creature types (CR 708.2) — and the card's own printed flash is text the
+    face-down spell does not have. The cast path already judges everything
+    else by the face-down card (``_cast_onto_stack``); a gate that asks
+    :func:`cast_timing.casts_at_instant_speed` *before* the cast is announced
+    asks it of what this returns, with the announcement it is gating.
+    """
+    if announced_morph_cost(
+        game, seat, card, alternative_cost=alternative_cost, permission=permission,
+    ) is not None:
+        return face_down_card(card)
+    return card
+
+
 def cast_announces_morph(game: "Game", seat: int, card, action) -> bool:
     """Whether a policy's cast *action* of *card* is a morph cast — the
     question :func:`announced_morph_cost` answers for the cast path, asked
