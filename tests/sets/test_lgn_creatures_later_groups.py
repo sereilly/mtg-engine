@@ -118,6 +118,47 @@ def test_w1g5_gempalm_polluter_declined_loses_nothing(set_pool):
     assert (alice.life, bob.life) == (20, 20)
     assert len(alice.hand) == 1
 
+
+def test_w1g5_noxious_ghoul_shrinks_every_non_zombie_when_a_zombie_enters(
+    set_pool,
+):
+    """"Whenever this creature or another Zombie enters, all non-Zombie
+    creatures get -1/-1 until end of turn." Cast, the Ghoul's own entry
+    shrinks both sides' non-Zombies (a 1/1 Elf dies) and no Zombie; Bob's
+    Zombie entering afterwards fires it again; a non-Zombie entering does
+    not; and the shrink ends at cleanup."""
+    game, alice, bob, card = _w1g5_table(
+        set_pool, "Noxious Ghoul", opponent_hand=("Severed Legion",),
+    )
+    elf = _w1g5_put(game, 1, card("Birchlore Rangers"))   # 1/1 Elf
+    bear = _w1g5_put(game, 0, card("Wellwisher"))          # 1/1 Elf
+    hulk = _w1g5_put(game, 1, card("Krosan Tusker"))       # 6/5 Beast
+    legion = _w1g5_put(game, 0, card("Severed Legion"))    # 2/2 Zombie
+
+    assert game.queue_from_hand(0, "Noxious Ghoul").supported
+    _w1g5_resolve_stack(game)
+    game.check_state_based_actions()
+    ghoul = next(p for p in game.controlled_by(0) if p.card.name == "Noxious Ghoul")
+    assert not game.is_on_battlefield(elf) and not game.is_on_battlefield(bear)
+    assert (hulk.effective_power, hulk.effective_toughness) == (5, 4)
+    assert (legion.effective_power, legion.effective_toughness) == (2, 2)
+    assert (ghoul.effective_power, ghoul.effective_toughness) == (3, 3)
+
+    # Another Zombie — the opponent's — fires it a second time.
+    game.active_player_index = 1
+    assert game.queue_from_hand(1, "Severed Legion").supported
+    _w1g5_resolve_stack(game)
+    assert (hulk.effective_power, hulk.effective_toughness) == (4, 3)
+    assert (ghoul.effective_power, ghoul.effective_toughness) == (3, 3)
+
+    # A non-Zombie entering does not.
+    _w1g5_put(game, 1, card("Wellwisher"))
+    _w1g5_resolve_stack(game)
+    assert (hulk.effective_power, hulk.effective_toughness) == (4, 3)
+
+    game.resolve_cleanup_step(1)
+    assert (hulk.effective_power, hulk.effective_toughness) == (6, 5)
+
 # ==== end W1G5 ======================================================
 
 
