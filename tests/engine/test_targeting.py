@@ -567,10 +567,21 @@ def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_c
     # nothing else, a card from either arrives under the Sovereign's
     # controller with five Zombies tapped, naming a land or an instant card
     # is refused, and four Zombies cannot pay.
+    # Ashen Powder (MIR) is the ninth, reviewed at Legions' W1G6, and the first
+    # whose widening is *narrowed back*: "Put target creature card from **an
+    # opponent's** graveyard onto the battlefield under your control." It
+    # read as own-graveyard-only — every printed owner did — so it offered the
+    # caster's own pile and refused the card it prints. It is `any_graveyard`
+    # with `opponent_graveyard_only` now (the Advocates' key), and its spec
+    # carries the same flag. Driven
+    # (`tests/regressions/test_lgn_w1g6_shipped_seams.py`): the picker offers
+    # the opponent's creature card and not the caster's, the cast naming the
+    # caster's own pile is refused, and the opponent's card arrives under the
+    # caster's control.
     assert widened == {
         "Hymn of Rebirth", "Necromancy", "Reanimate", "Coffin Queen",
         "Iridescent Drake", "Chainer, Dementia Master", "Nomad Mythmaker",
-        "Gravespawn Sovereign",
+        "Gravespawn Sovereign", "Ashen Powder",
     }
 
 

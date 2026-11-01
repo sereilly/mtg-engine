@@ -4504,17 +4504,33 @@ def test_a_several_card_return_refuses_a_narrowing_the_handler_cannot_test():
     assert "restriction" in result.failure_reason
 
 
-def test_several_cards_to_the_battlefield_still_has_no_handler():
-    """Only the graveyard→hand handler reads a list. The reanimator resolves one
-    chosen index, so the arity is refused there rather than silently reanimating
-    the first of two."""
+def test_several_cards_to_the_battlefield_lower_to_the_announced_pair():
+    """The single-target reanimator resolves one chosen index, so several cards
+    to the battlefield are never handed to it — that refusal stood until
+    Legions' Celestial Gatekeeper ("return up to two target Bird and/or Cleric
+    permanent cards from your graveyard to the battlefield"). They lower to
+    Victimize's pair instead: ``choose_target_cards`` announces the up-to-two
+    (its picker derived from the program) and ``reanimate_announced_cards``
+    returns every announced slot, each re-located from its stamp. The single
+    reanimation is still not what this lowers to."""
     result = compile_line(
         "Return up to two target creature cards from your graveyard to the battlefield.",
         card_name="Test",
     )
 
-    assert result.parsed
-    assert not result.lowered
+    assert result.parsed and result.lowered
+    kinds = [instruction.kind for instruction in result.instructions]
+    assert kinds == ["choose_target_cards", "reanimate_announced_cards"]
+    assert result.instructions[0].payload["targets"] == {
+        "quantifier": "up_to", "kind": "card", "count": 2,
+    }
+    assert result.instructions[1].payload["card_type"] == "creature"
+    # A rider the pair does not read still refuses the line.
+    assert not compile_line(
+        "Return up to two target creature cards from your graveyard to the "
+        "battlefield with a +1/+1 counter on each of them.",
+        card_name="Test",
+    ).lowered
 
 
 def test_several_cards_from_any_graveyard_still_has_no_handler():
