@@ -373,21 +373,27 @@ def test_blazing_effigys_dies_trigger_is_held_to_the_target_a_player_chose(catal
     assert game.is_on_battlefield(bears) and bears.damage_marked == 0
 
 
-def test_a_default_taken_while_the_effigy_is_dying_is_not_a_recorded_choice(catalog_by_name):
-    """The bound, at the one moment it is drawn. With nobody to ask, the
-    picker's default is taken *inside* the death sweep, off a list that still
-    holds the dying Effigy (``Game.departing``) — a board CR 603.3d would
-    never have chosen from. So it is not marked as a choice, CR 608.2b is not
-    asked of it, and the ability reaches a creature by the path it always
-    took: here a creature takes the 3 damage and nothing is "removed from the
-    stack" for a target the engine mis-chose."""
+def test_a_default_taken_once_the_effigy_has_died_is_a_recorded_choice(catalog_by_name):
+    """The bound this test drew is gone (LGN W2G2). With nobody to ask, the
+    picker's default used to be taken *inside* the death sweep, off a list
+    that still held the dying Effigy (``Game.departing``) — a board CR 603.3d
+    would never have chosen from — so it was not marked as a choice and CR
+    608.2b was not asked of it. The trigger's choice now waits for the
+    state-based sweep's window to close (``_trigger_choice_waits``, CR 117.5:
+    state-based actions, *then* triggered abilities go on the stack), so the
+    default is taken off the board the rule chooses from: the Effigy is not
+    on it, the pick is a recorded choice like a person's, and the 3 damage
+    reaches the creature it names."""
     game, item, bears, giant = _effigy_dies(catalog_by_name)
-    assert not item.targets_chosen and not item.activated
+    assert item.targets_chosen and not item.activated
+    named = item.target_permanent_id
+    assert named and named[0] in (bears.permanent_id, giant.permanent_id), named
     assert game.illegal_targets_refusal(item) is None
 
     resolve_stack(game)
 
-    assert 3 in (bears.damage_marked, giant.damage_marked), game.log[-4:]
+    hit = bears if named[0] == bears.permanent_id else giant
+    assert hit.damage_marked == 3 or not game.is_on_battlefield(hit), game.log[-4:]
     assert not any(_REMOVED in line for line in game.log)
 
 

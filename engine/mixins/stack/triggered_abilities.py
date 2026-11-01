@@ -264,8 +264,14 @@ class TriggeredAbilitiesMixin:
         self.collected_triggers = []
         try:
             yield
+            # The choices the unit's triggers waited to make, now that it has
+            # finished (CR 603.3c-d, 117.5; ``_trigger_choice_waits``) — while
+            # the window is still open, so a trigger an announcement sets off
+            # joins this unit and its order.
+            self._announce_waiting_triggers()
         except BaseException:
             self.collected_triggers = None
+            self.unannounced_triggers = []
             raise
         collected, self.collected_triggers = self.collected_triggers, None
         if len(collected) >= 2:
