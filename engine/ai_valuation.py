@@ -848,6 +848,55 @@ def waits_on_a_later_draw(instruction: OracleInstruction | None) -> bool:
     return instruction is not None and instruction.kind in DRAW_REPLACEMENT_ARMINGS
 
 
+#: The steps that put up a **shield** — a prevention shield (CR 615) or a
+#: regeneration shield (CR 701.19a) — and do nothing else. Each is used up or
+#: gone by the end of the turn or the combat (CR 615.3), and none changes
+#: anything a standing reads until something comes at what it protects. The
+#: prevention and regeneration kinds left out are not shields: they take
+#: one away ("can't be regenerated", "damage can't be prevented") or pin
+#: damage where it is (`lock_damage_to_target`). A kind of either category must
+#: be in this table or in that one (`tests/ai/test_lgn_c2_shield_activations.py`).
+#: Two shields are card-line kinds with no category (``card_hooks``): Forcefield's
+#: and the land shield of "the next time target land would be destroyed".
+SHIELD_KINDS = frozenset({
+    "grant_chosen_source_blanket_shield",
+    "grant_forcefield_shield",
+    "grant_half_prevention_shield",
+    "grant_prevention_shield",
+    "grant_recipient_class_prevention_shield",
+    "grant_regeneration_to_enchanted_creature",
+    "grant_regeneration_to_self",
+    "grant_regeneration_to_target_creature",
+    "grant_source_class_prevention_shield",
+    "grant_whole_prevention_shield",
+    "prevent_all_combat_damage",
+    "prevent_all_combat_damage_except_from",
+    "prevent_all_combat_damage_to_matching",
+    "prevent_damage_by_target_spell_until_eot",
+    "prevent_damage_by_target_until_eot",
+    "prevent_damage_from_targeting_sources_until_eot",
+    "prevent_damage_to_target_until_eot",
+    "prevent_next_damage_from_chosen_source",
+    "shield_target_land_from_destruction",
+})
+
+
+def shields_only(instruction: OracleInstruction | None) -> bool:
+    """Whether every step of an ability's effect is a shield
+    (:data:`SHIELD_KINDS`): "{1}{W}: Prevent all combat damage that would be
+    dealt to and dealt by this creature this turn." (Deftblade Elite), "{B}:
+    Regenerate this creature." (Drudge Skeletons), a Circle of Protection.
+
+    Worth what it stops, and only a rehearsal of what is coming says what
+    that is: the same shield is a creature saved in front of a burn spell or
+    a lethal blocker, and nothing at all in a main phase with nothing on the
+    stack and no fight it could be in. The flat score an activation is ranked
+    by (`ai_scoring._score_activation`) rated it 2.5 either way, so an AI seat
+    spent its mana on it in both main phases every turn (LGN Phase 5)."""
+    steps = _effect_steps(instruction) if instruction is not None else ()
+    return bool(steps) and all(step.kind in SHIELD_KINDS for step in steps)
+
+
 #: How a step's payload addresses **every player at once** ("Each player loses
 #: 1 life …"): the value lowering writes under whichever key the step reads
 #: its player from (``recipient``, ``who``, ``players``, ``whose``, ``actor``).

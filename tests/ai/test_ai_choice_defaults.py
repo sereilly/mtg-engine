@@ -17,9 +17,11 @@ here against the pool, with a floor on how many were examined.
 
 from __future__ import annotations
 
+from unittest import mock
+
 import pytest
 
-from engine import Game, PlayerState
+from engine import Game, PlayerState, ai_abilities
 from engine.ai_casts import _cast_candidate
 from engine.ai_abilities import choose_activation_action
 from engine.ai_payment import tap_planned_lands
@@ -140,7 +142,19 @@ def test_w2g6_an_activated_shield_is_not_raised_against_its_own_controller(_w2g6
     """The activated half of the same phrase. A shield's category reads "you",
     so the chooser took the activator's own largest creature as the source to
     be shielded *from* — Bone Mask, Dark Sphere, Kithkin Armor, Pentagram of
-    the Ages, Protective Sphere, Righteous Aura."""
+    the Ages, Protective Sphere, Righteous Aura.
+
+    The side is chosen before the moment is weighed: since LGN C2 a shield on
+    a main phase with nothing coming is not proposed at all
+    (``ai_valuation.shields_only``, rehearsed — the subject of
+    ``test_lgn_c2_shield_activations``), so the aim is read with that gate
+    off."""
+    with mock.patch.object(ai_abilities, "shields_only", lambda instruction: False):
+        examined = _w2g6_shields_aimed(_w2g6_pool)
+    assert examined >= 6, f"only {examined} activated source-of-choice shields were proposed"
+
+
+def _w2g6_shields_aimed(_w2g6_pool) -> int:
     examined = 0
     for card, program in compiled_units(_w2g6_pool.values()):
         if not program.supported or card.primary_type in ("instant", "sorcery"):
@@ -163,8 +177,7 @@ def test_w2g6_an_activated_shield_is_not_raised_against_its_own_controller(_w2g6
         assert isinstance(index, int), card.name
         named = game.permanent_at(action.target_player_index, index)
         assert (action.target_player_index, named.card.name) == (1, "Shivan Dragon"), card.name
-
-    assert examined >= 6, f"only {examined} activated source-of-choice shields were proposed"
+    return examined
 
 
 # --- a permanent's entry trigger -----------------------------------------------

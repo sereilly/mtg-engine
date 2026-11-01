@@ -195,7 +195,8 @@ def _assign_pips(
 
 
 def spend_under_permissions(
-    pool: dict[str, int], required: dict[str, int], permissions: Sequence = ()
+    pool: dict[str, int], required: dict[str, int], permissions: Sequence = (),
+    *, wants=None, others=(),
 ) -> dict[str, int] | None:
     """*pool* after paying *required* under CR 106.6 *permissions*, or None.
 
@@ -205,7 +206,9 @@ def spend_under_permissions(
     pays any colour and every other unit pays none, not even its own. Three
     buckets in the order that makes the payment maximal -- the coloured pips
     (pickiest), then ``{C}``, which nothing else can pay, then the generic
-    remainder from whatever is left.
+    remainder from whatever is left: which of it, against the payer's *wants*
+    with *others* (its untapped lands) beside it, is
+    :func:`pool_spent_on_generic`'s — colourless first where nothing is wanted.
     """
     after = _assign_pips(pool, required, permissions)
     if after is None:
@@ -215,14 +218,20 @@ def spend_under_permissions(
         return None
     after["C"] -= colorless
     generic = int(required.get("generic", 0))
-    for symbol in ("C",) + tuple(PIP_SYMBOLS):
-        if generic <= 0:
-            break
-        spend = min(after[symbol], generic)
-        after[symbol] -= spend
-        generic -= spend
-    if generic > 0:
+    if sum(max(0, amount) for amount in after.values()) < generic:
         return None
+
+    def pays_of(symbol: str) -> frozenset:
+        return frozenset(
+            pip for pip in COLOR_SYMBOLS
+            if (pip == "C" and symbol == "C")
+            or (pip != "C" and may_pay_pip(permissions, symbol, pip))
+        )
+
+    for symbol, spent in pool_spent_on_generic(
+        after, generic, wants, others=others, pays_of=pays_of,
+    ).items():
+        after[symbol] -= spent
     return after
 
 
@@ -346,17 +355,20 @@ def _plan_under_permissions(
             from_pool[units[index]] = from_pool.get(units[index], 0) + 1
     generic = want["generic"]
     spent_floating = set(assignment)
-    for index, symbol in enumerate(units):
-        if generic <= 0:
-            break
-        if index not in assignment:
-            from_pool[symbol] = from_pool.get(symbol, 0) + 1
-            spent_floating.add(index)
-            generic -= 1
     spare = [
         index for index, made in enumerate(produced)
         if floating + index not in assignment and made
     ]
+    # Which floating units pay generic: `floating_units_for_generic`, over what
+    # each may pay *as*.
+    unspent = [(index, sources[index][1]) for index in range(floating) if index not in assignment]
+    for index in floating_units_for_generic(
+        unspent, min(generic, len(unspent)), _wants_in_force(wants),
+        others=lambda: [sources[floating + index][1] for index in spare],
+    ):
+        from_pool[units[index]] = from_pool.get(units[index], 0) + 1
+        spent_floating.add(index)
+        generic -= 1
     if generic > len(spare):
         return None
     matched = {
@@ -472,22 +484,42 @@ def plan_payment(
         return None
 
     generic = want["generic"]
-    for symbol, amount in list(left.items()):
-        if generic <= 0:
-            break
-        paid = min(generic, int(amount))
-        if paid:
-            from_pool[symbol] = from_pool.get(symbol, 0) + paid
-            left[symbol] = int(amount) - paid
-            generic -= paid
     spare = [
         index
         for index, produced in producers
         if index not in assignment and produced
     ]
+    # The floating mana pays generic first, as much of it as there is; which
+    # of it is `floating_units_for_generic`'s, against the payer's wants and
+    # with the lands no pip needs still there beside what it leaves.
+    from_floating = min(generic, sum(max(0, int(amount or 0)) for amount in left.values()))
+    if from_floating:
+        spent = pool_spent_on_generic(
+            left, from_floating, _wants_in_force(wants),
+            others=lambda: [producers[index][1] for index in spare],
+        )
+        for symbol, paid in spent.items():
+            from_pool[symbol] = from_pool.get(symbol, 0) + paid
+            left[symbol] = int(left[symbol]) - paid
+        generic -= from_floating
     if generic > len(spare):
         return None
-    tapped = sorted([*assignment, *spare[:generic]])
+    # The floating units a caller handed in as lands (*spent_first*, the AI
+    # planner's) pay generic before any permanent does — which of them, the
+    # same answer as the pool's.
+    floating_spare = [index for index in spare if index < spent_first]
+    land_spare = [index for index in spare if index >= spent_first]
+    from_spent_first = min(generic, len(floating_spare))
+    paying = floating_units_for_generic(
+        [(index, producers[index][1]) for index in floating_spare],
+        from_spent_first, _wants_in_force(wants),
+        others=lambda: [
+            *(frozenset({symbol}) for symbol, amount in left.items()
+              for _ in range(max(0, int(amount)))),
+            *(producers[index][1] for index in land_spare),
+        ],
+    )
+    tapped = sorted([*assignment, *paying, *land_spare[:generic - from_spent_first]])
     # The floating units a caller handed in as lands (*spent_first*) pay what
     # the order gave them; which permanents pay the rest is the sparing
     # choice's, and what the pool and the unspent floating units hold is still
@@ -648,6 +680,76 @@ def _sparing_choice(candidates, pips, generic, base, left, wants, owners=None):
     if matched is None:
         return None
     return chosen, matched
+
+
+# -- Which floating mana pays generic -----------------------------------------
+
+#: The order floating mana is offered in to pay generic where nothing else
+#: decides: colourless first, the unit that pays no coloured pip, then the
+#: colours in WUBRG order.
+FLOATING_GENERIC_ORDER: tuple[str, ...] = ("C", *PIP_SYMBOLS)
+
+
+def floating_units_for_generic(candidates, amount: int, wants, *, others=()) -> list:
+    """Which *amount* of the floating units *candidates* pay generic mana:
+    their indices.
+
+    **The pool's half of the preference every planner shares**
+    (`_sparing_choice`). The lands a payment taps have been chosen to spare
+    the payer's other wants since round kg2, and the mana already floating
+    was spent in a fixed order, a different one in each of three places: the
+    cast path's spend took C, W, U, B, R, G, so a floating {C} paid a {1}
+    beside a {C} still wanted; :func:`plan_payment` took the pool dict's own
+    order, colourless last, so turning Liege of the Axe face up for {1}{W}
+    from {W:3, G:4, C:7} spent {W}{W} and left Defender of the Order's
+    {W}{W} unpayable with seven colourless floating (LGN Phase 5); and the
+    AI planner's floating units paid "what the order gave them". One answer
+    now, asked by all three.
+
+    *candidates* is ``(index, pays)`` per floating unit — *pays* the pips it
+    may pay (`pips_payable_by`) — in the order preferred where the wants do
+    not decide: a unit paying no coloured pip first (:data:`FLOATING_GENERIC_ORDER`).
+    *wants* is the payer's other costs (a `PaymentWants`, a sequence of symbol
+    dicts, a function returning either, or None); *others* is what stays
+    available whatever is chosen — the untapped lands, one pays-set each — or
+    a function returning it, asked only when there is a choice to make.
+    """
+    ordered = sorted(
+        candidates,
+        key=lambda candidate: bool(set(candidate[1]) & set(PIP_SYMBOLS)),
+    )
+    amount = max(0, min(int(amount), len(ordered)))
+    base = [index for index, _pays in ordered[:amount]]
+    if not amount or amount >= len(ordered) or not wants:
+        return base
+    if len({frozenset(pays) for _index, pays in ordered}) < 2:
+        return base
+    chosen = _sparing_choice(
+        ordered, [], amount, base, list(others() if callable(others) else others), wants,
+    )
+    return base if chosen is None else list(chosen[0])
+
+
+def pool_spent_on_generic(pool, amount: int, wants, *, others=(), pays_of=None) -> dict:
+    """``{symbol: units}`` — which of the mana in *pool* (a symbol dict) pays
+    *amount* generic, by :func:`floating_units_for_generic`. *pays_of* is a
+    unit's pips by its symbol (a payer's CR 106.6 permissions,
+    `pips_payable_by`); left out, a unit pays its own symbol."""
+    units = [
+        symbol for symbol in FLOATING_GENERIC_ORDER
+        for _ in range(max(0, int(pool.get(symbol, 0) or 0)))
+    ]
+    chosen = floating_units_for_generic(
+        [
+            (index, frozenset({symbol}) if pays_of is None else pays_of(symbol))
+            for index, symbol in enumerate(units)
+        ],
+        amount, wants, others=others,
+    )
+    spent: dict[str, int] = {}
+    for index in chosen:
+        spent[units[index]] = spent.get(units[index], 0) + 1
+    return spent
 
 
 @dataclass(frozen=True)

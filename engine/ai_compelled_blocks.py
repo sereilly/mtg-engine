@@ -149,6 +149,36 @@ def fight_outcome(game: "Game", attacker: "Permanent", blocker: "Permanent") -> 
     return blocker_dead, attacker_dead
 
 
+def compelled_blocks(game: "Game", defending_player_index: int) -> "dict[int, int]":
+    """``{blocker slot: attacker slot}`` — the blocks CR 509.1c already
+    requires of *defending_player_index*'s creatures, one attacker by name
+    (provoke's mark, Trumpeting Armodon's, "blocks this creature this turn if
+    able"), read off ``Game.block_requirements``: the first such requirement
+    on each untapped creature that can block the attacker it names.
+
+    The defending seat's chooser starts from these (``ai_declarations.
+    choose_combat_blockers``), because the engine will make them whatever it
+    chooses (``Game.obeying_block_declaration``) — so the fight a compelled
+    creature wins alone is a fight nobody else need join. A requirement to
+    block *something* (Watchdog) or for an attacker to be blocked by *someone*
+    names no pair, and is left to that maximisation."""
+    attacker_seat = game.active_player_index
+    blocks: dict[int, int] = {}
+    for requirement in game.block_requirements(defending_player_index):
+        if requirement.blocker is None or requirement.attacker is None:
+            continue
+        if requirement.blocker in blocks:
+            continue
+        blocker = game.permanent_at(defending_player_index, requirement.blocker)
+        attacker = game.permanent_at(attacker_seat, requirement.attacker)
+        if blocker is None or attacker is None or blocker.tapped or not blocker.is_creature:
+            continue
+        if not game._can_block_attacker(blocker, attacker):
+            continue
+        blocks[requirement.blocker] = requirement.attacker
+    return blocks
+
+
 def best_compelled_blocker(
     game: "Game", attacker: "Permanent", candidates: "list[Permanent]",
 ) -> "Permanent | None":
@@ -186,6 +216,7 @@ def compelled_block_declined(game: "Game", player_index: int, entry: dict) -> bo
 __all__ = [
     "best_compelled_blocker",
     "compelled_block_declined",
+    "compelled_blocks",
     "compelled_block_worth",
     "compels_a_block_on_source",
     "fight_outcome",

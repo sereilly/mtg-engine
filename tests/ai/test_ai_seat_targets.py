@@ -31,9 +31,11 @@ activator, Xira Arien's draw, the only kind on the old list that exists.
 
 from __future__ import annotations
 
+from unittest import mock
+
 import pytest
 
-from engine import Game, PlayerState
+from engine import Game, PlayerState, ai_abilities
 from engine.ai_abilities import _choose_target_for_instruction, choose_activation_action
 from engine.ai_target_sides import ability_seat_side
 from engine.card_loader import load_cards, manifest_set_paths
@@ -177,13 +179,20 @@ def test_what_the_program_calls_a_gift_leaves_its_own_seat_better_off(pool, by_n
 def test_the_ai_proposes_its_gifts_at_itself(pool, by_name):
     """The proposal, which is what a game sees: for every permanent whose
     first usable ability is a gift to a seat, the action the AI proposes names
-    its own seat or is not proposed at all — never an opponent."""
+    its own seat or is not proposed at all — never an opponent.
+
+    A shield among them ("Prevent the next 1 damage that would be dealt to any
+    target this turn") is not proposed on this idle table at all since LGN C2
+    (``ai_valuation.shields_only``: rehearsed, and nothing is coming), so its
+    aim is read with that gate off — the seat is chosen before the moment is
+    weighed."""
     proposed = 0
     for card, index, ability in seat_abilities(pool):
         if index != 0 or ability_seat_side(ability.instruction) != "you":
             continue
         game, _source = _table(by_name, card)
-        action = choose_activation_action(game, 0)
+        with mock.patch.object(ai_abilities, "shields_only", lambda instruction: False):
+            action = choose_activation_action(game, 0)
         if action is None or action.permanent_name != card.name:
             continue
         proposed += 1

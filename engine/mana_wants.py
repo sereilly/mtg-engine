@@ -35,6 +35,18 @@ played, not paid for). The card being paid for is left out once
 (*paying_for*): a spell on its way to the stack, or a card in the hand
 paying for its own cycling, is not a want the payment it is making competes
 with.
+
+**What it brings is** (:func:`wants_brought_by`). A card cast face down is
+paid for twice: {3} now (CR 702.37a), and its morph cost later, as the special
+action that turns it face up (CR 702.37e) — out of whatever the {3} left. So
+the face-down spell the cast path casts (CR 702.37c: the 2/2, its real card
+riding on it as ``face_down_of``) is read as the card it hides leaving the
+hand, and its turn-up as a want of the first tier, the same want it is the
+moment it lands. Read as the 2/2, the Angel was no card in the hand and
+wanted its printed {4}{W}{W}; read as itself, it was left out and wanted
+nothing — and on four Plains and three Mountains both readings tapped three
+Plains for the {3} (Onslaught's Phase 5, which round kg2's census never
+asked: its want was always a *second* card).
 """
 
 from __future__ import annotations
@@ -42,7 +54,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .activation_zones import HAND
-from .face_down import face_up_morph_cost, is_face_down
+from .face_down import face_up_morph_cost, hidden_card, is_face_down, morph_cost
 from .faces import castable_faces
 from .mana_payment import PaymentWants, is_mana_ability, mana_cost_x_as_zero
 from .oracle import compile_card_oracle
@@ -57,10 +69,12 @@ def mana_wants(game: "Game", seat: int, *, paying_for=None) -> PaymentWants:
     two tiers — see the module's note. *paying_for* is a card (or a face of
     one) the payment being planned is for, left out of the hand once."""
     player = game.players[seat]
-    wants: list[dict[str, int]] = []
+    wants: list[dict[str, int]] = list(wants_brought_by(paying_for))
     abilities: list[dict[str, int]] = []
     skipped = paying_for is None
-    whole = getattr(paying_for, "face_of", None) or paying_for
+    whole = (
+        hidden_card(paying_for) or getattr(paying_for, "face_of", None) or paying_for
+    )
     for card in player.hand:
         if not skipped and (card is paying_for or card is whole):
             skipped = True
@@ -86,6 +100,23 @@ def mana_wants(game: "Game", seat: int, *, paying_for=None) -> PaymentWants:
     return PaymentWants(cards=tuple(wants), abilities=tuple(abilities))
 
 
+def wants_brought_by(paying_for) -> "tuple[dict[str, int], ...]":
+    """What the card a payment is for will still want paid once this payment
+    is made, as symbol dicts of the cards' tier — see the module's note.
+
+    A face-down spell (CR 702.37c) brings its turn-up: the morph cost of the
+    card it hides (CR 702.37e), {X} as 0 (CR 107.3d lets the player choose
+    it). Nothing else is one today: every other cost a cast carries is paid
+    as it is cast (CR 601.2f-h), and an echo or a cumulative upkeep is paid
+    after the next untap step. A permanent (an ability being paid for) or a
+    face-up card brings nothing."""
+    hidden = hidden_card(paying_for)
+    if hidden is None:
+        return ()
+    turn_up = mana_cost_x_as_zero(morph_cost(hidden) or "")
+    return (turn_up,) if turn_up else ()
+
+
 def _add_ability_cost(wants: list, ability) -> None:
     cost = getattr(ability, "cost", None)
     if cost is None or ability.instruction is None or is_mana_ability(ability.instruction):
@@ -95,4 +126,4 @@ def _add_ability_cost(wants: list, ability) -> None:
         wants.append(mana)
 
 
-__all__ = ["mana_wants"]
+__all__ = ["mana_wants", "wants_brought_by"]

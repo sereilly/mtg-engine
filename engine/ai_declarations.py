@@ -28,7 +28,7 @@ from __future__ import annotations
 from .game import Game
 from .aura_restrictions import aura_restriction_active
 from .models import Permanent
-from .ai_compelled_blocks import fight_outcome
+from .ai_compelled_blocks import compelled_blocks, fight_outcome
 from .ai_rehearsal import life_worth, permanent_worth
 from .ai_scoring import choose_attack_target, _permanent_value
 from .combat_assignment import combat_damage_assigned_by
@@ -578,6 +578,17 @@ def choose_combat_blockers(
     assignments: dict[int, int] = {}
     used_blockers: set[int] = set()
 
+    # Priority 0: the blocks CR 509.1c already requires of one creature
+    # against one attacker (provoke). The engine makes them whatever this seat
+    # chooses (`Game.obeying_block_declaration`, last), so they are counted
+    # first: a provoked creature that kills its attacker alone is a fight
+    # nobody else joins, where three blockers on a provoked 4/1 lost a
+    # Skinthinner the attacker chose to kill (LGN Phase 5).
+    for blocker_idx, attacker_idx in compelled_blocks(game, defending_player_index).items():
+        if blocker_idx in available_blockers and attacker_idx in attackers:
+            assignments[blocker_idx] = attacker_idx
+            used_blockers.add(blocker_idx)
+
     # Priority 1: prevent lethal where possible.
     incoming = _estimated_incoming_player_damage(game, defending_player_index)
     life = defender.life
@@ -611,11 +622,22 @@ def choose_combat_blockers(
     # strike, deathtouch, indestructible, a regeneration or prevention
     # shield), not the bare power-against-toughness `_score_block_pair`
     # ranks by.
+    #
+    # **An attacker the blocks already kill takes no more** (CR 510.1c: a
+    # blocked creature's damage is "divided as its controller chooses among"
+    # its blockers, with no order to it in this edition): a further blocker
+    # adds nothing to the kill and is one more creature the attacker may choose
+    # to destroy. This loop gave every blocker its best pair, so three
+    # creatures that each beat a 1/1 all blocked it and Daru Mender was lost
+    # (LGN Phase 5) — and of two 3/3s facing two 2/2s, both blocked the first.
+    # The blocker is left for its next-best pair.
     losing: list[tuple[int, int, float]] = []
     for blocker_idx, attacker_idx, score in sorted(legal_pairs, key=lambda item: item[2], reverse=True):
         if blocker_idx in used_blockers:
             continue
         if blocker_idx in assignments:
+            continue
+        if _blocks_already_kill(game, defending_player_index, attacker_idx, assignments):
             continue
         if _block_loses_its_blocker(game, defending_player_index, blocker_idx, attacker_idx):
             losing.append((blocker_idx, attacker_idx, score))
@@ -698,6 +720,34 @@ def _block_loses_its_blocker(
 #: over subsets of the gang.
 GANG_BLOCKERS = 4
 
+#: How many of the cheapest spare blockers a gang is searched among: every
+#: gang of up to `GANG_BLOCKERS` of them is weighed (at most 162).
+GANG_CANDIDATES = 8
+
+
+def _blockers_on(
+    game: Game, defending_player_index: int, attacker_idx: int, assignments: dict,
+) -> list[Permanent]:
+    """The creatures *assignments* already has blocking the attacker at
+    *attacker_idx*."""
+    found = [
+        game.permanent_at(defending_player_index, blocker_idx)
+        for blocker_idx, assigned in assignments.items()
+        if attacker_idx in (assigned if isinstance(assigned, list) else [assigned])
+    ]
+    return [permanent for permanent in found if permanent is not None]
+
+
+def _blocks_already_kill(
+    game: Game, defending_player_index: int, attacker_idx: int, assignments: dict,
+) -> bool:
+    """Whether the blocks in *assignments* already destroy the attacker at
+    *attacker_idx* (:func:`_gang_kills`)."""
+    attacker = game.permanent_at(game.active_player_index, attacker_idx)
+    return attacker is not None and _gang_kills(
+        game, attacker, _blockers_on(game, defending_player_index, attacker_idx, assignments),
+    )
+
 
 def _gang_blocks(
     game: Game,
@@ -714,7 +764,19 @@ def _gang_blocks(
     What the old loop did by accident (every blocker took its best pair, and
     two that liked one attacker blocked it together) as a decision: two 2/2s
     on a 3/3 trade one for it; two 1/1s on a 5/5 lose both for nothing.
+
+    **Which gang**: of every gang of up to `GANG_BLOCKERS` among the
+    `GANG_CANDIDATES` cheapest spare blockers that kills the attacker beside
+    the creatures already blocking it (a compelled one included) and is worth
+    it, the one the attacker can kill back least of (CR 510.1c: it divides its
+    damage as it likes), then the smallest, then the cheapest. A creature the
+    attacker cannot destroy — protection from its colour, indestructible, too
+    much toughness — costs that gang nothing, so it is the one taken. Adding
+    the cheapest creatures one at a time until the damage added up took
+    whatever came first, a creature more than the kill needed among them.
     """
+    from itertools import combinations
+
     attacker_seat = game.active_player_index
     candidates: dict[int, list[int]] = {}
     for blocker_idx, attacker_idx, _score in losing:
@@ -728,36 +790,41 @@ def _gang_blocks(
         attacker = game.permanent_at(attacker_seat, attacker_idx)
         if attacker is None:
             continue
-        already = [
-            game.permanent_at(defending_player_index, blocker_idx)
-            for blocker_idx, assigned in assignments.items()
-            if assigned == attacker_idx
-        ]
-        already = [perm for perm in already if perm is not None]
+        already = _blockers_on(game, defending_player_index, attacker_idx, assignments)
         if _gang_kills(game, attacker, already):
             continue
-        spare = [
-            blocker_idx for blocker_idx in candidates[attacker_idx]
-            if blocker_idx not in used_blockers
-        ]
-        # The cheapest creatures first: the gang is the fewest least-valuable
-        # blockers whose damage adds up to a kill.
-        spare.sort(key=lambda idx: permanent_worth(
-            game.permanent_at(defending_player_index, idx), now=False,
-        ))
-        gang: list[int] = []
-        for blocker_idx in spare[:GANG_BLOCKERS]:
-            gang.append(blocker_idx)
-            members = already + [
-                game.permanent_at(defending_player_index, idx) for idx in gang
-            ]
-            if not _gang_kills(game, attacker, members):
-                continue
-            if _gang_is_worth_it(game, attacker, members):
-                for idx in gang:
-                    assignments[idx] = attacker_idx
-                    used_blockers.add(idx)
-            break
+
+        def worth(idx: int) -> float:
+            return permanent_worth(game.permanent_at(defending_player_index, idx), now=False)
+
+        spare = sorted(
+            (
+                blocker_idx for blocker_idx in candidates[attacker_idx]
+                if blocker_idx not in used_blockers
+            ),
+            key=worth,
+        )[:GANG_CANDIDATES]
+        best = None
+        for size in range(1, min(GANG_BLOCKERS, len(spare)) + 1):
+            for gang in combinations(spare, size):
+                members = already + [
+                    game.permanent_at(defending_player_index, idx) for idx in gang
+                ]
+                if not _gang_kills(game, attacker, members):
+                    continue
+                if not _gang_is_worth_it(game, attacker, members):
+                    continue
+                lost = sum(
+                    permanent_worth(member, now=False)
+                    for member in _kills_back(game, attacker, members)
+                )
+                key = (lost, size, sum(worth(idx) for idx in gang))
+                if best is None or key < best[0]:
+                    best = (key, gang)
+        if best is not None:
+            for idx in best[1]:
+                assignments[idx] = attacker_idx
+                used_blockers.add(idx)
 
 
 def _kills_back(game: Game, attacker: Permanent, members: list[Permanent]) -> list[Permanent]:
@@ -766,8 +833,12 @@ def _kills_back(game: Game, attacker: Permanent, members: list[Permanent]) -> li
     player divides the damage, lethal damage to each in turn): the most
     valuable set whose lethal damage its power covers. Deathtouch makes one
     point lethal (CR 702.2c); an indestructible or shielded blocker is not
-    destroyed."""
+    destroyed, nor one the attacker's damage would be prevented on —
+    protection from its colour (CR 702.16e), a Circle — as
+    `ai_compelled_blocks.fight_outcome` reads the same fight one on one."""
     from itertools import combinations
+
+    from .ai_combat import _would_be_prevented
 
     power = combat_damage_assigned_by(attacker)
     if power <= 0:
@@ -775,6 +846,8 @@ def _kills_back(game: Game, attacker: Permanent, members: list[Permanent]) -> li
     costs: list[tuple[Permanent, int]] = []
     for member in members:
         if game._has_keyword(member, "indestructible") or member.regeneration_shield:
+            continue
+        if _would_be_prevented(game, attacker, member, power):
             continue
         remaining = max(1, member.effective_toughness - member.damage_marked)
         costs.append((member, 1 if game._has_keyword(attacker, "deathtouch") else remaining))
