@@ -1748,13 +1748,19 @@ def _action_balance_confirm(session, req, seat_type):
 
 @action_handler("sacrifice_confirm")
 def _action_sacrifice_confirm(session, req, seat_type):
-    pending = session.game.pending_sacrifice
-    if pending is None or req.seat != pending["player_index"]:
+    # The seat's own prompt, not the first one queued: a prompt owed by
+    # another seat is not a reason to refuse this one.
+    if session.game.pending_choice_of("sacrifice", req.seat) is None:
         raise HTTPException(status_code=400, detail="no sacrifice pending for you")
     # A beginning phase this sacrifice paused resumes from the action tail in
     # web/actions.py, along with every other prompt's — the resume used to live
     # here, which is why a phase paused on any other decision stayed paused.
-    ok = session.game.confirm_sacrifice(req.seat, list(req.sacrifice_indices or []))
+    if req.sacrifice_permanent_ids is not None:
+        ok = session.game.confirm_sacrifice(
+            req.seat, permanent_ids=list(req.sacrifice_permanent_ids),
+        )
+    else:
+        ok = session.game.confirm_sacrifice(req.seat, list(req.sacrifice_indices or []))
     if not ok:
         raise HTTPException(status_code=400, detail="invalid sacrifice selection")
 

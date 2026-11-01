@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 
 from ..oracle_types import X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT
 from ._amounts import evaluate_count
+from ..resumption import ask_in_turn_order
 from ._filters import seats_matching_deed
 from .registry import effect_handler
 
@@ -111,9 +112,10 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     standing prompt, everyone else takes the deterministic heuristic.
 
     ``who`` names the payers — absent means the effect's own controller, which
-    is what a bare imperative means (CR 109.5). "Each opponent" arms the same
-    prompt for each of them, still living, in seat order so the AI simulation
-    stays seed-reproducible. The two targeted forms are the seat the spell
+    is what a bare imperative means (CR 109.5). "Each player" / "each
+    opponent" is a round: every payer still living chooses in turn order and
+    the chosen permanents go together (CR 101.4, the end of this function).
+    The two targeted forms are the seat the spell
     already chose; they stay apart in the payload because CR 102.2/102.3 makes "target
     opponent" and "target player" different spells, and only the picker cares.
     ``event_subject_player`` is the seat a trigger's own condition named
@@ -149,9 +151,9 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         payers = list(game.opponents_of(caster_index))
     elif who == "each_player":
         # "Each player sacrifices a third of the creatures they control of
-        # their choice." (Pox.) `each_opponent` plus the caster, in seat order
-        # so the AI simulation stays seed-reproducible — the same list the
-        # branch above builds, over one more seat.
+        # their choice." (Pox.) `each_opponent` plus the caster — the same
+        # list the branch above builds, over one more seat. Who is *asked*
+        # first is CR 101.4's question, answered by the round at the end.
         payers = [
             seat for seat, player in enumerate(game.players) if not player.lost
         ]
@@ -324,30 +326,55 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     if instruction.payload.get("all"):
         # "…sacrifices **all** creatures they control" (Living Death). Nothing
         # is chosen (CR 701.21a): every match each payer controls is taken,
-        # gathered before any leaves.
+        # gathered before any leaves — **every payer's**, and then given up in
+        # one event (CR 101.4: "Then the actions happen simultaneously"). One
+        # seat at a time, a watcher going with the first seat's creatures
+        # (CR 603.10a) never saw the second seat's go.
         described = dict(instruction.payload.get("filter") or {})
-        for seat in payers:
-            payer = game.players[seat]
-            doomed = [
-                game.permanent_at(payer, index)
-                for index in game._sacrifice_candidate_indices(payer, described, exclude)
-            ]
-            gone = [p.card.name for p in doomed if game.sacrifice_permanent(p) is not None]
+        doomed_by_seat = [
+            (
+                seat,
+                [
+                    game.permanent_at(seat, index)
+                    for index in game._sacrifice_candidate_indices(
+                        game.players[seat], described, exclude
+                    )
+                ],
+            )
+            for seat in payers
+        ]
+        gone = game.sacrifice_permanents(
+            [perm for _seat, doomed in doomed_by_seat for perm in doomed]
+        )
+        for seat, doomed in doomed_by_seat:
+            went = [p.card.name for p in doomed if any(p is g for g in gone)]
             game.log.append(
-                f"{payer.name} sacrificed {', '.join(gone) or 'nothing'} "
+                f"{game.players[seat].name} sacrificed {', '.join(went) or 'nothing'} "
                 f"({context.card.name})"
             )
         context.results["sacrificed_this_way"] = True
         return True, "resolved"
-    could_pay = True
-    for seat in payers:
+    # "**Each player** sacrifices a creature" is one round of choices, made in
+    # turn order and then performed together — CR 101.4's own example: "First,
+    # the active player chooses a creature they control. Then each of the
+    # nonactive players, in turn order, chooses a creature they control. Then
+    # all creatures chosen this way are sacrificed simultaneously." So the
+    # seats are asked one at a time (``resumption.ask_in_turn_order``) and
+    # each answer is held in a batch the round's last step performs
+    # (``SacrificeChoicesMixin.finish_sacrifice_batch``). Every seat's prompt
+    # used to be armed at once in *seat* order, each sacrificing as it was
+    # answered.
+    batch = game.new_sacrifice_batch() if who in _EACH_SEAT_PAYERS else None
+    paid = {"could_pay": True}
+
+    def ask(seat: int) -> None:
         described = dict(instruction.payload.get("filter") or {})
         if any_number:
             offered = game._sacrifice_candidate_indices(
                 game.players[seat], described, exclude
             )
             if not offered:
-                continue
+                return
             game.arm_forced_sacrifice(
                 seat, len(offered),
                 filter=described,
@@ -355,8 +382,9 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
                 reason=context.card.name,
                 record=context.results,
                 up_to=True,
+                batch=batch,
             )
-            continue
+            return
         owed = (
             evaluate_count(game, game.players[seat], per_seat)
             if per_seat is not None else count
@@ -364,15 +392,23 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         if owed <= 0:
             # CR 608.2's "as much as possible": a seat that owes none is not
             # asked, rather than being handed a prompt with no answer.
-            continue
+            return
         if len(game._sacrifice_candidate_indices(
             game.players[seat], described, exclude
         )) < owed:
-            # The printed count is indivisible: a player with one of the two
-            # Swamps sacrifices neither, and the "if you can't" branch behind
-            # this step is what the card says happens instead.
-            could_pay = False
-            continue
+            paid["could_pay"] = False
+            if batch is None:
+                # The printed count is indivisible for a player told to pay
+                # it: one of the two Swamps sacrifices neither, and the "if
+                # you can't" branch behind this step is what the card says
+                # happens instead (Infernal Denizen).
+                return
+            # …but "each player sacrifices **four** lands" has no such
+            # branch, and a player holding three sacrifices the three (CR
+            # 609.3: an effect that attempts the impossible does as much as
+            # possible). Wildfire left a three-land player untouched while
+            # the other gave up four. The prompt asks for what the seat
+            # holds (``_sacrifice_prompt``'s ``min``).
         game.arm_forced_sacrifice(
             seat, owed,
             filter=described,
@@ -386,9 +422,32 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
             # effect cannot see it, and `_run`'s `run_resumable` is what carries
             # the reading step across an interactive seat's prompt.
             record=context.results,
+            batch=batch,
         )
-    context.results["sacrificed_this_way"] = could_pay
+
+    if batch is None:
+        for seat in payers:
+            ask(seat)
+        context.results["sacrificed_this_way"] = paid["could_pay"]
+        return True, "resolved"
+
+    owing = set(payers)
+
+    def ask_in_turn(seat: int) -> None:
+        if seat in owing:
+            ask(seat)
+
+    def done() -> None:
+        game.finish_sacrifice_batch(batch)
+        context.results["sacrificed_this_way"] = paid["could_pay"]
+
+    ask_in_turn_order(game, ask_in_turn, then=done)
     return True, "resolved"
+
+
+#: The payers that make a sacrifice a **round** — one choice per seat, in turn
+#: order, performed together (CR 101.4) — rather than one seat's debt.
+_EACH_SEAT_PAYERS = frozenset({"each_player", "each_opponent"})
 
 
 @effect_handler("rebalance_lands")

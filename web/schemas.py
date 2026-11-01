@@ -705,6 +705,11 @@ class GameActionRequest(BaseModel):
     # Forced sacrifice (Lich): the battlefield indices the player chooses to
     # sacrifice, sent with `sacrifice_confirm`.
     sacrifice_indices: list[int] | None = None
+    # …or the same choice by stable permanent id (each offered entry of the
+    # `sacrifice_select` prompt carries its `id`). Authoritative over
+    # `sacrifice_indices` when present; a stale id is refused, never guessed
+    # (CR 400.7: an id names one object, a slot renumbers).
+    sacrifice_permanent_ids: list[int] | None = None
     # CR 616.1e: which of the effects contending over one event applies first,
     # as an index into the prompt's `options`. Sent with `effect_order_confirm`.
     option_index: int | None = None

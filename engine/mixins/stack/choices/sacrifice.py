@@ -979,12 +979,20 @@ class SacrificeChoicesMixin:
         record: dict | None = None,
         up_to: bool = False,
         count_onto=None,
+        batch: dict | None = None,
     ) -> None:
         """Force a player to sacrifice ``count`` permanents matching the filter
         payload ``filter``. A human seat is prompted to choose which; AI /
         headless play resolves it inline. Multiple calls to the same player
         during one step accumulate onto the existing prompt (e.g. two
         combat-damage events feeding Lich).
+
+        *batch* is one resolution's "**each player** sacrifices …"
+        (:meth:`new_sacrifice_batch`): the seat's answer — asked or defaulted
+        — is *held*, and nothing is sacrificed until
+        :meth:`finish_sacrifice_batch` performs every seat's together (CR
+        101.4). A batched prompt never folds into one already owed: it is one
+        seat's turn in a round, not a second debt of the same shape.
 
         ``filter`` has no default. An empty payload is a legal value meaning "any
         permanent", but it has to be written down: a caller that simply forgot
@@ -1015,9 +1023,16 @@ class SacrificeChoicesMixin:
             # sacrifice is *answered* by that — zero is a legal answer — so the
             # count it owes is recorded rather than left unset.
             self._record_sacrifice_count(count_onto, 0)
+            if batch is not None:
+                # Held with the round's answers: a consequence of giving up
+                # too few is part of the simultaneous action (CR 101.4).
+                batch["shortfalls"].append((player_index, count, on_short, reason))
+                return
             self._apply_sacrifice_shortfall(player_index, count, on_short, reason)
             return
-        queued = self.pending_choice_of("sacrifice", player_index)
+        queued = None if batch is not None else self.pending_choice_of(
+            "sacrifice", player_index
+        )
         if queued is not None:
             if (
                 queued.data["filter"] == filter
@@ -1038,11 +1053,99 @@ class SacrificeChoicesMixin:
                     up_to=up_to, count_onto=count_onto,
                 )
             return
+        extra = {"_batch": batch} if batch is not None else {}
         self.arm_pending_choice(
             "sacrifice", player_index,
             count=count, filter=filter, exclude=exclude, reason=reason,
             on_short=on_short, record=record, up_to=up_to, _count_onto=count_onto,
+            **extra,
         )
+
+    # -- "Each player sacrifices …": chosen in turn order, done together -----
+    #
+    # CR 101.4's own example: "A card reads 'Each player sacrifices a
+    # creature.' First, the active player chooses a creature they control.
+    # Then each of the nonactive players, in turn order, chooses a creature
+    # they control. Then all creatures chosen this way are sacrificed
+    # simultaneously." The handler asks one seat at a time
+    # (``resumption.ask_in_turn_order``) and arms each seat's ``sacrifice``
+    # prompt with a batch; the answers are held here and performed by the
+    # round's last step. Every prompt of a round used to be armed at once, in
+    # seat order, and each answer sacrificed on the spot: the nonactive player
+    # was asked first whenever seat 0 was not the active player, a later
+    # chooser saw nothing of an earlier one's choice, and an anthem given up
+    # by the first seat had stopped applying to what the second chose among.
+
+    @staticmethod
+    def new_sacrifice_batch() -> dict:
+        """One resolution's round of ``sacrifice`` prompts — the keep batch's
+        shape (:meth:`new_keep_batch`), finished by the round's own last step
+        rather than by reading the queue, because the round is a
+        ``run_resumable`` loop that already knows when its last seat has
+        answered."""
+        return {"answers": [], "shortfalls": [], "applied": False}
+
+    def _default_sacrifice_slots(self, player, data: dict) -> list[int]:
+        """The battlefield slots a seat nobody asks gives up: the shared
+        default rule (:meth:`default_sacrifice_pick`) applied *count* times
+        over the board as it stands — nothing leaves before the round's last
+        answer, so every pick is made on one board. A ceiling ("any number")
+        is answered with none, the inline default's stated policy."""
+        if data.get("up_to"):
+            return []
+        valid = self._sacrifice_candidate_indices(player, data["filter"], data["exclude"])
+        remaining = {index: self.permanent_at(player, index) for index in valid}
+        picks: list[int] = []
+        for _ in range(min(int(data["count"]), len(remaining))):
+            perm = self.default_sacrifice_pick(list(remaining.values()))
+            slot = next(i for i, p in remaining.items() if p is perm)
+            picks.append(slot)
+            del remaining[slot]
+        return picks
+
+    def finish_sacrifice_batch(self, batch: dict) -> list:
+        """Sacrifice every held answer of *batch* in **one event**, then say
+        what each seat gave up, in the order the seats chose.
+
+        Every seat's P/T totals and records are read before anything moves
+        (CR 608.2h's last-known information, the rule
+        :meth:`_resolve_sacrifice` follows for one seat), then
+        :meth:`sacrifice_permanents` — so a watcher going in the same event
+        sees the rest go (CR 603.10a). A seat that could give up fewer than it
+        owed has its printed consequence applied after the sacrifices, with
+        the others'. Returns the permanents sacrificed. Runs once.
+        """
+        if batch.get("applied"):
+            return []
+        batch["applied"] = True
+        plans: list = []
+        doomed: list = []
+        for choice, chosen in batch["answers"]:
+            live = [perm for perm in chosen if self.is_on_battlefield(perm)]
+            totals = (
+                sum(int(perm.effective_power) for perm in live),
+                sum(int(perm.effective_toughness) for perm in live),
+            )
+            for perm in live:
+                _record_sacrificed_card(choice.data.get("record"), choice.player_index, perm)
+            plans.append((choice, live, totals))
+            doomed.extend(live)
+        gone = self.sacrifice_permanents(doomed)
+        for choice, live, totals in plans:
+            data = choice.data
+            player = self.players[choice.player_index]
+            went = [perm for perm in live if any(perm is g for g in gone)]
+            for perm in went:
+                self.log.append(f"{player.name} sacrificed {perm.card.name} ({data['reason']})")
+            self._record_sacrifice_count(data.get("_count_onto"), len(went), totals)
+            short = int(data.get("_short", 0))
+            if short > 0:
+                self._apply_sacrifice_shortfall(
+                    choice.player_index, short, data["on_short"], data["reason"],
+                )
+        for seat, owed, on_short, reason in batch["shortfalls"]:
+            self._apply_sacrifice_shortfall(seat, owed, on_short, reason)
+        return gone
 
     def _record_sacrifice_count(
         self, count_onto, given_up: int, totals: tuple[int, int] = (0, 0)
@@ -1091,17 +1194,48 @@ class SacrificeChoicesMixin:
             "reason": choice.data["reason"],
         }
 
-    def confirm_sacrifice(self, player_index: int, indices: list[int]) -> bool:
-        """Resolve the pending forced sacrifice with the player's chosen battlefield
-        indices. Requires exactly ``min(count, eligible permanents)`` distinct
-        eligible permanents; if the player owed more than they could sacrifice, the
-        shortfall consequence applies (Lich loses; Lord of the Pit deals damage)."""
-        return self.resolve_pending_choice("sacrifice", player_index, indices=indices)
+    def confirm_sacrifice(
+        self, player_index: int, indices: list[int] | None = None,
+        *, permanent_ids: list[int] | None = None,
+    ) -> bool:
+        """Resolve the pending forced sacrifice with the player's chosen
+        permanents — by stable id (*permanent_ids*, authoritative when given)
+        or by battlefield slot. Requires exactly ``min(count, eligible
+        permanents)`` distinct eligible permanents; if the player owed more
+        than they could sacrifice, the shortfall consequence applies (Lich
+        loses; Lord of the Pit deals damage)."""
+        return self.resolve_pending_choice(
+            "sacrifice", player_index, indices=indices, permanent_ids=permanent_ids,
+        )
 
-    def _resolve_sacrifice(self, choice: PendingChoice, indices: list[int]) -> bool:
+    def _sacrifice_slots_for_ids(self, player, permanent_ids) -> list[int] | None:
+        """*permanent_ids* as the seat's battlefield slots, or None when any id
+        names no permanent of theirs (a stale id is a refusal, never a
+        guess). The prompt's own id form (CR 400.7: an id names one object,
+        where a slot renumbers the moment anything leaves)."""
+        seat = self.players.index(player)
+        slots: list[int] = []
+        for pid in permanent_ids:
+            found = self.find_permanent_by_id(pid) if isinstance(pid, int) else None
+            if found is None or found[0] != seat:
+                return None
+            slot = self.battlefield_index_of(found[1])
+            if slot is None:
+                return None
+            slots.append(slot)
+        return slots
+
+    def _resolve_sacrifice(
+        self, choice: PendingChoice, indices: list[int] | None,
+        permanent_ids: list[int] | None = None,
+    ) -> bool:
         player_index = choice.player_index
         player = self.players[player_index]
         data = choice.data
+        if permanent_ids is not None:
+            indices = self._sacrifice_slots_for_ids(player, permanent_ids)
+            if indices is None or len(set(permanent_ids)) != len(permanent_ids):
+                return False
         valid = self._sacrifice_candidate_indices(player, data["filter"], data["exclude"])
         count = int(data["count"])
         need = min(count, len(valid))
@@ -1115,6 +1249,23 @@ class SacrificeChoicesMixin:
         if not enough or any(i not in valid for i in chosen):
             return False
         reason = data["reason"]
+        batch = data.get("_batch")
+        if batch is not None:
+            # One seat's turn in "each player sacrifices …": the choice is
+            # held and said now — public the moment it is made, because the
+            # next player chooses knowing it (CR 101.4b) — and nothing leaves
+            # until the round's last answer (:meth:`finish_sacrifice_batch`).
+            held = [self.permanent_at(player, i) for i in sorted(chosen)]
+            self.discard_pending_choice(choice)
+            if count > len(valid) and not data.get("up_to"):
+                data["_short"] = count - len(valid)
+            batch["answers"].append((choice, held))
+            self.log.append(
+                f"{player.name} chose "
+                + (", ".join(perm.card.name for perm in held) or "nothing")
+                + f" to sacrifice ({reason})"
+            )
+            return True
         # Resolved before any removal, so no index is held across one.
         removed: list[str] = []
         record = data.get("record")
@@ -1143,6 +1294,13 @@ class SacrificeChoicesMixin:
     def _default_sacrifice(self, choice: PendingChoice) -> None:
         self.discard_pending_choice(choice)
         data = choice.data
+        if data.get("_batch") is not None:
+            # Held like an asked answer, picked by the same rule the inline
+            # default uses — on the board as it stands, since nothing in the
+            # round has moved yet.
+            slots = self._default_sacrifice_slots(self.players[choice.player_index], data)
+            self._resolve_sacrifice(choice, slots)
+            return
         self._resolve_sacrifice_inline(
             choice.player_index, int(data["count"]), data["filter"],
             data["exclude"], data["reason"], data["on_short"], data.get("record"),
