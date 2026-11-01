@@ -24,7 +24,13 @@ _CARDS = {card.name: card for card in load_catalog()}
 
 def _session_at_human_upkeep(names) -> tuple[str, object]:
     """A human-vs-AI session whose human seat (0) controls *names*, its upkeep
-    just begun."""
+    just begun.
+
+    The AI seat holds no hand: with mana costs off, a dealt instant is free,
+    and the AI's answer to each pass is weighed on rehearsal copies whose
+    hidden zones are shuffled by the module-level RNG (``conceal_from``), so
+    whether it casts one — and how many passes the triggers then take — read
+    whatever state an earlier test left that RNG in."""
     created = client.post(
         "/api/sessions",
         json={"mode": "human_vs_ai", "host_name": "Host", "host_colors": 2,
@@ -36,6 +42,7 @@ def _session_at_human_upkeep(names) -> tuple[str, object]:
     game.enforce_mana_costs = False
     game.players[0].battlefield = []
     game.players[1].battlefield = []
+    game.players[1].hand = []
     for name in names:
         game._put_permanent_onto_battlefield(0, Permanent(card=_CARDS[name]), None)
     game.stack.clear()
