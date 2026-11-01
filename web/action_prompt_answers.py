@@ -1538,6 +1538,21 @@ def _action_entry_exile_confirm(session, req, seat_type):
             ),
         )
 
+@action_handler("entry_reveal_confirm")
+def _action_entry_reveal_confirm(session, req, seat_type):
+    # Amplify (CR 702.38a): the hand slots revealed as the creature enters,
+    # none included. The engine re-checks each against the cards that share a
+    # creature type with it, so the prompt's list is a hint.
+    if req.hand_indices is None:
+        raise HTTPException(status_code=400, detail="hand_indices is required")
+    if not session.game.resolve_pending_choice(
+        "entry_reveal", req.seat, hand_indices=list(req.hand_indices)
+    ):
+        raise HTTPException(status_code=400, detail=(
+            "no amplify reveal is pending for you, or those cards are not "
+            "the ones offered"
+        ))
+
 @action_handler("mode_choice_confirm")
 def _action_mode_choice_confirm(session, req, seat_type):
     # A modal ability (Relic Bind, Trufflesnout, Elder Gargaroth): the

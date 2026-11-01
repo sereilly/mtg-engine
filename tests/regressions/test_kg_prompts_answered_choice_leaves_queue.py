@@ -1360,6 +1360,29 @@ def _frankensteins_monster():
 
 
 @scenario(
+    "entry_reveal", "Glowering Rogon",
+    # The hand is Canopy Crawler (a Beast) and an Island once the Rogon has
+    # left it, so slot 0 is the one card amplify may reveal.
+    answer=lambda g, c: {"hand_indices": [0]},
+    wire=lambda g, c: {"hand_indices": [0]},
+    then=lambda g: _assert(
+        (on_board(g, 0, "Glowering Rogon").effective_power,
+         on_board(g, 0, "Glowering Rogon").effective_toughness) == (5, 5)
+    ),
+)
+def _glowering_rogon():
+    # Legions is measured when this lands, so its cards are read from the set
+    # rather than from the shipped catalog this file's boards are built from.
+    from engine.card_loader import load_cards, manifest_set_path
+
+    legions = {c.name: c for c in load_cards(manifest_set_path("LGN", include_measured=True))}
+    game = duel(hands=(("Island",), ()))
+    game.players[0].hand[:0] = [legions["Glowering Rogon"], legions["Canopy Crawler"]]
+    game.cast_from_hand(0, "Glowering Rogon")
+    return game
+
+
+@scenario(
     "body_choice", "Primal Clay",
     answer=lambda g, c: {"option_index": 2},
     wire=lambda g, c: {"hand_index": 2},

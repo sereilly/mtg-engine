@@ -609,6 +609,32 @@ def _lower_lose_life(
                 "this loss is a printed rate per 1 life gained", node=node,
             )
         payload["per_each"] = {"trigger_record": key}
+    # "Whenever this creature attacks or blocks, you lose 1 life **for each
+    # +1/+1 counter on it**." (Embalmed Brawler.) A count of the ability's own
+    # source — one number whoever loses the life, so it is the shared
+    # ``x_from_count`` channel with the printed rate as its multiplier, read at
+    # resolution by the one evaluator that already answers "the number of
+    # +1/+1 counters on it" for the damage family (``source_counters``). The
+    # counters on *another* object ("…on that creature") are a different
+    # pile this loss has no reader for, and refuse rather than counting the
+    # source's.
+    if isinstance(node.per_each, ast.CountersOnEventSubject):
+        raise LoweringError(
+            "no life-loss reader counts the counters on the event's object",
+            node=node,
+        )
+    if isinstance(node.per_each, ast.CountersOnSource):
+        if not isinstance(node.amount, ast.Fixed):
+            raise LoweringError(
+                "a loss per counter on the source is a printed rate", node=node
+            )
+        payload = {
+            "amount": "x",
+            X_FROM_COUNT: {
+                "source_counters": node.per_each.kind,
+                "multiplier": node.amount.value,
+            },
+        }
     # "Each player loses 1 life for each creature **they** control."
     # (Stronghold Discipline.) One number per losing seat, counted on that
     # seat's own battlefield — the per-recipient channel the halved loss above
@@ -618,6 +644,7 @@ def _lower_lose_life(
     # below keeps its own payload.
     if (
         node.per_each is not None
+        and not isinstance(node.per_each, ast.CountersOnSource)
         and node.player.kind in _PER_SEAT_LIFE_RECIPIENTS
         and isinstance(node.amount, ast.Fixed)
     ):
@@ -680,7 +707,7 @@ def _lower_lose_life(
     # them already puts in front of its word ("defending player" only under an
     # event that froze one) included.
     elif node.per_each is not None and not isinstance(
-        node.per_each, ast.EachLifeGained
+        node.per_each, (ast.EachLifeGained, ast.CountersOnSource)
     ):
         filt = node.per_each
         if filt.zone != "graveyard" or not _counts_the_losers_own_pile(

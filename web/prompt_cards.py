@@ -1293,3 +1293,35 @@ def _entry_exile(ctx: PromptContext, choices: list) -> dict:
         "cards": [ctx.serialize_card(card) for card in player.graveyard],
         "legal_indices": ctx.game._entry_exile_candidates(choice),
     }
+
+
+@prompt_renderer("entry_reveal")
+def _entry_reveal(ctx: PromptContext, choices: list) -> dict:
+    """Amplify (CR 702.38a): which cards in the chooser's hand to reveal as the
+    creature enters, and how many +1/+1 counters each revealed card buys.
+
+    ``choose_cards_in_hand``'s "any number of" shape: every legal hand slot is
+    offered, none is a legal answer, and the slots are the engine's own
+    candidate list — the one the answer is re-checked against (idiom 9), so a
+    hand card that shares no creature type with the creature cannot be sent.
+    Only the slots are serialized with names, because a hand is hidden
+    (CR 400.2) and this prompt is shown to the chooser alone.
+    """
+    choice = choices[0]
+    owner = ctx.game.players[choice.player_index]
+    shared = (choice.data.get("filter") or {}).get("shares_creature_type_with_each")
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "counters_each": int(choice.data.get("counters_each", 0) or 0),
+        "any_number": True,
+        "verb": "reveal",
+        # The creature types a revealed card must share one of, for the line
+        # the panel shows ("reveal cards that share a creature type with it:
+        # Beast"). Presentation only — the engine re-derives the candidates.
+        "creature_types": sorted((shared or [[]])[0]),
+        "choices": [
+            {"hand_index": index, "name": owner.hand[index].name}
+            for index in ctx.game._entry_reveal_candidates(choice)
+        ],
+    }

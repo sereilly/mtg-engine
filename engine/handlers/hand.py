@@ -79,8 +79,11 @@ def put_cards_from_hand_onto_battlefield(game: Game, instruction: OracleInstruct
         else eligible_cards[:count]
     )
     caster_index = game.players.index(caster)
+    # Together out of the hand, then each onto the battlefield: the cards enter
+    # at the same time, so none is still in the hand while another's entry
+    # replacement reads it (``_put_entrants``' reason, CR 702.38a's amplify).
+    chosen = [card for card in chosen if game.take_card_from_hand(caster, card)]
     for card in chosen:
-        game.take_card_from_hand(caster, card)
         game._put_permanent_onto_battlefield(caster_index, Permanent(card=card), None)
         game.log.append(f"{caster.name} put {card.name} onto the battlefield")
     if not chosen:
@@ -669,9 +672,27 @@ def put_chosen_hand_cards_onto_battlefield(game: Game, instruction: OracleInstru
 
 def _put_entrants(game, context, entrants, hosts) -> None:
     """Put every chosen card onto the battlefield under its owner, each Aura
-    attached to its host (see ``put_chosen_hand_cards_onto_battlefield``)."""
+    attached to its host (see ``put_chosen_hand_cards_onto_battlefield``).
+
+    **The cards enter at the same time, so they leave the hand together**,
+    before the first of them enters. Two passes rather than one: which cards
+    move is settled first (CR 400.4a and 303.4g keep some in the hand) and
+    every mover is taken out of its owner's hand, and only then does each
+    enter. Moved one at a time, the second Beast a Tempting Wurm's opponent
+    puts down was still in that player's hand while the first one's entry
+    replacement read it — amplify's reveal (CR 702.38a: "You can't reveal this
+    card or any other cards that are entering the battlefield at the same time
+    as this card") offered it, and Heightened Awareness's "As this enchantment
+    enters, discard your hand" discarded the creature entering beside it.
+    """
     from ..aura_attachment import attach_aura, enchant_card_refusal
 
+    def stays(card, owner, why: str, rule: str) -> None:
+        game.log.append(
+            f"{card.name} {why} and stays in {owner.name}'s hand ({rule})"
+        )
+
+    movers = []
     for position, (seat, card) in enumerate(entrants):
         owner = game.players[seat]
         if not any(card_has_type(card, kind) for kind in _PERMANENT_CARD_TYPES):
@@ -679,23 +700,28 @@ def _put_entrants(game, context, entrants, hosts) -> None:
             # battlefield, it remains in its previous zone." A revealed instant
             # whose name a permanent shares (a token or a copy can carry one)
             # stays in its owner's hand.
-            game.log.append(
-                f"{card.name} can't enter the battlefield and stays in "
-                f"{owner.name}'s hand (400.4a)"
-            )
+            stays(card, owner, "can't enter the battlefield", "400.4a")
             continue
-        host = None
-        if position in hosts:
-            host = hosts[position]
-            if host is None or not game.is_on_battlefield(host) or (
-                enchant_card_refusal(game, card, seat, host) is not None
-            ):
-                game.log.append(
-                    f"{card.name} has nothing it could enchant and stays in "
-                    f"{owner.name}'s hand (303.4g)"
-                )
-                continue
-        if not game.take_card_from_hand(owner, card):
+        host = hosts.get(position)
+        if position in hosts and (
+            host is None or not game.is_on_battlefield(host)
+            or enchant_card_refusal(game, card, seat, host) is not None
+        ):
+            stays(card, owner, "has nothing it could enchant", "303.4g")
+            continue
+        if game.take_card_from_hand(owner, card):
+            movers.append((position, seat, card, host))
+    for position, seat, card, host in movers:
+        owner = game.players[seat]
+        if host is not None and (
+            not game.is_on_battlefield(host)
+            or enchant_card_refusal(game, card, seat, host) is not None
+        ):
+            # An earlier entrant's entry replacement took the host away (an
+            # Overlaid Terrain sacrificing every land as it enters): the Aura
+            # has nothing to enchant and stays where it was (CR 303.4g).
+            game.put_card_into_hand(owner, card)
+            stays(card, owner, "has nothing it could enchant", "303.4g")
             continue
         permanent = Permanent(card=card)
         game._put_permanent_onto_battlefield(seat, permanent, None)

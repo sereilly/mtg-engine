@@ -142,6 +142,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.29",  # Cycling (USG: 34 cards)
         "702.36",  # Fear
         "702.37",  # Morph (ONS: 46 cards; ``engine/face_down.py``)
+        "702.38",  # Amplify (LGN: 9 cards; ``engine/amplify.py``)
         "702.39",  # Provoke (LGN: 8 cards + Hunter Sliver; ``engine/provoke.py``)
         "702.108", # Prowess
         "702.111", # Menace

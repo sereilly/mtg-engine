@@ -35,6 +35,7 @@ from .ai_valuation import (
     harms_its_own_source,
     is_mana_ability,
     reaches_both_sides,
+    sized_by_its_own_empty_counters,
     source_becomes_an_aura,
     source_toughness_change,
     waits_on_a_later_draw,
@@ -276,6 +277,13 @@ def _activation_candidate(
     # phase. Derived from the payload, so it names no card.
     if "cost_tap_characteristic" in (
         ability.instruction.payload.get("x_from_count") or {}
+    ):
+        return None
+    # "…damage equal to the number of +1/+1 counters on it" with none on it
+    # (an amplifier that revealed nothing): a tap spent on nothing. Not when
+    # the cost itself puts a counter there first.
+    if ability.cost.put_counter is None and sized_by_its_own_empty_counters(
+        ability.instruction, permanent,
     ):
         return None
 

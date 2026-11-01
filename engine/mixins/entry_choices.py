@@ -230,6 +230,78 @@ class EntryChoicesMixin:
             # headless seat from stalling on it forever.
             self.discard_pending_choice(choice)
 
+    # -- "Amplify N": reveal cards from your hand as this enters (CR 702.38a) --
+
+    def _entry_reveal_candidates(self, choice) -> list[int]:
+        """Hand slots the reveal may name, re-derived from the filter the
+        prompt was armed with — the offer and the answer's check are one list
+        (idiom 9), and a hand that changed since is read as it is now."""
+        from ..amplify import revealable_hand_slots
+
+        return revealable_hand_slots(
+            self, choice.player_index, dict(choice.data.get("filter") or {})
+        )
+
+    def _resolve_entry_reveal(self, choice, hand_indices) -> bool:
+        """Reveal the chosen cards and place the counters they buy.
+
+        "Any number of" (CR 702.38a): none is a legal answer and so is every
+        candidate, but a slot outside the candidates or named twice rejects the
+        whole answer and leaves the prompt queued — a malformed request cannot
+        reveal a Goblin for a Beast's amplify. The cards stay in the hand and
+        become public (CR 701.20a): the log names them and the reveal feed the
+        web layer reads carries them. The counters go through
+        ``place_plus1_counters`` — entering with counters is a counter placement
+        like any other, so a CR 614 doubler of +1/+1 counters raises it.
+        """
+        if not isinstance(hand_indices, list):
+            return False
+        picks = list(hand_indices)
+        if any(not isinstance(index, int) for index in picks):
+            return False
+        if len(set(picks)) != len(picks):
+            return False
+        legal = set(self._entry_reveal_candidates(choice))
+        if any(index not in legal for index in picks):
+            return False
+        player = self.players[choice.player_index]
+        permanent = choice.data.get("_entering_permanent") or choice.data.get("permanent")
+        revealed = [player.hand[index] for index in sorted(picks)]
+        name = choice.data.get("card_name", "an entering permanent")
+        each = int(choice.data.get("counters_each", 0) or 0)
+        if revealed:
+            self.record_reveal(choice.player_index, [card.name for card in revealed])
+        self.log.append(
+            f"{player.name} revealed "
+            + (", ".join(card.name for card in revealed) if revealed else "no cards")
+            + f" for {name}'s amplify"
+        )
+        self.discard_pending_choice(choice)
+        if revealed and each > 0 and permanent is not None:
+            placed = self.place_plus1_counters(permanent, each * len(revealed))
+            self.log.append(
+                f"{name} entered with {placed} +1/+1 counter(s) (amplify {each})"
+            )
+            self._recompute_continuous_effects()
+        return True
+
+    def _default_entry_reveal(self, choice) -> None:
+        """The stated policy for a seat nobody asks (idiom 8): **every**
+        eligible card.
+
+        Revealing costs nothing and each card is counters on the controller's
+        own creature, so the most is the answer that is never the worst one —
+        Ghastly Remains is a 0/0 that dies to the state-based check with an
+        empty reveal. What revealing gives away (the hand, to the table) is a
+        weight ``engine/ai_valuation.py`` would have to argue, not a branch
+        here.
+        """
+        if not self._resolve_entry_reveal(choice, self._entry_reveal_candidates(choice)):
+            # The candidates were just derived from the same rule, so a refusal
+            # is a bug and not a board state; dropping the prompt keeps a
+            # headless seat from stalling on it.
+            self.discard_pending_choice(choice)
+
     def _dominant_nontoken_color(self, player: PlayerState) -> str:
         """The color *player* controls most of among nontoken permanents — the
         deterministic default for Jihad's "choose a color" (a color the chosen

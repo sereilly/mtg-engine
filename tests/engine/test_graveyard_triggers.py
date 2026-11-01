@@ -219,7 +219,12 @@ def test_every_graveyard_functioning_trigger_reaches_its_zone():
         # one of each basic covers any generic cost and no cost that names a
         # colour twice — the offer was declined out of hand and the guard read
         # a working card as one that never fired.
-        for basic in ("Plains", "Island", "Swamp", "Mountain", "Forest") * 2:
+        #
+        # **Three of each**, since Ghastly Remains (LGN): {B}{B}{B}, the same
+        # miss one pip further — two Swamps cannot pay it, the offer is
+        # rightly never made, and the guard read a working card as one that
+        # never fired.
+        for basic in ("Plains", "Island", "Swamp", "Mountain", "Forest") * 3:
             p1.battlefield.append(Permanent(card=pool[basic]))
         game._sync_control()
         game.interactive_seats = {0}

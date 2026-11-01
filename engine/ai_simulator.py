@@ -1241,8 +1241,11 @@ def _play_special_actions(
         return
     choice, refusal = taken
     _resolve_pending_choices(game)
-    # A face-up trigger (CR 603.3) resolves in this main phase (CR 116.3),
-    # not as a step left owing into combat (Warbreak Trumpeter's Goblins).
+    # "When this creature is turned face up, …" (CR 702.37e, 603.3): the
+    # trigger is on the stack in this main phase, and it resolves here (CR
+    # 116.3), before the combat it may decide (Patron of the Wild's +3/+3,
+    # Skirk Marauder's 2 damage, Warbreak Trumpeter's Goblins) — it was
+    # carried across the step into the beginning of combat.
     if refusal is None and game.stack:
         _drain_step(game)
     report.log_lines.append(

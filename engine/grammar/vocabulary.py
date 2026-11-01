@@ -176,7 +176,14 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
 #: A set rather than "consume any digit after any keyword", because a digit
 #: sitting behind a keyword that does not take one belongs to whatever comes
 #: next, and consuming it would be a silent misparse rather than a refusal.
-NUMERIC_ARGUMENT_KEYWORDS: frozenset[str] = frozenset({"rampage"})
+#:
+#: Amplify (CR 702.38a, "Amplify N") is the second. It is **not** in
+#: :data:`IMPLEMENTED_KEYWORDS`: like morph and madness it is admitted by the
+#: reader that implements it (``engine/amplify.py``), because a bare word with no
+#: number is no ability at all. It is here so the argument is stripped wherever
+#: a printed instance is named back to its ability (``keywords.
+#: keyword_ability_name``): "amplify 1" is the ability *amplify*.
+NUMERIC_ARGUMENT_KEYWORDS: frozenset[str] = frozenset({"rampage", "amplify"})
 
 
 #: The keyword **families** a card can name wholesale: "loses all landwalk

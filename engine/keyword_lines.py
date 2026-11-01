@@ -24,6 +24,7 @@ from __future__ import annotations
 import re
 
 from .oracle_types import ParsedTriggeredAbility, _COLOR_WORD_TO_SYMBOL
+from .amplify import amplify_amount
 from .cumulative_upkeep import cumulative_upkeep_triggers
 from .flanking import flanking_triggers
 from .madness import madness_triggers
@@ -154,6 +155,12 @@ def _qualified_keyword_part(part: str) -> bool:
     # the one that admits it, exactly as the protection arm below admits only
     # the qualities `_protection_qualities` models.
     if rampage_amount(part) is not None:
+        return True
+    # Amplify carries a number too (CR 702.38a: "Amplify N"), and is admitted
+    # the same way: by the reader the entry state reveals with
+    # (`engine/amplify.py`), so an amplify it cannot read keeps the line refused
+    # rather than shipping a creature that enters without its counters.
+    if amplify_amount(part) is not None:
         return True
     # Cumulative upkeep carries a cost rather than a quality (CR 702.24a), and
     # the cost is the whole of it. Same rule as rampage one line up: the reader

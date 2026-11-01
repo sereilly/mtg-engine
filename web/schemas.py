@@ -140,6 +140,9 @@ ActionKind = Literal[
     "land_type_swap_confirm",
     "body_choice_confirm",
     "entry_exile_confirm",
+    # CR 702.38a amplify: the hand slots revealed as the creature enters
+    # (`hand_indices`, none included).
+    "entry_reveal_confirm",
     "player_choice_confirm",
     "cast_choice_confirm",
     # CR 702.35a's madness trigger: cast the exiled card for its madness cost
