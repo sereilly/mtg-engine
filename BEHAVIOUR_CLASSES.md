@@ -7,7 +7,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 - Cards in the catalog: **5993**
 - Distinct behaviours: **5448**
 - Cards sharing a behaviour with another: **788** in **243** classes
-- Unverified cards covered by a verified peer: **213**
+- Unverified cards covered by a verified peer: **211**
 
 | Size | Cards |
 | --- | --- |
@@ -62,12 +62,12 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 4 | Gluttonous Zombie, Razortooth Rats, Severed Legion, Squirming Mass |
 | 4 | Goblin Chariot, Lightning Elemental, Raging Goblin, Thundering Giant |
 | 4 | Laccolith Grunt, Laccolith Titan, Laccolith Warrior, Laccolith Whelp |
-| 4 | Metallic Sliver, **Obsianus Golem**, Phyrexian Hulk, Phyrexian Walker |
+| 4 | **Metallic Sliver**, **Obsianus Golem**, Phyrexian Hulk, Phyrexian Walker |
 | 4 | **Prodigal Sorcerer**, Razorfin Hunter, Rootwater Hunter, Zuran Spellcaster |
 | 3 | Aggressive Urge, Defiant Strike, Sudden Strength |
 | 3 | Armor Sliver, Barbed Sliver, Spectral Sliver |
 | 3 | **Army of Allah**, Morale, Trumpet Blast |
-| 3 | **Blade Sliver**, Muscle Sliver, **Plated Sliver** |
+| 3 | **Blade Sliver**, **Muscle Sliver**, **Plated Sliver** |
 | 3 | Breezekeeper, Teferi's Drake, Tolarian Drake |
 | 3 | Cateran Brute, Cateran Kidnappers, Cateran Persuader |
 | 3 | Cave Tiger, Rabid Wolverines, Viashino Weaponsmith |

@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5993**
-- Passed: **923** (634 checked in-game, 289 auto-passed)
-- Failed: **1**
-- Equivalent to a passing card: **67**
-- Untested: **5002**
+- Passed: **929** (641 checked in-game, 288 auto-passed)
+- Failed: **0**
+- Equivalent to a passing card: **66**
+- Untested: **4998**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -646,7 +646,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Brontotherium | ⬜ untested |  |
 | Bronze Horse | ⬜ untested |  |
 | Bronze Tablet | ⬜ untested |  |
-| Brood Sliver | ❌ fail | Its combat-damage triggers outlive their step: with a human at the table, the first Brood (or Essence) trigger whose resolution asks a seat (the AI's may, or the human's) holds, and the combat rail closes the combat damage step anyway (advance_combat_phase leave_the_damage_step asks no _combat_awaits_an_answer; that test also answers False for an AI-owned prompt). Seen: AI attack under AI Brood+Essence Sliver left 3 Essence + 1 Brood triggers on the stack into the AI end step; my Sliver hitting the AI got the Brood offer in end_of_combat. Repro scratch/lgn/p5/repro_stack_across_steps.py. The token offer itself goes to the damaging Sliver controller correctly. |
+| Brood Sliver | ✅ pass |  |
 | Brood of Cockroaches | ⬜ untested |  |
 | Broodhatch Nantuko | ⬜ untested |  |
 | Brothers of Fire | ⬜ untested |  |
@@ -1243,7 +1243,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Defender en-Vec | ⬜ untested |  |
 | Defender of Chaos | ✅ pass | auto-pass: keywords only (flash, protection from white) |
 | Defender of Law | ✅ pass | auto-pass: keywords only (flash, protection from red) |
-| Defender of the Order | ⬜ untested |  |
+| Defender of the Order | ✅ pass |  |
 | Defense Grid | ⬜ untested |  |
 | Defense of the Heart | ⬜ untested |  |
 | Defensive Formation | ⬜ untested |  |
@@ -2904,7 +2904,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Library of Leng | ✅ pass |  |
 | Lich | ✅ pass |  |
 | Lichenthrope | ⬜ untested |  |
-| Liege of the Axe | ⬜ untested |  |
+| Liege of the Axe | ✅ pass |  |
 | Liege of the Hollows | ⬜ untested |  |
 | Lieutenant Kirtar | ⬜ untested |  |
 | Life // Death | ⬜ untested |  |
@@ -3067,7 +3067,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Mana Vortex | ⬜ untested |  |
 | Mana Web | ⬜ untested |  |
 | Manabarbs | ✅ pass |  |
-| Manabond | ⬜ untested |  |
+| Manabond | ✅ pass |  |
 | Manacles of Decay | ⬜ untested |  |
 | Manakin | ⬜ untested |  |
 | Mangara's Blessing | ⬜ untested |  |
@@ -3158,7 +3158,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Mesa Pegasus | ✅ pass |  |
 | Mesmeric Fiend | ✅ pass |  |
 | Mesmeric Trance | ⬜ untested |  |
-| Metallic Sliver | ✅ pass | auto-pass: no abilities |
+| Metallic Sliver | ✅ pass |  |
 | Metalworker | ⬜ untested |  |
 | Metamorphic Wurm | ≡ equivalent | same behaviour as Krosan Beast |
 | Metamorphosis | ✅ pass |  |
@@ -3351,7 +3351,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Murderous Betrayal | ⬜ untested |  |
 | Murk Dwellers | ⬜ untested |  |
 | Muscle Burst | ⬜ untested |  |
-| Muscle Sliver | ≡ equivalent | same behaviour as Blade Sliver |
+| Muscle Sliver | ✅ pass |  |
 | Musician | ⬜ untested |  |
 | Mutilate | ⬜ untested |  |
 | Muzzle | ⬜ untested |  |
@@ -5443,7 +5443,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Tropical Island | ✅ pass |  |
 | Tropical Storm | ⬜ untested |  |
 | Troubled Healer | ⬜ untested |  |
-| Troublesome Spirit | ⬜ untested |  |
+| Troublesome Spirit | ✅ pass |  |
 | Truce | ⬜ untested |  |
 | True Believer | ⬜ untested |  |
 | Trufflesnout | ⬜ untested |  |

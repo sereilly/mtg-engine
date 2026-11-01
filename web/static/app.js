@@ -4245,6 +4245,12 @@ function getPromptBoardTargeting(state = currentState) {
     return promptTargeting({
       playerSeats: (enterChoiceInfo.opponents || []).map((opp) => Number(opp.seat)),
       onPlayer: (targetSeat) => {
+        // The pill click sends the fields above with it, so it waits for them.
+        const missing = enterChoiceMissing(enterChoiceInfo);
+        if (missing.length) {
+          updateActionHint(`Choose ${missing.join(" and ")} before the opponent.`, true);
+          return;
+        }
         const payload = enterChoicePayload(enterChoiceInfo, targetSeat);
         enterChoiceSelectedColor = null;
         enterChoiceDraft = null;
@@ -7622,8 +7628,10 @@ async function retryMadnessCast() {
 }
 
 // "As this enters, choose …" — every shape (see getEnterChoiceInfo).
-// Selected color for the current enter-choice prompt; reset whenever the
-// prompt is (re)rendered without a prior selection.
+// The colour picked for the open enter-choice prompt, or null until the person
+// picks one. Nothing is picked for them: the server's `default_*` keys are what
+// an AI seat takes, and a person's prompt that opened on one of them read as a
+// choice already made (Legions' Phase 5: Ward Sliver's colour, CR 614.12a).
 let enterChoiceSelectedColor = null;
 // What the open prompt's other fields hold (a name, a type, a pair of types),
 // keyed to the prompt they belong to. Kept outside the DOM because the panel is
@@ -7639,17 +7647,27 @@ function enterChoiceDraftFor(info) {
     info.needs_land_type, info.needs_land_types, info.needs_color,
   ]);
   if (!enterChoiceDraft || enterChoiceDraft.key !== key) {
-    const pair = Array.isArray(info.default_land_types) ? info.default_land_types : [];
+    // Every field starts empty (see `enterChoiceSelectedColor`).
     enterChoiceDraft = {
-      key,
-      cardName: info.default_chosen_card_name || "",
-      creatureType: info.default_creature_type || (info.creature_types || [])[0] || "",
-      landType: info.default_land_type || (info.chosen_land_types || [])[0] || "",
-      landTypeFirst: pair[0] || (info.land_types || [])[0] || "",
-      landTypeSecond: pair[1] || (info.land_types || [])[1] || "",
+      key, cardName: "", creatureType: "", landType: "", landTypeFirst: "", landTypeSecond: "",
     };
   }
   return enterChoiceDraft;
+}
+
+// What the open enter-choice prompt still needs before it can be sent, in the
+// words the prompt uses ("a color", "a creature type"); empty when it is
+// complete. The opponent is not in it: a shape that names one is sent by the
+// click that names it.
+function enterChoiceMissing(info) {
+  const draft = enterChoiceDraftFor(info);
+  const missing = [];
+  if (info.needs_color && !enterChoiceSelectedColor) missing.push("a color");
+  if (info.needs_creature_type && !String(draft.creatureType || "").trim()) missing.push("a creature type");
+  if (info.needs_land_type && !draft.landType) missing.push("a land type");
+  if (info.needs_land_types && !(draft.landTypeFirst && draft.landTypeSecond)) missing.push("two basic land types");
+  if (info.needs_card_name && !String(draft.cardName || "").trim()) missing.push("a card name");
+  return missing;
 }
 
 // The action that answers *info*, in the fields the route reads for its shape
@@ -7659,7 +7677,7 @@ function enterChoiceDraftFor(info) {
 function enterChoicePayload(info, targetSeat = null) {
   const draft = enterChoiceDraftFor(info);
   const payload = { seat, action: "enter_choice_confirm" };
-  const color = enterChoiceSelectedColor || info.default_color || (info.colors || [])[0] || "W";
+  const color = enterChoiceSelectedColor;
   if (info.needs_land_types) {
     // An ordered pair, each basic land type addressed by its color letter.
     payload.old_color = ENTER_CHOICE_LAND_LETTERS[draft.landTypeFirst];
@@ -7684,6 +7702,8 @@ function enterChoicePayload(info, targetSeat = null) {
 function enterChoiceSelectHtml(field, options, selected) {
   return (
     `<select class="prompt-choice-select" data-enter-field="${escapeHtml(field)}">` +
+    // A blank first entry, so the select opens on no choice at all.
+    `<option value=""${selected ? "" : " selected"} disabled>Choose…</option>` +
     (options || [])
       .map(
         (option) =>
@@ -7725,9 +7745,6 @@ function applyEnterChoicePrompt(info) {
   const cardName = info.card_name || "Permanent";
   const needsColor = !!info.needs_color;
   const needsSeat = enterChoiceNamesASeat(info);
-  if (needsColor && !enterChoiceSelectedColor) {
-    enterChoiceSelectedColor = info.default_color || (info.colors || [])[0] || "W";
-  }
   const draft = enterChoiceDraftFor(info);
 
   // What is being chosen, in words: "a color and an opponent".
@@ -7809,29 +7826,41 @@ function applyEnterChoicePrompt(info) {
       ? `<div>Action: click a highlighted opponent's name or life pill` +
           `${rows.length ? " (after choosing above)" : ""}.</div>`
       : `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" ` +
-          `data-enter-confirm="1">Confirm</button></div>`
+          `data-enter-confirm="1" disabled>Confirm</button></div>`
   );
   steps.innerHTML = `<div data-enter-choice-form="1">${rows.join("")}</div>`;
   steps.dataset.enterChoiceKey = draft.key;
 
+  const confirmBtn = steps.querySelector("[data-enter-confirm]");
+  // Confirm is live only once every field holds something.
+  const refreshConfirm = () => {
+    if (confirmBtn) confirmBtn.disabled = enterChoiceMissing(info).length > 0;
+  };
+  refreshConfirm();
   steps.querySelectorAll("[data-enter-color]").forEach((btn) => {
     btn.addEventListener("click", () => {
       enterChoiceSelectedColor = btn.dataset.enterColor;
       steps.querySelectorAll("[data-enter-color]").forEach((b) => {
         b.classList.toggle("selected", b.dataset.enterColor === enterChoiceSelectedColor);
       });
+      refreshConfirm();
     });
   });
   steps.querySelectorAll("[data-enter-field]").forEach((field) => {
     const remember = () => {
       if (enterChoiceDraft) enterChoiceDraft[field.dataset.enterField] = field.value;
+      refreshConfirm();
     };
     field.addEventListener("input", remember);
     field.addEventListener("change", remember);
   });
-  const confirmBtn = steps.querySelector("[data-enter-confirm]");
   if (confirmBtn) {
     confirmBtn.addEventListener("click", () => {
+      const missing = enterChoiceMissing(info);
+      if (missing.length) {
+        updateActionHint(`Choose ${missing.join(" and ")} first.`, true);
+        return;
+      }
       const payload = enterChoicePayload(info);
       enterChoiceSelectedColor = null;
       enterChoiceDraft = null;

@@ -2979,6 +2979,33 @@ class BattlefieldCanvas {
     ctx.restore();
   }
 
+  // A permanent still entering (`_isEntering`): the printed card at under half
+  // opacity, a dashed sky-blue rim and an ENTERING ribbon, the look of a card
+  // on its way rather than one on the table.
+  _drawEnteringCard(ctx, x, y, w, h, card, flags) {
+    const R = 5;
+    ctx.save();
+    ctx.globalAlpha *= 0.45;
+    this._drawFullCardFace(ctx, x, y, w, h, card, { ...(flags || {}), noShadow: true });
+    ctx.restore();
+    ctx.save();
+    const bandH = Math.max(11, h * 0.13);
+    const bandY = y + h * 0.42;
+    ctx.fillStyle = "rgba(18, 58, 92, 0.9)";
+    ctx.fillRect(x, bandY, w, bandH);
+    ctx.fillStyle = "#e4f4ff";
+    ctx.font = `bold ${Math.max(7, bandH * 0.62)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(_ellipsizeText(ctx, "ENTERING", w - 6), x + w / 2, bandY + bandH / 2 + 0.5);
+    ctx.strokeStyle = "rgba(140, 210, 255, 0.85)";
+    ctx.lineWidth = 1.6 / this.zoom;
+    ctx.setLineDash([5 / this.zoom, 3 / this.zoom]);
+    this._roundRect(ctx, x + 1 / this.zoom, y + 1 / this.zoom, w - 2 / this.zoom, h - 2 / this.zoom, R);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // What makes a face-down object look face down (CR 708), drawn over its
   // face by `_drawCardFace`. For any seat but its controller ("hidden") the
   // card is a back: nothing about the card it hides reached this client, and
@@ -3035,6 +3062,14 @@ class BattlefieldCanvas {
     // CR 708: a face-down object is drawn as the seat looking at it may see it
     // (`faceDownDisplayCard`): its controller the real card, anyone else a back.
     card = faceDownDisplayCard(card);
+    // CR 614.12a: a permanent whose "as it enters" choice is still owed has not
+    // settled (`entering: true`, sent only then). It is drawn as arriving, its
+    // printed card ghosted under an ENTERING ribbon, with no keyword band, P/T
+    // or counter badges: those would say what the choice has not decided yet.
+    if (!fullImage && _isEntering(card)) {
+      this._drawEnteringCard(ctx, x, y, w, h, card, flags);
+      return;
+    }
     // Spells in flight and on the stack render as their original full card image
     // (printed frame/art/text baked in) rather than the Arena battlefield face.
     if (fullImage) {
@@ -3648,7 +3683,7 @@ class BattlefieldCanvas {
     }
     // Flying creatures float off the board and rock gently side to side, with a
     // soft contact shadow left behind on the table beneath them.
-    if (_isFlyer(card)) {
+    if (_isFlyer(card) && !_isEntering(card)) {
       const center = this._cardCenter(item.key);
       if (center) {
         const now = performance.now();
@@ -5545,6 +5580,13 @@ function _beamParticles() {
 }
 
 // True for a battlefield creature that has the Flying keyword (case-insensitive).
+// Whether a battlefield permanent is still entering: its "as it enters"
+// choice is owed (CR 614.12a). The server sends `entering: true` then and
+// leaves the key off otherwise (web/serialization.entry_choice_view).
+function _isEntering(card) {
+  return !!card && card.entering === true;
+}
+
 function _isFlyer(card) {
   if (!card || !String(card.type || "").toLowerCase().includes("creature")) return false;
   const kws = Array.isArray(card.keywords) ? card.keywords : [];
