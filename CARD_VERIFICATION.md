@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5849**
-- Passed: **854** (575 checked in-game, 279 auto-passed)
+- Passed: **860** (581 checked in-game, 279 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **64**
-- Untested: **4931**
+- Untested: **4925**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -488,7 +488,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Black Scarab | ⬜ untested |  |
 | Black Vise | ✅ pass |  |
 | Black Ward | ✅ pass |  |
-| Blackmail | ⬜ untested |  |
+| Blackmail | ✅ pass |  |
 | Blanchwood Armor | ⬜ untested |  |
 | Blanchwood Treefolk | ✅ pass | auto-pass: no abilities |
 | Blanket of Night | ⬜ untested |  |
@@ -1510,7 +1510,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Elvish Lookout | ✅ pass | auto-pass: keywords only (shroud) |
 | Elvish Lyrist | ⬜ untested |  |
 | Elvish Pathcutter | ⬜ untested |  |
-| Elvish Pioneer | ⬜ untested |  |
+| Elvish Pioneer | ✅ pass |  |
 | Elvish Piper | ⬜ untested |  |
 | Elvish Ranger | ✅ pass | auto-pass: no abilities |
 | Elvish Scout | ⬜ untested |  |
@@ -3036,7 +3036,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Maze of Ith | ⬜ untested |  |
 | Maze of Shadows | ⬜ untested |  |
 | Mazemind Tome | ⬜ untested |  |
-| Meddle | ⬜ untested |  |
+| Meddle | ✅ pass |  |
 | Meddling Mage | ✅ pass |  |
 | Medicine Bag | ⬜ untested |  |
 | Meditate | ⬜ untested |  |
@@ -4794,7 +4794,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Spur Grappler | ⬜ untested |  |
 | Spurnmage Advocate | ⬜ untested |  |
 | Spurred Wolverine | ⬜ untested |  |
-| Spy Network | ⬜ untested |  |
+| Spy Network | ✅ pass |  |
 | Squall | ⬜ untested |  |
 | Squallmonger | ⬜ untested |  |
 | Squandered Resources | ⬜ untested |  |
@@ -4896,7 +4896,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Stroke of Genius | ⬜ untested |  |
 | Stromgald Cabal | ⬜ untested |  |
 | Stromgald Spy | ⬜ untested |  |
-| Strongarm Tactics | ⬜ untested |  |
+| Strongarm Tactics | ✅ pass |  |
 | Strongarm Thug | ⬜ untested |  |
 | Stronghold Assassin | ⬜ untested |  |
 | Stronghold Biologist | ⬜ untested |  |
@@ -5067,7 +5067,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Temporal Spring | ✅ pass |  |
 | Temporary Insanity | ⬜ untested |  |
 | Tempting Licid | ⬜ untested |  |
-| Tempting Wurm | ⬜ untested |  |
+| Tempting Wurm | ✅ pass |  |
 | Tendrils of Despair | ⬜ untested |  |
 | Tephraderm | ⬜ untested |  |
 | Teremko Griffin | ✅ pass | auto-pass: keywords only (flying, banding) |

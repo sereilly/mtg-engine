@@ -230,6 +230,11 @@
       "status": "pass",
       "updated_at": 1781761302.7020597
     },
+    "Blackmail": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793501702.227121
+    },
     "Blaze": {
       "reason": "",
       "status": "pass",
@@ -814,6 +819,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781455740.8711123
+    },
+    "Elvish Pioneer": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793502061.4397159
     },
     "Emblazoned Golem": {
       "reason": "",
@@ -1599,6 +1609,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791884626.655493
+    },
+    "Meddle": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793502449.3586752
     },
     "Meddling Mage": {
       "reason": "",
@@ -2395,6 +2410,11 @@
       "status": "pass",
       "updated_at": 1791884568.648824
     },
+    "Spy Network": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793501641.8209343
+    },
     "Squee's Revenge": {
       "reason": "",
       "status": "pass",
@@ -2444,6 +2464,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1792622472.99595
+    },
+    "Strongarm Tactics": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793501913.4047668
     },
     "Stupefying Touch": {
       "reason": "",
@@ -2514,6 +2539,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791787832.8447487
+    },
+    "Tempting Wurm": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793501794.6616862
     },
     "Terror": {
       "reason": "",

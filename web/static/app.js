@@ -3312,7 +3312,7 @@ function applyTextChangeVocabularyPrompt(info) {
       action: "text_change_vocabulary_confirm",
       field: "text_change_mode",
       labelOf: (option) => `${option.from} → ${option.to}`,
-      valueOf: (option) => option.mode,
+      optionValue: (option) => option.mode,
     },
   );
 }
@@ -7146,12 +7146,19 @@ function applyBodyChoicePrompt(info) {
 // Backdraft's two decisions: which player, then which of their spells. Both are
 // button lists rather than board targeting -- neither names anything on a
 // battlefield, and the spells being chosen between have already resolved.
-// `valueOf` is what a prompt whose answer is not a number needs: every caller
-// before Mind Bend answered with a seat or a list position, so the wire value
-// was always `Number(...)`. Passing it opts out of that coercion and sends the
-// dataset string as it stands - a `Number("color_word")` is NaN, which the
+// `optionValue` is what a prompt whose answer is not a number needs: every
+// caller before Mind Bend answered with a seat or a list position, so the wire
+// value was always `Number(...)`. Passing it opts out of that coercion and sends
+// the dataset string as it stands - a `Number("color_word")` is NaN, which the
 // schema then rejects as a missing field.
-function applyChoiceButtonPrompt(info, { title, action, field, labelOf, valueOf }) {
+// It is deliberately not called `valueOf`: destructuring `{ valueOf }` out
+// of an options object that does not set it reads Object.prototype.valueOf, so
+// every caller that relied on the default called that unbound — "Cannot convert
+// undefined or null to object" — and rendered no buttons at all. Meddle's new
+// target, Callous Oppressor's "which opponent chooses", Entrails Feaster's
+// graveyard, a library end and a cast choice were each a prompt nobody could
+// answer (ONS Phase 5).
+function applyChoiceButtonPrompt(info, { title, action, field, labelOf, optionValue }) {
   const panel = q("activationPanel");
   const titleEl = q("promptTitle");
   const body = q("promptBody");
@@ -7172,8 +7179,8 @@ function applyChoiceButtonPrompt(info, { title, action, field, labelOf, valueOf 
   body.textContent = `${info.card_name || ""}: ${info.prompt || ""}`.trim();
   const buttons = info.options
     .map((option) => {
-      const value = valueOf
-        ? valueOf(option)
+      const value = optionValue
+        ? optionValue(option)
         : (field === "chosen_seat" ? option.seat : option.index);
       return (
         `<button type="button" class="prompt-choice-btn" data-choice-value="${value}">` +
@@ -7188,7 +7195,7 @@ function applyChoiceButtonPrompt(info, { title, action, field, labelOf, valueOf 
       await sendAction({
         seat,
         action,
-        [field]: valueOf
+        [field]: optionValue
           ? btn.dataset.choiceValue
           : Number(btn.dataset.choiceValue),
       });
