@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5849**
-- Passed: **842** (563 checked in-game, 279 auto-passed)
+- Passed: **854** (575 checked in-game, 279 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **64**
-- Untested: **4943**
+- Untested: **4931**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -270,7 +270,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Artifact Mutation | ⬜ untested |  |
 | Artifact Possession | ⬜ untested |  |
 | Artifact Ward | ⬜ untested |  |
-| Artificial Evolution | ⬜ untested |  |
+| Artificial Evolution | ✅ pass |  |
 | Ascendant Evincar | ⬜ untested |  |
 | Ascending Aven | ⬜ untested |  |
 | Ashen Firebeast | ⬜ untested |  |
@@ -350,7 +350,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Backdraft | ⬜ untested |  |
 | Backfire | ⬜ untested |  |
 | Backlash | ⬜ untested |  |
-| Backslide | ⬜ untested |  |
+| Backslide | ✅ pass |  |
 | Bad Deal | ⬜ untested |  |
 | Bad Moon | ✅ pass |  |
 | Bad River | ⬜ untested |  |
@@ -804,7 +804,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Chain of Plasma | ⬜ untested |  |
 | Chain of Silence | ⬜ untested |  |
 | Chain of Smog | ⬜ untested |  |
-| Chain of Vapor | ⬜ untested |  |
+| Chain of Vapor | ✅ pass |  |
 | Chainer's Edict | ✅ pass |  |
 | Chainer, Dementia Master | ⬜ untested |  |
 | Chainflinger | ⬜ untested |  |
@@ -1015,7 +1015,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Corrupting Licid | ⬜ untested |  |
 | Cosmic Horror | ⬜ untested |  |
 | Counterspell | ✅ pass |  |
-| Cover of Darkness | ⬜ untested |  |
+| Cover of Darkness | ✅ pass |  |
 | Covetous Dragon | ⬜ untested |  |
 | Cowardice | ⬜ untested |  |
 | Crackdown | ⬜ untested |  |
@@ -2133,7 +2133,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Grasp of Darkness | ⬜ untested |  |
 | Grassland Crusader | ⬜ untested |  |
 | Grasslands | ⬜ untested |  |
-| Gratuitous Violence | ⬜ untested |  |
+| Gratuitous Violence | ✅ pass |  |
 | Grave Consequences | ⬜ untested |  |
 | Grave Defiler | ⬜ untested |  |
 | Grave Pact | ⬜ untested |  |
@@ -2392,7 +2392,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Hypnotic Specter | ✅ pass |  |
 | Hypnox | ✅ pass |  |
 | Hypochondria | ⬜ untested |  |
-| Hystrodon | ⬜ untested |  |
+| Hystrodon | ✅ pass |  |
 | Icatian Infantry | ⬜ untested |  |
 | Icatian Javelineers | ⬜ untested |  |
 | Icatian Lieutenant | ⬜ untested |  |
@@ -3050,7 +3050,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Memory Crystal | ⬜ untested |  |
 | Memory Jar | ⬜ untested |  |
 | Memory Lapse | ⬜ untested |  |
-| Menacing Ogre | ⬜ untested |  |
+| Menacing Ogre | ✅ pass |  |
 | Mental Discipline | ⬜ untested |  |
 | Mental Note | ⬜ untested |  |
 | Mercadia's Downfall | ⬜ untested |  |
@@ -3527,7 +3527,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Patagia Golem | ⬜ untested |  |
 | Patchwork Gnomes | ⬜ untested |  |
 | Path of Peace | ⬜ untested |  |
-| Patriarch's Bidding | ⬜ untested |  |
+| Patriarch's Bidding | ✅ pass |  |
 | Patriarch's Desire | ⬜ untested |  |
 | Patrol Hound | ⬜ untested |  |
 | Patron Wizard | ⬜ untested |  |
@@ -4070,7 +4070,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Riptide Crab | ⬜ untested |  |
 | Riptide Entrancer | ⬜ untested |  |
 | Riptide Laboratory | ⬜ untested |  |
-| Riptide Replicator | ⬜ untested |  |
+| Riptide Replicator | ✅ pass |  |
 | Riptide Shapeshifter | ⬜ untested |  |
 | Rise Again | ≡ equivalent | same behaviour as Resurrection |
 | Rishadan Airship | ⬜ untested |  |
@@ -4544,7 +4544,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Skittering Horror | ⬜ untested |  |
 | Skittering Skirge | ⬜ untested |  |
 | Skittish Kavu | ⬜ untested |  |
-| Skittish Valesk | ⬜ untested |  |
+| Skittish Valesk | ✅ pass |  |
 | Skizzik | ⬜ untested |  |
 | Skulking Fugitive | ⬜ untested |  |
 | Skulking Ghost | ⬜ untested |  |
@@ -5536,7 +5536,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Voice of Law | ✅ pass | auto-pass: keywords only (flying, protection from red) |
 | Voice of Reason | ✅ pass | auto-pass: keywords only (flying, protection from blue) |
 | Voice of Truth | ✅ pass | auto-pass: keywords only (flying, protection from white) |
-| Voice of the Woods | ⬜ untested |  |
+| Voice of the Woods | ✅ pass |  |
 | Void | ⬜ untested |  |
 | Voidmage Prodigy | ⬜ untested |  |
 | Volcanic Dragon | ✅ pass | auto-pass: keywords only (flying, haste) |
@@ -5789,7 +5789,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Words of Wilding | ⬜ untested |  |
 | Words of Wind | ⬜ untested |  |
 | Words of Wisdom | ⬜ untested |  |
-| Words of Worship | ⬜ untested |  |
+| Words of Worship | ✅ pass |  |
 | Workhorse | ⬜ untested |  |
 | Worldgorger Dragon | ⬜ untested |  |
 | Worldly Counsel | ⬜ untested |  |

@@ -1080,6 +1080,26 @@ def _serialize_mana_pool(player: PlayerState) -> dict:
 _TARGETS_PLAYER_RE = re.compile(r"target (?:player|opponent)|any target")
 
 
+def _targeted_permanents_now(item, game: Game) -> "list[tuple[int, int, Permanent]] | None":
+    """``(seat, index, permanent)`` for each permanent *item* targets that is
+    still on the battlefield, read through its id (``StackItem.
+    target_permanent_id``, CR 400.7); None when the item carries no id and
+    only its announced slot says what it targets."""
+    ids = [pid for pid in target_ids(item.target_permanent_id) if isinstance(pid, int)]
+    if not ids:
+        return None
+    placed = []
+    for pid in ids:
+        perm = game.permanent_by_id(pid)
+        if perm is None:
+            continue
+        owner = game.controller_index_of(perm)
+        index = game.battlefield_index_of(perm)
+        if isinstance(owner, int) and isinstance(index, int):
+            placed.append((owner, index, perm))
+    return placed
+
+
 def _stack_item_targets(item, game: Game) -> list[dict]:
     """Every target a stack item chose, normalized for the UI's hover arrows.
 
@@ -1146,25 +1166,18 @@ def _stack_item_targets(item, game: Game) -> list[dict]:
                 targets.append({"kind": "graveyard", "seat": stamp.seat, "index": index})
         return targets
 
-    # **Permanents on more than one battlefield** ("For each opponent, gain
-    # control of target permanent that player controls", Blatant Thievery). The
-    # slots below are positional on one seat — the first target's — so every
-    # target drew its arrow onto that board: Bob's Glory Seeker twice where the
-    # spell was aimed at it and at Cara's Wellwisher. The ids say which board
-    # each slot is on; read only when they span two or more, so every
-    # one-board spell's payload is what it was.
-    by_id = [
-        game.permanent_by_id(pid)
-        for pid in target_ids(item.target_permanent_id) if isinstance(pid, int)
-    ]
-    boards = {game.controller_index_of(perm) for perm in by_id if perm is not None}
-    if len(boards) > 1:
-        for perm in by_id:
-            owner = game.controller_index_of(perm) if perm is not None else None
-            index = game.battlefield_index_of(perm) if perm is not None else None
-            if isinstance(owner, int) and isinstance(index, int):
-                targets.append({"kind": "permanent", "seat": owner, "index": index})
-        return targets
+    # **The permanents it targets, where they are now**, by id. The stored
+    # index is the slot each one held as the object was announced, and nothing
+    # renumbers it: a target that left (Chain of Vapor's own bounce, held on
+    # the stack by its "may sacrifice a land" offer; a Shock's creature
+    # sacrificed in response) left its slot to whatever moved into it, and the
+    # arrow and ``target_permanent_name`` pointed at that permanent instead.
+    # The ids also say which board each target is on ("For each opponent, gain
+    # control of target permanent that player controls", Blatant Thievery). A
+    # target no longer on the battlefield draws no arrow.
+    placed = _targeted_permanents_now(item, game)
+    if placed is not None:
+        return [{"kind": "permanent", "seat": owner, "index": index} for owner, index, _perm in placed]
 
     raw = item.target_permanent_index
     indices = raw if isinstance(raw, list) else ([raw] if isinstance(raw, int) else [])
@@ -1197,7 +1210,19 @@ def _serialize_stack_item(item, game: Game) -> dict:
 
     target_permanent_name = None
     target_permanent_seat = None
-    if isinstance(item.target_permanent_index, int) and item.target_player_index is not None:
+    target_permanent_index = item.target_permanent_index
+    placed = _targeted_permanents_now(item, game)
+    if placed is not None:
+        # By id, for the reason ``_stack_item_targets`` gives: the stored slot
+        # names whatever moved into it once the target left.
+        if isinstance(item.target_permanent_index, list):
+            target_permanent_index = [index for _owner, index, _perm in placed]
+        else:
+            target_permanent_index = placed[0][1] if placed else None
+        if placed and not isinstance(item.target_permanent_index, list):
+            target_permanent_seat, _index, first = placed[0]
+            target_permanent_name = first.card.name
+    elif isinstance(item.target_permanent_index, int) and item.target_player_index is not None:
         p_idx = item.target_player_index
         if 0 <= p_idx < len(game.players):
             bf = game.players[p_idx].battlefield
@@ -1253,7 +1278,7 @@ def _serialize_stack_item(item, game: Game) -> dict:
         "target_stack_name": (
             item.target_stack_item.card.name if item.target_stack_item is not None else None
         ),
-        "target_permanent_index": item.target_permanent_index,
+        "target_permanent_index": target_permanent_index,
         "target_permanent_name": target_permanent_name,
         "target_permanent_seat": target_permanent_seat,
         "targets": _stack_item_targets(item, game),
