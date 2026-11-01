@@ -462,7 +462,10 @@ def test_the_simulator_plays_an_ending_phase_and_until_end_of_turn_ends(
     assert seen["cleanups"] == seen["end_steps"], dict(seen)
     assert report.end_steps == seen["end_steps"]
     assert report.cleanup_steps == seen["cleanups"]
-    assert seen["cleanups_with_something_to_end"] >= 3, (
+    # A floor of one: that the expiry was exercised, never how often a
+    # seed's story exercises it (LGN W2G4's blocks changed ATQ seed 7's
+    # games, and its three became one).
+    assert seen["cleanups_with_something_to_end"] >= 1, (
         "the run never reached a cleanup step holding until-end-of-turn state, "
         f"so the expiry below was not exercised: {dict(seen)}"
     )

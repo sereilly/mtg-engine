@@ -1448,7 +1448,9 @@ SHADOWED = {
     # Onslaught's, at its promotion rehearsal.
     ("Trickery Charm", 1): ([0], "flying gets two damage past the blocker; a creature type nothing reads measures nothing"),
     ("Vitality Charm", 1): ([0], "a 1/1 Insect lasts; +1/+1 and trample on a Wall measures nothing"),
-    ("Vitality Charm", 2): ([1], "+1/+1 and trample wins the fight a regeneration shield only survives: 10.0 against 9.0"),
+    # LGN W2G4: the defending seat no longer blocks a creature it cannot
+    # kill, so neither bullet on the attacker starts a fight.
+    ("Vitality Charm", 2): ([0], "a 1/1 Insect lasts; +1/+1 and trample is three damage and a regeneration shield two, unblocked: 4.0 against 3.0 and 2.0"),
 }
 
 #: Boards on which the cast the policy made measures **less** than some

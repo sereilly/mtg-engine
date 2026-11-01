@@ -216,6 +216,28 @@ def entry_self_return_gate(card: CardDefinition) -> dict | None:
     return None
 
 
+def entry_targets_a_spell(card: CardDefinition) -> bool:
+    """Whether a permanent spell's entry trigger names a **spell** as its
+    target — "When this creature enters, counter target spell." (Mystic
+    Snake) — the one kind of permanent whose arrival is about what is on the
+    stack, and so the one worth casting **in response** to something.
+
+    Read off every entry trigger the card prints
+    (``cast_targets.entry_trigger_instructions``), wrappers opened. An
+    instant or sorcery has no entry trigger and reads False; its own
+    ``counters_a_spell`` is the spell-side question."""
+    from .cast_targets import entry_trigger_instructions
+
+    if card.primary_type in SPELL_TYPES:
+        return False
+    for instruction in entry_trigger_instructions(card, compile_card_oracle(card)):
+        for step in _effect_steps(instruction):
+            targets = (step.payload or {}).get("targets")
+            if isinstance(targets, dict) and targets.get("kind") == "spell":
+                return True
+    return False
+
+
 def entry_triggers_bought(
     card: CardDefinition, optional_cost_payments: dict | None
 ) -> tuple[OracleInstruction, ...]:
@@ -1129,6 +1151,7 @@ __all__ = [
     "mana_ability_amount",
     "foreign_activation_use",
     "library_top_setups",
+    "entry_targets_a_spell",
     "hand_entry_steps",
     "harms_its_own_source",
     "hand_pick_entry_consumer",

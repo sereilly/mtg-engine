@@ -53,7 +53,7 @@ from .ai_weighed_cast import (
     castable_commanders,
 )
 from .ai_rehearsal import deliberating
-from .ai_valuation import entry_sacrifice_is_unavoidable, is_mana_ability
+from .ai_valuation import entry_sacrifice_is_unavoidable, entry_targets_a_spell, is_mana_ability
 from .faces import castable_faces
 from .game import Game
 from .models import CardDefinition
@@ -415,6 +415,11 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
     mode whose target is a spell on the stack can be announced at all, and
     with no mode named Dromar's Charm never countered anything and Treva's
     Charm never exiled an attacker.
+
+    **Not only instants**: every spell the engine lets the seat cast now
+    (`_instant_speed_offers`) — a creature with flash, a sorcery "you may cast
+    as though it had flash", an Aura under Mirage's permission — each at the
+    moment such a spell is worth weighing (`_weighed_at_instant_speed_now`).
     """
     offered = _instant_speed_offers(game, player_index)
     best: CastAction | None = None
@@ -423,8 +428,6 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
     # reading of how that goes with nothing cast.
     with deliberating():
         for hand_index, card, under in offered:
-            if card.primary_type != "instant":
-                continue
             built: list[CastAction] = []
             chosen: CastAction | None = None
             for mode_index in _modes_weighed(game, player_index, card):
@@ -451,15 +454,15 @@ def _instant_speed_offers(
     game: Game, player_index: int,
 ) -> "list[tuple[int, CardDefinition, PermittedCast | None]]":
     """What `choose_combat_instant_cast_action` weighs: ``(zone index, spell,
-    the permission it is cast under)`` for each instant *player_index* may
-    cast now.
+    the permission it is cast under)`` for each spell *player_index* may cast
+    now and would weigh casting now (`_weighed_at_instant_speed_now`).
 
-    The hand's instants, then the instants an effect lets the seat cast from
-    somewhere else (CR 601.3; `ai_weighed_cast.permitted_casts`) — a flashback
-    instant in its graveyard (Moment's Peace, Sylvan Might), which is
-    castable in this window exactly as the hand's are. A hand card is weighed
-    under the waiver that covers it, if one does (`hand_waiver`), as the
-    main-phase chooser weighs it.
+    The hand's, then those an effect lets the seat cast from somewhere else
+    (CR 601.3; `ai_weighed_cast.permitted_casts`) — a flashback instant in its
+    graveyard (Moment's Peace, Sylvan Might), which is castable in this window
+    exactly as the hand's are. A hand card is weighed under the waiver that
+    covers it, if one does (`hand_waiver`), as the main-phase chooser weighs
+    it.
     """
     player = game.players[player_index]
     offered: "list[tuple[int, CardDefinition, PermittedCast | None]]" = [
@@ -468,20 +471,69 @@ def _instant_speed_offers(
             hand_waiver(game, player_index, player.hand[hand_index], card, hand_index),
         )
         for hand_index, card in hand_spells(player)
-        if card.primary_type == "instant"
+        if _weighed_at_instant_speed_now(game, player_index, card)
     ]
     offered += [
         (permitted.index, permitted.spell, permitted)
         for permitted in permitted_casts(game, player_index)
-        if permitted.spell.primary_type == "instant"
+        if _weighed_at_instant_speed_now(game, player_index, permitted.spell)
     ]
     return offered
 
 
+def _weighed_at_instant_speed_now(
+    game: Game, player_index: int, card: CardDefinition,
+) -> bool:
+    """Whether *card* is one the instant-speed chooser weighs at this moment.
+
+    **Whether it may be cast now is the engine's question**
+    (``cast_timing.casts_at_instant_speed``, the one both timing gates ask):
+    an instant, printed flash (Mystic Snake, Benalish Knight, Raging Kavu), a
+    card that grants itself flash (Mirage's five Auras, Invasion's five priced
+    sorceries), or a permission on the board (Quick Sliver's Slivers, Vernal
+    Equinox, Winding Canyons). This read ``primary_type == "instant"``, so 42
+    shipped non-instant cards castable at instant speed by their own text, and
+    every creature under those permissions, were only ever cast in their
+    caster's own main phase (W1G3's census).
+
+    **When it is worth weighing is the policy's**, and for one family only it
+    is narrower than "whenever the engine allows": a **creature** spell is
+    held for another seat's turn — its own turn's main phase casts it with
+    the same mana — and there for the end step, with the stack empty (the
+    body arrives after every sorcery-speed answer the opponent had, and the
+    mana it spends was the opponent's turn's to spend), or in response to a
+    spell when the creature's own entry names a spell (Mystic Snake's "counter
+    target spell", ``ai_valuation.entry_targets_a_spell``). Everything else is
+    weighed in every window an instant is: a flashed Aura is a combat trick, a
+    flashed sorcery an instant with a surcharge. In each case the rehearsal
+    decides (`_combat_instant_candidate`).
+    """
+    from .cast_timing import casts_at_instant_speed
+
+    if card.primary_type == "land":
+        return False
+    if card.primary_type == "instant":
+        return True
+    # The moment first, then the engine: asked at every priority offer, of
+    # every card in the hand, and a creature (most of a hand) is answered
+    # without scanning the board's permissions.
+    if card.primary_type == "creature":
+        if player_index == game.active_player_index:
+            return False
+        if game.stack:
+            if not entry_targets_a_spell(card):
+                return False
+        elif game.current_step != "end":
+            return False
+    return casts_at_instant_speed(card, game, player_index)
+
+
 def holds_an_instant_it_could_pay_for(game: Game, player_index: int) -> bool:
     """Whether `choose_combat_instant_cast_action` could propose anything at
-    all: *player_index* holds an instant (or may cast one from elsewhere)
-    whose mana its board can pay, by the chooser's own gates — the X it would
+    all: *player_index* holds a spell the chooser weighs now (an instant, or
+    anything else it may cast at instant speed — `_instant_speed_offers`; or
+    may cast one from elsewhere) whose mana its board can pay, by the
+    chooser's own gates — the X it would
     announce (`_pick_x_value`; an X of 0 is never proposed), the cost it
     would be charged (`_cost_for`, under the permission being weighed) and the
     tap plan (`_plan_land_taps`).
