@@ -126,11 +126,16 @@ def test_w2g5_hatred_does_not_pay_the_casters_whole_life(pool):
     # The X is the policy's (`_pick_x_value`); the cast is made here. The
     # policy's own proposal is weighed through the turn's fight now (a price
     # in life for a pump that ends with the turn was a loss on any board a
-    # reading with no combat in it could see, and the seat held the card):
-    # here a Hill Giant at +10/+0 clears the other side's blockers. Whatever
-    # it proposes keeps the reserve.
+    # reading with no combat in it could see, and the seat held the card).
+    # Whatever it proposes keeps the reserve — and since the defending seat
+    # stopped piling every blocker that wins onto one attacker (LGN C2,
+    # `ai_declarations._blocks_already_kill`), the fight it is weighed through
+    # here is one Grizzly Bears trading with the pumped one, which no life is
+    # worth paying for, so it may propose nothing at all. (On a501c6c5 the
+    # rehearsal's defender blocked a +5/+0 Grizzly Bears with a Grizzly Bears
+    # and a Hill Giant, and the pump killed both.)
     proposed = _cast_candidate(game, 0, pool["Hatred"], 0)
-    assert proposed is not None and proposed.x_value <= 20 - X_LIFE_RESERVE
+    assert proposed is None or proposed.x_value <= 20 - X_LIFE_RESERVE
     x_value = _pick_x_value(game, game.players[0], pool["Hatred"], hand_index=0)
     mine = next(p for p in game.controlled_by(0) if p.is_creature)
     result = game.cast_from_hand(

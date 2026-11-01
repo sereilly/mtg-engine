@@ -188,8 +188,10 @@ def test_the_census_examines_what_it_says(rows):
     """The floor: a census that reaches nothing passes everything."""
     assert len(rows) >= 350, len(rows)
     assert REFUSED_BEFORE <= set(rows), sorted(REFUSED_BEFORE - set(rows))
-    assert sum(row["poor"]["proposed"] for row in rows.values()) >= 50
-    assert sum(row["rich"]["proposed"] for row in rows.values()) >= 70
+    # 55 and 76 until LGN C2, which stopped proposing a shield on a table with
+    # nothing coming (``ai_valuation.shields_only``): 45 and 64 since.
+    assert sum(row["poor"]["proposed"] for row in rows.values()) >= 40
+    assert sum(row["rich"]["proposed"] for row in rows.values()) >= 60
 
 
 def test_no_proposal_crashed(rows):
