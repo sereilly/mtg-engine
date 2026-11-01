@@ -155,8 +155,10 @@ def test_the_offer_is_not_weighed_with_no_combat_ahead(set_pool):
 @pytest.mark.parametrize("code, aura, seed", [
     # Seed 12 until ONS W2G5: its first game diverges at G1 T2, where Hapless
     # Researcher is no longer sacrificed to loot (the self-sacrifice rehearsal
-    # gate), and the run never reaches the offer. Seed 3 takes it.
-    ("JUD", "Lost in Thought", 3),
+    # gate), and the run never reaches the offer. Seed 3 took it until the AI
+    # began to take mulligans (kg2), which changed its games; seed 7 takes it
+    # twice (4, 5 and 6 never do).
+    ("JUD", "Lost in Thought", 7),
     ("TMP", "Volrath's Curse", 6),
 ])
 def test_a_seeded_run_takes_the_offer(code, aura, seed):

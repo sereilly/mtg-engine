@@ -38,12 +38,17 @@ _RUNS = [
 #: controller's Fog) until ONS W2G5, when an activation that gives up its
 #: source began to be rehearsed: seed 3's first game diverges at G1 T7, where
 #: Scavenger Folk is no longer sacrificed for the opponent's Iron Star, and no
-#: longer reaches the kept damage. Seed 1337 reaches both answers again.
+#: longer reaches the kept damage. Seed 1337 reached both answers again,
+#: until the kg2 round (below).
 _SEEDS = {
     # Round 4 gave both seats priority outside their own main phases, and
     # seed 1337's first two ICE games no longer reach the Bottle's card (the
     # third does, ten times over). Seed 7 reaches it in two games, nine times.
     "Elkin Bottle": 7,
+    # The kg2 round's mulligans changed seed 1337's games, and its four no
+    # longer walk Lone Wolf past a block; nor do 1338-1343's. Seed 1344's
+    # reach both answers.
+    "Lone Wolf": 1344,
 }
 
 

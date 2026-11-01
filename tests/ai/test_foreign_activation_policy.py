@@ -224,7 +224,9 @@ def test_a_simulated_seat_destroys_its_opponents_dungeon():
     from engine.card_loader import manifest_set_path
 
     foreign, own, refused = 0, [], {}
-    for seed in (2, 3, 4):
+    # Seed 6 replaced 4 in the kg2 round: once the AI took mulligans none of
+    # seeds 2-5 paid for an opponent's Dungeon; 6 does once.
+    for seed in (2, 3, 6):
         report = run_ai_simulation(
             [manifest_set_path("EXO")], games=2, seed=seed, max_turns=10,
             required_cards=["Volrath's Dungeon"],
