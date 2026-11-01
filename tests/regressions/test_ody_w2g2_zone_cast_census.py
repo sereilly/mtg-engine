@@ -527,12 +527,15 @@ def twin_census(stride: int = STRIDE, part: int = 0) -> list[dict]:
                 elif free and action.land_tap_indices:
                     row["finding"] = "tapped a land for a cast that costs nothing"
                 elif (
-                    f"{spell.name} cast from {owner.name}'s {KIND_ZONE[kind]}"
+                    f"{spell.name} {'played' if spell.primary_type == 'land' else 'cast'} "
+                    f"from {owner.name}'s {KIND_ZONE[kind]}"
                     not in game.log
                 ):
                     # The cast path's own statement of which pile the card
                     # left. (Counting the pile afterwards would not do: a
-                    # creature that dies as it enters is back in it.)
+                    # creature that dies as it enters is back in it.) A land
+                    # is played, not cast (CR 305.1), and the line says so
+                    # since Legions' client round.
                     row["finding"] = "not cast from the pile the permission opened"
     return rows
 
