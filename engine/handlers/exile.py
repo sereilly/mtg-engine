@@ -20,6 +20,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..exiled_records import record_exiled_card
+from ..face_down import revealed_as_it_moves
+from ..faces import whole_card
 from ..game_types import first_target_id
 from ..linked_exile import link_exiled_card
 from ..models import Permanent
@@ -1210,13 +1212,29 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
     # is no object left to ask. Filled in the loop below, where the owner is
     # already being resolved to route the card to the right pile.
     owners: dict[int, int] = {}
+    # "Exile all creatures. At the beginning of the next end step, return
+    # **those cards** to the battlefield under their owners' control." (Planar
+    # Guide.) Which cards this sweep put into exile, under the key every "that
+    # card" behind an exile reads (``put_exiled_cards_into_zone``); a delayed
+    # ability's creation freezes the scratchpad (CR 603.7d), so the return finds
+    # these by identity and not whatever else has reached the zone since. No
+    # token: CR 111.8 ends it as it leaves, and there is no card to give back.
+    exiled_cards: list = []
     for perm in victims:
         owner_idx = game.owner_index_of(perm)
         if owner_idx is not None:
             owners[perm.permanent_id] = owner_idx
         owner = game.players[owner_idx] if owner_idx is not None else context.caster
         if not perm.metadata.get("is_token", False):
-            owner.exile.append(perm.card)
+            # The card the permanent **is**, revealed if it was face down
+            # (CR 708.9) — this sweep puts the card in exile before the
+            # battlefield is rebuilt, so the one transition out has not yet
+            # turned the blank 2/2 back into the card it hid, and the blank was
+            # what went into exile. ``revealed_as_it_moves`` is the seam the
+            # zone funnels ask for exactly this order of events.
+            card = whole_card(revealed_as_it_moves(game, perm.card, perm))
+            owner.exile.append(card)
+            exiled_cards.append(card)
             # Recorded as exiled **with** the ability's source when there is one
             # (CR 610.3), exactly as ``exile_top_of_library`` records its pile
             # and for that handler's stated reason: nothing ends the link on its
@@ -1227,11 +1245,12 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
             # because it simply ceases to exist (CR 111.7) and there is no card
             # to give back.
             if source_permanent is not None and owner_idx is not None:
-                link_exiled_card(source_permanent, perm.card, owner_idx)
+                link_exiled_card(source_permanent, card, owner_idx)
         game._remove_aura_effects(perm)
     game.remove_all_from_battlefield(victims)
     context.results[EXILED_THIS_WAY_OBJECTS] = victims
     context.results[EXILED_THIS_WAY] = len(victims)
+    context.results["exiled_cards"] = exiled_cards
     context.results[PER_OBJECT_SEAT_RECORDS["controller"]] = controllers
     context.results[SWEPT_OWNER_SEATS] = owners
     game.log.append(f"{context.card.name} exiled {len(victims)} permanent(s)")

@@ -47,7 +47,7 @@ from tests.helpers import resolve_stack as _w1g6_resolve
 
 
 def _w1g6_card(set_pool, name):
-    for code in ("LGN", "ONS", "LEA"):
+    for code in ("LGN", "ONS", "LEA", "7ED"):
         pool = set_pool(code)
         if name in pool:
             return pool[name]
@@ -488,6 +488,106 @@ def test_w1g6_celestial_gatekeeper_default_seat_returns_two(set_pool):
     assert len(returned) == 2
     assert set(returned) <= {"Aven Envoy", "Blood Celebrant", "Earthblighter"}
     assert [c.name for c in me.exile] == ["Celestial Gatekeeper"]
+
+
+
+# --- Planar Guide -----------------------------------------------------------
+
+
+def _w1g6_planar_guide_board(set_pool):
+    """Seat 0: the Guide, a Bears wearing Holy Strength with a +1/+1 counter,
+    a Monk ("When this creature enters, you gain 2 life"), a token and a
+    Forest. Seat 1: a face-down Krosan Colossus, and a Hill Giant seat 0 has
+    stolen. Returns the game and the pieces by name."""
+    from engine.control import change_control
+    from engine.face_down import turn_face_down
+    from engine.aura_attachment import attach_aura
+    from engine.named_counters import add_counters
+    from engine.tokens import make_token_card
+
+    game, me, opp = _w1g6_game(set_pool, library=["Forest"] * 5)
+    assert _w1g6_compile(_w1g6_card(set_pool, "Planar Guide")).supported
+    board = {
+        name: _w1g6_put(game, 0, set_pool, name)
+        for name in ("Planar Guide", "Grizzly Bears", "Venerable Monk", "Forest")
+    }
+    aura = _w1g6_put(game, 0, set_pool, "Holy Strength")
+    attach_aura(aura, board["Grizzly Bears"])
+    add_counters(board["Grizzly Bears"], "+1/+1", 1)
+    token = _w1g6_Permanent(card=make_token_card("Soldier", 1, 1, "Token Creature — Soldier"))
+    token.metadata["is_token"] = True
+    game._put_permanent_onto_battlefield(0, token, None)
+    colossus = _w1g6_put(game, 1, set_pool, "Krosan Colossus")
+    assert turn_face_down(game, colossus)
+    giant = _w1g6_put(game, 1, set_pool, "Hill Giant")
+    change_control(giant, 0, source=board["Planar Guide"])
+    game._recompute_continuous_effects()
+    assert game.controller_index_of(giant) == 0
+    board.update(token=token, colossus=colossus, giant=giant, aura=aura)
+    return game, me, opp, board
+
+
+def test_w1g6_planar_guide_exiles_every_creature_and_returns_them_at_end_step(set_pool):
+    """"{3}{W}, Exile this creature: Exile all creatures. At the beginning of
+    the next end step, return those cards to the battlefield under their
+    owners' control." Its rulings (2004-10-04, 2005-08-01): the Aura goes to
+    the graveyard and the counter is gone, the token does not return, "enters"
+    abilities trigger, a face-down creature returns face up — and each card
+    comes back under its **owner's** control, so the stolen Giant goes home.
+    The Guide, exiled to pay the cost, is not one of "those cards"."""
+    game, me, opp, board = _w1g6_planar_guide_board(set_pool)
+    result = game.activate_permanent_ability(0, "Planar Guide")
+    assert result.supported, result.details
+    assert [p.card.name for p in game.all_permanents()] == ["Forest"]
+    assert sorted(c.name for c in me.exile) == [
+        "Grizzly Bears", "Planar Guide", "Venerable Monk",
+    ]
+    # The face-down creature is exiled as the card it is (CR 708.9), not as
+    # the blank 2/2 it was on the battlefield.
+    assert sorted(c.name for c in opp.exile) == ["Hill Giant", "Krosan Colossus"]
+    assert [c.name for c in me.graveyard] == ["Holy Strength"]
+    life = me.life
+
+    game.resolve_end_step(0)
+    _w1g6_resolve(game)
+    mine = sorted(p.card.name for p in game.controlled_by(0))
+    theirs = sorted(p.card.name for p in game.controlled_by(1))
+    assert mine == ["Forest", "Grizzly Bears", "Venerable Monk"]
+    assert theirs == ["Hill Giant", "Krosan Colossus"]
+    assert [c.name for c in me.exile] == ["Planar Guide"] and opp.exile == []
+    bears = next(p for p in game.controlled_by(0) if p.card.name == "Grizzly Bears")
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+    colossus = next(p for p in game.controlled_by(1) if p.card.name == "Krosan Colossus")
+    assert colossus.effective_power == 9, "face up, a new object (CR 400.7)"
+    assert me.life == life + 2, "the Monk's entry trigger"
+    assert not any(p.metadata.get("is_token") for p in game.all_permanents())
+    assert (
+        "Grizzly Bears, Venerable Monk returned to the battlefield under Me's "
+        "control; Krosan Colossus, Hill Giant returned to the battlefield under "
+        "Opp's control (Planar Guide)"
+    ) in game.log
+
+
+def test_w1g6_planar_guide_activated_in_the_end_step_returns_at_the_next_one(set_pool):
+    """The ruling (2004-10-04): "If the ability is activated during the End
+    step, then the creatures do not return until the End step of the
+    following turn." The beginning of this end step has passed, so the
+    delayed ability waits for the next one there is."""
+    game, me, opp, board = _w1g6_planar_guide_board(set_pool)
+    game.resolve_end_step(0)
+    _w1g6_resolve(game)
+    assert game.activate_permanent_ability(0, "Planar Guide").supported
+    _w1g6_resolve(game)
+    assert [p.card.name for p in game.all_permanents()] == ["Forest"]
+    assert game.start_next_turn() == 1
+    _w1g6_resolve(game)
+    assert [p.card.name for p in game.all_permanents()] == ["Forest"]
+    game.resolve_end_step(1)
+    _w1g6_resolve(game)
+    assert sorted(p.card.name for p in game.all_permanents()) == [
+        "Forest", "Grizzly Bears", "Hill Giant", "Krosan Colossus",
+        "Venerable Monk",
+    ]
 
 # ==== end W1G6 ======================================================
 

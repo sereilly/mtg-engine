@@ -225,7 +225,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # "each player chooses one of the exiled cards" (Thieves' Auction)
     # reads exactly this list. Two records for the one step, for the
     # ``exile_graveyard_cards`` row's stated reason — how many, and which.
-    "exile_all_matching": (EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS),
+    #
+    # …and the **cards** (Planar Guide's "return those cards to the
+    # battlefield"), under the key every "that card" behind an exile reads —
+    # the sweep's nontoken finds, revealed if face down.
+    "exile_all_matching": (EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS, "exiled_cards"),
     # "…exile up to two target creature cards from defending player's
     # graveyard. If you do, you gain 1 life **for each card exiled this way**"
     # (Rysorian Badger). The same key the sweep above writes, because the

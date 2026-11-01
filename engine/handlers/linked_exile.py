@@ -902,7 +902,11 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
     caster = context.caster
     destination = str(instruction.payload.get("zone", "hand"))
     moved: list = []
-    returned_to = ""
+    # Whose control each returning card entered under, in the order they
+    # returned: "those cards … under their owners' control" (Planar Guide) can
+    # be several seats' cards, and one name for all of them told the table the
+    # wrong player controlled most of them.
+    returned_to: dict[str, list[str]] = {}
     # The caster's own pile first, then everybody else's. Identity alone is not
     # enough to pick the pile: a deck repeats one immutable ``CardDefinition``
     # per copy and the catalog is shared between seats, so *the same object* can
@@ -938,7 +942,7 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
                     permanent.metadata["owner_player_index"] = owner_seat
                 game._put_permanent_onto_battlefield(seat, permanent, None)
                 moved.append(card)
-                returned_to = game.players[seat].name
+                returned_to.setdefault(game.players[seat].name, []).append(card.name)
                 break
             if destination == "graveyard":
                 # CR 400.3: its **owner's** graveyard, and the owner is the
@@ -958,9 +962,15 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
                 moved.append(card)
             break
     if moved and destination == "battlefield":
+        # One sentence per seat, so a card is never said to be under a player
+        # who does not control it; with one seat the line is what it was.
         game.log.append(
-            f"{', '.join(card.name for card in moved)} returned to the "
-            f"battlefield under {returned_to}'s control ({context.card.name})"
+            "; ".join(
+                f"{', '.join(names)} returned to the battlefield under "
+                f"{seat_name}'s control"
+                for seat_name, names in returned_to.items()
+            )
+            + f" ({context.card.name})"
         )
     elif moved:
         if destination == "hand":
