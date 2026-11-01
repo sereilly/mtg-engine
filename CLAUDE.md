@@ -92,6 +92,20 @@ time is its own; a test that clears the compile caches calls
 `tests.passes.rewarm_compile_cache()` (`tests/engine/test_passes.py`). Prefer
 `--dist worksteal`: a few long tests decide the wall time.
 
+**The pool compiles once per engine, not once per process**
+(`engine/program_store.py`). Each test process reads the compile at configure
+time — before collection, which compiles the pool, since `tests/helpers.py`
+imports `web.app` — from a store in `.program_store/`, named by a hash of every
+`engine/**/*.py`, `data/` and `cards/*.json` file, so any edit to the engine — a
+comment included — names a new store and the old one is never opened. The
+first worker of a folder or whole-suite run to find none builds it in a
+subprocess that imports only the engine (~18 s) and the rest wait for it; a run
+naming files only reads one that is there. Reading takes under a second. Stored programs go into
+`_compile_card_oracle`'s own `lru_cache`, so `clear_compilation_caches()` clears
+them too. An engine module that starts reading a file adds its folder to
+`program_store.INPUTS` (`tests/engine/test_program_store.py` fails until it
+does). `MTG_NO_PROGRAM_STORE=1` turns the store off.
+
 **The runner holds itself to the machine's memory** (`tests/memory_guard.py`,
 hooked in by `tests/conftest.py`): `-n N` and `-n auto` run as at most what
 free memory holds — a worker peaks near 2.5 GB, and 4 GB is kept free

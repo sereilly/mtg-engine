@@ -2,6 +2,9 @@
 
 A selection hook that drops too much reads green — the tests it dropped report
 nothing — so its rules are pinned here on stand-in items rather than trusted.
+So is who builds the compiled-program store and who reads it: a worker that
+read a store for another engine, or every worker rebuilding a failed one in
+turn, would also read green.
 """
 
 from __future__ import annotations
@@ -9,6 +12,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from tests import passes
 from tests.source_index import source_text
@@ -83,12 +88,94 @@ def test_the_full_pass_runs_the_censuses_whole(monkeypatch):
     # outlive this test and run every later census in this worker whole.
     monkeypatch.setenv(passes.FULL_CENSUS_ENV, "0")
     monkeypatch.delenv(passes.FULL_CENSUS_ENV)
+    # Configuring also notes this process's engine for the store; not this test's business.
+    monkeypatch.setattr(passes, "_note_the_engine", lambda config: None)
     passes.pytest_configure(_config()[0])
     import os
 
     assert os.environ.get(passes.FULL_CENSUS_ENV) is None
     passes.pytest_configure(_config(full=True)[0])
     assert os.environ.get(passes.FULL_CENSUS_ENV) == "1"
+
+
+@pytest.fixture
+def store_world(tmp_path, monkeypatch):
+    """A process allowed the store, with the build and the read recorded
+    rather than run: what is pinned is who builds and who reads."""
+    from engine import program_store
+
+    engine_print = program_store.fingerprint()
+    directory = tmp_path / "store"
+    monkeypatch.setattr(passes, "_store_dir", directory)
+    monkeypatch.setattr(passes, "_engine_print", engine_print)
+    world = SimpleNamespace(
+        directory=directory, built=[], loaded=[],
+        store=program_store.store_path(directory, engine_print),
+        failed=program_store.failure_path(directory, engine_print),
+    )
+
+    def build(directory, store, failed):
+        world.built.append(store)
+        store.write_bytes(b"")
+
+    monkeypatch.setattr(passes, "_build_the_store", build)
+    monkeypatch.setattr(program_store, "load", lambda path, _: world.loaded.append(path) or 0)
+    return world
+
+
+def test_the_first_process_without_a_store_builds_it_and_every_one_reads_it(store_world):
+    passes._seed_from_the_store(build=True)
+    passes._seed_from_the_store(build=True)
+    assert store_world.built == [store_world.store]
+    assert store_world.loaded == [store_world.store, store_world.store]
+
+
+def test_a_process_not_asked_to_build_only_reads(store_world):
+    passes._seed_from_the_store()
+    assert store_world.built == [] and store_world.loaded == [store_world.store]
+
+
+def test_a_failed_build_is_not_retried_by_each_process_waiting_on_it(store_world):
+    store_world.directory.mkdir()
+    store_world.failed.write_text("the first builder's stderr", encoding="utf-8")
+    passes._seed_from_the_store(build=True)
+    assert store_world.built == [], "every waiting worker would run the failing build in turn"
+
+
+def test_an_engine_edited_since_the_run_started_reads_no_store(store_world, monkeypatch):
+    """The store read must be the one for the code this process imported."""
+    monkeypatch.setattr(passes, "_engine_print", "the engine before the edit")
+    passes._seed_from_the_store(build=True)
+    assert store_world.built == [] and store_world.loaded == []
+
+
+def test_the_store_is_read_before_collection_and_built_only_for_a_large_run(monkeypatch):
+    """Collection compiles the pool (``tests/helpers.py`` imports ``web.app``),
+    so configure time is the last moment the store can save that compile. A
+    run naming files may need none of the pool and does not pay for a build;
+    an IDE's discovery reads a store but never builds one."""
+    monkeypatch.setattr(passes, "_store_dir", None)
+    monkeypatch.setattr(passes, "_engine_print", None)
+    monkeypatch.delenv(passes.NO_STORE_ENV, raising=False)
+    seeded = []
+    monkeypatch.setattr(passes, "_seed_from_the_store", lambda *, build: seeded.append(build))
+
+    def note(*, collectonly=False, numprocesses=None, worker=False, args=("tests",)):
+        config, _ = _config(collectonly=collectonly, args=args)
+        config.option.numprocesses = numprocesses
+        if worker:
+            config.workerinput = {}
+        seeded.clear()
+        passes._note_the_engine(config)
+        monkeypatch.setattr(passes, "_store_dir", None)
+        return seeded[0] if seeded else None
+
+    assert note() is True and note(numprocesses=4, worker=True) is True
+    assert note(args=(str(HERE.relative_to(REPO)),)) is False, "a named file only reads"
+    assert note(collectonly=True) is False, "an IDE's discovery only reads"
+    assert note(numprocesses=4) is None, "the xdist controller collects nothing"
+    monkeypatch.setenv(passes.NO_STORE_ENV, "1")
+    assert note() is None
 
 
 _CLEARS = re.compile(r"\bclear_compilation_caches\(\)|_compile_card_oracle\.cache_clear\(\)")

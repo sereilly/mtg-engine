@@ -52,6 +52,7 @@ from functools import lru_cache
 
 from .models import CardDefinition
 from .faces import CAST_FACE_LAYOUTS, face_cards, is_multi_face
+from .program_store import seedable
 from .oracle_types import (ActivatedAbilityCost, ModalOption,
                            OracleInstruction, OracleProgram, OracleToken,
                            ParsedActivatedAbility, ParsedTriggeredAbility,
@@ -269,9 +270,11 @@ def _carries_no_behaviour(instruction: OracleInstruction) -> bool:
 
 # Unbounded cache: card definitions are immutable and the pool is finite, so
 # every distinct card compiles exactly once per process — even with thousands
-# of cards the programs are tiny compared to recompilation cost.
+# of cards the programs are tiny compared to recompilation cost. `@seedable`
+# lets the pool compiled by another process fill it (`engine/program_store.py`).
 @compilation_cache
 @lru_cache(maxsize=None)
+@seedable
 def _compile_card_oracle(
     name: str,
     primary_type: str,

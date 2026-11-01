@@ -52,3 +52,6 @@ logs/
 
 # sim_fingerprint.py snapshots (seeded-run logs; a round's before/after baseline)
 .sim_fingerprint/
+
+# engine/program_store.py: the compiled pool, one file per engine fingerprint
+.program_store/

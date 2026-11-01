@@ -70,19 +70,41 @@ def test_a_cycled_card_has_resolved_before_the_pass_that_cycled_it_returns(catal
     }
 
 
+#: Per set, the first five seeds from 1337 whose one game cycles a card from
+#: hand (read 2026-10-31). A seed whose game stops cycling fails its own piece
+#: by name: replace it with the next seed whose game does.
+_CYCLING_GAMES = {
+    "USG": (1337, 1339, 1340, 1345, 1346),
+    "ULG": (1337, 1338, 1341, 1344, 1345),
+    "UDS": (1339, 1341, 1343, 1348, 1352),
+}
+
+
 @pytest.mark.full
-@pytest.mark.parametrize("code", ["USG", "ULG", "UDS"])
-def test_no_urzas_block_simulation_leaves_a_cycle_on_the_stack(code):
-    """The run the script makes, on the three sets that exited 1 — ten games at
-    the default seed, where the old tree counted 3, 10 and 3."""
+@pytest.mark.parametrize("code, seed", [
+    pytest.param(code, seed, id=f"{code}-{seed}")
+    for code, seeds in _CYCLING_GAMES.items() for seed in seeds
+])
+def test_no_urzas_block_simulation_leaves_a_cycle_on_the_stack(code, seed):
+    """Seeded games on the three sets whose ``simulate_ai_games.py`` runs
+    exited 1, where the old tree counted 3, 10 and 3 step changes owing over
+    ten games each.
+
+    One game per test, so the workers of a run share them. As one ten-game
+    run per set this was ULG's 375 s, the full pass's second-longest test, and
+    a run's games cannot be split up: each draws on the random state the game
+    before it left. Each seed's game cycles at least once, where the ten-game
+    runs cycled two or three times between them — a game that cycles nothing
+    cannot leave a cycle on the stack, so it would test nothing here."""
     report = run_ai_simulation(
-        manifest_set_path(code, include_measured=True), games=10, seed=1337,
+        manifest_set_path(code, include_measured=True), games=1, seed=seed,
     )
 
     cycled = sum("from hand" in line for line in report.log_lines)
-    # Two, where it was three: the seed's run moved when the cast policy began
-    # measuring a cast before proposing it, and Urza's Destiny now cycles twice.
-    assert cycled >= 2, f"only {cycled} hand activation(s): the run did not exercise the keyword"
+    assert cycled >= 1, (
+        f"{code} seed {seed}'s game no longer cycles a card, so it exercises "
+        "nothing: replace the seed in _CYCLING_GAMES with the next whose game does"
+    )
     assert report.steps_left_owing == Counter(), dict(report.steps_left_owing)
 
 

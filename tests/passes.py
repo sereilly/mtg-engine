@@ -24,6 +24,15 @@ ran in 1,412 s and the quick pass in under 180. So:
   tests/ai/test_ai_simulator.py` runs its full-marked tests too — because
   naming a file is asking about it. A folder, or no argument, is the quick
   pass. An IDE running one test passes its node id, so it runs.
+- **A large run compiles the pool once per engine, not once per process.**
+  Before collection (which compiles the pool, below) each process fills its
+  compile cache from the store ``engine/program_store.py`` writes to
+  ``.program_store/``, named by a hash of the engine's source, the vocabulary
+  and the card files: a fraction of a second, where compiling took ~17 s in
+  every worker. The first worker of a folder or whole-suite run to find no
+  store for its engine builds it in a subprocess that imports nothing but the
+  engine, and the others wait for it; a run naming files reads one only if it
+  is there. ``MTG_NO_PROGRAM_STORE=1`` turns it off.
 
 The hooks are imported into ``tests/conftest.py``, which is what registers them.
 """
@@ -31,6 +40,8 @@ The hooks are imported into ``tests/conftest.py``, which is what registers them.
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 FULL_MARK = "full"
@@ -40,6 +51,8 @@ FULL_CENSUS_ENV = "MTG_FULL_CENSUS"
 FULL_THRESHOLD_SECONDS = 10.0
 #: An unmarked quick-pass test whose call took this long is named at the end of the run.
 REPORT_THRESHOLD_SECONDS = 2 * FULL_THRESHOLD_SECONDS
+#: Set to compile the pool in every process rather than read it from the store.
+NO_STORE_ENV = "MTG_NO_PROGRAM_STORE"
 
 _slow_unmarked: list[tuple[float, str]] = []
 
@@ -61,6 +74,7 @@ def pytest_configure(config):
     if is_full_pass(config):
         # Before xdist starts its workers, so they inherit it.
         os.environ[FULL_CENSUS_ENV] = "1"
+    _note_the_engine(config)
 
 
 def _named_files(config) -> set[Path]:
@@ -107,7 +121,8 @@ def pytest_collection_finish(session):
     report above named it. Paid here, the cost is the run's and every test's
     reading is its own. A small run (one file, one folder of guards) skips it,
     since it may need none of the pool. Runs in each xdist worker, which is
-    where the tests are."""
+    where the tests are — and where the store, when there is one for this
+    engine, filled the cache at configure time (``_note_the_engine``)."""
     global _warmed
     if session.config.option.collectonly or len(session.items) < WARM_FROM_ITEMS:
         return
@@ -122,7 +137,94 @@ def _compile_the_pool() -> None:
     from engine.card_loader import load_cards, manifest_set_paths
     from engine.oracle import compiled_units
 
+    _seed_from_the_store()
     compiled_units(load_cards(manifest_set_paths(include_measured=True)))
+
+
+#: The store's folder, when this process may use the store; None when it may not.
+_store_dir: Path | None = None
+#: The engine this process imported, as ``program_store.fingerprint`` read it
+#: at configure time — the programs a store may hand it are that engine's.
+_engine_print: str | None = None
+
+
+def _note_the_engine(config) -> None:
+    """Record which engine this process runs, and seed it from the store.
+
+    At configure time, before collection, because collection compiles the
+    pool: ``tests/helpers.py`` imports ``web.app``, whose ``runtime`` sorts the
+    shipped pool into behaviour classes as it loads, and three test files in
+    four import the helpers. Seeded any later, the store would arrive after
+    the compile it is for. A run that names files only reads a store that is
+    there — it may need none of the pool, and building one costs ~18 s — while
+    a folder or the whole suite builds one first if none is.
+
+    The fingerprint read here is compared with one read again at warm-up
+    (:func:`_seed_from_the_store`). The store is its own folder rather than
+    pytest's cache: the gate's runs turn that plugin off
+    (``scripts/integration/gate.sh``), and the full pass is one of them."""
+    global _store_dir, _engine_print
+    if os.environ.get(NO_STORE_ENV):
+        return
+    if not hasattr(config, "workerinput") and getattr(config.option, "numprocesses", None):
+        return  # the xdist controller: its workers collect and run the tests
+    from engine import program_store
+
+    _engine_print = program_store.fingerprint()
+    _store_dir = program_store.DIRECTORY
+    _seed_from_the_store(build=not (config.option.collectonly or _named_files(config)))
+
+
+def _seed_from_the_store(*, build: bool = False) -> None:
+    """Fill the compile cache from the store — first building it, if *build*
+    and no process has. On any failure the caller's compile does the work, as
+    it did before the store: the store is a shortcut, never a requirement."""
+    if _store_dir is None:
+        return
+    from engine import program_store
+
+    try:
+        if program_store.fingerprint() != _engine_print:
+            sys.stderr.write(
+                "passes: engine sources changed since this run started; "
+                "compiling the pool in-process\n"
+            )
+            return
+        _store_dir.mkdir(parents=True, exist_ok=True)
+        store = program_store.store_path(_store_dir, _engine_print)
+        if build and not store.exists():
+            from tests.memory_guard import exclusive
+
+            with exclusive(_store_dir / "build.lock"):
+                failed = program_store.failure_path(_store_dir, _engine_print)
+                if not store.exists() and not failed.exists():
+                    _build_the_store(_store_dir, store, failed)
+        program_store.load(store, _engine_print)
+    except Exception as error:  # noqa: BLE001 - see the docstring
+        sys.stderr.write(f"passes: compiled-program store unused ({error!r})\n")
+
+
+_BUILD = "import sys; from engine.program_store import build; build(sys.argv[1])"
+
+
+def _build_the_store(directory: Path, store: Path, failed: Path) -> None:
+    # A subprocess, not this process: by now collection has imported every
+    # test module, and nothing a test module did to the engine may be written
+    # down for the next run to read.
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", _BUILD, str(directory)],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True, text=True, timeout=600,
+        )
+        why = result.stderr[-4000:] or f"exit {result.returncode} and no store written"
+    except subprocess.TimeoutExpired:
+        why = "the build ran past 600 s"
+    if not store.exists():
+        # Recorded, so the workers waiting on the lock compile for themselves
+        # rather than each running the same failing build in turn.
+        failed.write_text(why, encoding="utf-8")
+        sys.stderr.write(f"passes: the compiled-program store was not built; see {failed}\n")
 
 
 def rewarm_compile_cache() -> None:
@@ -131,7 +233,8 @@ def rewarm_compile_cache() -> None:
     A test that patches the compiler clears the caches on both sides of the
     patch, and the next test in that process to walk the pool would pay the
     recompile — a stranger's bill, and a timing that names the wrong test.
-    Called after the patch is undone, it charges the test that cleared.
+    Called after the patch is undone, it charges the test that cleared — a
+    read of the store now, rather than a compile.
     `tests/engine/test_passes.py` holds every clearing function to calling it."""
     if _warmed:
         _compile_the_pool()

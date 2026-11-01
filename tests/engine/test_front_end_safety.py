@@ -128,8 +128,14 @@ _COMPILER_ENTRY_POINTS = frozenset({
 
 
 def _reaches_the_compiler(func) -> bool:
-    """Whether *func*'s body (nested code objects included) names one."""
-    code = getattr(func, "__code__", None)
+    """Whether *func*'s body (nested code objects included) names one.
+
+    Read through any decorator between the cache and the body
+    (``program_store.seedable`` sits under ``_compile_card_oracle``'s), since
+    the body is what holds the answer."""
+    import inspect
+
+    code = getattr(inspect.unwrap(func), "__code__", None)
     if code is None:
         return False
     names: set[str] = set()

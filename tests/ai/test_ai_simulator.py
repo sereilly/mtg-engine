@@ -219,7 +219,8 @@ def test_simulation_stops_when_player_loses_via_empty_library():
 
 
 @pytest.mark.full
-def test_ancestral_recall_never_self_causes_library_loss():
+@pytest.mark.parametrize("seed", range(1337, 1347))
+def test_ancestral_recall_never_self_causes_library_loss(seed):
     """Regression: AI must not self-cast Ancestral Recall when library has < 3 cards.
 
     Before the fix, the AI's score for Ancestral Recall did not account for library
@@ -229,11 +230,19 @@ def test_ancestral_recall_never_self_causes_library_loss():
     We verify this by scanning the log for the distinctive pattern:
       'cast Ancestral Recall' followed by 'lost the game (704.5b' in the *same turn block*
     which is the footprint of an AI-caused library self-kill from Ancestral Recall.
+    Only when the player who lost is the one who cast it: seed 1340's game ends
+    with AI-B decking AI-A, one card left, with Ancestral Recall aimed at AI-A —
+    the spell played to win, which is what the AI should do with it.
+
+    One game per test, so the workers of a run share the ten. As one ten-game
+    run this was the full pass's longest test (507 s), and a run's games cannot
+    be split up: each draws on the random state the game before it left. Seed
+    1337's game is that run's first; the other nine are new games.
     """
     report = run_ai_simulation(
         cards_path=LEA_PATH,
-        games=10,
-        seed=1337,
+        games=1,
+        seed=seed,
         max_turns=25,
         # Pinned for the same reason as the Prodigal Sorcerer test above: this
         # regression is about what the AI does *holding* Ancestral Recall, so a
@@ -241,19 +250,21 @@ def test_ancestral_recall_never_self_causes_library_loss():
         required_cards=("Ancestral Recall",),
     )
 
-    prev_was_ancestral_cast = False
+    caster = None  # who cast the Ancestral Recall whose follow-up lines these are
     for line in report.log_lines:
         stripped = line.strip()
         if "cast Ancestral Recall" in stripped:
-            prev_was_ancestral_cast = True
+            # "G1 T11 AI-A-1 cast Ancestral Recall -> resolved"
+            caster = stripped.split(" cast Ancestral Recall")[0].split()[-1]
             continue
-        if prev_was_ancestral_cast:
-            assert "lost the game (704.5b" not in stripped, (
-                f"Ancestral Recall self-cast triggered a library-death loss: {stripped!r}"
-            )
+        if caster is not None:
+            if "lost the game (704.5b" in stripped:
+                assert stripped.split(" lost the game")[0] != caster, (
+                    f"Ancestral Recall self-cast triggered a library-death loss: {stripped!r}"
+                )
             # Reset once we move past the immediate follow-up lines
             if stripped.startswith("G") or stripped.startswith("RESULT") or stripped == "":
-                prev_was_ancestral_cast = False
+                caster = None
 
 
 # --- the simulator's turn loop is the whole of `start_turn`, not three of its four steps ---

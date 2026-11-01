@@ -88,11 +88,16 @@ Anything that weakens these is a regression regardless of what it enables:
    the job's wall time on the slower runners from ~1,660s to ~950s, and
    no single shard is the long pole now.
 
-   **The sims half is bounded by one item**,
+   **The sims half was bounded by one item**,
    `test_no_urzas_block_simulation_leaves_a_cycle_on_the_stack[ULG]`: 428s
-   locally, where its USG and UDS twins took ~60s each. It is not one runaway
-   game but ten costly ones (one is a third of the run), and nearly all of it
-   is CR 613 layer reads: 30.7M `effective_card` reads, each folding,
+   locally, where its USG and UDS twins took ~60s each. It is now fifteen
+   one-game items, five seeds per set, each a game that cycles; the full
+   pass's longest, `test_ancestral_recall_never_self_causes_library_loss`
+   (507s), is ten. A ten-game run cannot be cut into its own games, since each
+   draws on the random state the one before it left, so the pieces are games
+   at seeds of their own, and the longest is ~2 minutes. The ten-game ULG run
+   was not one runaway game but ten costly ones (one a third of the run), and
+   nearly all of it was CR 613 layer reads: 30.7M `effective_card` reads, each folding,
    because a board-wide static is on the table. `_folded_card` derived the
    permanent's board-wide statics twice per fold (once in
    `abilities_lost_at`). Deriving them once made ULG's ten seeded games ~19%
