@@ -52,7 +52,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| LGN *(measured)* | 145 | 235 | 68.1% | 65.1% | 41.3% | 93 |
+| LGN *(measured)* | 145 | 235 | 69.8% | 66.8% | 42.6% | 96 |
 | **All (shipped)** | **8362** | **12427** | **90.2%** | **89.7%** | **62.4%** | **6559** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -65,9 +65,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 780 | 403 | expected a subject |  |
-| 179 | 93 | unrecognized effect verb |  |
-| 137 | 74 | unconsumed text |  |
+| 779 | 402 | expected a subject |  |
+| 177 | 91 | unrecognized effect verb |  |
+| 136 | 73 | unconsumed text |  |
 | 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -4498,6 +4498,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature dies, you may have it deal 1 damage to any target.`
 - **Goblin Artisans**
   - `{T}: Flip a coin. If you win the flip, draw a card. If you lose the flip, counter target artifact spell you control that isn't the target of an ability from another creature named Goblin Artisans.`
+- **Goblin Assassin**
+  - `Whenever this creature or another Goblin enters, each player flips a coin. Each player whose coin comes up tails sacrifices a creature of their choice.`
 - **Goblin Balloon Brigade**
   - `{R}: This creature gains flying until end of turn.`
   - `{R}: This creature gains flying until end of turn.`
@@ -5105,6 +5107,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Hollow Dogs**
   - `Whenever this creature attacks, it gets +2/+0 until end of turn.`
   - `Whenever this creature attacks, it gets +2/+0 until end of turn.`
+- **Hollow Specter**
+  - `Whenever this creature deals combat damage to a player, you may pay {X}. If you do, that player reveals X cards from their hand and you choose one of them. That player discards that card.`
 - **Hollow Trees**
   - `At the beginning of your upkeep, if this land is tapped, put a storage counter on it.`
   - `{T}, Remove any number of storage counters from this land: Add {G} for each storage counter removed this way.`
@@ -9040,6 +9044,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Riptide Laboratory**
   - `{T}: Add {C}.`
   - `{1}{U}, {T}: Return target Wizard you control to its owner's hand.`
+- **Riptide Mangler**
+  - `{1}{U}: This creature's base power becomes equal to target creature's power. (This effect lasts indefinitely.)`
 - **Riptide Replicator**
   - `{4}, {T}: Create an X/X creature token of the chosen color and type, where X is the number of charge counters on this artifact.`
 - **Riptide Shapeshifter**
