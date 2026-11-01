@@ -473,6 +473,19 @@ def _accept_search_one_of_each(
             stream.reset(mark)
             return None
     stream.accept_punct(",")
+    # "…for a Zombie card and a Swamp card, **reveal them**, put them into
+    # your hand, then shuffle." (Corpse Harvester.) The plural of the reveal the
+    # single-find tutor above reads, with the same meaning (CR 701.20): the
+    # finds are shown to every player, which the flow records — so it is a
+    # field, not a word skipped. Only in front of "put", so a search ending at
+    # the reveal still refuses on the missing destination.
+    reveal = False
+    if len(each) > 1 and stream.accept_word("reveal"):
+        if not stream.accept_word("them"):
+            stream.expect_word("those")
+            stream.expect_word("cards")
+        stream.accept_punct(",")
+        reveal = True
     stream.expect_word("put")
     if not (stream.accept_word("them") or stream.accept_phrase("those", "cards")):
         raise stream.error("expected 'those cards' after a search for several")
@@ -486,6 +499,7 @@ def _accept_search_one_of_each(
         ast.PlayerRef("you"), described, destination, graveyard,
         extra_destinations=(destination,) * (len(each) - 1),
         tapped=(tapped,) * len(each), up_to=True, one_of_each=each,
+        reveal=reveal,
     )
 
 
