@@ -26,6 +26,7 @@ and the board shows them as one panel.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Callable
 
 from engine.pending_choices import CHOICE_SPECS
@@ -121,6 +122,49 @@ def blocking_prompt(game, seat: int, action: str, exempt_actions: frozenset[str]
             continue
         return spec, choice
     return None
+
+
+#: The tail every ``blocked_detail`` ends with, which says why an action was
+#: refused and not what the owing seat is doing.
+_BEFORE_OTHER_ACTIONS = " before other actions"
+
+#: The refusal sentence is addressed to the seat that owes the decision ("say
+#: how much mana you pay"); another viewer is told it about that seat.
+_THIRD_PERSON_WORDS = {"you": "they", "your": "their"}
+_THIRD_PERSON = re.compile(r"\b(?:your|you)\b")
+
+
+def prompt_owed_by(game, viewer_seat: int | None) -> dict | None:
+    """**Who** the game is waiting on, for the status line: the first open
+    decision on the pending-choice queue (``Game.waiting_prompt`` — while it is
+    owed no step advances and nobody receives priority, CR 117.3b), as the
+    seat that owes it, that seat's name, the prompt's kind and what the seat
+    is doing.
+
+    ``waiting_on_prompt`` beside it answers a different question — whether
+    *this viewer's* pass would be refused — and so could not say whose prompt
+    was holding the game: the status line read "<holder> has priority." while
+    another seat's search or target choice was what everybody was waiting for.
+
+    What the seat is doing is the spec's own refusal sentence with its tail
+    dropped ("choose the triggered ability's target"), told to another viewer
+    in the third person ("…on top of their library"). Which kind of decision
+    is public — CR 708.5's hidden cards and a secret number's value are not
+    in it.
+    """
+    choice = game.waiting_prompt()
+    if choice is None:
+        return None
+    spec = CHOICE_SPECS.get(choice.kind)
+    seat = choice.player_index
+    doing = (getattr(spec, "blocked_detail", None) or "make a decision")
+    if doing.endswith(_BEFORE_OTHER_ACTIONS):
+        doing = doing[: -len(_BEFORE_OTHER_ACTIONS)]
+    if viewer_seat != seat:
+        doing = _THIRD_PERSON.sub(lambda m: _THIRD_PERSON_WORDS[m.group(0)], doing)
+    players = getattr(game, "players", ())
+    name = players[seat].name if isinstance(seat, int) and 0 <= seat < len(players) else ""
+    return {"seat": seat, "name": name, "kind": choice.kind, "doing": doing}
 
 
 def auto_resolve_ai_prompts(game, seat_type: Callable[[int], str]) -> None:

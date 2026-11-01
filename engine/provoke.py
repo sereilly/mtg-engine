@@ -65,6 +65,16 @@ PROVOKE_LABEL = "triggered_combat"
 #: reminder text already stripped. No argument, so the whole part is the word.
 _PROVOKE_PART = "provoke"
 
+#: What one instance of provoke says, in the words Legions prints as its
+#: reminder (CR 702.39a defines the same ability). For a reader that has to say
+#: what the ability does where the card cannot: a provoke Hunter Sliver grants
+#: is the bare word on the Sliver ("All Sliver creatures have provoke"), and the
+#: offer it makes was worded "Provoke" with nothing after it.
+PROVOKE_REMINDER = (
+    "Whenever this creature attacks, you may have target creature defending "
+    "player controls untap and block it if able."
+)
+
 #: "target creature defending player controls" as the grammar lowers it for an
 #: untap (probe: "Whenever this creature attacks, you may untap target creature
 #: defending player controls."), so the picker, the CR 608.2b gate and the
@@ -133,6 +143,7 @@ def provoke_triggers(keyword_line: str) -> tuple[ParsedTriggeredAbility, ...]:
 
 __all__ = [
     "PROVOKE_LABEL",
+    "PROVOKE_REMINDER",
     "is_provoke",
     "provoke_instances",
     "provoke_instruction",

@@ -1255,8 +1255,12 @@ class SpellCastingMixin:
             pile_seat = (
                 permission.zone_seat if permission is not None else caster_index
             )
+            # A land is played, never cast (CR 305.1): Future Sight's "play
+            # lands … from the top of your library" comes through this path as
+            # the land drop, and the log called it a cast.
+            verb = "played" if card.primary_type == "land" else "cast"
             self.log.append(
-                f"{card.name} cast from {self.players[pile_seat].name}'s {from_zone}"
+                f"{card.name} {verb} from {self.players[pile_seat].name}'s {from_zone}"
             )
 
         if card.primary_type != "land":

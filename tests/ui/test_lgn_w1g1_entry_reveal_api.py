@@ -2,9 +2,9 @@
 and to nobody else, gating that seat's other actions, and answered by
 ``entry_reveal_confirm`` with the hand slots to reveal.
 
-The client half (a panel in ``web/static/`` that shows ``state.entry_reveal``
-and sends the slots) is the wave-2 client group's; this holds the server half
-it will be built against.
+This holds the server half. The client half is ``applyEntryRevealPrompt`` in
+``web/static/app.js``, run over this payload by
+``tests/ui/test_lgn_w2g1_client_ui_api.py``.
 """
 
 from __future__ import annotations

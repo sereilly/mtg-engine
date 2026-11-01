@@ -6,8 +6,9 @@ the ``turn_face_up`` special action with its printed ``morph_cost``, how many
 (``max_x``); ``{"action": "special_action", "special_action_kind":
 "turn_face_up", "x_value": N, …}`` pays X generic per symbol on the server and
 the face-up trigger reads that X. An X the lands cannot pay is a 400 with
-nothing tapped. The client half (an X box bounded by ``max_x``) is the
-wave-2 client group's.
+nothing tapped. The client half (a row of X values bounded by ``max_x``) is
+``renderSpecialActionXRow`` in ``web/static/app.js``, run over this payload by
+``tests/ui/test_lgn_w2g1_client_ui_api.py``.
 """
 
 from __future__ import annotations

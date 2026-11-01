@@ -55,6 +55,10 @@ _DISPLAY_KEYWORDS = (
     # hand (CR 702.8b), not a battlefield ability worth a badge.
     "Menace", "Hexproof", "Prowess",
     "Shadow", "Phasing", "Desertwalk",
+    # CR 702.39: an attack trigger, line-derived so a granted one (Hunter
+    # Sliver) folds in too — the badge says the creature can drag a blocker
+    # in, which nothing else on the permanent shows once the reminder is gone.
+    "Provoke",
 )
 
 #: The implemented keywords this row deliberately does **not** badge, each with

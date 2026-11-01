@@ -29,6 +29,7 @@ from ...models import PlayerState
 from ...restricted_mana import CAST, PaymentPurpose
 from ...cast_permissions import permission_for
 from ...cost_modifiers import keyword_cost_modifiers
+from ...face_down import is_morph_cost
 from ...cost_x_definitions import (
     caps_cast_x, cast_x_ceiling, cast_x_floor, cast_x_value, defines_cast_x,
     floors_cast_x,
@@ -913,6 +914,9 @@ class PoolPaymentMixin:
                 )
                 if paid is None:
                     details = (
+                        f"insufficient mana to cast {card.name} face down "
+                        f"({alternative_mana})"
+                        if is_morph_cost(chosen_alternative) else
                         f"insufficient mana for {card.name}'s "
                         f"{chosen_alternative.keyword or 'alternative'} cost "
                         f"({alternative_mana})"
@@ -929,15 +933,26 @@ class PoolPaymentMixin:
                     )
                 x_mana_spent = paid
                 if keyword_names:
+                    what = (
+                        "cost to cast it face down"
+                        if is_morph_cost(chosen_alternative)
+                        else f"{chosen_alternative.keyword} cost"
+                    )
                     self.log.append(
-                        f"{card.name}'s {chosen_alternative.keyword} cost is "
+                        f"{card.name}'s {what} is "
                         f"changed by {', '.join(sorted(set(keyword_names)))}"
                     )
-            self.log.append(
-                f"{card.name} cast for its "
-                f"{chosen_alternative.keyword or 'alternative'} cost "
-                f"({chosen_alternative.describe()})"
-            )
+            if is_morph_cost(chosen_alternative):
+                # CR 702.37a reserves "morph cost" for the cost that turns the
+                # permanent face up; casting it face down is the {3}
+                # alternative cost CR 702.37c describes, and the log says so.
+                self.log.append(f"{card.name} cast face down for {alternative_mana}")
+            else:
+                self.log.append(
+                    f"{card.name} cast for its "
+                    f"{chosen_alternative.keyword or 'alternative'} cost "
+                    f"({chosen_alternative.describe()})"
+                )
         elif free_grant is not None and card.primary_type != "land":
             if "{X}" in card.mana_cost.upper():
                 resolved_x_value = 0  # CR 107.3b: the only legal choice for X

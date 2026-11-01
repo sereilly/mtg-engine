@@ -156,6 +156,7 @@ let currentState = INPUT.state;
 let modalModeTargetsSelected = new Set();
 let severalTargetsOpenFor = null;
 let severalTargetsShares = new Map();
+let severalTargetsRolePicks = [];
 function escapeHtml(text) { return String(text); }
 function tile(markup) {
   const el = {
@@ -218,6 +219,9 @@ function chosen() { return nodes.modalModeTargetsList.tiles.map((t) => t.classLi
 _DIALOG = [
     "getTriggerTargetInfo", "getModalModeTargetsInfo", "triggerNamesSeveralTargets",
     "severalTargetsPrompt", "candidateOwnerLabel", "renderSeveralTargetsModal",
+    # A tile's name, with the card a face-down permanent hides for its
+    # controller (CR 708.5), and the roles branch the renderer hands off to.
+    "candidatePermanentName", "renderRoleTargetsModal",
     # A divided trigger's shares (Shambling Swarm).
     "evenStartingDivision", "severalTargetsDivisionValid", "resplitSeveralTargetsShares",
     "renderSeveralTargetsDivision",
