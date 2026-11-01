@@ -412,4 +412,93 @@ def test_w1g7_goblin_assassin_hears_another_goblin_and_no_one_else(set_pool, mon
     _w1g7_put(game, set_pool, 1, "Craw Wurm")
     assert _w1g7_board(game, 1) == ["Craw Wurm"]
 
+
+# --- Hollow Specter -----------------------------------------------------------
+
+_W1G7_BOB_HAND = ["Lightning Bolt", "Plains", "Shivan Dragon", "Island", "Giant Growth"]
+
+
+def _w1g7_specter_hits(set_pool, bob_hand, swamps, *, interactive):
+    """Alice's Hollow Specter connects with Bob; returns the game with the
+    trigger's resolution started and held on Alice's prompt. Alice must be
+    interactive: a seat nobody asks is answered as the trigger resolves."""
+    game = _w1g7_table(set_pool, hands={1: bob_hand}, interactive=interactive)
+    _w1g7_put(game, set_pool, 0, "Hollow Specter")
+    for _ in range(swamps):
+        _w1g7_put(game, set_pool, 0, "Swamp")
+    _w1g7_declare_attack(game, 0)
+    for _ in range(6):
+        if game.stack:
+            break
+        game.advance_combat_phase()
+    assert [item.card.name for item in game.stack] == ["Hollow Specter"]
+    game.resolve_top_of_stack()
+    return game
+
+
+def test_w1g7_hollow_specter_x_paid_then_shown_then_picked(set_pool):
+    """"…you may pay {X}. If you do, that player reveals X cards from their
+    hand and you choose one of them. That player discards that card." The
+    ruling (2004-10-04): "You decide on the value of X and pay {X} during
+    resolution." Alice names 2 and two Swamps tap; Bob picks the two he shows
+    (CR 608.2c); Alice may take only one of those, and Bob discards it."""
+    game = _w1g7_specter_hits(set_pool, _W1G7_BOB_HAND, 3, interactive={0, 1})
+    assert game.players[1].life == 18
+    assert game.pending_choice_of("pay_any_amount", 0) is not None
+    assert not game.confirm_pay_any_amount(0, 4), "three Swamps cannot pay {4}"
+    assert game.confirm_pay_any_amount(0, 2)
+    tapped = [p for p in game.controlled_by(0) if p.tapped and p.card.name == "Swamp"]
+    assert len(tapped) == 2
+    shown = game.pending_choice_of("choose_cards_in_hand", 1)
+    assert shown is not None and shown.data["count"] == 2
+    assert game.confirm_choose_cards_in_hand(1, [1, 2])
+    pick = game.pending_choice_of("revealed_hand_pick", 0)
+    assert pick is not None and pick.data["legal_indices"] == [1, 2]
+    assert not game.confirm_revealed_hand_pick(0, 0), "Lightning Bolt was never shown"
+    assert game.confirm_revealed_hand_pick(0, 2)
+    _w1g7_resolve_stack(game)
+    assert _w1g7_names(game.players[1].graveyard) == ["Shivan Dragon"]
+    assert _w1g7_names(game.players[1].hand) == [
+        "Lightning Bolt", "Plains", "Island", "Giant Growth",
+    ]
+    assert game.stack == [] and game.pending_choices == []
+
+
+def test_w1g7_hollow_specter_x_past_the_hand_shows_it_all(set_pool):
+    """X larger than Bob's hand reveals every card he has (CR 608.2's as much
+    as possible) and nobody asks him which; Alice picks among them."""
+    game = _w1g7_specter_hits(
+        set_pool, ["Plains", "Shivan Dragon"], 4, interactive={0},
+    )
+    assert game.confirm_pay_any_amount(0, 4)
+    assert game.pending_choice_of("choose_cards_in_hand", 1) is None
+    pick = game.pending_choice_of("revealed_hand_pick", 0)
+    assert pick is not None and pick.data["legal_indices"] == [0, 1]
+    assert game.confirm_revealed_hand_pick(0, 1)
+    _w1g7_resolve_stack(game)
+    assert _w1g7_names(game.players[1].graveyard) == ["Shivan Dragon"]
+    assert _w1g7_names(game.players[1].hand) == ["Plains"]
+
+
+def test_w1g7_hollow_specter_x_zero_discards_nothing(set_pool):
+    """The ruling (2004-10-04): "X can be zero, but then that player discards
+    nothing." A seat nobody asks pays nothing — the stated default of the
+    any-amount payment — and Bob keeps his hand; so does an interactive Alice
+    who names 0."""
+    game = _w1g7_table(set_pool, hands={1: _W1G7_BOB_HAND})
+    _w1g7_put(game, set_pool, 0, "Hollow Specter")
+    for _ in range(3):
+        _w1g7_put(game, set_pool, 0, "Swamp")
+    _w1g7_declare_attack(game, 0)
+    _w1g7_finish_combat(game)
+    assert game.players[1].life == 18
+    assert _w1g7_names(game.players[1].hand) == _W1G7_BOB_HAND
+    assert "Alice paid no mana" in game.log
+
+    game = _w1g7_specter_hits(set_pool, _W1G7_BOB_HAND, 3, interactive={0, 1})
+    assert game.confirm_pay_any_amount(0, 0)
+    _w1g7_resolve_stack(game)
+    assert _w1g7_names(game.players[1].hand) == _W1G7_BOB_HAND
+    assert not any(p.tapped for p in game.controlled_by(0) if p.card.name == "Swamp")
+
 # ==== end W1G7 ======================================================

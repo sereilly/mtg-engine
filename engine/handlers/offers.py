@@ -749,6 +749,9 @@ def each_player_pays_any_mana(
 ) -> tuple[bool, str]:
     """"Each player may pay any amount of mana." (Liege of the Hollows.)
 
+    ``actor: you`` is "you may pay {X}" with X undefined (Hollow Specter,
+    CR 107.3f): the controller's prompt alone, the amount read back as X.
+
     One ``pay_any_amount`` prompt per seat in turn order (CR 101.4), the shape
     ``each_player_discards_up_to_cards`` and ``each_player_draws_up_to_cards``
     already have one zone each over — and here for their reason: the "may" and
@@ -764,6 +767,11 @@ def each_player_pays_any_mana(
     caster_index = game.players.index(context.caster)
     if instruction.payload.get("actor") == "each_opponent":
         seats = [s for s in game.opponents_of(caster_index) if not game.players[s].lost]
+    elif instruction.payload.get("actor") == "you":
+        # "You may pay {X}." (Hollow Specter.) CR 107.3f's X, chosen as it is
+        # paid by the controller alone — the same prompt and the same record
+        # as "each player may pay any amount of mana", over one seat.
+        seats = [caster_index]
     else:
         # CR 101.4: the active player first, then the rest in turn order.
         count = len(game.players)

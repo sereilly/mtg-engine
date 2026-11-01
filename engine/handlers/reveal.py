@@ -893,6 +893,15 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         any_colors = [str(chosen_color)]
         narrowing["restrictions"] = {"any_colors": any_colors}
     shows = instruction.payload.get("revealer_shows")
+    if shows == "x":
+        # "…that player reveals **X** cards from their hand and you choose one
+        # of them." (Hollow Specter.) The X the sentence defined, taken now
+        # (CR 608.2h). Zero is the ruling's case (2004-10-04): "X can be zero,
+        # but then that player discards nothing."
+        shows = resolve_amount("x", context.x_value)
+        if shows <= 0:
+            game.log.append(f"{card.name}: {victim.name} reveals no cards")
+            return True, "resolved"
     if shows:
         return _reveal_shown_cards_and_choose(
             game, instruction, context, victim_index, caster_index,
