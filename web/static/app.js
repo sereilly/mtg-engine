@@ -5870,6 +5870,15 @@ function applySacrificeSelectPrompt(info) {
         action: "sacrifice_confirm",
         sacrifice_indices: sacrificeSelection.slice(),
       };
+      // By id where the prompt gives one (`permanents[].id`): an id names one
+      // object (CR 400.7) while a slot renumbers when anything leaves, and the
+      // server takes `sacrifice_permanent_ids` over the slots and refuses a
+      // stale one rather than sacrificing whatever moved into its place.
+      const idBySlot = new Map(permanents.map((p) => [Number(p.index), p.id]));
+      const ids = sacrificeSelection.map((slot) => idBySlot.get(Number(slot)));
+      if (ids.length && ids.every((id) => Number.isInteger(id))) {
+        payload.sacrifice_permanent_ids = ids;
+      }
       sacrificeSelection = [];
       await sendAction(payload);
     });
@@ -6731,12 +6740,16 @@ function applyPayAnyAmountPrompt(info) {
   // of the Hollows' "any amount of mana", and is said the way it is printed:
   // the number chosen is X.
   const paysX = !!info.pays_x;
-  title.textContent = paysX ? "Choose X — pay {X}?" : "Pay how much mana?";
-  body.textContent =
+  title.textContent = paysX ? "Choose X" : "Pay how much mana?";
+  // Through the symbol renderer (which escapes the rest), so "{X}" reads as
+  // the mana symbol the card prints.
+  setSymbolsHtml(
+    body,
     (paysX
       ? `${cardName}: you may pay {X}. Choose X — 0 pays nothing. `
       : `${cardName}: you may pay any amount of mana. `) +
-    `Your pool and untapped lands cover up to ${info.maximum}.`;
+    `Your pool and untapped lands cover up to ${info.maximum}.`,
+  );
   const buttons = info.options
     .map(
       (n) =>
@@ -13552,12 +13565,6 @@ function renderActivationPrompt() {
   }
 
   if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingCastDivision && !pendingManaColor && !pendingAbilityChoice && !pendingChannel) {
-    const shouldShowPriority = shouldShowPriorityPrompt(currentState);
-    const opponentHasPriority =
-      !!currentState &&
-      seat !== null &&
-      Number.isInteger(currentState.priority_player) &&
-      currentState.priority_player !== seat;
     // Who the game is actually waiting on: the seat that owes the open
     // decision (`prompt_owed_by`, read off the pending-choice queue), which is
     // not the priority holder — while it is owed nobody receives priority
@@ -13565,6 +13572,16 @@ function renderActivationPrompt() {
     // seat's search or target choice.
     const owed = currentState?.prompt_owed_by;
     const otherSeatOwes = !!owed && Number.isInteger(owed.seat) && owed.seat !== seat;
+    // …and where that decision also refuses this viewer's pass
+    // (`waiting_on_prompt`), the priority panel's "press OK to pass" offered
+    // a button the server would answer with a 400: it is a wait, said as one.
+    const shouldShowPriority = shouldShowPriorityPrompt(currentState)
+      && !(otherSeatOwes && currentState?.waiting_on_prompt);
+    const opponentHasPriority =
+      !!currentState &&
+      seat !== null &&
+      Number.isInteger(currentState.priority_player) &&
+      currentState.priority_player !== seat;
     const shouldShowWaitingPriority = !isCombatDeclarePromptStep && !shouldShowPriority
       && (opponentHasPriority || otherSeatOwes);
 
@@ -25482,9 +25499,9 @@ function renderSpecialActionXRow(host, entry) {
   const maxX = Math.max(0, Number(entry.max_x) || 0);
   const intro = document.createElement("span");
   intro.className = "special-action-x-label";
-  intro.innerHTML = renderSymbolsInline(
-    `Turn ${hidden} face up — Morph ${entry.morph_cost || ""}: choose X`
-  );
+  // Short: the row sits in the phase rail's narrow column.
+  intro.innerHTML = renderSymbolsInline(`${hidden} — choose X:`);
+  intro.title = `Turn ${hidden} face up for its morph cost, ${entry.morph_cost || ""}`;
   row.appendChild(intro);
   for (let value = 0; value <= maxX; value += 1) {
     const button = document.createElement("button");

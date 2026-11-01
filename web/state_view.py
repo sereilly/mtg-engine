@@ -1162,7 +1162,12 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             "selected_indices": valid_indices,
             "selected_count": len(valid_indices),
         }
-    else:
+    elif cleanup_required <= 0:
+        # Cleared only once nothing is owed. Another viewer's poll while the
+        # active seat is still choosing is not that: it used to clear the
+        # selection too, so with a second person at the table every state the
+        # other browser fetched between two clicks wiped the first click, and
+        # a seat owing two discards could never finish choosing them.
         _clear_cleanup_selection(session)
 
     untap_info = None

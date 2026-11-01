@@ -26,6 +26,7 @@ and the board shows them as one panel.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Callable
 
 from engine.pending_choices import CHOICE_SPECS
@@ -127,6 +128,11 @@ def blocking_prompt(game, seat: int, action: str, exempt_actions: frozenset[str]
 #: refused and not what the owing seat is doing.
 _BEFORE_OTHER_ACTIONS = " before other actions"
 
+#: The refusal sentence is addressed to the seat that owes the decision ("say
+#: how much mana you pay"); another viewer is told it about that seat.
+_THIRD_PERSON_WORDS = {"you": "they", "your": "their"}
+_THIRD_PERSON = re.compile(r"\b(?:your|you)\b")
+
 
 def prompt_owed_by(game, viewer_seat: int | None) -> dict | None:
     """**Who** the game is waiting on, for the status line: the first open
@@ -155,7 +161,7 @@ def prompt_owed_by(game, viewer_seat: int | None) -> dict | None:
     if doing.endswith(_BEFORE_OTHER_ACTIONS):
         doing = doing[: -len(_BEFORE_OTHER_ACTIONS)]
     if viewer_seat != seat:
-        doing = doing.replace(" your ", " their ")
+        doing = _THIRD_PERSON.sub(lambda m: _THIRD_PERSON_WORDS[m.group(0)], doing)
     players = getattr(game, "players", ())
     name = players[seat].name if isinstance(seat, int) and 0 <= seat < len(players) else ""
     return {"seat": seat, "name": name, "kind": choice.kind, "doing": doing}
