@@ -15,6 +15,10 @@ writing somewhere nothing reads. The cleanup sweep names it too
 
 from __future__ import annotations
 
+# A leaf too (it imports nothing), so naming the duration vocabulary here keeps
+# this module importable from the cleanup sweep without closing a cycle.
+from .shields import END_OF_COMBAT
+
 #: "…can attack this turn as though it didn't have defender." (Wall of Wonder.)
 ATTACK_AS_THOUGH_NO_DEFENDER = "attack_as_though_no_defender_until_eot"
 
@@ -31,8 +35,9 @@ ATTACKS_AS_THOUGH_NO_DEFENDER = "attacks_as_though_no_defender"
 #: a permission, and here anyway: it is the same kind of channel — one mark on
 #: one permanent, written by a handler, read by a combat step, swept with the
 #: turn — and the argument above about spelling a channel twice does not care
-#: which direction the mark points. This module is a leaf that imports nothing,
-#: which is what lets the cleanup sweep name the key without closing a cycle;
+#: which direction the mark points. This module is a leaf that imports nothing
+#: but another leaf (``engine/shields.py``'s duration words), which is what
+#: lets the cleanup sweep name the key without closing a cycle;
 #: ``engine/combat_restrictions.py``, where the *derivation* of the printed
 #: clause lives, cannot be imported that early.
 CANT_BLOCK_UNTIL_EOT = "cant_block_until_eot"
@@ -72,6 +77,33 @@ MUST_BLOCK_ALL_UNTIL_EOT = "must_block_all_until_eot"
 #: anything leaving the battlefield and a returning permanent is a new object
 #: (CR 400.7) that must not inherit a requirement aimed at its earlier self.
 MUST_BLOCK_ATTACKERS_UNTIL_EOT = "must_block_attackers_until_eot"
+
+#: "…block this creature **this combat** if able." (Provoke, CR 702.39a.) The
+#: same pair as ``MUST_BLOCK_ATTACKERS_UNTIL_EOT`` over the shorter window, so
+#: its own key rather than a second reading of that one: a turn may hold a
+#: second combat phase (CR 505.1a's additional phases), and a requirement swept
+#: only at cleanup would compel the creature to block the same attacker again
+#: there. Swept by the end of combat step, where every other "this combat"
+#: mark ends, and by cleanup as well, for a combat that never reaches its end
+#: step (a turn ended early, CR 723).
+#:
+#: **One entry per requirement**, where the until-end-of-turn list keeps one per
+#: attacker: two instances of provoke (two Hunter Slivers, CR 702.39b) aimed at
+#: one creature are two requirements CR 509.1c counts, and a creature also owed
+#: a block elsewhere must obey the side that carries more of them.
+MUST_BLOCK_ATTACKERS_THIS_COMBAT = "must_block_attackers_this_combat"
+
+#: Which mark a requirement aimed at one attacker is written to, by the
+#: ``duration`` its payload carries: absent (Trumpeting Armodon's "this turn")
+#: or ``shields.END_OF_COMBAT`` (provoke's "this combat") — the duration
+#: vocabulary the end of combat step already sweeps shields and redirects by.
+OWED_BLOCK_KEYS: dict[str | None, str] = {
+    None: MUST_BLOCK_ATTACKERS_UNTIL_EOT,
+    END_OF_COMBAT: MUST_BLOCK_ATTACKERS_THIS_COMBAT,
+}
+
+#: The duration provoke's requirement carries (CR 702.39a: "this combat").
+PROVOKE_DURATION = END_OF_COMBAT
 
 #: "Target creature can't block this creature this turn." (Duct Crawler.) The
 #: exact denial mirror of the requirement above, and the same shape for the

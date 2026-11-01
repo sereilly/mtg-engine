@@ -11,7 +11,7 @@ cannot carry out keeps the whole line refused, naming it.
 
 :func:`keyword_line_triggers` is the other half: the keywords whose rules text
 the CR defines as a triggered ability (rampage, cumulative upkeep, flanking,
-madness), read here for both of the compiler's line loops. And
+madness, provoke), read here for both of the compiler's line loops. And
 :func:`_protection_clause_modelled` is asked by the static-line gate
 (``engine/static_line_support.py``) too, so "protection from ..." printed on a
 line of its own and inside a keyword list is admitted by one reader.
@@ -27,6 +27,7 @@ from .oracle_types import ParsedTriggeredAbility, _COLOR_WORD_TO_SYMBOL
 from .cumulative_upkeep import cumulative_upkeep_triggers
 from .flanking import flanking_triggers
 from .madness import madness_triggers
+from .provoke import provoke_triggers
 from .rampage import rampage_amount, rampage_triggers
 from .grammar.vocabulary import IMPLEMENTED_KEYWORDS
 from .line_normalization import normalize_creature_line
@@ -252,4 +253,8 @@ def keyword_line_triggers(normalized_line: str) -> tuple[ParsedTriggeredAbility,
         # ability this returns: it is a CR 614 replacement, read off the
         # printed line by `engine/replacements/zone_changes.py` (`engine/madness.py`).
         *madness_triggers(normalized_line),
+        # CR 702.39a: "Whenever this creature attacks, you may choose to have
+        # target creature defending player controls block this creature this
+        # combat if able. If you do, untap that creature." (`engine/provoke.py`.)
+        *provoke_triggers(normalized_line),
     )

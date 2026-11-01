@@ -24,8 +24,9 @@ from ..named_counters import counters_on
 from ..granted_abilities import bind_granter
 from ..graveyard_statics import (GraveyardSource, graveyard_static_sources,
                                  static_source_seat)
-from ..keywords import (add_derived_ability_line, add_derived_grant,
-                        add_derived_removal, clear_derived_grants)
+from ..keywords import (LINE_DERIVED_KEYWORDS, add_derived_ability_line,
+                        add_derived_grant, add_derived_removal,
+                        clear_derived_grants, keyword_ability_name)
 from ..land_animation import LAND_ANIMATIONS_REACHING
 from ..layer_bridge import QUALIFIED_BUFFS
 from ..lord_buffs import LORD_BUFF_KIND, LordBuff, lord_buff_from_payload
@@ -419,6 +420,20 @@ class LordBuffsMixin:
                     add_derived_grant(
                         target_perm, keyword, timestamp=source_perm.timestamp
                     )
+                    # "All Sliver creatures have **provoke**." (Hunter Sliver.)
+                    # A keyword the CR defines *as* an ability
+                    # (``LINE_DERIVED_KEYWORDS``) is built by the compiler out
+                    # of a printed line, so the word alone grants the word and
+                    # not the trigger. The grant is of the line as well, on the
+                    # derived-ability channel the quoted grant below uses —
+                    # the rule ``aura_granted_line_derived_lines`` applies for
+                    # an Aura — so the lord leaving takes the ability with it
+                    # and two lords grant it twice (CR 702.39b).
+                    if keyword_ability_name(keyword) in LINE_DERIVED_KEYWORDS:
+                        add_derived_ability_line(
+                            target_perm, keyword.capitalize(),
+                            timestamp=source_perm.timestamp, cumulative=True,
+                        )
                 for keyword in buff.lost_keywords:
                     add_derived_removal(target_perm, keyword)
                 # …and the sentence half of the same layer (CR 113.3): a quoted

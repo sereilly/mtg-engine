@@ -30,7 +30,9 @@ from ..mana_payment import mana_cost_label
 from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
+                                  MUST_BLOCK_ATTACKERS_THIS_COMBAT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
+                                  OWED_BLOCK_KEYS,
                                   ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CANT_ATTACK_UNTIL_EOT,
                                   CANT_BLOCK_ATTACKERS_UNTIL_EOT,
@@ -244,11 +246,33 @@ def force_bound_to_block_until_eot(game: Game, instruction: OracleInstruction, c
 
     Nothing is re-tested: the untap in front of it already found the creature,
     and "if able" is what makes the mark harmless on one that cannot block.
+
+    **Aimed** when the payload names an attacker: "…have target creature
+    defending player controls untap and **block it** if able" (provoke,
+    CR 702.39a — ``engine/provoke.py``). ``attacker: "source"`` is the
+    ability's own source, recorded by id exactly as Trumpeting Armodon's
+    requirement is (:func:`_owe_block`), and ``duration`` picks the mark —
+    provoke's "this combat" (``combat_permissions.OWED_BLOCK_KEYS``). With the
+    source gone there is no attacker for the requirement to be about, so
+    nothing is recorded, for the reason the targeted twin below gives.
     """
     chosen = bound_permanent(game, context)
     if chosen is None:
         game.log.append(
             f"{context.card.name}: nothing left for the block requirement"
+        )
+        return True, "resolved"
+    if instruction.payload.get("attacker") == "source":
+        attacker = context.source_permanent
+        if attacker is None or not game.is_on_battlefield(attacker):
+            game.log.append(
+                f"{context.card.name}: its own attacker has left, so nothing is "
+                "compelled to block"
+            )
+            return True, "resolved"
+        _owe_block(
+            game, chosen, attacker, context,
+            duration=instruction.payload.get("duration"),
         )
         return True, "resolved"
     chosen.metadata[MUST_BLOCK_UNTIL_EOT] = True
@@ -322,7 +346,7 @@ def force_target_to_block_until_eot(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
-def _owe_block(game: Game, blocker, attacker, context) -> None:
+def _owe_block(game: Game, blocker, attacker, context, *, duration=None) -> None:
     """Record that *blocker* owes *attacker* a block this turn (CR 509.1c).
 
     One body for both ways the creature is named — a target the caster chose
@@ -332,13 +356,23 @@ def _owe_block(game: Game, blocker, attacker, context) -> None:
     and the creature owes both blocks as far as the rules allow, and an
     attacker that leaves and returns is a new object (CR 400.7) whose new id
     the old requirement no longer names.
+
+    *duration* picks the mark (``combat_permissions.OWED_BLOCK_KEYS``): none is
+    "this turn"; ``END_OF_COMBAT`` is provoke's "this combat", whose list keeps
+    **one entry per requirement** — two provokes aimed at one creature are two
+    requirements CR 509.1c counts (CR 702.39b) — where the turn-long list keeps
+    one per attacker, as it always has.
     """
-    owed = list(blocker.metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) or ())
-    if attacker.permanent_id not in owed:
+    key = OWED_BLOCK_KEYS.get(duration)
+    if key is None:
+        raise ValueError(f"no block-requirement mark lasts {duration!r}")
+    owed = list(blocker.metadata.get(key) or ())
+    if key == MUST_BLOCK_ATTACKERS_THIS_COMBAT or attacker.permanent_id not in owed:
         owed.append(attacker.permanent_id)
-    blocker.metadata[MUST_BLOCK_ATTACKERS_UNTIL_EOT] = owed
+    blocker.metadata[key] = owed
+    window = "this combat" if key == MUST_BLOCK_ATTACKERS_THIS_COMBAT else "this turn"
     game.log.append(
-        f"{blocker.card.name} blocks {attacker.card.name} this turn if able"
+        f"{blocker.card.name} blocks {attacker.card.name} {window} if able"
     )
 
 

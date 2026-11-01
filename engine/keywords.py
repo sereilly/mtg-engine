@@ -182,7 +182,12 @@ ALL_ABILITIES_REMOVED = "all_abilities_removed"
 #: flanker's filter. Cumulative upkeep is deliberately absent: no card in the
 #: pool grants or removes it, and a row here with nothing behind it is a claim
 #: nothing checks.
-LINE_DERIVED_KEYWORDS = frozenset({"rampage", "flanking"})
+#:
+#: Provoke (CR 702.39a, `engine/provoke.py`) is the third, and the first a
+#: **lord** grants: "All Sliver creatures have provoke" (Hunter Sliver). The
+#: lord pass (`mixins/lords._recalculate_lord_buffs`) grants such a keyword's
+#: line on the derived-ability channel beside the word, as the Aura path does.
+LINE_DERIVED_KEYWORDS = frozenset({"rampage", "flanking", "provoke"})
 
 
 def keyword_ability_name(keyword: str) -> str:
@@ -685,7 +690,7 @@ def derived_removals(perm: Permanent) -> tuple[str, ...]:
 
 
 def add_derived_ability_line(
-    perm: Permanent, line: str, *, timestamp: int = 0
+    perm: Permanent, line: str, *, timestamp: int = 0, cumulative: bool = False
 ) -> None:
     """Layer 6: *perm* says *line* for as long as the source keeps granting it.
 
@@ -693,9 +698,16 @@ def add_derived_ability_line(
     same quoted ability two grants of one sentence and the compiler would build
     two identical abilities out of a repeat — two rows in the UI's ability list,
     two entries the activation index has to tell apart, and nothing gained.
+
+    *cumulative* keeps the repeat, for the grant whose instances **each
+    trigger**: "If a creature has multiple instances of provoke, each triggers
+    separately" (CR 702.39b), so two Hunter Slivers give a Sliver two provoke
+    lines and the compiler two abilities. The lord pass clears this channel
+    before it rebuilds it, so a repeat is one per source and never accumulates
+    across recomputes.
     """
     lines = perm.metadata.setdefault(DERIVED_ABILITY_LINES, [])
-    if line not in lines:
+    if cumulative or line not in lines:
         lines.append(line)
     # *timestamp* is the source's (CR 613.7a), the newest where two sources
     # grant one sentence — :func:`add_derived_grant`'s rule, for its reason.

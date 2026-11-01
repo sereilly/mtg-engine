@@ -12,6 +12,7 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CANT_BLOCK_ATTACKERS_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
+                                  MUST_BLOCK_ATTACKERS_THIS_COMBAT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   MUST_BLOCK_UNTIL_EOT)
 from ..damage_events import (DAMAGE_DENIES_REGENERATION,
@@ -86,6 +87,10 @@ _EOT_METADATA_KEYS = (
     # (Trumpeting Armodon.) The narrowed twin of the mark above it, swept
     # beside it for the same reason and at the same moment.
     MUST_BLOCK_ATTACKERS_UNTIL_EOT,
+    # "…block this creature **this combat** if able." (Provoke.) Ended by the
+    # end of combat step; swept here as well for a combat that never reaches
+    # that step (a turn ended early, CR 723), so it cannot outlive the turn.
+    MUST_BLOCK_ATTACKERS_THIS_COMBAT,
     # "Until end of turn, Autumn Willow can be the target of spells and
     # abilities controlled by target player as though it didn't have shroud."
     # The sweep *is* the duration: the waiver is a list of seats on the
