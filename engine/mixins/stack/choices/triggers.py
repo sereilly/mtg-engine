@@ -834,6 +834,21 @@ class TriggerChoicesMixin:
             # candidate below is unchanged: with nothing to say whose creatures
             # an effect wants, "as many as possible" is not a policy.
             ceiling = int(choice.data.get("max_targets") or 1)
+            # "…turn **any number of** target creatures with morph abilities …
+            # face down" (Weaver of Lies): every candidate on the side the
+            # effect wants — and with none there, CR 107.1c's zero, which is an
+            # answer: the fall-through below would aim a denial at the seat's
+            # own first creature. Asked before the ceiling, because a board
+            # with one candidate arms a ceiling of one.
+            if (
+                wanted and choice.data.get("up_to")
+                and _printed_quantifier(item) == "any_number"
+            ):
+                return self._resolve_trigger_targets(choice, [
+                    target["permanent_id"] for target in targets
+                    if target.get("kind") == "permanent"
+                    and target.get("seat") in wanted
+                ][:ceiling])
             if ceiling > 1:
                 several = [
                     target["permanent_id"] for target in targets
@@ -852,16 +867,6 @@ class TriggerChoicesMixin:
                     ][: ceiling - len(several)]
                 if several:
                     return self._resolve_trigger_targets(choice, several)
-                # "…turn **any number of** target creatures with morph
-                # abilities … face down" (Weaver of Lies) with nothing on the
-                # side the effect wants: CR 107.1c's zero is an answer, and it
-                # is the one a seat nobody asks gives — the fall-through below
-                # would aim a denial at the seat's own first creature.
-                if (
-                    wanted and choice.data.get("up_to")
-                    and _printed_quantifier(item) == "any_number"
-                ):
-                    return self._resolve_trigger_targets(choice, [])
             for target in targets:
                 if target.get("kind") == "permanent" and target.get("seat") in wanted:
                     return self._resolve_trigger_target(
