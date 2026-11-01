@@ -35,6 +35,7 @@ from engine.models import Permanent as _W1G5Permanent
 from engine.models import PlayerState as _W1G5PlayerState
 from engine.oracle import compile_card_oracle as _w1g5_compile
 
+from tests.helpers import _mk_card as _w1g5_mk_card
 from tests.helpers import resolve_stack as _w1g5_resolve_stack
 
 
@@ -158,6 +159,77 @@ def test_w1g5_noxious_ghoul_shrinks_every_non_zombie_when_a_zombie_enters(
 
     game.resolve_cleanup_step(1)
     assert (hulk.effective_power, hulk.effective_toughness) == (6, 5)
+
+
+def _w1g5_slot(game, seat, permanent):
+    return next(
+        index for index, candidate in enumerate(game.players[seat].battlefield)
+        if candidate is permanent
+    )
+
+
+def test_w1g5_frenetic_raptor_grounds_every_beast_as_a_blocker(set_pool):
+    """"Beasts can't block." Every Beast on every battlefield — the Raptor
+    itself, Alice's other Beast, and Bob's — and nothing else: Alice's Elf
+    blocks as usual."""
+    game, alice, bob, card = _w1g5_table(set_pool)
+    raptor = _w1g5_put(game, 0, card("Frenetic Raptor"))
+    tusker = _w1g5_put(game, 0, card("Krosan Tusker"))     # Boar Beast
+    elf = _w1g5_put(game, 0, card("Birchlore Rangers"))
+    attacker = _w1g5_put(game, 1, card("Wellwisher"))
+    bobs_beast = _w1g5_put(game, 1, card("Krosan Tusker"))
+
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, why = game.declare_attackers(
+        1, [_w1g5_slot(game, 1, attacker)], defending_player_index=0,
+    )
+    assert ok, why
+    game.advance_combat_phase()
+    assert game.current_step == "declare_blockers"
+    for beast in (raptor, tusker):
+        assert not game._can_block_attacker(beast, attacker)
+    assert game._can_block_attacker(elf, attacker)
+    assert not game._can_block_attacker(bobs_beast, attacker), "any controller"
+    ok, _why = game.declare_blockers(
+        0, {_w1g5_slot(game, 0, tusker): _w1g5_slot(game, 1, attacker)},
+    )
+    assert not ok, "the Beast's block is refused"
+    ok, why = game.declare_blockers(
+        0, {_w1g5_slot(game, 0, elf): _w1g5_slot(game, 1, attacker)},
+    )
+    assert ok, why
+
+    # The Raptor gone, the Beasts block again (a static, CR 611.3a).
+    game.remove_from_battlefield(raptor)
+    assert game._can_block_attacker(tusker, attacker)
+
+
+def test_w1g5_a_one_word_creature_type_subject_cannot_attack():
+    """The attack twin of the Raptor's row: "Beasts can't attack." on an
+    invented card grounds a Beast attacker and no other."""
+    beast = _w1g5_mk_card("Test Beast", "Creature — Beast", power=2, toughness=2)
+    elf = _w1g5_mk_card("Test Elf", "Creature — Elf", power=2, toughness=2)
+    warden = _w1g5_mk_card(
+        "Beast Warden", "Creature — Human", "Beasts can't attack.",
+        power=1, toughness=1,
+    )
+    assert _w1g5_compile(warden).supported
+    game = _W1G5Game(players=[_W1G5PlayerState(name="A"), _W1G5PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    attacker_beast = _w1g5_put(game, 0, beast)
+    attacker_elf = _w1g5_put(game, 0, elf)
+    _w1g5_put(game, 1, warden)
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, _why = game.declare_attackers(
+        0, [_w1g5_slot(game, 0, attacker_beast)], defending_player_index=1,
+    )
+    assert not ok
+    ok, why = game.declare_attackers(
+        0, [_w1g5_slot(game, 0, attacker_elf)], defending_player_index=1,
+    )
+    assert ok, why
 
 # ==== end W1G5 ======================================================
 

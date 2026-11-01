@@ -534,6 +534,14 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         "creatures_cant_attack",
     ),
     (
+        # "**Beasts** can't attack." The attack twin of Frenetic Raptor's
+        # one-word creature-type subject (the blocking row's comment says why
+        # one word keeps the self-references out), so the two prohibitions
+        # read the same printed subjects at their two steps.
+        re.compile(r"^(?P<board_attack_subject>[a-z'-]+) can't attack$"),
+        "creatures_cant_attack",
+    ),
+    (
         # "Creatures you control can't attack." (Glacial Chasm.) The
         # unnarrowed member of the family below — no keyword, no negated
         # subtype, nothing but the seat — and the same `subject` payload one
@@ -642,6 +650,20 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         # ("creature" is not "creatures"), and below the narrowed blocking rows,
         # whose sentences do not end here.
         re.compile(r"^(?P<board_attack_subject>(?:[a-z'-]+ )*creatures) can't block$"),
+        "creatures_cant_block",
+    ),
+    (
+        # "**Beasts** can't block." (Frenetic Raptor.) Bedlam's sentence with
+        # the head noun a creature type's plural instead of "creatures" — every
+        # Beast on every battlefield, the Raptor itself included (no "other"
+        # is printed). The plural anchor above cannot reach it, and this row
+        # keeps that anchor's discipline by another road: the subject is **one
+        # word**, which no self-reference is ("this creature", "enchanted
+        # creature" are two, and "it" is no noun phrase `_printed_noun`
+        # reads). The word is the one noun reader's to interpret, so "Goblins"
+        # or "Walls" is this same row over a different set and a word it
+        # cannot read refuses the line.
+        re.compile(r"^(?P<board_attack_subject>[a-z'-]+) can't block$"),
         "creatures_cant_block",
     ),
     (re.compile(r"^this creature attacks each combat if able$"), "must_attack_each_combat"),
