@@ -88,7 +88,7 @@
     "Animate Dead": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1782583946.9919634
+      "updated_at": 1793558313.619203
     },
     "Animate Wall": {
       "reason": "",
@@ -385,6 +385,11 @@
       "status": "pass",
       "updated_at": 1788202934.1076071
     },
+    "Canopy Crawler": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793558250.1293244
+    },
     "Capsize": {
       "reason": "",
       "status": "pass",
@@ -414,6 +419,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1793555120.4491076
+    },
+    "Celestial Gatekeeper": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793558041.5530198
     },
     "Celestial Prism": {
       "reason": "",
@@ -669,6 +679,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782021429.201607
+    },
+    "Dark Supplicant": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793558066.1603777
     },
     "Darkpact": {
       "reason": "",
@@ -1185,10 +1200,20 @@
       "status": "pass",
       "updated_at": 1793554731.585258
     },
+    "Goblin Assassin": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793558128.3903854
+    },
     "Goblin Balloon Brigade": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781411321.368721
+    },
+    "Goblin Clearcutter": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793558097.0461643
     },
     "Goblin Grappler": {
       "reason": "",
@@ -1299,6 +1324,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782544666.9248512
+    },
+    "Hollow Specter": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793558159.4791594
     },
     "Holy Armor": {
       "reason": "",
@@ -1883,7 +1913,7 @@
     "Mystic Snake": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1791787837.7943609
+      "updated_at": 1793558297.1293218
     },
     "Nafs Asp": {
       "reason": "",
@@ -2040,6 +2070,11 @@
       "status": "pass",
       "updated_at": 1792618026.4957345
     },
+    "Phage the Untouchable": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793558266.0496478
+    },
     "Phantasmal Forces": {
       "reason": "",
       "status": "pass",
@@ -2074,6 +2109,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782007559.386425
+    },
+    "Planar Guide": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793558143.9773626
     },
     "Plateau": {
       "reason": "",
@@ -2250,6 +2290,11 @@
       "status": "pass",
       "updated_at": 1786235480.123106
     },
+    "Riptide Mangler": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793558233.8706942
+    },
     "Riptide Replicator": {
       "reason": "",
       "status": "pass",
@@ -2355,6 +2400,11 @@
       "status": "pass",
       "updated_at": 1783043745.1008599
     },
+    "Scion of Darkness": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793558081.6262221
+    },
     "Scrubland": {
       "reason": "",
       "status": "pass",
@@ -2374,6 +2424,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782586190.182135
+    },
+    "Seedborn Muse": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793558112.611238
     },
     "Seeker": {
       "reason": "",
@@ -3088,7 +3143,7 @@
     "Wrath of God": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1782008868.629678
+      "updated_at": 1793558281.7661283
     },
     "Wyluli Wolf": {
       "reason": "",

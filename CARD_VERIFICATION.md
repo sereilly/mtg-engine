@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5993**
-- Passed: **912** (623 checked in-game, 289 auto-passed)
+- Passed: **923** (634 checked in-game, 289 auto-passed)
 - Failed: **1**
-- Equivalent to a passing card: **66**
-- Untested: **5014**
+- Equivalent to a passing card: **67**
+- Untested: **5002**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -717,7 +717,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Candelabra of Tawnos | ✅ pass |  |
 | Cannibalize | ⬜ untested |  |
 | Canopy Claws | ⬜ untested |  |
-| Canopy Crawler | ⬜ untested |  |
+| Canopy Crawler | ✅ pass |  |
 | Canopy Dragon | ⬜ untested |  |
 | Canopy Spider | ✅ pass | auto-pass: keywords only (reach) |
 | Canopy Stalker | ⬜ untested |  |
@@ -787,7 +787,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Celestial Convergence | ⬜ untested |  |
 | Celestial Dawn | ⬜ untested |  |
 | Celestial Enforcer | ⬜ untested |  |
-| Celestial Gatekeeper | ⬜ untested |  |
+| Celestial Gatekeeper | ✅ pass |  |
 | Celestial Prism | ✅ pass |  |
 | Celestial Sword | ⬜ untested |  |
 | Cemetery Gate | ✅ pass | auto-pass: keywords only (defender, protection from black) |
@@ -1161,7 +1161,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Dark Privilege | ⬜ untested |  |
 | Dark Ritual | ✅ pass |  |
 | Dark Sphere | ⬜ untested |  |
-| Dark Supplicant | ⬜ untested |  |
+| Dark Supplicant | ✅ pass |  |
 | Dark Suspicions | ⬜ untested |  |
 | Dark Triumph | ⬜ untested |  |
 | Darkest Hour | ⬜ untested |  |
@@ -2103,7 +2103,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Gnarled Sage | ⬜ untested |  |
 | Goblin Arsonist | ⬜ untested |  |
 | Goblin Artisans | ⬜ untested |  |
-| Goblin Assassin | ⬜ untested |  |
+| Goblin Assassin | ✅ pass |  |
 | Goblin Balloon Brigade | ✅ pass |  |
 | Goblin Berserker | ✅ pass | auto-pass: keywords only (first strike, haste) |
 | Goblin Bomb | ⬜ untested |  |
@@ -2113,7 +2113,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Goblin Caves | ⬜ untested |  |
 | Goblin Chariot | ✅ pass | auto-pass: keywords only (haste) |
 | Goblin Chirurgeon | ⬜ untested |  |
-| Goblin Clearcutter | ⬜ untested |  |
+| Goblin Clearcutter | ✅ pass |  |
 | Goblin Digging Team | ⬜ untested |  |
 | Goblin Dynamo | ⬜ untested |  |
 | Goblin Elite Infantry | ⬜ untested |  |
@@ -2391,7 +2391,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Hobblefiend | ⬜ untested |  |
 | Holistic Wisdom | ⬜ untested |  |
 | Hollow Dogs | ⬜ untested |  |
-| Hollow Specter | ⬜ untested |  |
+| Hollow Specter | ✅ pass |  |
 | Hollow Trees | ⬜ untested |  |
 | Hollow Warrior | ⬜ untested |  |
 | Holy Armor | ✅ pass |  |
@@ -3533,7 +3533,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Orcish Farmer | ⬜ untested |  |
 | Orcish Healer | ⬜ untested |  |
 | Orcish Librarian | ⬜ untested |  |
-| Orcish Lumberjack | ⬜ untested |  |
+| Orcish Lumberjack | ≡ equivalent | same behaviour as Goblin Clearcutter |
 | Orcish Mechanics | ⬜ untested |  |
 | Orcish Mine | ⬜ untested |  |
 | Orcish Oriflamme | ✅ pass |  |
@@ -3667,7 +3667,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Petradon | ✅ pass |  |
 | Petravark | ⬜ untested |  |
 | Petrified Field | ⬜ untested |  |
-| Phage the Untouchable | ⬜ untested |  |
+| Phage the Untouchable | ✅ pass |  |
 | Phantasmal Fiend | ⬜ untested |  |
 | Phantasmal Forces | ✅ pass |  |
 | Phantasmal Mount | ⬜ untested |  |
@@ -3766,7 +3766,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Planar Collapse | ⬜ untested |  |
 | Planar Despair | ⬜ untested |  |
 | Planar Gate | ⬜ untested |  |
-| Planar Guide | ⬜ untested |  |
+| Planar Guide | ✅ pass |  |
 | Planar Overlay | ⬜ untested |  |
 | Planar Portal | ⬜ untested |  |
 | Planar Void | ⬜ untested |  |
@@ -4171,7 +4171,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Riptide Director | ⬜ untested |  |
 | Riptide Entrancer | ⬜ untested |  |
 | Riptide Laboratory | ⬜ untested |  |
-| Riptide Mangler | ⬜ untested |  |
+| Riptide Mangler | ✅ pass |  |
 | Riptide Replicator | ✅ pass |  |
 | Riptide Shapeshifter | ⬜ untested |  |
 | Rise Again | ≡ equivalent | same behaviour as Resurrection |
@@ -4395,7 +4395,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Scent of Nightshade | ⬜ untested |  |
 | School of Piranha | ⬜ untested |  |
 | School of the Unseen | ⬜ untested |  |
-| Scion of Darkness | ⬜ untested |  |
+| Scion of Darkness | ✅ pass |  |
 | Scorched Earth | ⬜ untested |  |
 | Scorched Ruins | ⬜ untested |  |
 | Scorching Dragonfire | ⬜ untested |  |
@@ -4456,7 +4456,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Security Detail | ⬜ untested |  |
 | Sedge Troll | ✅ pass |  |
 | See the Truth | ⬜ untested |  |
-| Seedborn Muse | ⬜ untested |  |
+| Seedborn Muse | ✅ pass |  |
 | Seedling Charm | ⬜ untested |  |
 | Seeds of Innocence | ⬜ untested |  |
 | Seedtime | ⬜ untested |  |

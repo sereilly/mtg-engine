@@ -7,7 +7,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 - Cards in the catalog: **5993**
 - Distinct behaviours: **5448**
 - Cards sharing a behaviour with another: **788** in **243** classes
-- Unverified cards covered by a verified peer: **211**
+- Unverified cards covered by a verified peer: **213**
 
 | Size | Cards |
 | --- | --- |
@@ -67,7 +67,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 3 | Aggressive Urge, Defiant Strike, Sudden Strength |
 | 3 | Armor Sliver, Barbed Sliver, Spectral Sliver |
 | 3 | **Army of Allah**, Morale, Trumpet Blast |
-| 3 | Blade Sliver, Muscle Sliver, Plated Sliver |
+| 3 | **Blade Sliver**, Muscle Sliver, **Plated Sliver** |
 | 3 | Breezekeeper, Teferi's Drake, Tolarian Drake |
 | 3 | Cateran Brute, Cateran Kidnappers, Cateran Persuader |
 | 3 | Cave Tiger, Rabid Wolverines, Viashino Weaponsmith |
@@ -171,7 +171,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Gaseous Form, Sandskin |
 | 2 | Giant Trap Door Spider, Hunting Kavu |
 | 2 | Glittering Lion, Glittering Lynx |
-| 2 | Goblin Clearcutter, Orcish Lumberjack |
+| 2 | **Goblin Clearcutter**, Orcish Lumberjack |
 | 2 | Goblin Glider, Kyren Glider |
 | 2 | Goblin Goon, Mogg Toady |
 | 2 | Goblin Mutant, Orgg |
