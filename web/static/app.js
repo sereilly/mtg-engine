@@ -2716,13 +2716,38 @@ function autoTapIsPayable(pending) {
 }
 
 // One line per permanent the plan taps, in tap order, with what it is asked
-// for. A source the server did not ask for a colour names none.
+// for. A source the server did not ask for a colour names none. A mana ability
+// paid by tapping other permanents ("Tap two untapped Elves you control: Add
+// one mana of any color", Birchlore Rangers) names the ones its cost taps
+// (`cost_taps`): the dialog said "Birchlore Rangers for {G}" and tapped an
+// Elvish Warrior it never mentioned (ONS Phase 5).
 function autoTapPlanLines(plan) {
   const taps = Array.isArray(plan?.taps) ? plan.taps : [];
   return taps.map((tap) => {
     const color = typeof tap.mana_color === "string" && tap.mana_color ? ` for {${tap.mana_color}}` : "";
-    return `${tap.name || "a permanent"}${color}`;
+    const costTaps = Array.isArray(tap.cost_taps) ? tap.cost_taps : [];
+    const tapping = costTaps.length
+      ? ` (tapping ${costTaps.map((tapped) => tapped?.name || "a permanent").join(" and ")})`
+      : "";
+    return `${tap.name || "a permanent"}${color}${tapping}`;
   });
+}
+
+// How many permanents the plan turns sideways: each source, and each one a
+// source's cost taps — once each, since a Birchlore Rangers may tap itself.
+function autoTapPlanTapCount(plan) {
+  const taps = Array.isArray(plan?.taps) ? plan.taps : [];
+  const ids = new Set();
+  let unnamed = 0;
+  for (const tap of taps) {
+    const costTaps = Array.isArray(tap.cost_taps) ? tap.cost_taps : [];
+    const sideways = costTaps.length ? costTaps : [tap];
+    for (const one of sideways) {
+      if (Number.isInteger(one?.id)) ids.add(one.id);
+      else unnamed += 1;
+    }
+  }
+  return ids.size + unnamed;
 }
 
 // The cost the engine actually asked the pool for — taxes, reductions, a
@@ -2744,7 +2769,7 @@ function autoTapPromptText(pending) {
   const plan = pending.plan;
   if (!plan) return `Asking what could pay for ${pending.cardName}…`;
   if (plan.payable) {
-    const count = Array.isArray(plan.taps) ? plan.taps.length : 0;
+    const count = autoTapPlanTapCount(plan);
     return count > 0
       ? `Your mana pool can't pay for ${pending.cardName}. Auto-Tap will tap ${count} permanent${count === 1 ? "" : "s"} to pay the cost, or cancel.`
       : `Your mana pool can pay for ${pending.cardName} now. Press Auto-Tap to go ahead, or cancel.`;
@@ -3312,7 +3337,7 @@ function applyTextChangeVocabularyPrompt(info) {
       action: "text_change_vocabulary_confirm",
       field: "text_change_mode",
       labelOf: (option) => `${option.from} → ${option.to}`,
-      valueOf: (option) => option.mode,
+      optionValue: (option) => option.mode,
     },
   );
 }
@@ -4532,6 +4557,13 @@ function shouldShowPriorityPrompt(state = currentState) {
   // pass. Surface the prompt at those steps too, otherwise the game silently
   // stalls with no visible reason.
   if (Number.isInteger(state.current_turn) && state.current_turn !== seat) {
+    return true;
+  }
+  // And on this seat's own turn at a step the rail lets it hold (upkeep, draw —
+  // CR 503.1, 504.2): with a stop set there the server hands it priority and
+  // the panel stayed hidden ("No pending activation."), so a person holding at
+  // their upkeep to use Words of Worship saw nothing to pass with.
+  if (!NO_PRIORITY_STEPS.has(state.current_step)) {
     return true;
   }
   return false;
@@ -5887,7 +5919,10 @@ function applyOptionalPayPrompt(info) {
   const costSymbols = renderSymbolsInline(costText);
   // "You may tap or untap target creature" (Tolarian Kraken's reflexive
   // half): an optional action with nothing to pay is a yes/no, not a payment.
-  const isFree = !isDraw && costText === "{0}" && damage === 0 && Number(life) === 0;
+  // Nothing to pay **and** a life gain is still free (Renewed Faith's "when
+  // you cycle this card, you may gain 2 life"): it was titled "Pay for Life?"
+  // with a "Pay" button over an empty cost — `optionalOfferIsFree`.
+  const isFree = optionalOfferIsFree(current);
   // An offer priced in an *action* rather than in mana or life (the punisher
   // spells' "…unless that creature's controller has Blazing Salvo deal 5
   // damage to them", Junk Golem's "…unless you remove a +1/+1 counter from
@@ -5911,10 +5946,10 @@ function applyOptionalPayPrompt(info) {
     ? "Optional Draw"
     : damage > 0
       ? "Pay or Take Damage"
-      : Number(life) > 0
-        ? "Pay for Life?"
-        : isFree
-          ? "Optional Effect"
+      : isFree
+        ? "Optional Effect"
+        : Number(life) > 0
+          ? "Pay for Life?"
           : "Pay the Cost?";
   if (isDraw) {
     body.textContent = `${cardName}: ${current.prompt || "Draw a card?"}`;
@@ -5977,6 +6012,17 @@ function applyOptionalPayPrompt(info) {
       });
     });
   });
+}
+
+// Whether an optional offer (`optional_pay`) costs nothing to take: no mana,
+// no damage on the decline, not a draw rider. A life *gain* does not make it a
+// payment — the "life rods" price theirs in mana ("{1}: gain 1 life"), and an
+// offer whose only number is the gain (Renewed Faith's cycle trigger) is a
+// yes/no.
+function optionalOfferIsFree(current) {
+  if (!current || current.draw) return false;
+  if (Number(current.damage || 0) !== 0) return false;
+  return manaCostText(current.cost ?? 1) === "{0}";
 }
 
 // Cleansing: "For each land, destroy that land unless any player pays 1 life."
@@ -7125,12 +7171,19 @@ function applyBodyChoicePrompt(info) {
 // Backdraft's two decisions: which player, then which of their spells. Both are
 // button lists rather than board targeting -- neither names anything on a
 // battlefield, and the spells being chosen between have already resolved.
-// `valueOf` is what a prompt whose answer is not a number needs: every caller
-// before Mind Bend answered with a seat or a list position, so the wire value
-// was always `Number(...)`. Passing it opts out of that coercion and sends the
-// dataset string as it stands - a `Number("color_word")` is NaN, which the
+// `optionValue` is what a prompt whose answer is not a number needs: every
+// caller before Mind Bend answered with a seat or a list position, so the wire
+// value was always `Number(...)`. Passing it opts out of that coercion and sends
+// the dataset string as it stands - a `Number("color_word")` is NaN, which the
 // schema then rejects as a missing field.
-function applyChoiceButtonPrompt(info, { title, action, field, labelOf, valueOf }) {
+// It is deliberately not called `valueOf`: destructuring `{ valueOf }` out
+// of an options object that does not set it reads Object.prototype.valueOf, so
+// every caller that relied on the default called that unbound — "Cannot convert
+// undefined or null to object" — and rendered no buttons at all. Meddle's new
+// target, Callous Oppressor's "which opponent chooses", Entrails Feaster's
+// graveyard, a library end and a cast choice were each a prompt nobody could
+// answer (ONS Phase 5).
+function applyChoiceButtonPrompt(info, { title, action, field, labelOf, optionValue }) {
   const panel = q("activationPanel");
   const titleEl = q("promptTitle");
   const body = q("promptBody");
@@ -7151,8 +7204,8 @@ function applyChoiceButtonPrompt(info, { title, action, field, labelOf, valueOf 
   body.textContent = `${info.card_name || ""}: ${info.prompt || ""}`.trim();
   const buttons = info.options
     .map((option) => {
-      const value = valueOf
-        ? valueOf(option)
+      const value = optionValue
+        ? optionValue(option)
         : (field === "chosen_seat" ? option.seat : option.index);
       return (
         `<button type="button" class="prompt-choice-btn" data-choice-value="${value}">` +
@@ -7167,7 +7220,7 @@ function applyChoiceButtonPrompt(info, { title, action, field, labelOf, valueOf 
       await sendAction({
         seat,
         action,
-        [field]: valueOf
+        [field]: optionValue
           ? btn.dataset.choiceValue
           : Number(btn.dataset.choiceValue),
       });
@@ -13069,11 +13122,11 @@ function renderActivationPrompt() {
         const owedNote = alternativeOfferOwedNote(offer);
         const buttons = [
           `<button type="button" class="prompt-choice-btn${declined ? " selected" : ""}"`
-          + ` data-alt-choice="decline">Pay ${escapeHtml(pending.card.mana_cost || "its mana cost")}</button>`,
+          + ` data-alt-choice="decline">Pay ${pending.card.mana_cost ? renderSymbolsInline(pending.card.mana_cost) : "its mana cost"}</button>`,
         ];
         if (!offer.payable) {
           rows.push(
-            `<div>Alternative cost: ${escapeHtml(offer.label)} — you can't pay it right now.</div>`,
+            `<div>Alternative cost: ${renderSymbolsInline(offer.label)} — you can't pay it right now.</div>`,
           );
         } else if (Array.isArray(offer.hand_choices)) {
           // The verb is the backend's (`hand_verb`): a discard cost (Dream
@@ -13100,7 +13153,7 @@ function renderActivationPrompt() {
                   + ` data-alt-other="${choice.index}" data-alt-other-count="${others}">`
                   + `${verb} ${escapeHtml(choice.name)}</button>`;
               });
-            rows.push(`<div>Instead of its mana cost: ${escapeHtml(offer.label)}${owedNote}</div>`);
+            rows.push(`<div>Instead of its mana cost: ${renderSymbolsInline(offer.label)}${owedNote}</div>`);
             rows.push(`<div class="prompt-choice-row">${buttons.join("")}</div>`);
             rows.push(`<div>…and ${others === 1 ? "another card" : `${others} other cards`}:</div>`);
             rows.push(`<div class="prompt-choice-row">${otherButtons.join("")}</div>`);
@@ -13131,10 +13184,10 @@ function renderActivationPrompt() {
           const on = pending.alternative === true;
           buttons.push(
             `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
-            + ` data-alt-choice="take">${escapeHtml(offer.label)}</button>`,
+            + ` data-alt-choice="take">${renderSymbolsInline(offer.label)}</button>`,
           );
         }
-        rows.push(`<div>Instead of its mana cost: ${escapeHtml(offer.label)}${owedNote}</div>`);
+        rows.push(`<div>Instead of its mana cost: ${renderSymbolsInline(offer.label)}${owedNote}</div>`);
         rows.push(`<div class="prompt-choice-row">${buttons.join("")}</div>`);
         continue;
       }

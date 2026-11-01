@@ -95,6 +95,16 @@ def blocking_prompt(game, seat: int, action: str, exempt_actions: frozenset[str]
     library reorder before other actions" refused both Continue buttons while
     the reorder was open. The registry's two such kinds today are exactly
     those two notifications.
+
+    **Two decisions one seat owes at once are answered in registration order**
+    — the order ``Game.waiting_prompt`` reports and the browser's cascade
+    (``renderActivationPrompt``) renders them in. The answer to the first one
+    the seat owes goes through, and a later one waits for it rather than
+    refusing it. Without that each refused the other's answer and neither
+    could ever be sent: one cycle putting Astral Slide's targeted trigger and
+    Solar Blast's own trigger on the stack together owes ``trigger_target``
+    and ``order_triggers`` at the same moment, and the seat was stuck for good
+    (``tests/ui/test_ons_p5_two_cycle_triggers_ui_api.py``).
     """
     if any(spec.blocked_detail is None and action == spec.action for spec in CHOICE_SPECS.values()):
         return None
@@ -105,6 +115,8 @@ def blocking_prompt(game, seat: int, action: str, exempt_actions: frozenset[str]
             continue
         if not spec.open_for(game, choice):
             continue
+        if action == spec.action and choice.player_index == seat:
+            return None
         if action in exempt_actions or action == spec.action or action in spec.also_answers:
             continue
         return spec, choice

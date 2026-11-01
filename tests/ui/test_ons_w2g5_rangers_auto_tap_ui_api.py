@@ -74,3 +74,33 @@ def test_w2g5_the_auto_tap_pays_with_birchlore_rangers(set_pool):
     assert all(p.tapped for p in game.controlled_by(0))
     assert [item.card.name for item in game.stack] == ["Wirewood Savage"]
     assert not any(game.players[0].mana_pool.values())
+
+
+def test_ons_p5_the_dialog_names_the_elves_the_rangers_cost_taps(set_pool):
+    """The dialog said "Auto-Tap will tap 2 permanents … Birchlore Rangers for
+    {G}, Plains for {W}" and tapped an Elvish Warrior it never named (ONS
+    Phase 5, in the browser): the preview's ``cost_taps`` reached the client
+    and nothing read them. The plan the server sends, through the client's
+    own readers."""
+    from tests.helpers import run_app_js
+
+    sid, _session = _w2g5_session(
+        set_pool,
+        ["Forest", "Birchlore Rangers", "Elvish Warrior", "Llanowar Elves"],
+        ["Wirewood Savage"], sick=("Elvish Warrior",),
+    )
+    body = {"seat": 0, "action": "cast", "card_name": "Wirewood Savage", "target_seat": 1}
+    plan = client.post(f"/api/sessions/{sid}/payment_plan", json=body).json()
+    assert plan["payable"] is True, plan
+
+    out = run_app_js(
+        ["autoTapPlanLines", "autoTapPlanTapCount"],
+        "return { lines: autoTapPlanLines(INPUT), count: autoTapPlanTapCount(INPUT) };",
+        plan,
+    )
+    rangers_line = next(line for line in out["lines"] if line.startswith("Birchlore Rangers"))
+    assert "(tapping Elvish Warrior and Birchlore Rangers)" in rangers_line, out
+    sideways = {tap["id"] for tap in plan["taps"] if not tap.get("cost_taps")}
+    for tap in plan["taps"]:
+        sideways |= {tapped["id"] for tapped in tap.get("cost_taps") or []}
+    assert out["count"] == len(sideways), (out, plan["taps"])
