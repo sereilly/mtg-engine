@@ -252,15 +252,25 @@ def test_no_pair_of_draw_replacements_leaves_two_prompts_that_refuse_each_other(
 
 def test_the_census_sees_the_lock_with_the_seam_switched_off(pool, monkeypatch):
     """Backwards: a seam that never parks a draw is the tree before the fix,
-    and on it the census names the pair Phase 5 locked a game with."""
+    and on it the census names the pair Phase 5 locked a game with.
+
+    Named as a lock or as a meeting: since Onslaught's Phase 5 the action gate
+    takes two decisions one seat owes in registration order
+    (``web.prompts.blocking_prompt``), so the two prompts no longer refuse each
+    other and the pair does not lock a game any more — but two draws are still
+    under way at once (CR 121.2), which is the defect, and the census's
+    ``meetings`` sees it."""
     monkeypatch.setattr(Game, "_draw_prompt_open", lambda self, seat: False)
 
-    locked = [
+    def seen(result) -> bool:
+        return bool(result["locked"] or (result["met"] - _SAME_DRAW_MEETINGS))
+
+    named = [
         policy for policy in _POLICIES
-        if _drive(pool, ("Abundance", "Pursuit of Knowledge"), 3, policy)["locked"]
+        if seen(_drive(pool, ("Abundance", "Pursuit of Knowledge"), 3, policy))
     ]
 
-    assert locked, "the census cannot see the defect it is there for"
+    assert named, "the census cannot see the defect it is there for"
 
 
 @pytest.mark.parametrize(

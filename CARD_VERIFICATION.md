@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5849**
-- Passed: **834** (554 checked in-game, 280 auto-passed)
+- Passed: **842** (563 checked in-game, 279 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **64**
-- Untested: **4951**
+- Untested: **4943**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -285,7 +285,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Aspect of Wolf | ✅ pass |  |
 | Assault // Battery | ⬜ untested |  |
 | Assembly Hall | ⬜ untested |  |
-| Astral Slide | ⬜ untested |  |
+| Astral Slide | ✅ pass |  |
 | Astrolabe | ⬜ untested |  |
 | Atalya, Samite Master | ⬜ untested |  |
 | Atog | ⬜ untested |  |
@@ -1147,7 +1147,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Daru Cavalier | ⬜ untested |  |
 | Daru Encampment | ⬜ untested |  |
 | Daru Healer | ⬜ untested |  |
-| Daru Lancer | ✅ pass | auto-pass: keywords only (first strike, morph {2}{w}{w}) |
+| Daru Lancer | ✅ pass |  |
 | Daughter of Autumn | ⬜ untested |  |
 | Daunting Defender | ⬜ untested |  |
 | Dauthi Cutthroat | ⬜ untested |  |
@@ -1619,7 +1619,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Evil Presence | ✅ pass |  |
 | Evincar's Justice | ⬜ untested |  |
 | Eviscerator | ⬜ untested |  |
-| Exalted Angel | ⬜ untested |  |
+| Exalted Angel | ✅ pass |  |
 | Exalted Dragon | ⬜ untested |  |
 | Excavation | ⬜ untested |  |
 | Excavator | ⬜ untested |  |
@@ -1798,7 +1798,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Fledgling Imp | ⬜ untested |  |
 | Fledgling Osprey | ⬜ untested |  |
 | Fleetfoot Panther | ⬜ untested |  |
-| Fleeting Aven | ⬜ untested |  |
+| Fleeting Aven | ✅ pass |  |
 | Fleeting Image | ⬜ untested |  |
 | Flesh Reaver | ⬜ untested |  |
 | Flicker | ⬜ untested |  |
@@ -2143,7 +2143,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Gravebind | ⬜ untested |  |
 | Gravedigger | ✅ pass |  |
 | Gravegouger | ✅ pass |  |
-| Gravel Slinger | ⬜ untested |  |
+| Gravel Slinger | ✅ pass |  |
 | Gravespawn Sovereign | ⬜ untested |  |
 | Gravestorm | ⬜ untested |  |
 | Gravity Sphere | ⬜ untested |  |
@@ -2850,7 +2850,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Lightning Elemental | ✅ pass | auto-pass: keywords only (haste) |
 | Lightning Hounds | ✅ pass | auto-pass: keywords only (first strike) |
 | Lightning Reflexes | ⬜ untested |  |
-| Lightning Rift | ⬜ untested |  |
+| Lightning Rift | ✅ pass |  |
 | Lightning Surge | ⬜ untested |  |
 | Liliana's Devotee | ⬜ untested |  |
 | Liliana's Scorn | ⬜ untested |  |
@@ -3987,7 +3987,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Remove Soul | ⬜ untested |  |
 | Renegade Warlord | ⬜ untested |  |
 | Renewal | ⬜ untested |  |
-| Renewed Faith | ⬜ untested |  |
+| Renewed Faith | ✅ pass |  |
 | Renounce | ⬜ untested |  |
 | Reparations | ⬜ untested |  |
 | Repel | ⬜ untested |  |
@@ -4635,7 +4635,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sol Grail | ⬜ untested |  |
 | Sol Ring | ✅ pass |  |
 | Sol'kanar the Swamp King | ⬜ untested |  |
-| Solar Blast | ⬜ untested |  |
+| Solar Blast | ✅ pass |  |
 | Soldevi Adnate | ⬜ untested |  |
 | Soldevi Digger | ⬜ untested |  |
 | Soldevi Excavations | ⬜ untested |  |
@@ -4701,7 +4701,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Spark Mage | ⬜ untested |  |
 | Sparkcaster | ⬜ untested |  |
 | Sparkhunter Masticore | ⬜ untested |  |
-| Sparksmith | ⬜ untested |  |
+| Sparksmith | ✅ pass |  |
 | Sparring Golem | ⬜ untested |  |
 | Spatial Binding | ⬜ untested |  |
 | Spawning Pool | ⬜ untested |  |
