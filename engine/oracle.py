@@ -75,6 +75,7 @@ from .line_normalization import (_PARENTHETICAL_RE, _normalize_text,
                                  normalize_creature_line)
 from .self_reference import _restriction_line
 from .static_line_support import _grammar_static_creature_instructions
+from .amplify import amplify_amounts
 from .keyword_lines import UNSUPPORTED_KEYWORDS, _is_supported_keyword_line
 from .front_ends import _grammar_static_coeffects
 from .ability_lines import _modal_at_least, _modal_chooser, _modal_options
@@ -1026,6 +1027,13 @@ def simple_card_keywords(card: CardDefinition) -> tuple[str, ...] | None:
         or program.triggered_abilities
         or program.modes
     ):
+        return None
+    # Amplify (CR 702.38) is a keyword line whose behaviour is a card-specific
+    # *choice* — which cards in the hand to reveal, a prompt the client has to
+    # answer — not the generic keyword code this auto-pass vouches for. Glowering
+    # Rogon's whole text is "Amplify 1", and passing it unseen would record as
+    # checked the one thing about it a person has to check.
+    if amplify_amounts(card):
         return None
     keywords: list[str] = []
     for line in card.oracle_text.splitlines():
