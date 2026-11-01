@@ -330,8 +330,10 @@ class TargetRoleRef(BaseModel):
 
 class SearchPickRef(BaseModel):
     # One pick of a two-zone exile search: which zone, and the card's index in
-    # that zone's list as the prompt serialized it.
-    zone: Literal["library", "graveyard"]
+    # that zone's list as the prompt serialized it. "hand" is Dark Supplicant's
+    # third zone ("search your graveyard, hand, and/or library"); the engine
+    # refuses it on any search not armed to look there.
+    zone: Literal["library", "graveyard", "hand"]
     index: int = Field(ge=0)
 
 

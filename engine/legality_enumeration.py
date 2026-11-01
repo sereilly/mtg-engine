@@ -1087,6 +1087,13 @@ class TargetEnumerationMixin:
             # caster reach into their own graveyard, which is a different card.
             if spec.get("opponent_graveyard_only") and seat == caster_index:
                 continue
+            # "…from **that player's** graveyard" (Scion of Darkness): the pile
+            # of the seat the trigger's event froze, which the trigger picker
+            # hands over beside the flag (``that_player_index``). A flag with
+            # no seat offers nothing — the permanent enumeration's reading of
+            # the same flag — rather than every graveyard in the game.
+            if spec.get("that_player_only") and seat != spec.get("that_player_index"):
+                continue
             # "…**another** target artifact card from your graveyard"
             # (Junk Diver). The printed word excludes one *slot* rather than one
             # kind of card, so it is asked beside the predicate rather than

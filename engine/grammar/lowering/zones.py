@@ -38,6 +38,7 @@ from ._deaths import BOUND_CARD_EVENTS
 from ._described_returns import _graveyard_to_hand_payload
 from ._cost_records import shared_creature_type_referent
 from ._events import binds_block_pair
+from ._frozen_seats import frozen_seat_record
 from ._piles import _chosen_graveyard_cards, one_card_pile_pick
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, dropped_narrowings, _describe_several_targets,
@@ -826,14 +827,49 @@ def _lower_put_onto_battlefield(
             raise LoweringError(
                 "the reanimation handler reads a described card", node=node
             )
+        # **Whose pile**, asked of every possessive the noun parser can hand
+        # over rather than of its absence alone. ``any_graveyard`` used to be
+        # ``zone_owner is None``, so every *printed* owner read as "your": Ashen
+        # Powder's "target creature card from **an opponent's** graveyard"
+        # offered only its caster's own pile and refused the card it prints,
+        # and Scion of Darkness's "from **that player's** graveyard" reanimated
+        # out of its controller's. Each owner now reads as what it says or
+        # refuses by name.
+        pile_owner = filt.zone_owner.kind if filt.zone_owner is not None else None
+        # "Whenever this creature deals combat damage to a player, you may put
+        # target creature card from **that player's** graveyard onto the
+        # battlefield under your control." (Scion of Darkness.) The noun parser
+        # hands "that player's" over as ``PlayerRef("owner")`` — the player the
+        # sentence is about — and under an event that froze "that player" it
+        # is that seat: the damaged player's pile, scoped at announcement by
+        # the flag the trigger picker already fills for "…that player
+        # controls" (``that_player_only``, Feline Sovereign).
+        that_players_pile = (
+            pile_owner == "owner"
+            and frozen_seat_record("that_player", event) is not None
+        )
+        if pile_owner not in (None, "you", "opponent") and not that_players_pile:
+            raise LoweringError(
+                f"the reanimation cannot scope its target to {pile_owner!r}'s "
+                "graveyard", node=node,
+            )
         payload: dict[str, object] = {
             # "from a graveyard" (no owner) widens the search to every
             # player's graveyard; "under your control" is CR 400.3's
             # exception spelled out, honored by the handler.
-            "any_graveyard": filt.zone_owner is None,
+            "any_graveyard": pile_owner in (None, "opponent") or that_players_pile,
             "under_your_control": node.under_your_control,
             "gains": list(node.gains),
         }
+        if pile_owner == "opponent":
+            # "…from **an opponent's** graveyard" (Ashen Powder). Any one
+            # opponent's pile — the handler reads the announced seat's, as it
+            # does for "from a graveyard" — with the caster's own excluded, on
+            # the key ``_graveyard_return_spec`` already carries for the
+            # Advocates' identical phrase and the enumeration already reads.
+            payload["opponent_graveyard_only"] = True
+        if that_players_pile:
+            payload["that_player_only"] = True
         # Written only when the phrase is not the creature the handler already
         # defaults to, so every reanimation compiled before this one keeps a
         # byte-identical payload.

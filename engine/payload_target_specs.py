@@ -786,6 +786,19 @@ def _reanimation_spec(payload: dict) -> dict | None:
     spec: dict = {"kind": "graveyard_creature"}
     if not payload.get("any_graveyard"):
         spec["own_graveyard_only"] = True
+    elif payload.get("opponent_graveyard_only"):
+        # "…from **an opponent's** graveyard" (Ashen Powder): the scope
+        # :func:`_graveyard_return_spec` hands over for the Advocates' phrase,
+        # for its reason — left off, the caster could reanimate out of their
+        # own graveyard, a different card from the one printed.
+        spec["opponent_graveyard_only"] = True
+    if payload.get("any_graveyard") and payload.get("that_player_only"):
+        # "…from **that player's** graveyard" (Scion of Darkness): the pile of
+        # the seat the trigger's event froze, on the flag the trigger picker
+        # fills with that seat (``trigger_targets._that_player_seat``) and the
+        # graveyard enumeration narrows by — without it the picker would offer
+        # every pile in the game for a phrase that names one.
+        spec["that_player_only"] = True
     # "Return target **artifact** card from your graveyard to the battlefield"
     # (Argivian Restoration). The printed type, handed straight over in the key
     # ``graveyard_card_matches`` reads — the same arrangement the colours below

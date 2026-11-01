@@ -34,7 +34,9 @@ one.
 
 from __future__ import annotations
 
-from ...oracle_types import OracleInstruction
+import dataclasses
+
+from ...oracle_types import CHOSEN_CREATURE_TYPE_THIS_WAY, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import _describe_targets, _restrictions_beyond
@@ -55,6 +57,7 @@ _SHUFFLE_LIBRARY_PLAYERS = frozenset(
 
 def _lower_shuffle_graveyard_into_library(
     node: ast.ShuffleGraveyardIntoLibrary,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """Feldon's Cane. Whose graveyard is on the payload even though only one
     value is printed today — the alternative is a kind that would have to be
@@ -94,6 +97,22 @@ def _lower_shuffle_graveyard_into_library(
         return (OracleInstruction("shuffle_graveyard_into_library", "", payload),)
     if node.cards is not None:
         filt = node.cards
+        # "Choose a creature type. Shuffle all creature cards **of that type**
+        # from your graveyard into your library." (Elvish Soultiller.) The word
+        # the step in front recorded (CR 608.2d), lifted off the filter and
+        # named by its record — Tsabo's Decree's discard and sweep carry the
+        # same key, and the handler turns it into the subtype this predicate
+        # tests. Only behind the step that writes it: an unresolved "that type"
+        # read as no narrowing is every creature card in the pile.
+        bound_type: dict[str, object] = {}
+        if filt.of_bound_type:
+            if CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
+                raise LoweringError(
+                    "'of that type' names a creature type no step of this "
+                    "effect chose", node=node,
+                )
+            filt = dataclasses.replace(filt, of_bound_type=False)
+            bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
         # Read field by field rather than through ``_filter_payload``, which
         # speaks the *battlefield* matcher's key names and refuses a
         # graveyard-scoped phrase outright. The reader here is
@@ -126,6 +145,7 @@ def _lower_shuffle_graveyard_into_library(
                 "the graveyard shuffle's noun phrase narrows nothing at all",
                 node=node,
             )
+        cards.update(bound_type)
         payload["cards"] = cards
     return (
         OracleInstruction("shuffle_graveyard_into_library", "", payload),

@@ -212,6 +212,18 @@ def resolution_creature_type_preference(
             ):
                 found.add(("you", "library"))
             continue
+        cards = payload.get("cards")
+        if (
+            instruction.kind == "shuffle_graveyard_into_library"
+            and isinstance(cards, dict)
+            and cards.get("subtype_filter_from") in records
+        ):
+            # "Choose a creature type. Shuffle all creature cards of that type
+            # from your graveyard into your library." (Elvish Soultiller.) The
+            # chooser's own cards come back to the deck — Patriarch's Bidding's
+            # row below, one destination over, counted in the graveyards.
+            found.add(("you", "graveyard"))
+            continue
         described = payload.get("filter")
         reads = payload.get("subtype_filter_from") in records or (
             isinstance(described, dict)

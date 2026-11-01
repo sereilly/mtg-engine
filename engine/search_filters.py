@@ -444,3 +444,28 @@ def landing_seat(data: dict, chooser_seat: int) -> int:
     what this decides.
     """
     return int(data.get("battlefield_seat", searched_seat(data, chooser_seat)))
+
+
+#: The zones a search may be armed to look through, and the pile each names on
+#: a player. A hand joined the library and the graveyard with Dark Supplicant
+#: ("Search your graveyard, hand, and/or library for a card named Scion of
+#: Darkness"): CR 701.23a's search of a zone, of one its owner already sees.
+SEARCHABLE_ZONES = ("library", "graveyard", "hand")
+
+
+def search_zone_cards(player, zone: str) -> list:
+    """The pile *zone* names on *player* — the one spelling of "which list is
+    this zone", asked by the resolver, the AI's pick and the web picker.
+
+    It was ``player.library if zone == "library" else player.graveyard`` in a
+    dozen places, which reads a hand as a graveyard the moment a search can
+    open one. An unknown zone raises rather than answering with a pile the
+    search was never armed to look in.
+    """
+    if zone == "library":
+        return player.library
+    if zone == "graveyard":
+        return player.graveyard
+    if zone == "hand":
+        return player.hand
+    raise ValueError(f"a search cannot look in {zone!r}")

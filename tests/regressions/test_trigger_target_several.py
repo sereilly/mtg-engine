@@ -43,7 +43,14 @@ _BYSTANDERS = ("Grizzly Bears", "Savannah Lions", "Hill Giant", "Forest", "Islan
 #: target cards **from a single graveyard**"), the first several-target trigger
 #: whose targets are cards in a graveyard (W2G2): a board with empty piles
 #: offers it nothing, and an "up to" with nothing to name is not asked.
-_GRAVEYARD_BYSTANDERS = ("Lightning Bolt", "Giant Growth", "Hill Giant")
+#:
+#: Three Clerics since Legions' Celestial Gatekeeper ("return up to two target
+#: **Bird and/or Cleric** permanent cards from your graveyard"): a narrowed pick
+#: needs more than it prints to refuse "more than it prints".
+_GRAVEYARD_BYSTANDERS = (
+    "Lightning Bolt", "Giant Growth", "Hill Giant",
+    "Battlefield Medic", "Daru Healer", "Doubtless One",
+)
 
 
 @pytest.fixture(scope="module")

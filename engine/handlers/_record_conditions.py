@@ -191,10 +191,12 @@ def evaluate_record_condition(
         # Conspiracy's override for its owner's cards). No word answers no —
         # "of the chosen type" with nothing chosen names no card.
         chosen_from = payload.get("subtype_filter_from")
-        if answer and chosen_from is not None:
+        printed_subtypes = [
+            str(word).lower() for word in (payload.get("subtypes") or ())
+        ]
+        if answer and (chosen_from is not None or printed_subtypes):
             from ..object_creature_types import object_creature_types
 
-            word = (context.results or {}).get(str(chosen_from))
             owner = next(
                 (
                     seat for seat, player in enumerate(game.players)
@@ -202,10 +204,22 @@ def evaluate_record_condition(
                 ),
                 None,
             )
-            answer = bool(word) and str(word).lower() in {
+            held_types = {
                 str(kind).lower()
                 for kind in object_creature_types(game, revealed, owner)
             }
+            if chosen_from is not None:
+                word = (context.results or {}).get(str(chosen_from))
+                answer = bool(word) and str(word).lower() in held_types
+            # "If it's a **Goblin** permanent card" (Skirk Drill Sergeant). The
+            # printed subtype, through the same reader: "Goblin or Elf" is a
+            # union and "Elf Warrior" one card that is both, the distinction
+            # ``type_match`` draws for the card types above.
+            if answer and printed_subtypes:
+                if payload.get("subtype_match") == "all":
+                    answer = all(word in held_types for word in printed_subtypes)
+                else:
+                    answer = any(word in held_types for word in printed_subtypes)
         # "If it **isn't** a land card" (Wand of Ith) — the same reading turned
         # over at the end, after the union rule above has been applied, because
         # negating each type separately would ask a different question.

@@ -243,6 +243,29 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
     # key's absence is Feldon's Cane's whole pile, which is why the loop below
     # is one loop rather than two paths.
     described = instruction.payload.get("cards")
+    # "…all creature cards **of that type**…" (Elvish Soultiller). The creature
+    # type a step in front of this one chose (CR 608.2d), resolved here into
+    # the printed subtype the predicate tests — the arrangement Tsabo's
+    # Decree's discard has one zone over. **No word means no shuffle of any
+    # card**: an unanswered choice read as "no narrowing" would send every
+    # creature card in the pile, so only the library is shuffled (the sentence
+    # still says to, CR 701.24a).
+    subtype_key = (described or {}).get("subtype_filter_from")
+    if subtype_key is not None:
+        chosen_type = str(context.results.get(str(subtype_key)) or "").strip()
+        described = {
+            key: value for key, value in described.items()
+            if key != "subtype_filter_from"
+        }
+        if chosen_type:
+            described["graveyard_subtypes"] = [chosen_type.lower()]
+        else:
+            game.log.append(
+                f"{context.card.name}: no creature type was chosen, so no card "
+                "is shuffled in"
+            )
+            random.shuffle(player.library)
+            return True, "resolved"
     if described:
         moving = [
             c for c in player.graveyard

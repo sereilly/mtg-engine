@@ -22,7 +22,8 @@ from ....pending_choices import PendingChoice
 from ....oracle_types import SEARCHED_PERMANENTS
 from ....search_filters import (landing_seat, search_matches,
                                 search_names_a_quality, search_slots,
-                                searched_seat, slot_assignment)
+                                search_zone_cards, searched_seat,
+                                slot_assignment)
 
 
 class LibrarySearchChoicesMixin:
@@ -111,7 +112,7 @@ class LibrarySearchChoicesMixin:
         # one into the other.
         if zone not in zones:
             return False
-        source = caster.library if zone == "library" else caster.graveyard
+        source = search_zone_cards(caster, zone)
         if library_index < 0 or library_index >= len(source):
             return False
         card = source[library_index]
@@ -124,7 +125,7 @@ class LibrarySearchChoicesMixin:
             card, choice.data, game=self, owner=choice.player_index
         ):
             return False
-        source.pop(library_index)
+        self._take_found_card(caster, zone, source, library_index)
         # "…, reveal it, …" (CR 701.20): a search armed with the printed word
         # shows the find's face to every player when the search ends.
         if choice.data.get("reveal"):
@@ -339,7 +340,7 @@ class LibrarySearchChoicesMixin:
             index = pick.get("index", -1)
             if zone not in zones:
                 return False
-            source = caster.library if zone == "library" else caster.graveyard
+            source = search_zone_cards(caster, zone)
             if not isinstance(index, int) or index < 0 or index >= len(source):
                 return False
             if (zone, index) in seen:
@@ -378,8 +379,7 @@ class LibrarySearchChoicesMixin:
         # Highest index first so the earlier picks still address the cards
         # they named (the two zones do not renumber each other).
         for zone, index, _card in sorted(found, key=lambda entry: entry[1], reverse=True):
-            source = caster.library if zone == "library" else caster.graveyard
-            source.pop(index)
+            self._take_found_card(caster, zone, search_zone_cards(caster, zone), index)
         cards = [card for _zone, _index, card in found]
         # "…, reveal those cards, …" (CR 701.20): one showing for the whole
         # search, recorded now — the finds are known even while where each
@@ -422,6 +422,21 @@ class LibrarySearchChoicesMixin:
         self._place_or_ask_destinations(choice.player_index, cards, slots, choice.data)
         return True
 
+    def _take_found_card(self, owner, zone: str, source: list, index: int) -> None:
+        """Take the find at *index* out of *source*, the pile *zone* names.
+
+        By index for a library and a graveyard, where two copies of one card
+        are one object and only the slot tells them apart; through
+        ``take_card_from_hand`` for a hand, the one seam a card leaves a hand
+        by (Dark Supplicant's "search your graveyard, **hand**, and/or
+        library") — which removes exactly one copy by identity, so the slot
+        named and the copy taken cannot differ in anything that matters.
+        """
+        if zone == "hand":
+            self.take_card_from_hand(owner, source[index])
+        else:
+            source.pop(index)
+
     def _search_findable_picks(self, choice: PendingChoice, limit: int) -> list:
         """Up to *limit* picks the resolver itself admits, in zone order.
 
@@ -447,7 +462,7 @@ class LibrarySearchChoicesMixin:
                 if slot is not None
             ][:limit]
         for zone in tuple(choice.data.get("zones", ("library",))):
-            cards = searched.library if zone == "library" else searched.graveyard
+            cards = search_zone_cards(searched, zone)
             for index, card in enumerate(cards):
                 if len(picks) >= limit:
                     return picks
@@ -465,9 +480,7 @@ class LibrarySearchChoicesMixin:
         return [
             (zone, index, card)
             for zone in tuple(choice.data.get("zones", ("library",)))
-            for index, card in enumerate(
-                searched.library if zone == "library" else searched.graveyard
-            )
+            for index, card in enumerate(search_zone_cards(searched, zone))
             if search_matches(
                 card, choice.data, game=self, owner=choice.player_index
             )
@@ -533,7 +546,7 @@ class LibrarySearchChoicesMixin:
         return sum(
             1
             for zone in zones
-            for card in (searched.library if zone == "library" else searched.graveyard)
+            for card in search_zone_cards(searched, zone)
             if search_matches(
                 card, choice.data, game=self, owner=choice.player_index
             )
@@ -558,7 +571,7 @@ class LibrarySearchChoicesMixin:
             return
         moved = 0
         for zone_name in zones:
-            pile = searched.library if zone_name == "library" else searched.graveyard
+            pile = search_zone_cards(searched, zone_name)
             moved += len(pile)
             searched.exile.extend(pile)
             pile.clear()

@@ -230,7 +230,8 @@ def lower_record_condition(
         )
         leftover = _restrictions_beyond(
             condition.filter,
-            {"card_types", "is_card", "type_match", "excluded_types"}
+            {"card_types", "is_card", "type_match", "excluded_types",
+             "subtypes", "subtype_match"}
             | ({"chosen_creature_type"} if chosen_this_way else set()),
         )
         if leftover:
@@ -264,6 +265,19 @@ def lower_record_condition(
             payload["negated"] = True
         if chosen_this_way:
             payload["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
+        if condition.filter.subtypes:
+            # "If it's a **Goblin** permanent card, put it onto the
+            # battlefield." (Skirk Drill Sergeant.) A printed subtype, asked of
+            # the revealed card through the one off-battlefield reader of
+            # creature types the chosen-type branch above already asks — so a
+            # card its owner's Conspiracy retyped answers as that type, as it
+            # would on the battlefield. Emitted only when printed, so every
+            # payload written before this stays byte-identical; and emitted at
+            # all, because a subtype the gate admits and the payload drops is a
+            # test every creature card passes.
+            payload["subtypes"] = list(condition.filter.subtypes)
+            if len(condition.filter.subtypes) > 1:
+                payload["subtype_match"] = condition.filter.subtype_match
         return payload
     if isinstance(condition, ast.ItWas):
         # The pronoun's referent, resolved here because only here is the

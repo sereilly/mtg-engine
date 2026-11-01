@@ -329,9 +329,15 @@ def lower_untargeted_return(
     # ``produced`` is the gate, as it is for every back-reference here: with no
     # exile in front of it "that card" keeps the event reading below. In front
     # of that branch because that one refuses the words outright.
+    #
+    # "Exile all creatures. At the beginning of the next end step, return
+    # **those cards** to the battlefield under their owners' control." (Planar
+    # Guide.) The plural of the same back-reference, over the cards a sweep
+    # exiled — the handler already walks a list, each card returning under the
+    # seat whose exile holds it.
     if (
         isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "that"
+        and subject.quantifier in ("that", "those")
         and subject.filter.is_card
         and "exiled_cards" in produced
         and node.from_zone is None

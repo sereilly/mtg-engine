@@ -129,7 +129,7 @@ def choose_search_cards(
     submit an answer the engine then refuses, which is the fail-to-find.
     """
     from .search_filters import (landing_seat, name_key, search_slots,
-                                 slot_assignment)
+                                 search_zone_cards, slot_assignment)
 
     # The zone the search looks in, which is not always the chooser's own —
     # see `searched_seat`. An AI reading its own graveyard for a card the
@@ -166,9 +166,7 @@ def choose_search_cards(
         entries = [
             (zone, index, card)
             for zone in tuple(working.get("zones", ("library",)))
-            for index, card in enumerate(
-                player.library if zone == "library" else player.graveyard
-            )
+            for index, card in enumerate(search_zone_cards(player, zone))
             if search_matches(card, working, game=game, owner=player_index)
         ]
         entries.sort(
@@ -189,7 +187,7 @@ def choose_search_cards(
         best: tuple[str, int] | None = None
         best_score = float("-inf")
         for zone in tuple(working.get("zones", ("library",))):
-            cards = player.library if zone == "library" else player.graveyard
+            cards = search_zone_cards(player, zone)
             for index, card in enumerate(cards):
                 if (zone, index) in taken or not search_matches(
                     card, working, game=game, owner=player_index,
@@ -202,7 +200,7 @@ def choose_search_cards(
         if best is None:
             break
         zone, index = best
-        card = (player.library if zone == "library" else player.graveyard)[index]
+        card = search_zone_cards(player, zone)[index]
         taken.add(best)
         picks.append({"zone": zone, "index": index})
         among = list((working.get("restrictions") or {}).get("named_among") or ())

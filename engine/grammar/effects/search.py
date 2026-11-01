@@ -45,6 +45,7 @@ went on describing a repo that had moved. Read a recorded seam as a lead.
 
 
 import dataclasses
+from ...search_filters import SEARCHABLE_ZONES
 from .. import ast
 from ..amounts import parse_amount
 from ..distinct import accept_one_of_each
@@ -143,6 +144,27 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         # racing for it would make which reading a card gets depend on their
         # order.
         return _parse_search_other_library(stream)
+    # "Search your **graveyard, hand, and/or library** for a card named Scion
+    # of Darkness and put it onto the battlefield. If you search your library
+    # this way, shuffle." (Dark Supplicant.) A list of three zones the player
+    # chooses among (its ruling, 2004-10-04: "You can choose which and how
+    # many of the three zones … you want to search"), read before the
+    # two-zone exile search below, which opens on the same word. Non-consuming
+    # when the comma is not there, so that search keeps its reading.
+    listed = _accept_search_zone_list(stream)
+    hand = False
+    if listed is not None:
+        if "library" not in listed:
+            raise stream.error("a listed-zone search names the library")
+        graveyard = "graveyard" in listed
+        hand = "hand" in listed
+        stream.expect_word("for")
+        # The single-find tutor is the one shape whose resolver takes its find
+        # out of a hand: a counted or per-description search over one would
+        # read the hand and then drop it.
+        if not stream.at_word("a", "an"):
+            raise stream.error("a search of a hand finds one card")
+        return _parse_search_single_find(stream, graveyard, possessive, hand=hand)
     # "Search your graveyard and library for any number of <filter> cards,
     # exile them, then shuffle." (Chandra, Heart of Fire's −9.) A different
     # effect, not a wording of the tutor below: any number rather than one,
@@ -258,6 +280,51 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
             stream, graveyard, None, possessive, ceiling=ast.Var("x"), exact=True,
         )
     stream.reset(exact)
+    return _parse_search_single_find(stream, graveyard, possessive)
+
+
+def _accept_search_zone_list(stream: TokenStream) -> "frozenset[str] | None":
+    """``<zone>, <zone>, and/or <zone>`` at the cursor — the zones a search may
+    look in — or None with the cursor where it was.
+
+    Only the comma list: "library and/or graveyard" keeps the two-zone reading
+    in front of the tutor, and "graveyard and library" the exile search's.
+    "and/or" is required before the last zone, because it is what says the
+    player chooses among them; "graveyard, hand, and library" (Lobotomy) is a
+    strip of every zone, a different effect read elsewhere.
+    """
+    mark = stream.mark()
+    zones: list[str] = []
+    while True:
+        word = stream.peek_word()
+        if word not in SEARCHABLE_ZONES or word in zones:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        zones.append(str(word))
+        if not stream.accept_punct(","):
+            # A zone with no comma behind it ends the list; only one that
+            # "and/or" introduced may end it.
+            stream.reset(mark)
+            return None
+        if stream.accept_phrase("and", "or"):
+            last = stream.peek_word()
+            if last not in SEARCHABLE_ZONES or last in zones or len(zones) < 2:
+                stream.reset(mark)
+                return None
+            stream.advance()
+            zones.append(str(last))
+            return frozenset(zones)
+
+
+def _parse_search_single_find(
+    stream: TokenStream, graveyard: bool, possessive: str, *, hand: bool = False,
+) -> ast.Statement:
+    """The single-find tutor from its article on: "a <filter>[, reveal it],
+    put it <where>, then shuffle." (Demonic Tutor and every spelling of it
+    the docstring above lists.) Split out so the listed-zone search (Dark
+    Supplicant) reaches it without passing the counted shapes in front, each of
+    which would read a hand and then drop it."""
     if not stream.accept_word("a", "an"):
         raise stream.error("a search for more than one card has no representation")
     # "a card named X" is read by the noun parser, like every other restriction
@@ -360,6 +427,7 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
                 stream.expect_word("library")
             return ast.SearchLibrary(
                 ast.PlayerRef("you"), filt, ast.Zone("library_top"), graveyard,
+                hand=hand,
                 tapped=(False,), named_alternatives=tuple(alternatives),
                 reveal=reveal,
             )
@@ -390,7 +458,7 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # search's own last clause (CR 701.23a), so a production that stopped in
     # front of the discard would strand the words it still owes.
     discard_after, discard_at_random = _accept_search_discard_clause(stream)
-    if graveyard:
+    if graveyard or hand:
         # "…into your hand. If you search your library this way, shuffle."
         # A printed sentence break, but not a second effect: the shuffle is the
         # tail of *this* search, conditional only because the graveyard half
@@ -424,6 +492,7 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     condition, counted = _parse_search_untap_rider(stream)
     return ast.SearchLibrary(
         ast.PlayerRef("you"), filt, destination, graveyard, tapped=(tapped,),
+        hand=hand,
         named_alternatives=tuple(alternatives),
         untap_found_if=condition, untap_found_filter=counted,
         reveal=reveal,
@@ -473,6 +542,19 @@ def _accept_search_one_of_each(
             stream.reset(mark)
             return None
     stream.accept_punct(",")
+    # "…for a Zombie card and a Swamp card, **reveal them**, put them into
+    # your hand, then shuffle." (Corpse Harvester.) The plural of the reveal the
+    # single-find tutor above reads, with the same meaning (CR 701.20): the
+    # finds are shown to every player, which the flow records — so it is a
+    # field, not a word skipped. Only in front of "put", so a search ending at
+    # the reveal still refuses on the missing destination.
+    reveal = False
+    if len(each) > 1 and stream.accept_word("reveal"):
+        if not stream.accept_word("them"):
+            stream.expect_word("those")
+            stream.expect_word("cards")
+        stream.accept_punct(",")
+        reveal = True
     stream.expect_word("put")
     if not (stream.accept_word("them") or stream.accept_phrase("those", "cards")):
         raise stream.error("expected 'those cards' after a search for several")
@@ -486,6 +568,7 @@ def _accept_search_one_of_each(
         ast.PlayerRef("you"), described, destination, graveyard,
         extra_destinations=(destination,) * (len(each) - 1),
         tapped=(tapped,) * len(each), up_to=True, one_of_each=each,
+        reveal=reveal,
     )
 
 

@@ -382,8 +382,21 @@ def _lower_search_library(
         payload["reveal"] = True
     if restrictions:
         payload["restrictions"] = restrictions
-    if node.graveyard:
+    if node.graveyard and not node.hand:
         payload["zones"] = ("library", "graveyard")
+    elif node.hand:
+        # "Search your graveyard, **hand**, and/or library…" (Dark
+        # Supplicant.) The third pile, after the two the two-zone spelling
+        # already names, so that spelling's payload is byte-identical. The
+        # resolver takes a find out of a hand through ``take_card_from_hand``.
+        if len(destinations) != 1 or node.one_of_each or node.unbounded:
+            raise LoweringError(
+                "a search of a hand finds one card", node=node,
+            )
+        payload["zones"] = (
+            ("library", "graveyard", "hand") if node.graveyard
+            else ("library", "hand")
+        )
     if node.exile_rest:
         # "…and exile the rest." (Doomsday.) What becomes of the searched piles
         # once the finds are out of them \u2014 a fact about the zones rather than
