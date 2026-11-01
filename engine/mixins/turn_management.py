@@ -4,7 +4,10 @@ The pregame (CR 103): the coin flip (``select_starting_player``), the opening
 hands with the Commander setup and the ante slotted where CR 903.6 and
 CR 407.2 put them (``deal_opening_hands``), mulligans (``take_mulligan``,
 ``pregame_mulligan_draw``, and ``mulligan_effective_count`` with CR 800.6's
-and CR 903.12g's free first one) and keeping a hand (``keep_hand``).
+and CR 903.12g's free first one), the cards a mulligan puts on the bottom
+(``put_mulligan_cards_on_bottom``) and keeping a hand (``keep_hand``, and
+``keep_opening_hand`` for a flow that bottoms the cards as it keeps).
+Whether an AI seat keeps, and what it bottoms, is ``engine/ai_mulligan.py``.
 
 The turn's boundary: ``begin_turn_bookkeeping`` is the one hook both turn
 drivers call as a turn begins - the outgoing seat's "last turn" facts are
@@ -145,18 +148,55 @@ class TurnManagementMixin:
 
         # Put n cards on the bottom.
         if bottom_card_indices is None:
-            cards_to_bottom = [player.hand.pop() for _ in range(min(n, len(player.hand)))]
-        else:
-            indices_sorted = sorted(set(bottom_card_indices), reverse=True)
-            cards_to_bottom = [player.hand.pop(i) for i in indices_sorted]
-
-        player.library.extend(cards_to_bottom)
+            bottom_card_indices = range(
+                len(player.hand) - min(n, len(player.hand)), len(player.hand)
+            )
+        cards_to_bottom = self.put_mulligan_cards_on_bottom(
+            player_index, sorted(set(bottom_card_indices), reverse=True)
+        )
 
         self.log.append(
             f"{player.name} took mulligan #{player.mulligans_taken}, drew 7, put {len(cards_to_bottom)}"
             f" card(s) on the bottom, keeping {len(player.hand)}"
         )
         return True
+
+    def put_mulligan_cards_on_bottom(
+        self, player_index: int, hand_indices
+    ) -> list:
+        """CR 103.5's last step of a mulligan: the player "puts a number of
+        those cards equal to the number of times that player has taken a
+        mulligan on the bottom of their library in any order" — the cards at
+        *hand_indices*, in the order given (the first lands nearest the
+        middle). Returns the cards moved.
+
+        The one way a mulligan's cards leave the hand: ``take_mulligan`` puts
+        them there at once, and the deferred flows — the web table's bottom
+        selection and the AI's opening hand (``ai_mulligan``), which choose
+        out of the last seven drawn as the hand is kept — through
+        :meth:`keep_opening_hand`. Each card goes through the hand and library
+        seams (``take_card_from_hand``, ``put_card_into_library``) rather than
+        a ``pop``, so a hand holding two copies of one card loses exactly one.
+        """
+        player = self.players[player_index]
+        picked = [player.hand[index] for index in dict.fromkeys(hand_indices)]
+        for card in picked:
+            self.take_card_from_hand(player_index, card)
+            self.put_card_into_library(player_index, card, "bottom")
+        return picked
+
+    def keep_opening_hand(self, player_index: int, bottom_indices=()) -> None:
+        """Keep the hand drawn by the last mulligan, putting the cards at
+        *bottom_indices* on the bottom first (CR 103.5, London mulligan).
+
+        A flow that lets a player choose the cards as they keep rather than as
+        they draw — the web table, the AI's mulligans — is the same choice
+        out of the same seven cards, and how many it owes is
+        :meth:`mulligan_effective_count` (CR 103.5c's free first mulligan
+        counted), never the raw number taken.
+        """
+        self.put_mulligan_cards_on_bottom(player_index, bottom_indices)
+        self.keep_hand(player_index)
 
     def keep_hand(self, player_index: int) -> None:
         """Rule 103.5: Player declares to keep their current hand.

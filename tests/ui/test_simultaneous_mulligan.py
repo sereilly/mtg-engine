@@ -75,15 +75,32 @@ class TestSimultaneousMulliganVsAi:
         assert session.pregame_phase is None  # game started
         assert len(session.game.players[0].hand) == 7
 
+    def test_first_mulligan_is_free_at_a_multiplayer_table(self):
+        """CR 103.5c: in a multiplayer game the first mulligan doesn't count
+        toward the cards put on the bottom, so keeping after one mulligan keeps
+        all seven with no bottom selection. The table asked for one card until
+        the kg2 round — it counted ``mulligans_taken``, not
+        ``mulligan_effective_count``."""
+        sid = _create_ffa_simultaneous(4)
+        _enter_mulligan_as_host(sid)
+        _action(sid, 0, "mulligan_take")
+        _action(sid, 0, "mulligan_keep")
+        session = store.get(sid)
+        assert session.pregame_phase is None  # nothing owed: the game started
+        assert len(session.game.players[0].hand) == 7
+
     def test_mulligan_then_bottom_flow(self):
         sid = _create_ffa_simultaneous(4)
         _enter_mulligan_as_host(sid)
 
+        # Two mulligans: the first is free at a four-seat table (CR 103.5c),
+        # so the second is the one that owes a card.
+        _action(sid, 0, "mulligan_take")
         _action(sid, 0, "mulligan_take")
         info = _state(sid, 0)["pregame"]
         assert info["phase"] == "mulligan"
         assert info["is_my_turn"] is True
-        assert info["mulligans_taken"] == 1
+        assert info["mulligans_taken"] == 2
         assert len(store.get(sid).game.players[0].hand) == 7
 
         # Keeping after a mulligan enters this seat's own bottom selection —
@@ -107,6 +124,9 @@ class TestSimultaneousMulliganVsAi:
     def test_take_and_keep_rejected_after_keeping(self):
         sid = _create_ffa_simultaneous(3)
         _enter_mulligan_as_host(sid)
+        # Two mulligans, so keeping leaves a bottom card owed and the phase open
+        # (the first is free at a three-seat table, CR 103.5c).
+        _action(sid, 0, "mulligan_take")
         _action(sid, 0, "mulligan_take")
         _action(sid, 0, "mulligan_keep")
 
