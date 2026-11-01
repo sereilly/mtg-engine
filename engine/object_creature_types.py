@@ -33,6 +33,92 @@ line, which for a card outside the battlefield is the whole of what there is.
 
 from __future__ import annotations
 
+import re
+from functools import lru_cache
+
+# ---------------------------------------------------------------------------
+# "Every creature type" — a characteristic-defining ability (CR 604.3).
+# ---------------------------------------------------------------------------
+
+#: "Mistform Ultimus is every creature type (even if this card isn't on the
+#: battlefield)." The self-reference collapsed to "this creature" first, so the
+#: card's own name is not part of the pattern; the parenthetical is optional
+#: because the normalizer that strips reminder text strips it too, and the
+#: sentence means the same thing without it (CR 604.3 makes every CDA work in
+#: every zone — the words only say so).
+_EVERY_CREATURE_TYPE = re.compile(
+    r"^this (?:creature|card) is every creature type"
+    r"(?: \(even if this card isn't on the battlefield\))?$"
+)
+
+
+#: The label the grammar's registry claim gives the sentence
+#: (``grammar/registries.registry_for_line``). Nothing dispatches on it.
+EVERY_CREATURE_TYPE_CLAIM = "object_creature_types"
+
+
+def every_creature_type_line(line: str, card_name: str | None = None) -> bool:
+    """Whether *line* is the "is every creature type" CDA, in full.
+
+    The one reader of the sentence: the support gate, the grammar's registry
+    claim and the type seed (:func:`defines_every_creature_type`) all ask it,
+    so a wording it cannot read is a card reported unsupported rather than one
+    admitted with every creature type missing.
+    """
+    from .self_reference import _collapse_self_references
+
+    lowered = " ".join(line.strip().lower().split()).rstrip(".")
+    return bool(
+        _EVERY_CREATURE_TYPE.match(
+            _collapse_self_references(lowered, card_name, "this creature")
+        )
+    )
+
+
+@lru_cache(maxsize=None)
+def defines_every_creature_type(oracle_text: str, card_name: str) -> bool:
+    """Whether a card printing *oracle_text* is every creature type.
+
+    CR 702.73a's changeling under its pre-Lorwyn wording (Mistform Ultimus):
+    "This object is every creature type." A characteristic-defining ability,
+    so it is part of what the card **is** in every zone (CR 604.3) — a hand
+    card for amplify, a library card for "search for a Goblin card", a spell
+    for "Sliver spells can't be countered", and a permanent, where CR 613.3
+    applies it first in layer 4 so any later type-*setting* effect replaces it
+    (the card's ruling, 2006-09-25: "if Mistform Ultimus becomes another type
+    as the result of a spell or ability, it will lose all its other creature
+    types").
+
+    Cached per card text, because it is asked by the type seed on every
+    characteristic read.
+    """
+    if not oracle_text or "every creature type" not in oracle_text.lower():
+        return False
+    return any(
+        every_creature_type_line(line, card_name)
+        for line in oracle_text.splitlines()
+    )
+
+
+def every_creature_type_subtypes(
+    card_types, subtypes, oracle_text: str, card_name: str
+) -> frozenset[str]:
+    """*subtypes* with every creature type added when the card's text defines
+    them (:func:`defines_every_creature_type`) and it is a creature.
+
+    "Creature" is required for CR 205.3d's reason: an object can have a
+    creature type only if it is a creature (or kindred), so a Mistform Ultimus
+    an effect had made a noncreature would not be a Goblin. The vocabulary
+    (``data/vocabulary/``) is the list, never one spelled here.
+    """
+    if "creature" not in card_types or not defines_every_creature_type(
+        oracle_text, card_name
+    ):
+        return frozenset(subtypes)
+    from .grammar.vocabulary import CREATURE_TYPES
+
+    return frozenset(subtypes) | CREATURE_TYPES
+
 
 def _seat_index(game, seat) -> int | None:
     """*seat* as an index, whether the caller had one or a ``PlayerState``.
@@ -237,6 +323,10 @@ __all__ = [
     "card_creature_types",
     "creature_type_override_for_seat",
     "creature_types",
+    "EVERY_CREATURE_TYPE_CLAIM",
+    "defines_every_creature_type",
+    "every_creature_type_line",
+    "every_creature_type_subtypes",
     "object_creature_types",
     "share_a_creature_type",
     "shared_creature_type_count",

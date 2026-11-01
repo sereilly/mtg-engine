@@ -462,6 +462,15 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if counts_as_claims_line(normalized):
         return True
+    # "Mistform Ultimus is every creature type (even if this card isn't on the
+    # battlefield)." A characteristic-defining ability (CR 604.3) the type
+    # seed reads off the card's text in every zone, so there is no
+    # instruction; asked of the reader that seed asks, with the card's name
+    # for its self-reference.
+    from .object_creature_types import every_creature_type_line
+
+    if every_creature_type_line(line, card_name):
+        return True
     # "You can't cast creature spells." (Steel Golem.) CR 601.3a scoped to the
     # permanent's own controller, enforced off the board at every cast — so
     # like every table above it produces no instruction, and a creature whose

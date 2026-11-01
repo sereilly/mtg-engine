@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 
 from .flashback import FLASHBACK, has_flashback
+from .object_creature_types import every_creature_type_subtypes
 
 # The ``ObjectFilter`` fields ``search_matches`` understands, and the
 # comparisons it can apply. ``_lower_search_library`` builds its honoured-field
@@ -51,8 +52,24 @@ def card_has_type(card, wanted: str) -> bool:
     Containment in the printed type line rather than a parse of it: a card
     outside the battlefield has no computed characteristics at all (CR 613.1),
     so the line is the whole of what there is to ask.
+
+    **Except a characteristic-defining ability**, which works in every zone
+    (CR 604.3): "Mistform Ultimus is every creature type (even if this card
+    isn't on the battlefield)" makes the card in hand a Sliver spell to Root
+    Sliver and Quick Sliver, which ask this function with a creature type.
+    Asked only for a creature-type word the line does not carry, so every
+    other question costs what it did.
     """
-    return str(wanted).lower() in (getattr(card, "type_line", "") or "").lower()
+    type_line = (getattr(card, "type_line", "") or "").lower()
+    word = str(wanted).lower()
+    if word in type_line:
+        return True
+    if "creature" not in type_line:
+        return False
+    return word in every_creature_type_subtypes(
+        ("creature",), (), getattr(card, "oracle_text", "") or "",
+        getattr(card, "name", ""),
+    )
 
 
 def card_colors(card, *, game=None, owner=None) -> frozenset[str]:
@@ -230,7 +247,11 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
         def carries(subtype: str) -> bool:
             if override is not None:
                 return subtype.lower() == override
-            return subtype in type_line
+            # The printed line, or a characteristic-defining ability that
+            # makes the card every creature type in the library too
+            # (CR 604.3, Mistform Ultimus) — ``card_has_type`` is that
+            # question asked of one word.
+            return subtype in type_line or card_has_type(card, subtype)
 
         if not all(carries(subtype) for subtype in wanted_subtypes):
             return False

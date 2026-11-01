@@ -420,6 +420,164 @@ def test_w1g5_whipgrass_entangler_taxes_the_block_too(set_pool):
     assert ok, why
     assert all(land.tapped for land in lands)
 
+
+# --- W1G5: Mistform Ultimus, every creature type in every zone -------------
+#
+# "Mistform Ultimus is every creature type (even if this card isn't on the
+# battlefield)." A characteristic-defining ability (CR 604.3; changeling's
+# CR 702.73a), read off the card's own text by the one type parse both the
+# off-battlefield answer and the layer seed share
+# (`layer_bridge._printed_shape`).
+
+
+def test_w1g5_mistform_ultimus_is_supported_and_shows_its_printed_line(set_pool):
+    """The line is claimed, and the board shows "Legendary Creature —
+    Illusion", not three hundred words."""
+    from engine.layer_bridge import displayed_type_line
+
+    ultimus = set_pool("LGN")["Mistform Ultimus"]
+    program = _w1g5_compile(ultimus)
+    assert program.supported, program.reason
+    game, alice, bob, card = _w1g5_table(set_pool)
+    permanent = _w1g5_put(game, 0, ultimus)
+    assert displayed_type_line(permanent) == "Legendary Creature — Illusion"
+    for word in ("illusion", "goblin", "zombie", "beast", "sliver", "cleric"):
+        assert permanent.has_type(word), word
+    assert not permanent.has_type("forest"), "a creature type, not a land type"
+
+
+def test_w1g5_mistform_ultimus_is_every_type_in_the_library_and_graveyard(
+    set_pool,
+):
+    """Off the battlefield (CR 604.3): Goblin Matron's "search your library
+    for a Goblin card" finds it, Lord of the Undead's "target Zombie card from
+    your graveyard" returns it, and Soulless One counts it among "Zombie cards
+    in all graveyards"."""
+    ultimus = set_pool("LGN")["Mistform Ultimus"]
+    game, alice, bob, card = _w1g5_table(set_pool)
+    alice.hand = [set_pool("USG")["Goblin Matron"]]
+    alice.library = [ultimus] + alice.library
+    assert game.queue_from_hand(0, "Goblin Matron").supported
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert [c.name for c in alice.hand] == ["Mistform Ultimus"]
+    assert any("put Mistform Ultimus into hand" in line for line in game.log)
+
+    game, alice, bob, card = _w1g5_table(set_pool)
+    alice.graveyard = [ultimus]
+    soulless = _w1g5_put(game, 0, set_pool("ONS")["Soulless One"])
+    game._refresh_dynamic_creatures()
+    assert (soulless.effective_power, soulless.effective_toughness) == (2, 2)
+    _w1g5_put(game, 0, set_pool("PLS")["Lord of the Undead"])
+    assert game.activate_permanent_ability(0, "Lord of the Undead").supported
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert [c.name for c in alice.hand] == ["Mistform Ultimus"]
+
+
+def test_w1g5_mistform_ultimus_is_every_type_as_a_spell(set_pool):
+    """On the stack: Rin and Seri's "Whenever you cast a Dog spell" and
+    "…a Cat spell" both fire for the one cast."""
+    game, alice, bob, card = _w1g5_table(set_pool, "Mistform Ultimus")
+    _w1g5_put(game, 0, set_pool("M21")["Rin and Seri, Inseparable"])
+    assert game.queue_from_hand(0, "Mistform Ultimus").supported
+    assert sorted(
+        item.ability_text[:27] for item in game.stack if item.ability_text
+    ) == ["Whenever you cast a Cat spe", "Whenever you cast a Dog spe"]
+    _w1g5_resolve_stack(game)
+    names = sorted(p.card.name for p in game.controlled_by(0))
+    assert "Cat Token" in names and "Dog Token" in names
+
+
+def test_w1g5_mistform_ultimus_in_hand_shares_every_creature_type(set_pool):
+    """The hand reader amplify and "share a creature type" ask
+    (`object_creature_types.creature_types`) answers every type for the card
+    in hand — and a Conspiracy naming Goblin replaces them (CR 205.1a), so the
+    card is then a Goblin and nothing else."""
+    from engine.object_creature_types import creature_types
+
+    ultimus = set_pool("LGN")["Mistform Ultimus"]
+    game, alice, bob, card = _w1g5_table(set_pool, "Mistform Ultimus")
+    held = creature_types(game, ultimus, 0)
+    assert {"beast", "bird", "soldier", "zombie", "dragon"} <= held
+    conspiracy = _w1g5_put(game, 0, set_pool("MMQ")["Conspiracy"])
+    game.auto_resolve_pending_choices()
+    conspiracy.metadata["chosen_creature_type"] = "goblin"
+    assert creature_types(game, ultimus, 0) == frozenset({"goblin"})
+    assert creature_types(game, ultimus, 1) >= {"zombie"}, "Bob's seat: no Conspiracy"
+
+
+def test_w1g5_mistform_ultimus_loses_its_types_to_a_type_setting_effect(
+    set_pool,
+):
+    """The card's rulings (2006-09-25): an effect that makes it another type
+    replaces every creature type — Mistform Wakecaster's "Each creature you
+    control becomes that type until end of turn" makes it an Advisor and
+    nothing else, shown so — and an effect removing its abilities does not
+    (layer 4 before layer 6): under Humility it is still a Goblin. Face down
+    it has no types at all (CR 708.2)."""
+    from engine.face_down import turn_face_down
+    from engine.layer_bridge import displayed_type_line
+
+    game, alice, bob, card = _w1g5_table(set_pool)
+    ultimus = _w1g5_put(game, 0, card("Mistform Ultimus"))
+    _w1g5_put(game, 0, card("Mistform Wakecaster"))
+    assert game.activate_permanent_ability(
+        0, "Mistform Wakecaster", ability_index=1,
+    ).supported
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    chosen = next(
+        word for word in ("advisor", "goblin", "zombie") if ultimus.has_type(word)
+    )
+    assert sum(ultimus.has_type(w) for w in ("advisor", "goblin", "zombie")) == 1
+    assert not ultimus.has_type("illusion")
+    assert displayed_type_line(ultimus).lower() == f"legendary creature — {chosen}"
+    game.resolve_cleanup_step(0)
+    assert ultimus.has_type("goblin") and ultimus.has_type("zombie")
+
+    _w1g5_put(game, 1, set_pool("TMP")["Humility"])
+    game._refresh_dynamic_creatures()
+    assert ultimus.effective_card.oracle_text == ""
+    assert ultimus.has_type("goblin") and ultimus.has_type("zombie")
+    assert (ultimus.effective_power, ultimus.effective_toughness) == (1, 1)
+
+    game, alice, bob, card = _w1g5_table(set_pool)
+    hidden = _w1g5_put(game, 0, card("Mistform Ultimus"))
+    assert turn_face_down(game, hidden)
+    assert not hidden.has_type("goblin") and not hidden.has_type("illusion")
+
+
+def test_w1g5_mistform_ultimus_answers_this_groups_tribal_cards(set_pool):
+    """On the board it is a Zombie, a Beast and a Cleric: Noxious Ghoul fires
+    as it enters and spares it; Frenetic Raptor grounds it; Gempalm
+    Polluter and Whipgrass Entangler count it."""
+    game, alice, bob, card = _w1g5_table(set_pool, "Mistform Ultimus")
+    _w1g5_put(game, 0, card("Noxious Ghoul"))
+    _w1g5_resolve_stack(game)
+    bystander = _w1g5_put(game, 1, card("Krosan Tusker"))
+    assert game.queue_from_hand(0, "Mistform Ultimus").supported
+    _w1g5_resolve_stack(game)
+    ultimus = next(
+        p for p in game.controlled_by(0) if p.card.name == "Mistform Ultimus"
+    )
+    assert (bystander.effective_power, bystander.effective_toughness) == (5, 4)
+    assert (ultimus.effective_power, ultimus.effective_toughness) == (3, 3)
+
+    _w1g5_put(game, 1, card("Frenetic Raptor"))
+    attacker = _w1g5_put(game, 1, card("Wellwisher"))
+    assert not game._can_block_attacker(ultimus, attacker)
+
+    whip = _w1g5_put(game, 0, card("Whipgrass Entangler"))
+    assert game.activate_permanent_ability(
+        0, "Whipgrass Entangler", target_permanent_ids=[attacker.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert game._attack_mana_costs_of(attacker, 0) == [{"generic": 2}], (
+        "the Entangler and the Ultimus are the Clerics"
+    )
+    assert whip.has_type("cleric")
+
 # ==== end W1G5 ======================================================
 
 
