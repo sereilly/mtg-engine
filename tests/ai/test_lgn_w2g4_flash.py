@@ -12,6 +12,8 @@ another seat's end step, or in response to a spell its entry trigger names.
 
 from __future__ import annotations
 
+import pytest
+
 from engine import Game
 from engine.ai_policy import cast_chosen_instant, choose_combat_instant_cast_action
 from engine.models import Permanent, PlayerState
@@ -120,3 +122,45 @@ def test_quick_slivers_permission_reaches_the_ai(set_pool):
     without = _table(set_pool, [lgn["Plated Sliver"]], ["Plains"] * 2)
     _at(without, "ending", "end")
     assert choose_combat_instant_cast_action(without, 0) is None
+
+
+def test_mystic_snake_is_held_in_its_own_main_phase(set_pool):
+    """Cast in its controller's main phase the trigger has nothing to counter
+    and the card is a 2/2 for four: the main-phase chooser leaves it for the
+    opponent's turn (``ai_policy._held_for_a_spell_to_answer``) — and there,
+    with no spell cast, the end step takes it as the creature it is."""
+    from engine.ai_policy import choose_cast_action
+
+    snake = set_pool("APC")["Mystic Snake"]
+    own = _table(set_pool, [snake], ["Island", "Island", "Forest", "Forest"], active=0)
+    _at(own, "precombat_main", "main")
+    assert choose_cast_action(own, 0) is None
+
+    theirs = _table(set_pool, [snake], ["Island", "Island", "Forest", "Forest"])
+    _at(theirs, "ending", "end")
+    action = choose_combat_instant_cast_action(theirs, 0)
+    assert action is not None and action.card_name == "Mystic Snake"
+    _cast(theirs, action)
+    assert "Mystic Snake" in [p.card.name for p in theirs.controlled_by(0)]
+
+
+@pytest.mark.full
+def test_a_simulated_seat_flashes_mystic_snake_in_response():
+    """The whole turn, seeded: with Mystic Snake pinned into both APC decks,
+    a seat holds it through its own main phase and casts it in response to
+    another seat's spell, through the executor the honesty counts read
+    (``casts_in_response``). A floor of one: that it happened, not how often
+    a seed's story makes it happen."""
+    from engine.ai_simulator import run_ai_simulation
+    from engine.card_loader import manifest_set_paths
+
+    (apc,) = [p for p in manifest_set_paths() if p.stem.upper().startswith("APC")]
+    report = run_ai_simulation(apc, games=2, seed=1, required_cards=["Mystic Snake"])
+    flashed = [
+        line for line in report.log_lines
+        if " cast Mystic Snake -> " in line and "[in response to " in line
+    ]
+    assert flashed, "no seat cast Mystic Snake in response"
+    assert report.casts_in_response >= 1
+    assert not any("Mystic Snake" in key for key in report.refused_instant_casts)
+    assert not report.issues, [issue.message for issue in report.issues]

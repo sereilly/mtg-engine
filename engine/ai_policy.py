@@ -129,6 +129,8 @@ def _choose_cast_action(game: Game, player_index: int) -> CastAction | None:
     """`choose_cast_action`, inside its deliberation."""
     best: CastAction | None = None
     for hand_index, card in hand_spells(game.players[player_index]):
+        if _held_for_a_spell_to_answer(game, player_index, card):
+            continue
         # The plan is told what it pays for (`ai_payment._paying_for`): the spell, which
         # is what a permanent given up for mana is weighed against and what
         # restricted mana may be spent on. Whether an effect has made the cast
@@ -152,6 +154,8 @@ def _choose_cast_action(game: Game, player_index: int) -> CastAction | None:
     # differs is carried by the entry: where the card is and what the cast is
     # charged.
     for permitted in permitted_casts(game, player_index):
+        if _held_for_a_spell_to_answer(game, player_index, permitted.spell):
+            continue
         candidate = _priced_candidate(
             game, player_index, permitted.spell, permitted.index,
             from_zone=permitted.zone, under=permitted,
@@ -174,6 +178,32 @@ def _choose_cast_action(game: Game, player_index: int) -> CastAction | None:
             best = candidate
 
     return best
+
+
+def _held_for_a_spell_to_answer(
+    game: Game, player_index: int, card: CardDefinition,
+) -> bool:
+    """Whether the main-phase chooser leaves *card* in hand for the
+    instant-speed one: a creature whose entry trigger names a spell
+    (``ai_valuation.entry_targets_a_spell`` — Mystic Snake's "counter target
+    spell"), which the engine lets its seat cast at instant speed
+    (``cast_timing.casts_at_instant_speed``), with no spell on the stack to
+    name.
+
+    Cast here, its trigger has nothing to counter and the card is a 2/2 for
+    four. Held, it is weighed in response to the next spell another seat
+    casts, and at that seat's end step as the creature it is if no spell came
+    (`_weighed_at_instant_speed_now`) — so holding it costs only the turns it
+    is not on the battlefield to block.
+    """
+    from .cast_timing import casts_at_instant_speed
+
+    return (
+        card.primary_type == "creature"
+        and not any(item.caster_index != player_index for item in game.stack)
+        and entry_targets_a_spell(card)
+        and casts_at_instant_speed(card, game, player_index)
+    )
 
 
 def choose_madness_cast(
