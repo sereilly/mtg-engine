@@ -133,6 +133,11 @@ def _parse_becomes_base_pt(
     mark = stream.mark()
     if not stream.accept_word("'s"):
         return None
+    # "This creature's **base** power becomes …" (Riptide Mangler). CR 613.4b
+    # is the layer either way — "power becomes N" sets the base value as
+    # surely as "base power becomes N" does — so the word confirms the
+    # sentence rather than changing what it does.
+    stream.accept_word("base")
     first = stream.peek_word()
     if first is None or first not in _READABLE_CHARACTERISTICS:
         stream.reset(mark)
@@ -149,6 +154,7 @@ def _parse_becomes_base_pt(
     if stream.accept_punct(",") and stream.accept_word("and"):
         if not stream.accept_word("its"):
             raise stream.error("expected 'its' before the second characteristic")
+        stream.accept_word("base")
         second = stream.peek_word()
         if second is None or second not in _READABLE_CHARACTERISTICS:
             raise stream.error("expected a characteristic after 'its'")
@@ -183,6 +189,9 @@ def _parse_becomes_pt_amount(
     read = _accept_characteristic_of_target(stream)
     if read is not None:
         return read
+    read = _accept_equal_to_possessive_characteristic(stream)
+    if read is not None:
+        return read
     referenced = _accept_bound_characteristic(stream, bound)
     if referenced is not None:
         return referenced
@@ -195,6 +204,39 @@ def _parse_becomes_pt_amount(
     if read is None:
         raise stream.error("expected a characteristic after 'plus'")
     return ast.Plus(amount, read)
+
+
+def _accept_equal_to_possessive_characteristic(
+    stream: TokenStream,
+) -> "ast.CharacteristicOfTarget | None":
+    """``equal to <object>'s <power|toughness>``, or None with the cursor
+    untouched.
+
+    "This creature's base power becomes **equal to target creature's power**."
+    (Riptide Mangler.) The possessive spelling of
+    :func:`_accept_characteristic_of_target`'s "the power of target creature"
+    — the genitive in front of its noun rather than behind it with "of" — so
+    it builds the same node and every reader of that node (the lowering, the
+    picker, the handler) needs nothing new. Only a chosen object
+    (``TargetSpec``) is read: a pronoun or a board count after "equal to" is
+    some other quantity, and resetting leaves it its own refusal.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("equal", "to"):
+        return None
+    try:
+        referent = parse_recipient(stream)
+    except GrammarError:
+        referent = None
+    if not isinstance(referent, ast.TargetSpec) or not stream.accept_word("'s"):
+        stream.reset(mark)
+        return None
+    word = stream.peek_word()
+    if word is None or word not in _READABLE_CHARACTERISTICS:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.CharacteristicOfTarget(referent, word, 0)
 
 
 def _accept_bound_characteristic(

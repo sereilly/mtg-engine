@@ -168,4 +168,66 @@ def test_w1g7_phage_unblocked_makes_the_damaged_player_lose(set_pool):
     assert game.players[1].lost
     assert not game.players[0].lost
 
+
+# --- Riptide Mangler ----------------------------------------------------------
+
+
+def test_w1g7_riptide_mangler_takes_a_targets_power_and_keeps_it(set_pool):
+    """"{1}{U}: This creature's base power becomes equal to target creature's
+    power. (This effect lasts indefinitely.)" Layer 7b (CR 613.4b): the 0/3
+    becomes 6/3 off a Craw Wurm, toughness untouched; a Giant Growth applies on
+    top (the 2015-02-25 ruling); a second activation overwrites the first
+    (the other 2015-02-25 ruling); and the write outlasts the turn's
+    cleanup."""
+    game = _w1g7_table(set_pool, hands={0: ["Giant Growth"]})
+    mangler = _w1g7_put(game, set_pool, 0, "Riptide Mangler")
+    wurm = _w1g7_put(game, set_pool, 1, "Craw Wurm")
+    bears = _w1g7_put(game, set_pool, 1, "Grizzly Bears")
+    assert (mangler.effective_power, mangler.effective_toughness) == (0, 3)
+
+    assert game.queue_permanent_ability(
+        0, "Riptide Mangler", target_player_index=1,
+        target_permanent_ids=[wurm.permanent_id],
+    ).supported
+    _w1g7_resolve_stack(game)
+    assert (mangler.effective_power, mangler.effective_toughness) == (6, 3)
+    assert (wurm.effective_power, wurm.effective_toughness) == (6, 4)
+
+    assert game.cast_from_hand(
+        0, "Giant Growth", target_player_index=0,
+        target_permanent_ids=[mangler.permanent_id],
+    ).supported
+    _w1g7_resolve_stack(game)
+    assert (mangler.effective_power, mangler.effective_toughness) == (9, 6)
+
+    assert game.queue_permanent_ability(
+        0, "Riptide Mangler", target_player_index=1,
+        target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g7_resolve_stack(game)
+    assert (mangler.effective_power, mangler.effective_toughness) == (5, 6)
+
+    game.resolve_cleanup_step(0)
+    assert (mangler.effective_power, mangler.effective_toughness) == (2, 3)
+
+
+def test_w1g7_riptide_mangler_fizzles_when_its_target_leaves(set_pool):
+    """CR 608.2b: the Wurm exiled in response leaves the ability with no legal
+    target, so it does nothing — the Mangler stays 0/3 rather than reading the
+    power of a creature that is gone."""
+    game = _w1g7_table(set_pool, hands={0: ["Swords to Plowshares"]})
+    mangler = _w1g7_put(game, set_pool, 0, "Riptide Mangler")
+    wurm = _w1g7_put(game, set_pool, 1, "Craw Wurm")
+    assert game.queue_permanent_ability(
+        0, "Riptide Mangler", target_player_index=1,
+        target_permanent_ids=[wurm.permanent_id],
+    ).supported
+    assert game.queue_from_hand(
+        0, "Swords to Plowshares", target_player_index=1,
+        target_permanent_ids=[wurm.permanent_id],
+    ).supported
+    _w1g7_resolve_stack(game)
+    assert (mangler.effective_power, mangler.effective_toughness) == (0, 3)
+    assert any("every target is illegal" in line for line in game.log)
+
 # ==== end W1G7 ======================================================
