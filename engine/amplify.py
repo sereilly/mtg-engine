@@ -54,13 +54,6 @@ from __future__ import annotations
 
 import re
 
-#: The prompt kind an interactive controller answers (registered in
-#: ``engine/mixins/stack/choices/table.py``). Named for what it asks — "which
-#: cards in your hand do you reveal as this enters" — rather than for the
-#: keyword, because the counters are payload: a card printing the same sentence
-#: without the keyword is this prompt with a different number.
-ENTRY_REVEAL = "entry_reveal"
-
 #: "amplify 2" as it survives ``normalize_creature_line`` — lowercased, with
 #: the reminder text already stripped. The number is the whole parameter.
 _AMPLIFY_PART = re.compile(r"^amplify (\d+)$")
@@ -164,8 +157,13 @@ def arm_amplify_reveals(game, permanent, seat: int) -> None:
                 f"{permanent.card.name}'s amplify"
             )
             continue
+        # ``entry_reveal`` (``engine/mixins/stack/choices/table.py``): named
+        # for what it asks — "which cards in your hand do you reveal as this
+        # enters" — rather than for the keyword, because the counters are
+        # payload. Spelled here, at the arm site, because the registry guard
+        # (``tests/engine/test_pending_choices.py``) reads the literal.
         game.arm_pending_choice(
-            ENTRY_REVEAL, seat,
+            "entry_reveal", seat,
             card_name=permanent.card.name,
             permanent=permanent,
             # Stamped here as well as by ``_initialize_permanent_state``, for the
@@ -178,7 +176,6 @@ def arm_amplify_reveals(game, permanent, seat: int) -> None:
 
 
 __all__ = [
-    "ENTRY_REVEAL",
     "amplify_amount",
     "amplify_amounts",
     "amplify_filter",
