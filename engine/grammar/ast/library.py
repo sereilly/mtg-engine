@@ -179,6 +179,12 @@ class SearchLibrary:
     # the filter because it says where the search happens, not what it may
     # find; the filter's `named` field carries the latter.
     graveyard: bool = False
+    #: "Search your graveyard, **hand**, and/or library for a card named Scion
+    #: of Darkness" (Dark Supplicant). A third zone, for ``graveyard``'s reason
+    #: — where the search happens, not what it finds — and only ever with the
+    #: single-find tutor, whose resolver takes the find out of whichever pile
+    #: the answer names.
+    hand: bool = False
     #: "…for **up to two** basic land cards … put **one** onto the battlefield
     #: tapped **and the other** into your hand" (Cultivate). One entry per find,
     #: in the printed order, so how many are found and where each goes are the

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 from engine.faces import choose_a_face_refusal, spell_named
+from engine.search_filters import SEARCHABLE_ZONES
 from engine.text_changes import LAND_TYPE_WORDS
 from .action_registry import action_handler
 from .action_helpers import _queue_spell_from_request
@@ -39,7 +40,7 @@ def _action_search_library_confirm(session, req, seat_type):
     # the search was armed with, so naming the graveyard on a library-only
     # search is a rejected answer rather than a widened effect.
     zone = req.search_zone or "library"
-    if zone not in {"library", "graveyard"}:
+    if zone not in SEARCHABLE_ZONES:
         raise HTTPException(status_code=400, detail="unknown search zone")
     ok = session.game.confirm_search_library(req.seat, req.hand_index, zone)
     if not ok:

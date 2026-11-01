@@ -284,6 +284,111 @@ def test_w1g6_skirk_drill_sergeant_triggers_on_itself_and_on_any_goblin(set_pool
     ), game.log[-6:]
     assert [c.name for c in me.library] == ["Forest", "Forest"]
 
+
+# --- Dark Supplicant --------------------------------------------------------
+
+
+def _w1g6_supplicant(set_pool, where, *, interactive, monkeypatch=None):
+    """Scion of Darkness in *where*; the Supplicant activated, three Clerics
+    sacrificed. Returns the game, seat 0 and the shuffles counted."""
+    game, me, _opp = _w1g6_game(
+        set_pool, library=["Forest", "Island", "Swamp"], interactive=interactive,
+    )
+    scion = _w1g6_card(set_pool, "Scion of Darkness")
+    {"hand": me.hand, "graveyard": me.graveyard, "library": me.library}[where].append(scion)
+    shuffles = []
+    if monkeypatch is not None:
+        monkeypatch.setattr(
+            "engine.mixins.stack.choices.search.random.shuffle",
+            lambda pile: shuffles.append(len(pile)),
+        )
+    assert _w1g6_compile(_w1g6_card(set_pool, "Dark Supplicant")).supported
+    _w1g6_put(game, 0, set_pool, "Dark Supplicant")
+    clerics = [
+        _w1g6_put(game, 0, set_pool, name)
+        for name in ("Blood Celebrant", "Earthblighter", "Deathmark Prelate")
+    ]
+    result = game.activate_permanent_ability(
+        0, "Dark Supplicant", cost_permanent_ids=[p.permanent_id for p in clerics],
+    )
+    assert result.supported, result.details
+    assert {"Blood Celebrant", "Earthblighter", "Deathmark Prelate"} <= {
+        c.name for c in me.graveyard
+    }
+    (choice,) = game.pending_choices
+    assert choice.kind == "search_library"
+    assert tuple(choice.data["zones"]) == ("library", "graveyard", "hand")
+    return game, me, scion, shuffles
+
+
+@_w1g6_pytest.mark.parametrize("where", ["hand", "graveyard"])
+def test_w1g6_dark_supplicant_finds_the_scion_in_hand_or_graveyard(set_pool, where, monkeypatch):
+    """"Search your graveyard, hand, and/or library for a card named Scion of
+    Darkness and put it onto the battlefield. If you search your library this
+    way, shuffle." Answered as an interactive seat naming the zone the Scion
+    is in: it enters, and the library — not searched — is not shuffled (the
+    ruling, 2004-10-04: "You only shuffle your library if you choose to search
+    it")."""
+    game, me, scion, shuffles = _w1g6_supplicant(
+        set_pool, where, interactive=True, monkeypatch=monkeypatch,
+    )
+    pile = {"hand": me.hand, "graveyard": me.graveyard}[where]
+    index = next(i for i, card in enumerate(pile) if card is scion)
+    # A pick that names a zone the card is not in finds a different card,
+    # which the name refuses.
+    other = "graveyard" if where == "hand" else "hand"
+    if len({"hand": me.hand, "graveyard": me.graveyard}[other]) > index:
+        assert not game.confirm_search_library(0, index, other)
+    assert not game.confirm_search_library(0, 0, "exile"), "never armed for exile"
+    assert game.confirm_search_library(0, index, where)
+    _w1g6_resolve(game)
+    assert any(p.card is scion for p in game.controlled_by(0))
+    assert scion not in me.hand and scion not in me.graveyard
+    assert [c.name for c in me.library] == ["Forest", "Island", "Swamp"]
+    assert shuffles == []
+    assert f"Me searched {where} and put Scion of Darkness onto the battlefield" in game.log
+
+
+def test_w1g6_dark_supplicant_default_seat_finds_it_in_the_library_and_shuffles(set_pool, monkeypatch):
+    """A seat nobody asks finds the Scion wherever it is — here the library,
+    which it searched, so the library is shuffled."""
+    game, me, scion, shuffles = _w1g6_supplicant(
+        set_pool, "library", interactive=False, monkeypatch=monkeypatch,
+    )
+    game.auto_resolve_pending_choices()
+    _w1g6_resolve(game)
+    assert any(p.card is scion for p in game.controlled_by(0))
+    assert sorted(c.name for c in me.library) == ["Forest", "Island", "Swamp"]
+    assert shuffles == [3]
+
+
+def test_w1g6_dark_supplicant_hand_pick_takes_one_copy(set_pool):
+    """Two Scions in hand (one ``CardDefinition`` object, as every deck holds
+    copies): a hand find takes exactly one through the hand seam."""
+    game, me, scion, _ = _w1g6_supplicant(set_pool, "hand", interactive=True)
+    me.hand.append(scion)
+    assert game.confirm_search_library(0, 0, "hand")
+    _w1g6_resolve(game)
+    assert [c.name for c in me.hand] == ["Scion of Darkness"]
+    assert sum(p.card is scion for p in game.controlled_by(0)) == 1
+
+
+def test_w1g6_dark_supplicant_needs_three_clerics(set_pool):
+    """"Sacrifice three Clerics": with only one other Cleric there are two in
+    all (the Supplicant is a Human Cleric itself), the cost cannot be paid,
+    and nothing is sacrificed or searched — the refusal is the result's, not
+    the log's (``engine/refusals.py``)."""
+    game, me, _opp = _w1g6_game(set_pool, library=["Forest"])
+    supplicant = _w1g6_put(game, 0, set_pool, "Dark Supplicant")
+    cleric = _w1g6_put(game, 0, set_pool, "Blood Celebrant")
+    result = game.activate_permanent_ability(
+        0, "Dark Supplicant",
+        cost_permanent_ids=[cleric.permanent_id, supplicant.permanent_id],
+    )
+    assert not result.supported, result.details
+    assert me.graveyard == [] and game.pending_choices == []
+    assert not supplicant.tapped
+
 # ==== end W1G6 ======================================================
 
 

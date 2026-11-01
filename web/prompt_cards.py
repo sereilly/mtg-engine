@@ -211,6 +211,19 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
                 card, choice.data, game=ctx.game, owner=choice.player_index
             )
         ]
+    # "Search your graveyard, **hand**, and/or library…" (Dark Supplicant). The
+    # third zone, sent beside the other two and only when the search was armed
+    # to look there. The hand is the searcher's own (the search names "your"),
+    # so nothing hidden from the chooser is shown; a pick naming it answers
+    # with ``search_zone: "hand"`` and its index in this list.
+    if "hand" in zones:
+        payload["hand_cards"] = [ctx.serialize_card(card) for card in caster.hand]
+        payload["legal_hand_indices"] = [
+            index for index, card in enumerate(caster.hand)
+            if search_matches(
+                card, choice.data, game=ctx.game, owner=choice.player_index
+            )
+        ]
     return payload
 
 
