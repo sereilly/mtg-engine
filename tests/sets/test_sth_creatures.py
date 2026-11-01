@@ -1112,8 +1112,9 @@ def test_w2g3_silver_wyvern_re_aims_an_activated_ability(set_pool):
     difference between this card and Deflection -- so this drives a real
     activated ability rather than a spell, and reads where the damage landed.
     """
-    game, mine, _ = _w2g3_board(set_pool, (("STH", "Spitting Hydra"),))
+    game, mine, theirs = _w2g3_board(set_pool, (("STH", "Spitting Hydra"),))
     wyvern, bystander = mine
+    (hydra,) = theirs
     assert game.queue_permanent_ability(
         1, "Spitting Hydra", target_permanent_ids=[wyvern.permanent_id],
         ability_index=0,
@@ -1126,7 +1127,12 @@ def test_w2g3_silver_wyvern_re_aims_an_activated_ability(set_pool):
     ).supported
     game.resolve_stack()
 
-    assert bystander.damage_marked == 1, game.log
+    # Off the Wyvern and onto the other creature the new-target choice offers
+    # on the side a seat nobody asks aims harm at (LGN W1G4: the retarget
+    # default prefers the re-aimed effect's side for its chooser, and a ping
+    # is harm) -- the Hydra itself, not the Wyvern's own Spined Wurm.
+    assert hydra.damage_marked == 1, game.log
+    assert bystander.damage_marked == 0, game.log
     assert wyvern.damage_marked == 0, game.log
 
 
