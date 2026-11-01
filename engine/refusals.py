@@ -40,6 +40,10 @@ Now there are two pieces, and neither writes anything:
   whose own effect fails as it resolves inline has paid its costs by then, and
   its lines are what happened.
 
+The tap seam is the other door to a mana ability (CR 106.12), and answers a
+bool rather than a result: ``Game.tap_land_for_mana_or_refusal`` returns its
+refusal's reason for the seat that asked and logs nothing, the same rule.
+
 ``tests/engine/test_kg2_refusal_seam.py`` holds every refused result to this
 module (an AST walk of ``engine/`` and ``web/``) and drives refusals over the
 pool to read that each leaves ``game.log`` as it found it.
