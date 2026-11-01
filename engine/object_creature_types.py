@@ -120,6 +120,32 @@ def every_creature_type_subtypes(
     return frozenset(subtypes) | CREATURE_TYPES
 
 
+def restore_struck_every_creature_type(perm, card, card_types, subtypes):
+    """*subtypes* (the layer seed's parse of *card*, *perm*'s effective card)
+    with every creature type put back if layer 6 struck the CDA defining them.
+
+    "Mistform Ultimus has all creature types even if an effect removes its
+    ability. Type-changing static abilities will apply in layer 4 before
+    effects such as Sudden Spoiling's remove them in layer 6." (The card's
+    ruling, 2006-09-25; CR 613.1, 613.6.) ``effective_card`` is the finished
+    answer, with layer 6's removals struck out, so under a Humility its text
+    no longer carries the sentence; ``card_before_layer_6`` is what layer 4
+    reads.
+
+    Asked only where something was folded: a permanent whose effective card
+    *is* its printed card has had nothing removed, so the common read — this
+    is on every characteristic read — pays an identity test and nothing more.
+    """
+    if card is perm.card or "creature" not in card_types:
+        return subtypes
+    before = perm.card_before_layer_6
+    if before is card:
+        return subtypes
+    return every_creature_type_subtypes(
+        card_types, subtypes, before.oracle_text or "", before.name
+    )
+
+
 def _seat_index(game, seat) -> int | None:
     """*seat* as an index, whether the caller had one or a ``PlayerState``.
 
@@ -328,6 +354,7 @@ __all__ = [
     "every_creature_type_line",
     "every_creature_type_subtypes",
     "object_creature_types",
+    "restore_struck_every_creature_type",
     "share_a_creature_type",
     "shared_creature_type_count",
     "shares_a_creature_type_with_each",

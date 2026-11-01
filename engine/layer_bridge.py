@@ -60,8 +60,8 @@ from .landwalk import BOARD_NAMED_LANDWALKS, landwalk_requirement
 from .land_types import DERIVED_LAND_TYPES, LAND_TYPE_EFFECTS, land_type_changes
 from .late_modules import LateModules
 from .lord_buffs import QUALIFIER_FIELDS
-from .object_creature_types import (defines_every_creature_type,
-                                    every_creature_type_subtypes)
+from .object_creature_types import (every_creature_type_subtypes,
+                                    restore_struck_every_creature_type)
 from .type_changes import (
     LAND_ANIMATION_ORDER,
     LAYER_4_CHANNELS,
@@ -203,46 +203,23 @@ def _printed_shape(
     if "—" in type_line or "-" in type_line:
         tail = type_line.replace("—", "-").split("-", 1)[-1]
         subtypes = frozenset(word.lower() for word in tail.split() if word)
-    # "Mistform Ultimus is every creature type (even if this card isn't on the
-    # battlefield)." A characteristic-defining ability (CR 604.3) is part of
-    # what the card is in every zone, so it belongs in the one parse both the
-    # off-battlefield answer (``printed_shape``) and the layer seed read — and
-    # in the seed it is applied before every layer-4 effect, which is CR
-    # 613.3's order for a CDA. This is why the text and the name were always
-    # among this cache's keys.
+    # "…is every creature type" (Mistform Ultimus): a CDA works in every zone
+    # (CR 604.3), so it is in the one parse the off-battlefield answer and the
+    # layer seed share — applied before every layer-4 effect (CR 613.3).
     return card_types, every_creature_type_subtypes(
         card_types, subtypes, oracle_text, name
     )
 
 
 def _seed_shape(perm: Permanent, card) -> tuple[frozenset[str], frozenset[str]]:
-    """``_printed_shape`` of *card* (the permanent's effective card), with a
-    characteristic-defining type ability layer 6 has struck put back.
-
-    "Mistform Ultimus has all creature types even if an effect removes its
-    ability. Type-changing static abilities will apply in layer 4 before
-    effects such as Sudden Spoiling's remove them in layer 6." (The card's
-    ruling, 2006-09-25; CR 613.1, 613.6.) ``effective_card`` is the finished
-    answer, with layer 6's removals struck out, so under a Humility its text no
-    longer carries the sentence; ``card_before_layer_6`` is what layer 4 reads.
-
-    Asked only where something was folded: a permanent whose effective card
-    *is* its printed card has had nothing removed, so the common read pays an
-    identity test and nothing more.
-    """
+    """``_printed_shape`` of *card*, *perm*'s effective card, with a type CDA
+    layer 6 struck put back (``restore_struck_every_creature_type``)."""
     card_types, subtypes = _printed_shape(
         card.type_line, card.name, card.oracle_text, card.keywords
     )
-    if card is perm.card or "creature" not in card_types:
-        return card_types, subtypes
-    before = perm.card_before_layer_6
-    if before is not card and defines_every_creature_type(
-        before.oracle_text or "", before.name
-    ):
-        subtypes = every_creature_type_subtypes(
-            card_types, subtypes, before.oracle_text or "", before.name
-        )
-    return card_types, subtypes
+    return card_types, restore_struck_every_creature_type(
+        perm, card, card_types, subtypes
+    )
 
 
 @lru_cache(maxsize=None)
@@ -1701,12 +1678,8 @@ def displayed_type_line(perm: Permanent) -> str:
     gained_supertypes = sorted(supertypes - printed_head_words)
     gained_card_types = sorted(card_types - printed_head_words)
     gained = subtypes - printed_tail_words
-    # "…is every creature type" (Mistform Ultimus): the types a
-    # characteristic-defining ability supplies are the card's own, stated in
-    # its rules text rather than on its type line, so while they all stand
-    # they are not *gained* and the printed line is what is shown — not three
-    # hundred words. A type-setting effect that replaced them (CR 205.1a)
-    # leaves them short, and then what it set is shown like any other gain.
+    # A CDA's own types (Mistform Ultimus) are not gains while they all stand;
+    # once a type-setting effect replaced them (CR 205.1a), what it set is.
     defined = _seed_shape(perm, perm.effective_card)[1] - printed_tail_words
     if defined and defined <= subtypes:
         gained -= defined
