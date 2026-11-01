@@ -404,9 +404,10 @@ def plan_payment(
 
     **Which lands pay is chosen with the payer's other wants in view**
     (*wants*, `_sparing_choice`): of the sets of lands that pay this cost, the
-    one leaving the most of the payer's other costs payable — so a {3} on four
-    Plains and three Mountains is paid with the Mountains when the hand holds
-    a {2}{W}{W}, where the lands' order alone took three Plains and stranded
+    one leaving the most of the payer's other costs payable (together, then
+    one at a time: `_wants_left`) — so a {3} on four Plains and three
+    Mountains leaves two Plains when a face-down Exalted Angel wants
+    {2}{W}{W}, where the lands' order alone took three Plains and stranded
     it. Whether the cost can be paid never depends on this, only which lands
     pay it; with nothing wanted, or nothing to choose between, the lands are
     the ones their order gives, as they always were. *wants* is a sequence of
@@ -587,8 +588,10 @@ def _sparing_choice(candidates, pips, generic, base, left, wants, owners=None):
 
     Exact over **kinds** of unit: two Mountains are interchangeable, so a
     choice is how many of each kind it spends — the first that many of the
-    kind, in the caller's order. Each choice is scored by how many wants the
-    rest still pays (a want repeated in hand counts each time); *base* — the
+    kind, in the caller's order. Each choice is scored by what the rest still
+    pays (`_wants_left`: the most wants together, the earlier-listed first,
+    then the most one at a time; a want repeated in hand counts each time);
+    *base* — the
     caller's own choice — is kept unless another scores higher, so a board
     with no competing want pays exactly as it did, and ties go to the choice
     tapping the fewest sources, then to the one whose units come first in the
@@ -636,8 +639,8 @@ def _sparing_choice(candidates, pips, generic, base, left, wants, owners=None):
     best = max(score for score, _sources in scores.values())
     if tuple(taken) in scores and scores[tuple(taken)][0] >= best:
         return None
-    _score, _sources, positions = min(
-        (-score, sources, _realized(of_kind, choice))
+    _sources, positions = min(
+        (sources, _realized(of_kind, choice))
         for choice, (score, sources) in scores.items() if score == best
     )
     chosen = [candidates[position][0] for position in positions]
@@ -657,8 +660,9 @@ def _realized(of_kind, choice) -> "tuple[int, ...]":
 
 
 def _counted_wants(wants, *, generic_too: bool) -> "tuple[tuple[tuple[tuple[str, int], ...], int], ...]":
-    """*wants* as ``((cost items, times), …)``, each cost a sorted tuple of its
-    non-zero symbols. A want of generic mana alone is dropped unless
+    """*wants* as ``((cost items, times), …)`` in the order they were listed
+    (first appearance), each cost a sorted tuple of its non-zero symbols. A
+    want of generic mana alone is dropped unless
     *generic_too* (some source makes more than one unit): with one unit a
     source every choice taps as many sources, so such a want is payable after
     all of them or none — but a choice that part-spends a Sol Ring taps one
@@ -675,7 +679,7 @@ def _counted_wants(wants, *, generic_too: bool) -> "tuple[tuple[tuple[tuple[str,
         ):
             continue
         times[items] = times.get(items, 0) + 1
-    return tuple(sorted(times.items()))
+    return tuple(times.items())
 
 
 @lru_cache(maxsize=8192)
@@ -684,7 +688,8 @@ def _choice_scores(order, of_kind, owner_of, pips, generic, left, wants):
     ``len(pips) + generic`` units of the kinds *order* that pays *pips* — a
     choice is a count per kind (``of_kind[k]`` lists kind *k*'s candidate
     positions, ``owner_of[p]`` the source position *p* is a unit of), its
-    score the number of *wants* the untouched sources and *left* still pay.
+    score what the untouched sources and *left* still pay of *wants*
+    (`_wants_left`).
     Empty past ``_MAX_SPARING_CHOICES``.
 
     A pure function of what a board holds and what is asked of it, so a board
@@ -708,11 +713,8 @@ def _choice_scores(order, of_kind, owner_of, pips, generic, left, wants):
 
     if not extend(0, owed, ()):
         return {}
-    relevant = [
-        (dict(items), times) for items, times in wants
-        if not _units_pay(list(left), dict(items))
-    ]
-    scores: dict[tuple[int, ...], tuple[int, int]] = {}
+    asked = [(dict(items), times) for items, times in wants]
+    scores: dict[tuple[int, ...], tuple] = {}
     for choice in choices:
         spending = [order[kind] for kind, count in enumerate(choice) for _ in range(count)]
         if pips and _match_colored(list(pips), list(enumerate(spending))) is None:
@@ -724,11 +726,36 @@ def _choice_scores(order, of_kind, owner_of, pips, generic, left, wants):
             *(order[kind_at[position]] for position in range(len(owner_of))
               if owner_of[position] not in touched),
         ]
-        scores[choice] = (
-            sum(times for want, times in relevant if _units_pay(rest, want)),
-            len(touched),
-        )
+        scores[choice] = (_wants_left(rest, asked), len(touched))
     return scores
+
+
+def _wants_left(rest: "list[frozenset[str]]", wants) -> tuple:
+    """How well *rest* serves *wants* (listed first to last), as a key that
+    sorts better-is-larger: how many of them it pays **together** — taken in
+    the order listed, each kept if it still fits beside those before it —
+    then which ones (an earlier want before a later: the hand's cards come
+    before the board's abilities), then how many it pays one at a time.
+
+    Together first, because a turn is several payments: four lands left as
+    Swamp, Swamp beside a Mountain pay two {B} one-drops, where Mountain and a
+    Dimir dual pay either one and a {R} ability one at a time — more wants
+    *one at a time*, one fewer spell cast (M21's seeded game, Liliana's
+    Steward and Archfiend's Vessel beside Heartfire Immolator's {R}).
+    """
+    together: dict[str, int] = {}
+    packed: list[int] = []
+    for want, times in wants:
+        for _ in range(times):
+            trial = dict(together)
+            for symbol, amount in want.items():
+                trial[symbol] = trial.get(symbol, 0) + amount
+            fits = _units_pay(rest, trial)
+            if fits:
+                together = trial
+            packed.append(1 if fits else 0)
+    alone = sum(times for want, times in wants if _units_pay(rest, want))
+    return (sum(packed), tuple(packed), alone)
 
 
 def _units_pay(units: "list[frozenset[str]]", want: dict[str, int]) -> bool:

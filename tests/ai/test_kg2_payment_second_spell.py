@@ -25,14 +25,14 @@ _CARDS = {card.name: card for card in load_catalog()}
 _BOARD = ["Plains", "Mountain", "Plains", "Mountain", "Plains", "Plains"]
 
 
-def _table() -> Game:
+def _table(board=_BOARD, hand=("Regal Unicorn", "Hurloon Minotaur")) -> Game:
     game = Game(players=[PlayerState(name="AI"), PlayerState(name="Opp")])
     game.enforce_mana_costs = True
     game.interactive_seats = set()
-    game.players[0].battlefield = [Permanent(card=_CARDS[name]) for name in _BOARD]
+    game.players[0].battlefield = [Permanent(card=_CARDS[name]) for name in board]
     for permanent in game.all_permanents():
         permanent.metadata["summoning_sickness_turn"] = -99
-    game.players[0].hand = [_CARDS["Regal Unicorn"], _CARDS["Hurloon Minotaur"]]
+    game.players[0].hand = [_CARDS[name] for name in hand]
     game.players[0].library = [_CARDS["Plains"]] * 10
     game.players[1].library = [_CARDS["Plains"]] * 10
     game.active_player_index = 0
@@ -66,6 +66,43 @@ def test_the_unicorn_is_paid_with_plains_and_the_minotaur_follows():
     assert game.players[0].hand == []
     assert all(p.tapped for p in game.controlled_by(0) if p.has_type("land"))
     assert not report.refused_casts
+
+
+def test_two_one_drops_are_kept_together_over_an_ability_alone():
+    """M21's seeded game: Mountain, Swamp, a Dismal Backwater, a second Swamp
+    and Heartfire Immolator ("{R}, Sacrifice …"); Walking Corpse ({1}{B}),
+    Archfiend's Vessel ({B}) and Liliana's Steward ({B}) in hand. Paying the
+    Corpse with both Swamps keeps each want payable *one at a time* — either
+    one-drop off the dual, the Immolator's {R} off the Mountain — and casts
+    one spell fewer; paying it with a Swamp and the Mountain keeps both
+    one-drops together. All three are cast."""
+    game = _table(
+        ["Mountain", "Swamp", "Heartfire Immolator", "Dismal Backwater", "Swamp"],
+        ["Walking Corpse", "Archfiend's Vessel", "Liliana's Steward"],
+    )
+    report = _main_phase(game)
+
+    assert sorted(report.log_lines) == sorted([
+        "G1 T1 AI cast Walking Corpse -> resolved",
+        "G1 T1 AI cast Archfiend's Vessel -> resolved",
+        "G1 T1 AI cast Liliana's Steward -> resolved",
+    ])
+    assert game.players[0].hand == []
+
+    # Backwards: weighing each want alone casts two of the three.
+    def alone(rest, wants):
+        return sum(times for want, times in wants if mana_payment._units_pay(rest, want))
+
+    mana_payment._choice_scores.cache_clear()
+    try:
+        with mock.patch.object(mana_payment, "_wants_left", alone):
+            again = _main_phase(_table(
+                ["Mountain", "Swamp", "Heartfire Immolator", "Dismal Backwater", "Swamp"],
+                ["Walking Corpse", "Archfiend's Vessel", "Liliana's Steward"],
+            ))
+    finally:
+        mana_payment._choice_scores.cache_clear()
+    assert len(again.log_lines) == 2, again.log_lines
 
 
 def test_the_board_measures_the_order_blind_plan():

@@ -40,6 +40,15 @@ at the step's end) and prefers the choice that taps fewer sources.
 `test_the_census_names_the_order_blind_planner` runs it backwards — the
 sparing choice switched off — and must find strands on both planners, the
 entry's two boards among them.
+
+**Two wants.** A turn is several payments, so the choice weighs the wants
+*together* first (`mana_payment._wants_left`). Scoring each want alone kept
+more of them payable one at a time and cast one spell fewer: four lands left
+as Swamp, Swamp, Mountain and a Dimir dual were paid down to Mountain and the
+dual, which pays either {B} one-drop or Heartfire Immolator's {R}, never both
+one-drops (M21's seeded game). `_two_wants_census` asks a cost and two cheap
+spells the board could pay all together: 0 of 12,110 strand (1,517 with the
+choice off, 650 scoring wants alone).
 """
 from __future__ import annotations
 
@@ -57,7 +66,7 @@ from engine.mana_payment import mana_cost_from_symbols, plan_payment
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
-from tests.helpers import stable_sample
+from tests.helpers import full_census, stable_part, stable_sample
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -251,9 +260,101 @@ def _effect_census() -> dict:
     return found
 
 
+#: One triple in this many is examined: 12,110 rows whole take two minutes a
+#: run, so even the full pass samples them (one in four).
+_EVERY_TRIPLE = 24
+_EVERY_TRIPLE_FULL = 4
+
+
+def _two_wants_census(every: "int | None" = None) -> dict:
+    """The AI planner with **two** wants beside the spell: a cost and two
+    cheap spells (mana value two or less) the board could pay all together.
+    The rest must pay both wants together — a turn is several payments, and a
+    choice that keeps each want payable one at a time can still cast one
+    spell fewer (M21's seeded game). Single-unit boards only: a part-spent
+    Sol Ring is the pair census's ``floating_only`` again."""
+    if every is None:
+        every = _EVERY_TRIPLE_FULL if full_census() else _EVERY_TRIPLE
+    costs = _real_costs()
+    found = {"examined": 0, "strands": [], "boards": set()}
+    for label, names in BOARDS.items():
+        if label == "a Sol Ring":
+            continue
+        game = _board(names)
+        player = game.players[0]
+        planner = _PaymentPlanner(game, player)
+        made, units = _what_it_makes(planner)
+        payable = sorted(
+            printed for printed in costs
+            if {s for s in _cost(printed) if s != "generic"} <= made
+            and sum(_cost(printed).values()) <= units
+            and planner.plan(_cost(printed)) is not None
+        )
+        cheap = [printed for printed in payable if sum(_cost(printed).values()) <= 2]
+        for first in payable:
+            for second, third in itertools.combinations_with_replacement(cheap, 2):
+                if stable_part("|".join((label, first, second, third)), every):
+                    continue
+                wanted = _together(_cost(second), _cost(third))
+                player.hand = []
+                if _PaymentPlanner(game, player).plan(_together(_cost(first), wanted)) is None:
+                    continue
+                player.hand = [costs[first], costs[second], costs[third]]
+                with _paying_for(costs[first]):
+                    chooser = _PaymentPlanner(game, player)
+                slots, _colours = chooser.plan(_cost(first))
+                found["examined"] += 1
+                found["boards"].add(label)
+                left = [source for source in chooser.sources if source.slot not in slots]
+                if chooser._plan_with(left, wanted) is None:
+                    found["strands"].append((
+                        label, first, second, third,
+                        [game.permanent_at(0, s).card.name for s in slots],
+                    ))
+    return found
+
+
+@contextmanager
+def _one_at_a_time():
+    """The sparing choice scoring each want alone, as it was first written."""
+    def alone(rest, wants):
+        return sum(times for want, times in wants if mana_payment._units_pay(rest, want))
+
+    mana_payment._choice_scores.cache_clear()
+    try:
+        with mock.patch.object(mana_payment, "_wants_left", alone):
+            yield
+    finally:
+        mana_payment._choice_scores.cache_clear()
+
+
 @pytest.fixture(scope="module")
 def ai_census():
     return _ai_census()
+
+
+@pytest.fixture(scope="module")
+def two_wants_census():
+    return _two_wants_census()
+
+
+def test_two_wants_the_board_could_pay_together_stay_payable_together(two_wants_census):
+    assert two_wants_census["strands"] == []
+    assert len(two_wants_census["boards"]) >= 10, two_wants_census["boards"]
+    assert two_wants_census["examined"] >= 350, two_wants_census["examined"]
+
+
+@pytest.mark.full
+def test_the_two_wants_census_names_a_choice_that_weighs_wants_alone():
+    """Backwards, twice, over the quick pass's sample: order-blind (63
+    strands), and scoring each want one at a time (31) — which is how the
+    choice was first written, and why M21's seeded game cast one spell fewer."""
+    with _order_blind():
+        blind = _two_wants_census(_EVERY_TRIPLE)
+    with _one_at_a_time():
+        alone = _two_wants_census(_EVERY_TRIPLE)
+    assert len(blind["strands"]) >= 40, len(blind["strands"])
+    assert len(alone["strands"]) >= 20, len(alone["strands"])
 
 
 @pytest.fixture(scope="module")
