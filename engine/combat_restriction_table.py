@@ -73,6 +73,8 @@ _LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 #                                   cant_be_blocked_by above)
 #   cant_block_power_n_or_greater_unless_pay  phases/declare_blockers_step
 #                                   + declare_blockers (the charge)
+#   cant_block_unless_pay           phases/declare_blockers_step
+#                                   + declare_blockers (the charge)
 #   creatures_that_attacked_last_turn_cant_attack
 #                                   phases/attack_legality.can_attack
 #   can_block_only_with_keyword     phases/block_legality
@@ -219,13 +221,48 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         # A creature holding none of the named counter owes nothing, which is
         # what "for each" means at zero and what Phyrexian Marauder cast for
         # X=0 is.
+        #
+        # "…pays {1} **for each Cleric on the battlefield**." (The ability
+        # Whipgrass Entangler grants.) The same toll multiplied by a board
+        # count instead of a counter pile — read by the grammar's one reader of
+        # a "for each" clause (``grammar.per_each_count_spec_for``), so the
+        # counted noun phrase is payload and a phrase it cannot read refuses
+        # the line. Asked after the counter tail, which the board reader would
+        # refuse anyway ("counter on it" is no board).
         re.compile(
             r"^this creature can't attack unless (?:you pay|its controller pays) "
             r"(?P<attack_mana>(?:\{[^}]+\})+)"
             r"(?: for each (?P<attack_per_counter>[+-]\d+/[+-]\d+|[a-z][a-z-]*) "
-            r"counter on it)?$"
+            r"counter on it| (?P<toll_per_each>for each .+))?$"
         ),
         "cant_attack_unless_pay",
+    ),
+    (
+        # "This creature can't **block** unless its controller pays {1} …" —
+        # CR 509.1d's cost to block, the mirror of the attack toll above, and
+        # its own kind for the reason every attack/block pair in this file is
+        # two: the two are charged at two steps. Read by
+        # ``phases/declare_blockers_step._block_mana_costs_of`` beside
+        # Hipparion's thresholded toll, so the gate, the plan and the charge
+        # read one price. The same optional board multiplier.
+        re.compile(
+            r"^this creature can't block unless (?:you pay|its controller pays) "
+            r"(?P<block_mana>(?:\{[^}]+\})+)(?: (?P<toll_per_each>for each .+))?$"
+        ),
+        "cant_block_unless_pay",
+    ),
+    (
+        # "This creature can't attack **or block** unless its controller pays
+        # {1} for each Cleric on the battlefield." (Whipgrass Entangler's
+        # grant.) The two rows above as one sentence over one price — the
+        # ``also_kinds`` union Light of Day's "can't attack or block" already
+        # is — so the price is read once and both steps charge it.
+        re.compile(
+            r"^this creature can't attack or block unless (?:you pay|its "
+            r"controller pays) (?P<attack_mana>(?:\{[^}]+\})+)"
+            r"(?: (?P<toll_per_each>for each .+))?$"
+        ),
+        ("cant_attack_unless_pay", "cant_block_unless_pay"),
     ),
     (
         # "Creatures can't attack you unless their controller pays {2} for each

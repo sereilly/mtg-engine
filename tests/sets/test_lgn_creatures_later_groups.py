@@ -340,6 +340,86 @@ def test_w1g5_caller_of_the_claw_counts_this_turn_only(set_pool):
     assert _w1g5_bears(game, 0) == []
     assert any(p.card.name == "Caller of the Claw" for p in game.controlled_by(0))
 
+
+def _w1g5_entangle(game, card, target):
+    """Alice's Whipgrass Entangler grants its toll to *target*."""
+    result = game.activate_permanent_ability(
+        0, "Whipgrass Entangler", target_permanent_ids=[target.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g5_resolve_stack(game)
+
+
+def test_w1g5_whipgrass_entangler_taxes_the_attack_per_cleric(set_pool):
+    """"{1}{W}: Until end of turn, target creature gains "This creature can't
+    attack or block unless its controller pays {1} for each Cleric on the
+    battlefield."" Two Clerics (the Entangler and Bob's own): Bob's Beast owes
+    {2} to attack — refused with one land, paid with two. A third Cleric
+    arriving before the declaration makes it {3}. Cleanup ends the grant."""
+    game, alice, bob, card = _w1g5_table(set_pool)
+    game.active_player_index = 1
+    _w1g5_put(game, 0, card("Whipgrass Entangler"))
+    _w1g5_put(game, 1, card("Daru Mender"))                # a Cleric
+    beast = _w1g5_put(game, 1, card("Krosan Tusker"))
+    land = _w1g5_put(game, 1, card("Plains"))
+    _w1g5_entangle(game, card, beast)
+    assert "for each Cleric on the battlefield" in beast.effective_card.oracle_text
+    assert game._attack_mana_costs_of(beast, 0) == [{"generic": 2}]
+
+    game.enforce_mana_costs = True
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, _why = game.declare_attackers(
+        1, [_w1g5_slot(game, 1, beast)], defending_player_index=0,
+    )
+    assert not ok and not beast.tapped and not land.tapped, "one land, {2} owed"
+
+    _w1g5_put(game, 1, card("Plains"))
+    _w1g5_put(game, 0, card("Daru Sanctifier"))             # a third Cleric
+    assert game._attack_mana_costs_of(beast, 0) == [{"generic": 3}]
+    _w1g5_put(game, 1, card("Plains"))
+    ok, why = game.declare_attackers(
+        1, [_w1g5_slot(game, 1, beast)], defending_player_index=0,
+    )
+    assert ok, why
+    assert any("paid {3} to declare attackers" in line for line in game.log)
+
+    game.resolve_cleanup_step(1)
+    assert game._attack_mana_costs_of(beast, 0) == []
+
+
+def test_w1g5_whipgrass_entangler_taxes_the_block_too(set_pool):
+    """The same grant's block half: Bob's creature owes {2} to block Alice's
+    attacker — refused with no land, accepted and charged with two
+    Plains. Its toll is the creature's alone: Bob's other creature blocks
+    free."""
+    game, alice, bob, card = _w1g5_table(set_pool)
+    _w1g5_put(game, 0, card("Whipgrass Entangler")).tapped = True
+    attacker = _w1g5_put(game, 0, card("Krosan Tusker"))
+    _w1g5_put(game, 1, card("Daru Mender")).tapped = True    # Bob's Cleric
+    taxed = _w1g5_put(game, 1, card("Wellwisher"))
+    free = _w1g5_put(game, 1, card("Birchlore Rangers"))
+    _w1g5_entangle(game, card, taxed)
+    game.enforce_mana_costs = True
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, why = game.declare_attackers(
+        0, [_w1g5_slot(game, 0, attacker)], defending_player_index=1,
+    )
+    assert ok, why
+    game.advance_combat_phase()
+    assert game.current_step == "declare_blockers"
+    assert game._block_mana_costs_of(taxed, attacker) == [{"generic": 2}]
+    assert game._block_mana_costs_of(free, attacker) == []
+    ok, _why = game.declare_blockers(
+        1, {_w1g5_slot(game, 1, taxed): _w1g5_slot(game, 0, attacker)},
+    )
+    assert not ok, "no mana for the {2}"
+    lands = [_w1g5_put(game, 1, card("Plains")) for _ in range(2)]
+    ok, why = game.declare_blockers(
+        1, {_w1g5_slot(game, 1, taxed): _w1g5_slot(game, 0, attacker)},
+    )
+    assert ok, why
+    assert all(land.tapped for land in lands)
+
 # ==== end W1G5 ======================================================
 
 

@@ -441,6 +441,19 @@ def combat_restriction_for(
         per_counter = payload.pop("attack_per_counter", None)
         if per_counter is not None:
             payload["per_counter"] = per_counter
+        # "…{1} for each Cleric on the battlefield." A board count as the
+        # multiplier, read by the grammar's one "for each" reader with the
+        # shared zone admitted beside "you" (CR 403.1; Elvish Guidance's
+        # scope). A clause it cannot read refuses the line — a toll read as
+        # unmultiplied charges less than the card says.
+        toll_per_each = payload.pop("toll_per_each", None)
+        if toll_per_each is not None:
+            from .grammar import per_each_count_spec_for
+
+            spec = per_each_count_spec_for(toll_per_each, scopes=("you", "all"))
+            if spec is None:
+                return None
+            payload["per_each"] = spec
         printed_cost = payload.pop("attack_mana", None) or payload.pop("block_mana", None)
         # "…pays {X} …, where X is the number of <counted>." (Collective
         # Restraint.) The two halves are admitted together or not at all: an
@@ -851,6 +864,46 @@ def _restore_own_name(phrase: str, card_name: str | None) -> str | None:
     if not card_name:
         return None
     return phrase.replace("named this creature", f"named {card_name}")
+
+
+def toll_mana(game, payload: dict, permanent) -> dict[str, int]:
+    """The mana a creature's own toll (CR 508.1h / 509.1d) costs it **now**.
+
+    The printed symbol run, multiplied by whichever "for each" the sentence
+    carried: the creature's own counters ("…{1} for each +1/+1 counter on
+    it", Phyrexian Marauder — ``per_counter``) or a board count ("…{1} for
+    each Cleric on the battlefield", Whipgrass Entangler's grant —
+    ``per_each``), counted for the creature's controller, whose ability the
+    toll is (CR 109.5). One reader for the attack and the block step, so the
+    two charge one price for one sentence.
+
+    A multiplied zero drops the symbol, and an empty dict is no cost at all:
+    a Marauder whose counters were all removed attacks for free, which is
+    what "for each" says at zero.
+    """
+    from .handlers._amounts import evaluate_count
+    from .pt import pt_counter_key
+
+    cost = {
+        symbol: int(amount) for symbol, amount in (payload.get("mana") or {}).items()
+    }
+    per_counter = payload.get("per_counter")
+    per_each = payload.get("per_each")
+    if per_counter:
+        held = int(permanent.metadata.get(pt_counter_key(str(per_counter)), 0))
+    elif isinstance(per_each, dict):
+        seat = game.controller_index_of(permanent)
+        if seat is None:
+            return {}
+        held = int(evaluate_count(game, game.players[seat], per_each, source=permanent))
+    else:
+        # Unmultiplied, the printed run as it stands — a zero included: "a
+        # cost of zero is not automatically paid" (War Cadence, 2004-10-04),
+        # so an X=0 toll is still a toll and this must not erase it.
+        return cost
+    return {
+        symbol: amount * held for symbol, amount in cost.items() if amount * held
+    }
 
 
 #: A restriction *granted* for the turn rather than printed on a permanent
