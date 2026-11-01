@@ -985,9 +985,11 @@ def test_liege_of_the_hollows_gives_each_seat_a_squirrel_per_mana_it_paid(set_po
 
 
 def test_liege_of_the_hollows_makes_nothing_for_a_seat_that_pays_nothing(set_pool):
-    """A seat nobody asks pays nothing — the printed "may", and the only answer
-    a default can take honestly. The record is a zero for every seat rather
-    than a missing key, so no player reads another's answer."""
+    """A seat nobody asks pays what a Squirrel per mana is worth — everything
+    its board can (LGN W2G4, ``ai_prompts.choose_amount_paid``; this read "pays
+    nothing" until then) — and a seat with nothing to pay with pays nothing.
+    The record is a zero for that seat rather than a missing key, so it does
+    not read the other's four."""
     wth, lea = set_pool("WTH"), set_pool("LEA")
     game = _w1g5c_game()
     game.active_player_index = 0
@@ -1004,10 +1006,14 @@ def test_liege_of_the_hollows_makes_nothing_for_a_seat_that_pays_nothing(set_poo
     game.auto_resolve_pending_choices()
 
     assert not any(
-        p.card.name == "Squirrel Token"
-        for p in game.players[0].battlefield + game.players[1].battlefield
+        p.card.name == "Squirrel Token" for p in game.players[1].battlefield
     ), game.log
-    assert all(not p.tapped for p in game.players[0].battlefield), game.log
+    assert sum(
+        p.card.name == "Squirrel Token" for p in game.players[0].battlefield
+    ) == 4, game.log
+    assert all(
+        p.tapped for p in game.players[0].battlefield if p.card.name == "Forest"
+    ), game.log
 
 
 # --- W2G1: costs charged and permissions granted ---

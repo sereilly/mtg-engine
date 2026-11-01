@@ -164,9 +164,12 @@ def test_a_pump_is_held_once_the_fight_is_over(pool):
 
 def test_a_pump_wins_the_fight_it_is_cast_before(pool):
     """A 2/2 into a 0/4: with +3/+3 the attack is made and the Wall that
-    blocks it dies."""
+    blocks it dies. The defender is at five, where the 5/5 unblocked would
+    kill it: a block the Wall loses is made only where the damage it stops
+    is worth more than the Wall (LGN W2G4), and at twenty it takes the five."""
     game = _table(
         pool, ["Giant Growth"], mine=[BEAR], theirs=[_mk_creature_card("Their Wall", 0, 4)],
+        life=(20, 5),
     )
     action = choose_cast_action(game, ME)
     assert action is not None
@@ -294,9 +297,11 @@ def test_hatred_pays_the_life_the_fight_needs(pool):
     """A 2/2 into a 0/4 Wall: two life is a dead Wall. The X was the largest
     the life reserve allowed — ten life for a Wall worth less than that —
     and measured as the loss it was, so Hatred was held; each size is now
-    weighed (``ai_casts._cast_candidate_sized``)."""
+    weighed (``ai_casts._cast_candidate_sized``). The defender is at four,
+    where a 4/2 unblocked kills it — so the Wall blocks it and dies (at
+    twenty it would not throw itself in front, LGN W2G4)."""
     wall = _mk_creature_card("Their Wall", 0, 4, "Defender")
-    game = _table(pool, ["Hatred"], mine=[BEAR], theirs=[wall])
+    game = _table(pool, ["Hatred"], mine=[BEAR], theirs=[wall], life=(20, 4))
     action = choose_cast_action(game, ME)
     assert action is not None and action.card_name == "Hatred"
     assert action.x_value is not None and action.x_value < 10
@@ -313,9 +318,12 @@ def test_a_shield_for_any_target_goes_on_the_creature_about_to_trade(pool):
     be dealt to any target this turn", with a 2/2 about to trade with a 2/2:
     on the attacker it is the trade won. Its target was chosen with no
     combat in the reading — the caster's seat, where it is nothing — and
-    the cast was then held, or made on the caster for three life."""
+    the cast was then held, or made on the caster for three life. The
+    defender is at two, where the Bear unblocked kills it, so the Rival
+    blocks the shielded Bear and loses (at twenty it would take the two
+    rather than block a creature it cannot kill, LGN W2G4)."""
     rival = _mk_creature_card("Their Rival", 2, 2)
-    game = _table(pool, ["Healing Salve"], mine=[BEAR], theirs=[rival])
+    game = _table(pool, ["Healing Salve"], mine=[BEAR], theirs=[rival], life=(20, 2))
     action = choose_cast_action(game, ME)
     assert action is not None and action.mode_index == 1
     assert game.permanent_by_id(action.target_permanent_ids[0]).card is BEAR

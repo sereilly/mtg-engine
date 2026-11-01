@@ -794,6 +794,7 @@ def _activation_candidate(
     # source exists to be given up (`_exists_to_be_given_up`); and an effect
     # that comes back at its activator (`ai_valuation.reaches_both_sides` —
     # Shepherd of Rot drained both players from any position).
+    # (Riptide Mangler's rewrite was re-activated at 1 -> 1: `_OWN_REWRITE_KINDS`.)
     if (
         ability_index is not None
         or _sets_only_what_its_source_is(ability.instruction)
@@ -818,6 +819,11 @@ def _activation_candidate(
 _OWN_TYPE_SET_KINDS = frozenset({
     "set_self_creature_type", "set_enchanted_creature_type",
 })
+
+#: Every rewrite of what its source **is** that is rehearsed, not scored: the
+#: type sets above, and a base P/T read off a target (Riptide Mangler,
+#: Sentinel, Sworn Defender) — worth nothing when the two powers are equal.
+_OWN_REWRITE_KINDS = _OWN_TYPE_SET_KINDS | {"set_source_base_pt_from_target"}
 
 
 def _gives_up_its_source(cost) -> bool:
@@ -853,15 +859,15 @@ def _exists_to_be_given_up(permanent) -> bool:
 
 
 def _sets_only_what_its_source_is(instruction) -> bool:
-    """Whether *instruction* is a type set on its source or host and nothing
-    else (:data:`_OWN_TYPE_SET_KINDS`, behind any ``choose_creature_type``)."""
+    """Whether *instruction* rewrites what its source or host is and nothing
+    else (:data:`_OWN_REWRITE_KINDS`, behind any ``choose_creature_type``)."""
     steps = (
         tuple(instruction.payload.get("steps") or ())
         if instruction.kind == "sequence" else (instruction,)
     )
     kinds = {step.kind for step in steps}
-    return bool(kinds & _OWN_TYPE_SET_KINDS) and kinds <= (
-        _OWN_TYPE_SET_KINDS | {"choose_creature_type"}
+    return bool(kinds & _OWN_REWRITE_KINDS) and kinds <= (
+        _OWN_REWRITE_KINDS | {"choose_creature_type"}
     )
 
 

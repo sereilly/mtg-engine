@@ -2240,13 +2240,12 @@ def test_w1g7_hollow_specter_x_past_the_hand_shows_it_all(set_pool):
 
 def test_w1g7_hollow_specter_x_zero_discards_nothing(set_pool):
     """The ruling (2004-10-04): "X can be zero, but then that player discards
-    nothing." A seat nobody asks pays nothing — the stated default of the
-    any-amount payment — and Bob keeps his hand; so does an interactive Alice
-    who names 0."""
+    nothing." A seat nobody asks pays nothing when the board pays nothing —
+    since LGN W2G4 it pays what X buys (``ai_prompts.choose_amount_paid``; its
+    tests are ``tests/ai/test_lgn_w2g4_payments.py``) — and Bob keeps his hand;
+    so does an interactive Alice who names 0."""
     game = _w1g7_table(set_pool, hands={1: _W1G7_BOB_HAND})
     _w1g7_put(game, set_pool, 0, "Hollow Specter")
-    for _ in range(3):
-        _w1g7_put(game, set_pool, 0, "Swamp")
     _w1g7_declare_attack(game, 0)
     _w1g7_finish_combat(game)
     assert game.players[1].life == 18

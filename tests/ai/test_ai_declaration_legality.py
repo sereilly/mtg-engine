@@ -401,6 +401,11 @@ def test_the_ai_keeps_its_best_blocks_under_a_cap(set_pool):
     be last in battlefield order.
     """
     game = _w1g1_board(set_pool("LEG")["Caverns of Despair"], 3, 2)
+    # At three life, so that all three blocks are wanted: the two 3/3s would
+    # kill, so the Runt and the Middling chump them (W2G4: at twenty life a
+    # losing block is not made, and only the Fatty would block — a board on
+    # which the cap never bites).
+    game.players[1].life = 3
     proposed = choose_combat_blockers(game, 1)
     names = {game.players[1].battlefield[i].card.name for i in proposed}
 

@@ -1053,3 +1053,111 @@ def order_hand_pick(
         sign = 1 if superlative.get("extreme") == "least" else -1
         admitted.sort(key=lambda slot: (sign * int(player.hand[slot].cmc or 0), slot))
     return admitted + [slot for slot in order if slot not in admitted]
+
+
+def choose_amount_paid(game: Game, choice) -> int:
+    """How much mana a seat nobody asks pays into "you may pay {X}" (Hollow
+    Specter, CR 107.3f) or "may pay any amount of mana" (Liege of the
+    Hollows) — the ``pay_any_amount`` prompt *choice*.
+
+    **The most the board can pay, up to what the amount can buy**
+    (:func:`_amount_worth_paying`), read off the sentence that spends the
+    record the payment writes (``MANA_PAID_BY_SEAT``): "that player reveals X
+    cards from their hand and you choose one of them" buys one more card to
+    choose from per mana up to the size of that hand — public information
+    (CR 402.3), whatever its cards are — and "creates a number of … tokens
+    equal to the amount of mana they paid" buys a token per mana. A sentence
+    this does not read buys nothing it can price, so it pays nothing, the
+    prompt's stated default. Always 0 where the board pays nothing.
+
+    The prompt is answered part-way through the resolution that armed it,
+    where no rehearsal can be run (``ai_rehearsal.mid_resolution``), so the
+    answer is read, not measured. Mana spent here is not kept for the rest
+    of the turn; a seat holding a spell for its second main phase is the
+    case this does not weigh.
+    """
+    from .mana_payment import generic_cost, plan_payment
+
+    worth = _amount_worth_paying(game, choice)
+    if worth == 0:
+        return 0
+    seat = choice.player_index
+    player = game.players[seat]
+    lands = game.payment_lands(seat)
+    # Walked up, as the browser's renderer of this prompt walks it: the
+    # resolver accepts exactly what `plan_payment` can pay.
+    limit = sum(max(0, int(v)) for v in player.mana_pool.values()) + 2 * len(lands)
+    if worth is not None:
+        limit = min(limit, worth)
+    affordable = 0
+    for amount in range(1, limit + 1):
+        if plan_payment(
+            player.mana_pool, lands, generic_cost(amount),
+            produces=game._land_payment_colors, payer=player,
+        ) is None:
+            break
+        affordable = amount
+    return affordable
+
+
+def _amount_worth_paying(game: Game, choice) -> "int | None":
+    """What the amount paid into *choice* can buy at most: a number, None
+    for no ceiling but the board's, or 0 for nothing this policy can price.
+
+    Read off the steps of the resolving object that take their number from
+    the payment's record: an X (``x_from_count``'s ``own_seat_record``,
+    Hollow Specter) or a count (``count``'s ``seat_record``, Liege of the
+    Hollows' Squirrels)."""
+    from .ai_weighed_cast import _effect_steps
+    from .oracle_types import MANA_PAID_BY_SEAT
+
+    # The prompt's own stamp, or — for a seat nobody asks, whose default is
+    # taken as the prompt is armed, before anything is stamped on it — the
+    # object resolving now (`Game.resolving_items`, pushed for every
+    # resolution; `resolving_stack_item` only for one that may pause).
+    item = choice.data.get("_stack_item") or game.resolving_stack_item or (
+        game.resolving_items[-1] if getattr(game, "resolving_items", None) else None
+    )
+    instruction = getattr(item, "ability_instruction", None)
+    if instruction is None:
+        return 0
+    seat = choice.player_index
+    worth: "int | None" = 0
+    for step in _effect_steps(instruction):
+        payload = step.payload or {}
+        count = payload.get("count")
+        records = {
+            (payload.get("x_from_count") or {}).get("own_seat_record"),
+            count.get("seat_record") if isinstance(count, dict) else None,
+        }
+        if MANA_PAID_BY_SEAT not in records:
+            continue
+        if step.kind == "reveal_hand_and_choose" and payload.get("revealer_shows") == "x":
+            # "…that player reveals X cards from their hand and you choose one
+            # of them. That player discards that card." Worth a card per mana
+            # up to the size of an opponent's hand; nothing aimed at the payer.
+            victim = _revealing_seat(item, payload)
+            if (
+                victim is None or victim == seat
+                or payload.get("fate") != "discard"
+            ):
+                continue
+            return len(game.players[victim].hand)
+        if step.kind == "create_token" and payload.get("recipient_players") in (
+            None, "each_player",
+        ):
+            # A token per mana, made for the seat that paid it ("each player
+            # creates a number of … tokens equal to the amount of mana they
+            # paid"): no ceiling but the board's.
+            worth = None
+    return worth
+
+
+def _revealing_seat(item, payload: dict) -> "int | None":
+    """The seat a ``reveal_hand_and_choose`` step's "that player" names on
+    *item*: the player the triggering damage was dealt to, frozen on the
+    trigger (``trigger_context``), as the handler reads it."""
+    if payload.get("victim") != "damaged_player":
+        return None
+    seat = (getattr(item, "trigger_context", None) or {}).get("defending_player_index")
+    return seat if isinstance(seat, int) else None
