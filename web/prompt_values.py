@@ -18,6 +18,7 @@ from engine.grammar.phrases import BASIC_LAND_WORDS
 from engine.grammar.vocabulary import CREATURE_TYPES, LAND_TYPES
 from engine.mana_payment import mana_cost_label
 from engine.pending_choices import public_data
+from engine.provoke import PROVOKE_REMINDER, is_provoke
 
 from .prompt_registry import PromptContext, prompt_renderer
 
@@ -218,6 +219,12 @@ def offer_wording(data: dict) -> dict:
     A reading of printed text for a label, never a rule: nothing dispatches on
     it, and the answer is the same index whatever the words say.
     """
+    # A keyword that *is* a "may" trigger (provoke, CR 702.39a) prints no
+    # sentence once its reminder text is dropped — and a granted one (Hunter
+    # Sliver) never printed one on the creature at all — so the offer is the
+    # ability the keyword defines, not the card's whole text.
+    if is_provoke(getattr(data.get("_context"), "ability_text", "") or ""):
+        return {"card_text": f"Provoke — {PROVOKE_REMINDER}"}
     card = _offer_source_card(data)
     text = getattr(card, "oracle_text", "") or ""
     if not text:
@@ -395,6 +402,10 @@ def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
         # The printed "may": paying nothing is the answer that changes least,
         # and it is what a seat nobody asks takes.
         "default": 0,
+        # "You may pay {X}" (Hollow Specter, CR 107.3f) rather than "each
+        # player may pay any amount of mana" (Liege of the Hollows): one
+        # answer, two printed sentences, and the panel says the one printed.
+        **({"pays_x": True} if choice.data.get("pays_x") else {}),
     }
 
 

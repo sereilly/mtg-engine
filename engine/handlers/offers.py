@@ -781,14 +781,22 @@ def each_player_pays_any_mana(
             key=lambda i: ((i - active) % count, i),
         )
     context.results.setdefault(MANA_PAID_BY_SEAT, {})
+    # "You may pay {X}" is an X the controller chooses as they pay it
+    # (CR 107.3f), not "any amount of mana" — the same answer, said the way
+    # the card prints it, on the prompt and in the log.
+    pays_x = instruction.payload.get("actor") == "you"
     for seat in seats:
         context.results[MANA_PAID_BY_SEAT][seat] = 0
         game.arm_pending_choice(
             "pay_any_amount", seat,
             card_name=context.card.name if context.card is not None else "",
             _results=context.results,
+            **({"pays_x": True} if pays_x else {}),
         )
-        game.log.append(f"{game.players[seat].name} may pay any amount of mana")
+        game.log.append(
+            f"{game.players[seat].name} may pay "
+            + ("{X}" if pays_x else "any amount of mana")
+        )
     return True, "resolved"
 
 

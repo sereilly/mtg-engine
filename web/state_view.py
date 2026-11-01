@@ -68,7 +68,7 @@ from engine.targeting import (derive_activation_spec, derive_cast_spec,
                               spec_roles, usable_activated_abilities)
 from engine.untap_restrictions import permanent_in_limited_scope
 
-from .prompts import PromptContext, blocking_prompt, render_prompts
+from .prompts import PromptContext, blocking_prompt, prompt_owed_by, render_prompts
 from .session_store import Session
 
 from .presence import seat_is_connected
@@ -1097,6 +1097,21 @@ def build_card_target_spec(
     }
 
 
+def _prompt_permanent_summary(viewer_seat: int | None, perm, game) -> dict:
+    """*perm* described for a prompt that lists permanents
+    (``PromptContext.describe_permanent``), as the battlefield payload
+    describes it to this viewer: through the layers, and — for the one seat
+    CR 708.5 lets look — with the card a face-down permanent hides
+    (``hidden_card``). Without it two face-down permanents in a sacrifice list
+    were "Face-down creature" twice to the player who knows which is which."""
+    summary = _serialize_permanent_summary(perm, game)
+    if viewer_seat is not None and game.controller_index_of(perm) == viewer_seat:
+        hidden = hidden_card_view(perm)
+        if hidden is not None:
+            summary["hidden_card"] = hidden
+    return summary
+
+
 def _with_hidden_card_for(viewer_seat: int | None, item, payload: dict) -> dict:
     """*payload* (one stack object, as every viewer is sent it) with what a
     face-down spell is added for the one seat that may look at it — its
@@ -1210,8 +1225,8 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             viewer_seat=viewer_seat,
             serialize_card=_serialize_card_summary,
             seat_type=lambda seat: _seat_type(session, seat),
-            serialize_permanent=lambda perm: _serialize_permanent_summary(
-                perm, session.game
+            serialize_permanent=lambda perm: _prompt_permanent_summary(
+                viewer_seat, perm, session.game
             ),
         )
     )
@@ -1369,6 +1384,11 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "waiting_on_prompt": viewer_seat is not None and blocking_prompt(
             session.game, viewer_seat, "pass_priority", frozenset(),
         ) is not None,
+        # …and **who** the game is waiting on, which ``waiting_on_prompt``
+        # (this viewer's pass, refused or not) cannot say: the status line
+        # names the seat that owes the open decision and what it is doing,
+        # rather than "<holder> has priority." (``prompts.prompt_owed_by``).
+        "prompt_owed_by": prompt_owed_by(session.game, viewer_seat),
         "rematch": _build_rematch_info(session, viewer_seat),
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,

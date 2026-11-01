@@ -136,6 +136,12 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     # ``role``. Absent on every prompt that is not a roles announcement.
     if choice.data.get("roles"):
         payload["roles"] = [dict(role) for role in choice.data["roles"]]
+        # The printed line, so the dialog can say what each role is ("target
+        # creature **you control** and target creature **an opponent
+        # controls**"): a role carries its noun (``kind``) and nothing of the
+        # narrowing the candidates were enumerated under.
+        if getattr(trigger, "ability_text", None):
+            payload["ability_text"] = trigger.ability_text
     # "Exile up to two target cards **from a single graveyard**" (Gravegouger):
     # several ``graveyard`` candidates, all of one answer in one pile. The
     # client keeps a selection inside the pile its first card came from and
