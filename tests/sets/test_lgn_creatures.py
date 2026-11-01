@@ -442,4 +442,92 @@ def test_w1g3_shifting_sliver_leaves_with_its_source(set_pool):
     assert ok, why
 
 
+# --- Quick Sliver: any player's Sliver spells at instant speed -------------
+
+
+def test_w1g3_quick_sliver_lets_any_player_cast_sliver_spells_at_instant_speed(set_pool):
+    """"Any player may cast Sliver spells as though they had flash." Asked of
+    ``casts_at_instant_speed``, the one question the web's two timing gates
+    and the AI's ask. On A's turn, with A's Quick Sliver out, B may cast a
+    Sliver (and so may A, off its own main phase); a Grizzly Bears still waits
+    for its owner's main phase; and the permission leaves with the Sliver."""
+    from engine.cast_timing import casts_at_instant_speed
+
+    game, (a, b) = _w1g3_board(set_pool, ["Quick Sliver"], ["Grizzly Bears"])
+    plated = _w1g3_card(set_pool, "Plated Sliver")
+    bears = _w1g3_card(set_pool, "Grizzly Bears")
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert casts_at_instant_speed(plated, game, 1)
+    assert casts_at_instant_speed(plated, game, 0)
+    assert not casts_at_instant_speed(bears, game, 1)
+    # Quick Sliver's own printed Flash, which needs nobody's permission.
+    assert casts_at_instant_speed(_w1g3_card(set_pool, "Quick Sliver"))
+    game.remove_from_battlefield(a.battlefield[0])
+    assert not casts_at_instant_speed(plated, game, 1)
+
+
+def test_w1g3_quick_sliver_reads_the_spells_creature_type(set_pool):
+    """A Sliver spell is a spell with the Sliver creature type (CR 205.3m):
+    Mistform Sliver (an Illusion Sliver) is one; Mistform Seaswift — an
+    Illusion with no Sliver in its line — is not."""
+    from engine.cast_timing import casts_at_instant_speed
+
+    game, (a, b) = _w1g3_board(set_pool, ["Quick Sliver"])
+    game.active_player_index = 1
+    assert casts_at_instant_speed(_w1g3_card(set_pool, "Mistform Sliver"), game, 0)
+    assert not casts_at_instant_speed(_w1g3_card(set_pool, "Mistform Seaswift"), game, 0)
+
+
+# --- Root Sliver: Sliver spells can't be countered --------------------------
+
+
+def _w1g3_counter(set_pool, victim, counter, *, root_on=1):
+    """A casts *victim*; B answers with *counter* aimed at it; drain. Root
+    Sliver sits on seat *root_on*'s battlefield (None: nowhere)."""
+    mine = ["Root Sliver"] if root_on == 0 else []
+    theirs = ["Root Sliver"] if root_on == 1 else []
+    game, (a, b) = _w1g3_board(set_pool, mine, theirs)
+    a.hand.append(_w1g3_card(set_pool, victim))
+    b.hand.append(_w1g3_card(set_pool, counter))
+    cast = game.queue_from_hand(0, victim)
+    assert cast.supported, cast.details
+    answer = game.queue_from_hand(1, counter, target_stack_index=0)
+    assert answer.supported, answer.details
+    _w1g3_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g3_resolve_stack(game)
+    return game, a, b
+
+
+@_w1g3_pytest.mark.parametrize("root_on", [0, 1])
+def test_w1g3_root_sliver_makes_every_sliver_spell_uncounterable(set_pool, root_on):
+    """CR 101.2: "can't" beats "can". Whoever controls Root Sliver, A's Plated
+    Sliver resolves through B's Counterspell — the static names Sliver spells,
+    not "Sliver spells you control"."""
+    game, a, b = _w1g3_counter(set_pool, "Plated Sliver", "Counterspell", root_on=root_on)
+    assert "Plated Sliver" in [p.card.name for p in a.battlefield]
+    assert "Counterspell: Plated Sliver can't be countered (Root Sliver)" in game.log
+
+
+def test_w1g3_root_sliver_leaves_a_non_sliver_counterable(set_pool):
+    game, a, b = _w1g3_counter(set_pool, "Grizzly Bears", "Counterspell")
+    assert [c.name for c in a.graveyard] == ["Grizzly Bears"]
+    assert not a.battlefield
+
+
+def test_w1g3_root_sliver_spell_itself_cant_be_countered(set_pool):
+    """"This spell can't be countered." (CR 113.6g) — with no other Root
+    Sliver out."""
+    game, a, b = _w1g3_counter(set_pool, "Root Sliver", "Counterspell", root_on=None)
+    assert [p.card.name for p in a.battlefield] == ["Root Sliver"]
+
+
+def test_w1g3_root_sliver_asks_before_an_unless_payment(set_pool):
+    """Power Sink's "unless its controller pays X" never asks A to pay for a
+    Sliver nothing can counter — the immunity is asked before the toll."""
+    game, a, b = _w1g3_counter(set_pool, "Plated Sliver", "Power Sink")
+    assert "Plated Sliver" in [p.card.name for p in a.battlefield]
+    assert not any("must pay" in line for line in game.log)
+
+
 # ==== end W1G3 ======================================================

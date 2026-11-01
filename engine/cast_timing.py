@@ -275,6 +275,22 @@ _FLASHABLE_CLASSES: frozenset[str] = frozenset(
 )
 
 
+def _flashable_class(word: str) -> bool:
+    """Whether a printed spell class is one :meth:`StaticFlashPermission.covers`
+    can test: a card type above, or a **creature type** — "Any player may cast
+    **Sliver** spells as though they had flash" (Quick Sliver).
+
+    A creature type is asked of the creature-type catalog (``data/vocabulary``,
+    never a list spelled here) and answered by the one reader of a card's
+    creature types off the battlefield, ``object_creature_types``.
+    """
+    if word in _FLASHABLE_CLASSES:
+        return True
+    from .grammar.vocabulary import CREATURE_TYPES
+
+    return word in CREATURE_TYPES
+
+
 @dataclass(frozen=True)
 class StaticFlashPermission:
     """What one printed static timing permission covers.
@@ -291,11 +307,26 @@ class StaticFlashPermission:
     enchant_noun: str | None = None
     everyone: bool = False
 
-    def covers(self, card) -> bool:
-        """Whether *card* is one of the spells this permission names."""
+    def covers(self, card, game: "Game | None" = None, seat: int | None = None) -> bool:
+        """Whether *card* is one of the spells this permission names.
+
+        A creature-type class ("Sliver spells", Quick Sliver) is a spell with
+        that creature type (CR 205.3m), read through
+        ``object_creature_types.card_creature_types`` — the card in the
+        caster's hand, which has no layers (CR 613.1), told whose it is so an
+        effect retyping a seat's cards off the battlefield (Conspiracy) is
+        honoured. *game* and *seat* are optional for that reader's reason: a
+        caller with neither gets the printed types.
+        """
+        from .object_creature_types import card_creature_types
         from .search_filters import card_has_type
 
-        if not any(card_has_type(card, klass) for klass in self.card_classes):
+        def _is(klass: str) -> bool:
+            if klass in _FLASHABLE_CLASSES:
+                return card_has_type(card, klass)
+            return klass in card_creature_types(game, card, seat)
+
+        if not any(_is(klass) for klass in self.card_classes):
             return False
         if self.enchant_noun is None:
             return True
@@ -319,7 +350,7 @@ def static_flash_permission(line: str) -> StaticFlashPermission | None:
     # otherwise grant flash to the half this engine can test and silently drop
     # the other, which is a permission narrower than the card prints and
     # invisible from outside a game.
-    if any(klass not in _FLASHABLE_CLASSES for klass in classes):
+    if any(not _flashable_class(klass) for klass in classes):
         return None
     return StaticFlashPermission(
         card_classes=classes,
@@ -361,7 +392,7 @@ def board_flash_timing(game: "Game", seat: int, card) -> bool:
         for permission in static_flash_permissions_on(permanent):
             if not permission.everyone and controller_index != seat:
                 continue
-            if permission.covers(card):
+            if permission.covers(card, game, seat):
                 return True
     return False
 
