@@ -224,7 +224,18 @@ def stable_sample(label: str, every: int) -> bool:
     """
     if every <= 1 or full_census():
         return True
-    return stable_digest(label) % every == 0
+    return stable_part(label, every) == 0
+
+
+def stable_part(label: str, parts: int) -> int:
+    """Which of *parts* digest classes *label* is in; :func:`stable_sample`
+    keeps class 0.
+
+    For a census too long to be one test even in the full pass: it runs each
+    class as a test of its own, so every row is still examined and xdist's
+    workers share them (``tests/regressions/test_ody_w2g2_zone_cast_census.py``).
+    """
+    return stable_digest(label) % parts
 
 
 def _get(all_cards, name: str):

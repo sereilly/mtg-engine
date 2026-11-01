@@ -161,10 +161,12 @@ def test_every_positional_sampler_left_is_counted():
         "positional samplers moved; a new one belongs on stable_sample, and a "
         "converted one comes off the table"
     )
-    # …and the digest is in use where the round put it.
+    # …and the digest is in use where the round put it: sampling, or — the
+    # zone-cast census in the full pass — partitioning by it.
     users = [
         name for name, source in _modules().items()
-        if "stable_sample(" in source and name != "helpers.py"
+        if ("stable_sample(" in source or "stable_part(" in source)
+        and name != "helpers.py"
     ]
     assert {
         "regressions/test_ody_w2g2_zone_cast_census.py",

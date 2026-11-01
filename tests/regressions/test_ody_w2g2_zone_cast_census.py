@@ -49,11 +49,13 @@ permission waives it); accepted; and the card gone from the pile it was cast
 from. Each card takes ``graveyard_open`` and one of the other four in
 rotation.
 
-The twin sweep runs over **one spell in N** in the suite (``STRIDE``) — a
+The twin sweep runs over **one spell in N** in a test (``STRIDE``) — a
 proposal on a populated board is the engine's whole target enumeration, and
 the pool is five thousand cards — chosen by a digest of the spell's name
-(``tests.helpers.stable_sample``), and over the whole pool when run as a
-module with ``--stride 1`` or under ``MTG_FULL_CENSUS=1``. It took every Nth
+(``tests.helpers.stable_part``). Naming this file runs the first share; under
+``MTG_FULL_CENSUS=1`` (the full pass) every share runs, each as its own test,
+so the whole pool is swept and the workers share it; run as a module with
+``--stride 1`` it sweeps the pool in one go. It took every Nth
 spell by position until round ``kg``: this pool holds the measured set, so
 each card a merge supported shifted every spell behind it, and the sample
 moved at every merge. The whole pool, at the round's end: 9,990 rows over
@@ -103,7 +105,7 @@ from engine.mana_payment import mana_cost_from_symbols
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import (
-    _mk_card, _nosick, resolve_stack, stable_digest, stable_sample,
+    _mk_card, _nosick, full_census, resolve_stack, stable_digest, stable_part,
 )
 
 ME, OPP = 0, 1
@@ -113,9 +115,12 @@ BY_NAME: dict = {}
 for _card in POOL:
     BY_NAME.setdefault(_card.name, _card)
 
-#: The twin sweep's sample in the suite: one supported spell in STRIDE, by a
-#: digest of its name.
+#: The twin sweep's share of the pool in one test: one supported spell in
+#: STRIDE, by a digest of its name (``tests.helpers.stable_part``).
 STRIDE = 10
+#: Which shares run: the first when this file is named, every one — each its
+#: own test, which the full pass's workers share — under the full census.
+TWIN_PARTS = tuple(range(STRIDE)) if full_census() else (0,)
 
 #: Twin rows that differ for a reason the card prints — measured over the whole
 #: pool and left (the module docstring has each one's story). A finding on any
@@ -442,15 +447,17 @@ def _x_aside(said: tuple, cost) -> tuple:
 FLOATING = 8
 
 
-def twin_census(stride: int = STRIDE) -> list[dict]:
+def twin_census(stride: int = STRIDE, part: int = 0) -> list[dict]:
+    """The rows of the spells in share *part* of *stride* (all of them at a
+    stride of 1)."""
     rows = []
     for held in POOL:
         for spell in castable_faces(held):
-            # Sampled by the spell's name, not its place in the pool (see
+            # Shared out by the spell's name, not its place in the pool (see
             # ``tests.helpers.stable_sample``): this pool holds the measured
             # set, so every card a round supported shifted every spell behind
             # it one place, and the sample moved at every merge.
-            if not stable_sample(spell.name, stride):
+            if stable_part(spell.name, stride) != part:
                 continue
             if not compile_card_oracle(spell).supported:
                 continue
@@ -532,19 +539,17 @@ def twin_census(stride: int = STRIDE) -> list[dict]:
 
 # --- the tests ----------------------------------------------------------------
 
-@pytest.fixture(scope="module")
-def flashback_rows() -> list:
-    return flashback_census()
-
-
-@pytest.fixture(scope="module")
-def twin_rows() -> list:
-    return twin_census()
-
-
 @pytest.mark.full
-def test_the_flashback_sweep_examined_every_flashback_card(flashback_rows):
-    """The floor: Odyssey prints 28, and a sweep that reaches none passes."""
+def test_a_flashback_card_in_the_graveyard_is_cast_from_it():
+    """Proposed from the graveyard wherever it is proposed from hand, accepted,
+    paid for exactly — at the printed flashback cost, under Catalyst Stone on
+    either side and under a tax — and exiled.
+
+    The floor first: Odyssey prints 28, and a sweep that reaches none passes.
+    One test, as the twin sweep's tenths are, so no two workers run the sweep
+    (~60 s at ``-n 11``); as a fixture shared by two tests it ran twice when
+    xdist put them on different workers."""
+    flashback_rows = flashback_census()
     cards = {row["card"] for row in flashback_rows}
     assert len(cards) >= 28
     assert {"Firebolt", "Call of the Herd", "Roar of the Wurm", "Moment's Peace"} <= cards
@@ -559,12 +564,6 @@ def test_the_flashback_sweep_examined_every_flashback_card(flashback_rows):
     # (an added combat its creatures, tapped by the first, cannot use).
     assert sum(1 for row in flashback_rows if row["from_hand"]) >= 23 * len(FLASHBACK_BOARDS)
 
-
-@pytest.mark.full
-def test_a_flashback_card_in_the_graveyard_is_cast_from_it(flashback_rows):
-    """Proposed from the graveyard wherever it is proposed from hand, accepted,
-    paid for exactly — at the printed flashback cost, under Catalyst Stone on
-    either side and under a tax — and exiled."""
     findings = [
         f"{row['card']} [{row['board']}]: {row['finding']}"
         for row in flashback_rows if row["finding"]
@@ -578,24 +577,27 @@ def test_a_flashback_card_in_the_graveyard_is_cast_from_it(flashback_rows):
 
 
 @pytest.mark.full
-def test_the_twin_sweep_examined_the_pool(twin_rows):
-    """The floor, per kind: each is a different road through the cast path.
+@pytest.mark.parametrize("part", TWIN_PARTS, ids=lambda part: f"tenth-{part}")
+def test_what_a_seat_casts_from_its_hand_it_casts_from_an_opened_zone(part):
+    """One tenth of the twin sweep (``TWIN_PARTS``): the floor, then the claim.
 
-    Re-measured once the sample was taken by digest (round ``kg``): 1,059
-    rows over 534 spells — graveyard_open 534, exile_lent 157, exile_free 126,
-    library_top_free 122, opponents_exile 120 — and every one proposed but five
-    (four free casts, one library top). A growing pool only adds to it."""
+    One test per tenth, the floor and the findings together, so no two
+    workers sweep the same tenth. As one fixture over the whole pool this was
+    the full pass's longest item (653 s at ``-n 12``); a tenth reads ~40-70 s.
+
+    The floor is per kind, since each is a different road through the cast
+    path. Measured over all ten tenths on 2026-10-31 (10,575 rows over 5,317
+    spells): graveyard_open 491 to 563 a tenth, each other kind 112 to 161,
+    and each kind proposed at least 109 times. A growing pool only adds to it."""
+    twin_rows = twin_census(part=part)
     by_kind = Counter(row["kind"] for row in twin_rows)
-    assert by_kind["graveyard_open"] >= 480, by_kind
+    assert by_kind["graveyard_open"] >= 440, by_kind
     for kind in KINDS[1:]:
-        assert by_kind[kind] >= 105, (kind, by_kind)
+        assert by_kind[kind] >= 100, (kind, by_kind)
     proposed = Counter(row["kind"] for row in twin_rows if row["proposed"])
     for kind in KINDS:
-        assert proposed[kind] >= 100, (kind, proposed)
+        assert proposed[kind] >= 95, (kind, proposed)
 
-
-@pytest.mark.full
-def test_what_a_seat_casts_from_its_hand_it_casts_from_an_opened_zone(twin_rows):
     named = sorted(
         f"{row['card']} [{row['kind']}]: {row['finding']}"
         for row in twin_rows
