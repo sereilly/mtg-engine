@@ -227,6 +227,7 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         target_role_refs=role_refs,
         x_value=x_value,
         new_color=req.mana_color,
+        mana_combination=req.mana_combination,
         target_stack_index=engine_stack_index,
         mode_index=req.mode_index,
         mode_choices=mode_choices,

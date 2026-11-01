@@ -43,6 +43,7 @@ from ...counter_conditions import spend_next_spell_promises
 from ...divided_damage import divided_entry, stamped_entry
 from ...face_down import announced_morph_cost, face_down_card
 from ...faces import choose_a_face_refusal, spell_named
+from ...mana_combination import MANA_COMBINATION, split_refusal
 from ...classifier import classify_card
 from ...cost_modifiers import (CostReduction, buyback_cost_reduction,
                                cost_reduction_for_cast, reduce_cost,
@@ -86,6 +87,9 @@ class SpellCastingMixin:
         target_role_refs: list[dict] | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
+        # "Add X mana in any combination of {B} and/or {R}" (Burnt Offering):
+        # the producer's split, ``{symbol: count}`` (``engine/mana_combination.py``).
+        mana_combination: dict | None = None,
         target_stack_index: int | None = None,
         mode_index: int | None = None,
         # "Choose one **or more** —" (Sublime Epiphany). Every chosen mode, with
@@ -180,6 +184,7 @@ class SpellCastingMixin:
             target_role_refs=target_role_refs,
             x_value=x_value,
             new_color=new_color,
+            mana_combination=mana_combination,
             target_stack_index=target_stack_index,
             mode_index=mode_index,
             mode_choices=mode_choices,
@@ -264,6 +269,9 @@ class SpellCastingMixin:
         target_role_refs: list[dict] | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
+        # "Add X mana in any combination of {B} and/or {R}" (Burnt Offering):
+        # the producer's split, ``{symbol: count}`` (``engine/mana_combination.py``).
+        mana_combination: dict | None = None,
         target_stack_index: int | None = None,
         mode_index: int | None = None,
         # "Choose one **or more** —" (Sublime Epiphany). Every chosen mode, with
@@ -417,6 +425,13 @@ class SpellCastingMixin:
         )
         if morph_cost is not None:
             card = face_down_card(held)
+        # The split of an "any combination" spell, checked whole before
+        # anything is paid (``engine/mana_combination.py``).
+        combination_refusal = split_refusal(
+            compile_card_oracle(card).instructions, mana_combination,
+        ) if mana_combination is not None else None
+        if combination_refusal is not None:
+            return refuse(card_name, None, combination_refusal)
         classification = classify_card(card)
         # The roles announcement's seats **by slot** where several roles may
         # each be answered by a player ("Choose any number of target players
@@ -1323,6 +1338,7 @@ class SpellCastingMixin:
                     choices={
                         "divided_targets": divided_targets,
                         "new_color": new_color,
+                        MANA_COMBINATION: mana_combination,
                         "old_color": old_color,
                         # What the additional cost ate, for the spell whose
                         # effect asks about it ("…equal to the sacrificed

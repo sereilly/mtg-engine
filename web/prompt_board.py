@@ -356,9 +356,11 @@ def _sacrifice(ctx: PromptContext, choices: list) -> dict:
         "up_to": state["up_to"],
         "reason": state["reason"],
         # Each described as it is (CR 613): an animated land in a "sacrifice
-        # a creature" list is drawn as the creature it is.
+        # a creature" list is drawn as the creature it is. ``id`` is the stable
+        # address `sacrifice_permanent_ids` answers with; ``index`` stays for
+        # the client that still answers by slot.
         "permanents": [
-            {"index": i, **ctx.describe_permanent(perm)}
+            {"index": i, **ctx.describe_permanent(perm), "id": perm.permanent_id}
             for i in state["valid_indices"]
             if (perm := ctx.game.permanent_at(choice.player_index, i)) is not None
         ],

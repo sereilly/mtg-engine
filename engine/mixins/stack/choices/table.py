@@ -305,7 +305,9 @@ register_choice(
 
 register_choice(
     "sacrifice",
-    resolve=lambda game, choice, r: game._resolve_sacrifice(choice, r["indices"]),
+    resolve=lambda game, choice, r: game._resolve_sacrifice(
+        choice, r.get("indices"), r.get("permanent_ids"),
+    ),
     default=lambda game, choice: game._default_sacrifice(choice),
     action="sacrifice_confirm",
     prompt_key="sacrifice_select",

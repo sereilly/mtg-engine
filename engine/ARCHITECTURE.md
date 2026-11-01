@@ -547,7 +547,14 @@ step, so the next seat is asked only once the one before has answered, and runs
 discards (`handlers/discards`), the each-seat hand picks and reveals
 (`handlers/hand._ask_each_seat_to_pick_from_hand`), and each player choosing
 permanents ("each player returns a permanent they control", Curfew and Words
-of Wind — `handlers/permanent_choices.choose_permanents`). **A secret number is
+of Wind — `handlers/permanent_choices.choose_permanents`), and each player
+sacrificing ("each player sacrifices a creature", CR 101.4's own example —
+`handlers/sacrifices.sacrifice_matching_permanent` with `who` each_player /
+each_opponent) or keeping and sacrificing the rest (Cataclysm —
+`keep_chosen_sacrifice_rest`): there the answers are **held** in a batch
+(`new_sacrifice_batch` / `new_keep_batch`) and the round's `then` performs
+every seat's choice in one event, because CR 101.4 has the actions happen
+simultaneously after the last choice. **A secret number is
 not asked in turn**: "each player **secretly** chooses a number" (Goblin Game,
 Menacing Ogre) is the card setting 101.4b aside, so `secretly_choose_numbers`
 arms every seat's `secret_number` at once and the answer that completes the map

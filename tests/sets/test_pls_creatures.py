@@ -1735,8 +1735,10 @@ def test_w1g2_razing_snidd_makes_each_player_sacrifice_a_land(set_pool):
     ]
     assert game.confirm_permanent_set_choice(0, [knight.permanent_id])
     _w1g2_until_asked(game)
-    assert sorted((c.kind, c.player_index) for c in game.pending_choices) == [
-        ("sacrifice", 0), ("sacrifice", 1),
+    # The active player chooses first; the other seat is asked once that
+    # answer is in (CR 101.4).
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("sacrifice", 0),
     ]
     game.auto_resolve_pending_choices()
     _w1g2_resolve_stack(game)

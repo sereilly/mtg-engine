@@ -513,6 +513,12 @@ class GameActionRequest(BaseModel):
     # object one object, and the engine has written a tuple to layer 5 since
     # Dream Coat — what was missing was a way for a player to name one.
     mana_colors: list[Literal["W", "U", "B", "R", "G"]] | None = None
+    # "Add three mana **in any combination of** {R} and/or {G}" (Goblin
+    # Clearcutter, Orcish Lumberjack; Burnt Offering on a cast): the split,
+    # symbol -> count, sent with `activate` or `cast`. The engine refuses a
+    # split naming an unlisted symbol or the wrong total before anything is
+    # paid; absent, the seat's default split (engine/mana_combination.py).
+    mana_combination: dict[Literal["W", "U", "B", "R", "G", "C"], int] | None = None
     # Text-change spells (Magical Hack / Sleight of Mind): the "from" word to
     # replace. `mana_color` carries the "to" word. Both are color symbols (a basic
     # land type is addressed by its color: W=plains, U=island, B=swamp, R=mountain,
@@ -705,6 +711,11 @@ class GameActionRequest(BaseModel):
     # Forced sacrifice (Lich): the battlefield indices the player chooses to
     # sacrifice, sent with `sacrifice_confirm`.
     sacrifice_indices: list[int] | None = None
+    # …or the same choice by stable permanent id (each offered entry of the
+    # `sacrifice_select` prompt carries its `id`). Authoritative over
+    # `sacrifice_indices` when present; a stale id is refused, never guessed
+    # (CR 400.7: an id names one object, a slot renumbers).
+    sacrifice_permanent_ids: list[int] | None = None
     # CR 616.1e: which of the effects contending over one event applies first,
     # as an index into the prompt's `options`. Sent with `effect_order_confirm`.
     option_index: int | None = None

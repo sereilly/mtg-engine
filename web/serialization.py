@@ -383,10 +383,11 @@ def _ability_mana(instruction) -> dict | None:
     ability with nothing to choose and then sent an answer the engine ignored.
 
     Riders that change the amount or restrict the spend are read through; a
-    shape whose symbols the board, a record or the seat's own split decides
-    (``any_color_from``, ``from_noted``, ``combination`` …) is None, and the
-    client falls back to the summary — which the server narrows for exactly
-    those (:func:`_offered_mana`).
+    shape whose symbols the board or a record decides (``any_color_from``,
+    ``from_noted`` …) is None, and the client falls back to the summary — which
+    the server narrows for exactly those (:func:`_offered_mana`). A split the
+    seat chooses ("in any combination of") carries a ``combination`` entry of
+    its own: ``{"symbols": […], "count": N}``.
     """
     adders = [step for step in _effect_steps(instruction) if step.kind == "add_mana_from_text"]
     if not adders:
@@ -404,6 +405,22 @@ def _ability_mana(instruction) -> dict | None:
         elif shape == {"any_color"} and payload.get("any_color") and len(adders) == 1:
             found = ["W", "U", "B", "R", "G"]
             choice = True
+        elif (
+            shape == {"combination", "combination_count"}
+            and len(adders) == 1
+            and isinstance(payload["combination_count"], int)
+        ):
+            # "Add three mana in any combination of {R} and/or {G}" (Goblin
+            # Clearcutter): a **split**, which a colour fan cannot ask for —
+            # so the entry says how many and of which, and the activate action
+            # takes the answer as ``mana_combination`` ({symbol: count}).
+            # ``choice`` stays true for a client that knows only the fan: one
+            # colour named is every unit that colour, a legal split.
+            found = [str(symbol) for symbol in payload["combination"]]
+            return {
+                "symbols": found, "choice": True,
+                "combination": {"symbols": found, "count": int(payload["combination_count"])},
+            }
         else:
             return None
         symbols.extend(symbol for symbol in found if symbol not in symbols)

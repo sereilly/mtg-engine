@@ -31,6 +31,7 @@ from ...cost_modifiers import (ability_cost_reduction, ability_cost_tax,
                                 sacrifice_taxes)
 from ...self_cost_modifiers import ability_self_reduction_amount
 from ...divided_damage import DIVIDED_TARGETS
+from ...mana_combination import MANA_COMBINATION, split_refusal
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...oracle_types import x_spend_colors_from_text
 from ...targeting import GRAVEYARD_TARGET_KIND, derive_activation_spec
@@ -130,6 +131,11 @@ class AbilityActivationMixin:
         # queued prompt would put the ability on the stack before its
         # announcement was finished.
         chosen_keyword: str | None = None,
+        # "Add three mana **in any combination of** {R} and/or {G}" (Goblin
+        # Clearcutter): the producer's split, ``{symbol: count}``, announced
+        # with the activation as ``mana_color`` is (CR 605.3a) — see
+        # ``engine/mana_combination.py``. None is the seat's default split.
+        mana_combination: dict | None = None,
         source_seat: int | None = None,
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
@@ -156,6 +162,7 @@ class AbilityActivationMixin:
             cost_other_hand_indices=cost_other_hand_indices,
             cost_graveyard_indices=cost_graveyard_indices,
             chosen_keyword=chosen_keyword,
+            mana_combination=mana_combination,
             source_seat=source_seat,
             source_permanent_index=source_permanent_index,
             source_stack_index=source_stack_index,
@@ -330,6 +337,11 @@ class AbilityActivationMixin:
         # queued prompt would put the ability on the stack before its
         # announcement was finished.
         chosen_keyword: str | None = None,
+        # "Add three mana **in any combination of** {R} and/or {G}" (Goblin
+        # Clearcutter): the producer's split, ``{symbol: count}``, announced
+        # with the activation as ``mana_color`` is (CR 605.3a) — see
+        # ``engine/mana_combination.py``. None is the seat's default split.
+        mana_combination: dict | None = None,
         source_seat: int | None = None,
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
@@ -459,6 +471,12 @@ class AbilityActivationMixin:
             return refuse(
                 permanent.card.name, "unsupported", keyword_refusal,
             )
+        # "…in any combination of {R} and/or {G}": the split, checked whole
+        # before any cost is paid — a malformed one is refused rather than
+        # quietly replaced by the default (``engine/mana_combination.py``).
+        combination_refusal = split_refusal(ability.instruction, mana_combination)
+        if combination_refusal is not None:
+            return refuse(permanent.card.name, "unsupported", combination_refusal)
 
         # CR 602.2b/601.2c, once, before any cost is paid: an ability that
         # targets is unactivatable with no legal target, and a named target
@@ -1007,6 +1025,9 @@ class AbilityActivationMixin:
                         # channel, so a handler still need not know which path
                         # resolved it.
                         "new_color": self._chosen_mana_color(mana_color),
+                        # The producer's split of an "any combination" mana
+                        # ability, announced with it (CR 605.3a).
+                        MANA_COMBINATION: mana_combination,
                     },
                 ),
             )
@@ -1182,6 +1203,9 @@ class AbilityActivationMixin:
                     # (CR 608.2d, the ``choose_color`` step), and nothing reads
                     # it here for it any more.
                     "new_color": self._chosen_mana_color(mana_color),
+                    # The split of an "any combination" ability that uses the
+                    # stack, on the key the inline path above carries it on.
+                    MANA_COMBINATION: mana_combination,
                     # The word a text change replaces, beside the one it
                     # replaces it with. See the parameter's note above.
                     "old_color": self._normalize_mana_color(old_color),
