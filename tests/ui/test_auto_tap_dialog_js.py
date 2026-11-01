@@ -59,7 +59,7 @@ function clearPendingHandCast() { cleared += 1; }
 
 _FUNCTIONS = [
     "autoTapStateKey", "autoTapActionBody", "refreshAutoTapPlan",
-    "autoTapIsPayable", "autoTapPlanLines", "autoTapChargedCost",
+    "autoTapIsPayable", "autoTapPlanLines", "autoTapPlanTapCount", "autoTapChargedCost",
     "autoTapPromptText", "performAutoTap", "isManaRefusal",
     "carryCastMode", "carryCastZoneAndCost",
 ]

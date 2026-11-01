@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5849**
-- Passed: **860** (581 checked in-game, 279 auto-passed)
+- Passed: **869** (590 checked in-game, 279 auto-passed)
 - Failed: **0**
-- Equivalent to a passing card: **64**
-- Untested: **4925**
+- Equivalent to a passing card: **65**
+- Untested: **4915**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -208,7 +208,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Apathy | ⬜ untested |  |
 | Apes of Rath | ⬜ untested |  |
 | Aphetto Alchemist | ⬜ untested |  |
-| Aphetto Dredging | ⬜ untested |  |
+| Aphetto Dredging | ✅ pass |  |
 | Aphetto Grifter | ⬜ untested |  |
 | Aphetto Vulture | ⬜ untested |  |
 | Apocalypse | ⬜ untested |  |
@@ -477,7 +477,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Binding Agony | ⬜ untested |  |
 | Binding Grasp | ⬜ untested |  |
 | Biorhythm | ⬜ untested |  |
-| Birchlore Rangers | ⬜ untested |  |
+| Birchlore Rangers | ✅ pass |  |
 | Bird Maiden | ✅ pass |  |
 | Birds of Paradise | ✅ pass |  |
 | Black Carriage | ⬜ untested |  |
@@ -495,7 +495,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Blasted Landscape | ⬜ untested |  |
 | Blaster Mage | ⬜ untested |  |
 | Blastoderm | ⬜ untested |  |
-| Blatant Thievery | ⬜ untested |  |
+| Blatant Thievery | ✅ pass |  |
 | Blaze | ✅ pass |  |
 | Blaze of Glory | ✅ pass |  |
 | Blazing Effigy | ⬜ untested |  |
@@ -663,7 +663,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Burnt Offering | ⬜ untested |  |
 | Burrowing | ✅ pass |  |
 | Burst of Energy | ⬜ untested |  |
-| Butcher Orgg | ⬜ untested |  |
+| Butcher Orgg | ✅ pass |  |
 | Bösium Strip | ⬜ untested |  |
 | Cabal Archon | ⬜ untested |  |
 | Cabal Coffers | ⬜ untested |  |
@@ -1069,7 +1069,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Crown of Vigor | ⬜ untested |  |
 | Crown of the Ages | ⬜ untested |  |
 | Crude Rampart | ✅ pass | auto-pass: keywords only (defender, morph {4}{w}) |
-| Cruel Revival | ⬜ untested |  |
+| Cruel Revival | ✅ pass |  |
 | Crumble | ⬜ untested |  |
 | Crumbling Sanctuary | ⬜ untested |  |
 | Crusade | ✅ pass |  |
@@ -1567,7 +1567,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Entangler | ⬜ untested |  |
 | Enthralling Hold | ⬜ untested |  |
 | Entomb | ✅ pass |  |
-| Entrails Feaster | ⬜ untested |  |
+| Entrails Feaster | ✅ pass |  |
 | Entropic Specter | ⬜ untested |  |
 | Envelop | ⬜ untested |  |
 | Ephemeron | ≡ equivalent | same behaviour as Skywing Aven |
@@ -3294,7 +3294,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Nantuko Cultivator | ⬜ untested |  |
 | Nantuko Disciple | ⬜ untested |  |
 | Nantuko Elder | ⬜ untested |  |
-| Nantuko Husk | ⬜ untested |  |
+| Nantuko Husk | ✅ pass |  |
 | Nantuko Mentor | ⬜ untested |  |
 | Nantuko Monastery | ⬜ untested |  |
 | Nantuko Shade | ✅ pass |  |
@@ -3607,7 +3607,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Phyrexian Driver | ⬜ untested |  |
 | Phyrexian Furnace | ⬜ untested |  |
 | Phyrexian Gargantua | ⬜ untested |  |
-| Phyrexian Ghoul | ⬜ untested |  |
+| Phyrexian Ghoul | ≡ equivalent | same behaviour as Nantuko Husk |
 | Phyrexian Gremlins | ⬜ untested |  |
 | Phyrexian Grimoire | ⬜ untested |  |
 | Phyrexian Hulk | ✅ pass | auto-pass: no abilities |
@@ -3765,7 +3765,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Psychatog | ⬜ untested |  |
 | Psychic Allergy | ⬜ untested |  |
 | Psychic Battle | ⬜ untested |  |
-| Psychic Purge | ⬜ untested |  |
+| Psychic Purge | ✅ pass |  |
 | Psychic Theft | ⬜ untested |  |
 | Psychic Trance | ⬜ untested |  |
 | Psychic Transfer | ⬜ untested |  |
@@ -5774,7 +5774,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Wood Elemental | ⬜ untested |  |
 | Wood Elves | ⬜ untested |  |
 | Wood Sage | ⬜ untested |  |
-| Wooded Foothills | ⬜ untested |  |
+| Wooded Foothills | ✅ pass |  |
 | Wooden Sphere | ✅ pass |  |
 | Woodland Druid | ✅ pass | auto-pass: no abilities |
 | Woodripper | ⬜ untested |  |

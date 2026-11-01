@@ -2716,13 +2716,38 @@ function autoTapIsPayable(pending) {
 }
 
 // One line per permanent the plan taps, in tap order, with what it is asked
-// for. A source the server did not ask for a colour names none.
+// for. A source the server did not ask for a colour names none. A mana ability
+// paid by tapping other permanents ("Tap two untapped Elves you control: Add
+// one mana of any color", Birchlore Rangers) names the ones its cost taps
+// (`cost_taps`): the dialog said "Birchlore Rangers for {G}" and tapped an
+// Elvish Warrior it never mentioned (ONS Phase 5).
 function autoTapPlanLines(plan) {
   const taps = Array.isArray(plan?.taps) ? plan.taps : [];
   return taps.map((tap) => {
     const color = typeof tap.mana_color === "string" && tap.mana_color ? ` for {${tap.mana_color}}` : "";
-    return `${tap.name || "a permanent"}${color}`;
+    const costTaps = Array.isArray(tap.cost_taps) ? tap.cost_taps : [];
+    const tapping = costTaps.length
+      ? ` (tapping ${costTaps.map((tapped) => tapped?.name || "a permanent").join(" and ")})`
+      : "";
+    return `${tap.name || "a permanent"}${color}${tapping}`;
   });
+}
+
+// How many permanents the plan turns sideways: each source, and each one a
+// source's cost taps — once each, since a Birchlore Rangers may tap itself.
+function autoTapPlanTapCount(plan) {
+  const taps = Array.isArray(plan?.taps) ? plan.taps : [];
+  const ids = new Set();
+  let unnamed = 0;
+  for (const tap of taps) {
+    const costTaps = Array.isArray(tap.cost_taps) ? tap.cost_taps : [];
+    const sideways = costTaps.length ? costTaps : [tap];
+    for (const one of sideways) {
+      if (Number.isInteger(one?.id)) ids.add(one.id);
+      else unnamed += 1;
+    }
+  }
+  return ids.size + unnamed;
 }
 
 // The cost the engine actually asked the pool for — taxes, reductions, a
@@ -2744,7 +2769,7 @@ function autoTapPromptText(pending) {
   const plan = pending.plan;
   if (!plan) return `Asking what could pay for ${pending.cardName}…`;
   if (plan.payable) {
-    const count = Array.isArray(plan.taps) ? plan.taps.length : 0;
+    const count = autoTapPlanTapCount(plan);
     return count > 0
       ? `Your mana pool can't pay for ${pending.cardName}. Auto-Tap will tap ${count} permanent${count === 1 ? "" : "s"} to pay the cost, or cancel.`
       : `Your mana pool can pay for ${pending.cardName} now. Press Auto-Tap to go ahead, or cancel.`;
