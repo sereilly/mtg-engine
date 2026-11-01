@@ -52,7 +52,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| LGN *(measured)* | 145 | 235 | 69.8% | 66.8% | 42.6% | 96 |
+| LGN *(measured)* | 145 | 235 | 70.6% | 69.4% | 45.1% | 102 |
 | **All (shipped)** | **8362** | **12427** | **90.2%** | **89.7%** | **62.4%** | **6559** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -88,8 +88,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | no handler for returning a non-targeted object |  |
 | 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
 
 ## Cards executing through the grammar
 
@@ -1656,6 +1656,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Lands you control are Plains.`
 - **Celestial Enforcer**
   - `{1}{W}, {T}: Tap target creature. Activate only if you control a creature with flying.`
+- **Celestial Gatekeeper**
+  - `When this creature dies, exile it, then return up to two target Bird and/or Cleric permanent cards from your graveyard to the battlefield.`
 - **Celestial Prism**
   - `{2}, {T}: Add one mana of any color.`
   - `{2}, {T}: Add one mana of any color.`
@@ -2190,6 +2192,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}, Tap an untapped blue creature you control, Remove a polyp counter from this enchantment: Put a +0/+1 counter on target creature.`
 - **Corpse Dance**
   - `Return the top creature card of your graveyard to the battlefield. That creature gains haste until end of turn. Exile it at the beginning of the next end step.`
+- **Corpse Harvester**
+  - `{1}{B}, {T}, Sacrifice a creature: Search your library for a Zombie card and a Swamp card, reveal them, put them into your hand, then shuffle.`
 - **Corrosion**
   - `At the beginning of your upkeep, put a rust counter on each artifact target opponent controls. Then destroy each artifact with mana value less than or equal to the number of rust counters on it. Artifacts destroyed this way can't be regenerated.`
   - `When this enchantment leaves the battlefield, remove all rust counters from all permanents.`
@@ -2498,6 +2502,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Add {B}{B}{B}.`
 - **Dark Sphere**
   - `{T}, Sacrifice this artifact: The next time a source of your choice would deal damage to you this turn, prevent half that damage, rounded down.`
+- **Dark Supplicant**
+  - `{T}, Sacrifice three Clerics: Search your graveyard, hand, and/or library for a card named Scion of Darkness and put it onto the battlefield. If you search your library this way, shuffle.`
 - **Dark Suspicions**
   - `At the beginning of each opponent's upkeep, that player loses X life, where X is the number of cards in that player's hand minus the number of cards in your hand.`
 - **Dark Triumph**
@@ -3381,6 +3387,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}, {T}: Untap target attacking creature you control. Prevent all combat damage that would be dealt to and dealt by it this turn.`
 - **Elvish Scrapper**
   - `{G}, {T}, Sacrifice this creature: Destroy target artifact.`
+- **Elvish Soultiller**
+  - `When this creature dies, choose a creature type. Shuffle all creature cards of that type from your graveyard into your library.`
 - **Elvish Spirit Guide**
   - `Exile this card from your hand: Add {G}.`
 - **Elvish Vanguard**
@@ -8136,6 +8144,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, if there are four or more creatures on the battlefield, sacrifice this enchantment and destroy all creatures. They can't be regenerated.`
 - **Planar Despair**
   - `Domain — All creatures get -1/-1 until end of turn for each basic land type among lands you control.`
+- **Planar Guide**
+  - `{3}{W}, Exile this creature: Exile all creatures. At the beginning of the next end step, return those cards to the battlefield under their owners' control.`
 - **Planar Overlay**
   - `Each player chooses a land they control of each basic land type. Return those lands to their owners' hands.`
 - **Planar Portal**
@@ -10049,6 +10059,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Turn target face-down creature you control face up. At the beginning of the next end step, sacrifice it.`
 - **Skirk Commando**
   - `Whenever this creature deals combat damage to a player, you may have it deal 2 damage to target creature that player controls.`
+- **Skirk Drill Sergeant**
+  - `Whenever this creature or another Goblin dies, you may pay {2}{R}. If you do, reveal the top card of your library. If it's a Goblin permanent card, put it onto the battlefield. Otherwise, put it into your graveyard.`
 - **Skirk Fire Marshal**
   - `Tap five untapped Goblins you control: This creature deals 10 damage to each creature and each player.`
 - **Skirk Marauder**
