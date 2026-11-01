@@ -30,6 +30,11 @@
       "status": "pass",
       "updated_at": 1782590075.2882295
     },
+    "Akroma's Devoted": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793555027.9854615
+    },
     "Aladdin": {
       "reason": "",
       "status": "pass",
@@ -145,6 +150,11 @@
       "status": "pass",
       "updated_at": 1791884555.9780376
     },
+    "Aven Warhawk": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554747.5848145
+    },
     "Aysen Crusader": {
       "reason": "",
       "status": "pass",
@@ -174,6 +184,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791278762.2897134
+    },
+    "Bane of the Living": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554982.1461673
     },
     "Basalt Monolith": {
       "reason": "",
@@ -245,6 +260,11 @@
       "status": "pass",
       "updated_at": 1793501702.227121
     },
+    "Blade Sliver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554778.574823
+    },
     "Blatant Thievery": {
       "reason": "",
       "status": "pass",
@@ -314,6 +334,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1792623664.7332008
+    },
+    "Brood Sliver": {
+      "reason": "Its combat-damage triggers outlive their step: with a human at the table, the first Brood (or Essence) trigger whose resolution asks a seat (the AI's may, or the human's) holds, and the combat rail closes the combat damage step anyway (advance_combat_phase leave_the_damage_step asks no _combat_awaits_an_answer; that test also answers False for an AI-owned prompt). Seen: AI attack under AI Brood+Essence Sliver left 3 Essence + 1 Brood triggers on the stack into the AI end step; my Sliver hitting the AI got the Brood offer in end_of_combat. Repro scratch/lgn/p5/repro_stack_across_steps.py. The token offer itself goes to the damaging Sliver controller correctly.",
+      "status": "fail",
+      "updated_at": 1793555184.0845754
     },
     "Buried Alive": {
       "reason": "",
@@ -385,6 +410,11 @@
       "status": "pass",
       "updated_at": 1782544295.8578253
     },
+    "Cataclysm": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793555120.4491076
+    },
     "Celestial Prism": {
       "reason": "",
       "status": "pass",
@@ -434,6 +464,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1787458736.0762954
+    },
+    "Chromeshell Crab": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554920.4103699
     },
     "Churning Eddy": {
       "reason": "",
@@ -570,6 +605,11 @@
       "status": "pass",
       "updated_at": 1782019848.6426058
     },
+    "Crested Craghorn": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554700.1855776
+    },
     "Crippling Fatigue": {
       "reason": "",
       "status": "pass",
@@ -670,6 +710,11 @@
       "status": "pass",
       "updated_at": 1792615182.399777
     },
+    "Deftblade Elite": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793555089.986182
+    },
     "Degavolver": {
       "reason": "",
       "status": "pass",
@@ -694,6 +739,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791900821.6936688
+    },
+    "Dermoplasm": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554966.1945744
     },
     "Desert": {
       "reason": "",
@@ -880,6 +930,11 @@
       "status": "pass",
       "updated_at": 1786234897.55039
     },
+    "Essence Sliver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554890.0344303
+    },
     "Eternal Flame": {
       "reason": "",
       "status": "pass",
@@ -934,6 +989,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782191393.570935
+    },
+    "Feral Throwback": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554716.152151
     },
     "Fiery Temper": {
       "reason": "",
@@ -1120,10 +1180,20 @@
       "status": "pass",
       "updated_at": 1784516881.274088
     },
+    "Glowering Rogon": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554731.585258
+    },
     "Goblin Balloon Brigade": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781411321.368721
+    },
+    "Goblin Grappler": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554685.2471995
     },
     "Goblin Grenade": {
       "reason": "",
@@ -1250,6 +1320,11 @@
       "status": "pass",
       "updated_at": 1782086286.6517365
     },
+    "Hunter Sliver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554793.5280197
+    },
     "Hurloon Minotaur": {
       "reason": "",
       "status": "pass",
@@ -1309,6 +1384,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791787844.5205953
+    },
+    "Innocent Blood": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793555105.4840372
     },
     "Insidious Dreams": {
       "reason": "",
@@ -1495,6 +1575,11 @@
       "status": "pass",
       "updated_at": 1791884561.0395966
     },
+    "Krosan Vorine": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554808.981097
+    },
     "Kudzu": {
       "reason": "",
       "status": "pass",
@@ -1604,6 +1689,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782957169.0863905
+    },
+    "Lowland Tracker": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793555074.9717567
     },
     "Lure": {
       "reason": "",
@@ -1724,6 +1814,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782105016.6717145
+    },
+    "Mistform Sliver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793555043.9966657
+    },
+    "Mistform Ultimus": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554762.629204
     },
     "Molten Influence": {
       "reason": "",
@@ -1980,6 +2080,11 @@
       "status": "pass",
       "updated_at": 1781931114.369114
     },
+    "Plated Sliver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554904.9544334
+    },
     "Possessed Aven": {
       "reason": "",
       "status": "pass",
@@ -2049,6 +2154,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1784609475.5014002
+    },
+    "Quick Sliver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554823.8898735
     },
     "Radiant Fountain": {
       "reason": "",
@@ -2330,6 +2440,11 @@
       "status": "pass",
       "updated_at": 1791259983.6702995
     },
+    "Shifting Sliver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793555058.974606
+    },
     "Shivan Dragon": {
       "reason": "",
       "status": "pass",
@@ -2339,6 +2454,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791787846.124625
+    },
+    "Shock": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793555150.8667746
     },
     "Shower of Coals": {
       "reason": "",
@@ -2800,6 +2920,11 @@
       "status": "pass",
       "updated_at": 1782592447.7802558
     },
+    "Wall of Hope": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554997.1330013
+    },
     "Wall of Ice": {
       "reason": "",
       "status": "pass",
@@ -2840,6 +2965,16 @@
       "status": "pass",
       "updated_at": 1782590190.9304833
     },
+    "Warbreak Trumpeter": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554669.2429035
+    },
+    "Ward Sliver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554874.563246
+    },
     "Warp Artifact": {
       "reason": "",
       "status": "pass",
@@ -2865,6 +3000,11 @@
       "status": "pass",
       "updated_at": 1787458508.1981003
     },
+    "Weaver of Lies": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554935.3517427
+    },
     "Web": {
       "reason": "",
       "status": "pass",
@@ -2888,7 +3028,7 @@
     "White Knight": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1782190320.449395
+      "updated_at": 1793555013.0816443
     },
     "White Ward": {
       "reason": "",
@@ -2905,10 +3045,20 @@
       "status": "pass",
       "updated_at": 1791886555.5106957
     },
+    "Wildfire": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793555135.9237766
+    },
     "Will-o'-the-Wisp": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782178493.830383
+    },
+    "Willbender": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793554951.2834084
     },
     "Winter Orb": {
       "reason": "",
