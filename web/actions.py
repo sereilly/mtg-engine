@@ -607,6 +607,9 @@ def _action_activate(session, req, seat_type):
                 target_player_index=target,
                 permanent_index=permanent_index,
                 mana_color=req.mana_color,
+                # The split of an "any combination" mana ability (Goblin
+                # Clearcutter), checked whole by the engine before any cost.
+                mana_combination=req.mana_combination,
                 # The "from" word of a text change activated as an ability
                 # (Balduvian Shaman); the cast side already forwards the same
                 # field, and the request schema has carried it all along.

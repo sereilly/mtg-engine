@@ -513,6 +513,12 @@ class GameActionRequest(BaseModel):
     # object one object, and the engine has written a tuple to layer 5 since
     # Dream Coat — what was missing was a way for a player to name one.
     mana_colors: list[Literal["W", "U", "B", "R", "G"]] | None = None
+    # "Add three mana **in any combination of** {R} and/or {G}" (Goblin
+    # Clearcutter, Orcish Lumberjack; Burnt Offering on a cast): the split,
+    # symbol -> count, sent with `activate` or `cast`. The engine refuses a
+    # split naming an unlisted symbol or the wrong total before anything is
+    # paid; absent, the seat's default split (engine/mana_combination.py).
+    mana_combination: dict[Literal["W", "U", "B", "R", "G", "C"], int] | None = None
     # Text-change spells (Magical Hack / Sleight of Mind): the "from" word to
     # replace. `mana_color` carries the "to" word. Both are color symbols (a basic
     # land type is addressed by its color: W=plains, U=island, B=swamp, R=mountain,

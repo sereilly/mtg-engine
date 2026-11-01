@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..mana_combination import MANA_COMBINATION, default_split, normalized_split
 from ..oracle_types import MANA_COLOR_OF_CHOICE
 from .registry import effect_handler
 from ._amounts import count_from_payload, resolve_amount
@@ -243,43 +244,46 @@ def _pick_mana_alternative(alternatives, context) -> tuple:
 
 
 def _split_mana_combination(
-    symbols: tuple[str, ...], total: int, chosen: str | None, context
+    game, symbols: tuple[str, ...], total: int, chosen: str | None, context
 ) -> dict:
     """How *total* mana divides among the symbols an "any combination" lists.
 
-    ``mana_combination`` on the resolution's choices is an explicit split, taken
-    when it names only listed symbols and adds up to exactly *total* — anything
-    else is a split that was not offered, and is discarded rather than
-    part-applied.
+    ``mana_combination`` on the resolution's choices is the producer's split
+    (``engine/mana_combination.py``), announced with the activation or the
+    cast; it is taken when it names only listed symbols and adds up to exactly
+    *total* — anything else is a split that was not offered, and is discarded
+    rather than part-applied (the activation and cast paths refuse one before
+    anything is paid, so this is the last line of defence, and the one that
+    knows an X-sized total).
 
-    With nothing named, every unit takes the seat's chosen colour when that
-    colour is one the clause lists (the ``color`` channel a dual land's choice
-    already rides), and otherwise the first printed symbol. Both defaults are
-    choices the card allows: "any combination" includes every unit being the
-    same symbol. What they cannot do is *mix*, which is a narrowing of the
-    player's options rather than a widening of the card's — the safe direction,
-    and the reason this is a default and not a prompt.
+    With nothing named, a colour the producer asked for (the ``color`` channel
+    a dual land's choice already rides) makes every unit that colour when the
+    clause lists it — the activator chose. Otherwise the seat's held cards
+    decide (``mana_combination.default_split``): units toward the listed
+    colours its hand and abilities ask for and its pool lacks, the rest the
+    first printed symbol.
     """
     if total <= 0:
         return {}
-    named = (context.choices or {}).get("mana_combination")
-    if isinstance(named, dict):
-        try:
-            wanted = {symbol: int(amount) for symbol, amount in named.items()}
-        except (TypeError, ValueError):
-            wanted = {}
+    named = normalized_split((context.choices or {}).get(MANA_COMBINATION))
+    if named is not None:
         split = {
             symbol: amount
-            for symbol, amount in wanted.items()
+            for symbol, amount in named.items()
             if symbol in symbols and amount >= 0
         }
         # Accepted whole or not at all: the same keys, no negative unit, and the
         # printed total exactly. A split naming a symbol the clause does not
         # list, or adding up to something else, is a split that was never
         # offered — part-applying it would make mana out of a malformed answer.
-        if split == wanted and sum(split.values()) == total:
+        if split == named and sum(split.values()) == total:
             return split
-    return {chosen if chosen in symbols else symbols[0]: total}
+    if chosen in symbols:
+        return {chosen: total}
+    seat = game.players.index(context.caster) if context.caster in game.players else None
+    if seat is None:
+        return {symbols[0]: total}
+    return default_split(game, seat, symbols, total, chosen)
 
 
 @effect_handler("sacrifice_creature_for_mana")
@@ -755,6 +759,7 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             instruction.payload.get("combination_count", 0), context.x_value
         )
         split = _split_mana_combination(
+            game,
             tuple(combination),
             total,
             game._normalize_mana_color(
