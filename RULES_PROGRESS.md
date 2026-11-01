@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**427 / 638 tracked rules covered (66%)** — 3219 tests, 0 unannotated.
+**428 / 639 tracked rules covered (66%)** — 3226 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -89,7 +89,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/16 | 12% |
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 33/33 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 34/34 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 4/4 | 100% |
 | [704. State-Based Actions](#704-state-based-actions) | 8/8 | 100% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -569,7 +569,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **500.5** As a step or phase ends, if there are effects that last until the end of that step or phase, thos... *(2 tests)*
 - [x] **500.6** When a phase or step begins, any abilities that trigger “at the beginning of” that phase or step ... *(1 tests)*
 - [x] **500.7** Some effects can give a player extra turns. They do this by adding the turns directly after the s... *(5 tests)*
-- [x] **500.8** Some effects can add phases to a turn. They do this by adding the phases directly after the speci... *(6 tests)*
+- [x] **500.8** Some effects can add phases to a turn. They do this by adding the phases directly after the speci... *(7 tests)*
 - [ ] **500.9** Some effects can add steps to a phase. They do this by adding the steps directly after a specifie...
 - [x] **500.10** Some effects add a step after a particular phase. In that case, that effect first creates the pha... *(1 tests, subrules a)*
 - [x] **500.11** Some effects can cause a step, phase, or turn to be skipped. To skip a step, phase, or turn is to... *(3 tests)*
@@ -633,7 +633,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(100 tests, subrules abcdfghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(103 tests, subrules abcdfghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(15 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -649,7 +649,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **511.1** The end of combat step has no turn-based actions. Once it begins, the active player gets priority... *(4 tests)*
 - [x] **511.2** Abilities that trigger “at end of combat” trigger as the end of combat step begins. Effects that ... *(2 tests)*
-- [x] **511.3** As soon as the end of combat step ends, all creatures, battles, and planeswalkers are removed fro... *(2 tests)*
+- [x] **511.3** As soon as the end of combat step ends, all creatures, battles, and planeswalkers are removed fro... *(3 tests)*
 
 ### 512. Ending Phase
 
@@ -689,7 +689,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(37 tests, subrules bcd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(109 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(111 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(16 tests, subrules acd)*
@@ -780,7 +780,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(169 tests, subrules abcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(170 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(22 tests, subrules abc)*
 - [x] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t... *(2 tests)*
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(95 tests, subrules abcd)*
@@ -884,7 +884,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.6** Equip *(15 tests, subrules ace)*
 - [x] **702.7** First Strike *(5 tests, subrules b)*
 - [x] **702.8** Flash *(3 tests, subrules ab)*
-- [x] **702.9** Flying *(7 tests, subrules ab)*
+- [x] **702.9** Flying *(8 tests, subrules ab)*
 - [x] **702.10** Haste *(3 tests, subrules bc)*
 - [x] **702.11** Hexproof *(2 tests, subrules bd)*
 - [x] **702.12** Indestructible *(3 tests, subrules b)*
@@ -907,6 +907,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.32** Fading *(14 tests, subrules a)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
 - [x] **702.37** Morph *(11 tests, subrules ace)*
+- [x] **702.39** Provoke *(5 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
 
@@ -996,7 +997,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 802. Attack Multiple Players Option
 
 - [x] **802.1** Some multiplayer games allow the active player to attack multiple other players. If this option i... *(2 tests)*
-- [x] **802.2** As the combat phase starts, the attacking player doesn’t choose an opponent to become the defendi... *(2 tests)*
+- [x] **802.2** As the combat phase starts, the attacking player doesn’t choose an opponent to become the defendi... *(3 tests, subrules a)*
 - [x] **802.3** As the attacking player declares each attacking creature, they choose a defending player, a plane... *(3 tests, subrules a)*
 - [x] **802.4** If more than one player is being attacked, controls a planeswalker that’s being attacked, or prot... *(4 tests, subrules ab)*
 - [x] **802.5** Combat damage is assigned in APNAP order. Other than that, the combat damage step proceeds just a... *(2 tests)*

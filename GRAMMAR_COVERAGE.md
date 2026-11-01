@@ -52,7 +52,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| LGN *(measured)* | 145 | 235 | 66.4% | 60.4% | 37.4% | 84 |
+| LGN *(measured)* | 145 | 235 | 66.4% | 60.9% | 37.9% | 85 |
 | **All (shipped)** | **8362** | **12427** | **90.2%** | **89.7%** | **62.4%** | **6559** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -5197,6 +5197,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {G}{G}.`
 - **Hunted Wumpus**
   - `When this creature enters, each other player may put a creature card from their hand onto the battlefield.`
+- **Hunter Sliver**
+  - `All Sliver creatures have provoke. (Whenever a Sliver attacks, its controller may have target creature defending player controls untap and block it if able.)`
 - **Hunter's Edge**
   - `Put a +1/+1 counter on target creature you control. Then that creature deals damage equal to its power to target creature you don't control.`
 - **Hunting Drake**
