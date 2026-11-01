@@ -80,6 +80,7 @@ from .serialization import (
     _serialize_modes,
     _serialize_permanent_summary,
     _serialize_player,
+    entry_choice_view,
     _serialize_stack_item,
     hidden_card_view,
 )
@@ -1145,6 +1146,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     can be asked without altering the answer.
     """
     win = _winner(session)
+    entry_view = entry_choice_view(session.game)
 
     cleanup_info = None
     cleanup_required = _cleanup_discard_requirement(session)
@@ -1367,6 +1369,9 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
                 _compute_playable_hand_indices(session, i) if viewer_seat == i else [],
                 _compute_playable_command_indices(session, i) if viewer_seat == i else [],
                 _compute_castable_hand_faces(session, i) if viewer_seat == i else {},
+                # CR 614.12a: no entering permanent's choice is shown before
+                # it is made (``serialization.entry_choice_view``).
+                battlefield_view=entry_view,
             )
             for i in range(len(session.game.players))
         ],

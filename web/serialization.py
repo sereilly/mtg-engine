@@ -19,7 +19,7 @@ from engine.board_payment import tap_alone_symbols
 from engine.color_changes import spell_color_change
 from engine.cost_modifiers import spell_cost_tax
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
-from engine.entry_choices import chosen_as_entered
+from engine.entry_choices import ENTRY_CHOICES, chosen_as_entered
 from engine.face_down import face_up_morph_cost, hidden_card_of, is_face_down
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
 from engine.game_types import target_ids
@@ -1455,6 +1455,60 @@ def _exile_payload(
     return payload
 
 
+def entry_choice_view(game: Game) -> Game | None:
+    """The board as it stands **before** any entering permanent's choice, or
+    None while no permanent is entering (almost always).
+
+    CR 614.12a: "If a replacement effect that modifies how a permanent enters
+    the battlefield requires a choice, that choice is made before the permanent
+    enters the battlefield." The engine instead places the permanent and stamps
+    a provisional default on it before it arms the prompt (so no reader ever
+    meets the record missing), and every static that reads the record applies
+    it: while a person's Ward Sliver colour prompt was open, both seats were
+    sent "Protection from red" on every Sliver — the default, shown as a choice
+    nobody had made. A scratch copy with each entering permanent's ``chosen_*``
+    records taken away, and the board's statics recomputed, is what may be
+    shown until the answer. Nothing can act in that window (the game waits on
+    the prompt, CR 117.3b), so this is the display catching up with the rule;
+    the engine-side half is a parts list in the Legions C1 report.
+    """
+    entering = [
+        perm.permanent_id for perm in game.all_permanents()
+        if game.permanent_is_entering(perm)
+    ]
+    if not entering:
+        return None
+    from engine.ai_rehearsal import scratch_copy
+
+    view = scratch_copy(game)
+    records = {row.key for row in ENTRY_CHOICES}
+    for permanent_id in entering:
+        twin = view.permanent_by_id(permanent_id)
+        if twin is None:
+            continue
+        for key in records:
+            twin.metadata.pop(key, None)
+    view._recompute_continuous_effects()
+    return view
+
+
+def _serialize_battlefield_entry(perm: Permanent, game: Game, view: Game | None) -> dict:
+    """One permanent's payload, read off *view* (``entry_choice_view``) when
+    a permanent is entering. The entering permanent itself carries
+    ``entering: True`` — absent on every other payload — so the client can
+    show it as arriving rather than as a permanent that has made its choice."""
+    if view is None:
+        return _serialize_permanent(perm, game)
+    twin = view.permanent_by_id(perm.permanent_id)
+    payload = (
+        _serialize_permanent(twin, view) if twin is not None
+        else _serialize_permanent(perm, game)
+    )
+    if game.permanent_is_entering(perm):
+        payload["entering"] = True
+    return payload
+
+
 def _serialize_player(
     player: PlayerState,
     viewer_seat: int | None,
@@ -1463,6 +1517,7 @@ def _serialize_player(
     playable_hand_indices: list[int] | None = None,
     playable_command_indices: list[int] | None = None,
     castable_hand_faces: dict[int, list[str]] | None = None,
+    battlefield_view: Game | None = None,
 ) -> dict:
     if viewer_seat == seat:
         hand = [
@@ -1495,7 +1550,9 @@ def _serialize_player(
 
     top_public = bool(player.library) and top_is_public(game, seat)
     permanents = list(game.controlled_by(seat))
-    battlefield = [_serialize_permanent(perm, game) for perm in permanents]
+    battlefield = [
+        _serialize_battlefield_entry(perm, game, battlefield_view) for perm in permanents
+    ]
     # The viewer's own permanents carry the target spec for their activated ability
     # (kind + legal targets) so the UI can drive activation targeting from backend
     # data rather than parsing the ability text client-side.
