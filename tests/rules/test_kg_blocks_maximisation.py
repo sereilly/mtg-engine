@@ -134,6 +134,10 @@ def test_provoke_and_dueling_grounds_leave_the_choice_of_which_creature_blocks()
              Permanent(card=_mk_creature_card("Guard B", 2, 2))],
             hand=[provoke, provoke],
         )
+        # Each Provoke draws a card: with no library P1 lost the game
+        # (CR 704.5b) before combat, and an ended game goes no further
+        # (CR 104.1).
+        game.players[0].library = [_card("Forest")] * 4
         for slot in (0, 1):
             assert game.cast_from_hand(
                 0, "Provoke", target_player_index=1, target_permanent_index=slot,

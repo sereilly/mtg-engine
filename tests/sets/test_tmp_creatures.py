@@ -1915,6 +1915,9 @@ def test_w4g1_a_declaration_that_leaves_a_chosen_creature_home_is_illegal(set_po
     turtle, armodon, _dragonfly = victims
     _w4g1_activate(game, [turtle, armodon])
 
+    # P2 draws in its draw step: with no library it lost the game
+    # (CR 704.5b), and an ended game has no combat (CR 104.1).
+    game.players[1].library = [set_pool("TMP")["Horned Turtle"]] * 2
     game.start_next_turn()
     game._close_current_priority_step()
     game.advance_combat_phase()
@@ -1939,6 +1942,9 @@ def test_w4g1_a_chosen_creature_that_stayed_home_dies_at_that_turns_end_step(set
     turtle, armodon, dragonfly = victims
     _w4g1_activate(game, victims)
 
+    # P2 draws in its draw step: with no library it lost the game
+    # (CR 704.5b), and an ended game has no combat (CR 104.1).
+    game.players[1].library = [set_pool("TMP")["Horned Turtle"]] * 2
     game.start_next_turn()
     dragonfly.tapped = True
     game._close_current_priority_step()

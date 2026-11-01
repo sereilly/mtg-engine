@@ -77,12 +77,25 @@ class BeginningPhaseMixin:
         self.log.append(f"{player.name} skipped their turn to untap {permanent_name}")
         return True
 
-    def close_beginning_step(self) -> None:
-        """Close a deferred upkeep/draw step (counterpart to close_end_step)."""
+    def close_beginning_step(self) -> bool:
+        """Close a deferred upkeep/draw step (counterpart to close_end_step);
+        True when it ended.
+
+        What is still on the stack resolves in the step first, and a window
+        that stops on a question holds the step (CR 500.2, CR 608.2) — the
+        reasons ``close_end_step`` gives.
+        """
         phase = self.current_turn_phase
         step = self.current_step
         if phase != "beginning" or step not in ("upkeep", "draw"):
-            return
+            return True
+        self.resume_held_step()
         if self._receives_priority(step):
+            if self.stack:
+                self._resolve_priority_window()
+            if self.window_left_unfinished():
+                self.hold_step_open()
+                return False
             self.clear_priority_window()
         self._on_step_or_phase_end(phase, step)
+        return True

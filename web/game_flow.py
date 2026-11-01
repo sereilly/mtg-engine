@@ -43,6 +43,7 @@ from .turn_steps import (
     _cleanup_discard_requirement,
     _clear_cleanup_selection,
     _has_island_sanctuary,
+    _leave_step,
     _resume_deferred_upkeep,
     _start_next_turn,
 )
@@ -354,6 +355,8 @@ def _advance_ai_turn(session: Session) -> None:
         # backstop no later caller can forget.
         if _seat_type(session, session.current_turn) != "ai":
             return
+        if game.is_game_over():
+            return
 
         if _ai_should_hold(session, step):
             # Resolve the active player's turn-based action (declaring attackers)
@@ -394,6 +397,11 @@ def _advance_phase(session: Session) -> None:
     _auto_resolve_ai_pending(session)
     if game.waiting_prompt() is not None:
         return
+    # CR 104.1: a game that has ended goes no further. The engine's rail stops
+    # on its own; this is the web layer's turn loop stopping with it, rather
+    # than walking an ended game into its end step and the next turn.
+    if game.is_game_over():
+        return
     phase = game.current_turn_phase
     step = game.current_step
 
@@ -407,7 +415,8 @@ def _advance_phase(session: Session) -> None:
             return
         # Resume after a held upkeep/draw step on the AI's turn: close it and move on,
         # holding again at the draw step if the human flagged it.
-        game.close_beginning_step()
+        if not _leave_step(session, game.close_beginning_step):
+            return
         # Island Sanctuary: the human must choose whether to skip their draw before
         # the draw step resolves (CR 504 replacement choice). Pause for the prompt
         # instead of drawing through it.
@@ -431,7 +440,10 @@ def _advance_phase(session: Session) -> None:
         return
 
     if phase == "precombat_main":
-        game._close_current_priority_step()
+        # Left the engine's way, so a question its window stops on holds the
+        # phase (CR 608.2) — see `_leave_step`.
+        if not _leave_step(session, game._close_current_priority_step):
+            return
         # The turn's plan decides, not this line: normally the combat phase, but
         # an effect resolved during this main phase may have added one after it
         # (CR 500.8 - Relentless Assault).
@@ -550,7 +562,13 @@ def _advance_phase(session: Session) -> None:
         hold_damage = _self_should_hold(session, "combat_damage") or _ai_should_hold(
             session, "combat_damage"
         )
-        game.advance_combat_phase(allow_damage_skip=not hold_damage)
+        # Through `_leave_step`: a step whose window stopped on an AI seat's
+        # question is answered and left in this request, and one that stopped
+        # on a human's waits here for the answer (CR 608.2, CR 500.2).
+        _leave_step(
+            session,
+            lambda: game.advance_combat_phase(allow_damage_skip=not hold_damage),
+        )
         # On the AI's turn the engine leaves priority with the active AI; hand it to
         # the human so they can act at the step they flagged (mirrors the upkeep/draw
         # and declare-blockers holds). On the human's own turn the active player is
@@ -565,14 +583,16 @@ def _advance_phase(session: Session) -> None:
             _hold_priority_for_human(session)
         return
     if phase == "postcombat_main":
-        game._close_current_priority_step()
+        if not _leave_step(session, game._close_current_priority_step):
+            return
         # Normally the ending phase; an extra combat phase added after this one
         # (CR 500.8) is entered here instead of being recorded and lost.
         game.enter_next_turn_phase("postcombat_main")
         _clear_cleanup_selection(session)
         return
     if step == "end":
-        game.close_end_step()
+        if not _leave_step(session, game.close_end_step):
+            return
         should_defer_cleanup = _seat_type(session, session.current_turn) == "human"
         cleanup_completed = game.resolve_cleanup_step(
             session.current_turn,

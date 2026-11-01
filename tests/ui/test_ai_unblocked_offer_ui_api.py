@@ -65,7 +65,9 @@ def _ai_attacks_into(blockers, *, life: int = 20):
     for _ in range(12):
         state = _state(sid, 0)
         asked = asked or state["unblocked_assignment"] is not None
-        if state["current_turn_phase"] != "combat":
+        # The combat damage that ends the game ends everything (CR 104.1):
+        # the rail stays where the damage left it.
+        if state["current_turn_phase"] != "combat" or state["winner"] is not None:
             break
         if state["current_step"] == "declare_blockers" and not state["combat"]["blockers_locked"]:
             pairs = {str(slot): 0 for slot in range(len(walls))}
@@ -75,7 +77,10 @@ def _ai_attacks_into(blockers, *, life: int = 20):
             assert _act(sid, seat=0, action="pass_priority").status_code == 200
         else:
             assert _act(sid, seat=0, action="ai_step").status_code == 200
-    assert _state(sid, 0)["current_turn_phase"] != "combat", "combat never finished"
+    final = _state(sid, 0)
+    assert final["current_turn_phase"] != "combat" or final["winner"] is not None, (
+        "combat never finished"
+    )
     assert not asked, "the human defender has no choice to make (CR 510.1)"
     return game, beast, walls
 

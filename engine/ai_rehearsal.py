@@ -275,6 +275,9 @@ _GAME_BOOKKEEPING = frozenset({
     "prompt_driver", "interactive_seats", "enforce_mana_costs",
     "resolving_seats", "resolving_stack_item", "pending_choices",
     "current_phase", "current_turn_phase", "current_step",
+    # Which step's leaving stopped part-way for an answer (CR 500.2): where
+    # the turn is, like the three fields above, not anything a cast did.
+    "held_step",
     # Read apart, by the names of the cards each permission covers
     # (`_permission_entries`), so that the one a cast spends can be told
     # apart from what the cast did.

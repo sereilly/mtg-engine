@@ -66,6 +66,64 @@ class PhaseStepsMixin:
             if top.resolution_held or self.announcement_choice_for(top) is not None:
                 return
 
+    def awaits_an_answer(self) -> bool:
+        """Whether a prompt is owed that this table's priority windows wait for.
+
+        CR 608.2 / CR 117.3b: while a resolution waits on a decision it is not
+        finished, so no step advances and nobody receives priority. Which
+        decisions a window waits for is the window's own derivation, asked here
+        rather than restated: ``_resolve_priority_window`` pauses for **any**
+        seat's prompt at a table with an interactive seat, and for none at a
+        table without one (whose prompts are drained afterwards, which is what
+        keeps a seeded run as it was).
+
+        The combat rail asked a narrower question — a prompt an *interactive*
+        seat owes — so an AI seat's "you may" (Brood Sliver's token, an AI's
+        provoke) paused the window and the rail then walked past it: nobody it
+        waited for owed anything, and the step ended with the rest of its
+        triggers on the stack. Two questions, one of them wrong; this is the
+        one.
+        """
+        return bool(self.interactive_seats) and self.waiting_prompt() is not None
+
+    def window_left_unfinished(self) -> bool:
+        """After a step's priority window: whether the step must not end yet.
+
+        CR 500.2: a step ends "when the stack is empty and all players pass in
+        succession". ``_resolve_priority_window`` returns with an object still
+        on the stack when its resolution stopped to ask (CR 608.2), and a step
+        closed after it anyway carried that object — and every trigger beneath
+        it — into the next step: Brood Sliver's token offered in end of
+        combat, an AI's Essence Sliver life gain resolved in its end step.
+
+        Every site that leaves a step after draining its window asks this; a
+        step that must wait is held open (:meth:`hold_step_open`) and its
+        leaving resumes at the window once the answer is in. At a table with
+        no interactive seat the window always drains, so this is always False
+        there and nothing about a headless or simulated game moves.
+        """
+        return bool(self.stack) or self.awaits_an_answer()
+
+    def hold_step_open(self) -> None:
+        """Record that the current step's leaving stopped at its window (see
+        ``Game.held_step``)."""
+        self.held_step = (self.turn, self.current_turn_phase, self.current_step)
+
+    def step_held_open(self) -> bool:
+        """Whether the current step's leaving stopped at its window and has not
+        resumed — the question a caller asks to know that the step it tried to
+        leave is still owed an answer, rather than finished."""
+        return self.held_step == (self.turn, self.current_turn_phase, self.current_step)
+
+    def resume_held_step(self) -> bool:
+        """Spend the held-step record, answering whether the current step's
+        leaving is a *resumption*: what leaving the step does before its window
+        (the step's log line, end-of-combat triggers, the until-end-of-combat
+        sweeps) has been done once already and must not be done again."""
+        resuming = self.step_held_open()
+        self.held_step = None
+        return resuming
+
     def _check_between_resolutions(self) -> None:
         """The state-based check made after an object resolves and before the
         next one does (CR 704.3: "Whenever a player would get priority";
@@ -274,6 +332,13 @@ class PhaseStepsMixin:
             self.start_priority_window(self.active_player_index)
             return
         self._resolve_priority_window()
+        if self.window_left_unfinished():
+            # CR 608.2 / 500.2: an upkeep trigger still waiting on its answer
+            # (Bog Elemental's "unless you sacrifice a land") holds the step;
+            # the web layer's beginning phase drains it and ends the step
+            # (``web/turn_steps._pause_beginning_phase``) before the draw.
+            self.hold_step_open()
+            return
         self._on_step_or_phase_end(phase, step)
 
     def start_priority_window(self, starting_player_index: int | None = None) -> None:
@@ -788,13 +853,23 @@ class PhaseStepsMixin:
             break
         return candidate
 
-    def _close_current_priority_step(self) -> None:
+    def _close_current_priority_step(self) -> bool:
+        """Drain the current step's window and end the step; True when it ended.
+
+        False when the window left something owed (:meth:`window_left_unfinished`):
+        the step is held open and the caller must not enter the next one — the
+        next call resumes at the window."""
         phase = self.current_turn_phase
         step = self.current_step
+        self.resume_held_step()
         if self._receives_priority(step):
             self._resolve_priority_window()
+            if self.window_left_unfinished():
+                self.hold_step_open()
+                return False
             self.clear_priority_window()
         self._on_step_or_phase_end(phase, step)
+        return True
 
     def end_the_turn(self) -> None:
         """CR 724.1 — the expedited process "End the turn." performs.
@@ -860,6 +935,10 @@ class PhaseStepsMixin:
         # and this is the line every one of them already passes through.
         if phase != self.current_turn_phase:
             self._enter_planned_phase(phase)
+        if (phase, step) != (self.current_turn_phase, self.current_step):
+            # A step held open is over once another begins, however it was
+            # left (the End Turn button, CR 724.1's jump).
+            self.held_step = None
         self.current_turn_phase = phase
         self.current_step = step
         self.current_phase = self._public_phase_name(phase, step)

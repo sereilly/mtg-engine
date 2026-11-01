@@ -433,9 +433,31 @@ class EndStepMixin:
         if self._receives_priority(step):
             self.start_priority_window(self.active_player_index)
 
-    def close_end_step(self) -> None:
+    def close_end_step(self) -> bool:
+        """End the end step; True when it ended.
+
+        **What is on the stack resolves here, in the step** (CR 500.2: a step
+        ends when the stack is empty and all players pass). This only cleared
+        the priority window, so an end-step trigger nobody had passed priority
+        over — every one on an AI's turn at a table with a human, 37 of the 57
+        permanents in the pool with one — rode into the cleanup step and
+        resolved in its ``_settle`` instead, after the hand-size discard.
+
+        Drained only when something is there: a caller that has already
+        drained the window (the simulator's ``_drain_step``) gave the players
+        their last priority on an empty stack, and a second offer would be a
+        priority window CR 513 does not have. False when the window stops on a
+        question (CR 608.2): the step is held open and cleanup must wait.
+        """
         if self.current_turn_phase != "ending" or self.current_step != "end":
-            return
+            return True
+        self.resume_held_step()
         if self._receives_priority(self.current_step):
+            if self.stack:
+                self._resolve_priority_window()
+            if self.window_left_unfinished():
+                self.hold_step_open()
+                return False
             self.clear_priority_window()
         self._on_step_or_phase_end("ending", "end")
+        return True
