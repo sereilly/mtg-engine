@@ -182,6 +182,22 @@ def count_from_payload(
     # ``discarded_count`` beside it is the whole resolution's total, and the
     # per-recipient channel would answer one seat at a time. An empty or absent
     # record is zero, which is what "each player discarded nothing" means.
+    # "…you may pay {X}. If you do, that player reveals **X** cards …"
+    # (Hollow Specter.) CR 107.3f's X, chosen by the ability's controller as
+    # they pay it: the payment is the ``pay_any_amount`` prompt, which writes
+    # what each seat paid under a ``{seat: amount}`` record, and this reads the
+    # controller's own entry. "You" is the ability's controller (CR 109.5)
+    # whoever is performing the branch. A seat the record never mentions paid
+    # nothing.
+    own_seat = spec.get("own_seat_record")
+    if own_seat is not None:
+        controller = getattr(context, "ability_controller", None) or context.caster
+        seat = next(
+            (i for i, player in enumerate(game.players) if player is controller),
+            None,
+        )
+        paid = (context.results.get(str(own_seat)) or {}) if seat is not None else {}
+        return max(0, _scaled(int(paid.get(seat, 0) or 0), spec))
     greatest = spec.get("greatest_per_seat")
     if greatest is not None:
         tallies = context.results.get(str(greatest)) or {}

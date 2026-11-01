@@ -69,6 +69,17 @@ def return_permanent_to_owners_hand(game, permanent, fallback_owner=None):
     return owner
 
 
+#: "**Each player** flips a coin. Each player **whose coin comes up tails**
+#: sacrifices a creature of their choice." (Goblin Assassin.) The face each
+#: seat's coin showed, as ``{seat: "heads" | "tails"}`` in the resolution's
+#: scratchpad — written by ``flip_coin`` with ``flipper: each_player`` and read
+#: by the ``coin_came_up_tails`` seat deed (``handlers/_filters.PLAYER_DEEDS``).
+#: Faces rather than wins: the card's ruling (2004-10-04) is "This coin flip
+#: has no winner or loser" — CR 705.2's flip that cares only whether the coin
+#: comes up heads or tails.
+COIN_FACES_BY_SEAT = "coin_faces_by_seat"
+
+
 def flip_coin(win_probability: float = 0.5) -> bool:
     """Flip a coin, returning True on a win (CR 705). Draws from the module-level
     RNG that ``run_ai_simulation`` seeds, so a given seed replays identically."""

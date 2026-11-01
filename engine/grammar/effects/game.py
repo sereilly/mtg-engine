@@ -171,6 +171,14 @@ def _parse_flip_coin(stream: TokenStream) -> ast.Statement | None:
     if stream.accept_phrase("that", "player", "flips", "a", "coin"):
         return ast.FlipCoin(flipper="that_player")
     stream.reset(mark)
+    # "**Each player flips a coin.** Each player whose coin comes up tails
+    # sacrifices a creature of their choice." (Goblin Assassin.) A coin per
+    # seat, and a flip nobody wins (the card's 2004-10-04 ruling) — what the
+    # sentence behind it reads is each seat's face. No run tail, for the
+    # reason "that player" has none.
+    if stream.accept_phrase("each", "player", "flips", "a", "coin"):
+        return ast.FlipCoin(flipper="each_player")
+    stream.reset(mark)
     return None
 
 

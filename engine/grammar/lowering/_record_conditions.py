@@ -167,6 +167,10 @@ def lower_record_condition(
         # asked alone. Its own kind rather than ``entered_from`` with the
         # first half switched off, because the evaluator would then be asked a
         # question about a zone the card never printed.
+        # "…if you **didn't** cast it from your hand" (Phage) rides the
+        # payload only when printed, so every positive reading keeps its shape.
+        if condition.negated:
+            return {"kind": "cast_from", "zone": condition.zone, "negated": True}
         return {"kind": "cast_from", "zone": condition.zone}
     if isinstance(condition, ast.RevealedCardIs):
         # The pronoun's referent again, and the same discipline: a reveal

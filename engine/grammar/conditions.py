@@ -367,11 +367,16 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         # node, not that one with a half missing. The zone word is required
         # and checked against the zones a spell is cast from; anything else
         # resets, and "it" is the permanent that fired the trigger.
+        # "if you **didn't** cast it from your hand" (Phage the Untouchable)
+        # is the same record asked the other way round.
+        cast_negated = bool(
+            stream.accept_word("didn't") or stream.accept_phrase("did", "not")
+        )
         if stream.accept_phrase("cast", "it", "from", "your"):
             zone = stream.peek_word()
             if zone in ("hand", "graveyard", "exile", "library"):
                 stream.advance()
-                return ast.CastFrom(zone)
+                return ast.CastFrom(zone, negated=cast_negated)
     stream.reset(mark)
 
     # "it entered from your graveyard or you cast it from your graveyard"

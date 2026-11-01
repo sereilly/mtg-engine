@@ -691,7 +691,9 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     """
     mark = stream.mark()
     player = parse_player_ref(stream)
-    if player is None or player.kind not in ("target_player", "target_opponent"):
+    if player is None or player.kind not in (
+        "target_player", "target_opponent", "that_player",
+    ):
         stream.reset(mark)
         return None
     if not stream.accept_phrase("reveals", "their", "hand"):
@@ -700,6 +702,14 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
             stream.reset(mark)
             return None
         return _reveal_shown_and_choose(stream, mark, player, shown)
+    if player.kind == "that_player":
+        # "**That player** reveals X cards from their hand and you choose one
+        # of them." (Hollow Specter) is the shown-cards branch above, and only
+        # it: the whole-hand template below keeps the targeted seats it was
+        # written for, so every "that player reveals their hand …" sentence
+        # keeps the reading it already had.
+        stream.reset(mark)
+        return None
     # "…reveals their hand**, then** you choose a card…" (Lobotomy) is the same
     # two sentences with the weaker join. English writes one clause either way
     # and the referent is identical — "it" is the hand this sentence revealed —
@@ -796,7 +806,9 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     return ast.RevealHandAndChoose(player, chosen.filter, fate="name")
 
 
-def _accept_reveals_cards_from_hand(stream: TokenStream) -> "int | None":
+def _accept_reveals_cards_from_hand(
+    stream: TokenStream,
+) -> "int | ast.Var | None":
     """``reveals <N> cards from their hand`` at the cursor — the printed number,
     or None with the cursor where it was. (Blackmail.)
 
@@ -804,7 +816,9 @@ def _accept_reveals_cards_from_hand(stream: TokenStream) -> "int | None":
     the subject performs the reveal, so it is that player who picks the N
     cards (CR 608.2c), and "if the player has less than 3 cards, all of them
     are revealed" (the 2004-10-04 ruling) is CR 608.2's as-much-as-possible.
-    A printed number only; "any number of" is a different offer.
+    A printed number, or **X** ("that player reveals **X** cards from their
+    hand", Hollow Specter — the X the payment in front of it named); "any
+    number of" is a different offer.
     """
     mark = stream.mark()
     if not stream.accept_word("reveals"):
@@ -815,17 +829,20 @@ def _accept_reveals_cards_from_hand(stream: TokenStream) -> "int | None":
         stream.reset(mark)
         return None
     if not (
-        isinstance(count, ast.Fixed) and count.value >= 1
+        (
+            (isinstance(count, ast.Fixed) and count.value >= 1)
+            or isinstance(count, ast.Var)
+        )
         and stream.accept_word("cards", "card")
         and stream.accept_phrase("from", "their", "hand")
     ):
         stream.reset(mark)
         return None
-    return count.value
+    return count if isinstance(count, ast.Var) else count.value
 
 
 def _reveal_shown_and_choose(
-    stream: TokenStream, mark, player: ast.PlayerRef, shown: int,
+    stream: TokenStream, mark, player: ast.PlayerRef, shown: "int | ast.Var",
 ) -> "ast.RevealHandAndChoose | None":
     """``…reveals three cards from their hand and you choose one of them. That
     player discards that card.`` after the reveal has been read. (Blackmail.)

@@ -1,4 +1,4 @@
-"""Text-keyed untap-step restrictions (CR 502).
+"""Text-keyed untap-step restrictions and permissions (CR 502).
 
 "Players skip their untap steps", "players can't untap more than one land
 during their untap steps", "creatures with power 3 or greater don't untap
@@ -73,6 +73,15 @@ class UntapRestriction:
                   makes "you" the Wurm's controller, so an opponent's untap
                   step under it is unconstrained — and a row that dropped the
                   pronoun would be a creature that taxes the whole table.
+    untaps_in_others_steps -- with scope=:data:`OTHER_PLAYERS_STEPS_SCOPE`,
+                  the noun phrase the source's controller untaps **during
+                  each other player's untap step**, as a filter payload
+                  (``{}`` is CR 110.1's bare "permanents"). "Untap all
+                  permanents you control during each other player's untap
+                  step." (Seedborn Muse.) The fourth family and the only one
+                  that *adds* untapping rather than withholding it; it shares
+                  the table because it is the same step's text, read by the
+                  same support gate and the same step.
     """
 
     scope: str
@@ -81,6 +90,7 @@ class UntapRestriction:
     chosen_type_options: tuple[str, ...] | None = None
     only_while_source_untapped: bool = False
     controllers_step_only: bool = False
+    untaps_in_others_steps: dict | None = None
 
 
 # "As long as this artifact is untapped, ..." (Winter Orb) — a self-state
@@ -126,6 +136,19 @@ def permanent_in_limited_scope(permanent, scope: str) -> bool:
 #: options and a player picks one, so the untap step has to ask before it can
 #: enforce anything.
 TYPE_CHOICE_SCOPE = "choice"
+
+
+#: The scope word of the fourth family: a permission, not a restriction.
+#: "Untap all permanents you control during each other player's untap step."
+#: (Seedborn Muse.) What untaps is the source controller's, in a step that is
+#: somebody else's — so none of the other three families binds it: every one
+#: of them is printed about a player's *own* step ("during their untap steps",
+#: "during its controller's untap step", "during your untap step"), and the
+#: card's ruling (2004-10-04) says exactly that: "many effects say that the
+#: permanent does not untap during its controller's untap step, and this
+#: card's ability occurs during other players' untap steps. If a card does say
+#: this, then Seedborn Muse can untap it."
+OTHER_PLAYERS_STEPS_SCOPE = "other_players_steps"
 
 
 def _printed_type_options(phrase: str) -> tuple[str, ...] | None:
@@ -216,6 +239,24 @@ def _subject_block(match: re.Match) -> "UntapRestriction | None":
     """
     blocked = _blocked_subject(match.group("subject"))
     return None if blocked is None else UntapRestriction(scope="block", blocked=blocked)
+
+
+def _untap_in_other_players_steps(match: re.Match) -> "UntapRestriction | None":
+    """"Untap all <noun phrase> you control during each other player's untap
+    step." (Seedborn Muse.)
+
+    The noun phrase is payload, read by :func:`_blocked_subject` — the one
+    reader of a plural noun phrase in this module — so "creatures and lands"
+    or "green creatures" is the same row. A phrase the parser cannot read or
+    the matcher cannot test declines, which leaves the card unsupported rather
+    than untapping more than it prints.
+    """
+    described = _blocked_subject(match.group("subject"))
+    if described is None:
+        return None
+    return UntapRestriction(
+        scope=OTHER_PLAYERS_STEPS_SCOPE, untaps_in_others_steps=described
+    )
 
 
 #: "…each player **chooses artifact, creature, or land** during their untap
@@ -356,6 +397,18 @@ UNTAP_RESTRICTION_PATTERNS: tuple[tuple[re.Pattern, Callable[[re.Match], UntapRe
             rf"^{_UNTAP_TYPE_CHOICE_ASK_BODY}\. {_UNTAP_TYPE_CHOICE_LIMIT_BODY}$"
         ),
         _type_choice,
+    ),
+    (
+        # "Untap all permanents you control during each other player's untap
+        # step." (Seedborn Muse.) The permission family
+        # (:data:`OTHER_PLAYERS_STEPS_SCOPE`). "You control" is required: it is
+        # what makes the untapped set the source controller's, and a row
+        # without it would untap another seat's board in its own step.
+        re.compile(
+            r"^untap all (?P<subject>.+?) you control "
+            r"during each other player's untap step$"
+        ),
+        _untap_in_other_players_steps,
     ),
 )
 

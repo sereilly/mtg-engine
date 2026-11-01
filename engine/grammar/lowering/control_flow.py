@@ -37,13 +37,14 @@ time: what differs between the callers is only which parser they already hold.
 
 from __future__ import annotations
 
-from ...oracle_types import (EVENT_SPELL_MANA_COST, OracleInstruction,
+from ...oracle_types import (EVENT_SPELL_MANA_COST, MANA_PAID_BY_SEAT,
+                             OracleInstruction,
                              OTHER_THAN_EVENT_SUBJECT_PLAYER,
                              REVEALED_TOP_CARDS_BY_SEAT,
                              STACK_TARGET_CONTROLLER)
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import count_spec
+from ._amounts import _stamp_x_from_count, count_spec
 from ._collapses import (event_seat_performs, offered_seat_performs,
                          without_restated_target,
                          _each_player_optional_discard,
@@ -745,6 +746,52 @@ def _resolved_offer_actor(
     return actor
 
 
+def _free_x_offer(
+    node: ast.May, produced: frozenset[str], event: str | None,
+    event_subject: object | None, *, lower_statement,
+) -> "tuple[OracleInstruction, ...] | None":
+    """"You may pay {X}. If you do, <sentence reading X>." in a **triggered**
+    ability that defines no X (Hollow Specter), or None.
+
+    CR 107.3f: "If the value of X isn't defined, the controller of the spell or
+    ability chooses the value of X at the appropriate time", and the card's
+    ruling (2004-10-04) says when: "You decide on the value of X and pay {X}
+    during resolution." So the offer is not a price at all but a payment whose
+    size the payer names — which is exactly ``pay_any_amount`` (Liege of the
+    Hollows): the controller's prompt alone, its answer recorded per seat, and
+    every step of the if-you-do branch reading that record as its X. Declining
+    and paying {0} are the same answer, which is the ruling's other half: "X
+    can be zero, but then that player discards nothing."
+
+    **Only a trigger.** A spell or an activated ability with {X} in its own
+    cost announces X (CR 107.3a), and "unless its controller pays {X}" on such
+    a spell (Power Sink) means that announced number; the lowering cannot see
+    the card's cost, so it takes the one position where no announcement
+    exists. **Only the bare shape**: the price is X alone, nothing but an
+    if-you-do behind it. A where-clause that *does* define the X ("you may pay
+    {X}, where X is …", Primordial Ooze) wraps this node and stamps its own
+    definition over the branch — and every step here already carries one, so
+    ``_stamp_x_from_count`` refuses the pair ("two counts cannot share one X")
+    rather than letting the clause be overruled by the payment.
+    """
+    if (
+        event is None
+        or node.actor.kind != "you"
+        or node.then is None
+        or not isinstance(node.cost, ast.ManaCost)
+        or node != ast.May(node.actor, cost=node.cost, then=node.then)
+        or _may_cost_payload(node) != {"generic": "x"}
+    ):
+        return None
+    then = lower_statement(
+        node.then, produced | {MANA_PAID_BY_SEAT}, event=event,
+        event_subject=event_subject, whole_effect=False,
+    )
+    return (
+        OracleInstruction("each_player_pays_any_mana", "", {"actor": "you"}),
+    ) + _stamp_x_from_count(then, {"own_seat_record": MANA_PAID_BY_SEAT})
+
+
 def _lower_may(
     node: ast.May, produced: frozenset[str], event: str | None = None,
     event_subject: object | None = None,
@@ -814,6 +861,14 @@ def _lower_may(
     # seat only a previous step recorded, so it is asked with *produced* in hand
     # rather than of the node alone.
     collapsed = _referent_seat_optional_draw(node, produced)
+    if collapsed is not None:
+        return collapsed
+    # "Whenever this creature deals combat damage to a player, you may pay
+    # {X}. If you do, …" (Hollow Specter.) An X nothing defines — needs the
+    # sentences behind the offer, so it is asked here with them in hand.
+    collapsed = _free_x_offer(
+        node, produced, event, event_subject, lower_statement=lower_statement,
+    )
     if collapsed is not None:
         return collapsed
     # **An offer made to a set of seats rebinds what "that player" means.**

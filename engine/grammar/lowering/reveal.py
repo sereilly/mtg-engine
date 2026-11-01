@@ -947,15 +947,19 @@ def _lower_reveal_hand_and_choose(
         # then the chooser's pick among those. One pick only: the chain of
         # picks after the first (Mind Warp's X) re-derives its legal set from
         # the whole hand, which would widen "one of them" to every card.
+        shows = node.revealer_shows
         if (
             node.count != ast.Fixed(1) or node.up_to or not node.revealed
-            or node.revealer_shows < 1
+            or not (isinstance(shows, ast.Var) or int(shows) >= 1)
         ):
             raise LoweringError(
                 "a pick among the cards a player chose to reveal is one card",
                 node=node,
             )
-        payload["revealer_shows"] = int(node.revealer_shows)
+        # "…reveals **X** cards from their hand" (Hollow Specter): the string
+        # every amount path resolves against the resolution's X, defined by
+        # whatever in the sentence defines it (``x_from_count``).
+        payload["revealer_shows"] = "x" if isinstance(shows, ast.Var) else int(shows)
     if node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS:
         # "Whenever this creature deals combat damage to a player, look at
         # **that player's** hand and choose a card from it." (Doomsday
