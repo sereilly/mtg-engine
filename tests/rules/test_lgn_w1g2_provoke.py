@@ -190,7 +190,9 @@ def test_the_requirement_lasts_this_combat_and_not_the_next(set_pool):
     resolve_stack(game)
     game.advance_combat_phase()
     assert game.declare_blockers(1, {0: 0})[0]
-    while game.current_turn_phase == "combat":
+    for _ in range(12):
+        if game.current_turn_phase != "combat":
+            break
         game.advance_combat_phase()
     assert game.current_turn_phase == "postcombat_main"
     assert MUST_BLOCK_ATTACKERS_THIS_COMBAT not in wall.metadata
