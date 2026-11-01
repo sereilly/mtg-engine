@@ -5,7 +5,16 @@ The exact twin of ``engine/object_colors.py`` one characteristic over, and it
 exists for that module's reason rather than by analogy. CR 613.1 applies the
 layers to a **permanent**; a card in a hand, a library, a graveyard or the exile
 has no layer stack, so this engine reads its printed type line — which is right
-for every card in the pool but one.
+for every card in the pool but two.
+
+"Mistform Ultimus is every creature type (even if this card isn't on the
+battlefield)." A characteristic-defining ability (CR 604.3) is part of what the
+card *is* in every zone, so it is not an override here but part of the one type
+parse every zone shares (``layer_bridge._printed_shape``, through
+:func:`every_creature_type_subtypes` below) — the printed read every reader
+here already makes. In the layer seed it applies before every layer-4 effect
+(CR 613.3), so a type-setting effect — Conspiracy's first sentence included —
+replaces it.
 
 "Creatures you control are the chosen type. **The same is true for creature
 spells you control and creature cards you own that aren't on the battlefield.**"
@@ -32,6 +41,118 @@ line, which for a card outside the battlefield is the whole of what there is.
 """
 
 from __future__ import annotations
+
+import re
+from functools import lru_cache
+
+# ---------------------------------------------------------------------------
+# "Every creature type" — a characteristic-defining ability (CR 604.3).
+# ---------------------------------------------------------------------------
+
+#: "Mistform Ultimus is every creature type (even if this card isn't on the
+#: battlefield)." The self-reference collapsed to "this creature" first, so the
+#: card's own name is not part of the pattern; the parenthetical is optional
+#: because the normalizer that strips reminder text strips it too, and the
+#: sentence means the same thing without it (CR 604.3 makes every CDA work in
+#: every zone — the words only say so).
+_EVERY_CREATURE_TYPE = re.compile(
+    r"^this (?:creature|card) is every creature type"
+    r"(?: \(even if this card isn't on the battlefield\))?$"
+)
+
+
+#: The label the grammar's registry claim gives the sentence
+#: (``grammar/registries.registry_for_line``). Nothing dispatches on it.
+EVERY_CREATURE_TYPE_CLAIM = "object_creature_types"
+
+
+def every_creature_type_line(line: str, card_name: str | None = None) -> bool:
+    """Whether *line* is the "is every creature type" CDA, in full.
+
+    The one reader of the sentence: the support gate, the grammar's registry
+    claim and the type seed (:func:`defines_every_creature_type`) all ask it,
+    so a wording it cannot read is a card reported unsupported rather than one
+    admitted with every creature type missing.
+    """
+    from .self_reference import _collapse_self_references
+
+    lowered = " ".join(line.strip().lower().split()).rstrip(".")
+    return bool(
+        _EVERY_CREATURE_TYPE.match(
+            _collapse_self_references(lowered, card_name, "this creature")
+        )
+    )
+
+
+@lru_cache(maxsize=None)
+def defines_every_creature_type(oracle_text: str, card_name: str) -> bool:
+    """Whether a card printing *oracle_text* is every creature type.
+
+    CR 702.73a's changeling under its pre-Lorwyn wording (Mistform Ultimus):
+    "This object is every creature type." A characteristic-defining ability,
+    so it is part of what the card **is** in every zone (CR 604.3) — a hand
+    card for amplify, a library card for "search for a Goblin card", a spell
+    for "Sliver spells can't be countered", and a permanent, where CR 613.3
+    applies it first in layer 4 so any later type-*setting* effect replaces it
+    (the card's ruling, 2006-09-25: "if Mistform Ultimus becomes another type
+    as the result of a spell or ability, it will lose all its other creature
+    types").
+
+    Cached per card text, because it is asked by the type seed on every
+    characteristic read.
+    """
+    if not oracle_text or "every creature type" not in oracle_text.lower():
+        return False
+    return any(
+        every_creature_type_line(line, card_name)
+        for line in oracle_text.splitlines()
+    )
+
+
+def every_creature_type_subtypes(
+    card_types, subtypes, oracle_text: str, card_name: str
+) -> frozenset[str]:
+    """*subtypes* with every creature type added when the card's text defines
+    them (:func:`defines_every_creature_type`) and it is a creature.
+
+    "Creature" is required for CR 205.3d's reason: an object can have a
+    creature type only if it is a creature (or kindred), so a Mistform Ultimus
+    an effect had made a noncreature would not be a Goblin. The vocabulary
+    (``data/vocabulary/``) is the list, never one spelled here.
+    """
+    if "creature" not in card_types or not defines_every_creature_type(
+        oracle_text, card_name
+    ):
+        return frozenset(subtypes)
+    from .grammar.vocabulary import CREATURE_TYPES
+
+    return frozenset(subtypes) | CREATURE_TYPES
+
+
+def restore_struck_every_creature_type(perm, card, card_types, subtypes):
+    """*subtypes* (the layer seed's parse of *card*, *perm*'s effective card)
+    with every creature type put back if layer 6 struck the CDA defining them.
+
+    "Mistform Ultimus has all creature types even if an effect removes its
+    ability. Type-changing static abilities will apply in layer 4 before
+    effects such as Sudden Spoiling's remove them in layer 6." (The card's
+    ruling, 2006-09-25; CR 613.1, 613.6.) ``effective_card`` is the finished
+    answer, with layer 6's removals struck out, so under a Humility its text
+    no longer carries the sentence; ``card_before_layer_6`` is what layer 4
+    reads.
+
+    Asked only where something was folded: a permanent whose effective card
+    *is* its printed card has had nothing removed, so the common read — this
+    is on every characteristic read — pays an identity test and nothing more.
+    """
+    if card is perm.card or "creature" not in card_types:
+        return subtypes
+    before = perm.card_before_layer_6
+    if before is card:
+        return subtypes
+    return every_creature_type_subtypes(
+        card_types, subtypes, before.oracle_text or "", before.name
+    )
 
 
 def _seat_index(game, seat) -> int | None:
@@ -237,7 +358,12 @@ __all__ = [
     "card_creature_types",
     "creature_type_override_for_seat",
     "creature_types",
+    "EVERY_CREATURE_TYPE_CLAIM",
+    "defines_every_creature_type",
+    "every_creature_type_line",
+    "every_creature_type_subtypes",
     "object_creature_types",
+    "restore_struck_every_creature_type",
     "share_a_creature_type",
     "shared_creature_type_count",
     "shares_a_creature_type_with_each",

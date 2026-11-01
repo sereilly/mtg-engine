@@ -69,6 +69,8 @@ from ..damage_source_colors import colorless_source_line
 from ..draw_step_modifiers import draw_step_bonus_for, skips_own_draw_step
 from ..enter_effects import enter_effect_line
 from ..named_counters import CAP_CLAIM, counter_cap_line
+from ..object_creature_types import (EVERY_CREATURE_TYPE_CLAIM,
+                                     every_creature_type_line)
 from ..extra_triggers import extra_trigger_line
 from ..flashback import FLASHBACK_CLAIM, flashback_claims_line
 from ..land_play_allowance import land_play_line
@@ -511,6 +513,14 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # matcher asked here.
     if counts_as_claims_line(line):
         return COUNTED_NAMES_CLAIM
+
+    # engine/object_creature_types.py -- "Mistform Ultimus is every creature
+    # type (even if this card isn't on the battlefield)." A characteristic-
+    # defining ability (CR 604.3) that the type seed reads off the card's own
+    # text in every zone (``layer_bridge._printed_shape``), so there is no
+    # instruction; claimed through the reader the seed asks.
+    if every_creature_type_line(line, card_name):
+        return EVERY_CREATURE_TYPE_CLAIM
 
     return None
 

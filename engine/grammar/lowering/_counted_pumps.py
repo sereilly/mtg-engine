@@ -276,9 +276,25 @@ def lower_counted_pump(
             # than dropped, for that removal's reason: it restates the trigger's
             # own narrowing, and a word consumed and never read is a word that
             # could be deleted with no change to what the card does.
+            #
+            # "Whenever a Beast becomes blocked, **it** gets +1/+1 until end of
+            # turn for each creature blocking it." (Berserk Murlodont.) The
+            # same sentence with the pronoun for "that Beast" — one referent,
+            # the object the trigger fired about. **No noun phrase rides with
+            # it**: the parser rebinds the trigger's own filter onto the bare
+            # "it", but nothing is printed there to re-check (CR 400.7 keeps it
+            # the same object whatever it has become since; a Beast made a
+            # Wizard in response is still pumped). The source's own "it" and an
+            # Aura host's are other readings and stay out.
+            bare_it = (
+                isinstance(node.subject, ast.TargetSpec)
+                and node.subject.quantifier == "it"
+                and not node.subject.filter.is_source
+                and not node.subject.filter.is_enchanted
+            )
             if (
                 isinstance(node.subject, ast.TargetSpec)
-                and node.subject.quantifier == "that"
+                and (node.subject.quantifier == "that" or bare_it)
                 and not node.subject.targeted
                 and node.per_each.blocking_bound_target
                 and node.duration.kind is not None
@@ -289,7 +305,9 @@ def lower_counted_pump(
                     raise LoweringError(
                         "no pump handler ends at this duration", node=node
                     )
-                described = _filter_payload(node.subject.filter)
+                described = (
+                    {} if bare_it else _filter_payload(node.subject.filter)
+                )
                 if object_only_filter(described) is None:
                     raise LoweringError(
                         "the event subject's pump carries a restriction the "

@@ -183,6 +183,8 @@ class DeathsMixin:
                 self.players[owner_seat] if owner_seat is not None else player
             )
             grave_owner.creatures_put_into_your_graveyard_this_turn += 1
+            if not permanent.metadata.get("is_token", False):
+                grave_owner.nontoken_creatures_put_into_your_graveyard_this_turn += 1
             if next(matching_triggers(
                 permanent.effective_card,
                 condition_kinds={"dies"},

@@ -18,7 +18,7 @@ rampage, flanking) are ``block_triggers.py``. All three are composed onto
 import random
 
 from ..aura_restrictions import attached_combat_restrictions
-from ..combat_restrictions import declaration_tap_costs
+from ..combat_restrictions import declaration_tap_costs, toll_mana
 from ..mana_payment import mana_cost_label, plan_payment
 from ..subject_filters import subject_matches
 from ..models import Permanent
@@ -503,6 +503,16 @@ class DeclareBlockersStepMixin:
         """
         costs: list[dict[str, int]] = []
         for instruction in compile_card_oracle(blocker.effective_card).instructions:
+            # "This creature can't block unless its controller pays {1} for
+            # each Cleric on the battlefield." (Whipgrass Entangler's grant.)
+            # The unthresholded toll: owed whatever it blocks, priced by
+            # ``combat_restrictions.toll_mana`` — the attack step's reader of
+            # the same sentence's other half, so the two charge one price.
+            if instruction.kind == "cant_block_unless_pay":
+                cost = toll_mana(self, instruction.payload, blocker)
+                if cost:
+                    costs.append(cost)
+                continue
             if instruction.kind != "cant_block_power_n_or_greater_unless_pay":
                 continue
             if attacker.effective_power < int(instruction.payload.get("power", 0)):

@@ -14,7 +14,7 @@ are ``attack_legality.py``'s, composed onto ``Game`` directly after this.
 from ..attack_tapping import attacking_causes_tap
 from ..aura_restrictions import attached_combat_restrictions
 from ..combat_restrictions import (declaration_tap_costs, defender_attack_cap,
-                                   participation_cap)
+                                   participation_cap, toll_mana)
 from ..mana_payment import mana_cost_label, plan_payment
 from ..subject_filters import subject_matches
 from ..events import emit
@@ -22,7 +22,6 @@ from ..handlers._amounts import evaluate_count
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..oracle_types import X_FROM_COUNT
-from ..pt import pt_counter_key
 from ..trigger_utils import bound_event_object, matching_triggers
 from ..turn_state import record_attacked_seat, record_attack
 
@@ -656,33 +655,21 @@ class DeclareAttackersStepMixin:
             and subject_matches(self, attacker, dict(entry.get("filter") or {}))
         ]
         for payload in sources:
-            cost = {
-                symbol: int(amount)
-                for symbol, amount in (payload.get("mana") or {}).items()
-            }
             # "…unless you pay {1} **for each +1/+1 counter on it**."
-            # (Phyrexian Marauder.) The price is a reading of the attacker's
-            # own counters rather than a number, so it is multiplied here —
-            # at the one reader both the gate and the charge go through, which
-            # is what keeps a declaration from being approved at one price and
-            # billed at another. Counted through ``pt_counter_key`` so the
-            # three P/T kinds and every invented counter word are read from the
-            # pile the placement filled.
+            # (Phyrexian Marauder.) "…{1} **for each Cleric on the
+            # battlefield**" (Whipgrass Entangler's grant.) The price is a
+            # reading of the attacker's counters or of the board rather than a
+            # number, so it is multiplied here — at the one reader both the
+            # gate and the charge go through, which is what keeps a
+            # declaration from being approved at one price and billed at
+            # another. ``combat_restrictions.toll_mana`` is that
+            # multiplication, shared with the block step's toll.
             #
             # Zero counters means zero owed, and the falsy entries are dropped
             # so the cost disappears entirely: a Marauder cast for X=0 is a 0/0
             # that dies to the state-based sweep, and one whose counters were
             # all removed attacks for free, which is what "for each" says.
-            per_counter = payload.get("per_counter")
-            if per_counter:
-                held = int(
-                    attacker.metadata.get(pt_counter_key(str(per_counter)), 0)
-                )
-                cost = {
-                    symbol: amount * held
-                    for symbol, amount in cost.items()
-                    if amount * held
-                }
+            cost = toll_mana(self, payload, attacker)
             if cost:
                 costs.append(cost)
         return costs

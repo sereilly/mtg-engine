@@ -568,6 +568,13 @@ def _lower_pump(
                 # as untestable rather than read against nothing.
                 "other_than_attached_host",
                 "shares_creature_type_with",
+                # "…all **non-Zombie** creatures get -1/-1 until end of turn."
+                # (Noxious Ghoul.) The subtype twin of ``excluded_types``, and
+                # it has no hand-written key below: it rides the description
+                # (``exclude_subtypes``), answered by ``subject_matches``
+                # through ``has_type`` — so a creature made a Zombie escapes
+                # and a Zombie that stopped being one is caught (layer 4).
+                "excluded_subtypes",
             }),
         )
         if leftover:

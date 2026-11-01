@@ -505,6 +505,26 @@ def _lower_lose_life(
         # record since Life Chisel; the loss fell to ``_amount_payload``, which
         # knows no cost record, and refused.
         payload = {"amount": "x", X_FROM_COUNT: paid}
+    elif isinstance(node.amount, ast.CountOf):
+        # "…you may have target player lose life **equal to the number of
+        # Zombies on the battlefield**." (Gempalm Polluter.) The gain's
+        # counted amount one verb over (``_counted_life``, Rin and Seri),
+        # through the one evaluator — and held to the two boards the per-each
+        # loss below admits for the same reason: "you control" and the whole
+        # battlefield are one number whoever loses, while a count naming the
+        # *losing* seat ("they control") would be counted once against the
+        # target and taken from every seat a looped subject names.
+        counted = node.amount.filter
+        if counted.zone != "battlefield" or not (
+            counted.controller == "you"
+            or (counted.on_the_battlefield and counted.controller is None)
+        ):
+            raise LoweringError(
+                "a life loss equal to a count reads your battlefield or the "
+                "whole of it",
+                node=node,
+            )
+        payload = {"amount": "x", X_FROM_COUNT: count_spec(counted, node)}
     else:
         payload = (
             dict(_back_reference_payload(node.amount, produced, event))

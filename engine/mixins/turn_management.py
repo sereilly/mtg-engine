@@ -342,6 +342,7 @@ class TurnManagementMixin:
             player.noncombat_damage_dealt_to_opponents_this_turn = 0
             player.creatures_died_under_your_control_this_turn = 0
             player.creatures_put_into_your_graveyard_this_turn = 0
+            player.nontoken_creatures_put_into_your_graveyard_this_turn = 0
             player.cards_put_into_your_graveyard_from_battlefield_this_turn = []
             player.exile_cards_bound_for_graveyard_this_turn = False
             player.spells_cast_this_turn = []

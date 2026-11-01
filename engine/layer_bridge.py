@@ -60,6 +60,8 @@ from .landwalk import BOARD_NAMED_LANDWALKS, landwalk_requirement
 from .land_types import DERIVED_LAND_TYPES, LAND_TYPE_EFFECTS, land_type_changes
 from .late_modules import LateModules
 from .lord_buffs import QUALIFIER_FIELDS
+from .object_creature_types import (every_creature_type_subtypes,
+                                    restore_struck_every_creature_type)
 from .type_changes import (
     LAND_ANIMATION_ORDER,
     LAYER_4_CHANNELS,
@@ -201,7 +203,23 @@ def _printed_shape(
     if "—" in type_line or "-" in type_line:
         tail = type_line.replace("—", "-").split("-", 1)[-1]
         subtypes = frozenset(word.lower() for word in tail.split() if word)
-    return card_types, subtypes
+    # "…is every creature type" (Mistform Ultimus): a CDA works in every zone
+    # (CR 604.3), so it is in the one parse the off-battlefield answer and the
+    # layer seed share — applied before every layer-4 effect (CR 613.3).
+    return card_types, every_creature_type_subtypes(
+        card_types, subtypes, oracle_text, name
+    )
+
+
+def _seed_shape(perm: Permanent, card) -> tuple[frozenset[str], frozenset[str]]:
+    """``_printed_shape`` of *card*, *perm*'s effective card, with a type CDA
+    layer 6 struck put back (``restore_struck_every_creature_type``)."""
+    card_types, subtypes = _printed_shape(
+        card.type_line, card.name, card.oracle_text, card.keywords
+    )
+    return card_types, restore_struck_every_creature_type(
+        perm, card, card_types, subtypes
+    )
 
 
 @lru_cache(maxsize=None)
@@ -253,9 +271,7 @@ def seed_characteristics(perm: Permanent) -> Characteristics:
     the old code could not make, having no value for "not a number".
     """
     card = perm.effective_card
-    card_types, subtypes = _printed_shape(
-        card.type_line, card.name, card.oracle_text, card.keywords
-    )
+    card_types, subtypes = _seed_shape(perm, card)
     return Characteristics(
         card_types=set(card_types),
         subtypes=set(subtypes),
@@ -1666,7 +1682,13 @@ def displayed_type_line(perm: Permanent) -> str:
     printed_tail_words = {word.lower() for word in printed_tail}
     gained_supertypes = sorted(supertypes - printed_head_words)
     gained_card_types = sorted(card_types - printed_head_words)
-    gained_subtypes = sorted(subtypes - printed_tail_words)
+    gained = subtypes - printed_tail_words
+    # A CDA's own types (Mistform Ultimus) are not gains while they all stand;
+    # once a type-setting effect replaced them (CR 205.1a), what it set is.
+    defined = _seed_shape(perm, perm.effective_card)[1] - printed_tail_words
+    if defined and defined <= subtypes:
+        gained -= defined
+    gained_subtypes = sorted(gained)
     if not (gained_supertypes or gained_card_types or gained_subtypes) and (
         len(kept_supertypes) + len(kept_card_types) == len(printed_head)
         and len(kept_subtypes) == len(printed_tail)
@@ -1696,10 +1718,7 @@ def _without_type_effects(perm: Permanent) -> bool:
 def computed_types(perm: Permanent) -> tuple[set[str], set[str]]:
     """``(card_types, subtypes)`` after layer 4."""
     if _without_type_effects(perm):
-        card = perm.effective_card
-        card_types, subtypes = _printed_shape(
-            card.type_line, card.name, card.oracle_text, card.keywords
-        )
+        card_types, subtypes = _seed_shape(perm, perm.effective_card)
         answer = (set(card_types), set(subtypes))
         if fast_paths.CHECKING:
             full = _computed_types_in_full(perm)
