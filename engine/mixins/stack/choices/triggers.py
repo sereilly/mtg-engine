@@ -17,6 +17,16 @@ from ....pending_choices import PendingChoice
 from ....trigger_order import ORDER_TRIGGERS, apply_trigger_order
 
 
+def _printed_quantifier(item) -> str | None:
+    """The quantifier the trigger *item*'s printed target phrase carries
+    ("any_number", "up_to", …), read by the one walker the arming side reads
+    it with (``trigger_targets._target_quantifier``)."""
+    from ..trigger_targets import _target_quantifier
+
+    instruction = getattr(item, "ability_instruction", None)
+    return _target_quantifier(getattr(instruction, "payload", None))
+
+
 class TriggerChoicesMixin:
     # -- A triggered ability's "Choose one —" (CR 603.3c) ---------------------
 
@@ -842,6 +852,16 @@ class TriggerChoicesMixin:
                     ][: ceiling - len(several)]
                 if several:
                     return self._resolve_trigger_targets(choice, several)
+                # "…turn **any number of** target creatures with morph
+                # abilities … face down" (Weaver of Lies) with nothing on the
+                # side the effect wants: CR 107.1c's zero is an answer, and it
+                # is the one a seat nobody asks gives — the fall-through below
+                # would aim a denial at the seat's own first creature.
+                if (
+                    wanted and choice.data.get("up_to")
+                    and _printed_quantifier(item) == "any_number"
+                ):
+                    return self._resolve_trigger_targets(choice, [])
             for target in targets:
                 if target.get("kind") == "permanent" and target.get("seat") in wanted:
                     return self._resolve_trigger_target(

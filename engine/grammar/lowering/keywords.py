@@ -23,8 +23,8 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_TARGET_PERMANENTS,
-                             OracleInstruction)
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             CHOSEN_TARGET_PERMANENTS, OracleInstruction)
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -41,7 +41,8 @@ from ._common import (_GRANT_DURATIONS, _check_grantable,
                       _durationless_reason, _is_created_token,
                       _refuse_bare_chosen_ability,
                       _restrictions_beyond, _is_enchanted,
-                      _is_source, _is_target, _names_several_targets)
+                      _is_source, _is_target, _names_several_targets,
+                      split_creature_type_choice)
 
 #: Where a landwalk whose land type is not printed reads that type from
 #: (Excavator: "landwalk of each of the land types of **the sacrificed land**").
@@ -128,6 +129,44 @@ def _targets_description(payload: dict[str, object]) -> dict[str, object]:
     """
     described = payload.get("targets")
     return {"targets": described} if described is not None else {}
+
+
+def _chosen_type_reading(
+    filt: "ast.ObjectFilter", produced: frozenset[str], node,
+) -> "tuple[ast.ObjectFilter, tuple[OracleInstruction, ...], dict[str, object]]":
+    """*filt* with a creature type chosen during this resolution lifted out:
+    the filter left, the step to run first, and the key the grant carries.
+
+    Two spellings, the pump sweep's own (``lowering/characteristics``):
+
+    * "creatures **of that type**" (``of_bound_type``) reads the word an
+      earlier step of this effect chose — refused when no step did, because an
+      unresolved "that type" read as no narrowing is a grant to every creature;
+    * "creatures **of the creature type of your choice**" asks for the word
+      here (``split_creature_type_choice``, CR 608.2d).
+
+    Either way the grant reads the word back through ``subtype_filter_from``,
+    resolved by the handler — a key no matcher answers, so it is added after
+    the testability gate, never put to it. A filter naming neither comes back
+    unchanged with nothing else.
+    """
+    chosen: dict[str, object] = {}
+    prelude: tuple[OracleInstruction, ...] = ()
+    if filt.of_bound_type:
+        if CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
+            raise LoweringError(
+                "'of that type' names a creature type no step of this effect "
+                "chose", node=node,
+            )
+        filt = dataclasses.replace(filt, of_bound_type=False)
+        chosen["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
+    if filt.creature_type_of_your_choice:
+        prelude, _rest, asked = split_creature_type_choice(
+            {"creature_type_of_your_choice": True}
+        )
+        filt = dataclasses.replace(filt, creature_type_of_your_choice=False)
+        chosen.update(asked)
+    return filt, prelude, chosen
 
 
 def _lower_gain_keyword(
@@ -469,11 +508,21 @@ def _lower_granted_keywords(
         # "…and each creature blocking it" (Feint).
         blocking_bound = node.subject.filter.blocking_bound_target
         carried = frozenset({"blocking_bound_target"}) if blocking_bound else frozenset()
+        # "Creatures **of the creature type of your choice** … gain trample
+        # until end of turn" (Tribal Forcemage) and "…creatures **of that
+        # type** gain …" behind a choice an earlier step made. The pump's two
+        # readings (``lowering/characteristics``, Defensive Maneuvers and
+        # Outbreak), on the grant: the word is a step's record (CR 608.2d),
+        # taken off the filter and carried as the scratchpad slot the handler
+        # resolves (``subtype_filter_from``) — never a narrowing dropped.
+        team_filter, type_prelude, chosen_type = _chosen_type_reading(
+            node.subject.filter, produced, node,
+        )
         leftover = _restrictions_beyond(
-            node.subject.filter,
+            team_filter,
             frozenset({"card_types", "controller"}) | carried,
         )
-        described = _filter_payload(node.subject.filter, carried_separately=carried)
+        described = _filter_payload(team_filter, carried_separately=carried)
         if leftover or typed:
             # "**Attacking** creatures get +1/+0 and gain trample until end of
             # turn" (Stampede). A narrowing the *matcher* can test is carried as
@@ -517,7 +566,12 @@ def _lower_granted_keywords(
         if blocking_bound:
             team_payload["blocking_bound_target"] = True
         team_payload["duration"] = duration
-        return (OracleInstruction("grant_team_keyword_until_eot", "", team_payload),)
+        # After every key above, so a grant printing no chosen type keeps a
+        # byte-identical payload.
+        team_payload.update(chosen_type)
+        return type_prelude + (
+            OracleInstruction("grant_team_keyword_until_eot", "", team_payload),
+        )
     # "**X** target creatures gain islandwalk until end of turn." (Part Water.)
     # Several chosen targets rather than one, which is a property of the noun
     # phrase and not of the effect — so it is the same instruction with a

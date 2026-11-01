@@ -227,6 +227,15 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             # under your control"), and recorded rather than consumed: CR 110.5b
             # enters a permanent untapped unless the effect says otherwise.
             tapped = bool(stream.accept_word("tapped"))
+            # "…onto the battlefield **face up**." (Dermoplasm: "put a creature
+            # card with a morph ability from your hand onto the battlefield
+            # face up".) CR 110.5b: "Permanents enter the battlefield …
+            # face up … unless a spell or ability says otherwise" — so the
+            # words restate what every entry already does and are honoured by
+            # the entry itself, with nothing to record. Only "face up": "face
+            # down" says otherwise (CR 708.3) and is left unconsumed, so a
+            # card printing it refuses rather than entering face up.
+            stream.accept_phrase("face", "up")
             under = bool(stream.accept_phrase("under", "your", "control"))
             # "…**under its owner's control**" (Glyph of Reincarnation) — the
             # other seat CR 400.3 lets a card arrive under. Read only when

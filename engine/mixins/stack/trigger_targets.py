@@ -148,6 +148,28 @@ def _target_is_up_to(payload) -> bool:
     return False if inner is None else _target_is_up_to(inner)
 
 
+def _target_quantifier(payload) -> str | None:
+    """The printed quantifier of the first ``targets`` description under
+    *payload* (walked as :func:`_target_is_up_to` walks), or None."""
+    if isinstance(payload, dict):
+        targets = payload.get("targets")
+        if isinstance(targets, dict) and targets.get("quantifier"):
+            return str(targets["quantifier"])
+        for value in payload.values():
+            found = _target_quantifier(value)
+            if found is not None:
+                return found
+        return None
+    if isinstance(payload, (list, tuple)):
+        for entry in payload:
+            found = _target_quantifier(entry)
+            if found is not None:
+                return found
+        return None
+    inner = getattr(payload, "payload", None)
+    return None if inner is None else _target_quantifier(inner)
+
+
 class TriggerTargetsMixin:
     def _choose_trigger_mode(
         self, item: StackItem, *, targets_already_chosen: bool = False
@@ -716,6 +738,17 @@ class TriggerTargetsMixin:
                 "name": perm.card.name,
             })
         up_to = _target_is_up_to(getattr(instruction, "payload", None))
+        # "…turn **any number of** target creatures with morph abilities …
+        # face down." (Weaver of Lies, the pool's first trigger to print it.)
+        # No printed ceiling (``unbounded_targets``), so the ceiling is every
+        # legal candidate — the number ``legality_cast_spec`` fills in for a
+        # spell — and CR 107.1c lets the answer be zero, so it is an "up to"
+        # as far as the prompt is concerned. Absent from every other spec.
+        unbounded = bool(spec.get("unbounded_targets")) and not (
+            spec.get("kind") in self._CHOOSABLE_TRIGGER_DIVIDED_KINDS
+        )
+        if unbounded and _target_quantifier(getattr(instruction, "payload", None)) == "any_number":
+            up_to = True
         division = spec.get("kind") in self._CHOOSABLE_TRIGGER_DIVIDED_KINDS
         if division and self.departing:
             # A dies-trigger is announced while its dying permanent is still
@@ -760,6 +793,8 @@ class TriggerTargetsMixin:
         # keeps the prompt those raise byte-identical.
         several = {}
         printed = spec.get("max_targets")
+        if unbounded and printed is None:
+            printed = max(2, sum(1 for entry in offered if entry["kind"] == "permanent"))
         quantity_key = spec.get("x_from_trigger")
         if quantity_key:
             # "Whenever this creature deals combat damage to a player, return

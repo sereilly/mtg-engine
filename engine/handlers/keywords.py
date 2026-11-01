@@ -78,6 +78,19 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
     if instruction.payload.get("blocking_bound_target"):
         blocked = bound_permanent(game, context)
         blockers = list(game.creatures_blocking(blocked)) if blocked is not None else []
+    # "Creatures **of the creature type of your choice** … gain trample until
+    # end of turn." (Tribal Forcemage.) The word the step in front of this one
+    # wrote into the scratchpad (CR 608.2d), resolved the way the pump sweep
+    # beside this grant resolves it (``handlers/pump.buff_creatures_global``) —
+    # with its rule: **no word means no grant**. A missing record read as "no
+    # narrowing" would give the keyword to every creature on the table.
+    chosen_subtype = None
+    scratch_key = instruction.payload.get("subtype_filter_from")
+    if scratch_key is not None:
+        chosen_subtype = context.results.get(str(scratch_key))
+        if not chosen_subtype:
+            game.log.append(f"{context.card.name}: no creature type was chosen")
+            return True, "resolved"
     lifetime = grant_lifetime(game, instruction, context)
     granted = 0
     for seat in seats:
@@ -85,6 +98,10 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
             if not every_permanent and not perm.is_creature:
                 continue
             if blockers is not None and not any(perm is one for one in blockers):
+                continue
+            # Through the layers (CR 613.1d's type), so a creature a Mistform
+            # made a Goblin this turn is one.
+            if chosen_subtype and not perm.has_type(str(chosen_subtype)):
                 continue
             # Through the one reader of what a printed noun phrase means, with the
             # caster as observer (CR 109.5), so "attacking" here and "attacking" on

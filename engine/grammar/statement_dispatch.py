@@ -59,6 +59,8 @@ unchanged — the same promise that file's docstring makes about
 ``INSTRUCTION_CATEGORIES``.
 """
 
+import dataclasses
+
 from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
@@ -409,8 +411,8 @@ def lower_statement(
         # in a sequence lowered. Dream Fighter's "this creature **and** that
         # creature phase out" is one conjunction and nothing else.
         return _lower_steps(
-            statement.effects, produced, event, event_subject,
-            lower_statement=lower_statement,
+            _one_creature_type_choice(statement.effects), produced, event,
+            event_subject, lower_statement=lower_statement,
         )
 
     if isinstance(statement, ast.DestroyUnlessPay):
@@ -937,3 +939,43 @@ def lower_statement(
         return (OracleInstruction("grant_team_assign_unblocked_until_eot", "", {}),)
 
     raise LoweringError(f"no lowering for {type(statement).__name__}", node=statement)
+
+
+def _one_creature_type_choice(
+    effects: tuple[ast.Statement, ...],
+) -> tuple[ast.Statement, ...]:
+    """*effects* with one "of the creature type of your choice" asked once.
+
+    "**Creatures of the creature type of your choice** get +2/+2 and gain
+    trample until end of turn." (Tribal Forcemage.) One printed noun phrase,
+    the subject of both verbs, so one choice (CR 608.2d) — but each conjunct
+    lowered alone would split the phrase into its own ``choose_creature_type``
+    step, and the player would be asked twice and could answer two different
+    types for one creature set. So the choice is made a step of its own in
+    front (``ast.ChooseCreatureType``, Outbreak's sentence) and every conjunct
+    reads it back as "of that type" (``of_bound_type``), which each lowering
+    already resolves against the record the step writes.
+
+    Only where every conjunct's subject is the **same** phrase carrying the
+    choice — two different phrases would be two printed choices — and only
+    the subject: nothing else in a conjunct is rewritten. Every other
+    conjunction comes back unchanged.
+    """
+    subjects = [getattr(effect, "subject", None) for effect in effects]
+    first = subjects[0] if subjects else None
+    if not (
+        len(effects) >= 2
+        and isinstance(first, ast.TargetSpec)
+        and first.filter.creature_type_of_your_choice
+        and all(subject == first for subject in subjects)
+    ):
+        return effects
+    bound = dataclasses.replace(
+        first,
+        filter=dataclasses.replace(
+            first.filter, creature_type_of_your_choice=False, of_bound_type=True,
+        ),
+    )
+    return (ast.ChooseCreatureType(),) + tuple(
+        dataclasses.replace(effect, subject=bound) for effect in effects
+    )

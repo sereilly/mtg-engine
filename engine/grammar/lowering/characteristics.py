@@ -924,6 +924,12 @@ def _lower_turn_face(node: ast.TurnFace) -> tuple[OracleInstruction, ...]:
       ``subject_matches`` with the resolving seat as its observer: "an
       opponent controls" (Break Open) is a seat comparison.
 
+    * "turn **any number of target** <noun phrase> face down" (Weaver of
+      Lies) is the second shape with several chosen targets — the same
+      handler, with the several-target description every list-reading
+      handler opts into (``_describe_several_targets``), and each named
+      permanent re-asked as it resolves. CR 107.1c lets "any number" be zero.
+
     Everything else refuses by name. A sweep ("turn all …") has no handler,
     and turning one's own source face up is printed on no card here; read as
     one of the shapes above either would reach a permanent the card does not
@@ -937,6 +943,21 @@ def _lower_turn_face(node: ast.TurnFace) -> tuple[OracleInstruction, ...]:
                 "no handler turns an ability's own source face up", node=node
             )
         return (OracleInstruction("turn_self_face_down", "", {}),)
+    if (
+        isinstance(spec, ast.TargetSpec)
+        and spec.targeted
+        and _names_several_targets(spec)
+    ):
+        several_described = testable_filter_payload(
+            spec.filter,
+            refusal=f"nothing tests this narrowing of what is turned face {direction}",
+            node=node,
+            require_narrowing=False,
+        )
+        several: dict[str, object] = {}
+        _describe_several_targets(several, spec)
+        several.update(several_described)
+        return (OracleInstruction(f"turn_target_face_{direction}", "", several),)
     if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "target":
         raise LoweringError(
             f"no handler turns a permanent nobody targeted face {direction}",

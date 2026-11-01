@@ -94,6 +94,15 @@ class SpecialActionChoice:
     name: str
     sacrificed_id: int | None
     worth: float
+    #: The X announced for a price printing ``{X}`` (CR 107.3d; "Morph
+    #: {X}{B}{B}", Bane of the Living), the size whose rehearsal read best;
+    #: None for every price without one.
+    x_value: int | None = None
+
+
+#: The most sizes of X one offer is rehearsed at, largest first (see
+#: :func:`_x_sizes`). Each is a whole rehearsal through the turn's fight.
+_MAX_X_SIZES = 4
 
 
 @dataclass(frozen=True)
@@ -130,10 +139,33 @@ def choose_special_action(game: Game, seat: int) -> SpecialActionChoice | None:
     best: SpecialActionChoice | None = None
     with deliberating():
         for entry in entries:
-            choice = _weighed(game, seat, entry)
-            if choice is not None and (best is None or choice.worth > best.worth):
-                best = choice
+            for x_value in _x_sizes(entry):
+                choice = _weighed(game, seat, entry, x_value)
+                if choice is not None and (best is None or choice.worth > best.worth):
+                    best = choice
     return best
+
+
+def _x_sizes(entry: dict) -> "tuple[int | None, ...]":
+    """The X values *entry* is rehearsed at: ``(None,)`` for a price printing
+    no ``{X}``; otherwise the largest the seat can pay (``max_x``, which the
+    offer's listing computed through the seam's own payment plan) and the
+    sizes below it, largest first, at most :data:`_MAX_X_SIZES` of them.
+
+    Several rather than the largest alone because a bigger X is not always
+    better for its taker: "all creatures get -X/-X" (Bane of the Living)
+    reaches the taker's own board as well, and the rehearsal is what reads
+    where the trade turns. 0 is offered last when it fits — the creature face
+    up with nothing else — so a board where every X hurts still weighs the
+    body by itself.
+    """
+    if not entry.get("x_symbols"):
+        return (None,)
+    top = max(0, int(entry.get("max_x") or 0))
+    sizes = list(range(top, max(-1, top - _MAX_X_SIZES), -1))
+    if 0 not in sizes:
+        sizes[-1] = 0
+    return tuple(sizes)
 
 
 def _sacrifice_pick(game: Game, seat: int, entry: dict) -> "int | None | bool":
@@ -177,9 +209,11 @@ def _sacrifice_pick(game: Game, seat: int, entry: dict) -> "int | None | bool":
     ).permanent_id
 
 
-def _weighed(game: Game, seat: int, entry: dict) -> SpecialActionChoice | None:
-    """*entry* rehearsed through the turn's fight, or None when it is not
-    worth taking."""
+def _weighed(
+    game: Game, seat: int, entry: dict, x_value: "int | None" = None,
+) -> SpecialActionChoice | None:
+    """*entry* rehearsed through the turn's fight (at X = *x_value* for a
+    price printing ``{X}``), or None when it is not worth taking."""
     victim_id = _sacrifice_pick(game, seat, entry)
     if victim_id is False:
         return None
@@ -193,13 +227,17 @@ def _weighed(game: Game, seat: int, entry: dict) -> SpecialActionChoice | None:
         )
         refusal = take_permanent_special_action(
             table, seat, source, entry["kind"], sacrificed=sacrificed,
+            x_value=x_value,
         )
         return _Taken(refusal is None, refusal or "taken")
 
     rehearsal = rehearse(
         game, seat, perform, spell_name=None, leaves_hand=False,
         label=f"{entry['name']}'s special action",
-        key=("special_action", seat, entry["permanent_id"], entry["kind"], victim_id),
+        key=(
+            "special_action", seat, entry["permanent_id"], entry["kind"], victim_id,
+            x_value,
+        ),
         through_combat=True,
     )
     if rehearsal is None or not rehearsal.accepted or not rehearsal.changed:
@@ -210,7 +248,7 @@ def _weighed(game: Game, seat: int, entry: dict) -> SpecialActionChoice | None:
     return SpecialActionChoice(
         permanent_id=entry["permanent_id"], kind=entry["kind"], name=entry["name"],
         sacrificed_id=victim_id if isinstance(victim_id, int) else None,
-        worth=worth,
+        worth=worth, x_value=x_value,
     )
 
 
@@ -292,6 +330,7 @@ def take_chosen_special_action(
         return "the permanent chosen to pay for it has gone"
     return take_permanent_special_action(
         game, seat, source, choice.kind, sacrificed=sacrificed,
+        x_value=choice.x_value,
     )
 
 

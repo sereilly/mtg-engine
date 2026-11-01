@@ -29,6 +29,8 @@ is no import between the two in either direction.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ...oracle_types import EVENT_CHOSEN_TARGETS, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
@@ -165,6 +167,16 @@ def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...
             "targets of",
             node=node,
         )
+    # "…target spell **or ability** with a single target." (Willbender.) The
+    # union Silver Wyvern prints in its relative-clause arrangement, read here
+    # by the shared noun parser instead — which records it on the filter
+    # (``ObjectFilter.also_ability``) where ``_accept_targets_only`` records it
+    # on the node. One union, two spellings: lifted off the filter onto the
+    # node's flag, so both reach the one payload key below and nothing else
+    # about the retarget changes.
+    also_ability = node.also_ability or filt.also_ability
+    if filt.also_ability:
+        filt = dataclasses.replace(filt, also_ability=False)
     leftover = _restrictions_beyond(filt, _CHANGE_TARGET_HONOURED_FILTER_FIELDS)
     if leftover:
         raise LoweringError(
@@ -218,7 +230,7 @@ def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...
     # folds the ability list in beside the spell one. Nothing else about the
     # retarget changes: an ability chose its targets at CR 602.2b exactly as a
     # spell chose them at CR 601.2c, and CR 115.7a moves either.
-    if node.also_ability:
+    if also_ability:
         payload["also_ability"] = True
     return (
         OracleInstruction("choose_new_spell_target", "", dict(payload)),

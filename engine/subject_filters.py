@@ -663,7 +663,13 @@ CARD_ONLY_FILTER_KEYS = frozenset(
      # creature tapped this way" (Cryptic Gateway), once resolved: the card's
      # creature types are on its face (CR 205.3m), or Conspiracy's override for
      # a card its seat owns, so ``_card_matches_filter`` answers it off the card.
-     "shares_creature_type_with_each"}
+     "shares_creature_type_with_each",
+     # "…a creature card **with a morph ability** from your hand" (Dermoplasm).
+     # A keyword printed on the card (CR 702.37a: morph "functions in any zone
+     # from which you could play the card"), read off the card by the reader
+     # that charges the cost (``face_down.morph_cost``) — the permanent
+     # matcher's question for Backslide, asked of a card in a zone.
+     "with_morph_ability"}
 )
 
 
