@@ -99,8 +99,8 @@ def is_tap_alone_mana_ability(ability) -> bool:
     )
 
 
-#: The tap refusals `tap_land_for_mana` logs, by the reason key
-#: `land_mana_tap_refusal` returns, as the suffix after the land's name.
+#: The tap refusals `tap_land_for_mana_or_refusal` says why of, by the reason
+#: key `land_mana_tap_refusal` returns, as the suffix after the land's name.
 _LOGGED_TAP_REFUSALS = {
     "summoning_sick": " has summoning sickness",
     "activations_forbidden": "'s activated abilities can't be activated this turn",
@@ -112,7 +112,7 @@ _LOGGED_TAP_REFUSALS = {
 #: by the row of ``activation_prohibitions.ACTIVATION_PROHIBITIONS`` that
 #: answered. The three this seam asked before it asked the table keep the keys
 #: their callers and tests already read; every other row is its own kind, and
-#: `tap_land_for_mana` logs the sentence the table gives it.
+#: `tap_land_for_mana_or_refusal` answers with the sentence the table gives it.
 _TAP_REFUSAL_BY_ROW = {
     "permanent_shut_off_this_turn": "activations_forbidden",
     "aura_all_shut_off": "aura_activations_forbidden",
@@ -499,7 +499,33 @@ class LandManaTapsMixin:
         permanent_id: int | None = None,
         ability_index: int | None = None,
     ) -> bool:
-        """Tap one land for mana (CR 605.1a), as its controller.
+        """Tap one land for mana (CR 605.1a), as its controller: True when it
+        was tapped. :meth:`tap_land_for_mana_or_refusal` with the reason
+        dropped, for the callers that only need to know whether."""
+        return self.tap_land_for_mana_or_refusal(
+            player_index, land_name, chosen_color, permanent_index,
+            permanent_id=permanent_id, ability_index=ability_index,
+        ) is None
+
+    def tap_land_for_mana_or_refusal(
+        self,
+        player_index: int,
+        land_name: str,
+        chosen_color: str | None = None,
+        permanent_index: int | None = None,
+        *,
+        permanent_id: int | None = None,
+        ability_index: int | None = None,
+    ) -> str | None:
+        """Tap one land for mana (CR 605.1a), as its controller. None when it
+        was tapped; otherwise why not, for the seat that asked.
+
+        **A refused tap is the asker's alone** (CR 733.1, ``engine/refusals.py``):
+        an activation of a mana ability that cannot be made is reversed, not
+        announced, so the reason comes back here and nothing is logged. It
+        was logged — "Forest has summoning sickness" — and the web answered
+        the asker "failed to tap land for mana", so the one person who needed
+        the reason read it in the log every seat is sent.
 
         *chosen_color* is the mana symbol the seat asks the land for — one of
         the six types (CR 106.1b), or None for "whatever it makes". **Asking
@@ -546,7 +572,7 @@ class LandManaTapsMixin:
             if asked:
                 # Not one of the six mana types: nothing this land or any
                 # other could be tapped for.
-                return False
+                return f"{chosen_color!r} is not a mana symbol"
             asked = None
         chosen_color = asked or "G"
         if (
@@ -558,20 +584,20 @@ class LandManaTapsMixin:
             ability_index = tap_alone_ability_for(self, land, asked)
         refusal = self.land_mana_tap_refusal(land, ability_index)
         if refusal is not None:
-            # The refusals a player can see the reason for are logged, as they
-            # always were; the rest are a land that makes no mana here. A CR
-            # 602.5 prohibition the seam did not ask before it asked the table
-            # is logged in the table's own sentence.
+            # The refusals a player can see the reason for are said, as they
+            # always were — to the asker now, not the log; the rest are a land
+            # that makes no mana here. A CR 602.5 prohibition the seam did not
+            # ask before it asked the table is said in the table's own
+            # sentence.
             if refusal in _LOGGED_TAP_REFUSALS:
-                self.log.append(f"{land.card.name}{_LOGGED_TAP_REFUSALS[refusal]}")
-            else:
-                from ..activation_prohibitions import ACTIVATION_PROHIBITIONS
+                return f"{land.card.name}{_LOGGED_TAP_REFUSALS[refusal]}"
+            from ..activation_prohibitions import ACTIVATION_PROHIBITIONS
 
-                if any(row.kind == refusal for row in ACTIVATION_PROHIBITIONS):
-                    prohibited = self.land_tap_prohibition(land, ability_index)
-                    if prohibited is not None:
-                        self.log.append(prohibited.details)
-            return False
+            if any(row.kind == refusal for row in ACTIVATION_PROHIBITIONS):
+                prohibited = self.land_tap_prohibition(land, ability_index)
+                if prohibited is not None:
+                    return prohibited.details
+            return "failed to tap land for mana"
         gained_symbol = None
         if ability_index is not None:
             mana_ability = self._chosen_land_mana_ability(land, ability_index)
@@ -710,4 +736,4 @@ class LandManaTapsMixin:
         self._land_tapped_for_mana(
             player_index, land, chosen_color, produce, land_name=land_name,
         )
-        return True
+        return None

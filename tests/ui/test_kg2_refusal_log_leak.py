@@ -35,6 +35,7 @@ def _table(hand, lands=0):
         "guest_colors": 2, "seed": 3,
     }).json()
     sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "G"})
     session = store.get(sid)
     game = session.game
     session.pregame_phase = None
@@ -149,4 +150,32 @@ def test_a_refused_permanent_activation_is_answered_the_same_way():
 
     assert response.status_code == 400, response.text
     assert response.json()["detail"] == "insufficient mana to activate Shivan Dragon"
+    assert game.log == log_before
+
+
+def test_a_refused_land_tap_tells_the_tapper_why_and_the_log_nothing():
+    """Tapping a land for mana is activating its mana ability (CR 106.12), so
+    a refused tap is a refused activation: the reason — City of Solitude's
+    own sentence — comes back to the seat that clicked, where it used to read
+    "failed to tap permanent" while the reason went into the log every seat
+    is sent."""
+    sid, game = _table([])
+    game.players[0].battlefield.append(Permanent(card=_CATALOG["City of Solitude"]))
+    forest = Permanent(card=_CATALOG["Forest"])
+    forest.metadata["summoning_sickness_turn"] = -99
+    game.players[1].battlefield.append(forest)
+    game._sync_control()
+    log_before = list(game.log)
+
+    response = client.post(f"/api/sessions/{sid}/action", json={
+        "seat": 1, "action": "tap", "permanent_name": "Forest",
+        "permanent_index": 0,
+    })
+
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"] == (
+        "Forest's abilities can't be activated on another player's turn "
+        "(City of Solitude)"
+    )
+    assert not forest.tapped
     assert game.log == log_before

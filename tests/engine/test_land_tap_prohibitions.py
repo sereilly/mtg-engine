@@ -219,14 +219,21 @@ def test_the_seam_asks_the_row_itself(kind):
 
 
 def test_a_refused_tap_says_why():
-    """The table's sentence is the log line, as the activation path logs it."""
+    """The table's sentence is the refusal's reason, said to the seat that
+    asked (``tap_land_for_mana_or_refusal``) as the activation path says its
+    own — and written nowhere every seat reads (CR 733.1,
+    ``engine/refusals.py``)."""
     _refused, board, _index, _cost = _LAND_SCENARIOS["global_play_timing"]
     game, land = _board(**board)
-    assert not game.tap_land_for_mana(LAND_SEAT, "Forest", permanent_id=land.permanent_id)
-    assert game.log[-1] == (
+    log_before = list(game.log)
+    assert game.tap_land_for_mana_or_refusal(
+        LAND_SEAT, "Forest", permanent_id=land.permanent_id,
+    ) == (
         "Forest's abilities can't be activated on another player's turn "
         "(City of Solitude)"
     )
+    assert game.log == log_before
+    assert not land.tapped
 
 
 def test_on_its_own_turn_city_of_solitude_leaves_the_forest_alone():
