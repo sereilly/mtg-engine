@@ -675,3 +675,49 @@ def test_another_viewers_poll_does_not_wipe_a_cleanup_selection():
     assert second.status_code == 200, second.text
     assert len(game.players[1].hand) == 7
     assert sorted(c.name for c in game.players[1].graveyard) == ["Island", "Plains"]
+
+
+# --- 10. a mana split the activating seat chooses ---------------------------
+
+_SPLIT_BODY = r'''
+const card = { name: "Goblin Clearcutter", ability_mana: [INPUT.entry], __abilityIndex: 0 };
+const combination = chosenAbilityCombination(card);
+const splits = manaSplits(combination.symbols, combination.count).map(manaSplitKey);
+const texts = manaSplits(combination.symbols, combination.count).map(manaSplitText);
+pendingManaColor = { cardName: "Goblin Clearcutter", permanentIndex: 2, targetSeat: 0,
+                     abilityIndex: 0, combination };
+resolvePendingManaSplit("R:2,G:1");
+return { combination, splits, texts, cleared: pendingManaColor === null, sent: SENT,
+         fan: chosenAbilityCombination({ ability_mana: [{ symbols: ["R", "G"], choice: true }] }) };
+'''
+
+
+@needs_node
+def test_a_mana_split_is_offered_whole_and_sent_as_mana_combination():
+    """"{T}, Sacrifice a Forest: Add three mana in any combination of {R}
+    and/or {G}." (Goblin Clearcutter.) The ability's ``ability_mana`` entry
+    carries ``combination: {symbols, count}`` (W2G3's wire) and the activation
+    takes ``mana_combination`` ({symbol: count}); a colour fan could only ever
+    send one colour for all three. Every split is a button, and the one clicked
+    goes out with the activation."""
+    entry = {"symbols": ["R", "G"], "choice": True,
+             "combination": {"symbols": ["R", "G"], "count": 3}}
+    out = run_app_js(
+        ["chosenAbilityCombination", "manaSplits", "manaSplitText", "manaSplitKey",
+         "resolvePendingManaSplit"],
+        _SPLIT_BODY, {"entry": entry},
+        prelude=_DOM + (
+            "let pendingManaColor = null;"
+            "function withPermanentId(body, field, seatIndex, index) {"
+            " return { ...body, [field]: 100 + index }; }"
+        ),
+    )
+    assert out["combination"] == {"symbols": ["R", "G"], "count": 3}
+    assert out["splits"] == ["R:3", "R:2,G:1", "R:1,G:2", "G:3"]
+    assert out["texts"] == ["{R}{R}{R}", "{R}{R}{G}", "{R}{G}{G}", "{G}{G}{G}"]
+    assert out["cleared"] is True
+    (body,) = out["sent"]
+    assert body["action"] == "activate" and body["ability_index"] == 0
+    assert body["permanent_id"] == 102
+    assert body["mana_combination"] == {"R": 2, "G": 1}
+    assert out["fan"] is None, "a plain colour choice is not a split"

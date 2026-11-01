@@ -2586,6 +2586,72 @@ function landWordOptionsForTarget(perm) {
 // `produced_mana` cannot answer this: it is the permanent's whole colour
 // summary, and a filter land's reads exactly like a dual land's — which is how
 // Mossfire Valley came to open a Red/Green fan whose answer the engine ignored.
+// "Add three mana in any combination of {R} and/or {G}" (Goblin Clearcutter,
+// Orcish Lumberjack): a **split** the activating seat chooses, which a colour
+// fan cannot ask for. The server states it on the ability's `ability_mana`
+// entry as `combination: {symbols, count}` and takes the answer as
+// `mana_combination` ({symbol: count}). null for every other ability.
+function chosenAbilityCombination(card) {
+  if (!card || typeof card === "string" || !Array.isArray(card.ability_mana)) return null;
+  const index = Number.isInteger(card.__abilityIndex) ? card.__abilityIndex : 0;
+  const combination = card.ability_mana[index]?.combination;
+  if (!combination || !Array.isArray(combination.symbols) || !combination.symbols.length) return null;
+  const count = Number(combination.count);
+  if (!Number.isInteger(count) || count < 1) return null;
+  return { symbols: combination.symbols.map((symbol) => String(symbol).toUpperCase()), count };
+}
+
+// Every split of `count` mana among `symbols`, as {symbol: n} with no zero
+// entries, the first symbol's share largest first: {R}{R}{R}, {R}{R}{G}, …
+function manaSplits(symbols, count) {
+  if (!symbols.length) return count ? [] : [{}];
+  const [head, ...rest] = symbols;
+  if (!rest.length) return [count ? { [head]: count } : {}];
+  const out = [];
+  for (let n = count; n >= 0; n -= 1) {
+    for (const tail of manaSplits(rest, count - n)) out.push(n ? { [head]: n, ...tail } : tail);
+  }
+  return out;
+}
+
+// A split as the mana it makes ("{R}{R}{G}") and as the button's key ("R:2,G:1").
+function manaSplitText(split) {
+  return Object.entries(split).map(([symbol, n]) => `{${symbol}}`.repeat(n)).join("");
+}
+function manaSplitKey(split) {
+  return Object.entries(split).map(([symbol, n]) => `${symbol}:${n}`).join(",");
+}
+
+// The activation, sent with the split clicked (`data-mana-split`).
+function resolvePendingManaSplit(key) {
+  if (!pendingManaColor?.combination || seat === null) return;
+  const split = {};
+  for (const part of String(key).split(",")) {
+    const [symbol, n] = part.split(":");
+    if (symbol && Number(n) > 0) split[symbol] = Number(n);
+  }
+  const pending = pendingManaColor;
+  pendingManaColor = null;
+  renderActivationPrompt();
+  const text = manaSplitText(split);
+  updateActionHint(`Activating ${pending.cardName} for ${text}...`);
+  const body = withPermanentId(
+    {
+      seat,
+      action: "activate",
+      permanent_name: pending.cardName,
+      permanent_index: pending.permanentIndex,
+      target_seat: pending.targetSeat,
+      mana_combination: split,
+    },
+    "permanent_id", seat, pending.permanentIndex,
+  );
+  if (Number.isInteger(pending.abilityIndex)) body.ability_index = pending.abilityIndex;
+  sendAction(body)
+    .then(() => updateActionHint(`Activated ${pending.cardName} for ${text}.`))
+    .catch((e) => updateActionHint(e.message, true));
+}
+
 function chosenAbilityMana(card) {
   if (!card || typeof card === "string" || !Array.isArray(card.ability_mana)) return null;
   const index = Number.isInteger(card.__abilityIndex) ? card.__abilityIndex : 0;
@@ -14116,6 +14182,29 @@ function renderActivationPrompt() {
     return;
   }
 
+  if (pendingManaColor?.combination) {
+    const { symbols, count } = pendingManaColor.combination;
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = `Choose the mana for ${pendingManaColor.cardName}`;
+    setSymbolsHtml(
+      body,
+      `It adds ${count} mana in any combination of ${symbols.map((symbol) => `{${symbol}}`).join(" and/or ")}. Choose the split.`,
+    );
+    steps.innerHTML = [
+      `<div>Ability: ${renderSymbolsInline(pendingManaColor.oracleText || "Activated mana ability")}</div>`,
+      `<div class="prompt-choice-row">${manaSplits(symbols, count).map(
+        (split) => `<button type="button" class="prompt-choice-btn" data-mana-split="${escapeHtml(manaSplitKey(split))}">`
+          + `${renderSymbolsInline(manaSplitText(split))}</button>`,
+      ).join("")}</div>`,
+    ].join("");
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
+
   if (pendingManaColor) {
     // The dual-land choice is presented as an on-board mana fan, not a modal;
     // keep the prompt panel out of the way while the fan is up.
@@ -15370,6 +15459,21 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // whether there is a colour to choose and whether it is one of all five (the
   // modal) or one of the ability's own symbols (the fan); the card's text is
   // read only for a permanent the server said nothing about.
+  // A split ("any combination of {R} and/or {G}") is its own question, asked
+  // before the colour fan below would offer one colour for all of it.
+  const combination = chosenAbilityCombination(card);
+  if (combination) {
+    pendingManaColor = {
+      cardName,
+      permanentIndex,
+      targetSeat,
+      oracleText: card.oracle_text || "",
+      abilityIndex,
+      combination,
+    };
+    renderActivationPrompt();
+    return;
+  }
   const ownMana = chosenAbilityMana(card);
   const asksAnyColor = ownMana
     ? ownMana.choice && ownMana.symbols.length >= 5
@@ -26407,6 +26511,12 @@ q("promptSteps").addEventListener("click", (event) => {
       return;
     }
     resolveChannel(Number(channelLife));
+    return;
+  }
+
+  const manaSplitChoice = target.closest("[data-mana-split]")?.dataset.manaSplit;
+  if (manaSplitChoice && pendingManaColor?.combination) {
+    resolvePendingManaSplit(manaSplitChoice);
     return;
   }
 
