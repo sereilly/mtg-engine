@@ -35,6 +35,7 @@ from .ai_valuation import (
     harms_its_own_source,
     is_mana_ability,
     reaches_both_sides,
+    shields_only,
     sized_by_its_own_empty_counters,
     source_becomes_an_aura,
     source_toughness_change,
@@ -788,17 +789,15 @@ def _activation_candidate(
     # asks about, and armed every Word in every main phase after its own draw —
     # mana spent on a replacement no draw that turn would meet.
     #
-    # **Two more shapes the flat score cannot price** (ONS W2G5): a cost that
-    # gives up the source (`_gives_up_its_source` — Crown of Vigor was cast and
-    # sacrificed in one main phase with nothing able to attack), unless the
-    # source exists to be given up (`_exists_to_be_given_up`); and an effect
-    # that comes back at its activator (`ai_valuation.reaches_both_sides` —
-    # Shepherd of Rot drained both players from any position).
-    # (Riptide Mangler's rewrite was re-activated at 1 -> 1: `_OWN_REWRITE_KINDS`.)
+    # Also (ONS W2G5) a cost giving up a source that is not a one-shot (Crown of
+    # Vigor, `_exists_to_be_given_up`), an effect that comes back at its
+    # activator (Shepherd of Rot, `reaches_both_sides`), a 1 -> 1 rewrite
+    # (Riptide Mangler, `_OWN_REWRITE_KINDS`) and a shield (LGN C2: Deftblade
+    # Elite in both main phases, `ai_valuation.shields_only`).
     if (
         ability_index is not None
         or _sets_only_what_its_source_is(ability.instruction)
-        or waits_on_a_later_draw(ability.instruction)
+        or waits_on_a_later_draw(ability.instruction) or shields_only(ability.instruction)
         or (
             _gives_up_its_source(ability.cost)
             and not _exists_to_be_given_up(permanent)
