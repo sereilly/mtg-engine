@@ -198,6 +198,92 @@ def test_w1g6_elvish_soultiller_default_names_its_own_commonest_graveyard_type(s
         "Llanowar Elves", "Llanowar Elves",
     ]
 
+
+# --- Skirk Drill Sergeant ---------------------------------------------------
+
+
+def _w1g6_sergeant(set_pool, top, *, interactive, dying="Goblin Sky Raider", seat=0):
+    """A Sergeant and three Mountains; *dying* (seat *seat*'s) is sacrificed
+    with *top* on top of the Sergeant controller's library. Costs enforced."""
+    game, me, opp = _w1g6_game(
+        set_pool, library=[top, "Forest", "Forest"], interactive=interactive,
+    )
+    game.enforce_mana_costs = True
+    assert _w1g6_compile(_w1g6_card(set_pool, "Skirk Drill Sergeant")).supported
+    for _ in range(3):
+        _w1g6_put(game, 0, set_pool, "Mountain")
+    sergeant = _w1g6_put(game, 0, set_pool, "Skirk Drill Sergeant")
+    victim = sergeant if dying == "Skirk Drill Sergeant" else _w1g6_put(
+        game, seat, set_pool, dying,
+    )
+    game.sacrifice_permanent(victim)
+    assert [item.card.name for item in game.stack] == ["Skirk Drill Sergeant"]
+    return game, me
+
+
+def test_w1g6_skirk_drill_sergeant_puts_a_revealed_goblin_onto_the_battlefield(set_pool):
+    """"Whenever this creature or another Goblin dies, you may pay {2}{R}. If
+    you do, reveal the top card of your library. If it's a Goblin permanent
+    card, put it onto the battlefield." Paid as an interactive seat: the three
+    Mountains tap and the Goblin on top enters."""
+    game, me = _w1g6_sergeant(set_pool, "Goblin Sky Raider", interactive=True)
+    _w1g6_resolve(game)
+    (offer,) = game.pending_choices
+    assert offer.kind == "optional_pay" and offer.data["cost"] == {"R": 1, "generic": 2}
+    assert game.confirm_optional_pay(0)
+    _w1g6_resolve(game)
+    assert "Me revealed Goblin Sky Raider from the top of their library" in game.log
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Goblin Sky Raider", "Mountain", "Mountain", "Mountain",
+        "Skirk Drill Sergeant",
+    ]
+    assert all(p.tapped for p in game.controlled_by(0) if p.card.name == "Mountain")
+    assert [c.name for c in me.library] == ["Forest", "Forest"]
+
+
+def test_w1g6_skirk_drill_sergeant_bins_a_card_that_is_not_a_goblin(set_pool):
+    """A creature card that is not a Goblin is no "Goblin permanent card": it
+    goes into the graveyard ("Otherwise, put it into your graveyard") — the
+    subtype is tested, not merely the creature type it implies."""
+    game, me = _w1g6_sergeant(set_pool, "Grizzly Bears", interactive=False)
+    _w1g6_resolve(game)
+    game.auto_resolve_pending_choices()
+    _w1g6_resolve(game)
+    assert "Me revealed Grizzly Bears from the top of their library" in game.log
+    assert sorted(c.name for c in me.graveyard) == ["Goblin Sky Raider", "Grizzly Bears"]
+    assert not any(p.card.name == "Grizzly Bears" for p in game.all_permanents())
+
+
+def test_w1g6_skirk_drill_sergeant_declined_reveals_nothing(set_pool):
+    """Declining the {2}{R} reveals nothing and moves nothing: "If you do"
+    guards the reveal and both destinations behind it."""
+    game, me = _w1g6_sergeant(set_pool, "Goblin Sky Raider", interactive=True)
+    _w1g6_resolve(game)
+    assert game.confirm_optional_pay(0, accept=False)
+    _w1g6_resolve(game)
+    assert [c.name for c in me.library] == ["Goblin Sky Raider", "Forest", "Forest"]
+    assert not any("revealed" in line for line in game.log)
+    assert not any(p.tapped for p in game.controlled_by(0))
+
+
+@_w1g6_pytest.mark.parametrize("dying, seat", [
+    ("Skirk Drill Sergeant", 0), ("Goblin Sky Raider", 1),
+])
+def test_w1g6_skirk_drill_sergeant_triggers_on_itself_and_on_any_goblin(set_pool, dying, seat):
+    """"This creature or another Goblin": the Sergeant's own death triggers it
+    (leaves-the-battlefield abilities look back, CR 603.10a), and so does an
+    opponent's Goblin — the printed noun names no controller."""
+    game, me = _w1g6_sergeant(
+        set_pool, "Goblin Sky Raider", interactive=False, dying=dying, seat=seat,
+    )
+    _w1g6_resolve(game)
+    game.auto_resolve_pending_choices()
+    _w1g6_resolve(game)
+    assert any(
+        p.card.name == "Goblin Sky Raider" for p in game.controlled_by(0)
+    ), game.log[-6:]
+    assert [c.name for c in me.library] == ["Forest", "Forest"]
+
 # ==== end W1G6 ======================================================
 
 
