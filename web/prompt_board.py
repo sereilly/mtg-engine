@@ -73,13 +73,19 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
                 "name": target.get("name"),
             })
             continue
-        candidates.append({
+        entry = {
             "kind": target.get("kind", "permanent"),
             "seat": target.get("seat"),
             "index": target.get("permanent_index"),
             "id": target.get("permanent_id"),
             "name": target.get("name"),
-        })
+        }
+        # A roles announcement ("target creature you control and target
+        # creature an opponent controls", Chromeshell Crab): which role this
+        # candidate may fill. Only on such a prompt.
+        if target.get("role") is not None:
+            entry["role"] = target["role"]
+        candidates.append(entry)
     payload = {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
@@ -124,6 +130,12 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     # can hold its Confirm until the count is met; absent everywhere else.
     if choice.data.get("exact_targets"):
         payload["exact_targets"] = True
+    # "…exchange control of target creature you control and target creature
+    # an opponent controls" (Chromeshell Crab's trigger): one answer per role,
+    # in this order, sent as ``target_permanent_ids``; each candidate says its
+    # ``role``. Absent on every prompt that is not a roles announcement.
+    if choice.data.get("roles"):
+        payload["roles"] = [dict(role) for role in choice.data["roles"]]
     # "Exile up to two target cards **from a single graveyard**" (Gravegouger):
     # several ``graveyard`` candidates, all of one answer in one pile. The
     # client keeps a selection inside the pile its first card came from and

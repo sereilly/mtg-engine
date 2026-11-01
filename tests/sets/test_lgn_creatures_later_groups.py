@@ -475,6 +475,61 @@ def test_w1g4_tribal_forcemage_interactive_choice_reaches_both_halves(set_pool):
     assert not game._has_keyword(elves, "trample")
     assert (elves.effective_power, elves.effective_toughness) == (1, 1)
 
+
+# -- Chromeshell Crab (supported on arrival; its trigger announced nothing) --
+
+
+def test_w1g4_chromeshell_crab_exchanges_the_two_creatures_it_targets(set_pool):
+    """"…you may exchange control of target creature you control and target
+    creature an opponent controls." Two instances of "target", chosen as the
+    trigger goes on the stack (CR 603.3d) — a roles announcement. The trigger
+    used to announce nothing and resolve "the exchange could not be
+    completed". A seat nobody asks names each role's first candidate: the
+    Crab itself for the Hill Giant (CR 701.12a)."""
+    game, placed = _w1g4_table(
+        set_pool, ["fd:Chromeshell Crab", "Grizzly Bears"] + ["Island"] * 5,
+        ["Hill Giant"],
+    )
+    crab, bears, giant = placed[0], placed[1], placed[-1]
+    assert _w1g4_take(game, 0, crab, "turn_face_up") is None
+    assert game.stack[-1].target_permanent_id == [crab.permanent_id, giant.permanent_id]
+    _w1g4_settle(game)
+
+    assert game.controller_index_of(giant) == 0
+    assert game.controller_index_of(crab) == 1
+    assert game.controller_index_of(bears) == 0
+
+
+def test_w1g4_chromeshell_crab_interactive_names_each_role(set_pool):
+    """An interactive seat is offered each candidate under the role it may
+    fill and answers one per role, in order: an answer in the wrong order (the
+    opponent's creature for "you control") is refused and the prompt stays."""
+    game, placed = _w1g4_table(
+        set_pool, ["fd:Chromeshell Crab", "Grizzly Bears"] + ["Island"] * 5,
+        ["Hill Giant"], interactive=True,
+    )
+    crab, bears, giant = placed[0], placed[1], placed[-1]
+    assert _w1g4_take(game, 0, crab, "turn_face_up") is None
+    (choice,) = game.pending_choices
+    assert choice.kind == "trigger_target" and len(choice.data["roles"]) == 2
+    by_role = {}
+    for target in choice.data["targets"]:
+        by_role.setdefault(target["role"], set()).add(target["permanent_id"])
+    assert by_role == {
+        0: {crab.permanent_id, bears.permanent_id}, 1: {giant.permanent_id},
+    }
+    assert not game.resolve_pending_choice(
+        "trigger_target", 0, permanent_ids=[giant.permanent_id, bears.permanent_id],
+    )
+    assert game.resolve_pending_choice(
+        "trigger_target", 0, permanent_ids=[bears.permanent_id, giant.permanent_id],
+    )
+    _w1g4_settle(game)
+
+    assert game.controller_index_of(giant) == 0
+    assert game.controller_index_of(bears) == 1
+    assert game.controller_index_of(crab) == 0
+
 # ==== end W1G4 ======================================================
 
 

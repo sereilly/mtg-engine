@@ -282,6 +282,18 @@ class TriggerChoicesMixin:
             return False
         if any(permanent_id not in offered for permanent_id in named):
             return False
+        # A roles announcement ("target creature you control and target
+        # creature an opponent controls", Chromeshell Crab): the answer is one
+        # id per role in the printed order, each one offered under its role.
+        if choice.data.get("roles") and any(
+            not any(
+                target.get("permanent_id") == permanent_id
+                and target.get("role") == position
+                for target in choice.data.get("targets") or ()
+            )
+            for position, permanent_id in enumerate(named)
+        ):
+            return False
         permanents = [self.permanent_by_id(permanent_id) for permanent_id in named]
         if any(permanent is None for permanent in permanents):
             return False
@@ -696,6 +708,26 @@ class TriggerChoicesMixin:
         item = choice.data.get("_trigger_item")
         if choice.data.get("division_total") is not None:
             return self._default_trigger_division(choice, item)
+        if choice.data.get("roles"):
+            # A roles announcement (Chromeshell Crab): each role's first
+            # candidate in the offer's order, never one already named for an
+            # earlier role. Each role's own noun phrase already decided whose
+            # permanent it is.
+            picks: list = []
+            for position in range(len(choice.data["roles"])):
+                pick = next(
+                    (
+                        target["permanent_id"] for target in targets
+                        if target.get("role") == position
+                        and target["permanent_id"] not in picks
+                    ),
+                    None,
+                )
+                if pick is None:
+                    self.discard_pending_choice(choice)
+                    return True
+                picks.append(pick)
+            return self._resolve_trigger_targets(choice, picks)
         # "…counter target **spell**" (Mystic Snake): the topmost spell on the
         # side the effect wants — a counter is aimed at an opponent's — and the
         # topmost offered when that side has none, because the target is

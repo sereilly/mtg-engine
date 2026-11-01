@@ -553,6 +553,16 @@ class TriggerTargetsMixin:
         picks_a_division = spec.get("kind") in self._CHOOSABLE_TRIGGER_DIVIDED_KINDS
         if picks_a_division and not self._trigger_division_is_announceable(spec):
             return
+        if spec.get("kind") == "roles":
+            # "…you may exchange control of **target creature you control and
+            # target creature an opponent controls**." (Chromeshell Crab.) Two
+            # instances of "target", each with its own noun phrase — a roles
+            # announcement (CR 601.2c), chosen as the trigger is put on the
+            # stack (CR 603.3d). Only a trigger's own choice: a permanent
+            # spell's announcement for its entry trigger (*announced*) has no
+            # roles arm, and the census of supported triggers holds no entry
+            # trigger printing one.
+            return None if announced else self._trigger_role_candidates(item, spec)
         if (
             not picks_a_player
             and not picks_a_card
@@ -674,6 +684,93 @@ class TriggerTargetsMixin:
         )
         return spec, chooser_index, candidates
 
+    def _trigger_role_candidates(
+        self, item: StackItem, spec: dict,
+    ) -> "tuple[dict, int, list] | None":
+        """``(spec, chooser, candidates)`` for a trigger's **roles**
+        announcement, each candidate carrying the ``role`` (its position in
+        ``spec["roles"]``) it may fill — or None where this picker cannot make
+        the announcement.
+
+        Only the shape it can answer in full: two or more mandatory roles,
+        each a permanent kind the board picker narrows (``own_only``,
+        ``opponent_only`` ride each role's spec), on a line that printed
+        "target". An optional role ("…and **up to two** target lands", Goblin
+        Grenadiers) declines, as before, rather than being announced as if
+        it were owed.
+        """
+        from ...target_roles import OPTIONAL_ROLE
+        from ...targeting import announces_a_target
+
+        roles = list(spec.get("roles") or ())
+        if len(roles) < 2 or any(
+            role.get(OPTIONAL_ROLE)
+            or role.get("kind") not in self._CHOOSABLE_TRIGGER_TARGET_KINDS
+            for role in roles
+        ):
+            return None
+        instruction = item.ability_instruction
+        if not announces_a_target(instruction):
+            return None
+        candidates: list[dict] = []
+        for position, role in enumerate(roles):
+            role_spec = {key: value for key, value in role.items() if key != "role"}
+            for entry in self._enumerate_targets(
+                item.caster_index, item.card, role_spec, for_cast=False,
+                ability_instruction=instruction,
+                source_permanent=item.source_permanent,
+                ability_source=item.source_permanent,
+                triggered=True,
+            ):
+                if entry.get("kind") == "permanent":
+                    candidates.append({**entry, "role": position})
+        return dict(spec), item.caster_index, candidates
+
+    def _arm_trigger_role_choice(
+        self, item: StackItem, spec: dict, chooser_index: int, candidates: list,
+    ) -> None:
+        """The ``trigger_target`` prompt for a roles announcement: every
+        candidate offered under the role it may fill, one answer per role in
+        the printed order (``exact_targets``), and the ability taken off the
+        stack when a role has nothing to name (CR 603.3d: every role here is
+        owed)."""
+        roles = list(spec.get("roles") or ())
+        offered = []
+        for candidate in candidates:
+            perm = self.permanent_at(candidate["seat"], candidate["index"])
+            if perm is None:
+                continue
+            offered.append({
+                "kind": "permanent",
+                "seat": candidate["seat"],
+                "permanent_index": candidate["index"],
+                "permanent_id": perm.permanent_id,
+                "name": perm.card.name,
+                "role": candidate["role"],
+            })
+        if any(
+            not any(entry["role"] == position for entry in offered)
+            for position in range(len(roles))
+        ):
+            self.stack = [existing for existing in self.stack if existing is not item]
+            self.log.append(
+                f"{item.card.name}'s triggered ability was removed from the stack: "
+                "it has no legal target (603.3d)"
+            )
+            return
+        self.arm_pending_choice(
+            "trigger_target", chooser_index,
+            card_name=item.card.name,
+            targets=offered,
+            _trigger_item=item,
+            max_targets=len(roles),
+            exact_targets=True,
+            roles=[
+                {"role": position, "kind": role.get("kind")}
+                for position, role in enumerate(roles)
+            ],
+        )
+
     def _arm_trigger_target_choice(
         self, item: StackItem, spec: dict, chooser_index: int, candidates: list,
     ) -> None:
@@ -685,6 +782,9 @@ class TriggerTargetsMixin:
         instruction = item.ability_instruction
         if spec.get("kind") in self._CHOOSABLE_TRIGGER_STACK_KINDS:
             self._choose_trigger_stack_target(item, chooser_index, candidates)
+            return
+        if spec.get("kind") == "roles":
+            self._arm_trigger_role_choice(item, spec, chooser_index, candidates)
             return
         offered = []
         stamps: dict = {}
