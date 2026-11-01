@@ -5,7 +5,16 @@ The exact twin of ``engine/object_colors.py`` one characteristic over, and it
 exists for that module's reason rather than by analogy. CR 613.1 applies the
 layers to a **permanent**; a card in a hand, a library, a graveyard or the exile
 has no layer stack, so this engine reads its printed type line — which is right
-for every card in the pool but one.
+for every card in the pool but two.
+
+"Mistform Ultimus is every creature type (even if this card isn't on the
+battlefield)." A characteristic-defining ability (CR 604.3) is part of what the
+card *is* in every zone, so it is not an override here but part of the one type
+parse every zone shares (``layer_bridge._printed_shape``, through
+:func:`every_creature_type_subtypes` below) — the printed read every reader
+here already makes. In the layer seed it applies before every layer-4 effect
+(CR 613.3), so a type-setting effect — Conspiracy's first sentence included —
+replaces it.
 
 "Creatures you control are the chosen type. **The same is true for creature
 spells you control and creature cards you own that aren't on the battlefield.**"
