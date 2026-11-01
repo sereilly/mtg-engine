@@ -684,8 +684,10 @@ const card = { name: "Goblin Clearcutter", ability_mana: [INPUT.entry], __abilit
 const combination = chosenAbilityCombination(card);
 const splits = manaSplits(combination.symbols, combination.count).map(manaSplitKey);
 const texts = manaSplits(combination.symbols, combination.count).map(manaSplitText);
+// The cost was picked on the board first (the sacrificed Forest) and rides along.
 pendingManaColor = { cardName: "Goblin Clearcutter", permanentIndex: 2, targetSeat: 0,
-                     abilityIndex: 0, combination };
+                     abilityIndex: 0, combination,
+                     extraFields: { cost_permanent_index: 1, cost_permanent_id: 4 } };
 resolvePendingManaSplit("R:2,G:1");
 return { combination, splits, texts, cleared: pendingManaColor === null, sent: SENT,
          fan: chosenAbilityCombination({ ability_mana: [{ symbols: ["R", "G"], choice: true }] }) };
@@ -720,4 +722,5 @@ def test_a_mana_split_is_offered_whole_and_sent_as_mana_combination():
     assert body["action"] == "activate" and body["ability_index"] == 0
     assert body["permanent_id"] == 102
     assert body["mana_combination"] == {"R": 2, "G": 1}
+    assert (body["cost_permanent_index"], body["cost_permanent_id"]) == (1, 4)
     assert out["fan"] is None, "a plain colour choice is not a split"

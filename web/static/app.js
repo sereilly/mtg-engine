@@ -2633,10 +2633,16 @@ function resolvePendingManaSplit(key) {
   const pending = pendingManaColor;
   pendingManaColor = null;
   renderActivationPrompt();
-  const text = manaSplitText(split);
+  // In words: the action hint is plain text, where "{R}{R}{G}" would show
+  // its braces.
+  const words = { W: "white", U: "blue", B: "black", R: "red", G: "green", C: "colorless" };
+  const text = Object.entries(split).map(([symbol, n]) => `${n} ${words[symbol] || symbol}`).join(" and ");
   updateActionHint(`Activating ${pending.cardName} for ${text}...`);
   const body = withPermanentId(
     {
+      // A cost already picked on the board (the sacrificed Forest) rides in
+      // the body it would have been sent in.
+      ...(pending.extraFields || {}),
       seat,
       action: "activate",
       permanent_name: pending.cardName,
@@ -18935,6 +18941,26 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
         "cost_permanent_id", selectedTarget, selectedPermanentIndex,
       );
       if (Number.isInteger(pending.abilityIndex)) costBody.ability_index = pending.abilityIndex;
+      // "{T}, Sacrifice a Forest: Add three mana in any combination of {R}
+      // and/or {G}" (Goblin Clearcutter): the cost is picked, the split is
+      // still owed — asked now, and the cost rides along with it.
+      const costCombination = chosenAbilityCombination({
+        ...pending.card,
+        __abilityIndex: Number.isInteger(pending.abilityIndex) ? pending.abilityIndex : 0,
+      });
+      if (costCombination) {
+        pendingManaColor = {
+          cardName: pending.cardName,
+          permanentIndex: pending.sourcePermanentIndex,
+          targetSeat: seat,
+          oracleText: pending.card?.oracle_text || "",
+          abilityIndex: pending.abilityIndex,
+          combination: costCombination,
+          extraFields: costBody,
+        };
+        renderActivationPrompt();
+        return;
+      }
       updateActionHint(`Activating ${pending.cardName}...`);
       sendAction(costBody)
         .then(() => updateActionHint(`Activated ${pending.cardName}.`))
