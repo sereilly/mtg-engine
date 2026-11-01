@@ -231,6 +231,58 @@ def test_w1g5_a_one_word_creature_type_subject_cannot_attack():
     )
     assert ok, why
 
+
+def test_w1g5_berserk_murlodont_pumps_each_blocked_beast_by_its_blockers(
+    set_pool,
+):
+    """"Whenever a Beast becomes blocked, it gets +1/+1 until end of turn for
+    each creature blocking it." Alice attacks with a Beast blocked by two, the
+    Murlodont (a Beast) blocked by one, and an Elf blocked by one: the Beast
+    gets +2/+2, the Murlodont +1/+1, the Elf nothing — one trigger per
+    blocked Beast (CR 509.3c), sized by its own blockers."""
+    from tests.helpers import declare_attack
+
+    game, alice, bob, card = _w1g5_table(set_pool)
+    murlodont = _w1g5_put(game, 0, card("Berserk Murlodont"))   # 3/3
+    tusker = _w1g5_put(game, 0, card("Krosan Tusker"))          # 6/5
+    elf = _w1g5_put(game, 0, card("Birchlore Rangers"))         # 1/1
+    walls = [_w1g5_put(game, 1, card("Severed Legion")) for _ in range(4)]
+
+    def slot(perm):
+        seat = 0 if perm in (murlodont, tusker, elf) else 1
+        return _w1g5_slot(game, seat, perm)
+
+    declare_attack(game, 0, blocks={
+        slot(walls[0]): slot(tusker), slot(walls[1]): slot(tusker),
+        slot(walls[2]): slot(murlodont), slot(walls[3]): slot(elf),
+    })
+    triggers = [item for item in game.stack if item.card.name == "Berserk Murlodont"]
+    assert len(triggers) == 2, [item.ability_text for item in game.stack]
+    _w1g5_resolve_stack(game)
+    assert (tusker.effective_power, tusker.effective_toughness) == (8, 7)
+    assert (murlodont.effective_power, murlodont.effective_toughness) == (4, 4)
+    assert (elf.effective_power, elf.effective_toughness) == (1, 1)
+    assert any("gives Krosan Tusker +2/+2" in line for line in game.log)
+
+
+def test_w1g5_berserk_murlodont_watches_the_opponents_beasts_too(set_pool):
+    """"A Beast" is any controller's: Bob's Beast, blocked by Alice's two
+    creatures, is pumped by Alice's Murlodont."""
+    from tests.helpers import declare_attack
+
+    game, alice, bob, card = _w1g5_table(set_pool)
+    _w1g5_put(game, 0, card("Berserk Murlodont"))
+    blockers = [_w1g5_put(game, 0, card("Birchlore Rangers")) for _ in range(2)]
+    for perm in game.controlled_by(0):
+        perm.tapped = perm not in blockers
+    beast = _w1g5_put(game, 1, card("Krosan Tusker"))
+    declare_attack(game, 1, blocks={
+        _w1g5_slot(game, 0, blockers[0]): _w1g5_slot(game, 1, beast),
+        _w1g5_slot(game, 0, blockers[1]): _w1g5_slot(game, 1, beast),
+    })
+    _w1g5_resolve_stack(game)
+    assert (beast.effective_power, beast.effective_toughness) == (8, 7)
+
 # ==== end W1G5 ======================================================
 
 
