@@ -695,9 +695,10 @@ class TriggerTargetsMixin:
         Only the shape it can answer in full: two or more mandatory roles,
         each a permanent kind the board picker narrows (``own_only``,
         ``opponent_only`` ride each role's spec), on a line that printed
-        "target". An optional role ("…and **up to two** target lands", Goblin
-        Grenadiers) declines, as before, rather than being announced as if
-        it were owed.
+        "target" (Chromeshell Crab's exchange; Goblin Grenadiers' "destroy
+        target creature and target land"). An optional role (``OPTIONAL_ROLE``,
+        an "up to one" slot) declines, as before, rather than being announced
+        as if it were owed — no supported trigger prints one today.
         """
         from ...target_roles import OPTIONAL_ROLE
         from ...targeting import announces_a_target

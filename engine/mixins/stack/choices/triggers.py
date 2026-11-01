@@ -709,17 +709,30 @@ class TriggerChoicesMixin:
         if choice.data.get("division_total") is not None:
             return self._default_trigger_division(choice, item)
         if choice.data.get("roles"):
-            # A roles announcement (Chromeshell Crab): each role's first
-            # candidate in the offer's order, never one already named for an
-            # earlier role. Each role's own noun phrase already decided whose
-            # permanent it is.
+            # A roles announcement (Chromeshell Crab, Goblin Grenadiers): for
+            # each role, its first candidate on the side the effect wants
+            # (``_default_trigger_target_side`` — Grenadiers' destroy aims at
+            # the opponent's creature and land, never at itself), else its
+            # first candidate at all (a role whose own noun phrase names the
+            # seat, "target creature you control"), never one already named
+            # for an earlier role.
+            wanted = (
+                self._default_trigger_target_side(item, choice.player_index)
+                if item is not None else set()
+            )
             picks: list = []
             for position in range(len(choice.data["roles"])):
+                fillers = [
+                    target for target in targets
+                    if target.get("role") == position
+                    and target["permanent_id"] not in picks
+                ]
                 pick = next(
                     (
-                        target["permanent_id"] for target in targets
-                        if target.get("role") == position
-                        and target["permanent_id"] not in picks
+                        target["permanent_id"]
+                        for target in sorted(
+                            fillers, key=lambda target: target.get("seat") not in wanted,
+                        )
                     ),
                     None,
                 )

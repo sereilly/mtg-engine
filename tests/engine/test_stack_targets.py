@@ -711,9 +711,9 @@ def test_the_census_excuses_only_a_card_the_announcement_put_there(pool, by_name
 #:   controls", "that player chooses target player who…") has no seat in this
 #:   context-free drive — a real fire site supplies it;
 #: * the ability derives **no picker at all** (a reflexive ability, a target an
-#:   opponent chooses, a roles announcement on a trigger with an optional role
-#:   — Goblin Grenadiers; one whose roles are all owed is announced since
-#:   LGN W1G4, Chromeshell Crab).
+#:   opponent chooses; a trigger's roles announcement is made since LGN
+#:   W1G4 — Chromeshell Crab, Goblin Grenadiers — except one with an
+#:   optional role, which still declines).
 #:
 #: An ability in the first and third groups is invisible to "whenever a player
 #: chooses one or more targets" and to "becomes the target of". This is a
@@ -792,7 +792,10 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # and acts on it (tests/sets/test_ons_creatures.py, W1G1's section).
     "Dawning Purist#0", "Skirk Commando#0", "Snapping Thragg#0",
     # no picker derived
-    "The Abyss#0", "Rysorian Badger#0", "Goblin Grenadiers#0",
+    # Goblin Grenadiers ("…destroy target creature and target land") sat here
+    # until LGN W1G4: a trigger's roles announcement (Chromeshell Crab's
+    # exchange, the Grenadiers' destroy) is made as it goes on the stack.
+    "The Abyss#0", "Rysorian Badger#0",
     "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",
     # Gravegouger ("When this creature enters, exile **up to two target cards
     # from a single graveyard**") stood here from Torment's first wave, its
