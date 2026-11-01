@@ -228,9 +228,13 @@ def test_the_gate_is_the_door_s_refusal():
     expected = game.unpayable_activation_cost(ME, subject, ability)
     assert expected == "Grim Lavamancer: nothing available to exile as a cost"
     pool_before = dict(game.players[ME].mana_pool)
+    log_before = list(game.log)
     result = game.activate_permanent_ability(ME, card.name, target_player_index=OPP)
     assert not result.supported and result.details == expected
-    assert game.log[-1] == expected
+    # The gate's words are the activator's, in the result; the log every
+    # seat reads is told nothing of a reversed action (CR 733.1,
+    # ``engine/refusals.py``).
+    assert game.log == log_before
     assert dict(game.players[ME].mana_pool) == pool_before
     assert not subject.tapped
     # Two cards in the graveyard pay it: the gate is quiet and the cards go.
