@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5849**
-- Passed: **872** (593 checked in-game, 279 auto-passed)
+- Passed: **873** (594 checked in-game, 279 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **65**
-- Untested: **4912**
+- Untested: **4911**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -1924,7 +1924,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Furnace Spirit | ⬜ untested |  |
 | Furnace of Rath | ⬜ untested |  |
 | Furor of the Bitten | ⬜ untested |  |
-| Future Sight | ⬜ untested |  |
+| Future Sight | ✅ pass |  |
 | Fylamarid | ⬜ untested |  |
 | Fylgja | ⬜ untested |  |
 | Fyndhorn Bow | ⬜ untested |  |
