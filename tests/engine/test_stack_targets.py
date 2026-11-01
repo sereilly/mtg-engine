@@ -783,6 +783,20 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # one and the default names the opponent's
     # (tests/sets/test_lgn_creatures_later_groups.py, W1G4's section).
     "Weaver of Lies#0",
+    # Legions, W1G6. "…return **up to two** target Bird and/or Cleric
+    # permanent cards from your graveyard to the battlefield" (Celestial
+    # Gatekeeper): Constable's "up to" over a graveyard — this board's
+    # graveyard holds no Bird or Cleric card, so zero is all it can name.
+    # With one there, the picker offers it and the default returns two
+    # (tests/sets/test_lgn_creatures_later_groups.py, W1G6's section).
+    "Celestial Gatekeeper#0",
+    # Legions, W1G6. "…put target creature card from **that player's**
+    # graveyard onto the battlefield under your control" (Scion of
+    # Darkness): Zombie Cannibal's pile, which only the damage event names.
+    # It read "your graveyard" until W1G6 (every printed owner lowered as
+    # "your") and announced a card of its controller's own; driven through
+    # a real combat damage step it targets the damaged player's card.
+    "Scion of Darkness#0",
     # Onslaught, W1G1 — reached the moment their Morph line was read.
     # "Whenever this creature deals combat damage to a player, you may have it
     # deal 2 (Skirk Commando) / 3 (Snapping Thragg) damage to target creature

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
+from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_instruction_spec
@@ -44,7 +45,8 @@ def _table(mine, theirs, *, interactive=False):
     placed = []
     for seat, names in ((0, mine), (1, theirs)):
         for name in names:
-            permanent = Permanent(card=_CARDS[name])
+            card = _CARDS[name] if isinstance(name, str) else name
+            permanent = Permanent(card=card)
             game._put_permanent_onto_battlefield(seat, permanent, None)
             permanent.metadata["summoning_sickness_turn"] = -99
             placed.append(permanent)
@@ -56,7 +58,7 @@ def test_every_supported_roles_trigger_announces_its_roles():
     is a roles spec, enqueued from its source on a board holding a creature
     and a land on each side, goes on the stack with one target per role."""
     examined = 0
-    for card in _CARDS.values():
+    for card in compilation_units(_CARDS.values()):
         program = compile_card_oracle(card)
         if not program.supported:
             continue
@@ -67,7 +69,7 @@ def test_every_supported_roles_trigger_announces_its_roles():
             if not spec or spec.get("kind") != "roles":
                 continue
             game, placed = _table(
-                [card.name, "Grizzly Bears", "Forest"], ["Hill Giant", "Island"],
+                [card, "Grizzly Bears", "Forest"], ["Hill Giant", "Island"],
             )
             game._enqueue_triggered_ability(
                 controller_index=0, source_permanent=placed[0],
