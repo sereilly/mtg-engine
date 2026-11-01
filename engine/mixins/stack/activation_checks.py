@@ -33,7 +33,6 @@ from ...divided_damage import (
     EVENLY, divided_description, divided_entry, division_refusal,
     stamped_entry,
 )
-from ...game_types import SimulationResult
 from ...handlers._amounts import evaluate_count
 from ...handlers._chosen import CHOSEN_ABILITY
 from ...line_classification import LOYALTY_ANY_TIME_STATIC

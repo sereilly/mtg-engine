@@ -33,7 +33,6 @@ from ...cost_x_definitions import (
     caps_cast_x, cast_x_ceiling, cast_x_floor, cast_x_value, defines_cast_x,
     floors_cast_x,
 )
-from ...game_types import SimulationResult
 from ...oracle_types import x_spend_colors_from_text
 from ...refusals import refuse
 

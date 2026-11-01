@@ -50,7 +50,6 @@ from ...divided_damage import (
     CARD_DIVIDED, EACH, EVENLY, FIXED, card_shares, divided_description,
     division_refusal, stamp_card_shares,
 )
-from ...game_types import SimulationResult
 from ...targeting import instructions_as_announced
 from .cast_announcement import _mode_announcements
 from ...refusals import refuse

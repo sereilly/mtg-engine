@@ -25,7 +25,6 @@ from ...activation_tallies import (
 )
 from ...cost_tap_records import record_tapped_to_pay
 from ...events import emit
-from ...game_types import SimulationResult
 from ...subject_filters import (
     card_matches_any, filter_head_noun, subject_matches,
 )

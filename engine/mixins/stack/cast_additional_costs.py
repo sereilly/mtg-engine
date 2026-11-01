@@ -32,7 +32,6 @@ from ...models import CardDefinition, Permanent
 from ...oracle import compile_card_oracle
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 from ...cost_modifiers import sacrifice_taxes
-from ...game_types import SimulationResult
 from ...refusals import refuse
 
 

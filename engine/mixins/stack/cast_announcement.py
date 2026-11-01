@@ -19,7 +19,6 @@ from __future__ import annotations
 from ...cast_permissions import permission_for
 from ...classifier import classify_card
 from ...faces import holds_spell_named, spell_named
-from ...game_types import SimulationResult
 from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...oracle import compile_card_oracle
 from ...refusals import refuse
