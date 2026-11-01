@@ -346,35 +346,19 @@ class CombatPhaseMixin:
                     return True
         return False
 
-    def _combat_awaits_an_answer(self) -> bool:
-        """Whether a decision is owed that the combat rail must wait for.
-
-        CR 608.2 / CR 117.3b, the rule ``Game.waiting_prompt`` states and the
-        priority rail already honours: while a prompt is owed the resolution
-        that armed it is not finished, so no step advances and nobody receives
-        priority. The combat rail did not ask. ``_resolve_priority_window``
-        below returns with the held object still on the stack — that is its
-        documented behaviour — and the next two lines closed the step and
-        entered the following one anyway, so a "you may" offered in the
-        declare-blockers step was still on screen when the combat damage step
-        had already dealt its damage. Round 23 reverted Floral Spuzzem over
-        exactly this and recorded the reason.
-
-        The seat test is what keeps a headless or AI run identical: those seats
-        never answer a prompt themselves — their defaults are drained by
-        ``auto_resolve_pending_choices`` *after* the step — so blocking on one
-        would stop the rail with nothing left to unblock it. It is the same
-        question ``_resolve_priority_window`` asks before pausing at all.
-        """
-        waiting = self.waiting_prompt()
-        return waiting is not None and waiting.player_index in self.interactive_seats
-
     def advance_combat_phase(self, allow_damage_skip: bool = True) -> None:
         # allow_damage_skip: when a player has flagged the combat-damage step on the
         # phase rail (hold priority), the caller passes False so the engine enters
         # the step and opens a priority window there instead of auto-resolving damage
         # and skipping straight to end-of-combat.
-        if self._combat_awaits_an_answer():
+        #
+        # CR 608.2 / CR 117.3b: while a resolution waits on a decision, no step
+        # advances. Round 23 reverted Floral Spuzzem over a "you may" offered in
+        # the declare-blockers step that was still on screen once combat damage
+        # had been dealt; the question asked is the window's own
+        # (``awaits_an_answer``), so an AI seat's offer holds the rail exactly
+        # as long as it holds the window.
+        if self.awaits_an_answer():
             return
         combat_steps = list(self._phase_steps("combat"))
         if self.current_turn_phase != "combat":
@@ -387,13 +371,23 @@ class CombatPhaseMixin:
             self._enter_combat_step(combat_steps[0])
             return
 
+        # The step's leaving stopped at its window last time (something was
+        # still owed there): pick it up at the window. What leaving does
+        # first — the step's log line, the unblocked-attack triggers,
+        # end-of-combat triggers and sweeps — has been done once already.
+        resuming = self.resume_held_step()
+
         if self.current_step == "end_of_combat":
-            self.end_combat(step_already_started=True)
+            if not self.end_combat(step_already_started=True, resuming=resuming):
+                return
             # CR 500.1/500.8: whatever this turn has planned after the combat
             # phase, which is the postcombat main phase unless something added
             # one (Relentless Assault). Asked rather than named, so an extra
             # phase is entered rather than recorded and skipped.
             self.enter_next_turn_phase("combat")
+            return
+        if resuming:
+            self._leave_combat_step(combat_steps, idx, allow_damage_skip)
             return
         if self.current_step == "declare_attackers" and not self.combat_attackers_locked:
             # CR 802.2: under attack-multiple-players there's no single pre-picked
@@ -516,16 +510,26 @@ class CombatPhaseMixin:
             # declaration of its own to make it (CR 704.3).
             self._check_after_turn_based_actions()
 
-        # Close current combat step, then enter the next one.
+        self._leave_combat_step(combat_steps, idx, allow_damage_skip)
+
+    def _leave_combat_step(
+        self, combat_steps: list[str], idx: int, allow_damage_skip: bool
+    ) -> None:
+        """Drain the current combat step's window, end the step and enter the
+        next one — the half of ``advance_combat_phase`` a held step resumes at.
+
+        CR 500.2: a step ends when the stack is empty and all players pass in
+        succession. The window may stop part-way through a resolution
+        (CR 608.2); the step is then held open (``window_left_unfinished``,
+        ``hold_step_open``) and the next advance comes back here, after the
+        answer, rather than running the rest of combat around it.
+        """
         if self._receives_priority(self.current_step):
             self._resolve_priority_window()
-            # The window may have stopped part-way through a resolution
-            # (CR 608.2). Closing the step now would run the rest of combat
-            # around an unanswered question — see ``_combat_awaits_an_answer``.
-            if self._combat_awaits_an_answer():
+            if self.window_left_unfinished():
+                self.hold_step_open()
                 return
         self._on_step_or_phase_end("combat", self.current_step)
-
         next_idx = idx + 1
         if next_idx >= len(combat_steps):
             self.enter_next_turn_phase("combat")
@@ -563,6 +567,15 @@ class CombatPhaseMixin:
                     return
                 if self._receives_priority("combat_damage"):
                     self._resolve_priority_window()
+                    # The damage step's own window, which used to be closed
+                    # whatever it left: Brood Sliver's token offered in end of
+                    # combat, three Essence Sliver triggers carried to the end
+                    # step. Held open instead, and the next advance resumes at
+                    # the general close above, where this step has nothing to
+                    # do before its window.
+                    if self.window_left_unfinished():
+                        self.hold_step_open()
+                        return
                 self._on_step_or_phase_end("combat", "combat_damage")
                 eoc_idx = next_idx + 1
                 if eoc_idx >= len(combat_steps):

@@ -213,6 +213,15 @@ class Game(
     current_phase: str = "main"
     current_turn_phase: str = "precombat_main"
     current_step: str = "precombat_main"
+    # ``(turn, phase, step)`` of a step whose leaving stopped part-way: its
+    # priority window was drained and something is still owed there — an
+    # object on the stack whose resolution waits on an answer (CR 608.2,
+    # CR 117.3b) — so the step did not end (CR 500.2). The next attempt to
+    # leave the same step resumes at the window rather than re-running what
+    # leaving it does first (the step's log line, end-of-combat triggers).
+    # None almost always; never set at a table with no interactive seat,
+    # whose windows always drain (``PhaseStepsMixin.hold_step_open``).
+    held_step: tuple | None = None
     active_player_index: int = 0
     lands_played_this_turn: dict[int, int] = field(default_factory=dict)
     # CR 305.2 for one turn: what a *resolved effect* said about a seat's land

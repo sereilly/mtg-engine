@@ -28,12 +28,62 @@ from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
 
 class EndOfCombatStepMixin:
-    def end_combat(self, step_already_started: bool = False) -> None:
+    def end_combat(
+        self, step_already_started: bool = False, resuming: bool = False
+    ) -> bool:
+        """Leave the end of combat step (CR 511): its triggers, the
+        until-end-of-combat sweeps, its priority window, then combat state
+        cleared (CR 511.3). True when the step ended.
+
+        False when the window left something owed (CR 608.2,
+        ``window_left_unfinished``): the step is held open, creatures stay in
+        combat, and the caller must not enter the next phase. *resuming* is
+        the next call, after the answer: the triggers have fired and the
+        sweeps have run once, so it starts at the window.
+        """
         phase = "combat"
         step = "end_of_combat"
         if not step_already_started:
-            self._set_phase_and_step(phase, step)
-            self._on_step_or_phase_begin(phase, step)
+            # The End Turn button jumps here from any combat step, and comes
+            # back here when the step it left was held: that second call is the
+            # same step resuming, not a new one beginning.
+            resuming = resuming or (
+                (self.current_turn_phase, self.current_step) == (phase, step)
+                and self.resume_held_step()
+            )
+            if not resuming:
+                self._set_phase_and_step(phase, step)
+                self._on_step_or_phase_begin(phase, step)
+        if not resuming:
+            self._sweep_end_of_combat()
+        if self._receives_priority(step):
+            self._resolve_priority_window()
+            if self.window_left_unfinished():
+                self.hold_step_open()
+                return False
+        # CR 511.3: creatures are removed from combat **as the end of combat
+        # step ends** — after CR 511.2's priority window, which is where the
+        # triggers CR 511.1 put on the stack actually resolve.
+        #
+        # This used to run before that window, and the comment at the top of
+        # this method says why it looked right: the triggers *fire* before the
+        # state is cleared. Firing only puts an ability on the stack, though,
+        # and an ability determines what it affects when it **resolves**
+        # (CR 608.2) — so "At end of combat, exile all creatures blocked by this
+        # creature" (Wall of Nets) resolved against a board where nothing was
+        # blocking anything, logged "exiled 0 permanent(s)", and reported the
+        # card supported. Every end-of-combat trigger that reads a combat
+        # relation had the same hole; nothing failed, because no card in the
+        # pool had asked one until now.
+        self._reset_combat_state(clear_damage_marked=False)
+        self._on_step_or_phase_end(phase, step)
+        return True
+
+    def _sweep_end_of_combat(self) -> None:
+        """What leaving the end of combat step does before its window: fire
+        the end-of-combat triggers (CR 511.1) and end every until-end-of-combat
+        effect. Once per step — a step held open on its window resumes after
+        this (``end_combat``'s *resuming*)."""
         # End-of-combat triggered abilities fire before combat state is cleared,
         # while "attacked or blocked this combat" is still known.
         self._fire_end_of_combat_triggers()
@@ -114,24 +164,6 @@ class EndOfCombatStepMixin:
             for permanent in self.controlled_by(player):
                 clear_shields(permanent, END_OF_COMBAT)
                 clear_redirects(permanent, END_OF_COMBAT)
-        if self._receives_priority(step):
-            self._resolve_priority_window()
-        # CR 511.3: creatures are removed from combat **as the end of combat
-        # step ends** — after CR 511.2's priority window, which is where the
-        # triggers CR 511.1 put on the stack actually resolve.
-        #
-        # This used to run before that window, and the comment at the top of
-        # this method says why it looked right: the triggers *fire* before the
-        # state is cleared. Firing only puts an ability on the stack, though,
-        # and an ability determines what it affects when it **resolves**
-        # (CR 608.2) — so "At end of combat, exile all creatures blocked by this
-        # creature" (Wall of Nets) resolved against a board where nothing was
-        # blocking anything, logged "exiled 0 permanent(s)", and reported the
-        # card supported. Every end-of-combat trigger that reads a combat
-        # relation had the same hole; nothing failed, because no card in the
-        # pool had asked one until now.
-        self._reset_combat_state(clear_damage_marked=False)
-        self._on_step_or_phase_end(phase, step)
 
     def _fire_end_of_combat_triggers(self) -> None:
         """Fire "at end of combat" triggered abilities (CR 511.1, 603.2).

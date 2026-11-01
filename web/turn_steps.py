@@ -204,6 +204,12 @@ def _pause_beginning_phase(session: Session, marker: str, player_index: int) -> 
             session.paused_beginning_phase = (marker, player_index)
             return True
         if not game.stack:
+            # The step the window stopped in was held open rather than ended
+            # (``Game.window_left_unfinished``): now that nothing is owed, it
+            # ends — its mana pools empty (CR 500.5) *after* the trigger that
+            # stopped it has resolved, not before.
+            if game.step_held_open() and not game._close_current_priority_step():
+                continue
             return False
         game._resolve_priority_window()
     # A default that fails to clear its own prompt would loop here forever; the
@@ -212,6 +218,40 @@ def _pause_beginning_phase(session: Session, marker: str, player_index: int) -> 
     game.log.append(
         f"_pause_beginning_phase aborted after {_MAX_PROMPT_ROUNDS} rounds at {marker} "
         "(a prompt default is not clearing itself)"
+    )
+    return False
+
+
+def _leave_step(session: Session, leave) -> bool:
+    """Leave the current step through *leave*, answering what AI seats owe on
+    the way; True once the step has been left.
+
+    *leave* is the engine's own way out of the step (``advance_combat_phase``,
+    ``_close_current_priority_step``, ``end_combat``). It drains the step's
+    priority window, and at a table with a human at it the window stops for
+    **every** seat's prompt (CR 608.2: a resolution that asks is not finished)
+    — so the engine holds the step open (``Game.step_held_open``) rather than
+    ending it around the question. An AI seat's question is this layer's to
+    answer, with the kind's default, and the step's leaving then resumes at
+    its window: the rest of the step's triggers resolve *in* the step, Brood
+    Sliver's second token offer included. A human's question stops here and
+    the step waits for the answer; the next advance resumes it.
+
+    Before this, the engine walked past the AI's question and this layer
+    answered it one step late: an AI's provoke resolved in the declare
+    blockers step, Essence Sliver's life gain in the AI's end step.
+    """
+    game = session.game
+    for _ in range(_MAX_PROMPT_ROUNDS):
+        leave()
+        if not game.step_held_open():
+            return True
+        auto_resolve_ai_prompts(game, lambda seat: _seat_type(session, seat))
+        if game.waiting_prompt() is not None:
+            return False
+    game.log.append(
+        f"_leave_step gave up after {_MAX_PROMPT_ROUNDS} rounds in "
+        f"{game.current_step} (a prompt default is not clearing itself)"
     )
     return False
 
@@ -614,13 +654,19 @@ def _end_turn(session: Session, allow_manual_cleanup_selection: bool = False) ->
             + ", ".join(_PHASE_LABELS.get(phase, phase) for phase in added)
             + " (CR 500.8)"
         )
+    # Each step jumped through is still left the engine's way: a window that
+    # stops on a question holds the step (CR 608.2), and the jump waits there
+    # for a human's answer rather than carrying the question into the end step.
     if session.game.current_turn_phase in {"precombat_main", "postcombat_main"}:
-        session.game._close_current_priority_step()
+        if not _leave_step(session, session.game._close_current_priority_step):
+            return False
     if session.game.current_turn_phase == "combat":
-        session.game.end_combat()
+        if not _leave_step(session, session.game.end_combat):
+            return False
     if session.game.current_step != "end":
         session.game.resolve_end_step(session.current_turn)
-    session.game.close_end_step()
+    if not _leave_step(session, session.game.close_end_step):
+        return False
     should_defer_cleanup = allow_manual_cleanup_selection and _seat_type(session, session.current_turn) == "human"
     cleanup_completed = session.game.resolve_cleanup_step(
         session.current_turn,
