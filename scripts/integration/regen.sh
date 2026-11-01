@@ -4,12 +4,16 @@
 # Never an --accept: a ratchet that moved is a decision, made by hand after
 # reading it. Git's union of two branches' regenerations is not a regeneration
 # of the merged tree, so this runs after every merge, even a clean one.
+# Every tracker, CARD_VERIFICATION.md included: it counts the shipped pool, so a
+# promotion moves it, and Onslaught's promotion commit left it counting the
+# pool before the set (`check_all --freshness` regenerates the same list).
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 label="$1"
 for s in grammar_coverage hook_reliance parse_coverage set_progress behaviour_classes rules_progress; do
   "$PY" scripts/$s.py > /dev/null 2>&1
 done
-git add GRAMMAR_COVERAGE.md HOOK_RELIANCE.md PARSE_COVERAGE.md SET_PROGRESS.md BEHAVIOUR_CLASSES.md RULES_PROGRESS.md
+"$PY" -c "from web.verification_report import write_verification_markdown as w; w()" > /dev/null 2>&1
+git add GRAMMAR_COVERAGE.md HOOK_RELIANCE.md PARSE_COVERAGE.md SET_PROGRESS.md BEHAVIOUR_CLASSES.md RULES_PROGRESS.md CARD_VERIFICATION.md
 if git diff --cached --quiet; then
   echo "trackers already fresh"
 else

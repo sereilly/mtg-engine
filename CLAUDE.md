@@ -253,9 +253,10 @@ count** in `SimulationReport` (`interaction_count`, `lands_played`,
 `casts_in_response`, `casts_in_combat`, `casts_on_opponents_turn`,
 `activations_at_instant_speed`, `refused_casts`, `refused_attacks`,
 `rehearsals_raised`, `special_actions_taken`, `refused_special_actions`,
-`cards_from_outside_game`, the combat counts). A run that cast nothing exits
-1. A new piece of the turn arrives with its count. CR 116 special actions are
-weighed in `engine/ai_special_actions.py`, before the first combat.
+`cards_from_outside_game`, `face_down_casts`, the combat counts). A run that
+cast nothing exits 1. A new piece of the turn arrives with its count. CR 116
+special actions are weighed in `engine/ai_special_actions.py`, before the
+first combat.
 
 - **Casting**: every cast site goes through `ai_actions.cast_announcement` (an
   AST test fails a site that spells a cast keyword itself); the mode chooser
@@ -263,9 +264,13 @@ weighed in `engine/ai_special_actions.py`, before the first combat.
   reader of what `cast_permissions` opens (`CastAction.from_zone`).
 - **Mana**: one exact matching (`ai_payment._PaymentPlanner`, also asked by the
   web's auto-tap) over lands, then tap-only non-land sources
-  (`ai_valuation.planned_mana_yield`), then a self-sacrificing source only when
-  the lands cannot pay and the spell is worth more. `tap_planned_lands` binds
-  every slot to its permanent before the first tap (a sacrifice renumbers).
+  (`ai_valuation.planned_mana_yield`), then a mana ability whose cost taps
+  other permanents (Birchlore Rangers,
+  `ai_mana_sources.tap_cost_mana_activations`: the summoning-sick and least
+  valuable first, never the permanent being paid for), then a
+  self-sacrificing source only when the lands cannot pay and the spell is
+  worth more. `tap_planned_lands` binds every slot to its permanent before
+  the first tap (a sacrifice renumbers).
 - **Priority**: `Game.offer_priority` gives it in CR 117.3b–d order, before each
   resolution and at a step's end on an empty stack; inert without a driver, at
   a table with an interactive seat, and in the untap step. The simulator
@@ -517,7 +522,10 @@ entries, not editing dispatch**.
 - **Discarding is one seam, and the event says who caused it.**
   `Game._discard_card` raises the `discard` event with `cause_seat`
   (`discard_cause_seat`), because "a spell or ability an opponent controls causes
-  you to discard" is a question about the cause.
+  you to discard" is a question about the cause — and with `as_cost` when the
+  discard pays a cost, because "if an effect causes you to discard" (Library
+  of Leng) is one too. Every discard in the four cost-paying modules passes it
+  (`tests/engine/test_discard_cost_seam.py`).
 - **Every "put into a hand / a library"** goes through `Game.put_card_into_hand`
   (`mixins/zone_funnels.py`)
   / `put_card_into_library` (CR 903.9b has no single fire site).
@@ -544,16 +552,29 @@ entries, not editing dispatch**.
   ability (`tap_alone_symbols`), never off the printed summary.
 - `engine/board_payment.py` — `board_can_pay`: can this seat pay from its pool
   plus what its untapped lands would add (default — what an automatic payment
-  asks), or plus every tap-alone source (`nonland_sources=True` — what a player
-  is asked; the castable highlight passes it).
+  asks), or plus every tap-alone source and every mana ability whose cost taps
+  other permanents (`nonland_sources=True` — what a player is asked; the
+  castable highlight passes it).
 - `engine/faces.py` — multi-face cards (CR 709). **A face is a card**: each half
   is derived once as its own `CardDefinition` carrying `face_of`, and that half
-  compiles and goes on the stack; `whole_card` is CR 709.4 at the zone seams. The
+  compiles and goes on the stack; `whole_card` is CR 709.4 at the zone seams —
+  and CR 708.9 for a face-down object, whose real card it returns. The
   whole card's program has **no instructions**, so a guard whose population is
   "each card, compiled" passes over every half without examining one — blind,
   not red. Text questions iterate `faces.compilation_units(pool)` /
   `oracle.compiled_units`; card questions keep the card. Held by
   `tests/engine/test_face_blind_guards.py`.
+- `engine/face_down.py` — morph (CR 702.37) and face-down spells and
+  permanents (CR 708). **While hidden, a face-down `StackItem.card` /
+  `Permanent.card` *is* the blank 2/2** (`face_down_card`) and the real card
+  rides on it as `CardDefinition.face_down_of` — substitution, chosen because
+  `.card.name` is read everywhere and a hidden card must be fail-closed;
+  `copies.FACE_DOWN_AS_IT_LEFT` keeps last-known information. Casting face
+  down is an alternative cost; turning face up is the `turn_face_up` special
+  action (CR 116.2b); effects turn a permanent down or up through
+  `turn_face_down` / `turn_face_up(game, perm, how=…)`. The wire carries
+  `face_down` and, to the controller alone, `hidden_card`; the AI's rehearsal
+  copy conceals an opponent's face-down cards (CR 708.5).
 
 **Casting and activating**
 
@@ -645,13 +666,20 @@ entries, not editing dispatch**.
   target cards from a single graveyard" is `target_descriptions.SINGLE_GRAVEYARD`; two
   players may be two roles (`choices["role_seats"]`). `Game.stack_target_seat`
   is the controller of a targeted spell ("its controller"). An "up to one"
-  slot is an optional role (`target_roles.OPTIONAL_ROLE`, the last role only);
+  slot is an optional role (`target_roles.OPTIONAL_ROLE`); "any number of
+  target opponents / players or planeswalkers" is a chain of optional roles
+  (Wheel and Deal, Kaboom!), "for each opponent, … target permanent that
+  player controls" one mandatory role per live opponent
+  (`target_roles.per_opponent_roles`, Blatant Thievery), and an empty
+  `target_role_refs` on a cast names no target;
   "that player controls" after a seat role is a role relation
   (`same_controller_role`, `role_seat_of`); a seat a slot cannot carry (a
   pile's owner, a count's opponent, an opponent beside a division) rides the
   seat field as `target_descriptions.ANNOUNCED_SEAT`. A narrowing known only
-  at announcement (Phyrexian Splicer's chosen keyword) is asked with the
-  word this activation announces and rides the stack object.
+  at announcement (Phyrexian Splicer's chosen keyword; the creature type a
+  spell announces before its targets, Aphetto Dredging —
+  `engine/announced_creature_type.py`) is asked with the word the cast or
+  activation announces and rides the stack object.
 - `engine/target_requirements.py` — a target an opponent **must** choose (the
   Flagbearers): two gates over a whole announcement, deliberately not a
   narrowing in `_enumerate_targets` (which also serves resolution, retargets and
@@ -717,7 +745,12 @@ entries, not editing dispatch**.
   only). A private look stays private in the log (`Game.find_is_public`); "the
   rest in any order" is the looker's order (`Game.offer_library_bottom_order` /
   `offer_library_top_order`). A sentence that asks each player waits for the
-  last answer before acting (`new_keep_batch` / `finish_keep_batch`); Balance
+  last answer before acting (`new_keep_batch` / `finish_keep_batch`); a choice
+  each player makes **in turn order** (CR 101.4, each seeing the earlier
+  answers) is `resumption.ask_in_turn_order` — each player choosing a creature
+  type, the each-seat discards and hand picks, each player choosing
+  permanents — while "each player **secretly** chooses a number" arms every
+  seat at once (`secretly_choose_numbers`); Balance
   is three rounds, each counted as it starts and asked one seat at a time in
   turn order (`_finish_balance_round`).
 - `engine/enter_effects.py` — entry-state phrases `_initialize_permanent_state`
@@ -732,7 +765,10 @@ entries, not editing dispatch**.
   Who announces is `Game.combat_damage_assigner` (the defender under banding /
   Defensive Formation, CR 702.22j). An assignment is checked whole by one gate
   for both seats (`_attacker_division_refusal`, CR 510.1c–e), and each damage
-  step is its own announcement (CR 510.4).
+  step is its own announcement (CR 510.4). A division among the defending
+  player and their creatures (Butcher Orgg) has its own gate
+  (`divided_among_defenders_refusal`), and the step waits for an interactive
+  controller's answer (`engine/phases/divided_damage_wait.py`).
 
 **Layers, control and the board**
 
@@ -752,7 +788,8 @@ entries, not editing dispatch**.
   metadata flag instead is the bug class `tests/engine/test_layer_reads.py`
   guards. **"What does it say?" is `Permanent.effective_card`** (layer 1 copy,
   layer 3 text change, granted abilities); `perm.card.oracle_text` and
-  `perm.card.keywords` are the card as printed, and a keyword also wants
+  `perm.card.keywords` are the card as printed — except a face-down object's,
+  whose `card` is the blank 2/2 (CR 708.2) — and a keyword also wants
   `_has_keyword` (layer 6).
   - Folds are memoised by what the card *is* (`copies.card_identity`), **never by
     `id()`** — CPython reuses a freed object's address.

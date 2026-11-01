@@ -1194,7 +1194,9 @@ one card prints this") reads as a work item long after it stopped being true.
     attacker that changed sides.
   * *Small, each with a repro in its group's report.* A provisional
     entry-choice default drives static effects while the prompt is open
-    (Engineered Plague shows -1/-1 before the answer; 31 cards; display only).
+    (Engineered Plague shows -1/-1 before the answer; 31 cards; display only;
+    both seats see it — Cover of Darkness gave Daru Lancer fear with "Human"
+    still pending, Onslaught's Phase 5).
     `destroy_all_matching` logs what it aimed at, not what died (55 cards
     compile to the kind). "<Creature type> card" lowers with a creature
     `type_filter`, so a Kindred card would be missed (none in the manifest).
@@ -1415,24 +1417,28 @@ one card prints this") reads as a work item long after it stopped being true.
 
   * *An Aura put onto the battlefield with no host.* Wave 2 made a
     *returned* Aura choose its host and ask protection (CR 303.4f, 702.16c:
-    Replenish, Cleansing Meditation). Eureka, Charmed Griffin, Retraced Image
-    and Ugin's -10 still put an Aura card with no named host onto the
-    battlefield attached to nothing, and it stays there doing nothing: the
-    CR 704.5m sweep skips an Aura with no `attached_to` key ("manually placed
-    without tracking"). Parts: in `put_chosen_card_from_hand_onto_battlefield`
-    (and `_resolve_put_from_hand_choice`),
-    `put_cards_from_hand_onto_battlefield` and
-    `put_chosen_hand_cards_onto_battlefield`, choose a host through
-    `reanimation._legal_returning_aura_hosts` and ask an interactive seat through
-    `permanent_choice` with the `legal_host_for_card` / `host_controller`
-    keys, or leave the card where it is (CR 303.4g); then measure who relies
-    on the sweep's "manually placed" exemption before narrowing it.
+    Replenish, Cleansing Meditation); Onslaught did the same for several
+    cards put from hands at once (`put_chosen_hand_cards_onto_battlefield`,
+    Tempting Wurm), and Ugin's −10 is now a pick and that put. Eureka,
+    Charmed Griffin and Retraced Image still put one Aura card with no
+    named host onto the battlefield attached to nothing, and it stays there
+    doing nothing: the CR 704.5m sweep skips an Aura with no `attached_to`
+    key ("manually placed without tracking"). Parts: in
+    `put_chosen_card_from_hand_onto_battlefield` (and
+    `_resolve_put_from_hand_choice`, which attaches only to a host the
+    payload names), settle the host as the multi-card put does
+    (`aura_attachment.returning_aura_hosts`, an interactive seat asked
+    through `permanent_choice`), or leave the card where it is (CR 303.4g);
+    then measure who relies on the sweep's "manually placed" exemption
+    before narrowing it.
     Reproduction: `.worktrees/scratch/tor/w2g2/drive_single_auras.py`.
   * *Library of Leng and madness on a forced discard.* Both replace one
     discard's destination (CR 616.1). On a discard its player chooses they
-    are asked; on a forced one (at random, or a cost) `Game._discard_card`
-    passes no `restart` to `apply_replacements`, so madness applies first by
-    default. Parts: a restart closure in `_discard_card` that re-runs the
+    are asked; on one at random `Game._discard_card` passes no `restart` to
+    `apply_replacements`, so madness applies first by default. (A discard
+    paid as a cost no longer meets the Library at all: costs are not
+    effects, its 2004-10-04 ruling, and the seam carries `as_cost`.)
+    Parts: a restart closure in `_discard_card` that re-runs the
     discard, the discard announcements deferred until it, and its twenty-odd
     callers tolerating a suspended discard.
   * *The AI's default target for a graveyard-card trigger is the pile's
@@ -1575,7 +1581,8 @@ before citing it.**
 8. **Stated AI policies, not special cases**: the maximum for "up to N", the
    first printed mode, the costliest legal card in a reveal-and-choose,
    everything matching in an any-number search, `default_sacrifice_pick`'s
-   "keep the one whose death loses the game for last, then take the smallest",
+   "keep the one whose death loses the game for last, then the ability's own
+   source (`paying_for=`), then take the smallest",
    "take gifts, pay tolls, make no trades" for a free offer, and the *largest*
    alternative of a printed mana "or" (no mana burn, so more of the same is
    never worse). A card that should choose otherwise needs a valuation, not a
@@ -1910,9 +1917,20 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run on 2026-10-24, with Judgment shipped, it answers **Onslaught** (ONS,
-2002-10-07, 320 new by the release line's count — re-measure against this
-pool) and then Legions and Scourge. **Judgment arrived at 55.9%**, the lowest
+Run on 2026-10-26, with Onslaught shipped, it answers **Legions** (LGN,
+2003-02-03, 144 new by the release line's count — re-measure against this
+pool) and then Scourge (SCG, 2003-05-26). **Onslaught arrived at 59.4%**,
+for one keyword: **morph** (CR 702.37), and with it face-down spells and
+permanents (CR 708), which the engine had only as Illusionary Mask's hook
+(which leaked the hidden card's name). 46 of its cards print morph, and
+eight more look at, turn or reward face-down creatures. It was built as
+substitution — the face-down object's card *is* the blank 2/2 — because
+`.card.name` is read 1,598 times, and a hidden card has to be fail-closed.
+Thirteen groups landed 331 cards and declined four with their parts named;
+wave 2 landed those four. No group added a hook, and Stone Giant's was
+retired. Before that, run on 2026-10-24, with Judgment
+shipped, it answered **Onslaught** (ONS, 2002-10-07, 320 new) and then
+Legions and Scourge. **Judgment arrived at 55.9%**, the lowest
 work-set arrival since Mirage, and not for keywords (it brought none):
 for **zones**. Statics that function from a graveyard (CR 113.6b, the
 Incarnations), cards from outside the game (CR 400.11, the Wishes — the
@@ -2085,6 +2103,7 @@ a wave is five parallel worktree groups integrated serially.
 | ODY | 335 | 65.4% | 2 waves (nine groups, then eight: four on the last five cards and four on the pile) + 2 closers |
 | TOR | 143 | 70.6% | 2 waves (eight groups landed every card; then four: the client, two on the pile, one answering the promotion rehearsal) |
 | JUD | 143 | 55.9% | 2 waves (ten groups landed every card, three at a time for memory; then four: the client, the engine pile, the AI pile, the rehearsal's answers) + 3 follow-ups on regressions the full gates found |
+| ONS | 335 | 59.4% | 2 waves (thirteen groups landed 331, morph end to end in one; then six: the last four cards, two client groups, the engine pile, the AI pile, the rehearsal's answers) |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -2100,20 +2119,21 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-10-24, at Judgment's close): 5,529 unique cards over 35 sets,
-8,027 printings, 100% supported. Grammar parses 90.6% of lines, lowers 90.1%
-and executes 62.4% (`GRAMMAR_COVERAGE.md`). **0.9%** of supported cards
-carry a name-keyed hook — 48 cards, 53 entries in 6 registries
+2026-10-31, after Onslaught's promotion): 5,849 unique cards over 36 sets,
+8,362 printings, 100% supported. Grammar parses 90.2% of lines, lowers 89.7%
+and executes 62.4% (`GRAMMAR_COVERAGE.md`; the All row fell on membership
+alone as Onslaught's 541 lines joined it). **0.8%** of supported cards
+carry a name-keyed hook — 47 cards, 52 entries in 6 registries
 (`HOOK_RELIANCE.md`) — and the projection that implies for the release line
-has fallen from 1,195 hand-written entries to **250**, across twenty-two
-consecutive sets that added no hook (Judgment's 141 new cards added none,
-and its Wishes' production made Ring of Ma'rûf's hook dead, so it was
-deleted). That is the measure moving the way the architecture needs it to.
-Parse coverage: 5,527 of 5,529 supported cards fully claimed, 2
+has fallen from 1,195 hand-written entries to **232**, across twenty-three
+consecutive sets that added no hook (Onslaught's 320 new cards added none,
+and Stone Giant's hook was retired). That is the measure moving the way the
+architecture needs it to.
+Parse coverage: 5,847 of 5,849 supported cards fully claimed, 2
 acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is
-the CR coverage tracker (419 of 625 tracked rules, 3,144 tests).
-`CARD_VERIFICATION.md` is a log, not a target: 816 passed (554 in-game,
-262 auto), 61 equivalent, 0 failed, 4,652 untested.
+the CR coverage tracker (427 of 638 tracked rules, 3,212 tests).
+`CARD_VERIFICATION.md` is a log, not a target: 873 passed (594 in-game,
+279 auto), 65 equivalent, 0 failed, 4,911 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,

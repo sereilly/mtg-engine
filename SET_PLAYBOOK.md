@@ -47,26 +47,43 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   code, replacement, tests) and one applier lands them in sequence.
 - **Size the fan-out from the memory you measure, never from a number here.**
   Read free *commit* (not just free RAM) with nothing of yours running, and
-  count about 4 GB for every process that compiles the pool — a suite worker,
-  an instrument, an agent's serial pytest. Five agents was right on an idle
+  count about 2.5 GB for every process that compiles the pool — a suite worker,
+  an instrument, an agent's serial pytest (a worker's peak since `load_cards`
+  is cached; it was 5 GB before 2026-10-31). Five agents was right on an idle
   machine; at Judgment the owner's other work left ~18 GB, so three agents
   testing serially plus the integrator's `-n 2` meeting runs, and the full
   gate alone at `-n 4`; at kg ~55 GB was free and eleven agents ran at once
-  beside `-n 2` meeting runs. Hold the rest of a wave and start each as a slot
-  frees. Past the limit nothing fails loudly: a suite dies as a `MemoryError`
+  beside `-n 2` meeting runs. **And read it again before every launch and every
+  gate**: at Onslaught free commit went from 29 GB to 0.8 GB and back within a
+  day as the owner's own work opened and closed (a game engine; an IDE that
+  starts a pytest discovery for every worktree added or removed — nineteen at
+  once took the machine to zero free commit, before `tests/memory_guard.py`
+  ran discoveries one at a time per checkout). Hold the
+  rest of a wave and start each as a slot frees; stop your own oldest run first
+  when it falls, never theirs. Past the limit nothing fails loudly: a suite
+  dies as a `MemoryError`
   formatting a collection error, a `sim_fingerprint` "moves" a run whose log
   is truncated, and agents stop mid-edit.
 - **An agent never runs the full suite.** It runs the files it wrote, every
   test file it edited, and the files that cover the modules it touched (grep
   `tests/` for the module names — a guard sits far from its code), serially or
-  at `-n 2`, and lists them in its report. The full suite is the integrator's,
-  one at a time: `-n 8` when the machine is yours, `-n 4` while agents run,
-  never `-n auto` (killed for memory).
+  at `-n 2`, and lists them in its report — grepping for the names of the
+  functions it adds a caller to as well as for its modules, because a caller
+  census lists callers by name (Onslaught's
+  `test_aura_host_protection` was red for four links after a branch added one).
+  The full suite is the integrator's,
+  one at a time: `-n 8` when the machine is yours, `-n 4` while agents run.
+  The runner caps any `-n` at what free memory holds (`tests/memory_guard.py`
+  prints the cap when it bites), which keeps a run alive but slows it: read
+  the line rather than the number you asked for.
 - **A worker killed for memory is not a red test.** It reads as
   `INTERNALERROR … KeyError: <WorkerController gw1>`, as "Different tests were
   collected", as a run that stops thousands of tests short, as a bare
   `MemoryError` in unrelated guards, or as exit 3/137 with no `FAILED` line.
-  Re-run smaller. Read free memory before starting anything beside a gate and
+  A client test whose `node` child cannot start reads as a `FAILED` line
+  with exit status 3221225794 (0xC0000142): Onslaught's promotion gate had
+  96, every one in `tests/ui`, all green on a re-run. Re-run smaller. Read
+  free memory before starting anything beside a gate and
   stop your own run below a gigabyte free — a starved process does not fail, it
   stops making progress.
 - **Never pipe a gate.** `pytest … | tail` reports `tail`'s exit code, and a
@@ -149,7 +166,11 @@ And when writing one:
 - **An agent that edits `web/static/` drives the change in a browser before it
   reports** — both directions, the state API read after each click — and says
   what it did not drive. A comment saying what the code "then" does is a claim
-  to drive. Prefer one client group holding every prompt the reports say a
+  to drive. Such an agent drives with the set promoted, so its decks hold the
+  set's cards; it **re-runs its tests on the measured manifest before it
+  reports**, because a route that reads the shipped catalog cannot see the set
+  yet (an Onslaught wire test was green in its tree and red on its link).
+  Prefer one client group holding every prompt the reports say a
   person could not answer over every group making one client change.
 - **A group launched after the first merges starts from the latest gated
   link**, not the wave's base: it reuses its siblings' work instead of
@@ -169,6 +190,12 @@ And when writing one:
   brief.
 - **Verify a report's correction before relaying it.** A report is model output
   about code, and the code is one grep away.
+- **A test asserts an invariant, never a sibling's progress.** "These four
+  morph cards stay unsupported" went red at the link where a sibling supported
+  one, and a strict `xfail` of a defect a sibling was fixing turned into an
+  XPASS(strict) at the same kind of merge (Onslaught). Assert what holds in
+  every state the wave passes through (morph is never the reason a card is
+  unsupported), and leave a sibling's defect to the sibling's own test.
 - **Brief a speed group from a profile of two sets of different shape**, with
   the numbers and not a design: the call counts reproduce, a proposed design
   usually does not.
@@ -232,6 +259,10 @@ And when writing one:
   every conflict region asserted to be the one that was read. A replayable
   resolution can be tested before it is the merge, re-run when the merge is
   re-staged, and reviewed as intent.
+- **Bump the client's script versions once, after the last client merge.** Each
+  client group bumps `index.html`'s `?v=` to name its own build; the merge keeps
+  one, and a browser holding the other group's cached `app.js` is served it.
+  The integrator names the merged build (Onslaught's two client groups).
 - **When two groups are briefed to edit one function, rehearse their merge in a
   throwaway worktree and run their tests there.** The defect that matters can
   sit in a file with no conflict (one branch renamed a local, the other read the
@@ -723,18 +754,31 @@ green, the trackers agreeing the set ships.
    tests before the work is done: the quick pass over the whole tree, first
    on the day of the ingest for a reprint-shaped set (otherwise while the
    last wave runs), then as often as the tree changes shape (an inventory
-   written as an equality can live in `tests/ai` or `tests/ui`). The full
-   pass waits for the promotion commit (step 9). Promotion widens every `load_catalog()` guard and shows the set
+   written as an equality can live in `tests/ai` or `tests/ui`). Rehearse a
+   tree that closes a wave: Onslaught's first rehearsal, on a link three
+   merges short of it, was read after those merges had fixed most of what it
+   found. The full pass waits for the promotion commit (step 9). Promotion
+   widens every `load_catalog()` guard and shows the set
    to `parse_coverage` for the first time, so findings surface here by
    construction; rehearsing early hands them to somebody still in the code. A
    wave-2 group can take the rehearsal's inventories — driving each card,
    committing what holds either way, and writing the rows that name a set card
-   as a replay script the promotion commit runs.
+   as a replay script the promotion commit runs. **A replay's data is a reading
+   of the tree it was made on, and it expires**: re-run it and re-read what
+   it asserts on the final link. Onslaught's inserted 44 deletion-probe rows
+   read before another group taught the parser "have" and on a base lacking
+   the group that supported the last four cards, so at the promotion some
+   rows were stale and one card had never been read.
 2. **Rehearse the wrong insert at every promotion**: `promote.py <CODE> --wrong`
    appends the entry after the last shipped set by the same textual move, so
    `test_the_shipped_sets_are_in_printing_order` is the only thing that may turn
    red. The prefix guard cannot see a new set's own card whose origin moves
-   (CLAUDE.md, "The manifest").
+   (CLAUDE.md, "The manifest"). **Rehearse it on the promotion commit's
+   content** — check the commit out, put back the unpromoted manifest, then
+   move the entry — never on the link it was staged from: that tree lacks
+   the accepts and the replay, and their guards turn red beside the one that
+   matters (Onslaught's first wrong-insert run read seven reds, five of them
+   accepts it did not have).
 3. **Read every red, and run the card rather than guess its kind.** Reds come
    as cards still unsupported, ratchets (accepting is the review), inventories
    asking for a review, real findings, and stale guards — and the last two
@@ -776,10 +820,16 @@ green, the trackers agreeing the set ships.
 8. **The sampled censuses run whole once**, in step 9's full pass, which sets
    `MTG_FULL_CENSUS` for every file that calls `tests.helpers.stable_sample`
    (a sample's floor is a statement about the cards it happened to draw).
+   What it finds is mostly older than the set — run the red files on `main`
+   to tell — and is fixed in the promotion, the card pinned into that
+   census's sample so the sampled run keeps examining it (Onslaught's, the
+   first since sampling: Mindstab Thrull announcing its own controller
+   targeted, and Mogg Assassin's death scan recursing, both red on `main`).
 9. **Gate the promotion commit with the full gate as the full pass —
    `gate.sh <tree> <tag> <workers> full` — and move `main` only after it.**
    It is the one run of the tests marked `full` (the seeded AI-game batches,
-   the heavy censuses: `tests/passes.py`), so their findings arrive here. A targeted rehearsal re-runs what was red; a later merge can turn a
+   the heavy censuses: `tests/passes.py`), so their findings arrive here. A
+   targeted rehearsal re-runs what was red; a later merge can turn a
    different file red that only the promoted tree shows.
 
 The checklist, each line naming its guard:
@@ -825,6 +875,10 @@ records it through the Debug Menu.
 1. Record what is driven through the in-game Debug Menu, the only writer of
    `CARD_VERIFICATION.md`. A reprint set adds no untested card: the tracker is
    keyed to the deduped catalog, so its cards arrive carrying their results.
+   A recorded pass also moves `BEHAVIOUR_CLASSES.md` (a verified card covers
+   its class), so the agent's last commit is one `check_all --freshness`
+   reads clean — not the two freshness regenerations alone, which left
+   Onslaught's merge stale.
 2. **Play the set where a player meets it.** Give this to one agent with a port,
    a browser session and four lists, and the instruction "record what you
    watched":
@@ -946,7 +1000,7 @@ one adds it. Re-check an entry against the code before briefing it.
   `choices/optional_pay._apply_optional_pay_decline`,
   `choices/sacrifice._apply_sacrifice_shortfall`); land riders
   (`stack/resolution._resolve_card`'s extra-land damage,
-  `turn_management._resolve_tapped_land_trigger_step`); Earthbind
+  `land_tapped_for_mana._resolve_tapped_land_trigger_step`); Earthbind
   (`oracle_instructions._apply_aura_effect`); Eye for an Eye
   (`effects._apply_mirror_damage`); and eight CR 614.9 redirects in
   `replacements/redirects.py`, which deal a new event inside another event's
@@ -1013,7 +1067,10 @@ one adds it. Re-check an entry against the code before briefing it.
   only Goblin Cadets and Guerrilla Tactics, both fixed. The stamps left
   (unblocked, attached-combat, "one or more attack", upkeep "that player",
   delayed bound-player) are right only because no line beside them names a
-  player target. *Clears:* a round adding `about_player_index`, read the way
+  player target. The "becomes the target" announcement read a stamp as a
+  target until Onslaught's promotion (Mindstab Thrull announced its own
+  controller, Psychic Purge the discard's causer, and Rayne drew); it now
+  asks a trigger `announces_a_target`, the picker's question. *Clears:* a round adding `about_player_index`, read the way
   `about_permanent_id` is; `target_permanent_index` keeps its int-or-list shape
   beside it and goes in the same round.
 
@@ -1021,8 +1078,11 @@ one adds it. Re-check an entry against the code before briefing it.
   "The current player makes their choices before the other player") is the
   order Balance now follows (`_finish_balance_round`), but `new_keep_batch`
   arms every seat together, so a later chooser cannot see an earlier one's
-  choice. *Clears:* the round that next opens `new_keep_batch`; part: ask one
-  seat at a time in turn order, answers held and performed together.
+  choice. The part exists since Onslaught: `resumption.ask_in_turn_order`
+  asks one seat at a time for each-player creature types, discards, hand
+  picks and permanent choices (Curfew). *Clears:* the round that next opens
+  `new_keep_batch`; part: arm it through `ask_in_turn_order`, the answers
+  held and performed together in its `then`.
 
 - **The request-body guard derives presence, not shape.**
   `tests/ui/test_kg_client_request_schemas.py` holds every body to its
@@ -1049,3 +1109,116 @@ one adds it. Re-check an entry against the code before briefing it.
   object that dealt it). List: `scratch/kg/grammar/spell_source_family.txt`,
   including `tests/rules/test_damage_source_identity.py`'s marker. The
   citation guard reads only the 701 block. *Clears:* any time.
+
+- **A text change cannot name a spell.** Magical Hack, Sleight of Mind, Crystal
+  Spray, Alter Reality and Artificial Evolution print "target spell or
+  permanent" and offer only a permanent: a stack object has no text channel.
+  *Clears:* a round of its own (Onslaught's W2G4 declined it with its parts):
+  a `spell_or_permanent` target spec; a text-change record on the `StackItem`;
+  one `spell_text_card` reader at the thirteen sites that read a resolving
+  spell's text; the change carried to the permanent the spell becomes (CR
+  400.7a's exception, as `color_changes` carries a colour); copies dropping it.
+
+- **Seven "an opponent" picks made at announcement take the first opponent.**
+  With several opponents the controller chooses which (CR 601.7a, 602.3a,
+  700.2e); Callous Oppressor's entry and Wormfang Crab's pick ask it since
+  Onslaught, but a mode (Fatal Lore, Library of Lat-Nam, Misfortune) and a
+  target (Cuombajj Witches, Echo Chamber, Nova Pentacle, Preacher) chosen by
+  an opponent still go to the first one. Multiplayer only. *Clears:* a
+  multiplayer round; the census
+  `tests/regressions/test_an_opponent_chooses_asks_which.py` names the seven,
+  so a new silent pick fails.
+
+- **Whether a sweep is one "next instance of damage from that source" is not
+  settled.** CR 615.8's source-keyed shields (Penance, both Pilgrims,
+  Shadowbane, Reflect Damage, Desperate Gambit, Impulsive Maneuvers) answer
+  one chunk of an Earthquake; no ruling on any of the seven says whether a
+  sweep's simultaneous chunks are one instance. The recipient-keyed "next
+  time" is settled (Mirrorwood Treefolk's and Glarecaster's rulings:
+  `damage_redirects.SharedNextTime`). *Clears:* a rules reading with the
+  `mtg-rules` skill before any code;
+  `tests/regressions/test_next_time_is_a_time.py` counts them.
+
+- **The client says "has priority" while a prompt is owed.** The payload names
+  the priority holder and whether this viewer's pass would be refused
+  (`waiting_on_prompt`, a bool), not which seat owes the answer, so the status
+  line reads "<holder> has priority." while another seat's prompt holds the
+  game. *Clears:* the next client group; part: a who-owes field read off the
+  pending-choice queue beside `waiting_on_prompt`.
+
+- **A refused cast or activation is written to the shared log, naming the
+  card — a hidden-information leak.** Each of the 47 refusal sites in
+  `engine/mixins/stack/` appends its `details` to `Game.log` before it
+  returns, so the opponent's payload reads "insufficient mana for Exalted
+  Angel" about a card in the actor's hand. The client sends a cast first and
+  offers Auto-Tap on that refusal, so every drag-cast from an empty pool
+  writes one; a person who confirms the printed cost, is refused, and then
+  casts the card face down has named the face-down card (Onslaught's Phase
+  5, in both smoke games). A face-down cast's own refusals are masked
+  already. *Clears:* the next engine round, first; part: one refusal seam the
+  47 sites call, answering the actor and writing nothing public that names a
+  hidden card, with a census that every refusal reaches it
+  (`scratch/ons/p5/repro/refusal_log_leak.py`).
+
+- **The payment planner spends generic mana blind to the colours left to
+  pay for.** `ai_payment._PaymentPlanner`, which the web's auto-tap asks
+  too, pays generic in board order: a face-down {3} on four Plains and three
+  Mountains taps three Plains and strands Exalted Angel's {2}{W}{W}; Astral
+  Slide's {2}{W} on Plains, Mountain, Plains strands Solar Blast's {1}{R}{R}
+  cycling (`scratch/ons/p5/repro/autotap_colour_blind.py`, Onslaught's Phase
+  5). *Clears:* an AI-payment round; a fix moves seeded games
+  (`sim_fingerprint`).
+
+- **Face-down leftovers on the wire.** A land played from the library logs
+  "cast from"; prompt lists show two face-down permanents to their controller
+  indistinguishably (`describe_permanent`); Dream Halls beside a morph card
+  is two alternative costs, and the wire's `alternative_cost` is a bool
+  (Force of Will's limit); the log calls a face-down cast's {3} its "morph
+  cost", which CR 702.37a reserves for the turn-up cost
+  (`stack/pool_payment.py`); Chain of Vapor's two offers (sacrifice a land;
+  copy the spell) reach a person as the same card text with no question.
+  *Clears:* the next client group (Onslaught's Phase 5 put `cost_taps` in the
+  auto-tap dialog).
+
+- **A cast announcement carries one seat and no graveyard slot.**
+  `ai_actions.CastAction` has no `target_role_refs` (`ActivationAction` has),
+  so an AI seat names at most one player in a chain of seat roles (Wheel and
+  Deal's weighing, `ai_targets._weighed_seat_prefix`, stops at the second
+  seat; Kaboom! names one) and never names Cruel Revival's optional Zombie
+  card. And Kaboom!'s players
+  are dealt with in turn-order groups as its 2022-09-09 ruling says, but the
+  caster is never asked the order within a group. *Clears:* the next AI round
+  that opens casting. Parts: the field on `CastAction`, read where
+  `cast_announcement` builds the cast's roles; the AI's role chain answering
+  it; the within-group order as a prompt.
+
+- **Three unasked defaults pick by position, not by worth.** Strongarm
+  Tactics' seat nobody asks discards its first cards (it lost 4 life holding a
+  creature card in 5 of 12 discards); Risky Move's permanent-choice default
+  takes board order (Butcher Orgg risked over Festering Goblin, 5 of 24);
+  Meddle's forced re-aim takes the first legal change
+  (`handlers/retargeting.py`), where `ai_prompts.choose_target_change` already
+  answers the optional "may change". *Clears:* an engine-defaults round, each
+  with a census of its prompt kind's defaults over the pool. Measured by
+  Onslaught's W2G5 (`scratch/ons/w2g5/probe_defaults.txt`).
+
+- **A quick-pass rehearsal leaves the `full`-marked inventories to the
+  promotion commit.** Phase 4's rehearsals run the quick pass, so step 9's
+  full pass is the first run over the promoted tree of every test marked
+  `full`, and an inventory there that the set widens turns red after the
+  promotion commit rather than while a group is still in the code. Measured
+  against Onslaught's second rehearsal (run before the passes split): of its
+  ten real findings nine came from quick-pass guards, and one — the Charms
+  rows of `tests/ai/test_ai_mode_chooser_census.py` — is `full`-only now. The
+  parse, grammar, hook and behaviour ratchets are untouched: `check_all` runs
+  their `--check`. *Clears:* the owner's call — the full pass on the
+  wave-close rehearsal tree (~1,300 s at `-n 6` on 2026-10-31), or the
+  `full`-marked files that read `load_catalog()` named in the rehearsal.
+
+- **The AI never mulligans.** Every AI seat keeps its opening hand, in the
+  simulator (`ai_simulator` calls `keep_hand` for each seat) and at the web
+  table (`web/pregame.py`), so a one-land seven is played out: Onslaught's
+  second smoke game ended on turn 16 with the AI still on one land.
+  *Clears:* an AI round; part: a keep decision over the dealt hand (lands
+  against the curve), asked at both call sites, with a seeded census of what
+  the simulator's decks would mulligan.

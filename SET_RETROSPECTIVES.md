@@ -1320,3 +1320,63 @@ the round changed. *Known gaps:* all eighteen drained; fourteen added from the
 reports (attack maximisation, damage calls outside the handlers, the CR 614
 queue's hold, the AI and graveyard abilities, printed types off the
 battlefield, the seat channel, and eight smaller).
+
+
+### ONS — 2026-10-26
+
+*Two waves and nineteen groups on the Onslaught block's first set: 59.4% on
+arrival, one keyword the engine lacked, 320 of 335 new.* Morph was CR 702.37
+and CR 708 together, and the engine had face-down objects only as Illusionary
+Mask's hook, which leaked the hidden card's name. One group built it end to end
+as substitution (the face-down object's card *is* the blank 2/2) after
+counting 1,598 `.card.name` reads that a record beside the real card would have
+leaked. Wave 1's thirteen groups landed 331 with no hook, declining four with
+their parts. Stone Giant's hook was retired, and about two dozen
+already-shipped mis-plays were fixed beside the cards: ten "X or Y" fetchlands
+that found nothing, own-death triggers on eight cards, seven remains-tapped
+artifacts, eight control cards, each-player prompts asked of every seat at once.
+Wave 2's six took the four, two client groups, the engine and AI piles, and the
+rehearsal's answers. The engine pile included a sacrifice default that fed 45
+abilities their own source. The AI pile planned mana abilities that tap other
+creatures, and rehearsed every cycle, self-sacrifice and {X} cost; six of
+twelve seeded games moved. `oracle_diff` moved no card a group had not named
+on any of twenty merges. Three reds the meeting runs could not see sat in
+files no branch touched: a caller census, an old set's refusal message, and
+the per-set cap summed over three groups. The promotion's whole census, the
+first since sampling, found two defects older than the set: a trigger's named
+seat announced as its target (Rayne drew off a Psychic Purge), and a death
+scan comparing Auras by value round their attachment loop.
+
+Phase 5 ran on 2026-10-31, after the test runner's perf work (the memory
+guard, the quick and full passes, the compiled-program store) had landed; the
+full gate re-run under it on the promoted tree moved nothing (`oracle_diff` 0,
+`sim_fingerprint` 0 of 12, the full pass green, the wrong insert still turning
+only the order guard red). Its first agent died in the memory crash a worktree
+prune set off. Two smoke games: the first locked on turn 12 (two decisions one
+seat owed refused each other's answers, the cycling deck's everyday case), the
+second ran to a win. Five client defects were fixed (five button prompts had
+rendered no buttons since September) and 40 cards recorded passing. The worst
+finding is the engine's: a refused cast logs the card's name to both seats,
+which names a card about to be cast face down.
+
+*Edits in place:* Agents and the machine re-reads memory before every launch
+(29 GB to 0.8 within a day) and greps for the functions a branch calls anew.
+Briefing gains "a test asserts an invariant, never a sibling's progress" and
+the client groups' re-run on the measured manifest. The chain bumps the
+client's `?v=` once after the last client merge. Phase 4 rehearses a
+wave-close tree, a replay's data expires, the wrong insert is rehearsed on the
+promotion commit's content, and what the whole census finds is fixed in the
+promotion and pinned into its sample. A `node` child that cannot start is a
+starved gate, not a red test. The machine section's memory figures follow the
+runner's (2.5 GB a worker, its `-n` cap, IDE discoveries one at a time);
+`regen.sh` regenerates `CARD_VERIFICATION.md`; the gate scripts distribute by
+worksteal; Phase 5's records end on a clean `check_all --freshness`. *Known
+gaps:* the keep-batch entry rewritten to its existing part, the seat channel's
+announcement half closed, and a split's moved pointer. Added: text changes on
+a spell, seven announcement-time opponent picks, CR 615.8 over a sweep, the
+client's priority line, payment and face-down leftovers on the wire, a cast
+announcement that carries one seat, three defaults picked by position, and
+from Phase 5 the refused-cast log leak, the colour-blind payment planner, an
+AI that never mulligans, and a quick rehearsal leaving the `full`-marked
+inventories to the promotion commit. Nothing drained (one clause: `cost_taps`
+reached the auto-tap dialog).
