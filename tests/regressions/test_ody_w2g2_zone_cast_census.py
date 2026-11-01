@@ -80,6 +80,10 @@ that differ, every one for a reason the card prints and each named in
 buyback bought from an opponent's exile, which would return the card to *its
 owner's* hand (CR 702.27a), and a kicker a free cast with no mana cannot pay
 (CR 601.2f, 118.9d), leaving a combat trick that does nothing on this board.
+At Legions' promotion Savage Offensive came off that list: once the defending
+AI stopped making blocks its creature loses (LGN W2G4), the unkicked trick's
+first strike changes the fight on this board, so the free cast is proposed —
+unkicked, the comparison the sweep already skips for a waived offer.
 
 Validated backwards: on the tree before the change every flashback row and
 every twin row reads "never proposed" — the whole population.
@@ -142,7 +146,6 @@ MEASURED = {
     ),
     ("Imps' Taunt", "opponents_exile"): _BUYBACK_TO_ITS_OWNER,
     ("Brush with Death", "opponents_exile"): _BUYBACK_TO_ITS_OWNER,
-    ("Savage Offensive", "exile_free"): _KICKER_UNPAYABLE,
     ("Vigorous Charge", "exile_free"): _KICKER_UNPAYABLE,
 }
 

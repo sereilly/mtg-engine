@@ -1432,11 +1432,28 @@ def _rehearse(
         # Wirewood Pride before an attack that was lethal without it read as a
         # lasting change and was cast (ONS W1G7; seed 11, black, game 6).
         ended = untouched["table"].is_game_over() and reading["table"].is_game_over()
+        # The spell's own card, read off the standings by where its trip
+        # started: from a hand it is spent (a card down) or bought back
+        # (CR 702.27a: even); from a zone a permission opened (CR 601.3) it
+        # ends in a graveyard or an exile (even) or is bought back into its
+        # owner's hand — a card up for the caster, or down when the pile was
+        # an opponent's (CR 400.3). The digest below decides whether that is
+        # all there is; this only says when to ask it. Without the last case
+        # a Mind Games bought back out of an exile always read as lasting, so
+        # a target whose fight left nothing was weighed as one that left the
+        # card, and the cast from the exile named another target than the
+        # same cast from the hand (the zone-cast census, LGN promotion).
+        if leaves_hand:
+            own_card: tuple = (-CARD_WORTH,)
+        elif spell_zone is not None:
+            own_card = (CARD_WORTH if spell_seat in (None, seat) else -CARD_WORTH,)
+        else:
+            own_card = ()
         fleeting = (
             changed
             and (
                 abs(lasting) < _NO_SWING
-                or (leaves_hand and abs(lasting + CARD_WORTH) < _NO_SWING)
+                or any(abs(lasting - card) < _NO_SWING for card in own_card)
             )
             and (ended or same_position(
                 _lasting_digest(untouched), _lasting_digest(reading),
