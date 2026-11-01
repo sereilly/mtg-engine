@@ -52,7 +52,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| LGN *(measured)* | 145 | 235 | 67.2% | 62.6% | 39.1% | 88 |
+| LGN *(measured)* | 145 | 235 | 68.1% | 65.1% | 41.3% | 93 |
 | **All (shipped)** | **8362** | **12427** | **90.2%** | **89.7%** | **62.4%** | **6559** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -66,8 +66,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 780 | 403 | expected a subject |  |
-| 180 | 94 | unrecognized effect verb |  |
-| 138 | 75 | unconsumed text |  |
+| 179 | 93 | unrecognized effect verb |  |
+| 137 | 74 | unconsumed text |  |
 | 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -995,6 +995,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Bereavement**
   - `Whenever a green creature dies, its controller discards a card.`
   - `Whenever a green creature dies, its controller discards a card.`
+- **Berserk Murlodont**
+  - `Whenever a Beast becomes blocked, it gets +1/+1 until end of turn for each creature blocking it.`
 - **Bestial Fury**
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
   - `Whenever enchanted creature becomes blocked, it gets +4/+0 and gains trample until end of turn.`
@@ -1491,6 +1493,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{G}{G}: Reveal the top card of your library. If it's a creature card, put it onto the battlefield. Otherwise, put it into your graveyard.`
 - **Call to Arms**
   - `White creatures get +1/+1 as long as the chosen color is the most common color among nontoken permanents the chosen player controls but isn't tied for most common.`
+- **Caller of the Claw**
+  - `When this creature enters, create a 2/2 green Bear creature token for each nontoken creature put into your graveyard from the battlefield this turn.`
 - **Callous Oppressor**
   - `{T}: Gain control of target creature that isn't of the chosen type for as long as this creature remains tapped.`
 - **Calming Licid**
@@ -4334,6 +4338,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you cycle this card, Soldier creatures get +1/+1 and gain first strike until end of turn.`
 - **Gempalm Incinerator**
   - `When you cycle this card, you may have it deal X damage to target creature, where X is the number of Goblins on the battlefield.`
+- **Gempalm Polluter**
+  - `When you cycle this card, you may have target player lose life equal to the number of Zombies on the battlefield.`
 - **Gempalm Sorcerer**
   - `When you cycle this card, Wizard creatures gain flying until end of turn.`
 - **Gempalm Strider**
@@ -7480,6 +7486,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{W}, {T}, Sacrifice this creature: Destroy all enchantments.`
 - **Nova Pentacle**
   - `{3}, {T}: The next time a source of your choice would deal damage to you this turn, that damage is dealt to target creature of an opponent's choice instead.`
+- **Noxious Ghoul**
+  - `Whenever this creature or another Zombie enters, all non-Zombie creatures get -1/-1 until end of turn.`
 - **Noxious Vapors**
   - `Each player reveals their hand, chooses one card of each color from it, then discards all other nonland cards.`
 - **Null Brooch**
@@ -12515,6 +12523,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Tap target creature with flying blocked by this creature. That creature doesn't untap during its controller's untap step for as long as this creature remains tapped.`
 - **Whipcorder**
   - `{W}, {T}: Tap target creature.`
+- **Whipgrass Entangler**
+  - `{1}{W}: Until end of turn, target creature gains "This creature can't attack or block unless its controller pays {1} for each Cleric on the battlefield."`
 - **Whipkeeper**
   - `{T}: This creature deals damage to target creature equal to the damage already dealt to it this turn.`
 - **Whippoorwill**
