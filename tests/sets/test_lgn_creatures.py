@@ -33,7 +33,12 @@ import pytest as _w1g1_pytest
 from engine import Game as _W1G1Game, PlayerState as _W1G1PlayerState
 from engine.card_loader import load_catalog as _w1g1_load_catalog
 from engine.face_down import (face_down_card as _w1g1_face_down_card,
+                              is_face_down as _w1g1_is_face_down,
+                              morph_cost as _w1g1_morph_cost,
                               turn_face_up as _w1g1_turn_face_up)
+from engine.mana_payment import mana_cost_from_symbols as _w1g1_symbols
+from engine.special_actions import (
+    take_permanent_special_action as _w1g1_take_special_action)
 from engine.models import Permanent as _W1G1Permanent
 from engine.named_counters import counters_on as _w1g1_counters_on
 from engine.oracle import compile_card_oracle as _w1g1_compile
@@ -459,6 +464,201 @@ def test_w1g1_ghastly_remains_buys_itself_back_from_the_graveyard(set_pool, inte
     assert any(c.name == "Ghastly Remains" for c in p1.hand), game.log[-10:]
     assert not any(c.name == "Ghastly Remains" for c in p1.graveyard)
     assert all(swamp.tapped for swamp in swamps)
+
+
+# --- supported on arrival: the morph cards in this family, driven --------------
+#
+# Each is cast face down for {3}, turned face up for exactly its printed morph
+# cost by the CR 702.37e special action, and its "When this creature is turned
+# face up" trigger (CR 708.8: it does not enter, so nothing else fires) resolved
+# against a board that gives its target somewhere to land.
+
+
+def _w1g1_pool_for(cost: str) -> dict:
+    pool: dict = {}
+    for symbol, count in _w1g1_symbols(cost).items():
+        key = "C" if symbol == "generic" else symbol
+        pool[key] = pool.get(key, 0) + count
+    return pool
+
+
+def _w1g1_cast_down(game, seat, name, card):
+    player = game.players[seat]
+    player.hand.append(card)
+    player.mana_pool.update({"C": 3})
+    result = game.queue_from_hand(seat, name, alternative_cost=True)
+    assert result.supported, result.details
+    _w1g1_resolve_stack(game)
+    (permanent,) = [p for p in game.controlled_by(seat) if _w1g1_is_face_down(p)]
+    assert (permanent.effective_power, permanent.effective_toughness) == (2, 2)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def _w1g1_turn_up(game, seat, permanent, card):
+    player = game.players[seat]
+    game.priority_player_index = seat
+    player.mana_pool.update(_w1g1_pool_for(_w1g1_morph_cost(card)))
+    refusal = _w1g1_take_special_action(game, seat, permanent, "turn_face_up")
+    assert refusal is None, refusal
+    assert sum(player.mana_pool.values()) == 0, "paid exactly its morph cost"
+    assert permanent.card is card and not _w1g1_is_face_down(permanent)
+    return permanent
+
+
+def _w1g1_cast_down_and_turn_up(game, seat, name, card):
+    return _w1g1_turn_up(game, seat, _w1g1_cast_down(game, seat, name, card), card)
+
+
+def _w1g1_morph_board():
+    bears = _w1g1_permanent(_W1G1_CATALOG["Grizzly Bears"])
+    moon = _w1g1_permanent(_W1G1_CATALOG["Bad Moon"])
+    mountain = _w1g1_permanent(_W1G1_CATALOG["Mountain"])
+    game, p1, p2 = _w1g1_game(theirs=[bears, moon, mountain])
+    game.enforce_mana_costs = True
+    return game, p1, p2, bears, moon, mountain
+
+
+def test_w1g1_aphetto_exterminator_shrinks_a_creature_by_three(set_pool):
+    game, _p1, p2, bears, _moon, _mountain = _w1g1_morph_board()
+    _w1g1_cast_down_and_turn_up(game, 0, "Aphetto Exterminator", set_pool("LGN")["Aphetto Exterminator"])
+    _w1g1_resolve_stack(game)
+    assert (bears.effective_power, bears.effective_toughness) == (-1, -1)
+    game.check_state_based_actions()
+    assert not any(p is bears for p in game.controlled_by(1))
+    assert [c.name for c in p2.graveyard] == ["Grizzly Bears"]
+
+
+def test_w1g1_daru_sanctifier_destroys_an_enchantment(set_pool):
+    game, _p1, p2, _bears, moon, _mountain = _w1g1_morph_board()
+    _w1g1_cast_down_and_turn_up(game, 0, "Daru Sanctifier", set_pool("LGN")["Daru Sanctifier"])
+    _w1g1_resolve_stack(game)
+    assert not any(p is moon for p in game.controlled_by(1))
+    assert [c.name for c in p2.graveyard] == ["Bad Moon"]
+
+
+def test_w1g1_nantuko_vigilante_destroys_an_artifact_or_enchantment(set_pool):
+    game, _p1, p2, _bears, _moon, _mountain = _w1g1_morph_board()
+    _w1g1_cast_down_and_turn_up(game, 0, "Nantuko Vigilante", set_pool("LGN")["Nantuko Vigilante"])
+    _w1g1_resolve_stack(game)
+    assert [c.name for c in p2.graveyard] == ["Bad Moon"]
+
+
+def test_w1g1_shaleskin_plower_destroys_a_land(set_pool):
+    game, _p1, p2, _bears, _moon, _mountain = _w1g1_morph_board()
+    _w1g1_cast_down_and_turn_up(game, 0, "Shaleskin Plower", set_pool("LGN")["Shaleskin Plower"])
+    _w1g1_resolve_stack(game)
+    assert [c.name for c in p2.graveyard] == ["Mountain"]
+
+
+def test_w1g1_echo_tracer_returns_a_creature_to_its_owners_hand(set_pool):
+    game, _p1, p2, bears, _moon, _mountain = _w1g1_morph_board()
+    _w1g1_cast_down_and_turn_up(game, 0, "Echo Tracer", set_pool("LGN")["Echo Tracer"])
+    _w1g1_resolve_stack(game)
+    assert not any(p is bears for p in game.controlled_by(1))
+    assert [c.name for c in p2.hand] == ["Grizzly Bears"]
+
+
+def test_w1g1_skirk_marauder_deals_two_damage_to_a_player(set_pool):
+    """Asked as a person, so the target is the one named: the opponent."""
+    game, _p1, p2, _bears, _moon, _mountain = _w1g1_morph_board()
+    game.interactive_seats = {0}
+    _w1g1_cast_down_and_turn_up(game, 0, "Skirk Marauder", set_pool("LGN")["Skirk Marauder"])
+    assert game.confirm_trigger_target(0, seat=1)
+    _w1g1_resolve_stack(game)
+    assert p2.life == 18
+
+
+def test_w1g1_patron_of_the_wild_pumps_a_creature(set_pool):
+    game, _p1, _p2, _bears, _moon, _mountain = _w1g1_morph_board()
+    patron = _w1g1_cast_down_and_turn_up(game, 0, "Patron of the Wild", set_pool("LGN")["Patron of the Wild"])
+    _w1g1_resolve_stack(game)
+    assert (patron.effective_power, patron.effective_toughness) == (4, 4)
+
+
+def test_w1g1_wingbeat_warrior_grants_first_strike(set_pool):
+    game, _p1, _p2, _bears, _moon, _mountain = _w1g1_morph_board()
+    warrior = _w1g1_cast_down_and_turn_up(game, 0, "Wingbeat Warrior", set_pool("LGN")["Wingbeat Warrior"])
+    _w1g1_resolve_stack(game)
+    assert warrior.has_keyword("first strike") and warrior.has_keyword("flying")
+
+
+def test_w1g1_defender_of_the_order_pumps_its_side(set_pool):
+    game, p1, _p2, _bears, _moon, _mountain = _w1g1_morph_board()
+    ally = _w1g1_permanent(_W1G1_CATALOG["Grizzly Bears"])
+    p1.battlefield.append(ally)
+    game._sync_control()
+    defender = _w1g1_cast_down_and_turn_up(game, 0, "Defender of the Order", set_pool("LGN")["Defender of the Order"])
+    _w1g1_resolve_stack(game)
+    assert (defender.effective_power, defender.effective_toughness) == (2, 6)
+    assert (ally.effective_power, ally.effective_toughness) == (2, 4)
+
+
+def test_w1g1_skinthinner_names_only_a_nonblack_creature_that_cannot_regenerate(set_pool):
+    """"…destroy target nonblack creature. It can't be regenerated." Asked as a
+    person: a black creature is refused as the target, and the regeneration
+    shield on the green one does not save it."""
+    lgn = set_pool("LGN")
+    bears = _w1g1_permanent(_W1G1_CATALOG["Grizzly Bears"])
+    zombies = _w1g1_permanent(_W1G1_CATALOG["Scathe Zombies"])
+    game, _p1, p2 = _w1g1_game(theirs=[bears, zombies], interactive=True)
+    game.enforce_mana_costs = True
+    bears.regeneration_shield = 1
+    _w1g1_cast_down_and_turn_up(game, 0, "Skinthinner", lgn["Skinthinner"])
+    assert game.pending_choices_of("trigger_target", 0)
+    assert not game.confirm_trigger_target(0, permanent_id=zombies.permanent_id)
+    assert game.confirm_trigger_target(0, permanent_id=bears.permanent_id)
+    _w1g1_resolve_stack(game)
+    assert [c.name for c in p2.graveyard] == ["Grizzly Bears"]
+    assert any(p is zombies for p in game.controlled_by(1))
+
+
+def test_w1g1_skinthinner_turned_up_with_only_shielded_targets_leaves_the_stack(set_pool):
+    """White Knight has protection from black and Black Knight is black, so the
+    face-up trigger has no legal target and is removed (CR 603.3d)."""
+    game, _p1, p2 = _w1g1_game(theirs=[_w1g1_permanent(_W1G1_CATALOG["White Knight"]),
+                                       _w1g1_permanent(_W1G1_CATALOG["Black Knight"])])
+    game.enforce_mana_costs = True
+    _w1g1_cast_down_and_turn_up(game, 0, "Skinthinner", set_pool("LGN")["Skinthinner"])
+    assert not game.stack and not p2.graveyard
+    assert any("no legal target" in line for line in game.log)
+
+
+@_w1g1_pytest.mark.parametrize("name, keyword", [
+    ("Branchsnap Lorian", "trample"), ("Rockshard Elemental", "double strike"),
+    ("Sootfeather Flock", "flying"),
+])
+def test_w1g1_a_keyword_morph_has_its_keyword_only_face_up(set_pool, name, keyword):
+    card = set_pool("LGN")[name]
+    game, _p1, _p2 = _w1g1_game()
+    game.enforce_mana_costs = True
+    down = _w1g1_cast_down(game, 0, name, card)
+    assert not down.has_keyword(keyword)
+    _w1g1_turn_up(game, 0, down, card)
+    assert down.has_keyword(keyword)
+    assert (down.effective_power, down.effective_toughness) == (card.base_power, card.base_toughness)
+
+
+@_w1g1_pytest.mark.parametrize("pays", [True, False])
+def test_w1g1_krosan_cloudscraper_is_kept_only_by_paying_its_upkeep(set_pool, pays):
+    """"At the beginning of your upkeep, sacrifice this creature unless you pay
+    {G}{G}." Turned face up for {7}{G}{G}, it is a 13/13; at the next upkeep a
+    person pays with two Forests and keeps it, or declines and loses it."""
+    card = set_pool("LGN")["Krosan Cloudscraper"]
+    forests = [_w1g1_permanent(_W1G1_CATALOG["Forest"]) for _ in range(2)]
+    game, _p1, _p2 = _w1g1_game(mine=forests, interactive=True)
+    game.enforce_mana_costs = True
+    scraper = _w1g1_cast_down_and_turn_up(game, 0, "Krosan Cloudscraper", card)
+    assert (scraper.effective_power, scraper.effective_toughness) == (13, 13)
+    game.turn = 2
+    game.begin_turn_bookkeeping(0)
+    game.resolve_untap_step(0)
+    # The upkeep's pay-or-sacrifice is answered through the step's own answer
+    # map (``resolve_upkeep``'s ``human_choices``, what the web layer sends).
+    game.resolve_upkeep(0, human_choices={scraper.permanent_id: pays})
+    _w1g1_resolve_stack(game)
+    assert any(p is scraper for p in game.controlled_by(0)) is pays
+    assert all(forest.tapped for forest in forests) is pays
 
 
 # ==== end W1G1 ======================================================

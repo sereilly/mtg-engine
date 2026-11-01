@@ -1241,6 +1241,12 @@ def _play_special_actions(
         return
     choice, refusal = taken
     _resolve_pending_choices(game)
+    # "When this creature is turned face up, …" (CR 702.37e, 603.3): the
+    # trigger is on the stack in this main phase, and it resolves here, before
+    # the combat it may decide (Patron of the Wild's +3/+3, Skirk Marauder's
+    # 2 damage) — it was carried across the step into the beginning of combat.
+    if refusal is None and game.stack:
+        _drain_step(game)
     report.log_lines.append(
         f"G{game_index} T{turn} {game.players[active].name} special action "
         f"{choice.kind} ({choice.name}) -> {refusal or 'taken'}"
