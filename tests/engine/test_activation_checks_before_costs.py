@@ -115,10 +115,16 @@ def _called_name(call: ast.Call) -> str | None:
 
 
 def _is_refusal(node: ast.AST) -> bool:
-    """``return SimulationResult(<name>, False, ...)``."""
+    """``return refuse(...)`` — the one constructor of a refused result
+    (``engine/refusals.py``, which ``tests/engine/test_kg2_refusal_seam.py``
+    holds every refusal to) — or the spelling it replaced,
+    ``return SimulationResult(<name>, False, ...)``, so a refusal written the
+    old way is still read as one here."""
     if not isinstance(node, ast.Return) or not isinstance(node.value, ast.Call):
         return False
     call = node.value
+    if _called_name(call) == "refuse":
+        return True
     if _called_name(call) != "SimulationResult" or len(call.args) < 2:
         return False
     flag = call.args[1]

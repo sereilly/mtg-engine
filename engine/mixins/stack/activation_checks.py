@@ -39,6 +39,7 @@ from ...handlers._chosen import CHOSEN_ABILITY
 from ...line_classification import LOYALTY_ANY_TIME_STATIC
 from ...oracle import compile_card_oracle
 from ...targeting import derive_activation_spec, usable_activated_abilities
+from ...refusals import refuse
 
 
 def _stamped_divided_targets(game, entries):
@@ -119,8 +120,7 @@ class ActivationChecksMixin:
             permanent.effective_card
         ):
             details = f"{permanent.card.name}'s abilities can only be activated by its controller"
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
+            return refuse(permanent.card.name, "unsupported", details)
 
         # "Loses all abilities" (Titania's Song) means the activated ones too.
         # Layer 6 removes keyword abilities, but an activated ability is read
@@ -149,8 +149,7 @@ class ActivationChecksMixin:
         # two inline checks, and each list asked a different one or neither.
         details = self.lost_abilities_refusal(permanent, ability_index)
         if details is not None:
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
+            return refuse(permanent.card.name, "unsupported", details)
 
         # Through the seam rather than off the card directly: Conspicuous Snoop
         # has the activated abilities of whatever is on top of its controller's
@@ -171,8 +170,7 @@ class ActivationChecksMixin:
                     f"{permanent.card.name} has not been controlled continuously "
                     "since the beginning of your most recent turn"
                 )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+                return refuse(permanent.card.name, "unsupported", details)
         return controller, permanent, program
 
     def _chosen_activated_ability(
@@ -257,12 +255,10 @@ class ActivationChecksMixin:
                     f"{permanent.card.name}'s ability functions only "
                     f"from a {zone} (CR 113.6)"
                 )
-                self.log.append(details)
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", details
+                return refuse(
+                    permanent.card.name, "unsupported", details,
                 )
-            self.log.append(f"No implemented activated ability for {permanent.card.name}")
-            return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
+            return refuse(permanent.card.name, "unsupported", "ability not implemented")
         return ability
 
     def _announce_chosen_ability(
@@ -413,9 +409,8 @@ class ActivationChecksMixin:
             chosen_keyword=chosen_keyword,
         )
         if required_refusal is not None:
-            self.log.append(required_refusal)
-            return SimulationResult(
-                permanent.card.name, False, "unsupported", required_refusal
+            return refuse(
+                permanent.card.name, "unsupported", required_refusal,
             )
 
         # CR 601.2d itself, asked of an **ability** — the twin of the gate
@@ -453,9 +448,8 @@ class ActivationChecksMixin:
                 max_targets=spec.get("max_targets"),
             )
             if refusal is not None:
-                self.log.append(f"{permanent.card.name}: {refusal}")
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", refusal
+                return refuse(
+                    permanent.card.name, "unsupported", refusal,
                 )
         return divided_targets
 
@@ -587,15 +581,13 @@ class ActivationChecksMixin:
                     f"{permanent.card.name}'s loyalty abilities can only be activated "
                     "during a main phase of your turn with the stack empty (CR 606.3)"
                 )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+                return refuse(permanent.card.name, "unsupported", details)
             if permanent.metadata.get("loyalty_ability_used_turn") == self.turn:
                 details = (
                     f"a loyalty ability of {permanent.card.name} has already been "
                     "activated this turn (CR 606.3)"
                 )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+                return refuse(permanent.card.name, "unsupported", details)
             loyalty_delta = (
                 ability.cost.loyalty_x_sign * int(x_value or 0)
                 if ability.cost.loyalty_x_sign is not None
@@ -606,8 +598,7 @@ class ActivationChecksMixin:
                     f"{permanent.card.name} does not have enough loyalty counters "
                     "to pay that cost (CR 606.6)"
                 )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+                return refuse(permanent.card.name, "unsupported", details)
 
         # **One question, asked of one table** (``engine/activation_
         # prohibitions.py``, CR 602.5): the board-wide bans (Cursed Totem,
@@ -626,9 +617,8 @@ class ActivationChecksMixin:
             self, controller_index, permanent, ability
         )
         if prohibited is not None:
-            self.log.append(prohibited.details)
-            return SimulationResult(
-                permanent.card.name, False, "unsupported", prohibited.details
+            return refuse(
+                permanent.card.name, "unsupported", prohibited.details,
             )
 
         # "…players and permanents can't be the targets of spells or activated
@@ -657,9 +647,8 @@ class ActivationChecksMixin:
                     f"{permanent.card.name} has no legal target: nothing can be "
                     f"targeted ({source_name})"
                 )
-                self.log.append(details)
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", details
+                return refuse(
+                    permanent.card.name, "unsupported", details,
                 )
 
         # "Only this creatures owner may activate this ability." (Personal
@@ -670,8 +659,7 @@ class ActivationChecksMixin:
             and self.owner_index_of(permanent) != controller_index
         ):
             details = f"only {permanent.card.name}'s owner may activate this ability"
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
+            return refuse(permanent.card.name, "unsupported", details)
 
         # "X can't be 0." (Aladdin's Lamp, Helm of Obedience.) Through the
         # module that owns the sentence rather than spelled here: the grammar
@@ -683,8 +671,7 @@ class ActivationChecksMixin:
             for sentence in ability_lower.split(".")
         ) and not x_value:
             details = f"{permanent.card.name}: X can't be 0"
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
+            return refuse(permanent.card.name, "unsupported", details)
 
         # The timing half of "Activate only during your turn and only once each
         # turn" is in the restriction table above; the *count* half is
@@ -708,8 +695,7 @@ class ActivationChecksMixin:
                 f"{activations_allowed_each_turn(ability_lower, self, controller_index, permanent)}"
                 f" time(s) each turn"
             )
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
+            return refuse(permanent.card.name, "unsupported", details)
 
         # The {T} symbol's two refusals, asked **here, before a single cost is
         # collected** — CR 602.5a (a creature's {T} ability can't be activated
@@ -731,12 +717,10 @@ class ActivationChecksMixin:
         if ability.cost.requires_tap:
             if self._is_summoning_sick(permanent):
                 details = f"{permanent.card.name} has summoning sickness"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+                return refuse(permanent.card.name, "unsupported", details)
             if permanent.tapped:
                 details = f"{permanent.card.name} is already tapped"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+                return refuse(permanent.card.name, "unsupported", details)
 
         # **Can the cost be paid at all** (CR 601.2h via 602.2b; CR 118.3) —
         # one question over every resource a cost spends that is not mana,
@@ -750,8 +734,7 @@ class ActivationChecksMixin:
             controller_index, permanent, ability, x_value=x_value,
         )
         if unpayable is not None:
-            self.log.append(unpayable)
-            return SimulationResult(permanent.card.name, False, "unsupported", unpayable)
+            return refuse(permanent.card.name, "unsupported", unpayable)
         return (
             ability_lower, activation_caps, counters_removed_for_cost,
             loyalty_delta,

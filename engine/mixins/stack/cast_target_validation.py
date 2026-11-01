@@ -53,6 +53,7 @@ from ...divided_damage import (
 from ...game_types import SimulationResult
 from ...targeting import instructions_as_announced
 from .cast_announcement import _mode_announcements
+from ...refusals import refuse
 
 
 # Maps an "enchant X" noun to a predicate matching legal battlefield targets.
@@ -1320,9 +1321,8 @@ class CastTargetValidationMixin:
                 mode_index=announced_mode,
             )
             if miscounted is not None:
-                self.log.append(miscounted)
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, miscounted,
+                return refuse(
+                    card.name, classification.effect_kind, miscounted,
                 )
 
         found = divided_description(
@@ -1345,9 +1345,8 @@ class CastTargetValidationMixin:
             # announcement will run, so a division printed only in a kicked
             # arm or in one mode belongs to that cast alone.
             refusal = f"{card.name} divides nothing among targets (CR 601.2d)"
-            self.log.append(refusal)
-            return SimulationResult(
-                card.name, False, classification.effect_kind, refusal,
+            return refuse(
+                card.name, classification.effect_kind, refusal,
             )
         if found is not None:
             division = found[1].get("division", EVENLY)
@@ -1377,9 +1376,8 @@ class CastTargetValidationMixin:
                 carries_no_targets=True,
             )
             if refusal is not None:
-                self.log.append(f"{card.name}: {refusal}")
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, refusal,
+                return refuse(
+                    card.name, classification.effect_kind, refusal,
                 )
             # "…to each of **up to** three targets" (Shower of Coals), cast
             # naming nobody (CR 115.6). Written onto the announcement as the

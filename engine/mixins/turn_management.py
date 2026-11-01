@@ -27,6 +27,7 @@ from ..counter_conditions import clear_next_spell_promises
 from ..spell_prohibitions import clear_turn_spell_prohibitions
 from ..game_types import SimulationResult
 from ._constants import phases_after
+from ..refusals import refuse
 
 
 class TurnManagementMixin:
@@ -349,14 +350,14 @@ class TurnManagementMixin:
         """Pay `amount` life via an active Channel effect to add that many {C} mana."""
         player = self.players[player_index]
         if not player.channel_active_until_eot:
-            return SimulationResult("Channel", False, "spell_pattern", "Channel is not active")
+            return refuse("Channel", "spell_pattern", "Channel is not active")
         if amount <= 0:
-            return SimulationResult("Channel", False, "spell_pattern", "Amount must be positive")
+            return refuse("Channel", "spell_pattern", "Amount must be positive")
         if amount > player.life:
             # CR 118.3: a player can pay any amount of life up to their total,
             # including all of it, but no more.
-            return SimulationResult(
-                "Channel", False, "spell_pattern",
+            return refuse(
+                "Channel", "spell_pattern",
                 f"cannot pay {amount} life with only {player.life} remaining",
             )
         player.life -= amount

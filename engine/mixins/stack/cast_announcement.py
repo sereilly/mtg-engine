@@ -22,6 +22,7 @@ from ...faces import holds_spell_named, spell_named
 from ...game_types import SimulationResult
 from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...oracle import compile_card_oracle
+from ...refusals import refuse
 
 
 def _mode_announcements(
@@ -99,8 +100,7 @@ class CastAnnouncementMixin:
                 denial = hand_lock_reason(self, caster_index, card_name) or (
                     f"{card_name} can't be played"
                 )
-                self.log.append(denial)
-                return SimulationResult(card_name, False, None, denial)
+                return refuse(card_name, None, denial)
         elif from_zone == "command":
             # CR 903.8 is a *rule*, not an effect: "a player may cast a
             # commander they own from the command zone". So it needs no
@@ -123,10 +123,8 @@ class CastAnnouncementMixin:
                     f"{card_name} is not {caster.name}'s commander and cannot be cast "
                     f"from the command zone (CR 903.8)"
                 )
-                self.log.append(details)
-                return SimulationResult(
-                    card_name, False,
-                    classify_card(source_zone[hand_index]).effect_kind, details,
+                return refuse(
+                    card_name, classify_card(source_zone[hand_index]).effect_kind, details,
                 )
         else:
             if from_zone not in ("graveyard", "exile", "library"):
@@ -201,10 +199,8 @@ class CastAnnouncementMixin:
                     f"no effect allows playing {card_name} from "
                     f"{caster.name}'s {from_zone} (CR 601.3)"
                 )
-                self.log.append(details)
-                return SimulationResult(
-                    card_name, False,
-                    classify_card(source_zone[hand_index]).effect_kind, details,
+                return refuse(
+                    card_name, classify_card(source_zone[hand_index]).effect_kind, details,
                 )
         return hand_index, permission, source_seat, source_zone
 
@@ -322,8 +318,7 @@ class CastAnnouncementMixin:
                 ),
             )
             if not target_ok:
-                self.log.append(target_reason)
-                return SimulationResult(card.name, False, classification.effect_kind, target_reason)
+                return refuse(card.name, classification.effect_kind, target_reason)
 
             # CR 601.2c's other half, asked before what was *named*: a spell that
             # must announce a target cannot be cast while no legal target exists.
@@ -354,8 +349,7 @@ class CastAnnouncementMixin:
                 # resolved onto nothing.
                 unaimed = f"no valid target for {card.name}"
             if unaimed is not None and mode_stack_item is None:
-                self.log.append(unaimed)
-                return SimulationResult(card.name, False, classification.effect_kind, unaimed)
+                return refuse(card.name, classification.effect_kind, unaimed)
 
             # CR 601.2c for the target the caller *named*, beside the per-kind arms
             # above rather than inside them: a spell whose primary instruction is a
@@ -387,8 +381,7 @@ class CastAnnouncementMixin:
                 chosen_creature_type=chosen_creature_type,
             )
             if named_refusal is not None:
-                self.log.append(named_refusal)
-                return SimulationResult(card.name, False, classification.effect_kind, named_refusal)
+                return refuse(card.name, classification.effect_kind, named_refusal)
             # …and the same rule for a target **on the stack**, which the gate
             # above does not read (its slots are battlefield slots). One call
             # where Invasion's first wave left two: see
@@ -401,8 +394,7 @@ class CastAnnouncementMixin:
                 mode_index=announced_mode,
             )
             if stack_refusal is not None:
-                self.log.append(stack_refusal)
-                return SimulationResult(card.name, False, classification.effect_kind, stack_refusal)
+                return refuse(card.name, classification.effect_kind, stack_refusal)
             # …and the rule's other side: a stack object named for an
             # announcement that has no target there (a Lightning Bolt, a Terror,
             # a Wrath of God), or beside a permanent for "target spell **or**
@@ -417,8 +409,7 @@ class CastAnnouncementMixin:
                 ),
             )
             if stray_refusal is not None:
-                self.log.append(stray_refusal)
-                return SimulationResult(card.name, False, classification.effect_kind, stray_refusal)
+                return refuse(card.name, classification.effect_kind, stray_refusal)
 
     def _arm_opponent_mode_choice(self, caster_index: int, card, spell_item) -> None:
         """CR 700.2e: hand the mode choice to a player other than the caster.

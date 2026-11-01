@@ -32,6 +32,7 @@ from ...oracle import compile_card_oracle
 from ...stack_targets import names_a_target
 from ...subject_filters import filter_head_noun, subject_matches
 from ...target_requirements import narrow_offer
+from ...refusals import refuse, take_back_refused_attempt
 
 
 def hand_activation_cost(game, controller_index: int, card, ability):
@@ -158,9 +159,14 @@ class CardActivationMixin:
         cycled down to no cards is 0/0 and dies before anybody acts. Neither
         was here, and the playbook's audit of non-resolution state changes had
         never reached a cost paid from a hand.
+
+        A refusal takes back what the attempt wrote to the shared log
+        (CR 733.1, ``engine/refusals.py``): the card is in a hand.
         """
+        log_mark = len(self.log)
         with self.deferring_triggers():
             result = self._activate_from_hand(*args, **kwargs)
+        take_back_refused_attempt(self, log_mark, result)
         if result.supported:
             self.check_state_based_actions()
         return result
@@ -171,9 +177,12 @@ class CardActivationMixin:
         is and for its two reasons: Havoc Jester's ping off Necrosavant's
         sacrificed creature goes above the ability, and the Wild Growth on the
         snow land Whiteout sacrificed is put into its owner's graveyard
-        (CR 704.5m) before priority returns."""
+        (CR 704.5m) before priority returns. A refusal is taken back from the
+        shared log as theirs are (``engine/refusals.py``)."""
+        log_mark = len(self.log)
         with self.deferring_triggers():
             result = self._activate_from_graveyard(*args, **kwargs)
+        take_back_refused_attempt(self, log_mark, result)
         if result.supported:
             self.check_state_based_actions()
         return result
@@ -243,8 +252,7 @@ class CardActivationMixin:
             matches = [hand_index]
         if not matches:
             details = f"{card_name} is not in {controller.name}'s hand"
-            self.log.append(details)
-            return SimulationResult(card_name, False, "unsupported", details)
+            return refuse(card_name, "unsupported", details)
         index = matches[0]
         card = controller.hand[index]
 
@@ -252,12 +260,10 @@ class CardActivationMixin:
         from_hand = usable_activated_abilities(program, zone=HAND)
         if not from_hand:
             details = f"{card.name}'s ability can only be activated from the battlefield"
-            self.log.append(details)
-            return SimulationResult(card.name, False, "unsupported", details)
+            return refuse(card.name, "unsupported", details)
         if not 0 <= ability_index < len(from_hand):
             details = f"{card.name} has no ability {ability_index}"
-            self.log.append(details)
-            return SimulationResult(card.name, False, "unsupported", details)
+            return refuse(card.name, "unsupported", details)
         ability = from_hand[ability_index]
 
         # CR 602.5, before anything is paid: the prohibitions that reach an
@@ -270,9 +276,8 @@ class CardActivationMixin:
         # an opponent's turn under a City of Solitude.
         prohibited = activation_prohibition(self, controller_index, card, ability)
         if prohibited is not None:
-            self.log.append(prohibited.details)
-            return SimulationResult(
-                card.name, False, "unsupported", prohibited.details
+            return refuse(
+                card.name, "unsupported", prohibited.details,
             )
 
         # CR 601.2f: the cost is computed as the ability is activated, and
@@ -306,8 +311,7 @@ class CardActivationMixin:
             purpose=PaymentPurpose(ACTIVATE, source=card),
         ):
             details = f"{controller.name} cannot pay for {card.name}'s ability"
-            self.log.append(details)
-            return SimulationResult(card.name, False, "unsupported", details)
+            return refuse(card.name, "unsupported", details)
 
         # The card leaves the hand as the cost is paid (CR 602.2b), before the
         # ability is on the stack — so an effect that looks at the hand during
@@ -461,28 +465,24 @@ class CardActivationMixin:
             matches = [graveyard_index]
         if not matches:
             details = f"{card_name} is not in {controller.name}'s graveyard"
-            self.log.append(details)
-            return SimulationResult(card_name, False, "unsupported", details)
+            return refuse(card_name, "unsupported", details)
         index = matches[0]
         card = controller.graveyard[index]
 
         program = compile_card_oracle(card)
         if not 0 <= ability_index < len(program.activated_abilities):
             details = f"{card.name} has no ability {ability_index}"
-            self.log.append(details)
-            return SimulationResult(card.name, False, "unsupported", details)
+            return refuse(card.name, "unsupported", details)
         ability = program.activated_abilities[ability_index]
         if not ability.supported or ability.instruction is None:
             details = f"{card.name}: ability not implemented"
-            self.log.append(details)
-            return SimulationResult(card.name, False, "unsupported", details)
+            return refuse(card.name, "unsupported", details)
         if ability_functions_from(ability) != GRAVEYARD:
             details = (
                 f"{card.name}'s ability does not function from a graveyard "
                 "(CR 113.6)"
             )
-            self.log.append(details)
-            return SimulationResult(card.name, False, "unsupported", details)
+            return refuse(card.name, "unsupported", details)
 
         # Every printed "Activate only ..." clause on this line (CR 602.5), read
         # from the one table the support gate reads. The *card* is the source:
@@ -497,9 +497,8 @@ class CardActivationMixin:
         # "during combat" stopped nothing activated from a graveyard.
         prohibited = activation_prohibition(self, controller_index, card, ability)
         if prohibited is not None:
-            self.log.append(prohibited.details)
-            return SimulationResult(
-                card.name, False, "unsupported", prohibited.details
+            return refuse(
+                card.name, "unsupported", prohibited.details,
             )
 
         # CR 602.2b sends an activation through CR 601.2c, so the target is
@@ -516,8 +515,7 @@ class CardActivationMixin:
             target_permanent_ids=target_permanent_ids,
         )
         if target_refusal is not None:
-            self.log.append(target_refusal)
-            return SimulationResult(card.name, False, "unsupported", target_refusal)
+            return refuse(card.name, "unsupported", target_refusal)
         # …and an owed target left unnamed is the picker's first entry, named
         # here as on the permanent path and for its reason
         # (`engine/bare_announcements.py`): the object this builds is an
@@ -550,15 +548,13 @@ class CardActivationMixin:
             target_permanent_ids=target_permanent_ids,
         )
         if required_refusal is not None:
-            self.log.append(required_refusal)
-            return SimulationResult(card.name, False, "unsupported", required_refusal)
+            return refuse(card.name, "unsupported", required_refusal)
 
         cost = ability.cost
         unchargeable = _graveyard_cost_refusal(cost)
         if unchargeable is not None:
             details = f"{card.name}: {unchargeable}"
-            self.log.append(details)
-            return SimulationResult(card.name, False, "unsupported", details)
+            return refuse(card.name, "unsupported", details)
 
         # CR 601.2h/602.5c: the whole cost is checked before any of it is spent,
         # so an ability with an unpayable half does not pay the other half.
@@ -576,8 +572,7 @@ class CardActivationMixin:
                     f"{card.name}: no {filter_head_noun(cost.sacrifice_filter)} "
                     "available to sacrifice"
                 )
-                self.log.append(details)
-                return SimulationResult(card.name, False, "unsupported", details)
+                return refuse(card.name, "unsupported", details)
             # The same announcement an ability on the battlefield makes, so the
             # same check: a permanent named to pay that cannot is a refusal,
             # not a request for the default (CR 601.2h).
@@ -587,9 +582,8 @@ class CardActivationMixin:
                 None,
             )
             if named_cost_refusal is not None:
-                self.log.append(named_cost_refusal)
-                return SimulationResult(
-                    card.name, False, "unsupported", named_cost_refusal
+                return refuse(
+                    card.name, "unsupported", named_cost_refusal,
                 )
             named = (
                 self.permanent_by_id(cost_permanent_id)
@@ -617,15 +611,13 @@ class CardActivationMixin:
                     f"{card.name}: not enough untapped "
                     f"{filter_head_noun(cost.tap_filter or {})}s to tap for its cost"
                 )
-                self.log.append(details)
-                return SimulationResult(card.name, False, "unsupported", details)
+                return refuse(card.name, "unsupported", details)
             named_cost_refusal = self._named_cost_refusal(
                 card, controller, candidates, cost_permanent_ids, None,
             )
             if named_cost_refusal is not None:
-                self.log.append(named_cost_refusal)
-                return SimulationResult(
-                    card.name, False, "unsupported", named_cost_refusal
+                return refuse(
+                    card.name, "unsupported", named_cost_refusal,
                 )
             tap_cost_permanents = self._choose_tap_cost_permanents(
                 cost, candidates, cost_permanent_ids,
@@ -635,8 +627,7 @@ class CardActivationMixin:
             controller, cost.mana, purpose=PaymentPurpose(ACTIVATE, source=card),
         ):
             details = f"{controller.name} cannot pay for {card.name}'s ability"
-            self.log.append(details)
-            return SimulationResult(card.name, False, "unsupported", details)
+            return refuse(card.name, "unsupported", details)
         for tapped_for_cost in tap_cost_permanents:
             self.become_tapped(tapped_for_cost)
         if tap_cost_permanents:

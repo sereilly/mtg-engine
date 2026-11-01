@@ -35,6 +35,7 @@ from ...cost_x_definitions import (
 )
 from ...game_types import SimulationResult
 from ...oracle_types import x_spend_colors_from_text
+from ...refusals import refuse
 
 
 def _x_mana_actually_spent(
@@ -710,9 +711,8 @@ class PoolPaymentMixin:
             defined = cast_x_value(self, caster_index, card.oracle_text)
             if defined is None:
                 refusal = f"{card.name}: X cannot be determined for this cast"
-                self.log.append(refusal)
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, refusal,
+                return refuse(
+                    card.name, classification.effect_kind, refusal,
                 )
             resolved_x_value = defined
         # CR 601.2b's other definition, the one printed as the tail of the
@@ -778,9 +778,8 @@ class PoolPaymentMixin:
                 refusal = (
                     f"{card.name}: X can't be greater than {allowed}{printed}"
                 )
-                self.log.append(refusal)
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, refusal,
+                return refuse(
+                    card.name, classification.effect_kind, refusal,
                 )
 
         # CR 601.2b's other bound: "X can't be 0." (Ertai's Meddling.) Beside
@@ -793,9 +792,8 @@ class PoolPaymentMixin:
             floor = cast_x_floor(card.oracle_text)
             if floor is None or int(resolved_x_value or 0) < floor:
                 refusal = f"{card.name}: X can't be less than {floor or 1}"
-                self.log.append(refusal)
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, refusal,
+                return refuse(
+                    card.name, classification.effect_kind, refusal,
                 )
         return announced_x, resolved_x_value, x_colors, x_mana_spent
 
@@ -895,9 +893,8 @@ class PoolPaymentMixin:
                         f"{chosen_alternative.keyword or 'alternative'} cost "
                         f"is unpayable (CR 118.6)"
                     )
-                    self.log.append(details)
-                    return SimulationResult(
-                        card.name, False, classification.effect_kind, details,
+                    return refuse(
+                        card.name, classification.effect_kind, details,
                     )
                 keyword_more, keyword_less, keyword_names = (
                     keyword_cost_modifiers(
@@ -928,9 +925,8 @@ class PoolPaymentMixin:
                             f"({chosen_alternative.describe()})",
                             extra_generic_tax, extra_pip_tax, cost_reduction,
                         )
-                    self.log.append(details)
-                    return SimulationResult(
-                        card.name, False, classification.effect_kind, details,
+                    return refuse(
+                        card.name, classification.effect_kind, details,
                     )
                 x_mana_spent = paid
                 if keyword_names:
@@ -968,9 +964,8 @@ class PoolPaymentMixin:
                         card, "cast without paying its mana cost",
                         extra_generic_tax, extra_pip_tax, cost_reduction,
                     )
-                    self.log.append(details)
-                    return SimulationResult(
-                        card.name, False, classification.effect_kind, details,
+                    return refuse(
+                        card.name, classification.effect_kind, details,
                     )
             self.log.append(
                 f"{card.name} cast without paying its mana cost"
@@ -982,8 +977,7 @@ class PoolPaymentMixin:
             # waiver above is an alternative cost and may still be paid.)
             if not card.mana_cost.strip():
                 details = f"{card.name} has no mana cost; the cost is unpayable (CR 118.6)"
-                self.log.append(details)
-                return SimulationResult(card.name, False, classification.effect_kind, details)
+                return refuse(card.name, classification.effect_kind, details)
             x_mana_spent = self._pay_cast_cost(
                 caster, card, resolved_x_value, x_colors,
                 extra_generic=extra_generic_tax, reduction=cost_reduction,
@@ -1004,6 +998,5 @@ class PoolPaymentMixin:
                         f"insufficient mana for {card.name} "
                         f"(X can be paid only with {spelling} mana)"
                     )
-                self.log.append(details)
-                return SimulationResult(card.name, False, classification.effect_kind, details)
+                return refuse(card.name, classification.effect_kind, details)
         return permission, resolved_x_value, x_mana_spent
