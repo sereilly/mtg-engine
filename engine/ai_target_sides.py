@@ -264,7 +264,45 @@ def _effect_side(instruction: OracleInstruction) -> str | None:
         return "you" if sign > 0 else "opponent"
     if _silences_its_object(instruction):
         return "opponent"
+    if _grants_a_burden(instruction):
+        return "opponent"
     return activation_target_side(instruction)
+
+
+def _grants_a_burden(instruction: OracleInstruction) -> bool:
+    """Whether *instruction* grants its object a quoted ability that **hampers
+    the object holding it** — so the object should be an opponent's.
+
+    "Until end of turn, target creature gains "This creature can't attack or
+    block unless its controller pays {1} for each Cleric on the battlefield.""
+    (Whipgrass Entangler.) The kind (``grant_target_ability_text``) is a
+    grant, and its category reads every grant as a gift — so the AI paid
+    {1}{W} each turn to tax its own creature. What the grant *does* is the
+    quoted line, and two families of line are burdens on their holder, each
+    asked of the reader that enforces it: a combat restriction on its own
+    attacking or blocking (``combat_restrictions.combat_restriction_for`` —
+    "can't attack", "can't block", their tolls; not "can't be blocked", which
+    is evasion), and an untap restriction on itself
+    (``untap_restrictions.self_untap_line``: Glyph of Delusion's "This
+    creature doesn't untap during your untap step if it has a glyph counter on
+    it"). A grant of anything else keeps its category's reading.
+    """
+    if getattr(instruction, "kind", None) != "grant_target_ability_text":
+        return False
+    from .combat_restrictions import combat_restriction_for
+    from .self_reference import _restriction_line
+    from .untap_restrictions import self_untap_line
+
+    for text in (instruction.payload or {}).get("abilities") or ():
+        restriction = combat_restriction_for(_restriction_line(str(text), None))
+        if restriction is not None and any(
+            kind.startswith(("cant_attack", "cant_block"))
+            for kind in (restriction.kind, *restriction.also_kinds)
+        ):
+            return True
+        if self_untap_line(str(text)) is not None:
+            return True
+    return False
 
 
 def _silences_its_object(instruction: OracleInstruction) -> bool:
@@ -303,7 +341,7 @@ def denies_its_target(instruction: OracleInstruction) -> bool:
     kind = getattr(instruction, "kind", None)
     if kind in _OWN_KINDS or kind in _NO_SIDE_KINDS:
         return False
-    if kind in _OPPONENT_KINDS:
+    if kind in _OPPONENT_KINDS or _grants_a_burden(instruction):
         return True
     return INSTRUCTION_CATEGORIES.get(kind) in ("destruction", "tapping")
 
