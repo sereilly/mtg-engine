@@ -607,7 +607,19 @@ def test_a_seat_asked_for_an_up_to_target_may_answer_nobody(_pool):
     """The open table, for the announcement that is *asked*: a triggered
     ability's controller is offered its legal targets, the prompt says zero is
     an answer, and the answer is taken — nothing changes, the prompt is gone
-    and the ability resolves."""
+    and the ability resolves.
+
+    **With a card the slot could name in reach** (:func:`_up_to_bait`), as the
+    owed-target arm has it. "…return up to two target **Bird and/or Cleric**
+    permanent cards from your graveyard to the battlefield" (Celestial
+    Gatekeeper, at Legions' promotion rehearsal) met piles holding no Bird and
+    no Cleric: nothing was legal, so its controller was rightly not asked
+    (zero is the only announcement, :func:`test_an_up_to_with_nothing_legal_
+    to_name_changes_nothing` holds that), and this arm read "no target was
+    asked for beside legal targets" for a table that had none. Validated
+    backwards: without the bait it names Gatekeeper exactly so; with it the
+    prompt offers both baits, says "up to", and answering nobody returns
+    neither."""
     declined = 0
     findings: list[str] = []
     for unit in _units(_pool):
@@ -615,7 +627,10 @@ def test_a_seat_asked_for_an_up_to_target_may_answer_nobody(_pool):
         if where != "trigger" or _owes_a_target_beside(card, where, step):
             continue
         label = card.name
-        game = _table(_pool, card, open_board=True, interactive={0})
+        game = _table(
+            _pool, card, open_board=True, interactive={0},
+            bait=_up_to_bait(card, where, step),
+        )
         source = _stage(game, card, where, ability)
         before = _snapshot(game, card)
         assert _announce(game, card, where, position, step, ability, source), label

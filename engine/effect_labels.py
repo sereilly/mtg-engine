@@ -506,6 +506,15 @@ ACTIVATED_LABELS: dict[str, str] = {
     # Its negative twin (Glittering Lion's "…loses "Prevent all damage …""),
     # in the bucket `remove_self_keyword` already shares with the grant.
     "remove_self_ability_text": "activated_pump",
+    # Whipgrass Entangler (LGN): "{1}{W}: Until end of turn, target creature
+    # gains "This creature can't attack or block unless its controller pays
+    # {1} for each Cleric on the battlefield."" `grant_self_ability_text`
+    # aimed at a target rather than the source, and its bucket: which
+    # permanent gains the quoted ability is the target's business, not
+    # another kind of ability.
+    # (The category default already said `activated_pump`; named so the
+    # bucket is the table's answer rather than the grammar family's.)
+    "grant_target_ability_text": "activated_pump",
     "return_self_from_graveyard": "activated_return",
     "return_source_card_to_owners_hand": "activated_return",
     # "{W}: Return enchanted creature to its owner's hand" (Sun Clasp). The
@@ -840,6 +849,13 @@ ACTIVATED_LABELS: dict[str, str] = {
     # changing what it is, `gain_type`'s and the recolours', is
     # `activated_pump`.
     "turn_target_face_up": "activated_pump",
+    # Wall of Deceit (LGN): "{3}: Turn this creature face down." The mirror
+    # of Ixidor's row above, on the permanent itself: it stops being the card
+    # it is and becomes the blank 2/2 (CR 708.2) — the same every-
+    # characteristic change read the other way, so the same bucket. (The
+    # category default was `activated_characteristics`, which would file the
+    # two directions of one change under two words.)
+    "turn_self_face_down": "activated_pump",
     # Nova Cleric: "{2}{W}, {T}, Sacrifice this creature: Destroy all
     # enchantments." The one-card-type sweep of
     # `destroy_all_artifacts_creatures_enchantments` above, and its bucket.
@@ -1441,6 +1457,28 @@ TRIGGERED_LABELS: dict[str, str] = {
     # `prevent_all_combat_damage_to_matching` already takes above. Shown by
     # the guard's second assertion only once the activated half was green.
     "prevent_all_combat_damage": "triggered_prevent",
+    # --- Legions, at its promotion rehearsal -------------------------------
+    # Three leaves the set's triggers are the first to reach in the triggered
+    # position, each settled against the spelling its family already has
+    # rather than the `spell_pattern` marker they fell back to.
+    #
+    # Daru Mender: "When this creature is turned face up, regenerate target
+    # creature." The activated table's `activated_regenerate` for the same
+    # kind, with the triggered prefix: what the ability does is a shield, and
+    # that a morph turning face up sets it off is the condition's business.
+    "grant_regeneration_to_target_creature": "triggered_regenerate",
+    # Weaver of Lies: "When this creature is turned face up, turn any number
+    # of target creatures with morph abilities other than this creature face
+    # down." The mirror of `turn_target_face_up`'s `activated_pump` (Ixidor):
+    # the permanent stops being the card it is and becomes the blank 2/2
+    # (CR 708.2), every characteristic at once, which is the report's one word
+    # for a permanent changing what it is.
+    "turn_target_face_down": "triggered_pump",
+    # Phage the Untouchable: "Whenever Phage deals combat damage to a player,
+    # that player loses the game." The other spelling of `player_loses_game`
+    # above (the seat the damage froze rather than a described one), and its
+    # bucket: the game ends.
+    "target_player_loses_game": "triggered_game_end",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps
@@ -1626,6 +1664,16 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # ("combat_your_turn", "may") above: whose turn the combat is in is the
     # condition's narrowing, not another kind of ability.
     ("combat_opponent_turn", "may"): "triggered_combat",
+    # --- Legions, at its promotion rehearsal --------------------------------
+    # Four morphs whose face-up trigger opens "you may": Chromeshell Crab's
+    # exchange, Dermoplasm's creature from hand, Master of the Veil's turn face
+    # down, Imperial Hellkite's search. A condition-blind `may` falls back to
+    # `spell_pattern`, which is a leaf's bucket too
+    # (`test_a_triggered_wrapper_row_never_borrows_a_leaf_effects_bucket`), so
+    # the condition names the moment, as every other `may` row here does:
+    # CR 702.37e / 708.8's turning face up, which is neither an entry nor a
+    # cast — the permanent was on the battlefield all along.
+    ("turned_face_up", "may"): "triggered_face_up",
 }
 
 
