@@ -169,13 +169,27 @@ def _scenarios(cards: dict, family: str, fires=None) -> list[dict]:
 class _Recorder:
     """Every triggered object pushed, with the moment it was pushed in, and
     every ``order_triggers`` prompt armed — by wrapping the push, the
-    resolution and the arming, which every tree has."""
+    resolution and the arming, which every tree has.
+
+    **And every object that left the stack by resolving** (``resolved``), so
+    a census can tell an object that was put on the stack from one CR 603.3d
+    took back off for want of a target (:meth:`stood`). On the tree before LGN
+    W2G2 the two were told apart at the push — a trigger chose its target
+    there, and one with none was off the stack before the push returned, so
+    "on the stack right after the push" was the test. A trigger's choice now
+    waits for its unit of play to finish (``_trigger_choice_waits``, CR
+    117.5), so Goblin Masons' "destroy target Wall" in a sweep with no Wall is
+    on the stack as the push returns and gone when the sweep's window closes,
+    never ordered: read at the push, the census counted it as owed an order
+    and named it never asked, and the screen below drew its pairs from cards
+    whose triggers never stand."""
 
     def __init__(self, monkeypatch):
         self.moment = 0
         self.on = False
         self.pushes: list[tuple[int, object]] = []
         self.asked: list[tuple[int, int, object]] = []
+        self.resolved: list = []
         push, resolve, arm = (
             Game._stack_push, Game.resolve_top_of_stack, Game.arm_pending_choice,
         )
@@ -196,7 +210,11 @@ class _Recorder:
 
         def _resolve(game, *args, **kwargs):
             self.moment += 1
-            return resolve(game, *args, **kwargs)
+            top = game.stack[-1] if game.stack else None
+            result = resolve(game, *args, **kwargs)
+            if top is not None and not any(entry is top for entry in game.stack):
+                self.resolved.append(top)
+            return result
 
         def _arm(game, kind, player_index, **data):
             choice = arm(game, kind, player_index, **data)
@@ -207,6 +225,13 @@ class _Recorder:
         monkeypatch.setattr(Game, "_stack_push", _push)
         monkeypatch.setattr(Game, "resolve_top_of_stack", _resolve)
         monkeypatch.setattr(Game, "arm_pending_choice", _arm)
+
+    def stood(self, game, item) -> bool:
+        """Whether *item* was put on the stack and stayed there until it
+        resolved — not removed as its choices were made (CR 603.3c-d)."""
+        return any(entry is item for entry in game.stack) or any(
+            gone is item for gone in self.resolved
+        )
 
 
 def _game(cards) -> Game:
@@ -288,7 +313,10 @@ def _run(cards, family, scenario, monkeypatch) -> dict:
         recorder.on = False
     moments: dict[int, list] = defaultdict(list)
     for moment, item in recorder.pushes:
-        if item.caster_index == 0 and not any(kept is item for kept in moments[moment]):
+        if (
+            item.caster_index == 0 and recorder.stood(game, item)
+            and not any(kept is item for kept in moments[moment])
+        ):
             moments[moment].append(item)
     owed = [
         items for items in moments.values()

@@ -578,11 +578,34 @@ def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_c
     # the opponent's creature card and not the caster's, the cast naming the
     # caster's own pile is refused, and the opponent's card arrives under the
     # caster's control.
-    assert widened == {
+    reviewed = {
         "Hymn of Rebirth", "Necromancy", "Reanimate", "Coffin Queen",
         "Iridescent Drake", "Chainer, Dementia Master", "Nomad Mythmaker",
         "Gravespawn Sovereign", "Ashen Powder",
     }
+    # Scion of Darkness (LGN) is the tenth, reviewed at Legions' promotion
+    # rehearsal (W2G2): Ashen Powder's narrowing-back on Iridescent Drake's
+    # road, a *triggered* ability. "Whenever this creature deals combat damage
+    # to a player, you may put target creature card from **that player's**
+    # graveyard onto the battlefield under your control." It read as
+    # own-graveyard-only until W1G6 (every printed owner lowered as "your")
+    # and reanimated out of its controller's pile; it is `any_graveyard` with
+    # `that_player_only` now, its spec carries the same flag, and the trigger
+    # picker fills it with the seat the damage event froze — one pile, which
+    # is whichever player the damage went to, so not the controller's by
+    # construction. Not a card `legality.py`'s text fallback answers: the
+    # trigger chooses its card as it goes on the stack (CR 603.3d). Driven
+    # through a real combat damage step (tests/sets/
+    # test_lgn_creatures_later_groups.py, W1G6): the damaged player's creature
+    # card is offered and its controller's is not, and the card named arrives
+    # under Scion's controller; tests/engine/
+    # test_graveyard_trigger_target_census.py holds it to being asked,
+    # defaulted and answered like every other graveyard trigger. A member only
+    # while Legions ships: this walk is over the shipped pool, and a measured
+    # set's card is not in it.
+    if any(card.name == "Scion of Darkness" for card in supported_cards):
+        reviewed.add("Scion of Darkness")
+    assert widened == reviewed
 
 
 def test_a_reanimation_printed_your_graveyard_still_offers_only_yours(supported_cards):

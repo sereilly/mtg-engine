@@ -4,8 +4,9 @@
 CR 603.4's intervening-if may refuse a trigger; as it is pushed, the identity
 behind every index the object carries is stamped (``_stamp_stack_targets``),
 so a target is the permanent named and never whichever one later slides into
-its slot; and after it, a modal triggered ability chooses its mode (CR
-700.2b, 603.3c).
+its slot; and after it, a triggered ability chooses its mode and targets (CR
+700.2b, 603.3c-d) — at once, or, pushed inside a unit of play's trigger
+window, when that window closes (``_trigger_choice_waits``, CR 117.5).
 
 Every way an object comes to have targets is announced once, here:
 "becomes the target of a spell or ability" for a permanent and for a player
@@ -144,25 +145,6 @@ class TargetAnnouncementsMixin:
         # is complete and names nobody (CR 601.2c). After the stamping, which
         # is what turns an announced slot into the id this reads.
         self._note_empty_announcement(item)
-        self._choose_trigger_mode(
-            item, targets_already_chosen=targets_already_chosen or announced_at_cast
-        )
-        # …and its non-modal twin: an ability whose printed noun phrase is a
-        # *choice* the event did not make chooses it now, at the same moment
-        # and for the same rule (CR 603.3d/601.2c). Both hang off this method
-        # for the reason above — it is the one place an object goes on the
-        # stack, and a fire site that builds its own StackItem still passes
-        # through here.
-        #
-        # *targets_already_chosen* is the one exception, and it is a rule
-        # rather than a list of callers: an **activated** ability chose its
-        # targets when it was activated (CR 602.2b, gated once in
-        # `legality_abilities.activation_target_refusal`), and a **copy** inherits the
-        # original's (CR 707.10). Both were announced with their targets
-        # already made, so asking again would replace a choice a player has
-        # made with one they have not.
-        if not targets_already_chosen and not announced_at_cast:
-            self._choose_trigger_targets(item)
         # CR 113.6b: an ability that functions while the card is **on the
         # stack** starts functioning the moment the object is put there, and
         # Torrent of Lava's grants an activated ability to every creature — so
@@ -186,6 +168,127 @@ class TargetAnnouncementsMixin:
             if getattr(item, "timestamp", None) is None:
                 item.timestamp = next_timestamp()
             self._recompute_continuous_effects()
+        # **A triggered ability's choices wait for the unit of play that set
+        # it off to finish** (CR 603.3c-d, CR 117.5): see
+        # :meth:`_trigger_choice_waits`.
+        if self._trigger_choice_waits(
+            item, targets_already_chosen=targets_already_chosen,
+            announced_at_cast=announced_at_cast,
+        ):
+            self.unannounced_triggers.append(item)
+            return item
+        self._finish_announcement(
+            item, targets_already_chosen=targets_already_chosen,
+            announced_at_cast=announced_at_cast,
+        )
+        return item
+
+    def _trigger_choice_waits(
+        self, item, *, targets_already_chosen: bool, announced_at_cast: bool,
+    ) -> bool:
+        """Whether *item*'s mode and targets are chosen when the outermost
+        trigger window closes rather than now.
+
+        CR 603.3: a triggered ability is put on the stack "the next time a
+        player would receive priority", and CR 117.5 puts that after the
+        state-based check; CR 603.3c-d choose its mode and targets as it is put
+        there. This engine pushes the object at its **fire site**, and chose
+        there too — with the event that set it off still under way and the
+        state-based check still to come. So a death in a sweep offered every
+        creature the sweep was about to take, itself included (Festering
+        Goblin's "target creature gets -1/-1" was named onto a creature already
+        in the graveyard, where CR 603.3d removes it), Celestial Gatekeeper
+        dying to Wrath of God beside a Cleric could return the Cleric only if
+        the Cleric had died first, and Scion of Darkness could not name the
+        blocker it trampled over and killed, which its 2004-10-04 ruling says
+        it may.
+
+        Every unit of play that sets triggers off is already a window
+        (``putting_triggers_on_stack``: a resolution, a batch, an entry, a
+        state-based sweep, each turn-based action), and the outermost one
+        closes before anything could resolve what it collected — after the
+        resolution has finished, and, for a step's turn-based action, after the
+        state-based check the step makes inside it (combat damage, CR 510.2 /
+        704.3). That is when the waiting choices are made
+        (:meth:`_announce_waiting_triggers`), in the order the objects were
+        pushed. Outside a window nothing waits: a fire site with no unit around
+        it chooses as it pushes, as every one did.
+
+        Only what still has a choice to make waits — a modal trigger, or one
+        whose target the picker chooses and nothing has recorded
+        (``_entry_trigger_chooses_a_target``, the gate the push already asks
+        for an entry trigger). A copy and an activated ability arrive with
+        their targets (*targets_already_chosen*), and an entry trigger carrying
+        its permanent spell's announcement has had it judged by
+        ``cast_announcement_fault`` above.
+        """
+        if self.collected_triggers is None or item is None:
+            return False
+        if targets_already_chosen or announced_at_cast:
+            return False
+        if not is_triggered_object(item):
+            return False
+        instruction = item.ability_instruction
+        if instruction is None:
+            return False
+        from ..modal_triggers import modal_trigger_modes
+
+        if modal_trigger_modes(instruction):
+            return True
+        if (
+            item.target_permanent_id is not None
+            or item.about_permanent_id is not None
+            or item.target_stack_item is not None
+        ):
+            return False
+        return self._entry_trigger_chooses_a_target(instruction, item.ability_text)
+
+    def _announce_waiting_triggers(self) -> None:
+        """Make the choices :meth:`_trigger_choice_waits` held back, oldest
+        first, for every waiting object still on the stack.
+
+        Asked as the outermost trigger window closes, while it is still open:
+        an announcement can set off another trigger ("becomes the target of",
+        "whenever a player chooses one or more targets"), and that one belongs
+        to the same unit — it waits behind the others and is chosen in this
+        same loop, and its controller orders it with them. Asked too before
+        anything resolves (``resolve_top_of_stack``), so an object can never
+        resolve with a choice it has not made.
+        """
+        while self.unannounced_triggers:
+            item = self.unannounced_triggers.pop(0)
+            if not any(entry is item for entry in self.stack):
+                continue
+            self._finish_announcement(
+                item, targets_already_chosen=False, announced_at_cast=False,
+            )
+
+    def _finish_announcement(
+        self, item, *, targets_already_chosen: bool, announced_at_cast: bool,
+    ) -> None:
+        """The rest of :meth:`_stack_push` once the object is on the stack: a
+        triggered ability's mode and targets (CR 603.3c-d), then "whenever a
+        player chooses one or more targets"."""
+        self._choose_trigger_mode(
+            item, targets_already_chosen=targets_already_chosen or announced_at_cast
+        )
+        # …and its non-modal twin: an ability whose printed noun phrase is a
+        # *choice* the event did not make chooses it now, at the same moment
+        # and for the same rule (CR 603.3d/601.2c). Both are reached only from
+        # ``_stack_push`` — directly, or once the window the push was made in
+        # closes — for the reason that method gives: it is the one place an
+        # object goes on the stack, and a fire site that builds its own
+        # StackItem still passes through there.
+        #
+        # *targets_already_chosen* is the one exception, and it is a rule
+        # rather than a list of callers: an **activated** ability chose its
+        # targets when it was activated (CR 602.2b, gated once in
+        # `legality_abilities.activation_target_refusal`), and a **copy** inherits the
+        # original's (CR 707.10). Both were announced with their targets
+        # already made, so asking again would replace a choice a player has
+        # made with one they have not.
+        if not targets_already_chosen and not announced_at_cast:
+            self._choose_trigger_targets(item)
         # "Whenever a player chooses one or more targets" (CR 601.2c / 602.2b /
         # 603.3d). Last, because this is the first moment the announcement is
         # whole: the ids are stamped, and a triggered ability's own choice has
@@ -215,7 +318,6 @@ class TargetAnnouncementsMixin:
             and any(waiting is item for waiting in self.stack)
         ):
             self.announce_targets_chosen(item)
-        return item
 
     def spell_targets_nothing(self, item) -> bool:
         """Whether *item* is a **permanent spell that is not an Aura** — the

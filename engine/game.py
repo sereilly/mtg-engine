@@ -586,6 +586,15 @@ class Game(
     # order them. None means no window is open. See ``engine/trigger_order.py``
     # and ``TriggeredAbilitiesMixin.putting_triggers_on_stack``.
     collected_triggers: list | None = None
+    # CR 603.3c-d / CR 117.5: the triggered objects pushed while such a window
+    # is open whose mode or targets are still to be chosen. They are chosen
+    # when the outermost window closes — once the unit of play that set them
+    # off has finished, and after the state-based check a step makes inside
+    # its own window — rather than at the fire site, where the board is the
+    # one the event was still changing. Empty whenever no window is open, so
+    # it is bookkeeping to every ``vars()`` walker. See
+    # ``TargetAnnouncementsMixin._announce_waiting_triggers``.
+    unannounced_triggers: list = field(default_factory=list)
     # CR 603.7 delayed triggered abilities created by a resolving spell or
     # ability ("Whenever one or more nontoken creatures attack this turn, …" —
     # Basri Ket's −2; "At the beginning of your next main phase, …" — Mana

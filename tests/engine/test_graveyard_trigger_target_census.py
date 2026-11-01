@@ -270,8 +270,40 @@ def _fire(game, card, trigger) -> "Permanent | None":
     game._enqueue_triggered_ability(
         controller_index=0, source_permanent=source, instruction=trigger.instruction,
         effect_kind=trigger.effect_kind, ability_text=trigger.source_line,
+        trigger_context=_frozen_context(trigger),
     )
     return source
+
+
+def _frozen_context(trigger) -> "dict | None":
+    """The seat the trigger's own event freezes into its context (CR 603.10),
+    where it freezes one — what every non-entry trigger is pushed with.
+
+    "Whenever this creature deals combat damage to a player, you may put
+    target creature card from **that player's** graveyard onto the battlefield
+    under your control." (Scion of Darkness, at Legions' promotion rehearsal.)
+    The pile is the damaged player's, which only the damage event names: the
+    seam writes it into the event as ``defending_player_index``
+    (``damage_events``), the event's payload is the trigger's context
+    (``events``), and the picker narrows the graveyard by it
+    (``that_player_only``). Pushed with no context, as this census pushed
+    every non-entry trigger, the picker had no pile to offer and rightly
+    declined - so the census read "nobody was asked", "nothing was chosen"
+    and "no chosen card" for a trigger that asks on its real road
+    (``tests/sets/test_lgn_creatures_later_groups.py``, W1G6).
+
+    Frozen only where the event freezes it, read off the lowering's own table
+    (``frozen_seat_record``: the events after which "that player" names a
+    seat at all), so the census is never handed a seat its trigger's real
+    fire site would not have. The seat is the opposing one, the pile the
+    defaulted test expects a non-own-only row to choose from. Validated
+    backwards: with ``None`` here the four tests that read the stack name
+    Scion of Darkness exactly as the rehearsal did."""
+    from engine.grammar.lowering._frozen_seats import frozen_seat_record
+
+    if frozen_seat_record("that_player", trigger.condition.kind) is None:
+        return None
+    return {"defending_player_index": 1}
 
 
 def _object(game, trigger):

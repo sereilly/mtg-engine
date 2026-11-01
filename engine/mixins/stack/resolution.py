@@ -541,6 +541,15 @@ class StackResolutionMixin:
         preserving seeded behaviour."""
         if not self.stack:
             return False
+        # A triggered ability whose choices were waiting for its unit of play
+        # to finish (``_trigger_choice_waits``) makes them before anything
+        # resolves — the window that held them closes first in every path the
+        # engine takes, so this is the backstop for one that resolves inside a
+        # window.
+        if self.unannounced_triggers:
+            self._announce_waiting_triggers()
+            if not self.stack:
+                return False
         top = self.stack[-1]
         # **A choice made as the object went on the stack, not yet answered.**
         # CR 601.2b-c and CR 603.3c-d put a modal trigger's mode and a targeted
