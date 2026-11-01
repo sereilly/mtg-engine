@@ -25,6 +25,7 @@ import re
 
 from .._constants import _MANA_SYMBOLS as _POOL_SYMBOLS
 from ...cost_modifiers import CostReduction, reduce_cost
+from ...mana_payment import pips_payable_by, pool_spent_on_generic
 from ...models import PlayerState
 from ...restricted_mana import CAST, PaymentPurpose
 from ...cast_permissions import permission_for
@@ -441,7 +442,9 @@ class PoolPaymentMixin:
         paid = (
             self._pay_with_fungible_types(player, required)
             if grant.get("any_type")
-            else self._pay_with_fungible_colors(player, required)
+            else self._pay_with_fungible_colors(
+                player, required, wants=self._floating_mana_wants(player, purpose),
+            )
         )
         if not paid:
             return False
@@ -456,7 +459,8 @@ class PoolPaymentMixin:
         return True
 
     def _pay_mana_cost_directly(
-        self, player: PlayerState, required: dict[str, int], *, purpose=None
+        self, player: PlayerState, required: dict[str, int], *, purpose=None,
+        wants=None,
     ) -> bool:
         # "Spend this mana only to…" (CR 106.6): a restricted bucket joins the
         # pool only for a payment its own restriction admits, and whatever the
@@ -478,7 +482,10 @@ class PoolPaymentMixin:
                 sym: snapshot.get(sym, 0) + restricted.get(sym, 0)
                 for sym in ("W", "U", "B", "R", "G", "C")
             }
-            if not self._pay_mana_cost_directly(player, required):
+            if not self._pay_mana_cost_directly(
+                player, required,
+                wants=self._floating_mana_wants(player, purpose),
+            ):
                 player.mana_pool = snapshot
                 return False
             for sym in ("W", "U", "B", "R", "G", "C"):
@@ -503,10 +510,16 @@ class PoolPaymentMixin:
         # a colour (CR 105.1) and this line grants colours. So the generic and
         # colourless halves are unchanged.
         if player.mana_spending_is_general:
-            return self._pay_under_permissions(player, required)
+            return self._pay_under_permissions(
+                player, required,
+                wants=wants or self._floating_mana_wants(player, purpose),
+            )
 
         if player.spends_mana_as_any_color:
-            return self._pay_with_fungible_colors(player, required)
+            return self._pay_with_fungible_colors(
+                player, required,
+                wants=wants or self._floating_mana_wants(player, purpose),
+            )
 
         if pool.get("W", 0) < required["W"]:
             return False
@@ -549,15 +562,61 @@ class PoolPaymentMixin:
             if available_generic < generic:
                 return False
 
-            for sym in ("C", "W", "U", "B", "R", "G"):
-                spend = min(temp.get(sym, 0), generic)
-                temp[sym] -= spend
-                generic -= spend
-                if generic == 0:
-                    break
+            # Which of the floating mana pays the generic is the payer's
+            # other wants' (`mana_payment.pool_spent_on_generic`): this was
+            # C, W, U, B, R, G whatever was still wanted, so a floating {C}
+            # paid a {1} beside a {C} still wanted and a {W} one beside a {W}
+            # (SET_PLAYBOOK's Known gap; 470 of 1,344 floating pools stranded
+            # a want in `scratch/kg2/payment/pool_order.py`). Colourless
+            # first where nothing is wanted, as before.
+            for sym, spent in pool_spent_on_generic(
+                temp, generic, wants or self._floating_mana_wants(player, purpose),
+                others=lambda: self._untapped_mana_units(player),
+            ).items():
+                temp[sym] -= spent
 
         player.mana_pool = temp
         return True
+
+    def _floating_mana_wants(self, player: PlayerState, purpose):
+        """What *player* may still want to pay for beyond the payment being
+        made (`mana_wants.mana_wants`), as a thunk read only when the floating
+        mana offers a choice — or the wants an effect-collected payment named
+        (`mana_payment.payment_wants_in_force`). The card or permanent the
+        payment is for (*purpose*) is the one ``paying_for`` leaves out — a
+        face-down spell bringing its turn-up (`mana_wants.wants_brought_by`)."""
+        from ...mana_payment import _wants_in_force
+        from ...mana_wants import mana_wants
+
+        def wants():
+            named = _wants_in_force(None)
+            if named is not None:
+                return named() if callable(named) else named
+            seat = next(
+                (index for index, seated in enumerate(self.players) if seated is player),
+                None,
+            )
+            if seat is None:
+                return ()
+            paying_for = getattr(purpose, "card", None) or getattr(purpose, "source", None)
+            return mana_wants(self, seat, paying_for=paying_for)
+
+        return wants
+
+    def _untapped_mana_units(self, player: PlayerState) -> list:
+        """What *player*'s untapped lands could still add, one pays-set each —
+        what stays available beside the floating mana a payment leaves."""
+        seat = next(
+            (index for index, seated in enumerate(self.players) if seated is player),
+            None,
+        )
+        if seat is None:
+            return []
+        return [
+            pips_payable_by(player, frozenset(made)) for made in (
+                self._land_payment_colors(land) for land in self.payment_lands(seat)
+            ) if made
+        ]
 
     def _pay_with_fungible_types(
         self, player: PlayerState, required: dict[str, int]
@@ -592,7 +651,7 @@ class PoolPaymentMixin:
         return True
 
     def _pay_under_permissions(
-        self, player: PlayerState, required: dict[str, int]
+        self, player: PlayerState, required: dict[str, int], *, wants=None,
     ) -> bool:
         """Pay *required* under CR 106.6 permissions the booleans cannot name.
 
@@ -611,7 +670,8 @@ class PoolPaymentMixin:
             for symbol in ("W", "U", "B", "R", "G", "C")
         }
         after = spend_under_permissions(
-            pool, required, player.mana_spending_permissions
+            pool, required, player.mana_spending_permissions,
+            wants=wants, others=lambda: self._untapped_mana_units(player),
         )
         if after is None:
             return False
@@ -620,7 +680,7 @@ class PoolPaymentMixin:
         return True
 
     def _pay_with_fungible_colors(
-        self, player: PlayerState, required: dict[str, int]
+        self, player: PlayerState, required: dict[str, int], *, wants=None,
     ) -> bool:
         """Pay *required* while every unit in the pool counts as any colour.
 
@@ -662,14 +722,17 @@ class PoolPaymentMixin:
         temp["C"] -= required["C"]
 
         generic = required["generic"]
-        for sym in ("C", "W", "U", "B", "R", "G"):
-            if generic <= 0:
-                break
-            spend = min(temp[sym], generic)
-            temp[sym] -= spend
-            generic -= spend
-        if generic > 0:
+        if sum(max(0, amount) for amount in temp.values()) < generic:
             return False
+        # Which units pay the generic: the payer's wants', over what each may
+        # pay as (`mana_payment.pool_spent_on_generic`) — every unit any
+        # colour, and only colourless a {C}.
+        for sym, spent in pool_spent_on_generic(
+            temp, generic, wants or self._floating_mana_wants(player, None),
+            others=lambda: self._untapped_mana_units(player),
+            pays_of=lambda symbol: pips_payable_by(player, frozenset({symbol})),
+        ).items():
+            temp[sym] -= spent
 
         player.mana_pool = temp
         return True
