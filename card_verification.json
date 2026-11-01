@@ -336,9 +336,9 @@
       "updated_at": 1792623664.7332008
     },
     "Brood Sliver": {
-      "reason": "Its combat-damage triggers outlive their step: with a human at the table, the first Brood (or Essence) trigger whose resolution asks a seat (the AI's may, or the human's) holds, and the combat rail closes the combat damage step anyway (advance_combat_phase leave_the_damage_step asks no _combat_awaits_an_answer; that test also answers False for an AI-owned prompt). Seen: AI attack under AI Brood+Essence Sliver left 3 Essence + 1 Brood triggers on the stack into the AI end step; my Sliver hitting the AI got the Brood offer in end_of_combat. Repro scratch/lgn/p5/repro_stack_across_steps.py. The token offer itself goes to the damaging Sliver controller correctly.",
-      "status": "fail",
-      "updated_at": 1793555184.0845754
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793569921.4847918
     },
     "Buried Alive": {
       "reason": "",
@@ -388,7 +388,7 @@
     "Canopy Crawler": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1793558250.1293244
+      "updated_at": 1793569954.703808
     },
     "Capsize": {
       "reason": "",
@@ -603,7 +603,7 @@
     "Cover of Darkness": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1793499467.0951824
+      "updated_at": 1793569970.843877
     },
     "Craw Wurm": {
       "reason": "",
@@ -724,6 +724,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1792615182.399777
+    },
+    "Defender of the Order": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793570053.2304235
     },
     "Deftblade Elite": {
       "reason": "",
@@ -948,7 +953,7 @@
     "Essence Sliver": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1793554890.0344303
+      "updated_at": 1793569987.6045651
     },
     "Eternal Flame": {
       "reason": "",
@@ -963,7 +968,7 @@
     "Exalted Angel": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1793498724.277504
+      "updated_at": 1793570020.2562957
     },
     "Eye for an Eye": {
       "reason": "",
@@ -1608,7 +1613,7 @@
     "Krosan Vorine": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1793554808.981097
+      "updated_at": 1793570003.571395
     },
     "Kudzu": {
       "reason": "",
@@ -1644,6 +1649,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1783034556.4376652
+    },
+    "Liege of the Axe": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793570036.2244813
     },
     "Lifeforce": {
       "reason": "",
@@ -1770,6 +1780,11 @@
       "status": "pass",
       "updated_at": 1791884626.655493
     },
+    "Manabond": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793570152.2525067
+    },
     "Meddle": {
       "reason": "",
       "status": "pass",
@@ -1814,6 +1829,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1792622626.3872738
+    },
+    "Metallic Sliver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793570119.2618124
     },
     "Metamorphosis": {
       "reason": "",
@@ -1904,6 +1924,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782540531.3900843
+    },
+    "Muscle Sliver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793570102.0935872
     },
     "Mystic Familiar": {
       "reason": "",
@@ -2123,7 +2148,7 @@
     "Plated Sliver": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1793554904.9544334
+      "updated_at": 1793570085.7766213
     },
     "Possessed Aven": {
       "reason": "",
@@ -2840,6 +2865,11 @@
       "status": "pass",
       "updated_at": 1782357654.2899704
     },
+    "Troublesome Spirit": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793570069.3933263
+    },
     "Tsunami": {
       "reason": "",
       "status": "pass",
@@ -3028,7 +3058,7 @@
     "Ward Sliver": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1793554874.563246
+      "updated_at": 1793569938.0353787
     },
     "Warp Artifact": {
       "reason": "",
@@ -3083,7 +3113,7 @@
     "White Knight": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1793555013.0816443
+      "updated_at": 1793570135.30783
     },
     "White Ward": {
       "reason": "",
