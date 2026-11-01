@@ -26,6 +26,7 @@ import re
 
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
+from engine.faces import compilation_units, whole_card
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from web.serialization import _serialize_player, entry_choice_view
@@ -118,18 +119,16 @@ def test_an_amplify_creature_is_sent_as_entering_while_its_reveal_is_open():
 
 
 def _entry_choosers() -> list[str]:
-    amplify = [
-        card.name for card in _CATALOG.values()
-        if "Amplify" in (card.oracle_text or "")
-    ]
+    """Every permanent whose text chooses or reveals as it enters, read face by
+    face (a multi-face card's text is its faces'), named by the card that is
+    cast."""
     return sorted({
-        card.name for card in _CATALOG.values()
-        if card.face_of is None
-        and card.primary_type not in ("instant", "sorcery")
-        and compile_card_oracle(card).supported
+        whole_card(unit).name for unit in compilation_units(_CATALOG.values())
+        if unit.primary_type not in ("instant", "sorcery")
+        and compile_card_oracle(unit).supported
         and (
-            any(_ENTRY_CHOICE_LINE.search(line) for line in (card.oracle_text or "").splitlines())
-            or card.name in amplify
+            "Amplify" in (unit.oracle_text or "")
+            or any(_ENTRY_CHOICE_LINE.search(line) for line in (unit.oracle_text or "").splitlines())
         )
     })
 
