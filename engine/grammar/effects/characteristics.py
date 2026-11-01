@@ -43,7 +43,8 @@ from ..stream import TokenStream
 
 from ..durations import _parse_duration
 from ..phrases import (_expect_counter_kind, _parse_can_attack_as_though,
-                       _parse_keywords, _parse_per_each_objects,
+                       _parse_keywords, _parse_per_each_counters,
+                       _parse_per_each_objects,
                        _parse_that_object, parse_keyword_list)
 from ..where_x import parse_where_x_definition
 from ._life import accept_life_gain, accept_life_loss
@@ -122,10 +123,28 @@ def _parse_gets(
         _parse_for_each_this_way(stream)
         if not per_each_tapped and per_each_milled is None else None
     )
+    # "…until end of turn **for each +1/+1 counter on this creature**" (Canopy
+    # Crawler). A counter pile rather than a set of objects, read by the
+    # shared fragment before the object reader below, for that fragment's
+    # reason ("fungus" is a creature type the noun parser would claim).
+    #
+    # Only behind a printed duration. Without one the sentence is a static
+    # ("Bird creatures get +1/+1 for each feather counter on this
+    # enchantment", Soulcatchers' Aerie; Infinite Hourglass) that the lord-buff
+    # derivation table already computes, and that table is reached only when
+    # the parse refuses in full (``grammar/derived.py``) — so the parse leaves
+    # it there rather than claiming a line this production would then have to
+    # lower or refuse.
+    per_each_counters = (
+        _parse_per_each_counters(stream)
+        if duration.kind is not None and not per_each_tapped
+        and per_each_milled is None and per_each_recorded is None else None
+    )
     per_each, per_each_beyond_first = (
         _parse_per_each_objects(stream)
         if not per_each_tapped and per_each_milled is None
-        and per_each_recorded is None else (None, False)
+        and per_each_recorded is None and per_each_counters is None
+        else (None, False)
     )
 
     # The same clause the statement level reads, through the same parser
@@ -140,6 +159,7 @@ def _parse_gets(
         x_definition=x_definition, per_each_tapped_this_way=per_each_tapped,
         per_each=per_each, per_each_beyond_first=per_each_beyond_first,
         per_each_milled=per_each_milled, per_each_recorded=per_each_recorded,
+        per_each_counters=per_each_counters,
     )
 
     # "gets +3/+3 and gains flying until end of turn" / "get +1/+1 and have

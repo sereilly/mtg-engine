@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from ._core import (
     Amount,
     CountOfMillsThisWay,
+    CountersOnEventSubject,
+    CountersOnSource,
     Duration,
     Fixed,
     PlayerRef,
@@ -78,6 +80,13 @@ class Pump:
     # got there). The node carries the record's key, and lowering refuses it
     # unless a step in front of the sentence writes that key.
     per_each_recorded: "ThatMuch | None" = None
+    # "Target creature gets +1/+1 until end of turn **for each +1/+1 counter on
+    # this creature**." (Canopy Crawler.) A count of a counter pile, not of a
+    # set of objects — the node the shared ``phrases._parse_per_each_counters``
+    # fragment reads — so it is not ``per_each`` above, whose filter describes
+    # objects on a board. The printed P/T is the size of one repetition, as it
+    # is for every other count on this node.
+    per_each_counters: "CountersOnSource | CountersOnEventSubject | None" = None
 
 
 @dataclass(frozen=True)

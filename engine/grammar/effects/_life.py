@@ -62,7 +62,7 @@ from ..cost_records import accept_counters_removed_for_cost
 from ..distinct import parse_counted_objects
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
-from ..phrases import _parse_for_each
+from ..phrases import _parse_for_each, _parse_per_each_counters
 from ..records import (_parse_for_each_this_way, accept_each_life_gained,
                        accept_each_life_lost,
                        accept_plus_per_cost_paid,
@@ -332,6 +332,14 @@ def accept_life_loss(
             per_each: object | None = accept_each_life_gained(stream)
             if per_each is None:
                 per_each = _parse_for_each(stream, allow_this_way=True)
+            if per_each is None:
+                # "…you lose 1 life **for each +1/+1 counter on it**."
+                # (Embalmed Brawler.) A count of the source's own counters, the
+                # shared fragment the gain one branch over reads the same words
+                # with — asked before the noun parser below for that
+                # fragment's reason: a counter word is not a noun, and
+                # "fungus" is a creature type the noun parser would claim.
+                per_each = _parse_per_each_counters(stream)
             if per_each is None:
                 for_each_mark = stream.mark()
                 if stream.accept_phrase("for", "each"):

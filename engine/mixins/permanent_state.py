@@ -65,6 +65,7 @@ from ..enter_effects import (ENTERED_BATTLEFIELD_TURN,
 from ..entry_choices import (LIFE_PAID_AS_ENTERED, CHOSEN_COLOR_KEY,
                              CHOSEN_LAND_TYPE_KEY, choosable_bodies)
 from .. import copies
+from ..amplify import arm_amplify_reveals
 from ..named_counters import add_counters as add_named_counters
 from ..cast_costs import KICKED, KICKED_WITH
 from ..keywords import grant_ability_line, grant_keyword
@@ -825,6 +826,17 @@ class PermanentStateMixin:
                     counters=[],
                 )
             break
+
+        # "Amplify N" (CR 702.38a): "As this object enters, reveal any number
+        # of cards from your hand that share a creature type with it. This
+        # permanent enters with N +1/+1 counters on it for each card revealed
+        # this way." The entry exile above one zone over, with nothing leaving
+        # the hand: a choice of cards, made as the permanent enters (CR
+        # 614.1c), each buying counters — so it is armed here, by every road a
+        # permanent arrives by, and asked of ``effective_card`` so a copy
+        # amplifies as what it copied and a face-down creature not at all.
+        # ``engine/amplify.py`` is the whole of it.
+        arm_amplify_reveals(self, permanent, caster_index)
 
         # "If this land would enter, sacrifice an untapped Mountain instead. If
         # you do, put this land onto the battlefield." (Balduvian Trading Post

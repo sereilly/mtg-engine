@@ -169,6 +169,58 @@ def _lower_pump_per_milled(node: ast.Pump) -> tuple[OracleInstruction, ...]:
     )
 
 
+def _lower_pump_per_counter(node: ast.Pump) -> tuple[OracleInstruction, ...]:
+    """"Target creature gets +1/+1 until end of turn **for each +1/+1 counter on
+    this creature**." (Canopy Crawler.)
+
+    A one-shot boost sized by the ability's own source's counters: the same
+    ``source_counters`` spec Daru Stinger's "damage equal to the number of +1/+1
+    counters on it" resolves with, on the same two kinds the board-count readings
+    of "for each" already land on — ``pump_target_creature_until_eot`` for a
+    chosen target (Power Armor's arrangement: the count is not *about* the
+    target, so it carries no ``relative_to``), ``pump_self`` for the source
+    itself. The count is taken as the ability resolves (the card's ruling,
+    2004-10-04: "The number of +1/+1 counters for the ability is checked when
+    the ability resolves") and the boost it sizes does not move afterwards.
+
+    The parse only builds this node behind a printed duration, so the
+    durationless static that the lord-buff table owns never reaches here; a
+    duration no sweep ends, a subject that is neither one chosen target nor the
+    source, or a pile on some other object ("…on that creature") refuses —
+    each the card doing something it did not print.
+    """
+    counted = node.per_each_counters
+    if not isinstance(counted, ast.CountersOnSource):
+        raise LoweringError(
+            "a pump counted off another object's counters has no reader",
+            node=node,
+        )
+    duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind or "")
+    if duration is None:
+        raise LoweringError("no pump handler ends at this duration", node=node)
+    payload: dict[str, object] = {
+        # The sign rides inside `times_x`, as every "for each" pump below
+        # relies on, so the negation flags are not emitted beside it.
+        "power": _per_each_amount(node.power, node.power_negative, node),
+        "toughness": _per_each_amount(
+            node.toughness, node.toughness_negative, node
+        ),
+        "x_from_count": {"source_counters": counted.kind},
+    }
+    if _is_target(node.subject):
+        payload["duration"] = duration
+        _describe_targets(payload, node.subject)
+        return (
+            OracleInstruction("pump_target_creature_until_eot", "", payload),
+        )
+    if _is_source(node.subject) and duration == "end_of_turn":
+        return (OracleInstruction("pump_self", "", payload),)
+    raise LoweringError(
+        "a pump counted off the source's counters lands on one chosen target "
+        "or on the source", node=node,
+    )
+
+
 def lower_counted_pump(
     node: ast.Pump, event: str | None = None,
 ) -> tuple[OracleInstruction, ...] | None:
@@ -185,6 +237,8 @@ def lower_counted_pump(
 
     if node.per_each_milled is not None:
         return _lower_pump_per_milled(node)
+    if node.per_each_counters is not None:
+        return _lower_pump_per_counter(node)
     if node.per_each_tapped_this_way:
         # "…for each creature tapped **this way**" reaching here means no fuser
         # claimed the sentence, so there is no tap in front of it and nothing for

@@ -1767,3 +1767,28 @@ register_choice(
     # sideboard, which ``web/serialization`` keeps private like a hand — so
     # only the seat that owes the decision is shown them.
 )
+
+register_choice(
+    # "Amplify N" (CR 702.38a): "As this object enters, reveal any number of
+    # cards from your hand that share a creature type with it. This permanent
+    # enters with N +1/+1 counters on it for each card revealed this way." A
+    # choice of hand slots made as the permanent enters (CR 614.1c), answered
+    # with the slots to reveal (`hand_indices`), none included. The entry
+    # exile's arrangement with the hand where that has a graveyard: the
+    # permanent has not finished entering until it is answered, so the
+    # state-based sweep leaves a 0/0 Ghastly Remains alone meanwhile.
+    "entry_reveal",
+    resolve=lambda game, choice, r: game._resolve_entry_reveal(
+        choice, r.get("hand_indices")
+    ),
+    default=lambda game, choice: game._default_entry_reveal(choice),
+    action="entry_reveal_confirm",
+    prompt_key="entry_reveal",
+    blocked_detail="choose which cards to reveal for the entering creature's amplify before other actions",
+    # The resolution that put the permanent onto the battlefield has to finish,
+    # so a seat nobody asks takes the stated default where the entry stands.
+    default_at_arm=True,
+    # Deliberately *not* spectator_visible, for `choose_cards_in_hand`'s
+    # reason: the candidates are cards in a hand (CR 400.2, a hidden zone),
+    # and only the ones the seat chooses become public.
+)
