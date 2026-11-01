@@ -39,7 +39,7 @@ from functools import lru_cache
 
 from .models import CardDefinition
 from .oracle import OracleInstruction, compile_card_oracle
-from .oracle_types import cost_target_count
+from .oracle_types import compilation_cache, cost_target_count
 from .ai_weighed_cast import (
     SPELL_TYPES,
     mode_considered,
@@ -330,6 +330,7 @@ _HOLDER_TOLL_KINDS = frozenset({
 })
 
 
+@compilation_cache
 @lru_cache(maxsize=None)
 def _trigger_removes_its_holder(text: str) -> bool:
     """Whether the quoted line *text* is a triggered ability (read by the
