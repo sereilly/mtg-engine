@@ -858,7 +858,17 @@ def _retarget_choice(ctx: PromptContext, choices: list) -> dict:
     The candidates are re-derived through the engine's own liveness test, so a
     creature that has died or a player who has left since the prompt was armed
     is not offered — and the position each option carries is its position in the
-    armed list, which is what the answer names."""
+    armed list, which is what the answer names.
+
+    A permanent also carries its ``id`` and its controller's ``seat``. Without
+    them two options could read the same — two face-down creatures are both
+    "Face-down creature" (CR 708.2), and a Goblin Grappler on each side is two
+    "Goblin Grappler"s — and the person answering could not tell which is
+    theirs (Legions' post-promotion pass: Willbender re-aiming a Shock between
+    a Dermoplasm and a Willbender, both face down). Both are public: the id is
+    on the battlefield payload, and who controls a permanent is in the open.
+    The client names a face-down option from its own ``hidden_card`` (CR
+    708.5), so only the controller learns what it is."""
     choice = choices[0]
     data = choice.data
     options = list(data.get("options") or ())
@@ -866,11 +876,24 @@ def _retarget_choice(ctx: PromptContext, choices: list) -> dict:
         "card_name": data.get("card_name", ""),
         "prompt": data.get("prompt", "Choose a new target."),
         "options": [
-            {
-                "index": position,
-                "name": options[position].get("name", ""),
-                "kind": options[position].get("kind", ""),
-            }
+            _retarget_option(ctx, options[position], position)
             for position in ctx.game.live_retarget_choices(choice)
         ],
     }
+
+
+def _retarget_option(ctx: PromptContext, option: dict, position: int) -> dict:
+    """One ``retarget_choice`` option as the client reads it: its position,
+    name and kind, and — for a permanent still on the battlefield — its id and
+    the seat that controls it."""
+    out = {
+        "index": position,
+        "name": option.get("name", ""),
+        "kind": option.get("kind", ""),
+    }
+    if option.get("kind") == "permanent":
+        permanent = ctx.game.permanent_by_id(option.get("permanent_id"))
+        if permanent is not None:
+            out["id"] = permanent.permanent_id
+            out["seat"] = ctx.game.controller_index_of(permanent)
+    return out

@@ -7379,9 +7379,22 @@ function applyRetargetChoicePrompt(info) {
     // A face and a permanent can share a name in this game (a player called
     // after their commander), so the kind is on the button rather than left to
     // be inferred.
-    labelOf: (option) =>
-      option.kind === "player" ? `${option.name} (player)` : option.name,
+    labelOf: retargetOptionLabel,
   });
+}
+
+// One retarget option's button text. A permanent is named as a target tile
+// names it — a face-down one by the card its controller is sent
+// (`candidatePermanentName`, CR 708.5), so only they learn it — and says whose
+// it is, because two options can otherwise read the same: two face-down
+// creatures, or a Goblin Grappler on each side (Legions' post-promotion pass,
+// Willbender over a face-down Dermoplasm and a face-down Willbender).
+function retargetOptionLabel(option) {
+  if (option.kind === "player") return `${option.name} (player)`;
+  if (option.kind === "permanent" && Number.isInteger(option.seat)) {
+    return `${candidatePermanentName(option)} — ${candidateOwnerLabel(option.seat)}`;
+  }
+  return option.name;
 }
 
 function applyCastChoicePrompt(info) {

@@ -95,10 +95,20 @@ _CASES = [
 ]
 
 
+#: The helpers a renderer's label calls, lifted beside it: the retarget prompt
+#: names a permanent as a target tile does and says whose it is
+#: (``tests/ui/test_lgn_p5_retarget_option_names_ui_api.py``).
+_HELPERS = {
+    "applyRetargetChoicePrompt": (
+        "retargetOptionLabel", "candidatePermanentName", "candidateOwnerLabel",
+    ),
+}
+
+
 @pytest.mark.parametrize("renderer, info, values", _CASES, ids=[case[0] for case in _CASES])
 def test_a_choice_button_prompt_renders_one_button_per_option(renderer, info, values):
     out = run_app_js(
-        ["applyChoiceButtonPrompt", renderer],
+        ["applyChoiceButtonPrompt", renderer, *_HELPERS.get(renderer, ())],
         _BODY, {"renderer": renderer, "info": info}, prelude=_PRELUDE,
     )
     assert out["values"] == values, out
