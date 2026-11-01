@@ -7,7 +7,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 - Cards in the catalog: **5849**
 - Distinct behaviours: **5320**
 - Cards sharing a behaviour with another: **767** in **238** classes
-- Unverified cards covered by a verified peer: **205**
+- Unverified cards covered by a verified peer: **206**
 
 | Size | Cards |
 | --- | --- |
@@ -212,7 +212,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | **Mountain**, Snow-Covered Mountain |
 | 2 | Mtenda Herder, Shadow Rider |
 | 2 | Nantuko Disciple, Thriss, Nantuko Primus |
-| 2 | Nantuko Husk, Phyrexian Ghoul |
+| 2 | **Nantuko Husk**, Phyrexian Ghoul |
 | 2 | Noble Elephant, **War Elephant** |
 | 2 | Nomads en-Kor, Warrior en-Kor |
 | 2 | **Northern Paladin**, Southern Paladin |
