@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5849**
-- Passed: **869** (590 checked in-game, 279 auto-passed)
+- Passed: **872** (593 checked in-game, 279 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **65**
-- Untested: **4915**
+- Untested: **4912**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -2600,7 +2600,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Justice | ⬜ untested |  |
 | Juxtapose | ⬜ untested |  |
 | Juzám Djinn | ✅ pass |  |
-| Kaboom! | ⬜ untested |  |
+| Kaboom! | ✅ pass |  |
 | Kaervek's Hex | ⬜ untested |  |
 | Kaervek's Purge | ⬜ untested |  |
 | Kaervek's Spite | ⬜ untested |  |
@@ -4591,7 +4591,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sleeping Potion | ⬜ untested |  |
 | Sleight of Hand | ✅ pass |  |
 | Sleight of Mind | ✅ pass |  |
-| Slice and Dice | ⬜ untested |  |
+| Slice and Dice | ✅ pass |  |
 | Slimy Kavu | ⬜ untested |  |
 | Slingshot Goblin | ⬜ untested |  |
 | Slinking Serpent | ✅ pass | auto-pass: keywords only (forestwalk) |
@@ -5668,7 +5668,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Weatherseed Treefolk | ⬜ untested |  |
 | Web | ✅ pass |  |
 | Web of Inertia | ⬜ untested |  |
-| Weird Harvest | ⬜ untested |  |
+| Weird Harvest | ✅ pass |  |
 | Welkin Hawk | ⬜ untested |  |
 | Well of Discovery | ⬜ untested |  |
 | Well of Knowledge | ⬜ untested |  |
