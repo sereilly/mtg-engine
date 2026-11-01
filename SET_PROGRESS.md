@@ -47,7 +47,7 @@ Do not edit by hand — re-run the script instead.
 | 33 | Torment | TOR | 2002-02-04 | 143 | 142 | Complete (143/143 supported) |
 | 34 | Judgment | JUD | 2002-05-27 | 143 | 141 | Complete (143/143 supported) |
 | 35 | Onslaught | ONS | 2002-10-07 | 335 | 320 | Complete (335/335 supported) |
-| 36 | Legions | LGN | 2003-02-03 | 145 | 144 | Measured (130/145 supported, not shipped) |
+| 36 | Legions | LGN | 2003-02-03 | 145 | 144 | Measured (136/145 supported, not shipped) |
 | 37 | Scourge | SCG | 2003-05-26 | 143 | 142 | Not Implemented |
 | 38 | Eighth Edition | 8ED | 2003-07-28 | 342 | 0 | Not Implemented |
 | 39 | Mirrodin | MRD | 2003-10-02 | 291 | 269 | Not Implemented |

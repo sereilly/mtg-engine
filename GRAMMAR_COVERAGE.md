@@ -52,7 +52,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| LGN *(measured)* | 145 | 235 | 70.6% | 69.4% | 45.1% | 102 |
+| LGN *(measured)* | 145 | 235 | 71.1% | 71.1% | 46.8% | 106 |
 | **All (shipped)** | **8362** | **12427** | **90.2%** | **89.7%** | **62.4%** | **6559** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -67,7 +67,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 779 | 402 | expected a subject |  |
 | 177 | 91 | unrecognized effect verb |  |
-| 136 | 73 | unconsumed text |  |
+| 135 | 72 | unconsumed text |  |
 | 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -2739,6 +2739,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Deranged Hermit**
   - `When this creature enters, create four 1/1 green Squirrel creature tokens.`
   - `Squirrel creatures get +1/+1.`
+- **Dermoplasm**
+  - `When this creature is turned face up, you may put a creature card with a morph ability from your hand onto the battlefield face up. If you do, return this creature to its owner's hand.`
 - **Desert**
   - `{T}: Add {C}.`
   - `{T}: This land deals 1 damage to target attacking creature. Activate only during the end of combat step.`
@@ -11735,6 +11737,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Return target creature card from your graveyard to the battlefield.`
 - **Tribal Flames**
   - `Domain — Tribal Flames deals X damage to any target, where X is the number of basic land types among lands you control.`
+- **Tribal Forcemage**
+  - `When this creature is turned face up, creatures of the creature type of your choice get +2/+2 and gain trample until end of turn.`
 - **Tribal Unity**
   - `Creatures of the creature type of your choice get +X/+X until end of turn.`
 - **Trickery Charm**
@@ -12494,6 +12498,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Target creature gains forestwalk until end of turn. (It can't be blocked as long as defending player controls a Forest.)`
 - **Weatherseed Treefolk**
   - `When this creature dies, return it to its owner's hand.`
+- **Weaver of Lies**
+  - `When this creature is turned face up, turn any number of target creatures with morph abilities other than this creature face down.`
 - **Web of Inertia**
   - `At the beginning of combat on each opponent's turn, that player may exile a card from their graveyard. If the player doesn't, creatures they control can't attack you this turn.`
 - **Weird Harvest**
@@ -12613,6 +12619,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
   - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
   - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+- **Willbender**
+  - `When this creature is turned face up, change the target of target spell or ability with a single target.`
 - **Willow Priestess**
   - `{T}: You may put a Faerie permanent card from your hand onto the battlefield.`
   - `{2}{G}: Target green creature gains protection from black until end of turn.`
