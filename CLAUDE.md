@@ -262,7 +262,11 @@ first combat.
 - **Casting**: every cast site goes through `ai_actions.cast_announcement` (an
   AST test fails a site that spells a cast keyword itself); the mode chooser
   loops `Game.announceable_modes`; `ai_weighed_cast.permitted_casts` is the one
-  reader of what `cast_permissions` opens (`CastAction.from_zone`).
+  reader of what `cast_permissions` opens (`CastAction.from_zone`). Whether a
+  card may be cast at instant speed is the engine's question
+  (`cast_timing.casts_at_instant_speed`, never its type); when the AI wants
+  to is `ai_policy._weighed_at_instant_speed_now` (a creature at another
+  seat's end step, or in response when its entry trigger names a spell).
 - **Mana**: one exact matching (`ai_payment._PaymentPlanner`, also asked by the
   web's auto-tap) over lands, then tap-only non-land sources
   (`ai_valuation.planned_mana_yield`), then a mana ability whose cost taps
@@ -274,8 +278,13 @@ first combat.
   seat's other wants need least (`mana_payment._sparing_choice` over
   `mana_wants.mana_wants`: wants paid together first, a held card's price
   before an ability that can wait) — the one preference every planner
-  shares. `tap_planned_lands` binds every slot to its permanent before
-  the first tap (a sacrifice renumbers).
+  shares. A face-down spell's hidden card still wants its turn-up cost
+  (`mana_wants.wants_brought_by`, CR 702.37e). Floating mana pays generic
+  through the same choice (`mana_payment.floating_units_for_generic`,
+  colourless first where nothing is wanted), in `plan_payment` and the cast
+  path's pool spend.
+  `tap_planned_lands` binds every slot to its permanent before the first
+  tap (a sacrifice renumbers).
 - **Mulligans**: `engine/ai_mulligan.py` is the one keep decision and London
   bottom choice (CR 103.5: lands against the curve on the hand left after
   the bottom choice), asked by the simulator (`take_opening_mulligans`, CR
@@ -306,7 +315,8 @@ first combat.
   `ai_rehearsal.rehearsing()`. The AI is two families of modules: the
   choosers (`ai_policy` and the `ai_*` modules it fronts) and what a card or a
   position is worth (`ai_valuation`, `ai_rehearsal`, `ai_weighed_cast`,
-  `ai_target_sides`, `ai_prompt_readers`).
+  `ai_target_sides`, `ai_prompt_readers`, `ai_compelled_blocks` — a fight's
+  outcome, read by the blocks and by a trigger that compels a block).
 
 What the simulator does not do yet is in ROADMAP.
 
@@ -389,6 +399,10 @@ entries, not editing dispatch**.
   is CR 702.15b damage, not combat damage: one rule in
   `damage_events.lifelink_life_gained` with three callers). Held by
   `tests/engine/test_keyword_registry.py`, which checks behaviour, not two lists.
+  A keyword that carries an argument and is admitted by the reader that
+  implements it is not in the set, because listing it would admit the bare
+  word: morph, madness, and amplify (CR 702.38, `NUMERIC_ARGUMENT_KEYWORDS`,
+  `engine/amplify.py`'s `entry_reveal` as the creature enters).
 - **Rewrite keywords** are expanded by `line_rewrites.expand_ability_lines` before any
   line is classified, so the word is not in `IMPLEMENTED_KEYWORDS`: equip
   (CR 702.6a), buyback (702.27a), kicker (702.33a), flashback (702.34). Every
@@ -743,6 +757,11 @@ entries, not editing dispatch**.
   (`Game.putting_triggers_on_stack`) wraps each unit of play; when the outermost
   closes, each interactive seat with two or more distinguishable triggers is
   asked (`order_triggers`). A seat nobody asks keeps the fire sites' order.
+  **A trigger chooses its mode and targets as that window closes** (CR
+  603.3d, 117.5): one pushed while a window is open and still owing a choice
+  waits on `Game.unannounced_triggers` and is announced, oldest first, after
+  the event and its state-based check — so a sweep's dying creatures are
+  never offered; `resolve_top_of_stack` announces anything still waiting.
 - `engine/phases/upkeep_effects.py` — `@upkeep_effect(condition, kind)` for the
   pay-or-consequence upkeep triggers; a duplicate pair raises at import.
 
@@ -754,7 +773,9 @@ entries, not editing dispatch**.
   `engine/mixins/stack/choices/table.py`, in an order that is behaviour (how it is answered, what a
   non-interactive seat does, which action answers it, how the web renders and
   gates it). **Adding a prompt is one `register_choice` row + its answer in the family
-  module of `engine/mixins/stack/choices/` + one renderer in
+  module of `engine/mixins/stack/choices/` (an entry-time prompt's, beside
+  `entry_exile`'s and `entry_reveal`'s, in `engine/mixins/entry_choices.py`)
+  + one renderer in
   `web/prompt_cards.py`, `prompt_board.py` or `prompt_values.py` (by what the
   prompt is answered with) + the code that arms it + a scenario in
   `tests/regressions/test_kg_prompts_answered_choice_leaves_queue.py`** — never a
@@ -772,8 +793,10 @@ entries, not editing dispatch**.
   each player makes **in turn order** (CR 101.4, each seeing the earlier
   answers) is `resumption.ask_in_turn_order` — each player choosing a creature
   type, the each-seat discards and hand picks, each player choosing
-  permanents — while "each player **secretly** chooses a number" arms every
-  seat at once (`secretly_choose_numbers`); Balance
+  permanents, each player's sacrifice and Cataclysm's keep (chosen in turn
+  order, performed together in the round's last step) — while "each player
+  **secretly** chooses a number" arms every seat at once
+  (`secretly_choose_numbers`); Balance
   is three rounds, each counted as it starts and asked one seat at a time in
   turn order (`_finish_balance_round`).
 - `engine/enter_effects.py` — entry-state phrases `_initialize_permanent_state`
@@ -901,7 +924,14 @@ entries, not editing dispatch**.
   again if it put something on the stack, **the check is made between
   resolutions** (`PhaseStepsMixin._check_between_resolutions`, CR 704.3), and
   **after each step's turn-based actions, before its first priority**
-  (`_check_after_turn_based_actions`, CR 703.3).
+  (`_check_after_turn_based_actions`, CR 703.3). **At a table with a person,
+  a step does not end while its stack is owed** (CR 500.2, 608.2): every
+  site that leaves a step asks `window_left_unfinished()` (anything on the
+  stack, or `awaits_an_answer()`); a step that must wait is held
+  (`Game.held_step`) and resumes at its window, so its log line and sweeps
+  run once, and the web's `turn_steps._leave_step` answers an AI seat's held
+  prompt in the same request. Nothing happens in combat once the game is
+  over (CR 104.1, `resolve_combat_damage`).
 - `engine/mixins/stack/` — the stack (CR 405), one family of mixins per stage:
   `casting` with `cast_announcement`, `cast_additional_costs`,
   `cast_alternative_costs`, `cast_target_validation` and `pool_payment`
@@ -1008,14 +1038,21 @@ a human's turn** (`_advance_ai_turn` returns unless the active seat is an AI).
 **What a card can do right now is sent, not re-derived by the client**: `ways`
 (each way a card may be cast from a permission-opened zone, its price, whether
 payable now), `ability_denials` (the activation gate's refusal per ability),
-`ability_mana` (each mana ability's symbols and whether a colour is chosen),
+`ability_mana` (each mana ability's symbols, whether a colour is chosen, and
+a mixed split's `combination` — `engine/mana_combination.py`), `prompt_owed_by`
+(which seat owes the decision holding the game),
 `abilities_lost`, `taps_for_mana`, `produced_mana`, a payment prompt's `payable`
 (a "pay" that cannot be collected is refused with the prompt kept, never read as
 a decline), a search's `min_picks`, a graveyard ability's `target_spec`, and a
-defending seat's `combat.block_requirements` (with `most_obeyable`). Every
+defending seat's `combat.block_requirements` (with `most_obeyable`); and while
+a permanent is entering, the battlefield as it stood before its choice
+(`serialization.entry_choice_view`, `entering: true` on the permanent, CR
+614.12a). Every
 request body the client builds is held to what its route requires
 (`tests/ui/test_kg_client_request_schemas.py`). **Every automatic sender in the client
-re-asks by fetching the state when its in-flight flag clears.** The client does
+re-asks by fetching the state when its in-flight flag clears**, and forgets
+the state key it last sent from when a game ends (a rematch can open on the
+same turn, step and log length). The client does
 not plan taps: a click on a castable card is answered by `web/payment_plan.py`
 (`POST …/payment_plan` previews; `auto_tap` on the action taps).
 
@@ -1034,7 +1071,8 @@ pass is a by-product of finding bugs (SET_PLAYBOOK Phase 5) and does not gate a
 promotion.
 
 - **Auto-pass**: a card with no abilities, or only implemented keyword lines
-  (`engine.oracle.simple_card_keywords`), counts as a pass with the reason in its
+  (`engine.oracle.simple_card_keywords`; amplify excluded, its reveal being a
+  prompt a person answers), counts as a pass with the reason in its
   note — derived on read from `web/runtime.py`'s `AUTO_PASSES`, never stored; a
   recorded result wins over it.
 - **Equivalent**: an untested card sharing a behaviour class with a passing card

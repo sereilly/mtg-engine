@@ -246,6 +246,11 @@ And when writing one:
   Nothing a group is asked to do is optional for the integrator.
 - **Bisect a red on a cumulative tree by running the failing test on each link
   beneath it** — seconds, not a suite.
+- **A red carried across links is read again at each link, by what it names,
+  not by its id.** A census that is red on the base stays red at every merge
+  and reads as "the base's"; at Legions' fifth link the same failing test
+  named two more cards, from the branch just merged, and was waved through
+  until the next link's run.
 - **Do not re-run a red gate and take the green.** A test that fails in one
   full run and passes alone is a finding with a schedule — two tests, one
   worker, one order — and is read the day it is reported, including when it
@@ -536,7 +541,10 @@ carry its row, and the census is in hand.
    release-ordered (`card_loader.register_measured_set`). Everything else reads
    the manifest (`tests/sets/README.md`, "Adding a set"). Promotion to `sets`
    stays Phase 4's reviewed move.
-2. Run the full suite and **treat what fires as yield, not noise**: a new set's
+2. Run the **full pass** (`pytest --full`) and **treat what fires as yield,
+   not noise** — the quick pass samples the censuses, and Legions' one
+   engine yield (a trigger census naming Chromeshell Crab) hid in a sample
+   until a meeting run named the file and it ran whole: a new set's
    text reaches code the old pool never ran, and these are engine bugs found
    early and cheap. Fix them now — or, where a red names a card a wave-1 group
    will own, hand it over with the card: list it in `yield.txt` (the meeting run
@@ -971,7 +979,11 @@ set's execution proved wrong, and Known gaps no entry that is no longer true.
 What the playbook knows is not yet true: each entry says why it matters, the
 phase that clears it and the parts. A Phase 6 that drains an entry deletes it
 (the story goes in the commit and the retrospective); a set that meets a new
-one adds it. Re-check an entry against the code before briefing it.
+one adds it. Re-check an entry against the code before briefing it. **An
+entry is drained when the board it names is driven, as it names it** — kg2
+drained the colour-blind planner with a test on the neighbouring board (the
+Angel already face down), and Legions' Phase 5 found Onslaught's own board
+(the Angel cast face down) still stranding its turn-up.
 
 - **CR 508.1d's maximisation is not computed for attacks.** The block side's
   is (`engine/phases/block_requirements.py`); `declare_attackers_step.
@@ -987,13 +999,6 @@ one adds it. Re-check an entry against the code before briefing it.
   `_legal_declaration` asking it. Probes: `scratch/kg/blocks/attack_probe.py`,
   `attack_cost_probe.py`. (Measured at kg.)
 
-- **The AI proposes blocks past an attacker's blocker ceiling.**
-  `ai_declarations._legal_block_declaration` never prunes against "can't be
-  blocked by more than one creature" (Stalking Tiger, Charging Rhino,
-  Familiar Ground), so on a board with no requirement the AI proposes three,
-  is refused and blocks with nobody (`refused_blocks`). On a requirement board
-  `obeying_block_declaration` already covers it. *Clears:* the next AI round
-  that opens the declaration chooser. Probe: `scratch/kg/blocks/tiger_probe.py`.
 
 - **Twenty-one damage calls outside `engine/handlers` ask no CR 616.1e
   question** — each dealt where no resumable loop holds the work behind it,
@@ -1023,6 +1028,13 @@ one adds it. Re-check an entry against the code before briefing it.
   resolves" is wrong. ROADMAP had this as read and not measured; the boards in
   `tests/regressions/test_kg_prompts_answered_choice_leaves_queue.py` measure it.
   *Clears:* a round of its own, beside ROADMAP's "two prompts that meet".
+  Parts (Legions' W2G3, which found it a different mechanism from the
+  headless hold below): `pending_replacement_choices` are never stamped with
+  the stack item, and `choices_for_stack_item` reads only `pending_choices` —
+  stamp in `offer_replacement_choice`, have `choices_for_stack_item` /
+  `stack_item_is_waiting` read both queues, and answer
+  `resolve_replacement_choice` inside the `_answer_pending_choice` envelope so
+  `_release_stack_item` runs.
 
 - **The AI never activates a graveyard ability.** No caller of
   `activate_from_graveyard` exists outside the web route, so Ashen Ghoul,
@@ -1050,10 +1062,10 @@ one adds it. Re-check an entry against the code before briefing it.
   round; until then a promotion's red in one of them is computed on both trees
   before it is blamed on the set.
 
-- **Five prompts answer a permanent by index.** `untap_select` stores indices
+- **Four prompts answer a permanent by index.** `untap_select` stores indices
   across requests (the shape the upkeep target had); `opponent_damage_choose`
-  also takes an id; `sacrifice_confirm` and `optional_untap_confirm` have no id
-  form. *Clears:* the round that next opens those prompts. Parts per prompt:
+  also takes an id; `optional_untap_confirm` has no id form
+  (`sacrifice_confirm` gained its id form at Legions' W2G3). *Clears:* the round that next opens those prompts. Parts per prompt:
   an `id` on each offered entry, the answer read by id, a stale id a refusal.
 
 - **Activated roles with a seat role skip the all-targets-illegal check.**
@@ -1079,15 +1091,6 @@ one adds it. Re-check an entry against the code before briefing it.
   `about_permanent_id` is; `target_permanent_index` keeps its int-or-list shape
   beside it and goes in the same round.
 
-- **A keep batch asks every seat at once.** Cataclysm's ruling (2004-10-04:
-  "The current player makes their choices before the other player") is the
-  order Balance now follows (`_finish_balance_round`), but `new_keep_batch`
-  arms every seat together, so a later chooser cannot see an earlier one's
-  choice. The part exists since Onslaught: `resumption.ask_in_turn_order`
-  asks one seat at a time for each-player creature types, discards, hand
-  picks and permanent choices (Curfew). *Clears:* the round that next opens
-  `new_keep_batch`; part: arm it through `ask_in_turn_order`, the answers
-  held and performed together in its `then`.
 
 - **The request-body guard derives presence, not shape.**
   `tests/ui/test_kg_client_request_schemas.py` holds every body to its
@@ -1144,25 +1147,16 @@ one adds it. Re-check an entry against the code before briefing it.
   `mtg-rules` skill before any code;
   `tests/regressions/test_next_time_is_a_time.py` counts them.
 
-- **The client says "has priority" while a prompt is owed.** The payload names
-  the priority holder and whether this viewer's pass would be refused
-  (`waiting_on_prompt`, a bool), not which seat owes the answer, so the status
-  line reads "<holder> has priority." while another seat's prompt holds the
-  game. *Clears:* the next client group; part: a who-owes field read off the
-  pending-choice queue beside `waiting_on_prompt`.
 
 
 
-- **Face-down leftovers on the wire.** A land played from the library logs
-  "cast from"; prompt lists show two face-down permanents to their controller
-  indistinguishably (`describe_permanent`); Dream Halls beside a morph card
-  is two alternative costs, and the wire's `alternative_cost` is a bool
-  (Force of Will's limit); the log calls a face-down cast's {3} its "morph
-  cost", which CR 702.37a reserves for the turn-up cost
-  (`stack/pool_payment.py`); Chain of Vapor's two offers (sacrifice a land;
-  copy the spell) reach a person as the same card text with no question.
-  *Clears:* the next client group (Onslaught's Phase 5 put `cost_taps` in the
-  auto-tap dialog).
+- **Face-down leftovers on the wire.** Dream Halls beside a morph card is
+  two alternative costs, and the wire's `alternative_cost` is a bool (Force
+  of Will's limit); Chain of Vapor's two offers (sacrifice a land; copy the
+  spell) reach a person as the same card text with no question. *Clears:*
+  the next client group. Legions' W2G1 took the rest ("played from", the
+  {3} no longer called a morph cost, `hidden_card` in prompt lists) and its
+  Phase 5 the retarget prompt's two identical "Face-down creature" buttons.
 
 - **A cast announcement carries one seat and no graveyard slot.**
   `ai_actions.CastAction` has no `target_role_refs` (`ActivationAction` has),
@@ -1193,24 +1187,26 @@ one adds it. Re-check an entry against the code before briefing it.
   promotion commit rather than while a group is still in the code. Measured
   against Onslaught's second rehearsal (run before the passes split): of its
   ten real findings nine came from quick-pass guards, and one — the Charms
-  rows of `tests/ai/test_ai_mode_chooser_census.py` — is `full`-only now. The
+  rows of `tests/ai/test_ai_mode_chooser_census.py` — is `full`-only now.
+  Legions repeated it: the zone-cast census
+  (`tests/regressions/test_ody_w2g2_zone_cast_census.py`, `full`) first ran
+  over the promoted tree in the promotion's full pass and named two branches'
+  changes (a land's "played from" log line, and the rehearsal miscounting a
+  zone buyback's card), two follow-up commits on the promotion link. The
   parse, grammar, hook and behaviour ratchets are untouched: `check_all` runs
   their `--check`. *Clears:* the owner's call — the full pass on the
   wave-close rehearsal tree (~1,300 s at `-n 6` on 2026-10-31), or the
   `full`-marked files that read `load_catalog()` named in the rehearsal.
 
-- **The cast path's pool spend pays generic in a fixed order** (C, W, U, B,
-  R, G — `pool_payment._pay_mana_cost_directly`, and the spending-permission
-  path beside it), blind to the payer's wants: floating W and R, a {1} cost
-  and a {W} still wanted strands the W. Over 1,344 floating-pool shapes it
-  strands 470. Reached only when a seat floats more mana than it spends (a
-  person tapping by hand); the AI and the auto-tap plan exactly and spend
-  the float first. And no planner prices a source's own drawback (a depletion
-  counter, a painland's damage, "doesn't untap"): kg2's preference kept an
-  Island by tapping Timberline Ridge. *Clears:* a payment follow-up round;
-  part: that generic loop asks `mana_payment._sparing_choice` over the pool's
-  units with `mana_wants(game, seat)`. Repro:
-  `scratch/kg2/payment/pool_order.py`.
+- **No planner prices a source's own drawback** (a depletion counter, a
+  painland's damage, "doesn't untap"): kg2's preference kept an Island by
+  tapping Timberline Ridge. The other half of this entry is drained: since
+  Legions' closer C2, floating mana pays generic against the payer's wants at
+  every reader (`mana_payment.floating_units_for_generic`; 23,106 of 77,796
+  pool shapes stranded a colour before, 0 after). A payer told nothing still
+  spends colourless first (`scratch/kg2/payment/pool_order.py` reads 470 of
+  1,344 either way; 0 with the want named). *Clears:* a payment follow-up
+  round; part: a per-source price beside the wants in `_sparing_choice`.
 
 - **The web's sequential mulligan table is not CR 103.5's rounds.** Each seat
   mulligans until it keeps before the next declares; CR 103.5 has every
@@ -1228,3 +1224,178 @@ one adds it. Re-check an entry against the code before briefing it.
   payment-plan preview still shows the whole price. *Clears:* any round that
   opens `pool_payment`; part: fold the taxing sources into the refusal's own
   reason.
+
+- **The simulator and a headless resolution do not hold a stack object while
+  an optional prompt is owed.** The web always does (CR 608.2): there the
+  object stays on the stack until its last answer. With a `prompt_driver` (the
+  simulator) the driver answers before the next object resolves, but after
+  one state-based check and after destruction triggers are announced. Legions'
+  W2G3 counted 120 of 1,071 driven resolutions that armed a prompt and held
+  nothing (optional_pay 87, revealed_hand_pick 12, discard 11,
+  reorder_library 10; 8 seeded games), and in 3 the state-based check acted
+  before the answer. *Clears:* an engine round with the simulator's games
+  reseeded, since most "finished resolving" lines move. Parts:
+  `resolution._settle` pauses when `prompt_driver` is set (with a held top,
+  skip the loop-top state check, drive the prompts, don't break);
+  `phase_steps._resolve_window_answering_prompts` calls
+  `resolve_top_of_stack(pause_for_choices=True)` and skips
+  `_check_between_resolutions` / `offer_priority` while the top is held;
+  Power Sink's `mana_payment` branch then reaches the driver (check its
+  default against `_auto_resolve_mana_payment`); `ai_rehearsal.scratch_copy`
+  carries the driver, so rehearsals change too. Probe:
+  `scratch/lgn/w2g3/probe_driven_hold.py`.
+
+- **A trigger fired during a resolution chooses before that resolution's
+  state-based check.** Legions' W2G2 made a trigger choose its targets as its
+  unit of play's window closes, after the event and its state-based check —
+  every windowed road. A trigger fired *inside* a resolving spell still
+  chooses at once: Chandra's Incinerator triggered by Earthquake's damage is
+  offered creatures Earthquake is about to kill. *Clears:* whoever opens
+  `Game.putting_triggers_on_stack` around a resolution; part: the resolution
+  is the unit of play, closed after its own state-based check
+  (`PhaseStepsMixin._check_between_resolutions`).
+
+- **Rishadan Brigand, Cutpurse and Footpad at three or more seats offer the
+  payment to one opponent.** Only `context.target`'s seat is asked, and its
+  decline makes every opponent sacrifice (`scratch/lgn/w2g3/probe_rishadan3p.py`:
+  P1 paid, P2 was never asked). Two-player games are right. *Clears:* a
+  multiplayer round; part: lower as `may` with actor `each_opponent` and the
+  otherwise branch's `who` None (moves these three cards in `oracle_diff`).
+
+- **The AI casts no ambush blocker and never toggles Swooping Talon.**
+  Legions' W2G4 taught the AI to cast flash creatures at another seat's end
+  step and in response, not in the opponent's declare-attackers step:
+  `ai_simulator._instant_speed_window` answers no priority there, and a
+  rehearsal started there declares no blocks on its copy (`_run_out_the_turn`
+  decides nothing; `_fight_the_combat` starts only from the active seat's main
+  phase) — ROADMAP's "other priority windows". Swooping Talon's provoke is
+  always declined when the target cannot block a flier: the activation is a
+  hamper on its own source (`harms_its_own_source` skips
+  `SOURCE_HAMPER_KINDS`), and `compelled_block_declined` would have to value
+  the block with flying removed, activated before blockers are declared.
+  *Clears:* the next AI round that opens the defending seat's windows.
+
+- **Three wire leftovers from Legions' client group.** Burnt Offering's
+  cast-side mana split (`mana_combination` on the cast) has no client chooser,
+  where Goblin Clearcutter's activation has one. `prompt_owed_by` reads the
+  pending-choice queue only, so a session-level decision (a cleanup discard,
+  an upkeep payment) leaves the other viewer's panel blank rather than naming
+  who owes it. And a human-vs-human host tab made thousands of state GETs in
+  minutes (the poll does not back off while nothing changes). *Clears:* the
+  next client group.
+
+- **Trample damage is assigned without asking a human attacker.** With one
+  blocker, the damage step divides lethal to the blocker and the rest to the
+  player (Scion of Darkness: a 3/3 split) without offering the attacker CR
+  510.1c–d's choice of more to the blocker. `_needs_manual_damage_assignment`
+  does not count trample as a choice. *Clears:* a combat round; part: a
+  trampler with an interactive controller and a choice to make (more than
+  lethal available) is manual, through the existing assignment announcement
+  (`engine/combat_assignment.py`).
+
+- **An "as it enters" choice is made with the permanent already on the
+  battlefield** (CR 614.12a: the choice is made before it enters). Legions'
+  closer C1 cast 40 choosers from a person's hand. All 40 sat on the
+  battlefield with their spell still on the stack while the prompt was open.
+  37 had a provisional `chosen_*` default recorded, and Soul Warden fired
+  before the choice for all 11 creatures. The wire now shows the board as it
+  was before the choice (`serialization.entry_choice_view`; the permanent
+  carries `entering: true`). What remains is what the engine sees. Nothing
+  can act in the window, but an entry trigger fires before the choice it
+  should follow. *Clears:* an engine round. Parts:
+  1. In `zone_funnels._enter_battlefield`, an entry that arms a person's
+     prompt makes everything from the battlefield append onward a
+     continuation, run at the last answer (the recompute,
+     `apply_entry_riders`, the `matching_permanent_enters` emit, its own enter
+     trigger). Meanwhile the permanent sits in no zone, as
+     `pending_replacement_choices` already does.
+  2. `_perform_entry_state` and `mixins/entry_choices` stamp no default
+     before arming a person's prompt (readers use `.get`).
+  3. The answer funnel runs the continuation on the last `_entering_permanent`
+     prompt, then releases the held spell.
+  4. Census every caller that acts on the permanent after `_enter_battlefield`
+     returns (an Aura's attach, tapped-and-attacking, token returns, linked
+     exile returns).
+  5. Amplify's `place_plus1_counters` must work outside a zone, or run after
+     the append.
+  6. The entry renderers in `web/prompt_values` must not assume a battlefield
+     position.
+  7. `tests/ui/test_entry_choice_prompt_ui_api.py`, which calls
+     `_initialize_permanent_state` directly, must change with it.
+
+- **What a payment's wants cannot see.** Since Legions' closer C2, a
+  face-down spell's hidden card wants its turn-up cost
+  (`mana_wants.wants_brought_by`). Two later costs are still not wants:
+  - A face-up permanent spell's own activated abilities. `wants_brought_by`
+    is not told the payment is a cast. Its callers know it:
+    `_PaymentPlanner.spell is not None`, `PaymentPurpose.kind == CAST` in
+    `web/payment_plan.planned_taps`, and `pool_payment._floating_mana_wants`.
+    Told, it adds the card's non-mana activated abilities to the abilities
+    tier, skipping a {T} ability on a creature without haste (CR 302.6).
+  - Flashback. `mana_wants` reads no graveyard. Two parts: each graveyard
+    card the seat may cast under a permission joins the cards tier at the
+    permission's cost (`ai_weighed_cast.permitted_casts`,
+    `flashback.has_flashback(game, …)`); and `wants_brought_by` adds the
+    flashback cost of an instant or sorcery cast from the hand, since it
+    lands in the graveyard as it resolves.
+
+  The turn-up special action also counts the permanent being turned up as one
+  of its own wants, which is redundant but harmless. *Clears:* a payment
+  round.
+
+- **Phase 5's log wording.** Each of these moves seeded logs, so a round
+  taking them reseeds once:
+  - A token's name is doubled ("Goblin Token token").
+  - A colour choice is logged by its letter ("chose U"), and a creature type
+    in lower case ("chose wizard").
+  - Bane of the Living's −X/−X is logged as "buffed".
+  - "Reanimated creature to battlefield".
+  - Toxin Sliver's untargeted "that creature" is logged as "its target is gone
+    (608.2b)".
+  - "Goblin Dynamo dealt 1 damage" names no recipient.
+  - "Declare attackers step complete" is written before the step's window
+    drains, in every game.
+
+  *Clears:* a log-wording round.
+
+- **Legions' Phase 5 client leftovers.**
+  - Two same-named permanents one seat controls read the same on the retarget
+    prompt ("Willbender — yours" twice).
+  - The floating main-phase prompt panel covers a permanent at 1920×1080.
+  - A session with `use_pregame=False` ignores the rematch's CR 103.1 chooser.
+    The UI always uses the pregame.
+
+  *Clears:* the next client group.
+
+- **A dealt-damage trigger fires once per source, not once per event.**
+  Blood Hound ("Whenever you're dealt damage, you may put that many +1/+1
+  counters on this creature") triggered four times when four attackers dealt
+  their combat damage together (CR 510.2: one simultaneous event). By CR
+  603.2c it triggers once, for the total. Boros Reckoner's 2017-03-14 ruling
+  states it for "is dealt damage": "If Boros Reckoner is dealt damage by
+  multiple sources at once, such as by two creatures blocking it, its ability
+  triggers once". The same game also logged "Blood Hound gets 3 +1/+1
+  counters" after it had died. 24 pool cards print a "whenever … dealt damage"
+  trigger (Jackal Pup, Filthy Cur, Saber Ants, Wall of Souls, Lich, Soul
+  Link, …), though "whenever a creature is dealt damage" (Repercussion)
+  rightly triggers per creature. *Clears:* an engine round. Parts:
+  - a census of the 24 under one multi-source combat damage step;
+  - the damage event's per-recipient total read by a recipient-keyed
+    trigger;
+  - the counters step refusing, with no log line, a source that has left
+    (CR 400.7: the card in the graveyard is a new object).
+
+- **Two observations seen once and not reproduced.**
+  - **Goblin Assassin triggered once, not twice**, when Planar Guide returned
+    it beside Goblin Clearcutter. Two browser and three headless re-runs
+    triggered twice (`scratch/lgn/p5/assassin_single_trigger_state.json`,
+    `repro_assassin_*.py`). C1's step censuses do not explain it: it is an
+    entry trigger, not a held window.
+  - **A turn-up from floating mana spent {W}{W} with seven colourless
+    floating**, on a browser board with an untapped Savannah and other cards
+    held. On the same board without the extra cards, headless
+    (`scratch/lgn/probe_savannah.py`), it spends {W} and {C}, and
+    `floating_units_for_generic` spends colourless first in every shape
+    probed.
+
+  *Clears:* whoever reproduces either.

@@ -1402,3 +1402,107 @@ CLAUDE.md carries the refusal seam, the sparing choice and the mulligan
 decision. *Known gaps:* three drained; three added (the pool spend's fixed
 order and unpriced drawbacks, the web's sequential mulligan rounds, a refusal
 reason that lost its tax).
+
+
+### LGN — 2026-11-01
+
+*Two waves and eleven groups on the Onslaught block's second set: 67.6% on
+arrival, every card a creature, two keywords the engine lacked.* Amplify (CR
+702.38, a reveal from the hand as a creature enters, nine cards) and provoke
+(CR 702.39, an attack trigger that forces a block, eight with Hunter Sliver)
+were each one group's, end to end. Five more groups covered the rest:
+morph's second half (X in a morph cost, face-up triggers), six Slivers, the
+type statics with Mistform Ultimus (every creature type in every zone, CR
+604.3), searches and returns by type, and five odd ends about players. Those
+seven landed all 47 with no hook and no decline. Shipped cards fixed beside
+them: Brood and Synapse Sliver's seat, Goblin Grenadiers' two roles,
+retarget defaults, cards put down together, Ashen Powder and Dark
+Suspicions. Wave 2's four took the client, the first rehearsal's engine reds,
+the engine pile and the AI pile.
+- **Trigger targets** are now chosen after the event (CR 603.3d, 117.5): 17
+  shipped cards had been offered a creature the same sweep or combat was
+  killing.
+- **Each-player sacrifice** is asked in turn order and performed together
+  (18 cards), and a seat short of the count sacrifices what it has
+  (Wildfire).
+- **The AI** casts flash creatures, blocks only when the block pays, and pays
+  what X buys.
+
+`oracle_diff` moved no card a group had not named on any of the eleven
+merges. The integration lessons were about reading:
+- The yield's quick pass sampled away the only engine red, a trigger census
+  naming Chromeshell Crab, until a meeting run named the file.
+- A census red carried from the base was waved through one link after it had
+  started naming two more cards.
+- A probe command carrying a stray `git commit` committed a staged merge under
+  the wrong message; it was amended on the local link.
+
+The promotion's full pass, the first run of the `full`-marked zone-cast
+census over the promoted tree, named two branches' changes (a land's "played
+from", the rehearsal miscounting a zone buyback). Each became a follow-up
+commit on the promotion link. The wrong insert turned only the order guard
+red.
+
+Phase 5 ran the same day: two smoke games (the AI won the first on turn 19;
+the second stalled at turn 15), every list item driven, 44 cards recorded
+passing and Brood Sliver failing, one client defect fixed (two face-down
+creatures read the same on the retarget prompt). It sent three closers, split
+by where the defects live.
+- **C1, the engine.** At a table with a person, a step could close with its
+  stack still owed: an AI's "may" paused the window and the rail walked past
+  it. Censuses through the web's own stepping found 59 of 298 combat-trigger
+  creatures, 37 of 57 end-step triggers and 65 of 422 upkeep and draw
+  triggers carried into a later step; 0 after, behind one question
+  (`window_left_unfinished`) at every site that leaves a step. Combat no
+  longer goes on after a loss. An entry choice is no longer shown before it
+  is made, on the wire; the engine half (CR 614.12a) is declined with parts.
+- **C2, the AI and payment.** Onslaught's Exalted Angel board, which kg2 had
+  declared drained, still stranded the turn-up: its test had used the
+  neighbouring board, and both planners discarded the card being cast as a
+  want. Floating mana paid generic blind to the payer's wants (23,106 of
+  77,796 pool shapes stranded a colour). About 360 shield abilities were
+  activated idle in the main phase, and gang blocks over-committed. All four
+  went to 0.
+- **The browser agent, the client.** Offers say what yes costs (142 cards),
+  the stack hint names an ability, the rail and badges cover nothing, hints
+  last their moment, and "Play Again" gives the choice to the previous game's
+  loser (CR 103.1), which turned up a stalled second AI-first rematch.
+The browser agent then drove every closer's fix as a human seat on the merged
+tree, built C1's client half (an entering permanent drawn arriving, entry
+prompts opening with nothing chosen), and re-recorded Brood Sliver passing:
+the tracker reads 0 failed. The closers' full gate turned three seeded or
+census tests red that neither closer had run (`full`-marked, each moved by
+C2's blocks and shields); they were reseeded or read with the shield gate
+off, at the link.
+
+*Edits in place:*
+- Phase 1 runs the full pass at the yield.
+- The chain reads a carried red by what it names.
+- A Known gap is drained only when its own board is driven.
+- CLAUDE.md carries: casting at instant speed, the fight-outcome module,
+  amplify's keyword reader, a trigger's choice as its window closes, the
+  turn-order sacrifice and keep, held steps and the end of combat at a loss,
+  the face-down want and floating generic, and the wire's mana split,
+  `prompt_owed_by` and `entering`.
+
+*Known gaps:*
+- **Drained:** three (blocks past a ceiling, the keep batch, the client's
+  priority line) and half of the pool spend.
+- **Rewritten:** four (index prompts, face-down leftovers, the CR 614 twin's
+  parts, the quick rehearsal's evidence).
+- **Added:**
+  - the headless resolution's hold;
+  - a trigger inside a resolution;
+  - Rishadan Brigand at three seats;
+  - the ambush blocker and Swooping Talon;
+  - three wire leftovers;
+  - trample assigned unasked;
+  - the entry choice's engine half;
+  - what a payment's wants cannot see;
+  - Phase 5's log wording and client leftovers;
+  - a dealt-damage trigger firing per source (Blood Hound);
+  - two observations seen once.
+
+Four engine modules sit inside the 200-line band for Scourge's Phase 0:
+`ai_simulator` 1,812, `oracle_types` 1,811, `combat_damage_step` 1,805,
+`layer_bridge` 1,803.

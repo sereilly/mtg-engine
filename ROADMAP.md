@@ -431,7 +431,12 @@ one card prints this") reads as a work item long after it stopped being true.
 
   * **A trigger target not chosen through its own picker** is unmarked and
     unjudged. (a) *A default taken while a permanent is on its way to a
-    graveyard* (`Game.departing`): the death sweep announces a dies-trigger
+    graveyard* (`Game.departing`) — **drained on every windowed road** by
+    Legions' W2G2: a trigger chooses as its unit of play's window closes,
+    after the removal and the state-based check (`Game.unannounced_triggers`;
+    17 shipped cards had been offered a dying creature). A trigger fired
+    inside a resolution is SET_PLAYBOOK's Known gap; `Game.departing` is
+    still written and read, and whether it can go is unmeasured. As it was: the death sweep announces a dies-trigger
     while the dying permanent is still listed, so a non-interactive default
     can be the dying permanent itself ("Blazing Effigy: targets Blazing
     Effigy") - a person's answer is judged; 20 triggers print a target and
@@ -1034,7 +1039,11 @@ one card prints this") reads as a work item long after it stopped being true.
   commit or report that declined it, which is what makes it a brief). Wave 1's
   eight groups left a pile; wave 2 spent four groups on it and left this:
 
-  * *The web AI seat takes a prompt a step late.* `Game.prompt_driver` is the
+  * *The web AI seat takes a prompt a step late.* **Drained at a table with a
+    person** by Legions' closer C1 (every step-leaving site asks
+    `window_left_unfinished()`; `web/turn_steps._leave_step` answers an AI's
+    held prompt; `close_end_step` drains its own window). What follows is the
+    `ai_vs_ai` half, with no person seated. `Game.prompt_driver` is the
     simulator's only. A census driving `ai_vs_ai` sessions through `ai_step`
     found 8 step changes in 4,152 that left a priority-holding prompt owed
     (Hasran Ogress, Ferocity, Goblin Arsonist; once a Tombstone Stairwell
@@ -1192,11 +1201,11 @@ one card prints this") reads as a work item long after it stopped being true.
     can't-be-regenerated's own narrower gates. And a rebound subject's "you
     control" is re-checked at resolution, where the rules would still pump an
     attacker that changed sides.
-  * *Small, each with a repro in its group's report.* A provisional
-    entry-choice default drives static effects while the prompt is open
-    (Engineered Plague shows -1/-1 before the answer; 31 cards; display only;
-    both seats see it — Cover of Darkness gave Daru Lancer fear with "Human"
-    still pending, Onslaught's Phase 5).
+  * *Small, each with a repro in its group's report.* (A provisional
+    entry-choice default shown while the prompt is open is drained for the
+    display by Legions' closer C1, `serialization.entry_choice_view`; the
+    engine half — the permanent on the battlefield before its choice — is a
+    SET_PLAYBOOK Known gap with parts.)
     `destroy_all_matching` logs what it aimed at, not what died (55 cards
     compile to the kind). "<Creature type> card" lowers with a creature
     `type_filter`, so a Kindred card would be missed (none in the manifest).
@@ -1917,7 +1926,19 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run on 2026-10-26, with Onslaught shipped, it answers **Legions** (LGN,
+Run on 2026-11-01, with Legions shipped, it answers **Scourge** (SCG,
+2003-05-26, 142 new by the release line's count — re-measure against this
+pool) and then Eighth Edition (8ED, 2003-07-28, a core set with no new
+card). **Legions arrived at 67.6%**: every one of its 145 cards a creature,
+for two keywords the engine lacked — **amplify** (CR 702.38, a reveal from
+the hand as a creature enters) and **provoke** (CR 702.39, an attack
+trigger that forces a block) — beside morph's second half (X in a morph
+cost, face-up triggers), the block's Slivers and Mistform Ultimus (every
+creature type in every zone, CR 604.3). Seven groups landed all 47 with no
+hook, and the closers after its post-promotion pass found that a step at a
+table with a person could close with its stack still owed (the end step
+worst: 37 of 57 trigger permanents).
+Before that, run on 2026-10-26, with Onslaught shipped, it answered **Legions** (LGN,
 2003-02-03, 144 new by the release line's count — re-measure against this
 pool) and then Scourge (SCG, 2003-05-26). **Onslaught arrived at 59.4%**,
 for one keyword: **morph** (CR 702.37), and with it face-down spells and
@@ -2104,6 +2125,7 @@ a wave is five parallel worktree groups integrated serially.
 | TOR | 143 | 70.6% | 2 waves (eight groups landed every card; then four: the client, two on the pile, one answering the promotion rehearsal) |
 | JUD | 143 | 55.9% | 2 waves (ten groups landed every card, three at a time for memory; then four: the client, the engine pile, the AI pile, the rehearsal's answers) + 3 follow-ups on regressions the full gates found |
 | ONS | 335 | 59.4% | 2 waves (thirteen groups landed 331, morph end to end in one; then six: the last four cards, two client groups, the engine pile, the AI pile, the rehearsal's answers) |
+| LGN | 145 | 67.6% | 2 waves (seven groups landed all 47 with no hook; then four: the client, the rehearsal's engine reds, the engine pile, the AI pile) + 1 follow-up the promotion's full pass found + 2 closers after Phase 5 |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -2119,21 +2141,20 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-10-31, after Onslaught's promotion): 5,849 unique cards over 36 sets,
-8,362 printings, 100% supported. Grammar parses 90.2% of lines, lowers 89.7%
-and executes 62.4% (`GRAMMAR_COVERAGE.md`; the All row fell on membership
-alone as Onslaught's 541 lines joined it). **0.8%** of supported cards
-carry a name-keyed hook — 47 cards, 52 entries in 6 registries
+2026-11-01, after Legions' promotion and its closers): 5,993 unique cards
+over 37 sets, 8,507 printings, 100% supported. Grammar parses 89.9% of
+lines, lowers 89.4% and executes 62.1% (`GRAMMAR_COVERAGE.md`; the All row
+fell on membership alone as Legions' lines joined it). **0.8%** of supported
+cards carry a name-keyed hook — 47 cards, 52 entries in 6 registries
 (`HOOK_RELIANCE.md`) — and the projection that implies for the release line
-has fallen from 1,195 hand-written entries to **232**, across twenty-three
-consecutive sets that added no hook (Onslaught's 320 new cards added none,
-and Stone Giant's hook was retired). That is the measure moving the way the
-architecture needs it to.
-Parse coverage: 5,847 of 5,849 supported cards fully claimed, 2
+has fallen from 1,195 hand-written entries to **227**, across twenty-four
+consecutive sets that added no hook (Legions' 144 new cards added none).
+That is the measure moving the way the architecture needs it to.
+Parse coverage: 5,991 of 5,993 supported cards fully claimed, 2
 acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is
-the CR coverage tracker (427 of 638 tracked rules, 3,212 tests).
-`CARD_VERIFICATION.md` is a log, not a target: 873 passed (594 in-game,
-279 auto), 65 equivalent, 0 failed, 4,911 untested.
+the CR coverage tracker (429 of 640 tracked rules, 3,251 tests).
+`CARD_VERIFICATION.md` is a log, not a target: 929 passed (641 in-game,
+288 auto), 66 equivalent, 0 failed, 4,998 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,

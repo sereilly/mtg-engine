@@ -439,7 +439,8 @@ def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
         "maximum": affordable,
         "options": list(range(0, affordable + 1)),
         # The printed "may": paying nothing is the answer that changes least,
-        # and it is what a seat nobody asks takes.
+        # so a person's panel starts there. A seat nobody asks pays what the
+        # amount buys instead (`ai_prompts.choose_amount_paid`, Legions' W2G4).
         "default": 0,
         # "You may pay {X}" (Hollow Specter, CR 107.3f) rather than "each
         # player may pay any amount of mana" (Liege of the Hollows): one
