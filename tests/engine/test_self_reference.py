@@ -142,6 +142,12 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     as the object its own ability returns, and "Arcanis" is not a word the
     game uses to describe objects, so the expansion is right to write the
     whole name.
+
+    Legions added one: Phage the Untouchable's three triggers read "When Phage
+    enters, …" and "Whenever Phage deals combat damage …". The legend naming
+    itself as the subject of its own triggers, and "Phage" is not a word the
+    game uses to describe objects, so the expansion is right to write the
+    whole name.
     """
     changed = {
         card.name
@@ -168,4 +174,5 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Mageta the Lion",
         "Balthor the Defiled",
         "Arcanis the Omnipotent",
+        "Phage the Untouchable",
     }

@@ -134,7 +134,9 @@ def test_no_shipped_card_prints_a_counted_each_opponent_board_condition():
     controls a white or blue creature" — and on a static rather than an
     intervening-if. The invariant is the zero, which is what both evaluators'
     pooled tallies are right for; the names are pinned beside it so a third
-    arrival is read rather than waved through.
+    arrival is read rather than waved through. Legions brought the fourth,
+    read and the same case: Vexing Beetle "gets +3/+3 as long as no opponent
+    controls a creature" — the Kavus' seat negation on a static, a zero.
     """
 
     def walk(value, seen):
@@ -166,5 +168,5 @@ def test_no_shipped_card_prints_a_counted_each_opponent_board_condition():
         each_opponent
     )
     assert sorted(name for name, _op, _count in each_opponent) == [
-        "Kavu Runner", "Kezzerdrix", "Skittish Kavu",
+        "Kavu Runner", "Kezzerdrix", "Skittish Kavu", "Vexing Beetle",
     ]
