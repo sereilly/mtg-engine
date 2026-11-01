@@ -1241,12 +1241,8 @@ def _play_special_actions(
         return
     choice, refusal = taken
     _resolve_pending_choices(game)
-    # "When this creature is turned face up, …" (Legions' morphs): the action
-    # does not use the stack (CR 116.1) but what it sets off does (CR 603.3),
-    # and the seat holds priority afterwards (CR 116.3) — so the triggers
-    # resolve here, in the main phase they were put on the stack in, rather
-    # than riding into combat as a step left owing (Warbreak Trumpeter's
-    # Goblins arriving after attackers were declared).
+    # A face-up trigger (CR 603.3) resolves in this main phase (CR 116.3),
+    # not as a step left owing into combat (Warbreak Trumpeter's Goblins).
     if refusal is None and game.stack:
         _drain_step(game)
     report.log_lines.append(
