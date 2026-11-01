@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**427 / 638 tracked rules covered (66%)** — 3212 tests, 0 unannotated.
+**427 / 638 tracked rules covered (66%)** — 3219 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -134,7 +134,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **103.2** Some games require additional steps that are taken after the starting player has been determined....
 - [x] **103.3** After the starting player has been determined and any additional steps performed, each player shu... *(1 tests)*
 - [ ] **103.4** Each player begins the game with a starting life total of 20. Some variant games have different s...
-- [x] **103.5** Each player draws a number of cards equal to their starting hand size, which is normally seven. (... *(23 tests, subrules c)*
+- [x] **103.5** Each player draws a number of cards equal to their starting hand size, which is normally seven. (... *(30 tests, subrules c)*
 - [ ] **103.6** Some cards allow a player to take actions with them from their opening hand. Once the mulligan pr...
 - [ ] **103.7** In a Planechase game, the starting player moves the top card of their planar deck off that planar...
 - [x] **103.8** The starting player takes their first turn. *(3 tests, subrules ac)*
