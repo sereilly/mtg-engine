@@ -280,8 +280,11 @@ def _activation_candidate(
     ):
         return None
     # "…damage equal to the number of +1/+1 counters on it" with none on it
-    # (an amplifier that revealed nothing): a tap spent on nothing.
-    if sized_by_its_own_empty_counters(ability.instruction, permanent):
+    # (an amplifier that revealed nothing): a tap spent on nothing. Not when
+    # the cost itself puts a counter there first.
+    if ability.cost.put_counter is None and sized_by_its_own_empty_counters(
+        ability.instruction, permanent,
+    ):
         return None
 
     # "Put a -1/-1 counter on a creature you control" (Wandering Mage). The
