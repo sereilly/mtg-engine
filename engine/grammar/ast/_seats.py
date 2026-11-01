@@ -50,6 +50,9 @@ class PlayerDeed:
       of the *same resolution* wrote, which is why ``filter`` is required for
       it and meaningless for the others: "this way" without a producer names
       nothing at all.
+    - ``coin_came_up_tails`` — "each player **whose coin comes up tails**"
+      (Goblin Assassin): the face an earlier "each player flips a coin" of the
+      same resolution recorded for the seat.
 
     **When a kind can be answered is the kind's**, and it decides where the
     clause may live (``handlers/_filters.PLAYER_DEEDS``, the one table the

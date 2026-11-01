@@ -1336,6 +1336,19 @@ def _seat_discarded_this_way(game, seat, deed, source, results) -> bool:
     )
 
 
+def _seat_coin_came_up_tails(game, seat, deed, source, results) -> bool:
+    # "…each player **whose coin comes up tails** sacrifices a creature of
+    # their choice." (Goblin Assassin.) The face an earlier step of this same
+    # resolution recorded for the seat (``COIN_FACES_BY_SEAT``, written by
+    # ``flip_coin`` with ``flipper: each_player``). A seat that flipped nothing
+    # — no producer, or a seat that had left the game — has no face and is
+    # not tails.
+    from ._common import COIN_FACES_BY_SEAT
+
+    faces = (results or {}).get(COIN_FACES_BY_SEAT) or {}
+    return faces.get(seat) == "tails"
+
+
 @dataclass(frozen=True)
 class PlayerDeedKind:
     """How one ``who <did …>`` kind is read, and when it can be.
@@ -1372,6 +1385,7 @@ PLAYER_DEEDS: dict[str, PlayerDeedKind] = {
     ),
     "sacrificed_this_way": PlayerDeedKind(True, False, _seat_sacrificed_this_way),
     "discarded_this_way": PlayerDeedKind(True, False, _seat_discarded_this_way),
+    "coin_came_up_tails": PlayerDeedKind(False, False, _seat_coin_came_up_tails),
 }
 
 

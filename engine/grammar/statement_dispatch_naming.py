@@ -384,6 +384,13 @@ def lower_naming_statement(
                     "flip_coin", "", {"flipper": "event_subject_player"}
                 ),
             )
+        if statement.flipper == "each_player":
+            # "**Each player** flips a coin." (Goblin Assassin.) One coin per
+            # seat, recorded as each seat's face for the "whose coin comes up
+            # tails" clause behind it (``handlers/_filters.PLAYER_DEEDS``).
+            return (
+                OracleInstruction("flip_coin", "", {"flipper": "each_player"}),
+            )
         if statement.flipper != "you":
             raise LoweringError(
                 f"no flip is made by {statement.flipper!r}", node=statement,

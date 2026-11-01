@@ -329,4 +329,87 @@ def test_w1g7_seedborn_muse_does_nothing_in_a_skipped_step_or_its_own(set_pool):
     assert _w1g7_tapped(game, 1) == ["Forest"]
     assert _w1g7_tapped(game, 2) == []
 
+
+# --- Goblin Assassin ----------------------------------------------------------
+
+
+def _w1g7_rig_coins(monkeypatch, faces):
+    """Each flip the handler makes, in order: True is heads."""
+    queue = list(faces)
+    monkeypatch.setattr(
+        "engine.handlers.control_flow.flip_coin", lambda *a, **k: queue.pop(0)
+    )
+    return queue
+
+
+def _w1g7_board(game, seat):
+    return sorted(p.card.name for p in game.controlled_by(seat))
+
+
+def test_w1g7_goblin_assassin_tails_sacrifices_heads_does_not(set_pool, monkeypatch):
+    """"Whenever this creature or another Goblin enters, each player flips a
+    coin. Each player whose coin comes up tails sacrifices a creature of their
+    choice." Alice's coin comes up heads and Bob's tails: only Bob gives up a
+    creature (the cheaper, by the nobody-asked default), and nobody wins or
+    loses a flip (the 2004-10-04 ruling) — the log names faces, not wins."""
+    coins = _w1g7_rig_coins(monkeypatch, [True, False])
+    game = _w1g7_table(set_pool, hands={0: ["Goblin Assassin"]})
+    _w1g7_put(game, set_pool, 0, "Grizzly Bears")
+    _w1g7_put(game, set_pool, 1, "Grizzly Bears")
+    _w1g7_put(game, set_pool, 1, "Craw Wurm")
+    assert game.cast_from_hand(0, "Goblin Assassin").supported
+    _w1g7_resolve_stack(game)
+    assert coins == []
+    assert _w1g7_board(game, 0) == ["Goblin Assassin", "Grizzly Bears"]
+    assert _w1g7_board(game, 1) == ["Craw Wurm"]
+    assert "Goblin Assassin: Alice flipped heads" in game.log
+    assert "Goblin Assassin: Bob flipped tails" in game.log
+    assert not any("won the coin flip" in line for line in game.log)
+
+
+def test_w1g7_goblin_assassin_asks_each_tails_seat_which_creature(set_pool, monkeypatch):
+    """Both coins tails, both seats interactive: each is asked for a creature
+    of their choice, and each answer is what goes. Alice may give up the
+    Assassin itself."""
+    _w1g7_rig_coins(monkeypatch, [False, False])
+    game = _w1g7_table(
+        set_pool, hands={0: ["Goblin Assassin"]}, interactive={0, 1},
+    )
+    _w1g7_put(game, set_pool, 0, "Grizzly Bears")
+    _w1g7_put(game, set_pool, 1, "Grizzly Bears")
+    _w1g7_put(game, set_pool, 1, "Craw Wurm")
+    assert game.cast_from_hand(0, "Goblin Assassin").supported
+    game.resolve_top_of_stack()
+    assert not game.resolve_top_of_stack(), "the trigger waits for its answers"
+    assert sorted(c.player_index for c in game.pending_choices if c.kind == "sacrifice") == [0, 1]
+    assassin = next(
+        p for p in game.controlled_by(0) if p.card.name == "Goblin Assassin"
+    )
+    wurm = next(p for p in game.controlled_by(1) if p.card.name == "Craw Wurm")
+    assert game.confirm_sacrifice(0, [game.battlefield_index_of(assassin)])
+    assert game.confirm_sacrifice(1, [game.battlefield_index_of(wurm)])
+    _w1g7_resolve_stack(game)
+    assert _w1g7_board(game, 0) == ["Grizzly Bears"]
+    assert _w1g7_board(game, 1) == ["Grizzly Bears"]
+
+
+def test_w1g7_goblin_assassin_hears_another_goblin_and_no_one_else(set_pool, monkeypatch):
+    """Another Goblin entering (Mons's Goblin Raiders) fires it again; a Craw
+    Wurm entering fires nothing — no coin is drawn for it."""
+    coins = _w1g7_rig_coins(monkeypatch, [True, True])
+    game = _w1g7_table(set_pool, hands={0: ["Goblin Assassin"]})
+    _w1g7_put(game, set_pool, 0, "Grizzly Bears")
+    assert game.cast_from_hand(0, "Goblin Assassin").supported
+    _w1g7_resolve_stack(game)
+    assert coins == [] and _w1g7_board(game, 0) == ["Goblin Assassin", "Grizzly Bears"]
+
+    coins.extend([False, True])
+    _w1g7_put(game, set_pool, 0, "Mons's Goblin Raiders")
+    assert coins == []
+    assert len(game.players[0].graveyard) == 1
+    assert len(_w1g7_board(game, 0)) == 2
+
+    _w1g7_put(game, set_pool, 1, "Craw Wurm")
+    assert _w1g7_board(game, 1) == ["Craw Wurm"]
+
 # ==== end W1G7 ======================================================

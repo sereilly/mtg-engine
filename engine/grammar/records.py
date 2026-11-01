@@ -740,6 +740,14 @@ def accept_player_deed(stream: TokenStream, parse_filter) -> "ast.PlayerDeed | N
     # naming another one would be a different record.
     if stream.accept_phrase("previously", "dealt", "damage", "by", "it"):
         return ast.PlayerDeed("dealt_damage_by_source")
+    # "…each player **whose coin comes up tails** sacrifices a creature of
+    # their choice." (Goblin Assassin.) The face a coin this same resolution
+    # flipped for the seat showed. Only "tails" is printed, so only "tails" is
+    # read: a "heads" printing refuses the line rather than being answered by a
+    # record nobody taught it.
+    if stream.accept_phrase("whose", "coin", "comes", "up", "tails"):
+        return ast.PlayerDeed("coin_came_up_tails")
+    stream.reset(mark)
     if not stream.accept_word("who"):
         return None
     # "target player **who attacked this turn**" (Fire and Brimstone).

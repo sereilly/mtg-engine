@@ -314,7 +314,10 @@ class FlipCoin:
     ``flipper`` is who flips (CR 705.2: only that player wins or loses):
     ``"you"``, the effect's controller, for every printing but one, and
     ``"that_player"`` for "Whenever a player casts a spell, **that player
-    flips a coin**." (Planar Chaos) — the seat the firing event named.
+    flips a coin**." (Planar Chaos) — the seat the firing event named — and
+    ``"each_player"`` for "**Each player** flips a coin." (Goblin Assassin):
+    a coin per seat that nobody wins or loses, read back by the "whose coin
+    comes up tails" seat deed.
     """
     flipper: str = "you"
 

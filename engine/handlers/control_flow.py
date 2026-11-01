@@ -49,7 +49,7 @@ from ..oracle_types import (COIN_FLIPS_MADE, COIN_FLIPS_WON,
 from ..resumption import run_resumable
 from ..mana_payment import mana_cost_label
 from ._color_conditions import evaluate_color_condition
-from ._common import flip_coin, flip_coin_for
+from ._common import COIN_FACES_BY_SEAT, flip_coin, flip_coin_for
 from ._conditions import evaluate_state_condition
 from ._filters import permanent_matches_filter
 from ._record_conditions import evaluate_record_condition
@@ -562,8 +562,29 @@ def flip_a_coin(game: Game, instruction: OracleInstruction, context: OracleExecu
     announced as theirs (CR 705.2). An event that froze no seat names nobody
     to flip — nothing is flipped and nothing recorded, which the conditionals
     behind it read as neither a win nor a loss.
+
+    ``flipper: each_player`` is "**each player** flips a coin" (Goblin
+    Assassin): one coin per seat, recorded as each seat's face.
     """
     flipper = context.caster
+    if instruction.payload.get("flipper") == "each_player":
+        # "**Each player** flips a coin." (Goblin Assassin.) One coin per seat
+        # still in the game, in APNAP order (CR 101.4) so a seeded game draws
+        # the same coins for the same seats, and a flip nobody wins or loses
+        # (the card's 2004-10-04 ruling; CR 705.2's heads-or-tails flip) — so
+        # the bare coin, never the announcement of a win `flip_coin_for`
+        # makes, and nothing written under ``coin_flip``: "if you win the
+        # flip" behind this reads neither a win nor a loss. What the sentences
+        # after it read is each seat's face (``COIN_FACES_BY_SEAT``).
+        faces: dict[int, str] = {}
+        for seat in game.apnap_seats():
+            faces[seat] = "heads" if flip_coin() else "tails"
+            game.log.append(
+                f"{context.card.name}: {game.players[seat].name} flipped "
+                f"{faces[seat]}"
+            )
+        context.results[COIN_FACES_BY_SEAT] = faces
+        return True, "resolved"
     if instruction.payload.get("flipper") == "event_subject_player":
         seat = (context.trigger_context or {}).get("event_subject_player")
         if not isinstance(seat, int) or not 0 <= seat < len(game.players):

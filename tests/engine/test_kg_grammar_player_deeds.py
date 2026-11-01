@@ -67,6 +67,14 @@ _PRINTED = (
         r"\b(?:players?|opponents?) who (?:discarded|didn't discard) [\w ]+? "
         r"this way\b", re.I,
     ), "discarded_this_way"),
+    # "Each player whose coin comes up tails sacrifices a creature of their
+    # choice." (Goblin Assassin, LGN.) Anchored at a sentence's start: Mana
+    # Clash's "…deals 1 damage **to** each player whose coin comes up tails" is
+    # read whole by its own paragraph production (``coin_flip_damage_loop``,
+    # whose two coins are flipped inside it), never as a seat deed.
+    (re.compile(
+        r"(?:^|\. )each player whose coin comes up tails\b", re.I | re.M,
+    ), "coin_came_up_tails"),
 )
 
 
