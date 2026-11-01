@@ -51,6 +51,10 @@ def main() -> int:
     # Until PCY's wave 3 nothing was: the simulator's games ignored mana costs
     # and a land was the turn's one cast. Zero here is that coming back.
     print(f"Lands played: {report.lands_played}")
+    # CR 103.5: mulligans the AI's keep decision took (`ai_mulligan`). Every
+    # seat kept what it was dealt before the kg2 round, and the run read
+    # exactly as clean as it does now; zero over many games is that coming back.
+    print(f"Mulligans taken: {report.mulligans_taken}")
     print(f"Log file: {log_path}")
 
     # What combat did. Reported beside the interaction count and for the same

@@ -8,6 +8,7 @@ import random
 
 from . import ai_rehearsal
 from .ai_combat import run_ai_combat_phase
+from .ai_mulligan import take_opening_mulligans
 from .ai_policy import (
     activate_chosen_ability,
     cast_chosen_instant,
@@ -239,6 +240,11 @@ class SimulationReport:
     #: sideboard, so the offer was never made and the cast was never proposed.
     #: A zero over a pool that prints a Wish is that coming back.
     cards_from_outside_game: int = 0
+    #: Mulligans taken (CR 103.5), by ``ai_mulligan``'s keep decision. **Zero
+    #: in every run before the ``kg2`` round**: each seat kept what it was
+    #: dealt, so a one-land seven was played out. Zero over a run of games is
+    #: that coming back (one seat in nine is dealt 0-1 or 6-7 lands).
+    mulligans_taken: int = 0
 
     @property
     def ok(self) -> bool:
@@ -1621,8 +1627,7 @@ def run_ai_simulation(
         game.priority_driver = _priority_answerer(game, report, game_index, clock)
         starting_player = game.select_starting_player()
         game.deal_opening_hands(starting_player)
-        for i in range(len(game.players)):
-            game.keep_hand(i)
+        report.mulligans_taken += take_opening_mulligans(game, starting_player)
 
         initial_cards = _zone_counter(game)
         log_cursor = 0

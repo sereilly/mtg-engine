@@ -5,6 +5,7 @@ import random
 import secrets
 
 from engine import Game, PlayerState
+from engine.ai_mulligan import take_opening_mulligans
 from engine.ante import ante_card_names
 from engine.commander import can_be_commander
 from engine.game_history import GameHistory
@@ -527,8 +528,17 @@ class SessionStore:
             # Skip interactive pregame (ai_vs_ai or legacy clients).
             starting_player = game.select_starting_player(rng=random.Random(seed + 2))
             game.deal_opening_hands(starting_player)
-            for i in range(len(game.players)):
-                game.keep_hand(i)
+            # CR 103.5 with nobody asked: a person keeps what they were dealt,
+            # and an AI seat decides as it does at a pregame table and in the
+            # simulator (`engine/ai_mulligan.py`). Every ai_vs_ai game is dealt
+            # here, so until the kg2 round no AI seat in one ever mulliganed.
+            take_opening_mulligans(
+                game, starting_player,
+                deciding=[
+                    seat for seat in range(len(game.players))
+                    if (session.seat_types.get(seat) or session.seat_types.get(str(seat))) == "ai"
+                ],
+            )
             session.current_turn = starting_player
             # Align the engine's active player and priority window with the chosen
             # starter. The Game constructor defaults both to seat 0, so without this

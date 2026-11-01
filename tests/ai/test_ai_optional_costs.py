@@ -358,11 +358,13 @@ def test_w2g6_a_simulated_seat_buys_a_spell_back():
     additional cost — a refusal is the policy proposing what it cannot pay."""
     # Seed 1, not 1337: once both seats had priority outside their own main
     # phases (round 4) seed 1337's six games bought back four spells, and
-    # eight games five. Seed 1's six buy back eleven.
+    # eight games five. Seed 1's six bought back eleven, and three once the
+    # AI took mulligans (kg2) — so this asserts what a seeded test can: that
+    # a buyback was bought (a floor of one), not how many a seed's story holds.
     report = run_ai_simulation(manifest_set_path("TMP"), games=6, seed=1, max_turns=18)
     bought = [line for line in report.log_lines if "(buyback)" in line]
 
-    assert len(bought) >= 5, f"{len(bought)} buyback(s) in six games of Tempest"
+    assert len(bought) >= 1, f"{len(bought)} buyback(s) in six games of Tempest"
     assert not report.issues, [issue.message for issue in report.issues]
     assert not [why for why in report.refused_casts if "additional cost" in why]
     assert report.steps_left_owing == {}

@@ -18,7 +18,11 @@ import pytest
 from engine.ai_simulator import run_ai_simulation
 from engine.card_loader import manifest_set_path
 
-SEED = 11
+#: Seed 11 until the kg2 round, when the AI began to take mulligans and its
+#: games stopped reaching a creature round with an animated Forest in it;
+#: 21 is the first after it that does (12-20 cast Balance, but no Forest
+#: was a creature when its round came).
+SEED = 21
 
 
 @pytest.mark.full

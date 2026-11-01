@@ -6,9 +6,16 @@ rather than as branches buried in the action dispatch: offer, take or keep,
 bottom the extras, start the game. :func:`_pregame_auto_advance` is what a table
 with no interactive seat owed a decision runs, so nothing waits on a prompt
 nobody owns.
+
+An AI seat decides with ``engine/ai_mulligan.py`` — keep or mulligan, and
+which cards go to the bottom — the decision the simulator asks too. How many
+cards a seat owes the bottom is ``Game.mulligan_effective_count``, which counts
+CR 103.5c's free first mulligan in a multiplayer or Brawl game.
 """
 
 from __future__ import annotations
+
+from engine.ai_mulligan import keeps_opening_hand, opening_hand_bottom
 
 from .session_store import Session
 
@@ -113,26 +120,39 @@ def _pregame_advance_mulligan_offer(session: Session) -> None:
 
 
 def _pregame_keep_player(session: Session, seat: int) -> None:
-    player = session.game.players[seat]
     session.mulligan_kept_seats.add(seat)
+    # CR 103.5: as many cards as mulligans taken — less the free first one
+    # CR 103.5c gives a multiplayer or Brawl game, which this reads as owed.
+    owed = session.game.mulligan_effective_count(seat)
     if session.simultaneous_mulligan:
         # Bottom selection runs per-seat and concurrently: this seat picks its
         # bottom cards while the others may still be deciding keep/mulligan.
-        if player.mulligans_taken > 0:
-            session.mulligan_bottom_required_by_seat[seat] = player.mulligans_taken
+        if owed > 0:
+            session.mulligan_bottom_required_by_seat[seat] = owed
             session.mulligan_bottom_selected_by_seat[seat] = []
         else:
             session.game.keep_hand(seat)
         _pregame_check_simultaneous_done(session)
         return
-    if player.mulligans_taken > 0:
+    if owed > 0:
         session.pregame_phase = "bottom_select"
         session.mulligan_bottom_seat = seat
-        session.mulligan_bottom_required = player.mulligans_taken
+        session.mulligan_bottom_required = owed
         session.mulligan_bottom_selected = []
     else:
         session.game.keep_hand(seat)
         _pregame_advance_mulligan_offer(session)
+
+
+def _pregame_ai_decides(session: Session, seat: int) -> None:
+    """An AI seat's keep-or-mulligan decisions, to the hand it keeps: it
+    mulligans (``Game.pregame_mulligan_draw``) for as long as
+    ``ai_mulligan.keeps_opening_hand`` says no, then keeps through the step a
+    person's keep takes, which asks it for its bottom cards if it owes any."""
+    while not keeps_opening_hand(session.game, seat):
+        if not session.game.pregame_mulligan_draw(seat):
+            break
+    _pregame_keep_player(session, seat)
 
 
 def _pregame_check_simultaneous_done(session: Session) -> None:
@@ -145,17 +165,24 @@ def _pregame_check_simultaneous_done(session: Session) -> None:
     _pregame_start_game(session)
 
 
-def _pregame_confirm_bottom_simultaneous(session: Session, seat: int) -> None:
+def _bottom_indices(session: Session, seat: int, selected, required: int) -> list[int]:
+    """The hand indices *seat* keeps its hand without: what it selected,
+    highest first."""
     player = session.game.players[seat]
-    required = session.mulligan_bottom_required_by_seat.get(seat, 0)
-    indices = sorted(set(session.mulligan_bottom_selected_by_seat.get(seat, [])), reverse=True)
+    indices = sorted(set(selected), reverse=True)
     # Safety: if somehow fewer cards are selected, auto-fill from end of hand
     if len(indices) < required:
         extras = [i for i in range(len(player.hand) - 1, -1, -1) if i not in set(indices)]
         indices = sorted(set(indices) | set(extras[: required - len(indices)]), reverse=True)
-    cards_to_bottom = [player.hand.pop(i) for i in indices]
-    player.library.extend(cards_to_bottom)
-    session.game.keep_hand(seat)
+    return indices
+
+
+def _pregame_confirm_bottom_simultaneous(session: Session, seat: int) -> None:
+    required = session.mulligan_bottom_required_by_seat.get(seat, 0)
+    selected = session.mulligan_bottom_selected_by_seat.get(seat, [])
+    session.game.keep_opening_hand(
+        seat, _bottom_indices(session, seat, selected, required)
+    )
     session.mulligan_bottom_required_by_seat.pop(seat, None)
     session.mulligan_bottom_selected_by_seat.pop(seat, None)
     _pregame_check_simultaneous_done(session)
@@ -163,16 +190,13 @@ def _pregame_confirm_bottom_simultaneous(session: Session, seat: int) -> None:
 
 def _pregame_confirm_bottom(session: Session) -> None:
     seat = session.mulligan_bottom_seat
-    player = session.game.players[seat]
-    required = session.mulligan_bottom_required
-    indices = sorted(set(session.mulligan_bottom_selected), reverse=True)
-    # Safety: if somehow fewer cards are selected, auto-fill from end of hand
-    if len(indices) < required:
-        extras = [i for i in range(len(player.hand) - 1, -1, -1) if i not in set(indices)]
-        indices = sorted(set(indices) | set(extras[: required - len(indices)]), reverse=True)
-    cards_to_bottom = [player.hand.pop(i) for i in indices]
-    player.library.extend(cards_to_bottom)
-    session.game.keep_hand(seat)
+    session.game.keep_opening_hand(
+        seat,
+        _bottom_indices(
+            session, seat, session.mulligan_bottom_selected,
+            session.mulligan_bottom_required,
+        ),
+    )
     session.mulligan_bottom_seat = None
     session.mulligan_bottom_required = 0
     session.mulligan_bottom_selected = []
@@ -196,32 +220,43 @@ def _pregame_auto_advance(session: Session) -> None:
             _pregame_enter_mulligan(session, winner)
 
         elif session.pregame_phase == "mulligan" and session.simultaneous_mulligan:
-            # Every AI seat keeps its hand right away; the phase then waits on
-            # the remaining human seats (each prompted concurrently).
+            # Every AI seat decides right away — its mulligans, then the cards
+            # it owes the bottom; the phase then waits on the remaining human
+            # seats (each prompted concurrently). Until the kg2 round an AI
+            # seat only ever kept, so a seat owing bottom cards was always a
+            # person's, and nothing here answered one for an AI.
             pending_ai = [
                 i
                 for i in range(len(session.game.players))
                 if i not in session.mulligan_kept_seats and _seat_type(session, i) == "ai"
             ]
-            if not pending_ai:
-                break
             for i in pending_ai:
-                _pregame_keep_player(session, i)
+                _pregame_ai_decides(session, i)
+            bottoming_ai = [
+                i
+                for i in sorted(session.mulligan_bottom_required_by_seat)
+                if _seat_type(session, i) == "ai"
+            ]
+            if not pending_ai and not bottoming_ai:
+                break
+            for i in bottoming_ai:
+                session.mulligan_bottom_selected_by_seat[i] = opening_hand_bottom(
+                    session.game, i, session.mulligan_bottom_required_by_seat[i]
+                )
+                _pregame_confirm_bottom_simultaneous(session, i)
 
         elif session.pregame_phase == "mulligan":
             offer = session.mulligan_offer_seat
             if offer is None or _seat_type(session, offer) != "ai":
                 break
-            _pregame_keep_player(session, offer)
+            _pregame_ai_decides(session, offer)
 
         elif session.pregame_phase == "bottom_select":
             bottom = session.mulligan_bottom_seat
             if bottom is None or _seat_type(session, bottom) != "ai":
                 break
-            n = session.mulligan_bottom_required
-            player = session.game.players[bottom]
-            session.mulligan_bottom_selected = list(
-                range(max(0, len(player.hand) - n), len(player.hand))
+            session.mulligan_bottom_selected = opening_hand_bottom(
+                session.game, bottom, session.mulligan_bottom_required
             )
             _pregame_confirm_bottom(session)
 

@@ -73,10 +73,12 @@ def test_a_cycled_card_has_resolved_before_the_pass_that_cycled_it_returns(catal
 #: Per set, the first five seeds from 1337 whose one game cycles a card from
 #: hand (read 2026-10-31). A seed whose game stops cycling fails its own piece
 #: by name: replace it with the next seed whose game does.
+#: ULG 1347 replaced 1337 and UDS 1355 replaced 1352 in the kg2 round, when
+#: the AI began to take mulligans and those games stopped cycling a card.
 _CYCLING_GAMES = {
     "USG": (1337, 1339, 1340, 1345, 1346),
-    "ULG": (1337, 1338, 1341, 1344, 1345),
-    "UDS": (1339, 1341, 1343, 1348, 1352),
+    "ULG": (1347, 1338, 1341, 1344, 1345),
+    "UDS": (1339, 1341, 1343, 1348, 1355),
 }
 
 
