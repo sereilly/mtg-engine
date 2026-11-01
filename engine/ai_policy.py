@@ -7,7 +7,8 @@ hand, its command zone and whatever an effect has opened to it, every card
 weighed against one reading of the table), its land drop
 (:func:`choose_land_drop`, a special action and not a cast), a madness cast
 offered part-way through a resolution (:func:`choose_madness_cast`), and
-what it does given priority outside its main phase — the instant it casts
+what it does given priority outside its main phase — the spell it casts
+at instant speed, an instant or anything else the engine lets it cast then
 (:func:`choose_combat_instant_cast_action`) or the ability it activates
 (:func:`choose_instant_speed_activation`), each proposal rehearsed before it
 is made. The two executors both drivers share are here too

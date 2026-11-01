@@ -17,7 +17,10 @@ because only a maximum over every declaration can say which compelled block a
 cap may cost.
 
 Which trades are worth making is :func:`_score_block_pair`'s, with the
-damage estimates beside it.
+damage estimates beside it — and a block that loses its blocker
+(:func:`_block_loses_its_blocker`) is made only in a gang that kills its
+attacker (:func:`_gang_blocks`) or as a chump the life it saves is worth
+(:func:`_chump_blocks`).
 """
 
 from __future__ import annotations
