@@ -858,9 +858,13 @@ def _action_special_action(session, req, seat_type):
         # the taker's own pile, by slot, on the channel an activation's
         # graveyard price already travels on (``cost_graveyard_indices``). None
         # leaves the engine's stated order, as a sacrifice named by nobody does.
+        # "Morph {X}{B}{B}" (Bane of the Living): the X the taker chooses
+        # immediately before paying (CR 107.3d), on the channel a cast's X
+        # already travels on. The engine refuses a non-zero X for a price that
+        # prints none, and None is X = 0.
         refusal = take_permanent_special_action(
             session.game, req.seat, permanent, kind, sacrificed=sacrificed,
-            exiled_slots=req.cost_graveyard_indices,
+            exiled_slots=req.cost_graveyard_indices, x_value=req.x_value,
         )
         if refusal is not None:
             raise HTTPException(status_code=400, detail=refusal)

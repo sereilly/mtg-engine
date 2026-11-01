@@ -187,6 +187,11 @@ def _card_matches_filter(
     # ``color_filter`` first. Refused for the reason above.
     if filt.get(COLOR_CHOSEN_THIS_WAY_KEY) or filt.get("color_of_your_choice"):
         return False
+    # "…a creature card **with a morph ability**" (Dermoplasm). Off what the
+    # card prints, through the reader that charges a morph cost — the
+    # permanent matcher's test below, asked of a card in a zone (CR 702.37a).
+    if filt.get("with_morph_ability") and _late.face_down.morph_cost(card) is None:
+        return False
     types, subtypes = printed_shape(card)
     wanted = filt.get("type_filter")
     if wanted == "artifact_or_enchantment":

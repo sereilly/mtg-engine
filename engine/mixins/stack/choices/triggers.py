@@ -17,6 +17,16 @@ from ....pending_choices import PendingChoice
 from ....trigger_order import ORDER_TRIGGERS, apply_trigger_order
 
 
+def _printed_quantifier(item) -> str | None:
+    """The quantifier the trigger *item*'s printed target phrase carries
+    ("any_number", "up_to", …), read by the one walker the arming side reads
+    it with (``trigger_targets._target_quantifier``)."""
+    from ..trigger_targets import _target_quantifier
+
+    instruction = getattr(item, "ability_instruction", None)
+    return _target_quantifier(getattr(instruction, "payload", None))
+
+
 class TriggerChoicesMixin:
     # -- A triggered ability's "Choose one —" (CR 603.3c) ---------------------
 
@@ -271,6 +281,18 @@ class TriggerChoicesMixin:
         if choice.data.get("exact_targets") and len(named) != ceiling:
             return False
         if any(permanent_id not in offered for permanent_id in named):
+            return False
+        # A roles announcement ("target creature you control and target
+        # creature an opponent controls", Chromeshell Crab): the answer is one
+        # id per role in the printed order, each one offered under its role.
+        if choice.data.get("roles") and any(
+            not any(
+                target.get("permanent_id") == permanent_id
+                and target.get("role") == position
+                for target in choice.data.get("targets") or ()
+            )
+            for position, permanent_id in enumerate(named)
+        ):
             return False
         permanents = [self.permanent_by_id(permanent_id) for permanent_id in named]
         if any(permanent is None for permanent in permanents):
@@ -686,6 +708,39 @@ class TriggerChoicesMixin:
         item = choice.data.get("_trigger_item")
         if choice.data.get("division_total") is not None:
             return self._default_trigger_division(choice, item)
+        if choice.data.get("roles"):
+            # A roles announcement (Chromeshell Crab, Goblin Grenadiers): for
+            # each role, its first candidate on the side the effect wants
+            # (``_default_trigger_target_side`` — Grenadiers' destroy aims at
+            # the opponent's creature and land, never at itself), else its
+            # first candidate at all (a role whose own noun phrase names the
+            # seat, "target creature you control"), never one already named
+            # for an earlier role.
+            wanted = (
+                self._default_trigger_target_side(item, choice.player_index)
+                if item is not None else set()
+            )
+            picks: list = []
+            for position in range(len(choice.data["roles"])):
+                fillers = [
+                    target for target in targets
+                    if target.get("role") == position
+                    and target["permanent_id"] not in picks
+                ]
+                pick = next(
+                    (
+                        target["permanent_id"]
+                        for target in sorted(
+                            fillers, key=lambda target: target.get("seat") not in wanted,
+                        )
+                    ),
+                    None,
+                )
+                if pick is None:
+                    self.discard_pending_choice(choice)
+                    return True
+                picks.append(pick)
+            return self._resolve_trigger_targets(choice, picks)
         # "…counter target **spell**" (Mystic Snake): the topmost spell on the
         # side the effect wants — a counter is aimed at an opponent's — and the
         # topmost offered when that side has none, because the target is
@@ -850,6 +905,21 @@ class TriggerChoicesMixin:
             # candidate below is unchanged: with nothing to say whose creatures
             # an effect wants, "as many as possible" is not a policy.
             ceiling = int(choice.data.get("max_targets") or 1)
+            # "…turn **any number of** target creatures with morph abilities …
+            # face down" (Weaver of Lies): every candidate on the side the
+            # effect wants — and with none there, CR 107.1c's zero, which is an
+            # answer: the fall-through below would aim a denial at the seat's
+            # own first creature. Asked before the ceiling, because a board
+            # with one candidate arms a ceiling of one.
+            if (
+                wanted and choice.data.get("up_to")
+                and _printed_quantifier(item) == "any_number"
+            ):
+                return self._resolve_trigger_targets(choice, [
+                    target["permanent_id"] for target in targets
+                    if target.get("kind") == "permanent"
+                    and target.get("seat") in wanted
+                ][:ceiling])
             if ceiling > 1:
                 several = [
                     target["permanent_id"] for target in targets

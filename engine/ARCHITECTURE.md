@@ -283,10 +283,19 @@ face down by the cast path at the announcement, and a CR 116.2b special
 action (`turn_face_up`) on `engine/special_actions.py`'s permanent seam,
 offered for the morph cost the permanent *would* have face up
 (`face_down.face_up_morph_cost`, over `copies.face_up_copiable_card` — a
-face-down Clone of a morph creature has one, CR 708.10). Effects act on the
+face-down Clone of a morph creature has one, CR 708.10). A morph cost
+printing `{X}` (Legions: Bane of the Living, Warbreak Trumpeter) is offered
+at its fixed part with `SpecialActionOffer.x_symbols`; the taker announces X
+just before paying (CR 107.3d) as the seam's `x_value`, the listing reports
+`x_symbols` and `max_x`, and `turn_face_up(x_value=)` hands X to the face-up
+triggers (CR 702.37f) — an effect that turns it up chose no X, so theirs is
+0. Effects act on the
 same two seams (`engine/handlers/face_down.py`): "turn … face down / face
 up" is the `TurnFace` node (`turn_target_face_down`, `turn_target_face_up`,
-`turn_self_face_down`); "face-down" and "with a morph ability" are the
+`turn_self_face_down`; "any number of target …", Weaver of Lies, is the
+several-target description on the same two handlers); "face-down" and
+"with a morph ability" (a card in a zone answers it too — Dermoplasm's
+hand pick) are the
 `face_down_only` / `with_morph_ability` subject-filter keys, carried onto the
 picker spec so CR 608.2b re-asks them; "Face-down creatures get +1/+1" is a
 `lord_buffs` qualifier asked as P/T is read; and a look at a face-down

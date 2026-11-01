@@ -711,7 +711,9 @@ def test_the_census_excuses_only_a_card_the_announcement_put_there(pool, by_name
 #:   controls", "that player chooses target player who…") has no seat in this
 #:   context-free drive — a real fire site supplies it;
 #: * the ability derives **no picker at all** (a reflexive ability, a target an
-#:   opponent chooses, a roles announcement on a trigger).
+#:   opponent chooses; a trigger's roles announcement is made since LGN
+#:   W1G4 — Chromeshell Crab, Goblin Grenadiers — except one with an
+#:   optional role, which still declines).
 #:
 #: An ability in the first and third groups is invisible to "whenever a player
 #: chooses one or more targets" and to "becomes the target of". This is a
@@ -772,6 +774,15 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # damaged player's permanents are offered, as many as the damage dealt, and
     # the ones named go back to their owner's hand.
     "Cephalid Constable#0",
+    # Legions, W1G4. "…turn **any number of** target creatures with morph
+    # abilities other than this creature face down" (Weaver of Lies): CR
+    # 107.1c's zero is an announcement, and on this board — bait creatures
+    # with no morph ability — zero is all there is, so the ability goes on the
+    # stack naming nothing (``record_no_target_named``), Constable's "up to"
+    # one row up. With morph creatures on the board the prompt offers every
+    # one and the default names the opponent's
+    # (tests/sets/test_lgn_creatures_later_groups.py, W1G4's section).
+    "Weaver of Lies#0",
     # Onslaught, W1G1 — reached the moment their Morph line was read.
     # "Whenever this creature deals combat damage to a player, you may have it
     # deal 2 (Skirk Commando) / 3 (Snapping Thragg) damage to target creature
@@ -781,7 +792,10 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # and acts on it (tests/sets/test_ons_creatures.py, W1G1's section).
     "Dawning Purist#0", "Skirk Commando#0", "Snapping Thragg#0",
     # no picker derived
-    "The Abyss#0", "Rysorian Badger#0", "Goblin Grenadiers#0",
+    # Goblin Grenadiers ("…destroy target creature and target land") sat here
+    # until LGN W1G4: a trigger's roles announcement (Chromeshell Crab's
+    # exchange, the Grenadiers' destroy) is made as it goes on the stack.
+    "The Abyss#0", "Rysorian Badger#0",
     "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",
     # Gravegouger ("When this creature enters, exile **up to two target cards
     # from a single graveyard**") stood here from Torment's first wave, its

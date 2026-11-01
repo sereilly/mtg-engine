@@ -280,11 +280,64 @@ class SpellChoicesMixin:
 
     def _default_retarget_choice(self, choice: PendingChoice) -> None:
         """The stated policy: the **first** live candidate offered, in board
-        order. Deterministic rather than clever, for ``_default_player_choice``'s
-        reason."""
+        order — on the side the re-aimed object's effect is worth aiming at
+        for the seat choosing, where that side holds one
+        (:meth:`_retarget_preferred_seats`). Deterministic rather than clever,
+        for ``_default_player_choice``'s reason.
+
+        Board order alone named the chooser's own face first: Willbender
+        turned face up against a Lightning Bolt aimed at its controller's
+        creature moved the Bolt onto its controller, and Deflection did the
+        same for any seat 0 that cast it."""
         live = self.live_retarget_choices(choice)
+        if live:
+            options = choice.data.get("options") or ()
+            wanted = self._retarget_preferred_seats(choice)
+            preferred = [
+                position for position in live
+                if self._retarget_option_seat(options[position]) in wanted
+            ]
+            live = preferred + [position for position in live if position not in preferred]
         if not live or not self._resolve_retarget_choice(choice, live[0]):
             self._record_retarget_choice(choice, None)
+
+    def _retarget_option_seat(self, option: dict) -> "int | None":
+        """Whose a retarget candidate is: a face's seat, a permanent's
+        controller (through the control seam), else None."""
+        if option.get("kind") == "player":
+            return option.get("seat")
+        if option.get("kind") == "permanent":
+            permanent = self.permanent_by_id(option.get("permanent_id"))
+            return self.controller_index_of(permanent) if permanent is not None else None
+        return None
+
+    def _retarget_preferred_seats(self, choice: PendingChoice) -> set:
+        """The seats a seat nobody asks re-aims the object at: its effect's
+        side, read by the reader the optional "may change the target"
+        default already asks (``ai_prompts._target_change_side`` — one answer
+        to "which way does this effect cut" whether a seat chooses a target or
+        changes it), turned from the object's caster to the chooser. A harmful
+        effect ("opponent") goes to the chooser's opponents, a helpful one
+        ("you") to the chooser; an object whose effect has no side keeps board
+        order (the empty set)."""
+        from ....ai_prompts import _target_change_side
+
+        # "…**may** change the target or targets" (Psychic Battle) offers
+        # leaving them first, and that offer's default is its own question:
+        # only the forced choice of a new target is aimed.
+        if any(option.get("kind") == "keep" for option in choice.data.get("options") or ()):
+            return set()
+        context = choice.data.get("_context")
+        item = getattr(context, "stack_target", None)
+        if item is None:
+            return set()
+        side = _target_change_side(self, item)
+        chooser = choice.player_index
+        if side == "opponent":
+            return set(self.opponents_of(chooser))
+        if side == "you":
+            return {chooser}
+        return set()
 
     # -- Illusionary Mask's face-down cast -----------------------------------
 

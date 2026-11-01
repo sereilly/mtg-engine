@@ -1241,6 +1241,10 @@ def _play_special_actions(
         return
     choice, refusal = taken
     _resolve_pending_choices(game)
+    # A face-up trigger (CR 603.3) resolves in this main phase (CR 116.3),
+    # not as a step left owing into combat (Warbreak Trumpeter's Goblins).
+    if refusal is None and game.stack:
+        _drain_step(game)
     report.log_lines.append(
         f"G{game_index} T{turn} {game.players[active].name} special action "
         f"{choice.kind} ({choice.name}) -> {refusal or 'taken'}"

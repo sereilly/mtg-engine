@@ -1044,9 +1044,13 @@ def announces_a_target(payload, *, described_only: bool = False) -> bool:
     """
     if isinstance(payload, dict):
         targets = payload.get("targets")
-        if (
-            isinstance(targets, dict)
-            and targets.get("quantifier") in _ANNOUNCED_QUANTIFIERS
+        if isinstance(targets, dict) and (
+            targets.get("quantifier") in _ANNOUNCED_QUANTIFIERS
+            # "…destroy **target creature and target land**." (Goblin
+            # Grenadiers.) A roles description is the lowering's record of
+            # several printed "target"s, one per role — the same evidence a
+            # quantifier is, spelled as a list (``lowering/_roles``).
+            or (targets.get("kind") == "roles" and bool(targets.get("roles")))
         ):
             return True
         for value in payload.values():

@@ -223,21 +223,59 @@ def morph_cost_text(part: str) -> str | None:
 
     The keyword-line gate's admission test (``keyword_lines.
     _qualified_keyword_part``), for ``madness.madness_cost_text``'s reason:
-    the reader that charges the cost is the one that admits the line. A
-    hybrid, Phyrexian or {X} symbol refuses (``mana_cost_from_symbols``) — an
-    X would be CR 702.37f's number nothing here announces — and a non-mana
+    the reader that charges the cost is the one that admits the line
+    (:func:`morph_mana`). A hybrid or Phyrexian symbol refuses, and a non-mana
     cost behind a dash refuses, so a card printing one stays unsupported
     naming the line rather than turning face up for nothing.
-    """
-    from .mana_payment import mana_cost_from_symbols
 
+    An ``{X}`` is admitted (Legions: "Morph {X}{B}{B}", Bane of the Living;
+    "Morph {X}{X}{R}", Warbreak Trumpeter): CR 107.3d has the player taking
+    the special action choose X "immediately before they pay that cost", and
+    the special-action seam announces it (``special_actions.
+    take_permanent_special_action``'s ``x_value``) and hands it to the face-up
+    triggers, CR 702.37f's "other abilities of that permanent may also refer
+    to X".
+    """
     match = _MORPH_PART.match(_stripped(part).lower())
     if match is None:
         return None
     cost = match.group("cost").upper()
-    if mana_cost_from_symbols(cost) is None:
+    if morph_mana(cost) is None:
         return None
     return cost
+
+
+def morph_x_symbols(printed: str | None) -> int:
+    """How many ``{X}`` a printed morph cost carries — each is X generic mana
+    once X is chosen (CR 107.3d). 0 for a cost with none, or for None."""
+    return sum(
+        1 for symbol in re.findall(r"\{([^{}]+)\}", printed or "")
+        if symbol.upper() == "X"
+    )
+
+
+def morph_mana(printed: str | None, x_value: int = 0) -> "dict[str, int] | None":
+    """What paying the printed morph cost *printed* takes with X = *x_value*,
+    as the symbol dict every payment reads, or None when a symbol is one this
+    engine cannot spend (hybrid, Phyrexian) or nothing is printed.
+
+    CR 107.3d: "If a cost associated with a special action, such as … a morph
+    cost, has an {X} or an X in it, the value of X is chosen by the player
+    taking the special action immediately before they pay that cost." So each
+    ``{X}`` is *x_value* generic mana; ``{}`` is a price of nothing at all
+    ("{X}" with X = 0), which a seat may legally choose.
+    """
+    from .mana_payment import mana_cost_x_as_zero
+
+    if not printed:
+        return None
+    base = mana_cost_x_as_zero(printed)
+    if base is None:
+        return None
+    variable = morph_x_symbols(printed) * max(0, int(x_value or 0))
+    if variable:
+        base = {**base, "generic": int(base.get("generic", 0)) + variable}
+    return base
 
 
 def is_morph_line(line: str) -> bool:
@@ -350,7 +388,10 @@ def cast_announces_morph(game: "Game", seat: int, card, action) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def turn_face_up(game: "Game", permanent: "Permanent", *, how: str = "") -> bool:
+def turn_face_up(
+    game: "Game", permanent: "Permanent", *, how: str = "",
+    x_value: "int | None" = None,
+) -> bool:
     """Turn *permanent* face up (CR 708.8); whether it was face down.
 
     "As a face-down permanent is turned face up, its copiable values revert to
@@ -374,6 +415,15 @@ def turn_face_up(game: "Game", permanent: "Permanent", *, how: str = "") -> bool
     by an effect that turns a permanent face up without paying anything
     (CR 708.7; Ixidor's ruling, 2004-10-04: "its controller does not have to
     pay its Morph cost").
+
+    *x_value* is the X chosen as the morph special action was taken, when its
+    morph cost printed one (CR 702.37f: "The value of X in those abilities is
+    equal to the value of X chosen as the morph special action was taken"),
+    and it is what the face-up triggers resolve "X" as — "all creatures get
+    -X/-X" (Bane of the Living), "create X 1/1 red Goblin creature tokens"
+    (Warbreak Trumpeter). None everywhere else: an effect that turns the
+    permanent face up takes no special action, so no X was chosen and the
+    triggers' X is 0.
     """
     real = hidden_card(getattr(permanent, "card", None))
     if real is None:
@@ -386,14 +436,18 @@ def turn_face_up(game: "Game", permanent: "Permanent", *, how: str = "") -> bool
         + (f" ({how})" if how else "")
     )
     game._recompute_continuous_effects()
-    _announce_turned_face_up(game, permanent, controller)
+    _announce_turned_face_up(game, permanent, controller, x_value=x_value)
     return True
 
 
-def _announce_turned_face_up(game: "Game", permanent: "Permanent", controller) -> None:
+def _announce_turned_face_up(
+    game: "Game", permanent: "Permanent", controller, *, x_value: "int | None" = None,
+) -> None:
     """Put the just-turned permanent's own "When this creature is turned face
     up" abilities on the stack (CR 603.3), in one CR 603.3b window. The
-    dispatcher of :data:`TURNED_FACE_UP`."""
+    dispatcher of :data:`TURNED_FACE_UP`. *x_value* rides each one as the X
+    its text refers to (CR 702.37f), as an entry trigger carries its spell's
+    (CR 107.3m)."""
     from .trigger_utils import matching_triggers
 
     if controller is None:
@@ -411,6 +465,7 @@ def _announce_turned_face_up(game: "Game", permanent: "Permanent", controller) -
                 instruction=trig.instruction,
                 effect_kind=trig.effect_kind,
                 ability_text=trig.source_line,
+                x_value=x_value,
             )
             game.log.append(f"{permanent.card.name} triggered (turned face up)")
 
@@ -507,8 +562,11 @@ def _morph_offer(game: "Game", permanent: "Permanent"):
     face down has no morph cost unless its card prints one, and then this is
     its way up too: the rule is about the card, not about how it came to be
     face down.
+
+    A morph cost printing ``{X}`` is offered at its fixed part, with the count
+    of X symbols beside it (``SpecialActionOffer.x_symbols``): the seam adds X
+    generic per symbol once the taker has chosen X (CR 107.3d).
     """
-    from .mana_payment import mana_cost_from_symbols
     from .special_actions import SpecialActionOffer
 
     printed = face_up_morph_cost(permanent)
@@ -517,12 +575,20 @@ def _morph_offer(game: "Game", permanent: "Permanent"):
     controller = game.controller_index_of(permanent)
     if controller is None:
         return None
-    return SpecialActionOffer(seat=controller, mana=mana_cost_from_symbols(printed))
+    return SpecialActionOffer(
+        seat=controller, mana=morph_mana(printed), x_symbols=morph_x_symbols(printed),
+    )
 
 
-def _take_morph(game: "Game", seat: int, permanent: "Permanent") -> None:
-    """Turn *permanent* face up, its morph cost already paid by the seam."""
-    turn_face_up(game, permanent, how=f"for its morph cost {face_up_morph_cost(permanent)}")
+def _take_morph(
+    game: "Game", seat: int, permanent: "Permanent", *, x_value: int = 0,
+) -> None:
+    """Turn *permanent* face up, its morph cost already paid by the seam —
+    with the X the seam announced, for a cost that printed one (CR 702.37f)."""
+    printed = face_up_morph_cost(permanent)
+    announces_x = morph_x_symbols(printed) > 0
+    how = f"for its morph cost {printed}" + (f" with X = {x_value}" if announces_x else "")
+    turn_face_up(game, permanent, how=how, x_value=x_value if announces_x else None)
 
 
 def _morph_entry_extras(game: "Game", permanent: "Permanent") -> dict:
@@ -571,6 +637,8 @@ __all__ = [
     "morph_alternative_cost",
     "morph_cost",
     "morph_cost_text",
+    "morph_mana",
+    "morph_x_symbols",
     "reveal_departing",
     "revealed_as_it_moves",
     "turn_face_down",

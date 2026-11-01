@@ -60,6 +60,42 @@ def _named_target(game: "Game", instruction: "OracleInstruction",
     )
 
 
+def _names_several(instruction: "OracleInstruction") -> bool:
+    """Whether the sentence's targets are a list — "turn **any number of
+    target** creatures with morph abilities … face down" (Weaver of Lies) —
+    rather than one. The several-target description's mark
+    (``lowering._targets._describe_several_targets``): a count other than one,
+    or no printed ceiling at all."""
+    targets = instruction.payload.get("targets")
+    return isinstance(targets, dict) and (
+        bool(targets.get("unbounded")) or targets.get("count") not in (None, 1)
+    )
+
+
+def _named_targets(game: "Game", instruction: "OracleInstruction",
+                   context: "OracleExecutionContext") -> "list[Permanent]":
+    """Every permanent a several-target "turn …" sentence named, each held to
+    its printed noun phrase as it resolves (CR 608.2b): one that has left or
+    stopped answering — turned face down already, lost its morph ability — is
+    dropped rather than replaced, and the rest are still turned (an ability is
+    removed only when *every* target is illegal, CR 608.2b)."""
+    from ..subject_filters import subject_matches
+
+    from ._targets import resolve_target_permanents
+
+    described = {
+        key: value for key, value in instruction.payload.items() if key != "targets"
+    }
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    return list(resolve_target_permanents(
+        game, context,
+        predicate=lambda p: subject_matches(
+            game, p, described, observer=observer, source=context.source_permanent,
+        ),
+    ))
+
+
 @effect_handler("turn_target_face_down")
 def turn_target_face_down(game: "Game", instruction: "OracleInstruction",
                           context: "OracleExecutionContext") -> tuple[bool, str]:
@@ -72,6 +108,18 @@ def turn_target_face_down(game: "Game", instruction: "OracleInstruction",
     """
     from ..face_down import turn_face_down
 
+    if _names_several(instruction):
+        # "Turn any number of target creatures with morph abilities other than
+        # this creature face down." (Weaver of Lies.) Each named creature that
+        # still answers the phrase; CR 708.2b leaves one already face down as
+        # it is.
+        turned = [
+            permanent for permanent in _named_targets(game, instruction, context)
+            if turn_face_down(game, permanent)
+        ]
+        if not turned:
+            game.log.append(f"{context.card.name}: no creature turned face down")
+        return True, "resolved"
     permanent = _named_target(game, instruction, context)
     if permanent is None:
         game.log.append(f"{context.card.name}: no creature to turn face down")
@@ -119,6 +167,16 @@ def turn_target_face_up(game: "Game", instruction: "OracleInstruction",
     """
     from ..face_down import turn_face_up
 
+    if _names_several(instruction):
+        # The face-up twin of Weaver of Lies' list, lowered by the same branch
+        # ("turn any number of target face-down creatures face up").
+        turned = [
+            permanent for permanent in _named_targets(game, instruction, context)
+            if turn_face_up(game, permanent, how=context.card.name)
+        ]
+        if not turned:
+            game.log.append(f"{context.card.name}: no creature turned face up")
+        return True, "resolved"
     permanent = _named_target(game, instruction, context)
     if permanent is None:
         game.log.append(f"{context.card.name}: no face-down creature to turn face up")

@@ -339,12 +339,23 @@ class SpecialActionOffer:
     graveyard (CR 116.2d, Lost in Thought). All are paid by the seam below
     rather than by the offer's own ``take``, because a cost is a cost wherever
     it appears: paying it is not part of what the action *does*.
+
+    ``x_symbols`` is how many ``{X}`` the mana price prints beyond ``mana``
+    (Legions' "Morph {X}{X}{R}", Warbreak Trumpeter). CR 107.3d: "the value
+    of X is chosen by the player taking the special action immediately before
+    they pay that cost" — so the taker names X
+    (:func:`take_permanent_special_action`'s ``x_value``), each symbol is that
+    much generic mana, and an offer carrying any is taken as
+    ``take(game, seat, permanent, x_value=X)`` so what the action does may
+    read the number (CR 702.37f). 0 for every price without one, which leaves
+    every other offer's shape and call unchanged.
     """
 
     seat: int
     mana: "dict[str, int] | None" = None
     sacrifice: "dict[str, object] | None" = None
     exile_from_graveyard: int = 0
+    x_symbols: int = 0
 
 
 @dataclass(frozen=True)
@@ -360,7 +371,9 @@ class PermanentSpecialAction:
     whole ability away, which is the other half of what the ability did. The
     effect outlives its ability (CR 611.2a), and so does the offer.
 
-    ``take`` performs it, with the cost already paid.
+    ``take`` performs it, with the cost already paid — and, for an offer
+    whose price prints ``{X}`` (``SpecialActionOffer.x_symbols``), with the X
+    the taker chose as the keyword ``x_value``.
 
     A registration rather than a branch, for this file's own stated reason: the
     sentence table says what a card *offers* and this says what the engine
@@ -502,8 +515,55 @@ def _payment_plan(game: "Game", seat: int, cost: "dict[str, int]"):
     )
 
 
+def _offer_price(
+    offer: "SpecialActionOffer", x_value: "int | None",
+) -> "dict[str, int] | None":
+    """The mana *offer* charges with X = *x_value* (CR 107.3d): its fixed part
+    plus X generic per ``{X}`` it prints. An X nobody named is 0 — the
+    cheapest price, which is what "can this be taken at all?" asks."""
+    x = max(0, int(x_value or 0))
+    if not offer.x_symbols or not x:
+        return offer.mana
+    price = dict(offer.mana or {})
+    price["generic"] = int(price.get("generic", 0)) + offer.x_symbols * x
+    return price
+
+
+def _x_refusal(offer: "SpecialActionOffer", x_value: "int | None") -> str | None:
+    """Why *x_value* is no X this offer may be taken with, or None. A price
+    printing no ``{X}`` has no X to choose, so a non-zero one is refused
+    rather than ignored; a negative one is no number CR 107.3d lets a player
+    choose (CR 107.1b)."""
+    if x_value is None:
+        return None
+    if isinstance(x_value, bool) or not isinstance(x_value, int) or x_value < 0:
+        return f"X = {x_value!r} is not a number of mana"
+    if x_value and not offer.x_symbols:
+        return "that price has no X to choose"
+    return None
+
+
+def special_action_max_x(
+    game: "Game", seat: int, offer: "SpecialActionOffer", *, ceiling: int = 30,
+) -> int:
+    """The largest X *seat* could pay *offer*'s price with right now — its
+    pool and untapped lands, through the same plan the take pays by — or 0.
+    For a client's X box and the AI's sizing; never a bound the take relies
+    on (the take plans the announced X itself)."""
+    if not offer.x_symbols:
+        return 0
+    best = 0
+    for x in range(1, ceiling + 1):
+        price = _offer_price(offer, x) or {}
+        if _payment_plan(game, seat, price) is None:
+            break
+        best = x
+    return best
+
+
 def permanent_special_action_refusal(
-    game: "Game", seat: int, permanent: "Permanent", kind: str
+    game: "Game", seat: int, permanent: "Permanent", kind: str,
+    x_value: "int | None" = None,
 ) -> str | None:
     """Why *seat* may not take *kind* with *permanent* right now, or None.
 
@@ -515,6 +575,10 @@ def permanent_special_action_refusal(
     permanent must still be making the offer (CR 116.2c's "for as long as the
     effect allows it"), which is asked of the registered offer rather than of
     the card's text — see :class:`PermanentSpecialAction`.
+
+    *x_value* is the X the taker names for a price printing ``{X}``
+    (CR 107.3d); None asks at X = 0, the cheapest price, which is what an
+    offer's listing asks.
     """
     _load_registrations()
     spec = PERMANENT_SPECIAL_ACTIONS.get(kind)
@@ -529,7 +593,11 @@ def permanent_special_action_refusal(
         return f"{permanent.card.name} is not offering that to {game.players[seat].name}"
     if not game.has_priority(seat):
         return f"{game.players[seat].name} does not have priority"
-    if offer.mana and _payment_plan(game, seat, offer.mana) is None:
+    x_refusal = _x_refusal(offer, x_value)
+    if x_refusal is not None:
+        return x_refusal
+    price = _offer_price(offer, x_value)
+    if price and _payment_plan(game, seat, price) is None:
         return f"{game.players[seat].name} can't pay for it"
     if offer.sacrifice is not None and not _sacrificeable(game, seat, offer):
         return f"{game.players[seat].name} has nothing to sacrifice for it"
@@ -600,8 +668,15 @@ def take_permanent_special_action(
     game: "Game", seat: int, permanent: "Permanent", kind: str,
     sacrificed: "Permanent | None" = None,
     exiled_slots: "list[int] | None" = None,
+    x_value: "int | None" = None,
 ) -> str | None:
     """Perform *kind* with *permanent* for *seat*; a refusal, or None on success.
+
+    *x_value* is the X the taker chooses for a price printing ``{X}`` — CR
+    107.3d's "chosen by the player taking the special action immediately
+    before they pay that cost" — paid as that much generic per symbol and
+    handed to the offer's ``take`` (CR 702.37f). None is X = 0. A non-zero X
+    for a price that prints none is refused (:func:`_x_refusal`).
 
     CR 116.3 again: the player receives priority afterwards, so nothing here
     passes, advances a step or touches ``priority_player_index`` — and
@@ -620,12 +695,15 @@ def take_permanent_special_action(
     Thought): graveyard positions, held to the printed count
     (:func:`_graveyard_slots_paying`).
     """
-    refusal = permanent_special_action_refusal(game, seat, permanent, kind)
+    refusal = permanent_special_action_refusal(
+        game, seat, permanent, kind, x_value=x_value,
+    )
     if refusal is not None:
         return refusal
     spec = PERMANENT_SPECIAL_ACTIONS[kind]
     offer = spec.offer(game, permanent)
     assert offer is not None  # the refusal above already asked
+    price = _offer_price(offer, x_value)
     exiled: list = []
     if offer.exile_from_graveyard:
         slots = _graveyard_slots_paying(game, seat, offer, exiled_slots)
@@ -641,12 +719,12 @@ def take_permanent_special_action(
             victim = sacrificed
         else:
             victim = game.default_sacrifice_pick(candidates)
-    plan = _payment_plan(game, seat, offer.mana) if offer.mana else None
+    plan = _payment_plan(game, seat, price) if price else None
     if plan:
         # The planned lands are tapped for mana through the one payer
         # (``Game._pay_planned_cost``, CR 605.3a).
         if not game._pay_planned_cost(
-            game.players[seat], lambda: _payment_plan(game, seat, offer.mana)
+            game.players[seat], lambda: _payment_plan(game, seat, price)
         ):
             return "that cost can't be paid"
     if victim is not None:
@@ -670,7 +748,10 @@ def take_permanent_special_action(
             + ", ".join(card.name for card in cards)
             + f" from their graveyard ({permanent.card.name}, CR 116.2d)"
         )
-    spec.take(game, seat, permanent)
+    if offer.x_symbols:
+        spec.take(game, seat, permanent, x_value=max(0, int(x_value or 0)))
+    else:
+        spec.take(game, seat, permanent)
     _priority_returns(game)
     return None
 
@@ -710,6 +791,14 @@ def available_permanent_special_actions(game: "Game", seat: int) -> list[dict]:
                     entry.update(spec.entry_extras(game, permanent))
                 if offer is not None and offer.exile_from_graveyard:
                     entry["exile_from_graveyard"] = offer.exile_from_graveyard
+                # A price printing {X} (CR 107.3d: the taker chooses X just
+                # before paying): how many X symbols, and the largest X the
+                # seat could pay now, so a client asks for X — bounded — and
+                # sends it as the action's ``x_value``. Only on such an offer:
+                # every other entry's shape is unchanged.
+                if offer is not None and offer.x_symbols:
+                    entry["x_symbols"] = offer.x_symbols
+                    entry["max_x"] = special_action_max_x(game, seat, offer)
                 # …and which permanents a "sacrifice a permanent **of their
                 # choice**" price may be paid with (Volrath's Curse), by id —
                 # the list the action's ``sacrificed`` is checked against, so a
@@ -734,6 +823,7 @@ __all__ = [
     "permanent_special_action_refusal",
     "permanent_special_action_sentence",
     "register_permanent_special_action",
+    "special_action_max_x",
     "take_permanent_special_action",
     "special_action_line",
     "special_action_refusal",
