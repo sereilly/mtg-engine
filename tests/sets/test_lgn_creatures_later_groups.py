@@ -389,6 +389,106 @@ def test_w1g6_dark_supplicant_needs_three_clerics(set_pool):
     assert me.graveyard == [] and game.pending_choices == []
     assert not supplicant.tapped
 
+
+# --- Celestial Gatekeeper ---------------------------------------------------
+
+
+def _w1g6_gatekeeper_dies(set_pool, *, interactive, also_dying=()):
+    """Celestial Gatekeeper (and *also_dying*, in one event) sacrificed over a
+    graveyard of two Clerics, a Bird and a Bear.
+
+    Inside ``deferring_triggers`` — the window a cost's sacrifices are paid in
+    (Dark Supplicant's "Sacrifice three Clerics") — so the trigger goes on the
+    stack once every card of the event is in the graveyard (CR 603.3d). A bare
+    simultaneous sweep chooses at the fire site instead, before the later
+    cards arrive: measured and reported, not this card's to fix."""
+    game, me, _opp = _w1g6_game(set_pool, library=["Forest"] * 3, interactive=interactive)
+    me.graveyard.extend(
+        _w1g6_card(set_pool, name) for name in (
+            "Blood Celebrant", "Grizzly Bears", "Aven Envoy", "Earthblighter",
+        )
+    )
+    assert _w1g6_compile(_w1g6_card(set_pool, "Celestial Gatekeeper")).supported
+    gatekeeper = _w1g6_put(game, 0, set_pool, "Celestial Gatekeeper")
+    others = [_w1g6_put(game, 0, set_pool, name) for name in also_dying]
+    with game.deferring_triggers():
+        game.sacrifice_permanents([gatekeeper, *others])
+    return game, me
+
+
+def test_w1g6_celestial_gatekeeper_exiles_itself_and_returns_two_birds_or_clerics(set_pool):
+    """"When this creature dies, exile it, then return up to two target Bird
+    and/or Cleric permanent cards from your graveyard to the battlefield."
+    Answered as an interactive seat: the picker offers the Birds and Clerics
+    (itself included) and not the Bear; the Gatekeeper is exiled and the two
+    chosen enter."""
+    game, me = _w1g6_gatekeeper_dies(set_pool, interactive=True)
+    (choice,) = game.pending_choices
+    assert choice.kind == "trigger_target" and choice.data["max_targets"] == 2
+    offered = sorted(t["name"] for t in choice.data["targets"])
+    assert offered == [
+        "Aven Envoy", "Blood Celebrant", "Celestial Gatekeeper", "Earthblighter",
+    ]
+    names = [c.name for c in me.graveyard]
+    bear = names.index("Grizzly Bears")
+    assert not game.confirm_trigger_target(
+        0, seat=0, graveyard_indices=[names.index("Aven Envoy"), bear],
+    ), "the Bear is no Bird or Cleric"
+    assert game.confirm_trigger_target(0, seat=0, graveyard_indices=[
+        names.index("Aven Envoy"), names.index("Earthblighter"),
+    ])
+    _w1g6_resolve(game)
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Aven Envoy", "Earthblighter",
+    ]
+    assert [c.name for c in me.exile] == ["Celestial Gatekeeper"]
+    assert sorted(c.name for c in me.graveyard) == ["Blood Celebrant", "Grizzly Bears"]
+
+
+def test_w1g6_celestial_gatekeeper_targeting_itself_is_exiled_not_returned(set_pool):
+    """The ruling (2004-10-04): "You can choose to target this card as one of
+    the two … If you do, it gets exiled and does not get returned." The other
+    target still returns — and is the card it named, not the one that slid
+    into its slot when the Gatekeeper left the pile."""
+    game, me = _w1g6_gatekeeper_dies(set_pool, interactive=True)
+    names = [c.name for c in me.graveyard]
+    assert game.confirm_trigger_target(0, seat=0, graveyard_indices=[
+        names.index("Celestial Gatekeeper"), names.index("Aven Envoy"),
+    ])
+    _w1g6_resolve(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Aven Envoy"]
+    assert [c.name for c in me.exile] == ["Celestial Gatekeeper"]
+
+
+def test_w1g6_celestial_gatekeeper_target_above_it_in_the_pile_survives_the_exile(set_pool):
+    """The Gatekeeper and a Cleric die in one event, the Cleric going in after
+    it — so the Cleric's slot is above the Gatekeeper's. Exiling the Gatekeeper
+    first slides it down one; the return re-locates it from its stamp and
+    returns it, rather than reading the stale slot (out of range, or another
+    card)."""
+    game, me = _w1g6_gatekeeper_dies(
+        set_pool, interactive=True, also_dying=["Deathmark Prelate"],
+    )
+    names = [c.name for c in me.graveyard]
+    assert names.index("Deathmark Prelate") > names.index("Celestial Gatekeeper")
+    assert game.confirm_trigger_target(
+        0, seat=0, graveyard_indices=[names.index("Deathmark Prelate")],
+    )
+    _w1g6_resolve(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Deathmark Prelate"]
+    assert "Deathmark Prelate" not in [c.name for c in me.graveyard]
+
+
+def test_w1g6_celestial_gatekeeper_default_seat_returns_two(set_pool):
+    """A seat nobody asks names two of the Birds and Clerics as the trigger
+    goes on the stack (CR 603.3d) and both return; the Gatekeeper is exiled."""
+    game, me = _w1g6_gatekeeper_dies(set_pool, interactive=False)
+    _w1g6_resolve(game)
+    returned = [p.card.name for p in game.controlled_by(0)]
+    assert len(returned) == 2
+    assert set(returned) <= {"Aven Envoy", "Blood Celebrant", "Earthblighter"}
+    assert [c.name for c in me.exile] == ["Celestial Gatekeeper"]
+
 # ==== end W1G6 ======================================================
 
 

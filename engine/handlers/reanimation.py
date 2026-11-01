@@ -1093,6 +1093,21 @@ def reanimate_announced_cards(game: Game, instruction: OracleInstruction, contex
             instruction.payload, card, game=game, owner=caster,
         )
 
+    # **Re-located from the stamps now, not at the top of the resolution.**
+    # "When this creature dies, **exile it, then** return up to two target
+    # Bird and/or Cleric permanent cards from your graveyard to the
+    # battlefield." (Celestial Gatekeeper.) A step in front of this one took a
+    # card out of the very pile the slots count into, so the slots
+    # ``_run_stack_item_resolution`` re-located are stale by one past it — and
+    # a target that *was* the card exiled (its ruling, 2004-10-04: "it gets
+    # exiled and does not get returned") must answer gone rather than name
+    # whatever slid into its slot. ``chosen_graveyard_index`` is the one
+    # re-location; with no stamps it keeps the slots as they were.
+    stamps = getattr(context, "target_graveyard_card", None)
+    if stamps is not None:
+        context.target_permanent_index = game.chosen_graveyard_index(
+            stamps, context.target_permanent_index,
+        )
     picked = _resolve_graveyard_slots(caster, context, len(caster.graveyard), _eligible)
     for card in picked:
         permanent = Permanent(card=card)

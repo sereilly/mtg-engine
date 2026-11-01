@@ -578,6 +578,72 @@ def _lower_return_to_zone(
                 "return_creature_from_graveyard_to_hand", "", several_cards
             ),
         )
+    # "…then return **up to two target Bird and/or Cleric permanent cards from
+    # your graveyard to the battlefield**." (Celestial Gatekeeper.) The several
+    # card targets of the branch above, one destination over — and the move is
+    # Victimize's: "Choose two target creature cards in your graveyard. … return
+    # the chosen cards to the battlefield". So it lowers to that same pair, the
+    # announcement (``choose_target_cards``, whose picker the program derives)
+    # and the return of what it announced (``reanimate_announced_cards``,
+    # re-locating each slot from its stamp as it acts) — rather than a third
+    # graveyard picker beside the two. The narrowing rides both instructions in
+    # the keys ``graveyard_card_matches`` reads, so the picker, the CR 601.2c
+    # gate and the resolution's re-check (CR 608.2b) ask one predicate.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and _names_several_targets(subject)
+        and subject.targeted
+        and node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.from_zone.owner is not None
+        and node.from_zone.owner.kind == "you"
+        and node.to.name == "battlefield"
+        and subject.filter.is_card
+    ):
+        if node.to.owner is not None or node.under_control_of not in (
+            None, ast.PlayerRef("you"),
+        ):
+            raise LoweringError(
+                "several cards return to the battlefield under their owner's "
+                "control here", node=node,
+            )
+        # Every rider the node can carry, asked generically: a field this
+        # branch does not read and the card set is a word consumed and dropped.
+        riders = [
+            field.name for field in dataclasses.fields(node)
+            if field.name not in (
+                "subject", "to", "from_zone", "entering_tapped",
+                "under_control_of",
+            )
+            and getattr(node, field.name) != (
+                field.default if field.default is not dataclasses.MISSING
+                else field.default_factory()  # type: ignore[misc]
+            )
+        ]
+        if riders:
+            raise LoweringError(
+                "the several-card reanimation reads no rider: "
+                + ", ".join(riders), node=node,
+            )
+        if subject.filter.card_types not in _REANIMABLE_CARD_TYPES:
+            raise LoweringError(
+                "the reanimation handler only moves permanent cards", node=node,
+            )
+        returned = dataclasses.replace(
+            subject.filter, subtypes=(), colors=(), supertypes=(),
+        )
+        if _reads_no_return_restriction(returned):
+            raise LoweringError("no return handler honours this restriction", node=node)
+        narrowing = _graveyard_to_hand_payload(subject.filter)
+        announced = dict(narrowing)
+        _describe_several_card_targets(announced, subject)
+        moved = dict(narrowing)
+        if node.entering_tapped:
+            moved["tapped"] = True
+        return (
+            OracleInstruction("choose_target_cards", "", announced),
+            OracleInstruction("reanimate_announced_cards", "", moved),
+        )
     # "Return two target cards **from an opponent's graveyard to their hand**."
     # (Nullmage, Spurnmage, Pulsemage and Forcemage Advocate.) Endbringer's
     # Revel's any-graveyard return — the pile is the announced seat's and the
