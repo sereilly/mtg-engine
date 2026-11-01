@@ -360,6 +360,11 @@ class CombatPhaseMixin:
         # as long as it holds the window.
         if self.awaits_an_answer():
             return
+        # CR 104.1: once the game has ended nothing further happens — no
+        # step is left or entered. (A multiplayer game that lost one player
+        # goes on, CR 800.4a; ``is_game_over`` is the one answer to which.)
+        if self.is_game_over():
+            return
         combat_steps = list(self._phase_steps("combat"))
         if self.current_turn_phase != "combat":
             self._enter_combat_step(combat_steps[0])
@@ -564,6 +569,10 @@ class CombatPhaseMixin:
                     # can respond. The next advance (once players pass) moves on normally.
                     if self._receives_priority("combat_damage"):
                         self.start_priority_window(self.active_player_index)
+                    return
+                if self.is_game_over():
+                    # CR 104.1: the damage ended the game; its triggers do
+                    # not resolve and the step is not left.
                     return
                 if self._receives_priority("combat_damage"):
                     self._resolve_priority_window()

@@ -355,6 +355,8 @@ def _advance_ai_turn(session: Session) -> None:
         # backstop no later caller can forget.
         if _seat_type(session, session.current_turn) != "ai":
             return
+        if game.is_game_over():
+            return
 
         if _ai_should_hold(session, step):
             # Resolve the active player's turn-based action (declaring attackers)
@@ -394,6 +396,11 @@ def _advance_phase(session: Session) -> None:
     # "chosen, but not yet finished" distinction.
     _auto_resolve_ai_pending(session)
     if game.waiting_prompt() is not None:
+        return
+    # CR 104.1: a game that has ended goes no further. The engine's rail stops
+    # on its own; this is the web layer's turn loop stopping with it, rather
+    # than walking an ended game into its end step and the next turn.
+    if game.is_game_over():
         return
     phase = game.current_turn_phase
     step = game.current_step

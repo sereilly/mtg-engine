@@ -1192,7 +1192,17 @@ class CombatDamageStepMixin:
         controller orders it. A pass that stops to ask (CR 616.1e) resumes
         outside the window, and what the resumed half sets off goes on one
         at a time, as everything did before.
+
+        **None once the game has ended** (CR 104.1: "A game ends immediately
+        when a player wins"). A first-strike step that leaves one player
+        standing ends the game, and the regular step used to be dealt anyway,
+        after the loss had been logged (life -1 -> -4). Asked here, the one
+        seam every pass goes through — the two-pass loop, a person's
+        assignment one step at a time, the AI's. A multiplayer game goes on
+        without the player who left (CR 800.4a), which ``is_game_over`` says.
         """
+        if self.is_game_over():
+            return True, "the game is over (CR 104.1)"
         with self.putting_triggers_on_stack():
             return self._deal_combat_damage_pass(
                 controller_index, attacker_damage, blocker_damage,
@@ -1618,9 +1628,9 @@ class CombatDamageStepMixin:
                 if 0 <= controller_index < len(self.players):
                     self._gain_life(self.players[controller_index], amount, source_name="lifelink")
 
-            self._check_after_turn_based_actions()
-            self._prune_combat_state()
-
+            # What the step dealt to each player, written before the
+            # state-based check it causes: "P lost the game (704.5a)" used to
+            # come first, ahead of the damage that took them there.
             if sum(life_lost_by_defender.values()) > 0:
                 for defending_idx, damage in sorted(life_lost_by_defender.items()):
                     if not (0 <= defending_idx < len(self.players)) or damage <= 0:
@@ -1629,6 +1639,9 @@ class CombatDamageStepMixin:
                     self.log.append(
                         f"{defender.name} took {damage} combat damage (life: {defender.life + damage} → {defender.life})"
                     )
+
+            self._check_after_turn_based_actions()
+            self._prune_combat_state()
 
             if run_first_pass:
                 self.combat_first_strike_done = True
