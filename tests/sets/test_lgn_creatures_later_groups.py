@@ -44,14 +44,23 @@ from engine import Game as _w1g7_Game
 from engine.models import Permanent as _w1g7_Permanent
 from engine.models import PlayerState as _w1g7_PlayerState
 
+from tests.helpers import _nosick as _w1g7_nosick
 from tests.helpers import declare_attack as _w1g7_declare_attack
 from tests.helpers import resolve_stack as _w1g7_resolve_stack
 
 
+#: Where a W1G7 test finds a card by name: Legions first, then Alpha (the
+#: lands and the old regulars), then Arabian Nights (Old Man of the Sea).
+_W1G7_SETS = ("LGN", "LEA", "ARN")
+
+
 def _w1g7_card(set_pool, name):
-    """A Legions card, else one from Alpha (the lands and the old regulars)."""
-    lgn = set_pool("LGN")
-    return lgn[name] if name in lgn else set_pool("LEA")[name]
+    """A card by name from the first of :data:`_W1G7_SETS` that prints it."""
+    for code in _W1G7_SETS:
+        pool = set_pool(code)
+        if name in pool:
+            return pool[name]
+    raise KeyError(name)
 
 
 def _w1g7_table(set_pool, hands=None, *, libraries=None, seats=2, interactive=()):
@@ -79,9 +88,9 @@ def _w1g7_table(set_pool, hands=None, *, libraries=None, seats=2, interactive=()
 def _w1g7_put(game, set_pool, seat, name, *, tapped=False):
     """Put *name* onto *seat*'s battlefield by an effect (never cast)."""
     permanent = _w1g7_Permanent(card=_w1g7_card(set_pool, name))
-    permanent.metadata["summoning_sickness_turn"] = -5
     game._put_permanent_onto_battlefield(seat, permanent, None)
     _w1g7_resolve_stack(game)
+    _w1g7_nosick(permanent)
     permanent.tapped = tapped
     return permanent
 
@@ -229,5 +238,95 @@ def test_w1g7_riptide_mangler_fizzles_when_its_target_leaves(set_pool):
     _w1g7_resolve_stack(game)
     assert (mangler.effective_power, mangler.effective_toughness) == (0, 3)
     assert any("every target is illegal" in line for line in game.log)
+
+
+# --- Seedborn Muse ------------------------------------------------------------
+
+
+def _w1g7_tapped(game, seat):
+    return sorted(p.card.name for p in game.controlled_by(seat) if p.tapped)
+
+
+def test_w1g7_seedborn_muse_untaps_its_controllers_board_in_the_other_step(set_pool):
+    """"Untap all permanents you control during each other player's untap
+    step." In Bob's untap step Alice untaps everything, including a Basalt
+    Monolith ("doesn't untap during your untap step") and a Sunstrike
+    Legionnaire ("doesn't untap during your untap step") — the 2004-10-04
+    ruling: a restriction printed about its controller's step does not bind
+    this one. Bob's own Winter Orb caps *his* step at one land and does not
+    touch Alice's lands, which untap in a step that is not hers. In Alice's
+    own step the Monolith and the Legionnaire stay tapped and the Orb caps
+    her lands at one."""
+    game = _w1g7_table(set_pool)
+    _w1g7_put(game, set_pool, 1, "Grizzly Bears", tapped=True)
+    for name in ("Seedborn Muse", "Basalt Monolith", "Sunstrike Legionnaire",
+                 "Forest", "Forest"):
+        _w1g7_put(game, set_pool, 0, name, tapped=True)
+    _w1g7_put(game, set_pool, 1, "Winter Orb")
+    _w1g7_put(game, set_pool, 1, "Island", tapped=True)
+    _w1g7_put(game, set_pool, 1, "Island", tapped=True)
+
+    game.active_player_index = 1
+    game.resolve_untap_step(1)
+    assert _w1g7_tapped(game, 0) == []
+    assert _w1g7_tapped(game, 1) == ["Island"], "Winter Orb still caps Bob's own step"
+    assert (
+        "Alice untapped 5 permanent(s) during Bob's untap step (Seedborn Muse)"
+        in game.log
+    )
+
+    for permanent in game.controlled_by(0):
+        permanent.tapped = True
+    game.active_player_index = 0
+    game.resolve_untap_step(0)
+    assert _w1g7_tapped(game, 0) == [
+        "Basalt Monolith", "Forest", "Sunstrike Legionnaire",
+    ]
+
+
+def test_w1g7_seedborn_muse_gives_old_man_of_the_sea_no_choice(set_pool):
+    """The 2007-07-15 ruling: "You have no choice about what untaps." Alice's
+    Old Man of the Sea ("You may choose not to untap this creature during your
+    untap step") untaps in Bob's step with nobody asked — even with both seats
+    interactive — and the Grizzly Bears it held go back to Bob."""
+    game = _w1g7_table(set_pool, interactive={0, 1})
+    _w1g7_put(game, set_pool, 0, "Seedborn Muse")
+    old_man = _w1g7_put(game, set_pool, 0, "Old Man of the Sea")
+    bears = _w1g7_put(game, set_pool, 1, "Grizzly Bears")
+    assert game.queue_permanent_ability(
+        0, "Old Man of the Sea", target_player_index=1,
+        target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g7_resolve_stack(game)
+    assert game.controller_index_of(bears) == 0 and old_man.tapped
+
+    game.active_player_index = 1
+    game.resolve_untap_step(1)
+    assert game.pending_choices == []
+    assert not old_man.tapped
+    assert game.controller_index_of(bears) == 1
+
+
+def test_w1g7_seedborn_muse_does_nothing_in_a_skipped_step_or_its_own(set_pool):
+    """A skipped untap step (Stasis, CR 500.11) is not an untap step at all,
+    so the Muse has none to act in. At three seats it acts in each other
+    player's step and in no one else's favour: in Cara's step Alice untaps,
+    Bob — who has no Muse — does not."""
+    game = _w1g7_table(set_pool)
+    _w1g7_put(game, set_pool, 0, "Seedborn Muse", tapped=True)
+    _w1g7_put(game, set_pool, 1, "Stasis")
+    game.active_player_index = 1
+    game.resolve_untap_step(1)
+    assert _w1g7_tapped(game, 0) == ["Seedborn Muse"]
+
+    game = _w1g7_table(set_pool, seats=3)
+    _w1g7_put(game, set_pool, 0, "Seedborn Muse", tapped=True)
+    _w1g7_put(game, set_pool, 1, "Forest", tapped=True)
+    _w1g7_put(game, set_pool, 2, "Forest", tapped=True)
+    game.active_player_index = 2
+    game.resolve_untap_step(2)
+    assert _w1g7_tapped(game, 0) == []
+    assert _w1g7_tapped(game, 1) == ["Forest"]
+    assert _w1g7_tapped(game, 2) == []
 
 # ==== end W1G7 ======================================================

@@ -25,6 +25,7 @@ from ..turn_state import attacked_during_seats_last_turn
 from ..handlers._chosen import CHOSEN_CARD_TYPE, chosen_card_type_filter
 from ..untap_restrictions import (
     LIMITED_SCOPES,
+    OTHER_PLAYERS_STEPS_SCOPE,
     SELF_DOESNT_UNTAP_PHRASE,
     SELF_MAY_KEEP_TAPPED_PHRASE,
     TYPE_CHOICE_SCOPE,
@@ -263,6 +264,12 @@ class UntapStepMixin:
         # re-made every untap step, so what this aggregate can say is only which
         # sources are asking and what each offers.
         type_choices: list[tuple[object, tuple[str, ...]]] = []
+        # "Untap all permanents you control during each other player's untap
+        # step." (Seedborn Muse.) The permission family, as ``(source, its
+        # controller, filter payload)`` — only sources some *other* seat
+        # controls, because the step this aggregate is read for is
+        # *player_index*'s and the card names every step but its controller's.
+        others_untaps: list[tuple[object, int, dict]] = []
         for perm in self.all_permanents():
             # effective_card, so a CR 613 layer-3 text change (Sleight of Mind
             # rewriting the colour word) is applied before the restriction is
@@ -289,6 +296,16 @@ class UntapStepMixin:
             elif restriction.scope == TYPE_CHOICE_SCOPE:
                 if restriction.chosen_type_options:
                     type_choices.append((perm, restriction.chosen_type_options))
+            elif restriction.scope == OTHER_PLAYERS_STEPS_SCOPE:
+                seat = self.controller_index_of(perm)
+                if (
+                    player_index is not None
+                    and seat != player_index
+                    and restriction.untaps_in_others_steps is not None
+                ):
+                    others_untaps.append(
+                        (perm, seat, restriction.untaps_in_others_steps)
+                    )
             elif restriction.blocked is not None:
                 blocked.append(
                     (restriction.blocked, self.controller_index_of(perm), perm)
@@ -298,7 +315,69 @@ class UntapStepMixin:
             "limits": limits,
             "blocked": blocked,
             "type_choices": type_choices,
+            "others_untaps": others_untaps,
         }
+
+    def _untap_in_another_players_step(
+        self, player_index: int, others_untaps: list
+    ) -> None:
+        """Untap what a Seedborn Muse's controller untaps in *player_index*'s
+        untap step.
+
+        "Untap all permanents you control during each other player's untap
+        step." Each seat with a live source untaps every tapped permanent it
+        controls that the source's noun phrase names — all of them: the card's
+        ruling (2007-07-15) says "You have no choice about what untaps", so
+        "you may choose not to untap" (Old Man of the Sea) is not asked and
+        nothing is offered.
+
+        **None of the active player's restrictions bind it.** Every
+        restriction this engine reads is printed about a player's *own* step —
+        "during their untap steps" (Winter Orb, Static Orb, Smoke), "during
+        its controller's [next] untap step" (Meekstone's family, Frost Breath,
+        Paralyze, Dread Wight, Phyrexian Gremlins, Freyalise's Winds), "during
+        your untap step" (Basalt Monolith, Mungha Wurm), "that player can
+        untap only … this step" (Storage Matrix) — and this step is somebody
+        else's. That is the card's other ruling (2004-10-04): "many effects
+        say that the permanent does not untap during its controller's untap
+        step … If a card does say this, then Seedborn Muse can untap it." So
+        a skip marker is neither honoured nor spent here; its own controller's
+        step spends it. A skipped untap step (Stasis) never reaches this
+        method: the step does not happen (CR 500.11), so there is no "other
+        player's untap step" for the card to name.
+
+        Seats in turn order from the active player (CR 101.4), each source's
+        phrase asked through ``subject_matches`` with the source and its
+        controller, so a narrowed printing ("creatures and lands") untaps only
+        what it names.
+        """
+        by_seat: dict[int, list[tuple[object, dict]]] = {}
+        for source, seat, described in others_untaps:
+            by_seat.setdefault(seat, []).append((source, described))
+        seats = len(self.players)
+        for offset in range(1, seats):
+            seat = (player_index + offset) % seats
+            sources = by_seat.get(seat)
+            if not sources:
+                continue
+            untapped = 0
+            for permanent in list(self.controlled_by(seat)):
+                if not permanent.tapped or not self.is_on_battlefield(permanent):
+                    continue
+                if not any(
+                    subject_matches(
+                        self, permanent, described, observer=seat, source=source
+                    )
+                    for source, described in sources
+                ):
+                    continue
+                self.become_untapped(permanent)
+                untapped += 1
+            names = sorted({source.card.name for source, _ in sources})
+            self.log.append(
+                f"{self.players[seat].name} untapped {untapped} permanent(s) during "
+                f"{self.players[player_index].name}'s untap step ({', '.join(names)})"
+            )
 
     # -- The type the untapping player names (CR 502.3) ---------------------
 
@@ -765,6 +844,13 @@ class UntapStepMixin:
 
             self.become_untapped(permanent)
             untapped += 1
+
+        # "…during each other player's untap step" (Seedborn Muse): the seats
+        # that untap in this step although it is not theirs.
+        if constraints["others_untaps"]:
+            self._untap_in_another_players_step(
+                player_index, constraints["others_untaps"]
+            )
 
         # The marker's whole lifetime ends here (CR 611.2a: the effect lasts as
         # long as the spell said, and it said "next untap step"). Swept rather
