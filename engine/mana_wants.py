@@ -23,6 +23,11 @@ for, and the web's auto-tap reads a person's own hand on their behalf:
 * each activated ability of a permanent the seat controls that is not a mana
   ability (CR 605.1a), at its mana — one whose {T} is already spent excepted.
 
+The first three are a card's own price — a card held back that does nothing
+until it is paid for — and the last is an ability that can wait, so they are
+handed over as two tiers (``mana_payment.PaymentWants``): where two choices
+keep as many wants payable together, the one keeping more cards wins.
+
 Printed costs, not what the cast path would charge after taxes and
 reductions: a want only has to say which colours the seat will be asked for,
 and a tax is generic. A land in the hand wants nothing (CR 305.1: a land is
@@ -39,7 +44,7 @@ from typing import TYPE_CHECKING
 from .activation_zones import HAND
 from .face_down import face_up_morph_cost, is_face_down
 from .faces import castable_faces
-from .mana_payment import is_mana_ability, mana_cost_x_as_zero
+from .mana_payment import PaymentWants, is_mana_ability, mana_cost_x_as_zero
 from .oracle import compile_card_oracle
 from .targeting import usable_activated_abilities
 
@@ -47,12 +52,13 @@ if TYPE_CHECKING:
     from .game import Game
 
 
-def mana_wants(game: "Game", seat: int, *, paying_for=None) -> "tuple[dict[str, int], ...]":
-    """Every cost *seat* may still want to pay mana for, as symbol dicts —
-    see the module's note. *paying_for* is a card (or a face of one) the
-    payment being planned is for, left out of the hand once."""
+def mana_wants(game: "Game", seat: int, *, paying_for=None) -> PaymentWants:
+    """Every cost *seat* may still want to pay mana for, as symbol dicts in
+    two tiers — see the module's note. *paying_for* is a card (or a face of
+    one) the payment being planned is for, left out of the hand once."""
     player = game.players[seat]
     wants: list[dict[str, int]] = []
+    abilities: list[dict[str, int]] = []
     skipped = paying_for is None
     whole = getattr(paying_for, "face_of", None) or paying_for
     for card in player.hand:
@@ -76,8 +82,8 @@ def mana_wants(game: "Game", seat: int, *, paying_for=None) -> "tuple[dict[str, 
         for ability in usable_activated_abilities(compile_card_oracle(permanent.effective_card)):
             if ability.cost is not None and ability.cost.requires_tap and permanent.tapped:
                 continue
-            _add_ability_cost(wants, ability)
-    return tuple(wants)
+            _add_ability_cost(abilities, ability)
+    return PaymentWants(cards=tuple(wants), abilities=tuple(abilities))
 
 
 def _add_ability_cost(wants: list, ability) -> None:

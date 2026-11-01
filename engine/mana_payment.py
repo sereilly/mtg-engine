@@ -579,8 +579,8 @@ def _sparing_choice(candidates, pips, generic, base, left, wants, owners=None):
     candidate also pays generic). The chosen units must pay *pips* and
     *generic*. *left* is mana that stays available whatever is chosen
     (floating mana the payment does not spend), one pays-set per unit.
-    *wants* is the payer's other costs, symbol dicts (or a function returning
-    them). *owners*, where a source makes more than one unit (Sol Ring's
+    *wants* is the payer's other costs — a `PaymentWants`, a sequence of
+    symbol dicts, or a function returning either. *owners*, where a source makes more than one unit (Sol Ring's
     {C}{C}), maps an index to the source it is a unit of: a source part-spent
     is tapped all the same, so its other units are not counted as left for a
     want (they float only until the step ends, CR 106.4), and of two equally
@@ -589,10 +589,9 @@ def _sparing_choice(candidates, pips, generic, base, left, wants, owners=None):
     Exact over **kinds** of unit: two Mountains are interchangeable, so a
     choice is how many of each kind it spends — the first that many of the
     kind, in the caller's order. Each choice is scored by what the rest still
-    pays (`_wants_left`: the most wants together, the earlier-listed first,
-    then the most one at a time; a want repeated in hand counts each time);
-    *base* — the
-    caller's own choice — is kept unless another scores higher, so a board
+    pays (`_wants_left`: the most wants together, the most of them cards, then
+    the most one at a time; a want repeated in hand counts each time); *base*
+    — the caller's own choice — is kept unless another scores higher, so a board
     with no competing want pays exactly as it did, and ties go to the choice
     tapping the fewest sources, then to the one whose units come first in the
     caller's order. Nothing is asked of the wants where there is nothing to
@@ -651,6 +650,24 @@ def _sparing_choice(candidates, pips, generic, base, left, wants, owners=None):
     return chosen, matched
 
 
+@dataclass(frozen=True)
+class PaymentWants:
+    """What a payer may still want to pay for, as symbol dicts, in two tiers
+    (``mana_wants.mana_wants`` builds it).
+
+    ``cards`` is what a card the payer holds back costs — a spell in hand, an
+    ability that works from the hand, a face-down permanent's turn-up: a card
+    that does nothing until it is paid for. ``abilities`` is the activated
+    abilities of permanents already in play, which can wait. Where two
+    choices keep as many wants payable together, the one keeping more of the
+    first tier wins (`_wants_left`). A plain sequence of symbol dicts is all
+    ``cards``.
+    """
+
+    cards: tuple = ()
+    abilities: tuple = ()
+
+
 def _realized(of_kind, choice) -> "tuple[int, ...]":
     """The candidate positions a *choice* (a count per kind) spends: the first
     that many of each kind, in the caller's order."""
@@ -659,27 +676,34 @@ def _realized(of_kind, choice) -> "tuple[int, ...]":
     ))
 
 
-def _counted_wants(wants, *, generic_too: bool) -> "tuple[tuple[tuple[tuple[str, int], ...], int], ...]":
-    """*wants* as ``((cost items, times), …)`` in the order they were listed
-    (first appearance), each cost a sorted tuple of its non-zero symbols. A
-    want of generic mana alone is dropped unless
+def _counted_wants(wants, *, generic_too: bool) -> "tuple[tuple[tuple[tuple[str, int], ...], int, int], ...]":
+    """*wants* (a `PaymentWants` or a sequence of symbol dicts) as ``((cost
+    items, times, tier), …)`` — the cards' tier (0) before the abilities'
+    (1), each in the order listed (first appearance), each cost a sorted
+    tuple of its non-zero symbols. A want of generic mana alone is dropped
+    unless
     *generic_too* (some source makes more than one unit): with one unit a
     source every choice taps as many sources, so such a want is payable after
     all of them or none — but a choice that part-spends a Sol Ring taps one
     more source than the choice that spends both its units.
     """
+    if isinstance(wants, PaymentWants):
+        tiers = (wants.cards, wants.abilities)
+    else:
+        tiers = (tuple(wants or ()), ())
     times: dict[tuple, int] = {}
-    for want in wants or ():
-        items = tuple(sorted(
-            (str(symbol), int(amount)) for symbol, amount in (want or {}).items()
-            if int(amount or 0) > 0
-        ))
-        if not items or not generic_too and not any(
-            symbol != "generic" for symbol, _amount in items
-        ):
-            continue
-        times[items] = times.get(items, 0) + 1
-    return tuple(times.items())
+    for tier, listed in enumerate(tiers):
+        for want in listed:
+            items = tuple(sorted(
+                (str(symbol), int(amount)) for symbol, amount in (want or {}).items()
+                if int(amount or 0) > 0
+            ))
+            if not items or not generic_too and not any(
+                symbol != "generic" for symbol, _amount in items
+            ):
+                continue
+            times[(items, tier)] = times.get((items, tier), 0) + 1
+    return tuple((items, count, tier) for (items, tier), count in times.items())
 
 
 @lru_cache(maxsize=8192)
@@ -713,7 +737,7 @@ def _choice_scores(order, of_kind, owner_of, pips, generic, left, wants):
 
     if not extend(0, owed, ()):
         return {}
-    asked = [(dict(items), times) for items, times in wants]
+    asked = [(dict(items), times, tier) for items, times, tier in wants]
     scores: dict[tuple[int, ...], tuple] = {}
     for choice in choices:
         spending = [order[kind] for kind, count in enumerate(choice) for _ in range(count)]
@@ -731,31 +755,36 @@ def _choice_scores(order, of_kind, owner_of, pips, generic, left, wants):
 
 
 def _wants_left(rest: "list[frozenset[str]]", wants) -> tuple:
-    """How well *rest* serves *wants* (listed first to last), as a key that
-    sorts better-is-larger: how many of them it pays **together** — taken in
-    the order listed, each kept if it still fits beside those before it —
-    then which ones (an earlier want before a later: the hand's cards come
-    before the board's abilities), then how many it pays one at a time.
+    """How well *rest* serves *wants* (``(want, times, tier)``, cards before
+    abilities), as a key that sorts better-is-larger: how many it pays
+    **together** — taken in the order listed, each kept if it still fits
+    beside those before it — then how many of those are the cards' tier
+    (`PaymentWants`), then how many it pays one at a time.
 
-    Together first, because a turn is several payments: four lands left as
-    Swamp, Swamp beside a Mountain pay two {B} one-drops, where Mountain and a
-    Dimir dual pay either one and a {R} ability one at a time — more wants
-    *one at a time*, one fewer spell cast (M21's seeded game, Liliana's
-    Steward and Archfiend's Vessel beside Heartfire Immolator's {R}).
+    Together first, because a turn is several payments. Scored one at a
+    time, the seeded M21 game paid Walking Corpse with both Swamps off
+    Mountain, Swamp, Swamp and a Dismal Backwater: Mountain and the dual
+    leave Archfiend's Vessel ({B}), Liliana's Steward ({B}) and Heartfire
+    Immolator's "{R}, Sacrifice" each payable alone, where a Swamp and the
+    dual leave only the two one-drops — and the AI cast one spell fewer. The
+    cards' tier second, for the same game: either way two wants fit
+    together, and two one-drops in hand beat a one-drop and an ability that
+    can wait. Nothing finer: two cards in hand are not ranked against each
+    other, so where they tie the caller's own choice stands.
     """
     together: dict[str, int] = {}
-    packed: list[int] = []
-    for want, times in wants:
+    packed = cards = 0
+    for want, times, tier in wants:
         for _ in range(times):
             trial = dict(together)
             for symbol, amount in want.items():
                 trial[symbol] = trial.get(symbol, 0) + amount
-            fits = _units_pay(rest, trial)
-            if fits:
+            if _units_pay(rest, trial):
                 together = trial
-            packed.append(1 if fits else 0)
-    alone = sum(times for want, times in wants if _units_pay(rest, want))
-    return (sum(packed), tuple(packed), alone)
+                packed += 1
+                cards += 1 if tier == 0 else 0
+    alone = sum(times for want, times, _tier in wants if _units_pay(rest, want))
+    return (packed, cards, alone)
 
 
 def _units_pay(units: "list[frozenset[str]]", want: dict[str, int]) -> bool:

@@ -605,7 +605,7 @@ class _PaymentPlanner:
         #: read the first time a payment has a choice of sources to make —
         #: the spell or the hand card being paid for left out of it.
         self._paying_for = self.spell if self.spell is not None else paying_for
-        self._wants: "tuple | None" = None
+        self._wants = None
         self.sources: list[_ManaSource] = []
         #: Sources that pay by being sacrificed, in board order — counted only
         #: when everything above cannot pay (`plan`).
@@ -699,7 +699,7 @@ class _PaymentPlanner:
         offered = frozenset().union(*(unit for option in source.options for unit in option.units))
         return len(_unit_pays(self.player, offered) & set(PIP_SYMBOLS))
 
-    def wants(self) -> tuple:
+    def wants(self):
         """The seat's other wants (`mana_wants.mana_wants`), read once — what
         the matching keeps payable where it has a choice of sources
         (`mana_payment._sparing_choice`)."""

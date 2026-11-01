@@ -91,7 +91,9 @@ def test_two_one_drops_are_kept_together_over_an_ability_alone():
 
     # Backwards: weighing each want alone casts two of the three.
     def alone(rest, wants):
-        return sum(times for want, times in wants if mana_payment._units_pay(rest, want))
+        return sum(
+            times for want, times, _tier in wants if mana_payment._units_pay(rest, want)
+        )
 
     mana_payment._choice_scores.cache_clear()
     try:

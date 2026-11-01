@@ -318,7 +318,9 @@ def _two_wants_census(every: "int | None" = None) -> dict:
 def _one_at_a_time():
     """The sparing choice scoring each want alone, as it was first written."""
     def alone(rest, wants):
-        return sum(times for want, times in wants if mana_payment._units_pay(rest, want))
+        return sum(
+            times for want, times, _tier in wants if mana_payment._units_pay(rest, want)
+        )
 
     mana_payment._choice_scores.cache_clear()
     try:

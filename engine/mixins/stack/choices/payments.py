@@ -450,7 +450,7 @@ class PaymentChoicesMixin:
 
         read: list = []
 
-        def wants() -> tuple:
+        def wants():
             if not read:
                 read.append(mana_wants(self, seat))
             return read[0]
