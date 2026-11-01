@@ -44,7 +44,8 @@ from .models import CardDefinition, Permanent
 from .oracle import compile_card_oracle
 from .subject_filters import subject_matches
 from .targeting import bounce_subject_filter, spec_roles
-from .ai_payment import _plan_land_taps
+from .ai_payment import _paying_for, _plan_land_taps
+from .face_down import face_down_card, is_morph_cost
 from .ai_actions import (
     _OFFERS_ANNOUNCED,
     _announced_mode,
@@ -234,7 +235,16 @@ def _alternative_cost_tap_plan(
     owed = game.alternative_cost_mana(
         player_index, card, cost, extra_generic=extra_generic,
     )
-    plan = _plan_land_taps(game, game.players[player_index], owed)
+    # A morph cast is planned as the spell the cast path casts — the
+    # face-down 2/2 (CR 702.37c), whose payment purpose is that card — so the
+    # plan spares the colours of the turn-up the card brings (CR 702.37e,
+    # `mana_wants.wants_brought_by`). Planned as the face-up card, the
+    # Angel's {3} took three Plains of four and left {2}{W}{W} unpayable.
+    if is_morph_cost(cost):
+        with _paying_for(face_down_card(card)):
+            plan = _plan_land_taps(game, game.players[player_index], owed)
+    else:
+        plan = _plan_land_taps(game, game.players[player_index], owed)
     if plan is None or not cost.tap_count:
         return plan
     planned = [game.permanent_at(player_index, index) for index in plan[0]]

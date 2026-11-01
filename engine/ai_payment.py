@@ -385,7 +385,12 @@ def _may_sacrifice_for(spell: "CardDefinition | None", permanent: Permanent) -> 
     asked at all is `_nonland_mana_source`'s half (itself, and nothing with a
     free mana ability); that they are reached for last, and as few as pay, is
     `_plan_land_taps`'.
+
+    A spell cast face down is weighed as the card it hides (``face_down_of``):
+    the plan is drawn for the 2/2 the cast path casts (CR 702.37c), whose
+    mana value is 0, but what the seat is spending a permanent on is its card.
     """
+    spell = getattr(spell, "face_down_of", None) or spell
     if spell is None or spell.primary_type == "land":
         return False
     return float(permanent.effective_card.cmc or 0) < float(spell.cmc or 0)
