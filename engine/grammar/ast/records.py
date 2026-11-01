@@ -783,8 +783,17 @@ class CastFrom:
     Clone cast from a hand that enters as a copy of this creature answers yes
     — Hypnox's ruling (2013-09-20): "the copy's enters-the-battlefield ability
     will still trigger as long as you cast that creature spell from your hand."
+
+    ``negated`` is the printed "didn't": "When Phage enters, **if you didn't
+    cast it from your hand**, you lose the game." (Phage the Untouchable.) The
+    same record asked the other way round, so a field for the reason
+    :class:`WasKicked`'s is: Phage's ruling (2004-10-04) — "Putting it onto the
+    battlefield from your hand using a spell or ability will cause you to lose
+    the game" — is exactly "no cast stamp", the reanimated permanent this
+    node's positive reading answers False for.
     """
     zone: str
+    negated: bool = False
 
 
 @dataclass(frozen=True)

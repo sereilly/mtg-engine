@@ -238,10 +238,18 @@ def evaluate_record_condition(
         # permanent has none and answers False. "You" needs no seat check of
         # its own: the stamp is the source's, and the trigger's controller is
         # the player who controlled the permanent the spell became.
+        #
+        # "…if you **didn't** cast it from your hand" (Phage the Untouchable)
+        # is the same stamp read the other way round: a permanent put onto the
+        # battlefield from a hand by an effect has no cast stamp and answers
+        # True — Phage's ruling (2004-10-04), "Putting it onto the battlefield
+        # from your hand using a spell or ability will cause you to lose the
+        # game."
         source = context.source_permanent
-        if source is None:
-            return False
-        return source.metadata.get("cast_from_zone") == payload.get("zone")
+        cast = source is not None and (
+            source.metadata.get("cast_from_zone") == payload.get("zone")
+        )
+        return (not cast) if payload.get("negated") else cast
 
     if kind == "sacrificed_this_way_matches":
         # "If you sacrifice a **snow** Forest this way, …" (Gargantuan Gorilla),
