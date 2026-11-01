@@ -143,6 +143,61 @@ def test_w1g6_corpse_harvester_default_seat_finds_both_and_may_find_one(set_pool
     _w1g6_resolve(game)
     assert [c.name for c in me.hand] == ["Swamp"]
 
+
+# --- Elvish Soultiller ------------------------------------------------------
+
+
+def _w1g6_soultiller_dies(set_pool, *, interactive):
+    game, me, _opp = _w1g6_game(
+        set_pool, library=["Forest"] * 3, interactive=interactive,
+    )
+    me.graveyard.extend(
+        _w1g6_card(set_pool, name) for name in (
+            "Elvish Warrior", "Llanowar Elves", "Goblin Sky Raider", "Forest",
+            "Llanowar Elves",
+        )
+    )
+    assert _w1g6_compile(_w1g6_card(set_pool, "Elvish Soultiller")).supported
+    soultiller = _w1g6_put(game, 0, set_pool, "Elvish Soultiller")
+    game.sacrifice_permanent(soultiller)
+    assert [item.card.name for item in game.stack] == ["Elvish Soultiller"]
+    return game, me
+
+
+def test_w1g6_elvish_soultiller_shuffles_back_only_the_chosen_type(set_pool):
+    """"When this creature dies, choose a creature type. Shuffle all creature
+    cards of that type from your graveyard into your library." Answered as an
+    interactive seat with Goblin: the Goblin goes, the Elves and the land
+    stay — the narrowing is the chosen word, not every creature card."""
+    game, me = _w1g6_soultiller_dies(set_pool, interactive=True)
+    game.resolve_top_of_stack()
+    (choice,) = game.pending_choices
+    assert choice.kind == "creature_type_choice"
+    assert game.confirm_creature_type_choice(0, "Goblin")
+    _w1g6_resolve(game)
+    assert sorted(c.name for c in me.graveyard) == [
+        "Elvish Soultiller", "Elvish Warrior", "Forest", "Llanowar Elves",
+        "Llanowar Elves",
+    ]
+    assert sorted(c.name for c in me.library) == [
+        "Forest", "Forest", "Forest", "Goblin Sky Raider",
+    ]
+    assert "Me shuffled 1 card(s) from their graveyard into their library" in game.log
+
+
+def test_w1g6_elvish_soultiller_default_names_its_own_commonest_graveyard_type(set_pool):
+    """A seat nobody asks names the type its own graveyard holds most of —
+    the shuffle is a gift to the chooser — and the Soultiller, an Elf
+    Mutant already in the graveyard, goes back with the Elves."""
+    game, me = _w1g6_soultiller_dies(set_pool, interactive=False)
+    _w1g6_resolve(game)
+    assert "Elvish Soultiller: chose elf" in game.log
+    assert sorted(c.name for c in me.graveyard) == ["Forest", "Goblin Sky Raider"]
+    assert sorted(c.name for c in me.library) == [
+        "Elvish Soultiller", "Elvish Warrior", "Forest", "Forest", "Forest",
+        "Llanowar Elves", "Llanowar Elves",
+    ]
+
 # ==== end W1G6 ======================================================
 
 

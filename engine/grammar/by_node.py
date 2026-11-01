@@ -322,7 +322,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.GainType: _lower_gain_type,
     ast.ChangeSupertype: _lower_change_supertype,
     ast.ChangeLandType: _lower_change_land_type,
-    ast.ShuffleGraveyardIntoLibrary: _lower_shuffle_graveyard_into_library,
     ast.ShuffleSourceIntoLibrary: _lower_shuffle_source_into_library,
     ast.ShuffleTargetIntoLibrary: _lower_shuffle_target_into_library,
     ast.ShuffleHandIntoLibrary: _lower_shuffle_hand_into_library,
@@ -737,4 +736,10 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # number a step in front of it chose, so only the producer set can say
     # whether the words name anything.
     ast.FlipCoinsUntilLoss: _lower_flip_coins_until_loss,
+    # "Choose a creature type. Shuffle all creature cards **of that type**
+    # from your graveyard into your library." (Elvish Soultiller.) It left the
+    # name-only table for ``ast.Attach``'s reason: "that type" names the word a
+    # step in front of it chose, and with no such step the phrase names
+    # nothing — a shuffle of every creature card in the pile.
+    ast.ShuffleGraveyardIntoLibrary: _lower_shuffle_graveyard_into_library,
 }
