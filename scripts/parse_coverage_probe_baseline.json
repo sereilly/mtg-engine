@@ -289,6 +289,13 @@
   ]
  },
  {
+  "card": "Bane of the Living",
+  "clause": "all creatures get -x/-x until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Barbarian Bully",
   "clause": "this creature gets +2/+2 until end of turn unless a player has this creature deal 4 damage to them",
   "ignored": [
@@ -400,6 +407,13 @@
   "clause": "choose a creature type. reveal the top card of your library. if that card is a creature card of the chosen type, put it into your hand. otherwise, put it into your graveyard",
   "ignored": [
    "card"
+  ]
+ },
+ {
+  "card": "Bloodstoke Howler",
+  "clause": "beast creatures you control get +3/+0 until end of turn",
+  "ignored": [
+   "creatures"
   ]
  },
  {
@@ -524,6 +538,13 @@
   ]
  },
  {
+  "card": "Canopy Crawler",
+  "clause": "target creature gets +1/+1 until end of turn for each +1/+1 counter on this creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Canopy Surge",
   "clause": "canopy surge deals 1 damage to each creature with flying and each player. if this spell was kicked, it deals 4 damage to each creature with flying and each player instead",
   "ignored": [
@@ -591,6 +612,14 @@
   "clause": "remove an omen counter from this enchantment. if there are no omen counters on this enchantment, the player with the highest life total wins the game. if two or more players are tied for highest life total, the game is a draw",
   "ignored": [
    "enchantment,"
+  ]
+ },
+ {
+  "card": "Celestial Gatekeeper",
+  "clause": "exile it, then return up to two target bird and/or cleric permanent cards from your graveyard to the battlefield",
+  "ignored": [
+   "and/or",
+   "permanent"
   ]
  },
  {
@@ -1482,6 +1511,34 @@
   ]
  },
  {
+  "card": "Gempalm Avenger",
+  "clause": "soldier creatures get +1/+1 and gain first strike until end of turn",
+  "ignored": [
+   "creatures"
+  ]
+ },
+ {
+  "card": "Gempalm Polluter",
+  "clause": "you may have target player lose life equal to the number of zombies on the battlefield",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
+  "card": "Gempalm Sorcerer",
+  "clause": "wizard creatures gain flying until end of turn",
+  "ignored": [
+   "creatures"
+  ]
+ },
+ {
+  "card": "Gempalm Strider",
+  "clause": "elf creatures get +2/+2 until end of turn",
+  "ignored": [
+   "creatures"
+  ]
+ },
+ {
   "card": "Gemstone Mine",
   "clause": "add one mana of any color. if there are no mining counters on this land, sacrifice it",
   "ignored": [
@@ -1556,6 +1613,13 @@
   "clause": "you may put a goblin permanent card from your hand onto the battlefield",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Goblin Lookout",
+  "clause": "goblin creatures get +2/+0 until end of turn",
+  "ignored": [
+   "creatures"
   ]
  },
  {
@@ -1745,6 +1809,13 @@
  {
   "card": "Haunting Echoes",
   "clause": "exile all cards from target player's graveyard other than basic land cards. for each card exiled this way, search that player's library for all cards with the same name as that card and exile them. then that player shuffles",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Havoc Demon",
+  "clause": "all creatures get -5/-5 until end of turn",
   "ignored": [
    "all"
   ]
@@ -2028,6 +2099,13 @@
   "clause": "each other player may draw up to three cards",
   "ignored": [
    "may"
+  ]
+ },
+ {
+  "card": "Infernal Caretaker",
+  "clause": "return all zombie cards from all graveyards to their owners' hands",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -2637,6 +2715,13 @@
   ]
  },
  {
+  "card": "Mistform Wakecaster",
+  "clause": "choose a creature type. each creature you control becomes that type until end of turn",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Mogg Infestation",
   "clause": "destroy all creatures target player controls. for each creature that died this way, that player creates two 1/1 red goblin creature tokens",
   "ignored": [
@@ -2765,6 +2850,13 @@
  {
   "card": "Nova Cleric",
   "clause": "destroy all enchantments",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Noxious Ghoul",
+  "clause": "all non-zombie creatures get -1/-1 until end of turn",
   "ignored": [
    "all"
   ]
@@ -3061,6 +3153,13 @@
  {
   "card": "Planar Despair",
   "clause": "all creatures get -1/-1 until end of turn for each basic land type among lands you control",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Planar Guide",
+  "clause": "exile all creatures. at the beginning of the next end step, return those cards to the battlefield under their owners' control",
   "ignored": [
    "all"
   ]
@@ -3468,6 +3567,13 @@
   ]
  },
  {
+  "card": "Riptide Mangler",
+  "clause": "this creature's base power becomes equal to target creature's power",
+  "ignored": [
+   "base"
+  ]
+ },
+ {
   "card": "Riptide Replicator",
   "clause": "create an x/x creature token of the chosen color and type, where x is the number of charge counters on this artifact",
   "ignored": [
@@ -3852,6 +3958,14 @@
   "clause": "simoon deals 1 damage to each creature target opponent controls",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Skirk Drill Sergeant",
+  "clause": "you may pay {2}{r}. if you do, reveal the top card of your library. if it's a goblin permanent card, put it onto the battlefield. otherwise, put it into your graveyard",
+  "ignored": [
+   "permanent",
+   "card,"
   ]
  },
  {

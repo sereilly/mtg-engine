@@ -15,9 +15,11 @@
     "Earth Elemental",
     "Elvish Ranger",
     "Elvish Warrior",
+    "Enormous Baloth",
     "Femeref Scouts",
     "Fire Elemental",
     "Fresh Volunteers",
+    "Fugitive Wizard",
     "Garruk's Gorehorn",
     "Giant Cockroach",
     "Giant Octopus",
@@ -75,6 +77,27 @@
     "Woodland Druid"
   ],
   [
+    "Air Elemental",
+    "Armored Pegasus",
+    "Aven Envoy",
+    "Azure Drake",
+    "Bird Maiden",
+    "Concordia Pegasus",
+    "Dusk Imp",
+    "Feral Shadow",
+    "Fighting Drake",
+    "Flying Men",
+    "Gaea's Skyfolk",
+    "Misshapen Fiend",
+    "Phantom Monster",
+    "Roc of Kher Ridges",
+    "Scryb Sprites",
+    "Suntail Hawk",
+    "Tormented Angel",
+    "Willow Faerie",
+    "Wind Drake"
+  ],
+  [
     "Abbey Gargoyles",
     "Aven Smokeweaver",
     "Cerulean Wyvern",
@@ -93,26 +116,6 @@
     "Voice of Truth",
     "Weatherseed Faeries",
     "Windreaper Falcon"
-  ],
-  [
-    "Air Elemental",
-    "Armored Pegasus",
-    "Azure Drake",
-    "Bird Maiden",
-    "Concordia Pegasus",
-    "Dusk Imp",
-    "Feral Shadow",
-    "Fighting Drake",
-    "Flying Men",
-    "Gaea's Skyfolk",
-    "Misshapen Fiend",
-    "Phantom Monster",
-    "Roc of Kher Ridges",
-    "Scryb Sprites",
-    "Suntail Hawk",
-    "Tormented Angel",
-    "Willow Faerie",
-    "Wind Drake"
   ],
   [
     "Anaconda",
@@ -145,6 +148,7 @@
   [
     "Argothian Swine",
     "Crash of Rhinos",
+    "Defiant Elf",
     "Giant Warthog",
     "Goliath Beetle",
     "Iron Tusk Elephant",
@@ -215,6 +219,14 @@
     "Solidarity",
     "Vitalizing Wind",
     "Warrior's Honor"
+  ],
+  [
+    "Canopy Spider",
+    "Giant Mantis",
+    "Giant Spider",
+    "Needleshot Gourna",
+    "Plated Spider",
+    "Rib Cage Spider"
   ],
   [
     "Cat Warriors",
@@ -314,13 +326,6 @@
     "Disciple of Malice"
   ],
   [
-    "Canopy Spider",
-    "Giant Mantis",
-    "Giant Spider",
-    "Plated Spider",
-    "Rib Cage Spider"
-  ],
-  [
     "Canyon Wildcat",
     "Dwarven Grunt",
     "Goblin Spelunkers",
@@ -396,6 +401,12 @@
     "Standing Troops"
   ],
   [
+    "Barkhide Mauler",
+    "Hundroog",
+    "Sandbar Merfolk",
+    "Sandbar Serpent"
+  ],
+  [
     "Bog Imp",
     "Goblin Sky Raider",
     "Mahamoti Djinn",
@@ -412,6 +423,12 @@
     "Rootbreaker Wurm",
     "Wildwood Patrol",
     "Yavimaya Wurm"
+  ],
+  [
+    "Covert Operative",
+    "Metathran Soldier",
+    "Phantom Warrior",
+    "Tidal Kraken"
   ],
   [
     "Crossbow Infantry",
@@ -479,14 +496,19 @@
     "Sudden Strength"
   ],
   [
+    "Armor Sliver",
+    "Barbed Sliver",
+    "Spectral Sliver"
+  ],
+  [
     "Army of Allah",
     "Morale",
     "Trumpet Blast"
   ],
   [
-    "Barkhide Mauler",
-    "Sandbar Merfolk",
-    "Sandbar Serpent"
+    "Blade Sliver",
+    "Muscle Sliver",
+    "Plated Sliver"
   ],
   [
     "Breezekeeper",
@@ -554,6 +576,16 @@
     "Titanic Growth"
   ],
   [
+    "Kavu Climber",
+    "Merchant of Secrets",
+    "Striped Bears"
+  ],
+  [
+    "Keeneye Aven",
+    "Pendrell Drake",
+    "Primoc Escapee"
+  ],
+  [
     "Killer Whale",
     "Manta Riders",
     "Whiptongue Frog"
@@ -562,11 +594,6 @@
     "Lone Wolf",
     "Pride of Lions",
     "Thorn Elemental"
-  ],
-  [
-    "Metathran Soldier",
-    "Phantom Warrior",
-    "Tidal Kraken"
   ],
   [
     "Ramosian Commander",
@@ -637,10 +664,6 @@
   [
     "Arenson's Aura",
     "Teferi's Care"
-  ],
-  [
-    "Armor Sliver",
-    "Barbed Sliver"
   ],
   [
     "Armor of Faith",
@@ -879,6 +902,10 @@
     "Reclamation"
   ],
   [
+    "Folk of the Pines",
+    "Stonewood Invoker"
+  ],
+  [
     "Forbidden Lore",
     "Verdant Field"
   ],
@@ -915,8 +942,16 @@
     "Glittering Lynx"
   ],
   [
+    "Goblin Clearcutter",
+    "Orcish Lumberjack"
+  ],
+  [
     "Goblin Glider",
     "Kyren Glider"
+  ],
+  [
+    "Goblin Goon",
+    "Mogg Toady"
   ],
   [
     "Goblin Mutant",
@@ -1009,10 +1044,6 @@
   [
     "Juz\u00e1m Djinn",
     "Nettletooth Djinn"
-  ],
-  [
-    "Kavu Climber",
-    "Striped Bears"
   ],
   [
     "Kjeldoran Dead",
