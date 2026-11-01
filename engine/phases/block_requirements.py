@@ -15,7 +15,8 @@ Three parts, one per clause of that sentence:
   :class:`BlockRequirement` each, read off every channel the pool can arm: the
   attacker's side (Lure and its printed twins, "must be blocked if able") and
   the blocker's (Watchdog's printed line, the Aura and board-wide spellings of
-  it, Provoke's mark, Blaze of Glory's, Trumpeting Armodon's).
+  it, Provoke's mark, Blaze of Glory's, Trumpeting Armodon's, and the provoke
+  keyword's for this combat).
 * **The most that can be obeyed** — :meth:`~BlockRequirementsMixin.
   _most_obeyed_block_declaration`, a search over the declarations that disobey
   no restriction and pay no cost (CR 509.1c's last clause: a creature that
@@ -58,6 +59,7 @@ from itertools import combinations
 
 from ..aura_restrictions import auras_imposing
 from ..combat_permissions import (MUST_BLOCK_ALL_UNTIL_EOT,
+                                  MUST_BLOCK_ATTACKERS_THIS_COMBAT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   MUST_BLOCK_UNTIL_EOT)
 from ..combat_restrictions import participation_cap
@@ -219,17 +221,28 @@ class BlockRequirementsMixin:
         # Both halves of the pair named, the attacker by ``permanent_id`` — so a
         # marked attacker that left combat, left the battlefield or is aimed at
         # somebody else compels nothing.
+        #
+        # …and the same pair **for this combat** (provoke, CR 702.39a), read off
+        # its own mark, one requirement per entry: two provokes aimed at one
+        # creature are two requirements (CR 702.39b), which is what makes a
+        # creature also owed a block elsewhere obey the side carrying more.
         for blocker_idx, blocker in blockers:
-            owed = blocker.metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) or ()
-            if not owed:
-                continue
-            for attacker_idx, attacker in own_attackers:
-                if attacker.permanent_id in owed:
-                    found.append(BlockRequirement(
-                        blocker_idx, attacker_idx,
-                        f"{blocker.card.name} must block {attacker.card.name} "
-                        "this turn if able",
-                    ))
+            for key, window in (
+                (MUST_BLOCK_ATTACKERS_UNTIL_EOT, "this turn"),
+                (MUST_BLOCK_ATTACKERS_THIS_COMBAT, "this combat"),
+            ):
+                owed = list(blocker.metadata.get(key) or ())
+                if not owed:
+                    continue
+                for attacker_idx, attacker in own_attackers:
+                    found.extend(
+                        BlockRequirement(
+                            blocker_idx, attacker_idx,
+                            f"{blocker.card.name} must block {attacker.card.name} "
+                            f"{window} if able",
+                        )
+                        for _ in range(owed.count(attacker.permanent_id))
+                    )
 
         # "This creature blocks each combat if able." (Watchdog.) The weakest
         # blocker-side requirement — block **something** — and four channels

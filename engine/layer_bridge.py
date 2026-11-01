@@ -297,6 +297,11 @@ _TEXT_KEYWORDS = (
     # flanker's own "without flanking" filter asks. The substring scan is safe
     # here on the same test — no narrower keyword's name contains this word.
     "flanking",
+    # …and "provoke" (CR 702.39), line-derived like flanking and granted the
+    # same way — by a lord (Hunter Sliver), whose granted "Provoke" line is
+    # what puts the word back in the set. The substring test holds: no
+    # narrower keyword's name contains this word.
+    "provoke",
     # …and "phasing", which a card can carry as a printed line alone: Teferi's
     # Curse grants it as a keyword and Shimmer as a board-wide static, and the
     # untap step reads the word off this set. Same substring test as the two

@@ -142,6 +142,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.29",  # Cycling (USG: 34 cards)
         "702.36",  # Fear
         "702.37",  # Morph (ONS: 46 cards; ``engine/face_down.py``)
+        "702.39",  # Provoke (LGN: 8 cards + Hunter Sliver; ``engine/provoke.py``)
         "702.108", # Prowess
         "702.111", # Menace
         # NOT 702.83 Exalted, for 701.43's reason: `engine/whenever_triggers.py` cites

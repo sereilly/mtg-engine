@@ -156,6 +156,15 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
     # layer 6, so a granted shadow (Dauthi Embrace, Shadow Rift) and a removed
     # one (Reality Anchor) are the ordinary channels with nothing else to build.
     "shadow",
+    # CR 702.39: provoke. Flanking's shape again — the CR *defines* it as a
+    # triggered ability ("Whenever this creature attacks, you may choose to
+    # have target creature defending player controls block this creature this
+    # combat if able. If you do, untap that creature."), so the behaviour is a
+    # compile-time rewrite (`engine/provoke.py`) and this set holds the word.
+    # The word is not decoration: Hunter Sliver grants it ("All Sliver
+    # creatures have provoke"), and a grant of a line-derived keyword grants
+    # the line (`keywords.LINE_DERIVED_KEYWORDS`).
+    "provoke",
 })
 
 

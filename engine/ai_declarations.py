@@ -333,6 +333,7 @@ def _legal_block_declaration(
         )
         ordered.append((blocker_idx, blocker, score))
     ordered.sort(key=lambda entry: -entry[2])
+    ordered = _within_blocker_ceilings(game, attacker_player, chosen, ordered)
 
     while ordered:
         # What the declaration *costs*, pruned against for the attack side's
@@ -370,6 +371,49 @@ def _legal_block_declaration(
         if blocker_idx in kept
     }
 
+
+
+def _within_blocker_ceilings(game, attacker_player, chosen, ordered):
+    """*ordered* (best block first) without the blocks that put more creatures
+    on one attacker than it may be blocked by.
+
+    "This creature can't be blocked by more than one creature." (Stalking
+    Tiger, Charging Rhino, Krosan Vorine; Familiar Ground's board-wide
+    spelling.) CR 509.1b's ceiling on one attacker, which the declaration gate
+    reads through ``_maximum_blockers`` and ``block_declaration_refusal`` does
+    not — it judges the set of blockers, not who each one blocks — so the
+    prune below never saw it: two Bears both liked a Stalking Tiger, the
+    declaration was refused whole, and the seat blocked with nobody.
+
+    Asked of the same ``_maximum_blockers`` the gate asks, and the blocks kept
+    are the best ones up to each ceiling: the list is already worst-last, so a
+    walk down it keeps a block while its attacker has room. A creature
+    blocking several attackers is dropped whole when any of them is full,
+    for the reason the prune below drops a key: a partial block is a
+    different declaration, not a smaller one.
+    """
+    ceilings: dict[int, int | None] = {}
+    counted: dict[int, int] = {}
+    kept = []
+    for entry in ordered:
+        assigned = chosen[entry[0]]
+        attacker_indices = assigned if isinstance(assigned, list) else [assigned]
+        for attacker_idx in attacker_indices:
+            if attacker_idx not in ceilings:
+                attacker = game.permanent_at(attacker_player, attacker_idx)
+                ceilings[attacker_idx] = (
+                    game._maximum_blockers(attacker) if attacker is not None else None
+                )
+        if any(
+            ceilings[attacker_idx] is not None
+            and counted.get(attacker_idx, 0) + 1 > ceilings[attacker_idx]
+            for attacker_idx in attacker_indices
+        ):
+            continue
+        for attacker_idx in attacker_indices:
+            counted[attacker_idx] = counted.get(attacker_idx, 0) + 1
+        kept.append(entry)
+    return kept
 
 
 def _unaffordable_attacker(game, seat, attackers, against):

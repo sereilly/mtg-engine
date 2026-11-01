@@ -870,6 +870,19 @@ class OptionalPayChoicesMixin:
                 f"{player.name} declined {entry['card_name']} "
                 "(the copy would be aimed at them)"
             )
+        # …and a block the offer would compel (provoke, CR 702.39a): taken
+        # only when the attacker gains from the fight
+        # (`ai_compelled_blocks.compelled_block_declined`). "Take gifts" read
+        # the untap as one and untapped a creature that then could not block
+        # the provoker, or blocked it and won.
+        elif floating is not None and _compelled_block_declined(
+            self, choice.player_index, entry
+        ):
+            floating = None
+            self.log.append(
+                f"{player.name} declined {entry['card_name']} "
+                "(the block it compels is not worth having)"
+            )
         # **A trade this policy can price on both sides is weighed, not
         # refused or taken by rule** (`ai_prompts.offer_trade_is_worth_taking`:
         # a draw step for a land card, a card from hand for the source
@@ -1000,3 +1013,12 @@ class OptionalPayChoicesMixin:
         self._resolve_pay_life_to_save(
             choice, mine and self.players[choice.player_index].life > life
         )
+
+
+def _compelled_block_declined(game, player_index: int, entry: dict) -> bool:
+    """``ai_compelled_blocks.compelled_block_declined``, reached the way this
+    module reaches every other AI weight — at the call, so the stack mixins
+    load before the AI does."""
+    from ....ai_compelled_blocks import compelled_block_declined
+
+    return compelled_block_declined(game, player_index, entry)

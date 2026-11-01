@@ -816,6 +816,32 @@ class TriggerChoicesMixin:
                     return self._resolve_trigger_target(
                         choice, permanent_id=target["permanent_id"]
                     )
+            # "…you may have **target creature defending player controls**
+            # untap and block it if able." (Provoke, CR 702.39a.) The target is
+            # mandatory while one exists and the "may" comes later, so the
+            # answer here is the creature the attacker gains most from fighting
+            # (``ai_compelled_blocks``) — read off the program, so any trigger
+            # compelling its target to block its source is aimed the same way.
+            # The first creature offered was whatever sat first on the
+            # defender's battlefield, a tapped 1/1 as readily as a 6/6.
+            from ....ai_compelled_blocks import (best_compelled_blocker,
+                                                 compels_a_block_on_source)
+
+            attacker = getattr(item, "source_permanent", None)
+            if attacker is not None and compels_a_block_on_source(
+                getattr(item, "ability_instruction", None)
+            ):
+                offered_creatures = [
+                    permanent for target in targets
+                    if target.get("kind") == "permanent"
+                    for permanent in (self.permanent_by_id(target.get("permanent_id")),)
+                    if permanent is not None
+                ]
+                best = best_compelled_blocker(self, attacker, offered_creatures)
+                if best is not None:
+                    return self._resolve_trigger_target(
+                        choice, permanent_id=best.permanent_id
+                    )
             wanted = self._default_trigger_target_side(item, choice.player_index)
             # "Up to two": as many as the ability prints, on the side the
             # effect wants. A seat nobody asks takes what the card offers it —

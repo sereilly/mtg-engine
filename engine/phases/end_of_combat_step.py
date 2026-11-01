@@ -11,6 +11,7 @@ from ..combat_assignment import (BLOCKED_WITHOUT_BLOCKERS,
                                  DEFENDER_ANNOUNCED_THIS_STEP,
                                  DEFENDER_ASSIGNS_AS_UNBLOCKED)
 from ..attack_tapping import clear_attack_tap_exemptions
+from ..combat_permissions import MUST_BLOCK_ATTACKERS_THIS_COMBAT
 from ..destruction_events import delayed_destruction_cause
 from ..delayed_triggers import (expire_combat_delayed_triggers,
                                 fire_delayed_triggers)
@@ -85,6 +86,12 @@ class EndOfCombatStepMixin:
             # would stop the defender being asked there at all.
             permanent.metadata.pop(DEFENDER_ASSIGNS_AS_UNBLOCKED, None)
             permanent.metadata.pop(DEFENDER_ANNOUNCED_THIS_STEP, None)
+            # "…block this creature **this combat** if able." (Provoke,
+            # CR 702.39a.) The requirement is about this combat's blocks, and a
+            # turn may hold a second combat phase in which the same attacker
+            # attacks again: left here, it would compel the creature a second
+            # time on the strength of a trigger that resolved in this one.
+            permanent.metadata.pop(MUST_BLOCK_ATTACKERS_THIS_COMBAT, None)
         # "…this combat" (Johan). The exemptions are scoped to the combat
         # phase, so they end where every other until-end-of-combat effect above
         # does rather than waiting for cleanup.

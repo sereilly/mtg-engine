@@ -184,11 +184,20 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
             game.players.index(context.caster)
             if context.caster in game.players else None
         )
+        # "…untap target creature **defending player controls**" (provoke,
+        # CR 702.39a) and "…that player controls": seats no read of a
+        # permanent can supply, so they go to the matcher the way the tap twin
+        # below hands them over — CR 506.2's seat off the trigger's frozen
+        # context first, the live combat second. Without them the matcher
+        # refuses the word, and the untap found "no valid permanent" on the
+        # one target the picker had offered.
         perm = resolve_target_permanent(
             game, context,
             predicate=lambda p: subject_matches(
                 game, p, described, observer=observer,
                 source=context.source_permanent,
+                that_player=frozen_that_player_seat(game, context),
+                defending=defending_player_seat(game, context),
             ),
             fallback_on_invalid_choice=False,
         )
