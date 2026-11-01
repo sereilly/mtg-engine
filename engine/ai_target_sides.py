@@ -35,6 +35,7 @@ The policy's choosers ask these and choose among the engine's own candidates
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from .models import CardDefinition
 from .oracle import OracleInstruction, compile_card_oracle
@@ -178,9 +179,15 @@ def activation_target_side(instruction: OracleInstruction) -> str | None:
 #: attacking creature" (Feint) name the caster's own creature as the reference
 #: point for an effect on the opponent's; "tap or untap target permanent"
 #: (Twiddle) is both directions at once. No preference: the score decides, as
-#: it did before any of this was derived.
+#: it did before any of this was derived. "This creature's base power becomes
+#: equal to target creature's power" (Riptide Mangler; Sentinel, Sworn
+#: Defender) reads its target and changes only its source: the pump category
+#: made it "you", so the Mangler copied its controller's own biggest power
+#: and never an opponent's greater one — and Sentinel's and Sworn Defender's
+#: targets, the creatures fighting them, were never on that side at all.
 _NO_SIDE_KINDS = frozenset({
     "destroy_all_matching",
+    "set_source_base_pt_from_target",
     "tap_creatures_blocking_target",
     "tap_or_untap_target",
 })
@@ -286,6 +293,12 @@ def _grants_a_burden(instruction: OracleInstruction) -> bool:
     (``untap_restrictions.self_untap_line``: Glyph of Delusion's "This
     creature doesn't untap during your untap step if it has a glyph counter on
     it"). A grant of anything else keeps its category's reading.
+
+    **And a triggered ability that takes its holder off the battlefield**
+    (:func:`_trigger_removes_its_holder`): "If it doesn't have "At the
+    beginning of your upkeep, destroy this creature unless you pay {1} for
+    each music counter on it," it gains that ability." (Musician) — read
+    "you", so the AI put the music on its own creature.
     """
     if getattr(instruction, "kind", None) != "grant_target_ability_text":
         return False
@@ -302,7 +315,37 @@ def _grants_a_burden(instruction: OracleInstruction) -> bool:
             return True
         if self_untap_line(str(text)) is not None:
             return True
+        if _trigger_removes_its_holder(str(text)):
+            return True
     return False
+
+
+#: What a granted trigger compiles to when it takes the permanent holding it
+#: off the battlefield: the self-removals (``ai_valuation.SOURCE_REMOVAL_KINDS``)
+#: and the upkeep tolls whose price unpaid is the holder itself ("destroy this
+#: creature unless you pay …", as ``grammar/lowering/tolls`` lowers it).
+_HOLDER_TOLL_KINDS = frozenset({
+    "upkeep_pay_or_destroy_self",
+    "upkeep_pay_or_sacrifice_self",
+})
+
+
+@lru_cache(maxsize=None)
+def _trigger_removes_its_holder(text: str) -> bool:
+    """Whether the quoted line *text* is a triggered ability (read by the
+    compiler's own triggered-line front end) any step of whose effect
+    destroys, sacrifices, exiles or bounces its own holder, or charges it as
+    the price of an upkeep toll."""
+    from .ability_lines import _parse_triggered_ability
+    from .ai_valuation import SOURCE_REMOVAL_KINDS
+
+    parsed = _parse_triggered_ability(text)
+    if parsed is None or parsed.instruction is None:
+        return False
+    return any(
+        step.kind in SOURCE_REMOVAL_KINDS or step.kind in _HOLDER_TOLL_KINDS
+        for step in _effect_steps(parsed.instruction)
+    )
 
 
 def _silences_its_object(instruction: OracleInstruction) -> bool:

@@ -157,14 +157,22 @@ class NumberChoicesMixin:
         return True
 
     def _default_pay_any_amount(self, choice: PendingChoice) -> bool:
-        """A seat nobody asks pays **nothing**.
+        """A seat nobody asks pays what the amount can buy, as far as its
+        board can pay (``ai_prompts.choose_amount_paid``) — and nothing where
+        the sentence that spends the payment is one the policy cannot price.
 
-        "May" makes declining a real answer, and it is the only one a default
-        can take honestly here — the same reading ``_default_bid_life`` states:
-        how much a Squirrel is worth is a valuation, and spending a board's mana
-        on it is a judgement nobody made. It also keeps the mana where the seat
-        left it, which is the answer that changes least.
+        "May" makes declining a real answer, and it was the only one this
+        took: an AI Hollow Specter connected every turn and never made anyone
+        discard (LGN W1G7), and an AI seat under a dying Liege of the Hollows
+        made no Squirrels while the opponent it was playing could. An answer
+        the board turns out not to cover is answered with nothing rather than
+        left owing.
         """
+        from ....ai_prompts import choose_amount_paid
+
+        amount = choose_amount_paid(self, choice)
+        if amount and self._resolve_pay_any_amount(choice, amount):
+            return True
         return self._resolve_pay_any_amount(choice, 0)
 
     # -- "Choose a number between N and M" -----------------------------------
