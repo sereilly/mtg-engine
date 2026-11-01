@@ -794,11 +794,7 @@ def _activation_candidate(
     # source exists to be given up (`_exists_to_be_given_up`); and an effect
     # that comes back at its activator (`ai_valuation.reaches_both_sides` —
     # Shepherd of Rot drained both players from any position).
-    #
-    # **And a rewrite of what its source is that reads a target** (LGN W2G4):
-    # "This creature's base power becomes equal to target creature's power"
-    # (Riptide Mangler) was re-activated every main phase at 1 -> 1, a flat
-    # 2.5 for a change of nothing — `_sets_only_what_its_source_is` covers it.
+    # (Riptide Mangler's rewrite was re-activated at 1 -> 1: `_OWN_REWRITE_KINDS`.)
     if (
         ability_index is not None
         or _sets_only_what_its_source_is(ability.instruction)
@@ -824,12 +820,9 @@ _OWN_TYPE_SET_KINDS = frozenset({
     "set_self_creature_type", "set_enchanted_creature_type",
 })
 
-#: Every rewrite of what its own source **is** the activation chooser rehearses
-#: rather than scores: the type sets above, and a base power or toughness read
-#: off a target ("This creature's base power becomes equal to target
-#: creature's power", Riptide Mangler; Sentinel; Sworn Defender), whose worth
-#: is the difference between the source's power before and after — nothing
-#: when the two are equal, which the flat score cannot see.
+#: Every rewrite of what its source **is** that is rehearsed, not scored: the
+#: type sets above, and a base P/T read off a target (Riptide Mangler,
+#: Sentinel, Sworn Defender) — worth nothing when the two powers are equal.
 _OWN_REWRITE_KINDS = _OWN_TYPE_SET_KINDS | {"set_source_base_pt_from_target"}
 
 
@@ -866,9 +859,8 @@ def _exists_to_be_given_up(permanent) -> bool:
 
 
 def _sets_only_what_its_source_is(instruction) -> bool:
-    """Whether *instruction* is a rewrite of what its source or host is and
-    nothing else (:data:`_OWN_REWRITE_KINDS`, behind any
-    ``choose_creature_type``)."""
+    """Whether *instruction* rewrites what its source or host is and nothing
+    else (:data:`_OWN_REWRITE_KINDS`, behind any ``choose_creature_type``)."""
     steps = (
         tuple(instruction.payload.get("steps") or ())
         if instruction.kind == "sequence" else (instruction,)
