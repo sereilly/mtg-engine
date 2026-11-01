@@ -52,7 +52,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| LGN *(measured)* | 145 | 235 | 66.4% | 60.9% | 37.9% | 85 |
+| LGN *(measured)* | 145 | 235 | 67.2% | 62.6% | 39.1% | 88 |
 | **All (shipped)** | **8362** | **12427** | **90.2%** | **89.7%** | **62.4%** | **6559** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -66,9 +66,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 780 | 403 | expected a subject |  |
-| 181 | 95 | unrecognized effect verb |  |
+| 180 | 94 | unrecognized effect verb |  |
 | 138 | 75 | unconsumed text |  |
-| 70 | 51 | granted ability in quotes | phase 3 (quoted abilities) |
+| 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 22 | 18 | expected 'unless defending player controls' |  |
@@ -3548,6 +3548,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of the upkeep of enchanted creature's controller, put a -0/-1 counter on that creature.`
 - **Essence Fracture**
   - `Return two target creatures to their owners' hands.`
+- **Essence Sliver**
+  - `Whenever a Sliver deals damage, its controller gains that much life.`
 - **Essence Vortex**
   - `Destroy target creature unless its controller pays life equal to its toughness. A creature destroyed this way can't be regenerated.`
 - **Eternal Flame**
@@ -7032,6 +7034,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}: This creature becomes the creature type of your choice until end of turn.`
 - **Mistform Skyreaver**
   - `{1}: This creature becomes the creature type of your choice until end of turn.`
+- **Mistform Sliver**
+  - `All Slivers have "{1}: This permanent becomes the creature type of your choice in addition to its other types until end of turn."`
 - **Mistform Stalker**
   - `{1}: This creature becomes the creature type of your choice until end of turn.`
   - `{2}{U}{U}: This creature gets +2/+2 and gains flying until end of turn.`
@@ -12382,6 +12386,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{X}{U}: This turn, creatures can't attack unless their controller pays {X} for each attacking creature they control.`
 - **Warbreak Trumpeter**
   - `When this creature is turned face up, create X 1/1 red Goblin creature tokens.`
+- **Ward Sliver**
+  - `All Slivers have protection from the chosen color.`
 - **Warded Battlements**
   - `Attacking creatures you control get +1/+0.`
 - **Warden of the Woods**
