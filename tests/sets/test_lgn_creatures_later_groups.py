@@ -578,6 +578,92 @@ def test_w1g5_mistform_ultimus_answers_this_groups_tribal_cards(set_pool):
     )
     assert whip.has_type("cleric")
 
+
+# --- W1G5's drive list: the tribal cards that compiled on arrival ----------
+
+
+@_w1g5_pytest.mark.parametrize("with_ultimus", [False, True])
+def test_w1g5_tribal_statics_and_counts_see_mistform_ultimus(
+    set_pool, with_ultimus,
+):
+    """Cloudreach Cavalry ("As long as you control a Bird") and Skirk Outrider
+    ("…a Beast") switch on with the Ultimus and not without; Wirewood
+    Channeler adds a mana per Elf, Riptide Director draws per Wizard and
+    Timberwatch Elf pumps per Elf on the battlefield (Bob's Ultimus counts)."""
+    game, alice, bob, card = _w1g5_table(set_pool)
+    cavalry = _w1g5_put(game, 0, card("Cloudreach Cavalry"))
+    outrider = _w1g5_put(game, 0, card("Skirk Outrider"))
+    _w1g5_put(game, 0, card("Wirewood Channeler"))
+    _w1g5_put(game, 0, card("Riptide Director"))
+    _w1g5_put(game, 0, card("Timberwatch Elf"))
+    legion = _w1g5_put(game, 0, card("Severed Legion"))    # 2/2, no Beast
+    if with_ultimus:
+        _w1g5_put(game, 1, card("Mistform Ultimus"))
+        _w1g5_put(game, 0, card("Mistform Ultimus"))
+    game._refresh_dynamic_creatures()
+    bonus = 2 if with_ultimus else 0
+    assert (cavalry.effective_power, cavalry.effective_toughness) == (1 + bonus, 1 + bonus)
+    assert game._has_keyword(cavalry, "flying") is with_ultimus
+    assert (outrider.effective_power, outrider.effective_toughness) == (2 + bonus, 2 + bonus)
+    assert game._has_keyword(outrider, "trample") is with_ultimus
+
+    # The Channeler and Timberwatch Elf, and both Ultimuses where present.
+    elves = 2 + (2 if with_ultimus else 0)
+    assert game.activate_permanent_ability(0, "Wirewood Channeler").supported
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert sum(alice.mana_pool.values()) == elves
+
+    hand_before = len(alice.hand)
+    assert game.activate_permanent_ability(0, "Riptide Director").supported
+    _w1g5_resolve_stack(game)
+    assert len(alice.hand) - hand_before == (2 if with_ultimus else 1)
+
+    assert game.activate_permanent_ability(
+        0, "Timberwatch Elf", target_permanent_ids=[legion.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert legion.effective_power == 2 + elves
+
+
+@_w1g5_pytest.mark.parametrize("with_ultimus", [False, True])
+def test_w1g5_tribal_entry_triggers_and_tap_costs_see_mistform_ultimus(
+    set_pool, with_ultimus,
+):
+    """Totem Speaker ("Whenever a Beast enters, you may gain 3 life") and
+    Wirewood Hivemaster ("Whenever another nontoken Elf enters, you may
+    create a 1/1 green Insect") both answer the Ultimus entering — and
+    neither answers a Human Cleric (Daru Mender) entering. Crookclaw
+    Elder's "Tap two untapped Birds you control" can tap the Ultimus as its
+    second Bird."""
+    entering = "Mistform Ultimus" if with_ultimus else "Daru Mender"
+    game, alice, bob, card = _w1g5_table(set_pool, entering)
+    _w1g5_put(game, 0, card("Wirewood Hivemaster"))
+    _w1g5_put(game, 0, card("Totem Speaker"))     # an Elf: one Insect already
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    def insects():
+        return sum(1 for p in game.controlled_by(0) if "Insect" in p.card.name)
+
+    before_life, before_insects = alice.life, insects()
+    assert game.queue_from_hand(0, entering).supported
+    for _ in range(3):
+        _w1g5_resolve_stack(game)
+        game.auto_resolve_pending_choices()
+    assert alice.life - before_life == (3 if with_ultimus else 0)
+    assert insects() - before_insects == (1 if with_ultimus else 0)
+
+    elder = _w1g5_put(game, 0, card("Crookclaw Elder"))
+    hand = len(alice.hand)
+    result = game.activate_permanent_ability(0, "Crookclaw Elder", ability_index=0)
+    _w1g5_resolve_stack(game)
+    if with_ultimus:
+        assert result.supported and len(alice.hand) == hand + 1
+        assert elder.tapped
+    else:
+        assert not result.supported, "one Bird is not two"
+
 # ==== end W1G5 ======================================================
 
 
