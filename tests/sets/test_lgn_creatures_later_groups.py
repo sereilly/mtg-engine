@@ -2135,12 +2135,16 @@ def test_w1g7_goblin_assassin_asks_each_tails_seat_which_creature(set_pool, monk
     assert game.cast_from_hand(0, "Goblin Assassin").supported
     game.resolve_top_of_stack()
     assert not game.resolve_top_of_stack(), "the trigger waits for its answers"
-    assert sorted(c.player_index for c in game.pending_choices if c.kind == "sacrifice") == [0, 1]
+    # One seat at a time, the active player's first, and nothing goes until
+    # the last has chosen (CR 101.4; W2G3's each-player round).
+    assert [c.player_index for c in game.pending_choices if c.kind == "sacrifice"] == [0]
     assassin = next(
         p for p in game.controlled_by(0) if p.card.name == "Goblin Assassin"
     )
     wurm = next(p for p in game.controlled_by(1) if p.card.name == "Craw Wurm")
     assert game.confirm_sacrifice(0, [game.battlefield_index_of(assassin)])
+    assert [c.player_index for c in game.pending_choices if c.kind == "sacrifice"] == [1]
+    assert game.is_on_battlefield(assassin), "chosen, not yet sacrificed"
     assert game.confirm_sacrifice(1, [game.battlefield_index_of(wurm)])
     _w1g7_resolve_stack(game)
     assert _w1g7_board(game, 0) == ["Grizzly Bears"]

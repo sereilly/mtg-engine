@@ -1671,11 +1671,16 @@ def test_w1g8_the_three_edicts_ask_each_player_in_turn_order(
 
     assert game.queue_from_hand(0, spell).supported
     game.resolve_top_of_stack(pause_for_choices=True)
-    assert _w1g8.owed(game) == [("sacrifice", 0), ("sacrifice", 1)]
+    # One seat at a time (CR 101.4): the active player is asked, and the
+    # other seat only once that answer is in.
+    assert _w1g8.owed(game) == [("sacrifice", 0)]
     assert all(
         choice.data["filter"] == {"type_filter": kind} and choice.data["count"] == 1
         for choice in game.pending_choices
     )
+    game.auto_resolve_pending_choices(only_player_index=0)
+    if theirs:
+        assert _w1g8.owed(game) == [("sacrifice", 1)]
     _w1g8.settle(game)
 
     assert len(_w1g8.names(game, 0)) == len(mine), "one of theirs, and the Sol Ring kept"

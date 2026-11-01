@@ -666,14 +666,28 @@ def keep_chosen_sacrifice_rest(game: Game, instruction: OracleInstruction, conte
         # A seat already at the minimum keeps everything it has — no rest, no
         # decision, no prompt.
         seats = [seat for seat in seats if len(held[seat]) > fewest]
+    # **One seat at a time, in turn order** (CR 101.4; Cataclysm's ruling,
+    # 2004-10-04: "The current player makes their choices before the other
+    # player"): the next seat's prompt is armed only once the one before it
+    # has answered, so a later chooser knows the earlier choices (CR 101.4b).
+    # The answers are held in the batch and performed together by the
+    # round's last step. Every seat's prompt used to be armed at once, in seat
+    # order.
     batch = game.new_keep_batch()
-    for seat in seats:
-        game.arm_keep_permanents(
-            seat, pool=pool, slots=slots, reason=card_name, fate=fate,
-            batch=batch,
-        )
-    # Only now can a batch be complete: a seat nobody asks may have answered as
-    # it was armed, with seats still to come behind it.
-    batch["armed"] = True
-    game.finish_keep_batch(batch)
+    owing = set(seats)
+
+    def ask(seat: int) -> None:
+        if seat in owing:
+            game.arm_keep_permanents(
+                seat, pool=pool, slots=slots, reason=card_name, fate=fate,
+                batch=batch,
+            )
+
+    def done() -> None:
+        # Only now can a batch be complete: every seat has been asked, and a
+        # seat nobody asks answered as it was armed.
+        batch["armed"] = True
+        game.finish_keep_batch(batch)
+
+    ask_in_turn_order(game, ask, then=done)
     return True, "resolved"

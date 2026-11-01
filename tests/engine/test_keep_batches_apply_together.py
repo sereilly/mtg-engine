@@ -130,15 +130,22 @@ def test_no_keep_prompt_moves_anything_before_the_last_seat_answers(catalog):
         )
         before = _board(game)
         EFFECT_HANDLERS[KIND](game, instruction, context)
-        owed = [c for c in game.pending_choices if c.kind == "keep_permanents"]
+        # One seat is asked at a time, in turn order (CR 101.4), so the
+        # answers are given through the answer funnel — which is what brings
+        # the round back for the next seat.
+        answered = 0
+        while True:
+            owed = [c for c in game.pending_choices if c.kind == "keep_permanents"]
+            if not owed:
+                break
+            assert len(owed) == 1, f"{card.name}: one seat asked at a time"
+            game.take_choice_default(owed[0])
+            answered += 1
+            if [c for c in game.pending_choices if c.kind == "keep_permanents"]:
+                assert _board(game) == before, f"{card.name}: moved before the last answer"
         # "Each opponent" at three seats is still two answers.
-        assert len(owed) >= 2, card.name
-        for choice in owed[:-1]:
-            game._default_keep_permanents(choice)
-            assert _board(game) == before, f"{card.name}: moved before the last answer"
-        game._default_keep_permanents(owed[-1])
+        assert answered >= 2, card.name
         assert _board(game) != before, f"{card.name}: the last answer applied nothing"
-        assert not [c for c in game.pending_choices if c.kind == "keep_permanents"]
         examined.append(card.name)
 
     # Cataclysm, Global Ruin, Planar Overlay and Limited Resources on the tree

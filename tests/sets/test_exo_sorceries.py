@@ -576,8 +576,10 @@ def _r3j8_cataclysm(set_pool, mine, theirs):
 def _r3j8_cast(game):
     assert game.queue_from_hand(0, "Cataclysm").supported
     game.resolve_top_of_stack(pause_for_choices=True)
+    # The current player chooses first; the other seat is asked once that
+    # choice is made (the ruling, CR 101.4 — W2G3 asks the keep in turn order).
     assert [(c.kind, c.player_index) for c in game.pending_choices] == [
-        ("keep_permanents", 0), ("keep_permanents", 1),
+        ("keep_permanents", 0),
     ]
 
 
