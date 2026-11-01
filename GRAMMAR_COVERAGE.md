@@ -52,7 +52,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| LGN *(measured)* | 145 | 235 | 71.1% | 71.1% | 46.8% | 106 |
+| LGN *(measured)* | 145 | 235 | 71.9% | 71.9% | 47.7% | 108 |
 | **All (shipped)** | **8362** | **12427** | **90.2%** | **89.7%** | **62.4%** | **6559** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -67,7 +67,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 779 | 402 | expected a subject |  |
 | 177 | 91 | unrecognized effect verb |  |
-| 135 | 72 | unconsumed text |  |
+| 133 | 70 | unconsumed text |  |
 | 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -1512,6 +1512,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Choose two target creatures controlled by the same player. Exile one of those creatures and put two +1/+1 counters on the other.`
 - **Canopy Claws**
   - `Target creature loses flying until end of turn.`
+- **Canopy Crawler**
+  - `{T}: Target creature gets +1/+1 until end of turn for each +1/+1 counter on this creature.`
 - **Canopy Dragon**
   - `{1}{G}: This creature gains flying and loses trample until end of turn.`
 - **Canopy Stalker**
@@ -3395,6 +3397,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Exile this card from your hand: Add {G}.`
 - **Elvish Vanguard**
   - `Whenever another Elf enters, put a +1/+1 counter on this creature.`
+- **Embalmed Brawler**
+  - `Whenever this creature attacks or blocks, you lose 1 life for each +1/+1 counter on it.`
 - **Embargo**
   - `At the beginning of your upkeep, you lose 2 life.`
 - **Ember Beast**

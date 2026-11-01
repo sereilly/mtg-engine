@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**428 / 639 tracked rules covered (66%)** — 3226 tests, 0 unannotated.
+**429 / 640 tracked rules covered (67%)** — 3236 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -89,7 +89,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/16 | 12% |
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 34/34 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 35/35 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 4/4 | 100% |
 | [704. State-Based Actions](#704-state-based-actions) | 8/8 | 100% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -794,7 +794,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(49 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(50 tests, subrules abcd)*
 - [x] **614.2** Some replacement effects apply to damage from a source. See rule 609.7. *(1 tests)*
 - [x] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re... *(2 tests)*
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
@@ -867,7 +867,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.17** Mill *(7 tests, subrules a)*
 - [x] **701.18** Play *(6 tests, subrules ab)*
 - [x] **701.19** Regenerate *(29 tests, subrules abc)*
-- [x] **701.20** Reveal *(10 tests, subrules ab)*
+- [x] **701.20** Reveal *(11 tests, subrules ab)*
 - [x] **701.21** Sacrifice *(20 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(13 tests, subrules abd)*
@@ -907,6 +907,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.32** Fading *(14 tests, subrules a)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
 - [x] **702.37** Morph *(11 tests, subrules ace)*
+- [x] **702.38** Amplify *(10 tests, subrules ab)*
 - [x] **702.39** Provoke *(5 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
@@ -961,7 +962,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **708.5** At any time, you may look at a face-down spell you control on the stack or a face-down permanent ... *(1 tests)*
 - [ ] **708.6** If you control multiple face-down spells or face-down permanents, you must ensure at all times th...
 - [ ] **708.7** The ability or rules that allow a permanent to be face down may also allow the permanent’s contro...
-- [x] **708.8** As a face-down permanent is turned face up, its copiable values revert to its normal copiable val... *(2 tests)*
+- [x] **708.8** As a face-down permanent is turned face up, its copiable values revert to its normal copiable val... *(3 tests)*
 - [x] **708.9** If a face-down permanent or a face-down component of a merged permanent moves from the battlefiel... *(1 tests)*
 - [x] **708.10** If a face-down permanent becomes a copy of another permanent, its copiable values become the copi... *(1 tests)*
 - [ ] **708.11** If a face-down permanent would have an “As [this permanent] is turned face up . . .” ability afte...
