@@ -123,6 +123,9 @@ def test_provoke_untaps_a_creature_and_makes_it_block(set_pool):
     provoked = _g2i_nosick(Permanent(card=_g2i_creature("Guard", 2, 2)))
     provoked.tapped = True
     game = _g2i_game([attacker], [provoked], hand=[provoke])
+    # Provoke draws a card: with no library P1 lost the game (CR 704.5b)
+    # and an ended game has no combat (CR 104.1).
+    game.players[0].library = [set_pool("STH")["Provoke"]] * 2
     game.start_turn(0)
     game._close_current_priority_step()
 
