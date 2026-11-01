@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**429 / 640 tracked rules covered (67%)** — 3241 tests, 0 unannotated.
+**429 / 640 tracked rules covered (67%)** — 3247 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -120,7 +120,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **101.1** Whenever a card’s text directly contradicts these rules, the card takes precedence. The card over... *(1 tests)*
 - [x] **101.2** When a rule or effect allows or directs something to happen, and another effect states that it ca... *(2 tests)*
 - [x] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ... *(2 tests)*
-- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(11 tests, subrules b)*
+- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(19 tests, subrules b)*
 
 ### 102. Players
 
@@ -745,7 +745,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **609.1** An effect is something that happens in the game as a result of a spell or ability. When a spell, ... *(3 tests)*
 - [x] **609.2** Effects apply only to permanents unless the instruction’s text states otherwise or they clearly c... *(3 tests)*
-- [x] **609.3** If an effect attempts to do something impossible, it does only as much as possible. *(4 tests)*
+- [x] **609.3** If an effect attempts to do something impossible, it does only as much as possible. *(5 tests)*
 - [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(21 tests, subrules b)*
 - [ ] **609.5** If an effect could result in a tie, the text of the spell or ability that created the effect will...
 - [ ] **609.6** Some continuous effects are replacement effects or prevention effects. See rules 614 and 615.
