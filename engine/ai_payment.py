@@ -14,7 +14,10 @@ Three questions, in order:
   non-land sources that only tap, a source sacrificed for mana only to cast
   a spell (:func:`_may_sacrifice_for`), and last a source whose mana costs
   mana (:func:`_plan_through_a_priced_source`). The plan is told what it pays
-  for where its caller knows (:func:`_paying_for`) rather than guessing.
+  for where its caller knows (:func:`_paying_for`) rather than guessing. Of
+  the sources that could pay, the ones spent are those the seat's other wants
+  this turn need least (``mana_wants.mana_wants`` through
+  ``mana_payment._sparing_choice``, the preference every planner shares).
 * **The taps themselves** (:func:`tap_planned_lands`) — every executor's,
   the simulator's and the web app's AI seat's: each source tapped through the
   engine's own seams, for the colour the plan counted on and by the mana
@@ -598,6 +601,11 @@ class _PaymentPlanner:
         self.seat = next(
             (i for i, seated in enumerate(game.players) if seated is player), None
         )
+        #: What the seat may still want to pay for (`mana_wants.mana_wants`),
+        #: read the first time a payment has a choice of sources to make —
+        #: the spell or the hand card being paid for left out of it.
+        self._paying_for = self.spell if self.spell is not None else paying_for
+        self._wants = None
         self.sources: list[_ManaSource] = []
         #: Sources that pay by being sacrificed, in board order — counted only
         #: when everything above cannot pay (`plan`).
@@ -680,13 +688,29 @@ class _PaymentPlanner:
         # The order the matching reaches for them in: lands before non-lands,
         # and within each the source with the fewest colours to offer first —
         # a Forest pays the {G} and the Taiga beside it is still there for
-        # either colour the next spell wants. Board order breaks ties, so a
-        # board of basics is planned as it always was.
+        # either colour the next spell wants. Board order breaks ties. This
+        # is the order the matching *prefers*; which of the sources it could
+        # use actually pay is weighed against the seat's other wants
+        # (`mana_payment._sparing_choice`), and the order decides only where
+        # nothing else is wanted — so such a board is planned as it always was.
         self.sources.sort(key=lambda source: (source.rank, self._breadth(source), source.slot))
 
     def _breadth(self, source: _ManaSource) -> int:
         offered = frozenset().union(*(unit for option in source.options for unit in option.units))
         return len(_unit_pays(self.player, offered) & set(PIP_SYMBOLS))
+
+    def wants(self):
+        """The seat's other wants (`mana_wants.mana_wants`), read once — what
+        the matching keeps payable where it has a choice of sources
+        (`mana_payment._sparing_choice`)."""
+        if self._wants is None:
+            from .mana_wants import mana_wants
+
+            self._wants = (
+                mana_wants(self.game, self.seat, paying_for=self._paying_for)
+                if self.seat is not None else ()
+            )
+        return self._wants
 
     def _readings(self) -> "list[str | None]":
         """CR 609.4's one-spell grants (North Star), tried only where the
@@ -749,7 +773,14 @@ class _PaymentPlanner:
                 units.append(unit)
                 owner.append(position)
         pays = [_unit_pays(self.player, unit, reading) for unit in units]
-        payment = plan_payment({}, range(len(units)), required, produces=pays.__getitem__)
+        # Which units pay is chosen with the seat's other wants in view
+        # (`mana_payment._sparing_choice`): the floating ones first, as they
+        # always were, then the sources that leave the most of the rest of
+        # the turn payable.
+        payment = plan_payment(
+            {}, range(len(units)), required, produces=pays.__getitem__,
+            wants=self.wants, spent_first=len(self.floating), owners=owner,
+        )
         if payment is None:
             return None
         used = sorted(payment.tapped)

@@ -48,7 +48,10 @@ whole cost is {T}, and every mana ability whose cost taps other permanents
 (Birchlore Rangers — the ones it taps are named in the preview, as
 ``cost_taps``), with the colour to ask each for. One planner and two
 payers, so a board the AI seat taps correctly is one a person's auto-tap
-does. **Never a source that is sacrificed**: the AI weighs giving up a Black
+does — and the same preference among the sources that could pay: the ones
+the person's own hand and face-down permanents need least
+(``mana_wants.mana_wants``), so a {3} off Plains and Mountains leaves the
+Plains a face-down Exalted Angel needs to turn up. **Never a source that is sacrificed**: the AI weighs giving up a Black
 Lotus and a button labelled "Auto-Tap" does not make that choice for a
 person, which is also where the highlight draws its line.
 

@@ -29,7 +29,10 @@ matching and no reason to accept a heuristic.
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 
 if TYPE_CHECKING:
@@ -302,6 +305,7 @@ def _plan_under_permissions(
     want: dict[str, int],
     produced: "Sequence[frozenset[str]]",
     payer,
+    wants=None,
 ) -> ManaPayment | None:
     """:func:`plan_payment` for a seat holding a CR 106.6 spending permission.
 
@@ -341,11 +345,13 @@ def _plan_under_permissions(
         if index < floating:
             from_pool[units[index]] = from_pool.get(units[index], 0) + 1
     generic = want["generic"]
+    spent_floating = set(assignment)
     for index, symbol in enumerate(units):
         if generic <= 0:
             break
         if index not in assignment:
             from_pool[symbol] = from_pool.get(symbol, 0) + 1
+            spent_floating.add(index)
             generic -= 1
     spare = [
         index for index, made in enumerate(produced)
@@ -358,6 +364,18 @@ def _plan_under_permissions(
         for index, pip in assignment.items() if index >= floating
     }
     tapped = sorted([*matched, *spare[:max(0, generic)]])
+    # Which lands pay what the floating mana did not is the sparing choice's
+    # (`_sparing_choice`), over what each land's mana may pay *as*; what the
+    # floating mana pays was settled above, and what it leaves is still there
+    # for the payer's next want.
+    chosen = _sparing_choice(
+        [(index, sources[floating + index][1]) for index, made in enumerate(produced) if made],
+        list(matched.values()), max(0, generic), tapped,
+        [sources[index][1] for index in range(floating) if index not in spent_floating],
+        _wants_in_force(wants),
+    )
+    if chosen is not None:
+        tapped, matched = chosen
     return ManaPayment(
         from_pool=from_pool, tapped=tuple(lands[i] for i in tapped),
         # The pip is what the land's mana pays *as*; whether the land can be
@@ -373,6 +391,9 @@ def plan_payment(
     produces: "Callable[[Permanent], Sequence[str]] | None" = None,
     *,
     payer=None,
+    wants=None,
+    spent_first: int = 0,
+    owners=None,
 ) -> ManaPayment | None:
     """How *required* can be paid from *pool* plus tapping *lands*, or None.
 
@@ -380,6 +401,24 @@ def plan_payment(
     spent-in-advance and a land kept untapped is worth more than one that is
     not. Whatever colours the pool cannot cover are matched against the lands;
     the generic part is then paid by anything left over, pool before lands.
+
+    **Which lands pay is chosen with the payer's other wants in view**
+    (*wants*, `_sparing_choice`): of the sets of lands that pay this cost, the
+    one leaving the most of the payer's other costs payable (together, then
+    one at a time: `_wants_left`) — so a {3} on four Plains and three
+    Mountains leaves two Plains when a face-down Exalted Angel wants
+    {2}{W}{W}, where the lands' order alone took three Plains and stranded
+    it. Whether the cost can be paid never depends on this, only which lands
+    pay it; with nothing wanted, or nothing to choose between, the lands are
+    the ones their order gives, as they always were. *wants* is a sequence of
+    symbol dicts or a function returning one (asked only when there is a
+    choice to make); left out, it is whatever ``payment_wants_in_force``
+    names — the one writer of an effect-collected cost
+    (``Game._pay_planned_cost``) names the payer's there. *spent_first* is how
+    many of the first *lands* are mana already floating, there to be spent
+    before any permanent is chosen (``ai_payment._PaymentPlanner`` hands its
+    floating units in as lands); *owners*, beside *lands*, is the source each
+    is a unit of where one source makes several (Sol Ring's {C}{C}).
 
     *produces* overrides what a land makes, for the effects that change it and
     that the permanent cannot answer alone: "Until end of turn, if you tap a
@@ -411,6 +450,7 @@ def plan_payment(
                 for land in lands
             ],
             payer,
+            wants,
         )
     from_pool: dict[str, int] = {}
     left = dict(pool)
@@ -448,10 +488,313 @@ def plan_payment(
     if generic > len(spare):
         return None
     tapped = sorted([*assignment, *spare[:generic]])
+    # The floating units a caller handed in as lands (*spent_first*) pay what
+    # the order gave them; which permanents pay the rest is the sparing
+    # choice's, and what the pool and the unspent floating units hold is still
+    # there for the payer's next want.
+    fixed = [index for index in tapped if index < spent_first]
+    chosen = _sparing_choice(
+        [(index, produced) for index, produced in producers if produced and index >= spent_first],
+        [pip for index, pip in assignment.items() if index >= spent_first],
+        sum(1 for index in tapped if index >= spent_first and index not in assignment),
+        [index for index in tapped if index >= spent_first],
+        [
+            *(frozenset({symbol}) for symbol, amount in left.items()
+              for _ in range(max(0, int(amount)))),
+            *(producers[index][1] for index in range(min(spent_first, len(producers)))
+              if index not in tapped and producers[index][1]),
+        ],
+        _wants_in_force(wants),
+        owners,
+    )
+    if chosen is not None:
+        chosen_tapped, chosen_matched = chosen
+        assignment = {
+            **{index: pip for index, pip in assignment.items() if index < spent_first},
+            **chosen_matched,
+        }
+        tapped = sorted([*fixed, *chosen_tapped])
     return ManaPayment(
         from_pool=from_pool, tapped=tuple(lands[i] for i in tapped),
         tapped_for=tuple(assignment.get(i) for i in tapped),
     )
+
+
+# -- Which sources pay: the payer's other wants -------------------------------
+
+#: The wants an effect-collected cost is planned against when its caller names
+#: none (``Game._pay_planned_cost``, the one writer of such costs, sets it for
+#: the length of a payment): a sequence of symbol dicts, or a function
+#: returning one.
+_WANTS_IN_FORCE: ContextVar = ContextVar("payment_wants_in_force", default=None)
+
+
+@contextmanager
+def payment_wants_in_force(wants):
+    """Run a block in which every :func:`plan_payment` that names no *wants*
+    plans against these.
+
+    A context rather than a parameter for ``ai_payment._PAYING_FOR``'s reason:
+    the plans an effect-collected cost is paid by are drawn up by eight
+    callers' own thunks (an upkeep price, a toll, a counterspell's "unless",
+    an optional offer, a special action …), each also asked "can this be
+    paid?" where the answer cannot depend on it, and handed to one writer
+    (``Game._pay_planned_cost``) — which is the one place that knows a payment
+    is being made, and so the one place that names what the payer still
+    wants.
+    """
+    token = _WANTS_IN_FORCE.set(wants)
+    try:
+        yield
+    finally:
+        _WANTS_IN_FORCE.reset(token)
+
+
+def _wants_in_force(wants):
+    return _WANTS_IN_FORCE.get() if wants is None else wants
+
+
+#: The most ways of choosing which sources pay that are weighed one by one.
+#: Past it the order the sources were handed in decides, as it always did.
+_MAX_SPARING_CHOICES = 512
+
+
+def _sparing_choice(candidates, pips, generic, base, left, wants, owners=None):
+    """``(tapped, matched)`` — the sources to tap instead of *base* and the pip
+    each pays — or None to tap *base*.
+
+    **The one preference every payment planner shares**: of the sets of
+    sources that pay a cost, the one that leaves the payer the most of what
+    else it wants to pay for. Paying in the order the sources are listed is
+    blind to that: a {3} on four Plains and three Mountains took three Plains
+    and stranded Exalted Angel's {2}{W}{W} turn-up; Astral Slide's {2}{W} on
+    Plains, Mountain, Plains, Mountain, Plains, Plains took a Mountain and
+    stranded Solar Blast's cycling {1}{R}{R} (Onslaught's Phase 5). Asked by
+    :func:`plan_payment` — the matching the AI's payment plan, the web's
+    auto-tap and every effect-collected cost go through — after it has found
+    *a* payment, so whether a cost can be paid never depends on it.
+
+    *candidates* is ``(index, pays)`` for every unit of mana the choice may
+    spend, in the caller's order: *pays* is the set of pips it may pay (every
+    candidate also pays generic). The chosen units must pay *pips* and
+    *generic*. *left* is mana that stays available whatever is chosen
+    (floating mana the payment does not spend), one pays-set per unit.
+    *wants* is the payer's other costs — a `PaymentWants`, a sequence of
+    symbol dicts, or a function returning either. *owners*, where a source makes more than one unit (Sol Ring's
+    {C}{C}), maps an index to the source it is a unit of: a source part-spent
+    is tapped all the same, so its other units are not counted as left for a
+    want (they float only until the step ends, CR 106.4), and of two equally
+    good choices the one tapping fewer sources is taken.
+
+    Exact over **kinds** of unit: two Mountains are interchangeable, so a
+    choice is how many of each kind it spends — the first that many of the
+    kind, in the caller's order. Each choice is scored by what the rest still
+    pays (`_wants_left`: the most wants together, the most of them cards, then
+    the most one at a time; a want repeated in hand counts each time); *base*
+    — the caller's own choice — is kept unless another scores higher, so a board
+    with no competing want pays exactly as it did, and ties go to the choice
+    tapping the fewest sources, then to the one whose units come first in the
+    caller's order. Nothing is asked of the wants where there is nothing to
+    choose: one kind of unit, or every candidate needed.
+    """
+    owed = len(pips) + generic
+    if not owed or owed >= len(candidates) or not wants:
+        return None
+    kinds: dict[frozenset, list[int]] = {}
+    for index, pays in candidates:
+        kinds.setdefault(frozenset(pays), []).append(index)
+    if len(kinds) < 2:
+        return None
+    named: dict = {}
+    owner_of = tuple(
+        named.setdefault(
+            owners[index] if owners is not None and owners[index] is not None
+            else ("unit", index),
+            len(named),
+        )
+        for index, _pays in candidates
+    )
+    if callable(wants):
+        wants = wants()
+    counted = _counted_wants(wants, generic_too=len(named) < len(candidates))
+    if not counted:
+        return None
+    order = tuple(kinds)
+    position_of = {index: position for position, (index, _pays) in enumerate(candidates)}
+    # The candidates by kind, as positions in the caller's order, and whose
+    # unit each is: the board as the scoring sees it, with no index in it.
+    of_kind = tuple(tuple(position_of[index] for index in kinds[kind]) for kind in order)
+    scores = _choice_scores(
+        order, of_kind, owner_of, tuple(sorted(pips)), generic,
+        tuple(sorted(left, key=sorted)), counted,
+    )
+    if not scores:
+        return None
+    kind_of = {index: position for position, kind in enumerate(order) for index in kinds[kind]}
+    taken = [0] * len(order)
+    for index in base:
+        if index in kind_of:
+            taken[kind_of[index]] += 1
+    best = max(score for score, _sources in scores.values())
+    if tuple(taken) in scores and scores[tuple(taken)][0] >= best:
+        return None
+    _sources, positions = min(
+        (sources, _realized(of_kind, choice))
+        for choice, (score, sources) in scores.items() if score == best
+    )
+    chosen = [candidates[position][0] for position in positions]
+    pays_of = dict(candidates)
+    matched = _match_colored(list(pips), [(index, pays_of[index]) for index in chosen]) if pips else {}
+    if matched is None:
+        return None
+    return chosen, matched
+
+
+@dataclass(frozen=True)
+class PaymentWants:
+    """What a payer may still want to pay for, as symbol dicts, in two tiers
+    (``mana_wants.mana_wants`` builds it).
+
+    ``cards`` is what a card the payer holds back costs — a spell in hand, an
+    ability that works from the hand, a face-down permanent's turn-up: a card
+    that does nothing until it is paid for. ``abilities`` is the activated
+    abilities of permanents already in play, which can wait. Where two
+    choices keep as many wants payable together, the one keeping more of the
+    first tier wins (`_wants_left`). A plain sequence of symbol dicts is all
+    ``cards``.
+    """
+
+    cards: tuple = ()
+    abilities: tuple = ()
+
+
+def _realized(of_kind, choice) -> "tuple[int, ...]":
+    """The candidate positions a *choice* (a count per kind) spends: the first
+    that many of each kind, in the caller's order."""
+    return tuple(sorted(
+        position for kind, count in enumerate(choice) for position in of_kind[kind][:count]
+    ))
+
+
+def _counted_wants(wants, *, generic_too: bool) -> "tuple[tuple[tuple[tuple[str, int], ...], int, int], ...]":
+    """*wants* (a `PaymentWants` or a sequence of symbol dicts) as ``((cost
+    items, times, tier), …)`` — the cards' tier (0) before the abilities'
+    (1), each in the order listed (first appearance), each cost a sorted
+    tuple of its non-zero symbols. A want of generic mana alone is dropped
+    unless
+    *generic_too* (some source makes more than one unit): with one unit a
+    source every choice taps as many sources, so such a want is payable after
+    all of them or none — but a choice that part-spends a Sol Ring taps one
+    more source than the choice that spends both its units.
+    """
+    if isinstance(wants, PaymentWants):
+        tiers = (wants.cards, wants.abilities)
+    else:
+        tiers = (tuple(wants or ()), ())
+    times: dict[tuple, int] = {}
+    for tier, listed in enumerate(tiers):
+        for want in listed:
+            items = tuple(sorted(
+                (str(symbol), int(amount)) for symbol, amount in (want or {}).items()
+                if int(amount or 0) > 0
+            ))
+            if not items or not generic_too and not any(
+                symbol != "generic" for symbol, _amount in items
+            ):
+                continue
+            times[(items, tier)] = times.get((items, tier), 0) + 1
+    return tuple((items, count, tier) for (items, tier), count in times.items())
+
+
+@lru_cache(maxsize=8192)
+def _choice_scores(order, of_kind, owner_of, pips, generic, left, wants):
+    """``{choice: (score, sources tapped)}`` for every way of spending
+    ``len(pips) + generic`` units of the kinds *order* that pays *pips* — a
+    choice is a count per kind (``of_kind[k]`` lists kind *k*'s candidate
+    positions, ``owner_of[p]`` the source position *p* is a unit of), its
+    score what the untouched sources and *left* still pay of *wants*
+    (`_wants_left`).
+    Empty past ``_MAX_SPARING_CHOICES``.
+
+    A pure function of what a board holds and what is asked of it, so a board
+    planned again (every rehearsal of every candidate cast plans the same
+    lands) is answered from the cache.
+    """
+    owed = len(pips) + generic
+    caps = tuple(len(positions) for positions in of_kind)
+    kind_at = {position: kind for kind, positions in enumerate(of_kind) for position in positions}
+    choices: list[tuple[int, ...]] = []
+
+    def extend(kind: int, remaining: int, prefix: tuple[int, ...]) -> bool:
+        if kind == len(order) - 1:
+            if remaining <= caps[kind]:
+                choices.append((*prefix, remaining))
+            return len(choices) <= _MAX_SPARING_CHOICES
+        for count in range(min(remaining, caps[kind]), -1, -1):
+            if not extend(kind + 1, remaining - count, (*prefix, count)):
+                return False
+        return True
+
+    if not extend(0, owed, ()):
+        return {}
+    asked = [(dict(items), times, tier) for items, times, tier in wants]
+    scores: dict[tuple[int, ...], tuple] = {}
+    for choice in choices:
+        spending = [order[kind] for kind, count in enumerate(choice) for _ in range(count)]
+        if pips and _match_colored(list(pips), list(enumerate(spending))) is None:
+            continue
+        spent = _realized(of_kind, choice)
+        touched = {owner_of[position] for position in spent}
+        rest = [
+            *left,
+            *(order[kind_at[position]] for position in range(len(owner_of))
+              if owner_of[position] not in touched),
+        ]
+        scores[choice] = (_wants_left(rest, asked), len(touched))
+    return scores
+
+
+def _wants_left(rest: "list[frozenset[str]]", wants) -> tuple:
+    """How well *rest* serves *wants* (``(want, times, tier)``, cards before
+    abilities), as a key that sorts better-is-larger: how many it pays
+    **together** — taken in the order listed, each kept if it still fits
+    beside those before it — then how many of those are the cards' tier
+    (`PaymentWants`), then how many it pays one at a time.
+
+    Together first, because a turn is several payments. Scored one at a
+    time, the seeded M21 game paid Walking Corpse with both Swamps off
+    Mountain, Swamp, Swamp and a Dismal Backwater: Mountain and the dual
+    leave Archfiend's Vessel ({B}), Liliana's Steward ({B}) and Heartfire
+    Immolator's "{R}, Sacrifice" each payable alone, where a Swamp and the
+    dual leave only the two one-drops — and the AI cast one spell fewer. The
+    cards' tier second, for the same game: either way two wants fit
+    together, and two one-drops in hand beat a one-drop and an ability that
+    can wait. Nothing finer: two cards in hand are not ranked against each
+    other, so where they tie the caller's own choice stands.
+    """
+    together: dict[str, int] = {}
+    packed = cards = 0
+    for want, times, tier in wants:
+        for _ in range(times):
+            trial = dict(together)
+            for symbol, amount in want.items():
+                trial[symbol] = trial.get(symbol, 0) + amount
+            if _units_pay(rest, trial):
+                together = trial
+                packed += 1
+                cards += 1 if tier == 0 else 0
+    alone = sum(times for want, times, _tier in wants if _units_pay(rest, want))
+    return (packed, cards, alone)
+
+
+def _units_pay(units: "list[frozenset[str]]", want: dict[str, int]) -> bool:
+    """Whether *units* — one pays-set per mana, each also good for generic —
+    pay *want*: its pips matched exactly (:func:`_match_colored`), its generic
+    from what the pips leave."""
+    pips = [symbol for symbol in COLOR_SYMBOLS for _ in range(int(want.get(symbol, 0)))]
+    if len(units) < len(pips) + int(want.get("generic", 0)):
+        return False
+    return not pips or _match_colored(pips, list(enumerate(units))) is not None
 
 
 #: Instruction kinds that put mana into a pool. CR 605.1a's "could add mana to
@@ -875,8 +1218,14 @@ def permanent_mana_cost(permanent) -> dict[str, int] | None:
     as smaller than it is charges less than the card says, and refusing the
     payment is the conservative answer.
     """
-    printed = permanent.effective_card.mana_cost or ""
-    symbols = _PRINTED_SYMBOL.findall(printed)
+    return mana_cost_x_as_zero(permanent.effective_card.mana_cost or "")
+
+
+def mana_cost_x_as_zero(printed: str) -> dict[str, int] | None:
+    """A printed mana cost off the stack (CR 107.3g): :func:`permanent_mana_cost`'s
+    reading of a card's cost string — None for no symbols or one this cannot
+    spend, ``{}`` for a cost of {0} or {X} alone, each ``{X}`` dropped."""
+    symbols = _PRINTED_SYMBOL.findall(printed or "")
     if not symbols:
         return None
     spendable = "".join(

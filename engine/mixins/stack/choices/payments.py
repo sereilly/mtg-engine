@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from .... import land_mana_swaps
 from ....pending_choices import PendingChoice
-from ....mana_payment import (generic_cost, mana_cost_label, plan_payment,
-                              untapped_mana_lands)
+from ....mana_payment import (generic_cost, mana_cost_label, payment_wants_in_force,
+                              plan_payment, untapped_mana_lands)
 
 
 class PaymentChoicesMixin:
@@ -439,6 +439,27 @@ class PaymentChoicesMixin:
         )
         if seat is None:
             return False
+        # **Which lands pay is chosen with the rest of the payer's turn in
+        # view** (`mana_payment._sparing_choice`): every plan drawn up while
+        # this payment is made plans against what the payer may still want to
+        # pay for (`mana_wants.mana_wants`), read once and only if some plan
+        # has a choice of lands to make. The callers' thunks are also asked
+        # "can this be paid?", whose answer this never changes, so the wants
+        # are named here — the one writer — rather than by each of them.
+        from ....mana_wants import mana_wants
+
+        read: list = []
+
+        def wants():
+            if not read:
+                read.append(mana_wants(self, seat))
+            return read[0]
+
+        with payment_wants_in_force(wants):
+            return self._pay_planned_cost_with(player, seat, planner, spend)
+
+    def _pay_planned_cost_with(self, player, seat: int, planner, spend) -> bool:
+        """`_pay_planned_cost`'s loop, under the payer's wants."""
         # Each pass taps one land or finishes, so the bound is the board.
         for _ in range(2 + sum(1 for _perm in self.controlled_by(seat))):
             plan = planner()
