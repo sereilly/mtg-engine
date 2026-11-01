@@ -1663,7 +1663,14 @@ def test_w4g2_the_torch_taxes_a_counterspell_aimed_at_it(set_pool):
         answer = game.cast_from_hand(1, "Memory Lapse", target_stack_index=0)
 
         assert answer.supported is expected, (mana, answer.details)
-        assert any("taxed by Kaervek's Torch" in line for line in game.log)
+        if expected:
+            assert any("taxed by Kaervek's Torch" in line for line in game.log)
+        else:
+            # A refused cast is reversed (CR 733.1), its tax line with it:
+            # the Lapse never left the hand, so the table hears nothing of it
+            # (``engine/refusals.py``). The refusal is the caster's.
+            assert "insufficient mana" in answer.details, answer.details
+            assert not any("Memory Lapse" in line for line in game.log)
 
 
 def test_w4g2_the_torch_taxes_only_the_spell_that_names_it(set_pool):

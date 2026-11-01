@@ -1935,7 +1935,9 @@ def test_w2g4_gaeas_balance_named_four_lands_is_not_cast(set_pool):
     assert all(game.is_on_battlefield(permanent) for permanent in mine)
     assert [card.name for card in game.players[0].hand] == ["Gaea's Balance"]
     assert not game.stack and game.players[0].graveyard == []
-    assert [short.details, wrong.details] == game.log[-2:]
+    # The reasons are the caster's (above); the table is told nothing of a
+    # spell that never left the hand (CR 733.1, ``engine/refusals.py``).
+    assert not any("Gaea's Balance" in line for line in game.log), game.log
 
 
 def test_w2g4_gaeas_balance_pays_the_five_named_and_keeps_the_sixth(set_pool):
