@@ -47,6 +47,15 @@ the census's, below, and a reason:
   or 6–7 lands.
 * **Five: 1 to 4.** Going to four is worse than a one-land or four-land five.
 
+What that did to the same 4,000 sevens: 490 seats mulligan (12.3% — every
+0–1 and 6–7-land seven, and 8 of 1,012 two-landers with no play), 84 of them
+twice, none three times. Seats with at most one land among the cards they
+can reach by their own sixth turn go from 7 to 0, at most two from 83 to 28.
+Played out (the seven stuck deals and five one-landers that reached two
+lands, ``census_targeted.py``), the seats on one land at their sixth turn go
+from 6 of 12 to 1 — that one mulliganed into three lands and sacrificed two of
+them to its own City in a Bottle.
+
 **The bottom: the lands down to the deck's share, then the dearest spells.**
 Of the N cards, as many are lands as bring the kept lands down to
 ``ceil(k * share)`` (three of six, three of five for a 17/40 deck — screw
