@@ -261,10 +261,14 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
         # object it takes the default every other trigger takes, an opponent,
         # and a Necromancy put onto the battlefield with the only creature card
         # in that opponent's graveyard returned nothing.
+        # "…from **an opponent's** graveyard" (Ashen Powder) never falls back
+        # to its caster's own pile: that is the one pile the phrase excludes.
+        opponents_only = bool(instruction.payload.get("opponent_graveyard_only"))
         found = next(
             (
                 (player, slot)
                 for player in (source_player, caster, *game.players)
+                if not (opponents_only and player is caster)
                 for slot in _reanimable_slot(player, card_filter, card_type)
             ),
             None,

@@ -589,6 +589,56 @@ def test_w1g6_planar_guide_activated_in_the_end_step_returns_at_the_next_one(set
         "Venerable Monk",
     ]
 
+
+
+# --- Scion of Darkness (drive list) -----------------------------------------
+
+
+def _w1g6_scion_hits(set_pool, *, interactive):
+    """Scion of Darkness attacks unblocked; each graveyard holds a creature
+    card. Returns the game once combat damage is dealt."""
+    from tests.helpers import declare_attack
+
+    game, me, opp = _w1g6_game(set_pool, library=["Forest"] * 3, interactive=interactive)
+    me.graveyard.append(_w1g6_card(set_pool, "Grizzly Bears"))
+    opp.graveyard.append(_w1g6_card(set_pool, "Hill Giant"))
+    assert _w1g6_compile(_w1g6_card(set_pool, "Scion of Darkness")).supported
+    _w1g6_put(game, 0, set_pool, "Scion of Darkness")
+    declare_attack(game, 0)
+    game.advance_combat_phase()
+    assert opp.life == 14
+    return game, me, opp
+
+
+def test_w1g6_scion_of_darkness_takes_from_the_damaged_players_graveyard(set_pool):
+    """"Whenever this creature deals combat damage to a player, you may put
+    target creature card from that player's graveyard onto the battlefield
+    under your control." The picker offers the damaged player's creature card
+    and not its controller's own — it reanimated out of its controller's
+    graveyard before, the printed owner read as "your"."""
+    game, me, opp = _w1g6_scion_hits(set_pool, interactive=True)
+    (choice,) = [c for c in game.pending_choices if c.kind == "trigger_target"]
+    assert [(t["seat"], t["name"]) for t in choice.data["targets"]] == [(1, "Hill Giant")]
+    assert game.confirm_trigger_target(0, seat=1, graveyard_index=0)
+    _w1g6_resolve(game)
+    game.auto_resolve_pending_choices()
+    _w1g6_resolve(game)
+    assert sorted(
+        (p.card.name, game.controller_index_of(p)) for p in game.all_permanents()
+    ) == [("Hill Giant", 0), ("Scion of Darkness", 0)]
+    assert opp.graveyard == [] and [c.name for c in me.graveyard] == ["Grizzly Bears"]
+
+
+def test_w1g6_scion_of_darkness_default_seat_takes_the_opponents_card(set_pool):
+    game, me, opp = _w1g6_scion_hits(set_pool, interactive=False)
+    _w1g6_resolve(game)
+    game.auto_resolve_pending_choices()
+    _w1g6_resolve(game)
+    assert ("Hill Giant", 0) in [
+        (p.card.name, game.controller_index_of(p)) for p in game.all_permanents()
+    ]
+    assert [c.name for c in me.graveyard] == ["Grizzly Bears"]
+
 # ==== end W1G6 ======================================================
 
 
