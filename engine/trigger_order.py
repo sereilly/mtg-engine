@@ -36,11 +36,18 @@ it is answered none of those objects may resolve — the prompt names them as
 ``_trigger_items`` and ``Game.announcement_choice_for`` reads that, which is
 the hold every resolution loop already respects for an owed mode or target
 (they have not finished being put on the stack). The answer permutes them among
-the stack slots they already occupy, so nothing else on the stack moves. The
-objects were pushed first because a push is where CR 603.3c-d choose each
-one's mode and targets, and every prompt already armed there keeps working
-unchanged; the rule's own order — each object's targets chosen as it is put
-on — differs only in which question is on screen first.
+the stack slots they already occupy, so nothing else on the stack moves.
+
+**Each object's mode and targets are chosen as the window closes too**, just
+before the order is asked (``TargetAnnouncementsMixin._trigger_choice_waits``
+/ ``_announce_waiting_triggers``): a window's objects are pushed at their fire
+sites, while the event that set them off is still under way, and CR 603.3d
+chooses as the ability is put on the stack — after the unit has finished and
+after the state-based check (CR 117.5), which a step's turn-based action makes
+inside its own window. So a dies-trigger in a sweep chooses among what the
+sweep left, and a combat damage trigger among what the damage did not kill.
+The rule's own order — each object's targets chosen as it is put on, in the
+order chosen — differs only in which question is on screen first.
 
 **Between players, APNAP** (:func:`restore_apnap`). One batch was already
 sorted active player first; a window holding several batches was not — two

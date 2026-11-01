@@ -4,8 +4,9 @@
 CR 603.4's intervening-if may refuse a trigger; as it is pushed, the identity
 behind every index the object carries is stamped (``_stamp_stack_targets``),
 so a target is the permanent named and never whichever one later slides into
-its slot; and after it, a modal triggered ability chooses its mode (CR
-700.2b, 603.3c).
+its slot; and after it, a triggered ability chooses its mode and targets (CR
+700.2b, 603.3c-d) — at once, or, pushed inside a unit of play's trigger
+window, when that window closes (``_trigger_choice_waits``, CR 117.5).
 
 Every way an object comes to have targets is announced once, here:
 "becomes the target of a spell or ability" for a permanent and for a player
@@ -194,8 +195,9 @@ class TargetAnnouncementsMixin:
         there. This engine pushes the object at its **fire site**, and chose
         there too — with the event that set it off still under way and the
         state-based check still to come. So a death in a sweep offered every
-        creature the sweep was about to take (Pitchburn Devils' "any target"
-        defaulting onto a creature already destroyed), Celestial Gatekeeper
+        creature the sweep was about to take, itself included (Festering
+        Goblin's "target creature gets -1/-1" was named onto a creature already
+        in the graveyard, where CR 603.3d removes it), Celestial Gatekeeper
         dying to Wrath of God beside a Cleric could return the Cleric only if
         the Cleric had died first, and Scion of Darkness could not name the
         blocker it trampled over and killed, which its 2004-10-04 ruling says
@@ -272,10 +274,11 @@ class TargetAnnouncementsMixin:
         )
         # …and its non-modal twin: an ability whose printed noun phrase is a
         # *choice* the event did not make chooses it now, at the same moment
-        # and for the same rule (CR 603.3d/601.2c). Both hang off this method
-        # for the reason above — it is the one place an object goes on the
-        # stack, and a fire site that builds its own StackItem still passes
-        # through here.
+        # and for the same rule (CR 603.3d/601.2c). Both are reached only from
+        # ``_stack_push`` — directly, or once the window the push was made in
+        # closes — for the reason that method gives: it is the one place an
+        # object goes on the stack, and a fire site that builds its own
+        # StackItem still passes through there.
         #
         # *targets_already_chosen* is the one exception, and it is a rule
         # rather than a list of callers: an **activated** ability chose its
