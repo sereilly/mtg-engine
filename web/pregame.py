@@ -36,6 +36,9 @@ def _build_pregame_info(session: Session, viewer_seat: int | None) -> dict | Non
         info["winner_name"] = winner_name
         info["is_my_turn"] = viewer_seat is not None and viewer_seat == winner
         info["is_loser_choice"] = session.coin_flip_is_loser_choice
+        # "coin_flip", "loser", or "draw" (CR 103.1: after a draw the seat that
+        # chose last time chooses again) — what the prompt says to each seat.
+        info["choice_reason"] = session.coin_flip_choice_reason
         if not info["is_my_turn"]:
             info["waiting_for"] = winner_name
 
@@ -217,6 +220,10 @@ def _pregame_auto_advance(session: Session) -> None:
             winner = session.coin_flip_winner
             if winner is None or _seat_type(session, winner) != "ai":
                 break
+            # The AI's play/draw policy: it plays first. Said in the log as a
+            # person's choice is, so the seat it chose for knows why the game
+            # opened on the AI's turn (a rematch the AI lost, CR 103.1).
+            session.game.log.append(f"{session.game.players[winner].name} chooses to go first")
             _pregame_enter_mulligan(session, winner)
 
         elif session.pregame_phase == "mulligan" and session.simultaneous_mulligan:

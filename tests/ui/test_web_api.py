@@ -415,13 +415,15 @@ def test_rematch_rejected_before_game_finishes():
     assert "finished" in resp.json()["detail"]
 
 
-def test_rematch_rejected_for_non_hvh_mode():
+def test_rematch_rejected_for_a_mode_nobody_plays_in_pairs():
+    # Human vs AI has its rematch too since Legions' post-promotion pass
+    # (tests/ui/test_lgn_p5_client_round_ui_api.py); AI vs AI has no seat to ask.
     created = client.post(
         "/api/sessions",
-        json={"mode": "human_vs_ai", "host_name": "Solo", "host_colors": 2, "seed": 7202},
+        json={"mode": "ai_vs_ai", "host_name": "Solo", "host_colors": 2, "seed": 7202},
     ).json()
     sid = created["session_id"]
-    store.get(sid).game.players[1].life = 0  # AI loses
+    store.get(sid).game.players[1].life = 0
     resp = client.post(f"/api/sessions/{sid}/rematch", json={"seat": 0})
     assert resp.status_code == 400
     assert "human vs human" in resp.json()["detail"]

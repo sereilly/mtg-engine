@@ -68,6 +68,22 @@ def _first_opponent_seat(game, seat: int) -> int | None:
     return None
 
 
+def _rematch_first_chooser(session: Session) -> tuple[int | None, str | None]:
+    """Who chooses who plays first in the next game of the match, and why
+    (CR 103.1): "the loser of the previous game chooses … If the previous game
+    was a draw, the player who made the choice in that game makes the choice
+    in this game." The choice in that game was ``coin_flip_winner``'s — the
+    flip's winner, or a rematch's chooser, which is the seat that field names
+    for the whole game. ``(None, None)`` when nobody can be named (a draw with
+    no recorded chooser), which falls back to a flip."""
+    loser = _loser(session)
+    if loser is not None:
+        return loser, "loser"
+    if _winner(session) == -1 and session.coin_flip_winner is not None:
+        return session.coin_flip_winner, "draw"
+    return None, None
+
+
 def _rematch_human_seats(session: Session) -> list[int]:
     """Joined human seats whose agreement is needed to start a rematch."""
     return [

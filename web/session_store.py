@@ -159,7 +159,14 @@ class Session:
     # who plays first. When set, _begin_pregame skips the flip and hands that
     # seat the first-player choice; coin_flip_is_loser_choice drives the UI text.
     regame_first_chooser: int | None = None
+    # Why that seat chooses (CR 103.1): "loser" — it lost the previous game —
+    # or "draw", when the previous game was a draw and it made the choice in
+    # that game. Read as the pregame begins; None with no regame chooser.
+    regame_choice_reason: str | None = None
     coin_flip_is_loser_choice: bool = False
+    # How the seat choosing who plays first came to choose, for the prompt's
+    # words: "coin_flip", "loser" or "draw".
+    coin_flip_choice_reason: str = "coin_flip"
     mulligan_offer_seat: int | None = None
     mulligan_kept_seats: set[int] = field(default_factory=set)
     mulligan_bottom_seat: int | None = None
@@ -506,13 +513,20 @@ class SessionStore:
         if session.use_pregame:
             chooser = session.regame_first_chooser
             if chooser is not None:
-                # Rematch: the previous loser chooses who plays first — no flip.
+                # Rematch (CR 103.1): the previous game's loser chooses who
+                # plays first — or, after a draw, the seat that made the choice
+                # in that game makes it again. No flip either way.
+                reason = session.regame_choice_reason or "loser"
+                name = game.players[chooser].name
                 game.log.append(
-                    f"{game.players[chooser].name} lost the last game and chooses who plays first"
+                    f"The last game was a draw: {name} chose who played first then and chooses again"
+                    if reason == "draw"
+                    else f"{name} lost the last game and chooses who plays first"
                 )
                 session.pregame_phase = "coin_flip"
                 session.coin_flip_winner = chooser
-                session.coin_flip_is_loser_choice = True
+                session.coin_flip_is_loser_choice = reason == "loser"
+                session.coin_flip_choice_reason = reason
             else:
                 # Rule 103.1: flip coin and record the winner; hand dealing is deferred
                 # until the winner chooses to go first or second.
@@ -524,6 +538,7 @@ class SessionStore:
                 session.pregame_phase = "coin_flip"
                 session.coin_flip_winner = coin_flip_winner
                 session.coin_flip_is_loser_choice = False
+                session.coin_flip_choice_reason = "coin_flip"
         else:
             # Skip interactive pregame (ai_vs_ai or legacy clients).
             starting_player = game.select_starting_player(rng=random.Random(seed + 2))
@@ -699,14 +714,18 @@ class SessionStore:
             self._begin_pregame(session)
         return session
 
-    def restart(self, session: Session, first_chooser: int | None = None) -> Session:
+    def restart(
+        self, session: Session, first_chooser: int | None = None, choice_reason: str = "loser",
+    ) -> Session:
         """Rebuild a fresh game in the same session for a coordinated rematch.
 
         Keeps the same two players, seat assignments, and deck selections, but
         reshuffles both decks off a new seed and replays the pregame (mulligans).
-        When ``first_chooser`` is given (the previous game's loser) that seat
-        chooses who plays first instead of a coin flip. All per-game transient
-        state on the session is reset.
+        When ``first_chooser`` is given that seat chooses who plays first
+        instead of a coin flip (CR 103.1): the previous game's loser
+        (``choice_reason`` "loser"), or after a draw the seat that made the
+        choice in that game ("draw"). All per-game transient state on the
+        session is reset.
         """
         seed = secrets.randbits(32)
         ante = session.playing_for_ante
@@ -774,7 +793,9 @@ class SessionStore:
         session.coin_flip_winner = None
         session.pregame_starting_player = None
         session.regame_first_chooser = first_chooser
+        session.regame_choice_reason = choice_reason if first_chooser is not None else None
         session.coin_flip_is_loser_choice = False
+        session.coin_flip_choice_reason = "coin_flip"
         session.mulligan_offer_seat = None
         session.mulligan_kept_seats = set()
         session.mulligan_bottom_seat = None

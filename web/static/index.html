@@ -11,7 +11,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&display=swap"
     />
-    <link rel="stylesheet" href="/styles.css?v=20261021-torp5" />
+    <link rel="stylesheet" href="/styles.css?v=20261101-lgnp5f" />
   </head>
   <body>
     <div id="auroraLayer" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -370,6 +370,11 @@
             <section class="phase-row">
               <div id="phaseRail" class="phase-rail" aria-label="Turn phases"></div>
               <div class="phase-controls">
+                <!-- The three offer lists below share one scrolling column: it
+                     takes what the phase chips leave and scrolls past that, so
+                     no offer runs out of the rail and no chip is squeezed out
+                     of sight. -->
+                <div class="rail-offers">
                 <!-- CR 116 special actions: filled from state.special_actions,
                      one button per (hand card, kind), hidden when there are
                      none. A hand card cannot carry the affordance itself —
@@ -388,6 +393,7 @@
                      graveyard (Glory, Ashen Ghoul), filled from
                      state.graveyard_abilities, for the hand abilities' reason. -->
                 <span id="graveyardAbilities" class="special-actions"></span>
+                </div>
                 <button id="undoBtn" type="button" class="secondary-btn">Undo</button>
                 <button id="nextPhaseBtn" type="button">Next Phase</button>
                 <button id="endTurnBtn" type="button">End Turn</button>
@@ -940,14 +946,14 @@
       <button type="button" class="permanent-menu-item" role="menuitem" data-action="mark-test-result">Mark Test Result</button>
     </div>
 
-    <script src="/battlefield-canvas.js?v=20261026-onsw2g3"></script>
+    <script src="/battlefield-canvas.js?v=20261101-lgnp5f"></script>
     <script src="/sfx.js?v=3-reveal"></script>
     <script src="/music.js?v=1-music"></script>
     <script src="/anime.min.js?v=3.2.2"></script>
     <script src="/animations.js?v=20260818-handfly2"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
     <script src="/legality.js?v=20261004-splitcount1"></script>
-    <script src="/app.js?v=20261101-lgnp5"></script>
+    <script src="/app.js?v=20261101-lgnp5f"></script>
     <script src="/deck-editor.js?v=20261013-odyp5"></script>
   </body>
 </html>

@@ -3241,8 +3241,12 @@ class BattlefieldCanvas {
       const lines = _wrapKeywordLines(ctx, keywords, w - 6);
       const bandH = lines.length * lineH + 3;
       // Leave the bottom corners for P/T and damage badges; a noncreature has
-      // neither, so its band sits flush with the bottom edge.
-      const reserveBottom = isCreatureCard ? 16 : 3;
+      // neither, so its band sits flush with the bottom edge. The counter
+      // badges stack up the bottom-right corner above the P/T badge (below),
+      // so the band sits above them too: Feral Throwback's "+1/+1 ×4" badge
+      // covered its "Provoke" (Legions' post-promotion pass).
+      const counterSlots = (flags && flags.occludedAuraMember) ? 0 : _counterBadgeCount(card);
+      const reserveBottom = (isCreatureCard ? 16 : 3) + counterSlots * 15;
       const bandBottom = y + h - reserveBottom;
       const bandTop = bandBottom - bandH;
       ctx.fillStyle = "rgba(0,0,0,0.62)";
@@ -5554,6 +5558,17 @@ function _keyPhase(key) {
   const s = String(key);
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
   return ((h % 1000) / 1000) * Math.PI * 2;
+}
+
+// How many counter badges a permanent's tile draws (one per counter kind it
+// holds, or the legacy corpse count) — the same reading as the badge loop, so
+// the keyword band can sit clear of them.
+function _counterBadgeCount(card) {
+  const counterMap = card && card.counters;
+  if (counterMap && typeof counterMap === "object" && Object.keys(counterMap).length) {
+    return Object.values(counterMap).filter((n) => Number(n) > 0).length;
+  }
+  return card && Number(card.corpse_counters) > 0 ? 1 : 0;
 }
 
 // Wrap a list of keywords into lines that fit maxWidth, keeping each keyword

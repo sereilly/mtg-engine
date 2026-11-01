@@ -1235,6 +1235,24 @@ function gameIsOver(state = currentState) {
   return state.status === "finished" || (state.winner !== null && state.winner !== undefined);
 }
 
+// The states each automatic sender has already acted on are remembered by a
+// key of turn, step, stack and log length. "Play Again" starts the next game
+// in the same session, on the same turn 1 and often with a log just as long
+// (the chooser's line, the choice, two draws, two keeps), so a key from the
+// game before named a state of this one: the second rematch in a row the AI
+// played first in sat at "Waiting for AI…", its first step never sent
+// (Legions' post-promotion pass). A game ending is where every one of them
+// starts over, and an End Turn pressed in the last game does not run on.
+function forgetLastGamesRequests() {
+  aiAutoStepRequestedStateKey = "";
+  autoPassTurnEndRequestedStateKey = "";
+  autoPassPriorityRequestedStateKey = "";
+  autoPassDisabledPhaseRequestedStateKey = "";
+  autoCombatDeclareRequestedStateKey = "";
+  autoPassTurnEndEnabled = false;
+  autoPassMode = null;
+}
+
 function getAiStepStateKey(state) {
   if (!state) return "";
   const stackSize = Array.isArray(state.stack) ? state.stack.length : 0;
@@ -2052,6 +2070,25 @@ function specKind(card) {
 
 function specHasTargets(card) {
   return (targetSpecOf(card).valid_targets || []).length > 0;
+}
+
+// What one object on the stack is, for a hint: a spell, or an activated or a
+// triggered ability (CR 113.3b/c) — read off the served stack item (`type`,
+// `is_triggered`; `stack` is top-first, the index a `stack` target carries).
+function stackObjectNoun(stackIndex, state = currentState) {
+  const item = Array.isArray(state?.stack) ? state.stack[stackIndex] : null;
+  if (!item || item.type !== "ability") return "spell";
+  return item.is_triggered ? "triggered ability" : "activated ability";
+}
+
+// What a set of stack objects is, for "click a glowing … on the stack":
+// "spell", "ability", or "spell or ability" when both are offered.
+function stackObjectsNoun(stackIndices, state = currentState) {
+  const nouns = new Set(
+    [...(stackIndices || [])].map((i) => (stackObjectNoun(i, state) === "spell" ? "spell" : "ability")),
+  );
+  if (nouns.size > 1) return "spell or ability";
+  return nouns.has("ability") ? "ability" : "spell";
 }
 
 // Index a backend `valid_targets` list into the lookup structures the UI uses to
@@ -8137,8 +8174,9 @@ function applyTriggerTargetPrompt(info) {
   }
   const cards = candidates.filter((c) => c.kind === "graveyard");
   const kinds = new Set(candidates.map((c) => c.kind || "permanent"));
+  const stackOffered = candidates.filter((c) => c.kind === "stack").map((c) => Number(c.stack_index));
   const where = [];
-  if (kinds.has("stack")) where.push("a glowing spell on the stack");
+  if (kinds.has("stack")) where.push(`a glowing ${stackObjectsNoun(stackOffered)} on the stack`);
   if (kinds.has("permanent")) where.push("a highlighted permanent on the battlefield");
   if (kinds.has("player")) where.push("a highlighted player's life pill");
   q("promptTitle").textContent = "Choose a target";
@@ -8149,17 +8187,24 @@ function applyTriggerTargetPrompt(info) {
   if (where.length) {
     rows.push(`<div>Action: click ${escapeHtml(where.join(", or "))}.</div>`);
   }
-  // The spells on offer by name, top of the stack first: the cascade overlaps
-  // its cards, and a name is how a player tells two of them apart.
+  // The stack objects on offer by name, top of the stack first: the cascade
+  // overlaps its cards, and a name is how a player tells two of them apart.
+  // Each says what it is — Willbender's "target spell or ability" offered a
+  // Goblin Dynamo's activated ability as one of the "spells" it could target
+  // (Legions' post-promotion pass).
   const spells = candidates.filter((c) => c.kind === "stack");
   if (spells.length) {
+    const onlySpells = stackObjectsNoun(stackOffered) === "spell";
     const names = spells
       .map((c) => {
         const owner = currentState?.players?.[c.seat]?.name;
-        return owner ? `${c.name} (${owner})` : `${c.name}`;
+        if (onlySpells) return owner ? `${c.name} (${owner})` : `${c.name}`;
+        const noun = stackObjectNoun(Number(c.stack_index));
+        return owner ? `${c.name} (${owner}'s ${noun})` : `${c.name} (${noun})`;
       })
       .join(", ");
-    rows.push(`<div>Spells it can target: ${escapeHtml(names)}.</div>`);
+    const heading = onlySpells ? "Spells it can target" : "On the stack it can target";
+    rows.push(`<div>${heading}: ${escapeHtml(names)}.</div>`);
   }
   if (cards.length) {
     const buttons = cards
@@ -10140,11 +10185,18 @@ function applyCoinFlipPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  const loserChoice = !!info.is_loser_choice;
+  // CR 103.1: a flip's winner, the previous game's loser, or — after a draw —
+  // the seat that made the choice in that game.
+  const reason = info.choice_reason || (info.is_loser_choice ? "loser" : "coin_flip");
+  const loserChoice = reason !== "coin_flip";
   if (info.is_my_turn) {
-    title.textContent = loserChoice ? "You lost — your call" : "You won the coin flip!";
-    body.textContent = loserChoice
-      ? `You lost the last game, so ${escapeHtml(info.winner_name || "you")} choose who plays first. Do you want to go first or second?`
+    title.textContent = reason === "loser"
+      ? "You lost — your call"
+      : reason === "draw" ? "A draw — your call again" : "You won the coin flip!";
+    body.textContent = reason === "loser"
+      ? "You lost the last game, so you choose who plays first. Do you want to go first or second?"
+      : reason === "draw"
+      ? "The last game was a draw, and you chose who played first in it, so you choose again. Do you want to go first or second?"
       : `${escapeHtml(info.winner_name || "You")} won the coin flip. Do you want to go first or second?`;
     steps.innerHTML = `
       <div class="prompt-choice-row">
@@ -10159,8 +10211,10 @@ function applyCoinFlipPrompt(info) {
     );
   } else {
     title.textContent = loserChoice ? "Choosing who plays first" : "Coin Flip";
-    body.textContent = loserChoice
+    body.textContent = reason === "loser"
       ? `${escapeHtml(info.winner_name || "Opponent")} lost the last game and is choosing who plays first.`
+      : reason === "draw"
+      ? `The last game was a draw: ${escapeHtml(info.winner_name || "Opponent")} chose who played first in it and is choosing again.`
       : `${escapeHtml(info.winner_name || "Opponent")} won the coin flip and is choosing who goes first.`;
     steps.innerHTML = `<div>Waiting for ${escapeHtml(info.waiting_for || "opponent")} to choose...</div>`;
   }
@@ -13793,7 +13847,7 @@ function renderActivationPrompt() {
       body.textContent = isSacrificeCost
         ? `Click ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} you control on the battlefield to ${costVerb} it.`
         : pendingCastTarget.alsoStack
-        ? "Click a permanent on the battlefield, or a glowing spell on the stack, to choose the target."
+        ? `Click a permanent on the battlefield, or a glowing ${stackObjectsNoun(pendingCastTarget.validStackIndices)} on the stack, to choose the target.`
         : isEnchantEnchantment
         ? "Click a glowing enchantment on the battlefield to choose the target."
         : "Click any permanent on the battlefield to choose the target.";
@@ -13899,7 +13953,7 @@ function renderActivationPrompt() {
       customOkBtn.disabled = true;
       return;
     } else if (pendingCastTarget.targetKind === "stack") {
-      body.textContent = "Click a glowing spell on the stack to choose which one to target.";
+      body.textContent = `Click a glowing ${stackObjectsNoun(pendingCastTarget.validStackIndices)} on the stack to choose which one to target.`;
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "graveyard_creature") {
       // Regrowth targets any card; Animate Dead / Resurrection a creature card;
@@ -19348,10 +19402,36 @@ function cardStatsLabel(card) {
   return `${card.power}/${card.toughness}`;
 }
 
-function updateActionHint(message, isError = false) {
+// The tip the top-right hint returns to: true at every moment of a game.
+const DEFAULT_ACTION_HINT = "Drag from your hand to cast. The battlefield arranges itself automatically.";
+
+// The moment the current hint describes, and how long that moment lasts
+// (`until`: "step" by default, "turn" for a mode that runs to the turn's end,
+// "game" for the default tip). A hint used to stay until the next one
+// replaced it, so "Declare attackers by clicking creatures…" was still up in
+// the next main phase and on the opponent's turn, "Auto-passing priority until
+// your turn ends." into the opponent's turn, and "Blockers declared (3)…" in
+// another seat's tab during a sacrifice two steps later (Legions'
+// post-promotion pass). `expireStaleActionHint` puts the default tip back once
+// the moment has passed.
+let actionHintMoment = null;
+
+function actionHintMomentKey(state, until) {
+  if (!state || until === "game") return "";
+  // The pregame (coin flip, mulligans) is one moment of its own. A rematch
+  // opens on the same turn 1, seat and step the last game may have ended on,
+  // so without this a hint from the game before ("Debug: added Fireball to
+  // your hand.") read as current over the next game's coin flip.
+  if (state.pregame) return "pregame";
+  const turn = `${state.turn_number}|${state.current_turn}`;
+  return until === "turn" ? turn : `${turn}|${state.current_turn_phase}|${state.current_step}`;
+}
+
+function updateActionHint(message, isError = false, { until = "step" } = {}) {
   const el = q("actionHint");
   el.textContent = message;
   el.style.color = isError ? "#e16d70" : "#cfd7e4";
+  actionHintMoment = until === "game" ? null : { until, key: actionHintMomentKey(currentState, until) };
   if (isError) {
     const middleLane = document.querySelector(".middle-lane");
     if (middleLane) {
@@ -19360,6 +19440,13 @@ function updateActionHint(message, isError = false) {
       middleLane.classList.add("error-flash");
     }
   }
+}
+
+// Called with each new state, before anything renders a hint for it.
+function expireStaleActionHint(state) {
+  if (!actionHintMoment || !state) return;
+  if (actionHintMomentKey(state, actionHintMoment.until) === actionHintMoment.key) return;
+  updateActionHint(DEFAULT_ACTION_HINT, false, { until: "game" });
 }
 
 function setJoinUrls(url = "", lanUrl = "", publicUrl = "") {
@@ -24056,7 +24143,9 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   SFX.onStateChange(currentState, state, seat ?? 0);
   // Begin background music once the game is underway (idempotent per session).
   if (state && !state.pregame && !state.winner) MUSIC.start();
+  if (gameIsOver(prevStateForDiscard) && state && !gameIsOver(state)) forgetLastGamesRequests();
   currentState = state;
+  expireStaleActionHint(state);
   syncCombatDrafts(state);
   // A menu opened on a permanent is a reading of that permanent as it was.
   refreshPendingPermanentPrompts(state);
@@ -24125,7 +24214,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   updateLobbyOverlay(state);
   updateDisconnectOverlay(state);
   if (wasInPregame && !state?.pregame) {
-    updateActionHint("Drag from your hand to cast. The battlefield arranges itself automatically.");
+    updateActionHint(DEFAULT_ACTION_HINT, false, { until: "game" });
   }
   renderActivationPrompt();
   renderSearchLibraryModal(searchLibraryInfo);
@@ -26138,7 +26227,9 @@ async function requestRematch() {
   const btn = q("playAgainBtn");
   if (btn) {
     btn.disabled = true;
-    btn.textContent = "Waiting for opponent…";
+    // Against the AI this seat's vote is the only one, and the next game
+    // starts at once.
+    btn.textContent = currentState?.mode === "human_vs_human" ? "Waiting for opponent…" : "Starting…";
   }
   try {
     const payload = await postJson(`/api/sessions/${sessionId}/rematch`, { seat });
@@ -26164,8 +26255,14 @@ function restartLocalGame() {
   return createSession().catch((e) => resetToSetup(e.message));
 }
 
+// "Play Again" is the next game of a match (CR 103.1): the previous game's
+// loser chooses who plays first — a person is asked, an AI decides by its
+// play/draw policy, and after a draw the seat that chose last time chooses
+// again. The server's rematch keeps the session and its decks and names the
+// chooser; against the AI it used to be a fresh session with a fresh coin
+// flip. AI vs AI, which nobody plays, still starts a new session.
 q("playAgainBtn")?.addEventListener("click", async () => {
-  if (currentState?.mode === "human_vs_human") {
+  if (currentState?.mode === "human_vs_human" || currentState?.mode === "human_vs_ai") {
     await requestRematch();
   } else {
     await restartLocalGame();
@@ -26600,7 +26697,9 @@ q("endTurnBtn").addEventListener("click", async () => {
     updateActionHint(
       autoPassMode === "self"
         ? "Auto-passing priority until your turn ends."
-        : "Auto-pass enabled for opponent turn priority."
+        : "Auto-pass enabled for opponent turn priority.",
+      false,
+      { until: "turn" },
     );
   } catch (e) {
     alert(e.message);

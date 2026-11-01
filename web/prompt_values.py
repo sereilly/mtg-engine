@@ -184,15 +184,53 @@ def _offer_source_card(data: dict):
     return card
 
 
+#: "If you do, return this creature to its owner's hand." (Dermoplasm) /
+#: "Otherwise, …": a sentence that says what answering the offer before it
+#: costs or brings, and so is part of what is being asked.
+_CONSEQUENCE = re.compile(
+    r"^(?:if (?:you|they|that player|he or she|its controller|its owner) "
+    r"(?:do|does|don't|doesn't|do not|does not)\b|otherwise\b)",
+    re.IGNORECASE,
+)
+
+
+def _line_sentences(line: str) -> list[str]:
+    """One printed line's sentences, reminder text dropped."""
+    return [
+        sentence.strip()
+        for sentence in _SENTENCE_END.split(_REMINDER_TEXT.sub("", line).strip())
+        if sentence.strip()
+    ]
+
+
 def _offer_sentences(text: str) -> list[str]:
     """The sentences of *text* that make an offer ("…unless…" / "…may…"),
     reminder text dropped, in printed order."""
     return [
-        sentence.strip()
+        sentence
         for line in text.split("\n")
-        for sentence in _SENTENCE_END.split(_REMINDER_TEXT.sub("", line).strip())
-        if sentence.strip() and _OFFER_WORD.search(sentence)
+        for sentence in _line_sentences(line)
+        if _OFFER_WORD.search(sentence)
     ]
+
+
+def _with_consequences(text: str, sentence: str) -> str:
+    """*sentence* followed by the sentences on its line that answer it ("If
+    you do, …", "Otherwise, …"). Dermoplasm's offer read "you may put a
+    creature card with a morph ability from your hand onto the battlefield
+    face up" and stopped there, so the person saying yes was not told the
+    Dermoplasm then goes back to their hand (Legions' post-promotion pass)."""
+    for line in text.split("\n"):
+        sentences = _line_sentences(line)
+        if sentence not in sentences:
+            continue
+        kept = [sentence]
+        for following in sentences[sentences.index(sentence) + 1:]:
+            if not _CONSEQUENCE.search(following):
+                break
+            kept.append(following)
+        return " ".join(kept)
+    return sentence
 
 
 def offer_wording(data: dict) -> dict:
@@ -207,7 +245,8 @@ def offer_wording(data: dict) -> dict:
     English; the card does, so the sentence is read off it:
 
     * ``card_text`` - the one sentence of the source that makes an offer
-      ("…unless…" / "…may…"), or the whole text when that is not exactly one
+      ("…unless…" / "…may…") with any "If you do, …" / "Otherwise, …"
+      after it (what the answer costs), or the whole text when that is not exactly one
       sentence, so nothing is guessed between two offers on one card — unless
       the printed line that armed this offer (the context's ``ability_text``)
       holds exactly one of them, which is then this offer's;
@@ -247,7 +286,7 @@ def offer_wording(data: dict) -> dict:
             return {"card_text": text}
         offers = own
     sentence = offers[0]
-    wording = {"card_text": sentence}
+    wording = {"card_text": _with_consequences(text, sentence)}
     head, found, tail = sentence.rstrip(".").partition(" unless ")
     if found and head and tail:
         wording["decline_text"] = _ACTIVATION_COST.sub(

@@ -65,7 +65,7 @@ from .presence import (
     mark_seat_connected,
     seat_is_connected,
 )
-from .seats import _loser, _rematch_human_seats, _seat_type, _winner
+from .seats import _rematch_first_chooser, _rematch_human_seats, _seat_type, _winner
 from .catalog import (
     CATALOG_PAYLOAD,
     _deck_detail,
@@ -472,8 +472,15 @@ def start_session(session_id: str, req: StartGameRequest):
 @one_request_at_a_time
 def rematch_session(session_id: str, req: RematchRequest):
     session = _require_session(session_id)
-    if session.mode != "human_vs_human":
-        raise HTTPException(status_code=400, detail="rematch is only available in human vs human games")
+    # The next game of a two-seat match with a person in it (CR 103.1). Against
+    # the AI the one human vote is enough; "Play Again" there used to open a
+    # fresh session with a fresh coin flip, so the previous game's loser was
+    # never the one choosing (Legions' post-promotion pass).
+    if session.mode not in ("human_vs_human", "human_vs_ai"):
+        raise HTTPException(
+            status_code=400,
+            detail="rematch is only available in human vs human and human vs AI games",
+        )
     if req.seat not in session.joined_seats:
         raise HTTPException(status_code=400, detail="seat has not joined")
     if _winner(session) is None and session.status != "finished":
@@ -483,10 +490,12 @@ def rematch_session(session_id: str, req: RematchRequest):
     needed = _rematch_human_seats(session)
 
     if all(s in session.rematch_votes for s in needed):
-        # The previous game's loser, not a coin flip, chooses who plays first.
-        # Capture it before restart() resets the board (and the life totals).
-        loser_seat = _loser(session)
-        store.restart(session, first_chooser=loser_seat)
+        # The previous game's loser, not a coin flip, chooses who plays first
+        # — after a draw, the seat that chose then (CR 103.1). Captured before
+        # restart() resets the board (and the life totals). An AI chooser
+        # decides at once by its own play/draw policy (_pregame_auto_advance).
+        chooser, reason = _rematch_first_chooser(session)
+        store.restart(session, first_chooser=chooser, choice_reason=reason or "loser")
         _pregame_auto_advance(session)
         _notify_session_change(session.id, "rematch_start")
     else:

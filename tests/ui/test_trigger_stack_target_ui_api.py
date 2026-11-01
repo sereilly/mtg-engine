@@ -162,6 +162,8 @@ def test_the_client_reads_a_stack_candidate_and_answers_on_the_stack():
     assert "promptStackTargeting.onStack(info.index)" in canvas
 
     panel = app_js_function_body("applyTriggerTargetPrompt")
-    assert "a glowing spell on the stack" in panel
+    # "a glowing spell / ability / spell or ability on the stack", named off
+    # the served stack items (tests/ui/test_lgn_p5_client_round_ui_api.py).
+    assert "a glowing ${stackObjectsNoun(stackOffered)} on the stack" in panel
     dispatch = app_js_function_body("renderActivationPrompt")
     assert "applyTriggerTargetPrompt(triggerTargetPrompt)" in dispatch

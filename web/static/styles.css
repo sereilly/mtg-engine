@@ -638,12 +638,14 @@ body.in-game .battlefield-canvas-wrap {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 var(--glass-highlight);
 }
 
+/* The chips never shrink below their own height (every step stays visible and
+   clickable); whatever the rail is short of comes out of `.rail-offers`. */
 .phase-rail {
   display: flex;
   flex-direction: column;
   flex: 1;
   gap: 6px;
-  min-height: 0;
+  min-height: min-content;
   overflow: hidden;
 }
 
@@ -651,7 +653,14 @@ body.in-game .battlefield-canvas-wrap {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-height: 0;
+}
+
+@media (max-height: 760px) {
+  .phase-rail {
+    gap: 3px;
+  }
 }
 
 .phase-controls button {
@@ -4934,4 +4943,52 @@ pre {
    reason `.canvas-overlay.hidden` exists a few hundred lines up. */
 .special-actions.hidden {
   display: none;
+}
+
+/* In the phase rail the offers stack, one full-width button each. As a row
+   they ran out of the rail's 112px column and over the graveyard pile beside
+   it the moment a second morph could be turned up (Legions' post-promotion
+   pass). The three lists share one column that takes what the phase chips
+   leave (`.phase-rail` keeps its content height) and scrolls past that. */
+.rail-offers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.rail-offers:not(:has(> .special-actions:not(.hidden))) {
+  display: none;
+}
+
+.rail-offers .special-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex-shrink: 0;
+}
+
+.rail-offers .special-actions.hidden {
+  display: none;
+}
+
+.rail-offers .special-actions > button,
+.special-action-x-row > button {
+  width: 100%;
+}
+
+.rail-offers button {
+  font-size: 0.72rem;
+  line-height: 1.2;
+  padding: 4px 6px;
+}
+
+.special-action-x-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
 }
