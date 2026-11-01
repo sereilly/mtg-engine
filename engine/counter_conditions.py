@@ -240,12 +240,29 @@ def spell_cant_be_countered(card) -> bool:
 # The card **type** is payload, for ``cast_bans._GLOBAL_CAST_BAN``'s
 # reason: "Artifact spells can't be countered." is the same sentence and must
 # need no second row.
-_UNCOUNTERABLE_SPELL_TYPES = (
-    r"(?:artifact|creature|enchantment|instant|sorcery|planeswalker|battle)"
+#
+# "**Sliver** spells can't be countered." (Root Sliver.) The same sentence over
+# a **creature type** instead of a card type — a spell with that subtype
+# (CR 205.3m), whoever casts it. The word is captured whole and admitted by
+# :func:`_uncounterable_class` against the two vocabularies it may come from:
+# the card types listed here and the creature-type catalog in
+# ``data/vocabulary`` (never a list spelled here). A word in neither refuses.
+_UNCOUNTERABLE_SPELL_TYPES = frozenset(
+    {"artifact", "creature", "enchantment", "instant", "sorcery",
+     "planeswalker", "battle"}
 )
 _CLASS_UNCOUNTERABLE = re.compile(
-    rf"^(?P<type>{_UNCOUNTERABLE_SPELL_TYPES}) spells can't be countered$"
+    r"^(?P<type>[a-z][a-z'-]*) spells can't be countered$"
 )
+
+
+def _uncounterable_class(word: str) -> bool:
+    """Whether a captured class word is one the counter path can test."""
+    if word in _UNCOUNTERABLE_SPELL_TYPES:
+        return True
+    from .grammar.vocabulary import CREATURE_TYPES
+
+    return word in CREATURE_TYPES
 
 #: The claim name the support gate and ``engine/grammar/registries.py`` use for
 #: the row above. Its own rather than :data:`UNCOUNTERABLE_CLAIM`, because that
@@ -266,10 +283,14 @@ def uncounterable_class_line(line: str) -> str | None:
     and refuses here rather than being admitted with the narrowing dropped.
     """
     match = _CLASS_UNCOUNTERABLE.match(_key(line))
-    return match.group("type") if match is not None else None
+    if match is None or not _uncounterable_class(match.group("type")):
+        return None
+    return match.group("type")
 
 
-def spells_made_uncounterable_by(game: "Game", card) -> str | None:
+def spells_made_uncounterable_by(
+    game: "Game", card, seat: int | None = None,
+) -> str | None:
     """The name of a permanent whose static makes *card* uncounterable, or None.
 
     Every battlefield and no seat comparison: the sentence names nobody, so it
@@ -279,13 +300,27 @@ def spells_made_uncounterable_by(game: "Game", card) -> str | None:
     type test is ``search_filters.card_has_type`` — a card has **every** type
     its line names (CR 205.2), so an artifact creature spell is a creature
     spell.
+
+    A creature type ("Sliver spells", Root Sliver) is asked of the spell
+    through ``object_creature_types.card_creature_types`` with *seat*, the
+    spell's controller — the one reader of an off-battlefield object's
+    creature types. A face-down spell's card is the blank 2/2
+    (``face_down.face_down_card``), which has none (CR 708.2), so a hidden
+    Sliver is not a Sliver spell.
     """
+    from .object_creature_types import card_creature_types
     from .search_filters import card_has_type
 
     for _seat, permanent in game.permanents_with_controller():
         for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
             protected = uncounterable_class_line(raw_line)
-            if protected is not None and card_has_type(card, protected):
+            if protected is None:
+                continue
+            if protected in _UNCOUNTERABLE_SPELL_TYPES:
+                covered = card_has_type(card, protected)
+            else:
+                covered = protected in card_creature_types(game, card, seat)
+            if covered:
                 return permanent.effective_card.name
     return None
 
@@ -382,7 +417,9 @@ def cant_be_countered(game: "Game", card, item: "StackItem | None" = None) -> st
     """
     if spell_cant_be_countered(card):
         return f"{getattr(card, 'name', 'that spell')} can't be countered"
-    source = spells_made_uncounterable_by(game, card)
+    source = spells_made_uncounterable_by(
+        game, card, getattr(item, "caster_index", None),
+    )
     if source is not None:
         return (
             f"{getattr(card, 'name', 'that spell')} can't be countered ({source})"

@@ -627,7 +627,27 @@ def grantable_protection_quality(word: str) -> bool:
     # reads the two shorthands for several abilities — "each color"
     # (CR 702.16h) and "each of its colors" (CR 702.16i, Earnest Fellowship),
     # the second computed per creature the anthem reaches.
+    if is_chosen_color_protection(word):
+        return True
     return protection_qualities_named(word) is not None
+
+
+#: "All Slivers have protection from **the chosen color**." (Ward Sliver.) The
+#: one protection word a lord grants whose quality is not in the phrase: it is
+#: the colour the *lord* chose as it entered (CR 614.12, "As this creature
+#: enters, choose a color"), recorded on the lord under
+#: ``entry_choices.CHOSEN_COLOR_KEY``. So it travels as the printed words and
+#: is resolved by the one reader that holds the lord —
+#: ``mixins/protection._protection_qualities``' lord loop — exactly as the
+#: Wards' ``aura_grants.CHOSEN_PROTECTION_COLOR`` is resolved by the reader
+#: holding the Aura. A lord that has not chosen grants nothing rather than a
+#: guessed colour.
+CHOSEN_COLOR_PROTECTION = "the chosen color"
+
+
+def is_chosen_color_protection(word: str) -> bool:
+    """Whether a lord's protection word is :data:`CHOSEN_COLOR_PROTECTION`."""
+    return " ".join((word or "").strip().lower().split()) == CHOSEN_COLOR_PROTECTION
 
 
 def _parse_subject(words: list[str]) -> LordBuffFilter | None:

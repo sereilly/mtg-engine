@@ -603,6 +603,10 @@ def _set_creature_type(
     one place.
     """
     duration = str(instruction.payload.get("duration") or "until_end_of_turn")
+    # "…in addition to its other types" (Mistform Sliver's grant): CR 205.1b's
+    # retention, so the record is a plain layer-4 addition and the permanent
+    # keeps every creature type it had. Without the words it is CR 205.1a's set.
+    in_addition = bool(instruction.payload.get("in_addition"))
     for perm in perms:
         gain_types(
             perm,
@@ -612,7 +616,7 @@ def _set_creature_type(
             # CR 205.1a: a subtype *set* replaces the subtypes "from the
             # appropriate set" — the creature types, and nothing else the
             # permanent is. Read by ``layer_bridge.collect_own_type_effects``.
-            replaces_creature_types=True,
+            replaces_creature_types=not in_addition,
         )
     # A creature that changed type is one a type-scoped static now reaches or
     # no longer does ("Other Goblins get +1/+1", "All Zombies are …", "This
@@ -621,10 +625,11 @@ def _set_creature_type(
     game._refresh_dynamic_creatures()
     game._recalculate_lord_buffs()
     article = "an" if word[:1] in "aeiou" else "a"
+    retained = " in addition to its other types" if in_addition else ""
     for perm in perms:
         game.log.append(
-            f"{perm.card.name} became {article} {word.title()} until end of turn "
-            f"({name})"
+            f"{perm.card.name} became {article} {word.title()}{retained} until "
+            f"end of turn ({name})"
         )
 
 

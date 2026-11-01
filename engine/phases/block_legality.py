@@ -646,6 +646,35 @@ class BlockLegalityMixin:
                 ):
                     return False
 
+        # "**Slivers** can't be blocked except by Slivers." (Shifting Sliver.)
+        # The whitelist above printed on a permanent about a described set, so
+        # it is found by scanning the board rather than read off the
+        # attacker's program — `_maximum_blockers`' Familiar Ground scan, for
+        # the whitelist. Every such permanent is its own restriction
+        # (CR 509.1b), so each one the attacker matches must be satisfied.
+        # "You" in either noun phrase is the printing permanent's controller
+        # (CR 109.5), so that seat is the observer and that permanent the
+        # source.
+        for source_seat, source_perm in self.permanents_with_controller():
+            for instr in compile_card_oracle(
+                source_perm.effective_card
+            ).instructions:
+                if instr.kind != "matching_cant_be_blocked_except_by":
+                    continue
+                if not subject_matches(
+                    self, attacker, dict(instr.payload.get("subject") or {}),
+                    observer=source_seat, source=source_perm,
+                ):
+                    continue
+                if not any(
+                    subject_matches(
+                        self, blocker, described,
+                        observer=source_seat, source=source_perm,
+                    )
+                    for described in instr.payload.get("allowed_blockers") or ()
+                ):
+                    return False
+
         # Invisibility's "can't be blocked except by Walls" used to be its own
         # aura restriction and its own check here. It is not any more: the loop
         # above reads the whitelist form through the same subject rewrite as

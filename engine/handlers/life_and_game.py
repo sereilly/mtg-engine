@@ -577,6 +577,19 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
             game.log.append(f"{card.name}: no recorded player, no life gained")
             return True, "resolved"
         gainer = game.players[seat]
+    elif recipient == "event_subject_controller":
+        # "Whenever a Sliver deals damage, **its controller** gains that much
+        # life." (Essence Sliver.) The controller of the object the firing
+        # event was about — the damaging Sliver — frozen by the fire site
+        # (CR 603.10; `damage_events._announce` stamps the damager's seat).
+        # Not the trigger's controller: Essence Sliver's controller controls
+        # the ability, and an opponent's Sliver heals the opponent. The loss
+        # handler's branch of the same name reads the same key.
+        seat = (context.trigger_context or {}).get("event_subject_controller")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded controller, no life gained")
+            return True, "resolved"
+        gainer = game.players[seat]
     elif recipient == PER_OBJECT_SEAT_RECORDS["controller"]:
         # "For each artifact destroyed this way, **its controller** gains life
         # equal to its mana value." (Seeds of Innocence.) The seat the sweep

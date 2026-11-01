@@ -17,12 +17,13 @@ from __future__ import annotations
 
 import re
 
-from ..entry_choices import own_chosen_protection_color
+from ..entry_choices import CHOSEN_COLOR_KEY, own_chosen_protection_color
 from ..aura_grants import (AMONG_CONTROLLED_PROTECTION_COLORS,
                            CHOSEN_PROTECTION_COLOR, aura_protection_colors)
 from ..aura_attachment import auras_attached_to
 from ..keywords import abilities_lost_at, protection_flag_granted_after
-from ..lord_buffs import LORD_BUFF_KIND, lord_buff_from_payload
+from ..lord_buffs import (LORD_BUFF_KIND, is_chosen_color_protection,
+                          lord_buff_from_payload)
 from ..handlers._targets import attached_host
 from ..models import CardDefinition, Permanent
 from ..oracle import compile_card_oracle
@@ -229,6 +230,19 @@ class ProtectionMixin:
                 if not _kept(lord.timestamp):
                     continue
                 for word in buff.protection_from:
+                    if is_chosen_color_protection(word):
+                        # "All Slivers have protection from **the chosen
+                        # color**." (Ward Sliver.) The colour the *lord* chose
+                        # as it entered (CR 614.12), read off its entry record
+                        # on every ask — the Wards' reading one source up, with
+                        # the lord holding the choice instead of the Aura. No
+                        # record (the prompt is still owed) grants nothing: a
+                        # shield from a colour nobody named is one the card
+                        # never gave.
+                        symbol = lord.metadata.get(CHOSEN_COLOR_KEY)
+                        if symbol:
+                            _add(("color", str(symbol)), lord.timestamp)
+                        continue
                     # Through the shorthand reader, so "Each creature has
                     # protection from each of its colors." (Earnest
                     # Fellowship) is computed per creature reached — *its*

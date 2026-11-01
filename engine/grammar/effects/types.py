@@ -69,15 +69,23 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     # and it is the whole of the predicate: which set of types "that type"
     # belongs to is the lowering's question, asked of what the effect produced.
     if stream.accept_phrase("that", "type"):
-        return ast.BecomeThatType(subject, _parse_duration(stream))
+        in_addition = _accept_in_addition_to_other_types(stream)
+        return ast.BecomeThatType(
+            subject, _parse_duration(stream), in_addition=in_addition,
+        )
     # "…becomes **the creature type of your choice** until end of turn." (the
     # Mistforms, Mistform Mask, Trickery Charm.) The same subtype set with the
     # choice made by this sentence itself — Alchor's Tomb's "the color of your
     # choice" one characteristic over — so it lands on the same node, flagged,
     # and the lowering puts the choosing step in front.
     if stream.accept_phrase("the", "creature", "type", "of", "your", "choice"):
+        # "…**in addition to its other types** until end of turn." (Mistform
+        # Sliver's grant.) CR 205.1b: an addition, not a set — read before the
+        # duration, which is where the card prints it.
+        in_addition = _accept_in_addition_to_other_types(stream)
         return ast.BecomeThatType(
-            subject, _parse_duration(stream), of_your_choice=True
+            subject, _parse_duration(stream), of_your_choice=True,
+            in_addition=in_addition,
         )
     token = stream.peek()
     word = str(token.text).lower() if token is not None else ""
@@ -122,6 +130,23 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     if copied is not None:
         return copied
     raise stream.error("expected a colour or a creature body after 'becomes'")
+
+
+def _accept_in_addition_to_other_types(stream: TokenStream) -> bool:
+    """Consume CR 205.1b's retention tail after a creature-type change —
+    "in addition to its other types" (Mistform Sliver's grant) or its "…other
+    creature types" spelling — and say whether it was there.
+
+    Only for :class:`ast.BecomeThatType`'s spellings, whose type is a creature
+    type: the card-type addition (``_parse_gain_type``) and the animation read
+    their own tail, because there it is what tells an addition from a
+    replacement of *card* types.
+    """
+    return stream.accept_phrase(
+        "in", "addition", "to", "its", "other", "types"
+    ) or stream.accept_phrase(
+        "in", "addition", "to", "its", "other", "creature", "types"
+    )
 
 
 def _parse_becomes_creature_type(
