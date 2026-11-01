@@ -67,6 +67,8 @@ _LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 #                                   phases/block_legality
 #   cant_be_blocked_by              phases/block_legality
 #   cant_be_blocked_except_by       phases/block_legality
+#   matching_cant_be_blocked_except_by
+#                                   phases/block_legality (a board scan)
 #   cant_block_subject              phases/block_legality
 #                                   (also the first half of "can't block or be
 #                                   blocked by", whose second half is
@@ -892,6 +894,29 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         # Walls" lets none of it through.
         re.compile(r"^this creature can't be blocked except by (?P<allowed>.+)$"),
         "cant_be_blocked_except_by",
+    ),
+    (
+        # "**Slivers** can't be blocked except by Slivers." (Shifting Sliver.)
+        # The whitelist above printed on a *permanent* about a described set —
+        # every Sliver on the battlefield, either side (CR 205.3m; the card's
+        # 2013-07-01 ruling has a Sliver that stops being one leave its reach)
+        # — so it is its own kind for `matching_cant_be_blocked_by_more_than`'s
+        # reason: that one is found by scanning the board, this one is read off
+        # the attacker's own program, and a flag on one kind would leave
+        # whichever site did not read it applying the whitelist to the wrong
+        # creatures.
+        #
+        # **The subject must end in a plural head noun**, the gate every
+        # board-wide row on this page states: "this creature" and "enchanted
+        # creature" are singular, so the self-reference row directly above
+        # (and an Aura's spelling of it) cannot be read as a ban over the
+        # whole board. Below that row, which takes every "this creature" line
+        # first anyway.
+        re.compile(
+            r"^(?P<except_subject>(?:[a-z'-]+ )*[a-z'-]+s) can't be blocked "
+            r"except by (?P<allowed>.+)$"
+        ),
+        "matching_cant_be_blocked_except_by",
     ),
     # A blocking *requirement* rather than a restriction (CR 509.1c), and
     # weaker than Lure's: **one** able creature must block it, not every

@@ -173,6 +173,12 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
         # Elven Riders / Evil Eye: "can't be blocked except by …", the whitelist
         # twin of `cant_be_blocked_by` above.
         "cant_be_blocked_except_by",
+        # Shifting Sliver (LGN): "Slivers can't be blocked except by Slivers."
+        # The same whitelist printed on a permanent about a described set,
+        # found by a board scan in `block_legality._can_block_attacker`; the
+        # grammar refuses the line in full. Listed while LGN is measured, so
+        # its promotion lands a kind this list has already looked at.
+        "matching_cant_be_blocked_except_by",
         # Caverns of Despair, one card printing both halves.
         "max_attackers_each_combat", "max_blockers_each_combat",
         # Marble Priest: "All Walls able to block this creature do so."

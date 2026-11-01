@@ -748,12 +748,21 @@ class BecomeThatType:
     with no question asked at all — so no choosing step goes in front and the
     record carries the word itself. None for every "that type" and "of your
     choice" spelling, which is every node built before this field.
+
+    ``in_addition`` is CR 205.1b's retention: "…becomes the creature type of
+    your choice **in addition to its other types** until end of turn"
+    (Mistform Sliver's grant). The type is *added* rather than set, so the
+    permanent keeps every creature type it had — the Sliver stays a Sliver,
+    which is what keeps the lords reaching it (the card's 2004-10-04 ruling:
+    "Unlike most type changing effects, this one adds a creature type instead
+    of replacing existing creature types").
     """
 
     subject: Recipient
     duration: Duration = field(default_factory=Duration)
     of_your_choice: bool = False
     subtype: str | None = None
+    in_addition: bool = False
 
 
 @dataclass(frozen=True)

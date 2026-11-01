@@ -296,4 +296,150 @@ def test_w1g3_ward_sliver_prevents_the_chosen_colors_damage(set_pool):
     assert ogre not in b.battlefield
 
 
+# --- Mistform Sliver: a granted type change that adds -------------------
+
+
+def _w1g3_activate_granted(game, seat, name, *, answer_type=None):
+    """Activate the first activated ability of *seat*'s *name* (the grant),
+    answering the creature-type prompt with *answer_type* when the seat is
+    interactive, defaulting it otherwise; drain the stack."""
+    slot = next(
+        i for i, p in enumerate(game.players[seat].battlefield) if p.card.name == name
+    )
+    result = game.activate_permanent_ability(
+        seat, name, permanent_index=slot, ability_index=0,
+    )
+    assert result.supported, result.details
+    for _ in range(10):
+        if game.pending_choices:
+            choice = game.pending_choices[0]
+            assert choice.kind == "creature_type_choice", choice.kind
+            if choice.player_index in game.interactive_seats:
+                assert game.resolve_pending_choice(
+                    choice.kind, choice.player_index, creature_type=answer_type,
+                )
+            else:
+                game.auto_resolve_pending_choices()
+            continue
+        if not game.stack:
+            break
+        game.resolve_top_of_stack()
+    game._recompute_continuous_effects()
+    return game.players[seat].battlefield[slot]
+
+
+def test_w1g3_mistform_sliver_grant_adds_the_chosen_type_and_keeps_sliver(set_pool):
+    """"{1}: This permanent becomes the creature type of your choice **in
+    addition to its other types** until end of turn." The card's 2004-10-04
+    ruling: "Unlike most type changing effects, this one adds a creature type
+    instead of replacing existing creature types" — so the Blade Sliver that
+    becomes a Goblin is still a Sliver, and still gets the Sliver lords'
+    bonuses (its own +1/+0, B's Plated Sliver's +0/+1). The type ends at
+    cleanup (CR 514.2)."""
+    game, (a, b) = _w1g3_board(
+        set_pool, ["Mistform Sliver", "Blade Sliver"], ["Plated Sliver"],
+        interactive={0},
+    )
+    blade = _w1g3_activate_granted(game, 0, "Blade Sliver", answer_type="goblin")
+    assert blade.has_type("goblin") and blade.has_type("sliver")
+    assert (blade.effective_power, blade.effective_toughness) == (3, 3)
+    assert any(
+        "Blade Sliver became a Goblin in addition to its other types" in line
+        for line in game.log
+    )
+    mistform = a.battlefield[0]
+    assert not mistform.has_type("goblin")
+    game.resolve_cleanup_step(0)
+    game._recompute_continuous_effects()
+    assert not blade.has_type("goblin") and blade.has_type("sliver")
+
+
+def test_w1g3_mistform_sliver_grant_reaches_every_sliver_and_no_other_creature(set_pool):
+    """"All Slivers" is every Sliver on the battlefield: B's Plated Sliver has
+    the ability and B activates it (a default seat, taking the stated default);
+    B's Grizzly Bears has nothing."""
+    from engine.oracle import compile_card_oracle
+
+    game, (a, b) = _w1g3_board(
+        set_pool, ["Mistform Sliver"], ["Plated Sliver", "Grizzly Bears"],
+    )
+    bears = b.battlefield[1]
+    assert compile_card_oracle(bears.effective_card).activated_abilities == ()
+    plated = _w1g3_activate_granted(game, 1, "Plated Sliver")
+    gained = [t for t in ("illusion", "goblin", "bear") if plated.has_type(t)]
+    assert plated.has_type("sliver") and len(gained) == 1, gained
+
+
+# --- Shifting Sliver: a board-wide blocker whitelist -----------------------
+
+
+def _w1g3_block(game, attacker_seat, blocks):
+    """Declare every untapped creature of *attacker_seat* attacking and try
+    *blocks*; return the defender's (ok, why)."""
+    game.active_player_index = attacker_seat
+    game._set_phase_and_step("combat", "declare_attackers")
+    attackers = [
+        slot for slot, permanent in enumerate(game.players[attacker_seat].battlefield)
+        if permanent.is_creature and not permanent.tapped
+    ]
+    ok, why = game.declare_attackers(
+        attacker_seat, attackers, defending_player_index=1 - attacker_seat,
+    )
+    assert ok, why
+    game.advance_combat_phase()
+    return game.declare_blockers(1 - attacker_seat, dict(blocks))
+
+
+def test_w1g3_shifting_sliver_slivers_are_blockable_only_by_slivers(set_pool):
+    """"Slivers can't be blocked except by Slivers." CR 509.1b over every
+    Sliver on the battlefield: A's Blade Sliver (and Shifting Sliver itself)
+    can't be blocked by B's Grizzly Bears, and can be by B's Plated Sliver."""
+    game, (a, b) = _w1g3_board(
+        set_pool, ["Shifting Sliver", "Blade Sliver"], ["Grizzly Bears", "Plated Sliver"],
+    )
+    for attacker_slot in (0, 1):
+        ok, _why = _w1g3_block(game, 0, {0: attacker_slot})
+        assert not ok, attacker_slot
+        game, (a, b) = _w1g3_board(
+            set_pool, ["Shifting Sliver", "Blade Sliver"],
+            ["Grizzly Bears", "Plated Sliver"],
+        )
+    ok, why = _w1g3_block(game, 0, {1: 1})
+    assert ok, why
+
+
+def test_w1g3_shifting_sliver_reaches_the_opponents_slivers_too(set_pool):
+    """The static is about *Slivers*, not "Slivers you control": B's Plated
+    Sliver attacking A can't be blocked by A's Grizzly Bears — the Shifting
+    Sliver on A's own side makes the opponent's Sliver evasive. A non-Sliver
+    attacker is untouched."""
+    game, (a, b) = _w1g3_board(
+        set_pool, ["Shifting Sliver", "Grizzly Bears"], ["Plated Sliver"],
+    )
+    ok, _why = _w1g3_block(game, 1, {1: 0})
+    assert not ok
+    game, (a, b) = _w1g3_board(
+        set_pool, ["Shifting Sliver", "Grizzly Bears"], ["Plated Sliver"],
+    )
+    ok, why = _w1g3_block(game, 1, {0: 0})
+    assert ok, why
+    game, (a, b) = _w1g3_board(
+        set_pool, ["Shifting Sliver", "Grizzly Bears"], ["Hill Giant"],
+    )
+    ok, why = _w1g3_block(game, 1, {1: 0})
+    assert ok, why
+
+
+def test_w1g3_shifting_sliver_leaves_with_its_source(set_pool):
+    """Read off the board on every declaration (CR 611.3a): with Shifting
+    Sliver gone, Grizzly Bears blocks Blade Sliver."""
+    game, (a, b) = _w1g3_board(
+        set_pool, ["Shifting Sliver", "Blade Sliver"], ["Grizzly Bears"],
+    )
+    game.remove_from_battlefield(a.battlefield[0])
+    game._recompute_continuous_effects()
+    ok, why = _w1g3_block(game, 0, {0: 0})
+    assert ok, why
+
+
 # ==== end W1G3 ======================================================

@@ -761,6 +761,16 @@ def combat_restriction_for(
             if described is None:
                 return None
             payload["subject"] = described
+        # "**Slivers** can't be blocked except by Slivers." (Shifting Sliver.)
+        # The set the whitelist reaches, read by the same reader and refused
+        # unread for the same reason: a whitelist over an empty filter would
+        # make every attacker on the table blockable only by Slivers.
+        except_subject = payload.pop("except_subject", None)
+        if except_subject is not None:
+            described = _printed_noun(except_subject)
+            if described is None:
+                return None
+            payload["subject"] = described
         attack_controller = payload.pop("attack_controller", None)
         if attack_controller is not None:
             payload["subject"] = {

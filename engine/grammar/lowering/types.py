@@ -572,14 +572,29 @@ def _lower_become_that_type(
         **word_source,
         "duration": "until_end_of_turn",
     }
+    if node.in_addition:
+        # CR 205.1b: "…in addition to its other types" keeps every creature
+        # type the permanent had (Mistform Sliver's grant). Carried only when
+        # printed, so every set (the Mistforms' own line) is the record it was.
+        payload["in_addition"] = True
     subject = node.subject
+    # "**This permanent** becomes the creature type of your choice in addition
+    # to its other types …" — a quoted ability a lord hands every Sliver
+    # (Mistform Sliver), which names its holder "this permanent" because a
+    # grant is worded for whatever it lands on. Admitted for the *source*
+    # alone, because the handler asks the one question the noun would have:
+    # a source that is not a creature as the ability resolves takes no
+    # creature type (CR 205.3d), logged rather than written.
+    # ("This permanent" reads as no card type at all: every permanent is one.)
+    source_nouns = (("creature",), ()) if _is_source(subject) else (("creature",),)
     if _is_source(subject) or _is_enchanted(subject):
         # The record replaces *creature* types, so the phrase has to name a
         # creature — "this permanent becomes …" would hand a noncreature a
-        # creature type (CR 205.3d) — and nothing else: a narrowing on a phrase
-        # nobody chooses ("this tapped creature") would have to be re-asked at
-        # resolution, and nothing here asks it.
-        if tuple(subject.filter.card_types) != ("creature",) or (
+        # creature type (CR 205.3d) unless the source's handler asks, which it
+        # does — and nothing else: a narrowing on a phrase nobody chooses
+        # ("this tapped creature") would have to be re-asked at resolution,
+        # and nothing here asks it.
+        if tuple(subject.filter.card_types) not in source_nouns or (
             _restrictions_beyond(
                 subject.filter,
                 frozenset({"card_types", "is_source", "is_enchanted"}),
