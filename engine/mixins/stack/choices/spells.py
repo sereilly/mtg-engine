@@ -313,14 +313,14 @@ class SpellChoicesMixin:
 
     def _retarget_preferred_seats(self, choice: PendingChoice) -> set:
         """The seats a seat nobody asks re-aims the object at: its effect's
-        side, read the way every target is aimed (``ai_target_sides`` — an
-        ability step by step, a spell over its object steps, a face by what
-        the effect does to the player it names), turned from the object's
-        caster to the chooser. A harmful effect ("opponent") goes to the
-        chooser's opponents, a helpful one ("you") to the chooser; an object
-        whose effect has no side keeps board order (the empty set)."""
-        from ....ai_target_sides import (ability_seat_side, ability_target_side,
-                                         spell_seat_side, spell_target_side)
+        side, read by the reader the optional "may change the target"
+        default already asks (``ai_prompts._target_change_side`` — one answer
+        to "which way does this effect cut" whether a seat chooses a target or
+        changes it), turned from the object's caster to the chooser. A harmful
+        effect ("opponent") goes to the chooser's opponents, a helpful one
+        ("you") to the chooser; an object whose effect has no side keeps board
+        order (the empty set)."""
+        from ....ai_prompts import _target_change_side
 
         # "…**may** change the target or targets" (Psychic Battle) offers
         # leaving them first, and that offer's default is its own question:
@@ -331,11 +331,7 @@ class SpellChoicesMixin:
         item = getattr(context, "stack_target", None)
         if item is None:
             return set()
-        instruction = getattr(item, "ability_instruction", None)
-        if instruction is not None:
-            side = ability_target_side(instruction) or ability_seat_side(instruction)
-        else:
-            side = spell_target_side(item.card) or spell_seat_side(item.card)
+        side = _target_change_side(self, item)
         chooser = choice.player_index
         if side == "opponent":
             return set(self.opponents_of(chooser))
