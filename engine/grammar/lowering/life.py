@@ -197,11 +197,25 @@ def _lower_gain_life(
                     recipient = record
                     break
             else:
-                raise LoweringError(
-                    '"its controller" names the object an earlier step of this '
-                    "effect chose, and no step here recorded one",
-                    node=node,
-                )
+                # "Whenever a Sliver deals damage, **its controller** gains
+                # that much life." (Essence Sliver.) With no step in front of
+                # the sentence, the possessive names the object the *firing
+                # event* was about (CR 603.10) — the damaging Sliver — whose
+                # controller the fire site froze. The same last link
+                # `cards._lower_draw` asks of the same word ("Whenever a
+                # creature with power 4 or greater enters, its controller draws
+                # a card", Kavu Lair), off the same table: the trigger's
+                # controller is Essence Sliver's, and the life is the Sliver's
+                # controller's.
+                if event in _EVENT_SUBJECT_CONTROLLERS:
+                    recipient = EVENT_SUBJECT_CONTROLLER
+                else:
+                    raise LoweringError(
+                        '"its controller" names the object an earlier step of '
+                        "this effect or the firing event chose, and nothing "
+                        "here recorded one",
+                        node=node,
+                    )
     # "Destroy target creature. **Its owner** gains 4 life." (Path of Peace.)
     # CR 108.3's seat, and the branch above's twin in shape and its opposite in
     # answer: the controller is who had the permanent and the owner is whose

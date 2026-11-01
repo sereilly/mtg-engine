@@ -59,7 +59,7 @@ from ._events import (CAST_SPELL_EVENTS, EVENT_SUBJECT_CONTROLLER,
                       EVENT_SUBJECT_PLAYER,
                       _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, LOOP_BOUND_OBJECT,
-                      frozen_seat_record)
+                      damage_trigger_names_damaged_end, frozen_seat_record)
 from ._records import produced_keys
 
 
@@ -693,6 +693,38 @@ def _resolved_offer_actor(
         # module over reads it. Left as ``that_player`` the offer would go to
         # ``context.target``, which for a permanent-entering trigger is a seat
         # nothing chose.
+        actor = EVENT_SUBJECT_CONTROLLER
+    elif (
+        actor == "controller"
+        and event in _EVENT_SUBJECT_CONTROLLERS
+        and not produced
+        and node.action is not None
+        and node.otherwise is None
+        and not damage_trigger_names_damaged_end(event, event_subject)
+        and not getattr(event_subject, "is_enchanted", False)
+    ):
+        # "Whenever a Sliver deals combat damage to a player, **its controller
+        # may** draw a card / create a 1/1 colorless Sliver creature token."
+        # (Synapse Sliver, Brood Sliver.) The first sentence of the effect, so
+        # no step in front of it chose an object: "its" is the object the
+        # firing event was about, and its controller is the seat the fire site
+        # froze (CR 603.10) — the frozen-seat reading "that creature's
+        # controller may draw a card" (Fecundity) already takes. Left as
+        # ``controller`` the *offer* found the right seat off the board but
+        # the action did not follow it: Brood Sliver's ruling (2004-10-04)
+        # has the damaging Sliver's controller decide "whether or not to put
+        # the token onto the battlefield under their control", and the token
+        # and the card went to the trigger's controller instead. The event
+        # actor makes the seat that accepts the one that performs
+        # (``handlers/control_flow._EVENT_ACTORS``), and a frozen seat still
+        # answers once the Sliver has left the battlefield (CR 608.2h).
+        #
+        # Not under a damager that is the source ("this creature deals combat
+        # damage to a creature … unless **its** controller pays", Plague
+        # Fiend), where the possessive can only name the damaged end — the
+        # one ``damage_trigger_names_damaged_end`` exists to tell apart — and
+        # not for an offer with a decline branch, which is a toll whose payer
+        # is the object the sentence is about to act on.
         actor = EVENT_SUBJECT_CONTROLLER
     if actor == "controller" and getattr(event_subject, "is_enchanted", False):
         # "its" is the trigger's own subject here, not a target this sentence
