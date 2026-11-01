@@ -40,6 +40,8 @@ log), not instruction kinds alone.
 # W1G7's tests go between this line and the "end W1G7" line.
 
 # --- W1G7: players and odd ends ----------------------------------------------
+import pytest as _w1g7_pytest
+
 from engine import Game as _w1g7_Game
 from engine.models import Permanent as _w1g7_Permanent
 from engine.models import PlayerState as _w1g7_PlayerState
@@ -500,5 +502,29 @@ def test_w1g7_hollow_specter_x_zero_discards_nothing(set_pool):
     _w1g7_resolve_stack(game)
     assert _w1g7_names(game.players[1].hand) == _W1G7_BOB_HAND
     assert not any(p.tapped for p in game.controlled_by(0) if p.card.name == "Swamp")
+
+
+# --- Drive list: Dreamborn Muse -----------------------------------------------
+
+
+@_w1g7_pytest.mark.parametrize("controller", [0, 1])
+def test_w1g7_dreamborn_muse_mills_each_player_by_their_own_hand(set_pool, controller):
+    """"At the beginning of each player's upkeep, that player mills X cards,
+    where X is the number of cards in their hand." Alice holds one card and Bob
+    three; whoever controls the Muse, Alice mills one in her upkeep and Bob
+    three in his. "Their" is the upkeep's player (CR 603.10) — it used to be
+    read as the Muse controller's opponent, so both players milled the same
+    number."""
+    game = _w1g7_table(
+        set_pool, hands={0: ["Plains"], 1: ["Island", "Island", "Island"]},
+    )
+    _w1g7_put(game, set_pool, controller, "Dreamborn Muse")
+    for seat in (0, 1):
+        game.active_player_index = seat
+        game.resolve_upkeep(seat)
+        _w1g7_resolve_stack(game)
+    assert len(game.players[0].graveyard) == 1
+    assert len(game.players[1].graveyard) == 3
+    assert len(game.players[0].library) == 7 and len(game.players[1].library) == 5
 
 # ==== end W1G7 ======================================================

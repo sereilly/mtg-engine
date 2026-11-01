@@ -40,7 +40,8 @@ from ..errors import LoweringError
 from ._amounts import (TARGET_OPPONENT_SCOPE, count_filter_on_frozen_seat,
                        count_filter_on_targeted_seat, counted_definition_spec)
 from ._amounts import _mentions_x, _stamp_x_from_count
-from ._events import CAST_SPELL_EVENTS
+from ._events import (CAST_SPELL_EVENTS, _EVENT_SUBJECT_PLAYERS,
+                      EVENT_SUBJECT_PLAYER)
 from ._record_definitions import lower_record_definition
 
 def _round_every_x_spec(
@@ -304,6 +305,42 @@ def _names_a_player_target(inner: tuple[OracleInstruction, ...]) -> bool:
     return False
 
 
+#: The zones a printed "their <zone>" names a player's own copy of (CR 400.1).
+_PLAYER_ZONES = frozenset({"hand", "graveyard", "library"})
+
+
+def _their_zone_on_frozen_seat(filt, inner, event):
+    """*filt* with "**their** hand" moved onto the seat the firing event froze.
+
+    "At the beginning of each player's upkeep, that player mills X cards, where
+    X is the number of cards in **their** hand." (Dreamborn Muse.) The parse
+    reads "their" as the owner word, and an owner the count cannot resolve
+    falls back to ``context.target or context.caster`` — which for an upkeep
+    trigger that chose nothing is the controller's default opponent, so every
+    player milled as many cards as the Muse controller's opponent held. The
+    pronoun is the player the sentence is about, and with no player target the
+    only one it can be is the seat the event froze (CR 603.10) — the seat
+    "that player" in the same sentence already reads.
+
+    Only under an event that froze a seat and only with no player target: a
+    targeted sentence ("Target player draws cards equal to the number of cards
+    in their hand", Laquatus's Creativity) already reads its target through the
+    same fallback, and every other filter comes back unchanged.
+    """
+    owner = getattr(filt, "zone_owner", None)
+    if (
+        event in _EVENT_SUBJECT_PLAYERS
+        and isinstance(owner, ast.PlayerRef)
+        and owner.kind == "owner"
+        and filt.zone in _PLAYER_ZONES
+        and not _names_a_player_target(inner)
+    ):
+        return dataclasses.replace(
+            filt, zone_owner=ast.PlayerRef(EVENT_SUBJECT_PLAYER)
+        )
+    return filt
+
+
 def _count_filter_for(filt, inner: tuple[OracleInstruction, ...], node, event=None):
     """The filter a where-clause's count is taken over, with "that player"
     resolved into a zone owner.
@@ -322,7 +359,7 @@ def _count_filter_for(filt, inner: tuple[OracleInstruction, ...], node, event=No
     supported, which is the failure the refusal exists for.
     """
     if filt.controller != "that_player":
-        return filt
+        return _their_zone_on_frozen_seat(filt, inner, event)
     # "At the beginning of each opponent's upkeep, … where X is the number of
     # nontoken permanents of the chosen color **they control**" (Psychic
     # Allergy). Nothing was targeted: the seat is the one the *event* was about,
