@@ -51,11 +51,12 @@ from __future__ import annotations
 import random
 import sys
 from collections import Counter
+from unittest import mock
 
 import pytest
 
 from engine import Game, PlayerState
-from engine import ai_simulator
+from engine import ai_abilities, ai_simulator
 from engine.ai_abilities import choose_activation_action
 from engine.aura_attachment import attach_aura
 from engine.mixins.stack.cast_target_validation import aura_enchant_noun
@@ -311,11 +312,18 @@ def test_a_copy_is_activated_where_its_original_is(rows):
 
 
 @pytest.mark.full
-def test_a_sliver_uses_what_its_own_static_gives_it(rows):
+def test_a_sliver_uses_what_its_own_static_gives_it():
     """'All Slivers have "{2}: Regenerate this permanent."' (Clot Sliver):
     the card prints a static ability and *has* an activated one. Seven
-    Slivers the seat never activated."""
-    row = {tag(row): row for row in rows}[("Clot Sliver", "printed")]
+    Slivers the seat never activated.
+
+    The question is whose card the ability is read from, not when a shield
+    is worth raising: since Legions' closer C2 a shield on a main phase with
+    nothing coming is not proposed at all (``ai_valuation.shields_only``,
+    rehearsed — the subject of ``test_lgn_c2_shield_activations``), so the
+    row is read with that gate off."""
+    with mock.patch.object(ai_abilities, "shields_only", lambda instruction: False):
+        row = run(POOL["Clot Sliver"], "printed")
     assert row["by_subject"] and not row["refused"], row
 
 

@@ -1400,7 +1400,7 @@ register_choice(
     default=lambda game, choice: game.discard_pending_choice(choice),
     action="enter_choice_confirm",
     prompt_key="enter_choice",
-    blocked_detail="choose an opponent (and color) for the entering permanent before other actions",
+    blocked_detail="make the entering permanent's choice before other actions",
     default_at_arm=True,
 )
 

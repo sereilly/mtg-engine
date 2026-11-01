@@ -327,9 +327,15 @@ def test_w2g6_a_simulated_seat_skips_the_turn_a_card_takes_from_it():
     """CR 500.11's other direction, through the same call: Meditate's "You
     skip your next turn" is a record `_compute_next_active_player` spends, and
     a loop that named the seats itself never asked. A skipped turn is the
-    *other* seat taking two in a row, with no extra turn to explain it."""
+    *other* seat taking two in a row, with no extra turn to explain it.
+
+    Seed 5 resolved Meditate twice until Legions' closer C2 changed the AI's
+    blocks and its main-phase shields (green on the link beneath it, red on
+    its): it resolves once now, and seed 6 counts three back-to-back turns
+    against two Meditates resolved. Seed 7 resolves it five times, with two
+    turns taken back to back."""
     report = run_ai_simulation(
-        _w2g6_path("TMP"), games=4, seed=5, max_turns=14, required_cards=["Meditate"],
+        _w2g6_path("TMP"), games=4, seed=7, max_turns=14, required_cards=["Meditate"],
     )
     resolved = sum("cast Meditate -> resolved" in line for line in report.log_lines)
     takers = _w2g6_turn_takers(report)
