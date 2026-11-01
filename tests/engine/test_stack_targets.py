@@ -711,7 +711,9 @@ def test_the_census_excuses_only_a_card_the_announcement_put_there(pool, by_name
 #:   controls", "that player chooses target player who…") has no seat in this
 #:   context-free drive — a real fire site supplies it;
 #: * the ability derives **no picker at all** (a reflexive ability, a target an
-#:   opponent chooses, a roles announcement on a trigger).
+#:   opponent chooses, a roles announcement on a trigger with an optional role
+#:   — Goblin Grenadiers; one whose roles are all owed is announced since
+#:   LGN W1G4, Chromeshell Crab).
 #:
 #: An ability in the first and third groups is invisible to "whenever a player
 #: chooses one or more targets" and to "becomes the target of". This is a
@@ -772,6 +774,15 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # damaged player's permanents are offered, as many as the damage dealt, and
     # the ones named go back to their owner's hand.
     "Cephalid Constable#0",
+    # Legions, W1G4. "…turn **any number of** target creatures with morph
+    # abilities other than this creature face down" (Weaver of Lies): CR
+    # 107.1c's zero is an announcement, and on this board — bait creatures
+    # with no morph ability — zero is all there is, so the ability goes on the
+    # stack naming nothing (``record_no_target_named``), Constable's "up to"
+    # one row up. With morph creatures on the board the prompt offers every
+    # one and the default names the opponent's
+    # (tests/sets/test_lgn_creatures_later_groups.py, W1G4's section).
+    "Weaver of Lies#0",
     # Onslaught, W1G1 — reached the moment their Morph line was read.
     # "Whenever this creature deals combat damage to a player, you may have it
     # deal 2 (Skirk Commando) / 3 (Snapping Thragg) damage to target creature
