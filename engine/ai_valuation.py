@@ -778,6 +778,34 @@ def harms_its_own_source(instruction: OracleInstruction | None) -> bool:
     )
 
 
+def sized_by_its_own_empty_counters(
+    instruction: OracleInstruction | None, source,
+) -> bool:
+    """Whether an ability's effect is sized by counters its own *source* is not
+    carrying — so carried out now it does nothing.
+
+    "{T}: This creature deals damage equal to the number of +1/+1 counters on
+    it to any target" (Kilnmouth Dragon, Daru Stinger) and "{T}: Target
+    creature gets +1/+1 until end of turn for each +1/+1 counter on this
+    creature" (Canopy Crawler) — an amplifier that entered with nothing
+    revealed. The activation chooser's flat score reads an unread amount as 1,
+    so the AI tapped a 5/5 flier to deal 0 damage instead of attacking with it.
+    Read off the compiled payload (the counter kind is data), never a name.
+    """
+    if instruction is None or source is None:
+        return False
+    from .named_counters import counters_on
+
+    for step in _effect_steps(instruction):
+        payload = step.payload or {}
+        kind = payload.get("amount_from_named_counters")
+        if kind is None:
+            kind = (payload.get("x_from_count") or {}).get("source_counters")
+        if kind is not None and counters_on(source, str(kind)) <= 0:
+            return True
+    return False
+
+
 #: The effects that do nothing as they resolve but **arm a replacement for a
 #: later draw this turn** (CR 614.1): "The next time you would draw a card
 #: this turn, <effect> instead." (the Words, Mangara's Tome), its Ring of
