@@ -478,7 +478,12 @@ class AttackRequirementsMixin:
 
         The answer pays no cost the preference did not already pay: a costed
         attacker the seat chose is kept when the preference is accepted, and
-        a search never adds one.
+        a search never adds one of its own. **What the search leaves out of
+        the preference is offered back** (:meth:`_with_the_preference_kept`):
+        a maximisation over requirements first, then the seat's preference —
+        so an attacker the seat chose and pays for (under Propaganda, a toll
+        the maximum does not ask) still attacks wherever adding it obeys as
+        many requirements and breaks no restriction.
         """
         unchanged = AttackDeclaration(
             attackers=list(preferred),
@@ -506,7 +511,60 @@ class AttackRequirementsMixin:
                        for slot in preferred},
             rank=rank,
         )
-        return found.witness
+        return self._with_the_preference_kept(
+            found, requirements, mine, preferred, target_seat,
+        )
+
+    def _with_the_preference_kept(
+        self, found: AttackRequirementSearch, requirements: "list[AttackRequirement]",
+        mine: "list[Permanent]", preferred: "list[int]", target_seat: "int | None",
+    ) -> AttackDeclaration:
+        """*found*'s declaration with each creature of *preferred* it left out
+        added back, in the preference's order, aimed at *target_seat* —
+        wherever the creature may attack that seat, the declaration with it
+        breaks no CR 508.1c restriction, and it obeys no fewer requirements
+        than the maximum (CR 508.1d decides what must attack; among the
+        declarations that obey the most, which one is the player's choice).
+
+        The search walks only the attacks that cost nothing (CR 508.1d: a
+        player is not required to pay to obey a requirement), so a costed
+        attacker the seat had chosen — and planned the toll for — fell out of
+        every declaration it had to search for. Whatever is added back is a
+        subset of what the preference already paid for.
+        """
+        witness = found.witness
+        if target_seat is None:
+            return witness
+        attackers = list(witness.attackers)
+        seats = dict(witness.seats)
+        walkers = dict(witness.walkers)
+        for slot in preferred:
+            if slot in attackers or not 0 <= slot < len(mine):
+                continue
+            permanent = mine[slot]
+            if not (
+                permanent.is_creature and not permanent.tapped
+                and self.can_attack(permanent, target_seat)
+            ):
+                continue
+            trial = attackers + [slot]
+            defenders = {
+                mine[other].permanent_id: (
+                    None if other in walkers else seats.get(other, target_seat)
+                )
+                for other in trial
+            }
+            if self.attack_declaration_refusal(
+                [mine[other] for other in trial], defenders=defenders,
+            ) is not None:
+                continue
+            if sum(
+                1 for requirement in requirements if requirement.obeyed(set(trial))
+            ) < found.best:
+                continue
+            attackers = trial
+            seats[slot] = target_seat
+        return AttackDeclaration(attackers=sorted(attackers), seats=seats, walkers=walkers)
 
     # ------------------------------------------------------------------
     # The most that can be obeyed
