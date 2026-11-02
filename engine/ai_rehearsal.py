@@ -580,6 +580,11 @@ def scratch_copy_with(game, carried):
     memo = {id(card): card for card in _every_card(game)}
     clone, carried = copy.deepcopy((game, carried), memo)
     clone.interactive_seats = set()
+    # An event the original is still handing its newcomers (CR 603.6a,
+    # ``ZoneFunnelsMixin.entering_together``) is no event on the copy: the
+    # block that closes it is the original's, so a permanent the copy entered
+    # would join it and never arrive.
+    clone.entry_batch = None
     return clone, carried
 
 
