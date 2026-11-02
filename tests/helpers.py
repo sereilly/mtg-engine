@@ -185,6 +185,21 @@ def resolve_stack(game, *, limit: int = 200) -> int:
     )
 
 
+def entering_or_present(game, seat: int, name: str):
+    """The permanent named *name* entering under *seat* — **on its way** while
+    an "as it enters" choice is owed (CR 614.12a: at a table that holds for
+    answers the permanent is on no battlefield until the answer,
+    ``engine/entry_awaiting.py``), or on the battlefield once it is there.
+
+    For a test that casts a chooser at an interactive seat and wants the
+    permanent before answering its prompt: reading it off the battlefield then
+    finds nothing."""
+    for record in getattr(game, "entries_in_progress", ()) or ():
+        if record.controller_index == seat and record.permanent.card.name == name:
+            return record.permanent
+    return next(p for p in game.controlled_by(seat) if p.card.name == name)
+
+
 #: Set to anything but ``""`` or ``"0"`` and every census that samples through
 #: :func:`stable_sample` examines its whole population instead — what the full
 #: pass (``pytest --full``, the promotion gate's run) sets. An environment

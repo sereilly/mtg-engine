@@ -164,8 +164,10 @@ def test_w1g1_an_interactive_seat_chooses_any_number_and_is_held_to_the_offer(se
     result = game.queue_from_hand(0, "Glowering Rogon")
     assert result.supported, result.details
     _w1g1_resolve_stack(game)
-    (permanent,) = p1.battlefield
     (choice,) = game.pending_choices_of("entry_reveal", 0)
+    # On its way while asked (CR 614.12a), on the battlefield after.
+    permanent = choice.data["permanent"]
+    assert not p1.battlefield
     assert game._entry_reveal_candidates(choice) == [0, 2]
     assert _w1g1_plus1(permanent) == 0 and game.permanent_is_entering(permanent)
 
@@ -189,7 +191,8 @@ def test_w1g1_a_zero_zero_waits_for_its_reveal_and_dies_to_an_empty_one(set_pool
     game, p1, _p2 = _w1g1_game(hand=[remains, lgn["Zombie Brute"]], interactive=True)
     permanent = _w1g1_put_from_hand(game, 0, remains)
     game.check_state_based_actions()
-    assert any(p is permanent for p in game.controlled_by(0))
+    # On its way (CR 614.12a): on no battlefield, so no 0/0 to sweep.
+    assert game.entry_is_awaited(permanent) and not p1.graveyard
 
     assert game.resolve_pending_choice("entry_reveal", 0, hand_indices=[])
     assert "A revealed no cards for Ghastly Remains's amplify" in game.log

@@ -1110,16 +1110,20 @@ def test_black_vise_multiplayer_prompts_human_and_confirm_overrides(all_cards):
     result = game.cast_from_hand(0, "Black Vise", target_player_index=2)
 
     assert result.supported
-    vise_perm = p1.battlefield[0]
-    # The cast target is the provisional default...
-    assert vise_perm.metadata.get("chosen_player_index") == 2
     pending = game.pending_enter_choice
     assert pending is not None
+    # On its way with nothing recorded (CR 614.12a); the cast target is
+    # the default the prompt carries...
+    vise_perm = pending["permanent"]
+    assert not game.is_on_battlefield(vise_perm)
+    assert "chosen_player_index" not in vise_perm.metadata
+    assert pending["default_seat"] == 2
     assert pending["controller_index"] == 0
     assert pending["opponents"] == [1, 2]
     assert pending["needs_color"] is False
     # ...and the human's confirm overrides it.
     assert game.confirm_enter_choice(0, 1) is True
+    assert p1.battlefield[0] is vise_perm
     assert vise_perm.metadata.get("chosen_player_index") == 1
     assert game.pending_enter_choice is None
 

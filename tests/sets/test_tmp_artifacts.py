@@ -1033,12 +1033,15 @@ def test_booby_trap_records_both_halves_of_its_entry_choice(set_pool):
     trap = Permanent(card=set_pool("TMP")["Booby Trap"])
     game = _w3g3_trap_game(trap, [_w3g3_trap_card("Elf")], interactive=(0,))
 
-    assert trap.metadata.get("chosen_player_index") == 1
+    # A person is asked with nothing recorded (CR 614.12a); the prompt
+    # carries the default seat.
+    assert "chosen_player_index" not in trap.metadata
     prompt = next(iter(game.pending_choices_of("enter_choice")))
     assert prompt.data["needs_card_name"] is True
-    assert prompt.data["opponents"] == [1]
+    assert prompt.data["opponents"] == [1] and prompt.data["default_seat"] == 1
 
     assert game.confirm_enter_choice(0, opponent_index=1, card_name="Wildfire")
+    assert trap.metadata["chosen_player_index"] == 1
     assert trap.metadata["chosen_card_name"] == "Wildfire"
 
 

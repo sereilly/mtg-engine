@@ -233,8 +233,8 @@ def test_volraths_laboratory_makes_a_token_of_the_chosen_color_and_type(set_pool
     game.cast_from_hand(0, "Volrath's Laboratory")
     game.resolve_stack()
 
-    lab = game.players[0].battlefield[0]
     assert game.confirm_enter_choice(0, mana_color="U", creature_type="merfolk"), game.log
+    lab = game.players[0].battlefield[0]  # there once both are chosen (CR 614.12a)
     assert lab.metadata["chosen_color"] == "U"
     assert lab.metadata["chosen_creature_type"] == "merfolk"
 

@@ -1102,7 +1102,9 @@ def _w1g6_cast_voice(set_pool, theirs, colour, *, interactive=(0,)):
     game.players[0].hand.append(_w1g6_card(set_pool, "Voice of All"))
     assert game.queue_from_hand(0, "Voice of All").supported
     game.resolve_top_of_stack()
-    voice = next(p for p in game.controlled_by(0) if p.card.name == "Voice of All")
+    from tests.helpers import entering_or_present
+
+    voice = entering_or_present(game, 0, "Voice of All")  # on its way (CR 614.12a)
     voice.metadata["summoning_sickness_turn"] = -99
     if interactive:
         assert [(c.kind, c.player_index) for c in game.pending_choices] == [("enter_choice", 0)]
@@ -1855,9 +1857,9 @@ def _w1g7_mage_table(set_pool, *, mine=(), theirs=(), interactive=(0,)):
     )
     assert duel.cast_from_hand(0, "Meddling Mage").supported
     duel.resolve_stack(pause_for_choices=True)
-    entered = next(
-        p for p in duel.players[0].battlefield if p.card.name == "Meddling Mage"
-    )
+    from tests.helpers import entering_or_present
+
+    entered = entering_or_present(duel, 0, "Meddling Mage")  # on its way (CR 614.12a)
     return duel, entered
 
 

@@ -1527,6 +1527,9 @@ def test_w2g4_callous_oppressor_with_one_opponent_or_nobody_to_ask(set_pool):
     game, oppressor = _w2g4_oppressor_table(set_pool, 3, {0, 2}, controller=1)
     assert [(c.player_index, bool(c.data.get("needs_creature_type")))
             for c in game.pending_choices] == [(2, True)]
-    assert oppressor.metadata["chosen_creature_type"]
+    # Cara is a person: asked with nothing recorded (CR 614.12a), the
+    # default on the prompt.
+    assert "chosen_creature_type" not in oppressor.metadata
+    assert game.pending_choices[0].data["default_creature_type"]
 
 # ==== end W2G4 ======================================================

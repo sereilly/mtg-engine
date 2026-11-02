@@ -1179,7 +1179,9 @@ def _w1g6_cast_sky(set_pool, mine, theirs, colour, *, interactive=(0,)):
     )
     assert game.queue_from_hand(0, "Shifting Sky").supported
     game.resolve_top_of_stack()
-    sky = next(p for p in game.controlled_by(0) if p.card.name == "Shifting Sky")
+    from tests.helpers import entering_or_present
+
+    sky = entering_or_present(game, 0, "Shifting Sky")  # on its way (CR 614.12a)
     if interactive:
         assert [(c.kind, c.player_index) for c in game.pending_choices] == [("enter_choice", 0)]
         assert game.confirm_enter_choice(0, mana_color=colour)
@@ -1331,7 +1333,9 @@ def test_w1g6_dralnus_crusade_reads_goblin_through_the_layers(set_pool):
 
     conspiracy = _W1G6Permanent(card=set_pool("MMQ")["Conspiracy"])
     game._put_permanent_onto_battlefield(0, conspiracy, None)
-    conspiracy.metadata["chosen_creature_type"] = "goblin"
+    # Answered, not written: a person's Conspiracy is on its way until
+    # its type is chosen (CR 614.12a).
+    assert game.confirm_enter_choice(0, creature_type="goblin")
     game._recompute_continuous_effects()
     assert _w1g6_shape(game, bears) == (["B"], True, True, 3, 3)
 
