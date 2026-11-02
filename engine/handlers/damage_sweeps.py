@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .. import simultaneous_damage
 from ..dexterity import flip_lands_on
 from ..effect_ordering import in_apnap_order
 from ..game_types import single_chosen_id
@@ -78,7 +79,7 @@ def _sweep_amount(instruction: OracleInstruction, context: OracleExecutionContex
     return resolve_amount(instruction.payload.get("amount", 0), context.x_value)
 
 
-def _sweep(game: Game, recipients, hit, done, *, affected=None) -> None:
+def _sweep(game: Game, recipients, hit, done, *, source, affected=None) -> None:
     """*hit* each of *recipients* in turn and then run *done*, resumably.
 
     The one loop every sweep here runs, so a recipient whose event stops to
@@ -90,9 +91,25 @@ def _sweep(game: Game, recipients, hit, done, *, affected=None) -> None:
 
     The recipients are walked in APNAP order of the seat each one's question
     goes to (``in_apnap_order``; *affected* maps an item to its recipient
-    where the item is something else)."""
+    where the item is something else).
+
+    **One simultaneous dealing** (``engine/simultaneous_damage.py``): *source*
+    deals its damage to every recipient at once, so a trigger reading the
+    event from the source's side — "whenever this deals damage", "whenever a
+    red creature or spell deals damage" (Justice's ruling: "If a single source
+    does damage to multiple targets at once, Justice will add up all the
+    damage done") — is announced once, for the total, as the loop's last step
+    finishes the dealing."""
+    dealing = simultaneous_damage.begin(game, combat=False, source=source)
+
+    def finished() -> None:
+        simultaneous_damage.finish(game, dealing)
+        if done is not None:
+            done()
+
     run_resumable(
-        game, in_apnap_order(game, recipients, affected=affected), hit, then=done,
+        game, in_apnap_order(game, recipients, affected=affected), hit,
+        then=finished,
     )
 
 
@@ -150,7 +167,7 @@ def _mass_damage_players_and_creatures(
             return
         game._deal_damage_to_player(item, damage, source=source, asks=True)
 
-    _sweep(game, [*game.players, *creatures], hit, done)
+    _sweep(game, [*game.players, *creatures], hit, done, source=source)
 
 
 @effect_handler("earthquake_damage")
@@ -225,7 +242,7 @@ def deal_damage_to_random_creatures(
             asks=True,
         )
 
-    _sweep(game, hits, _hit, None)
+    _sweep(game, hits, _hit, None, source=damage_dealer(context))
     return True, "resolved"
 
 
@@ -253,6 +270,7 @@ def deal_damage_each_attacking_creature(
             f"{card.name} dealt {damage} damage to each of {len(struck)} "
             "attacking creatures"
         ),
+        source=damage_dealer(context),
     )
     return True, "resolved"
 
@@ -410,5 +428,8 @@ def deal_damage_each_matching(
         else:
             game.log.append(f"{card.name} dealt {damage} damage to {', '.join(struck)}")
 
-    _sweep(game, recipients, hit, summary, affected=lambda entry: entry[0])
+    _sweep(
+        game, recipients, hit, summary, affected=lambda entry: entry[0],
+        source=biter if biter is not None else dealer,
+    )
     return True, "resolved"
