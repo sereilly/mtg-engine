@@ -173,13 +173,20 @@ class Session:
     coin_flip_choice_reason: str = "coin_flip"
     mulligan_offer_seat: int | None = None
     mulligan_kept_seats: set[int] = field(default_factory=set)
+    # CR 103.5's rounds (web/pregame.py): the round's number, the seats
+    # declaring in it (turn order from the starting player), and those of them
+    # that declared a mulligan — taken together once the last has declared.
+    mulligan_round: int = 0
+    mulligan_round_seats: list[int] = field(default_factory=list)
+    mulligan_declared: set[int] = field(default_factory=set)
     mulligan_bottom_seat: int | None = None
     mulligan_bottom_required: int = 0
     mulligan_bottom_selected: list[int] = field(default_factory=list)
-    # Host setting: every player decides keep/mulligan at once instead of in
-    # turn order. mulligan_offer_seat is unused; per-seat bottom selections run
-    # concurrently in the dicts below (seat -> required count / selected hand
-    # indices) while other seats may still be deciding.
+    # Host setting: every player of a round declares keep/mulligan at once
+    # instead of in turn order (the round's mulligans are still taken together
+    # once all of it has declared). mulligan_offer_seat is unused; per-seat
+    # bottom selections run concurrently in the dicts below (seat -> required
+    # count / selected hand indices) while other seats may still be deciding.
     simultaneous_mulligan: bool = False
     mulligan_bottom_required_by_seat: dict[int, int] = field(default_factory=dict)
     mulligan_bottom_selected_by_seat: dict[int, list[int]] = field(default_factory=dict)
@@ -514,19 +521,21 @@ class SessionStore:
         game = session.game
         seed = session.seed
         self._apply_commander_variant(session)
+        chooser = session.regame_first_chooser
+        if chooser is not None:
+            # Rematch (CR 103.1): the previous game's loser chooses who plays
+            # first — or, after a draw, the seat that made the choice in that
+            # game makes it again. No flip either way, with the pregame or
+            # without it.
+            reason = session.regame_choice_reason or "loser"
+            name = game.players[chooser].name
+            game.log.append(
+                f"The last game was a draw: {name} chose who played first then and chooses again"
+                if reason == "draw"
+                else f"{name} lost the last game and chooses who plays first"
+            )
         if session.use_pregame:
-            chooser = session.regame_first_chooser
             if chooser is not None:
-                # Rematch (CR 103.1): the previous game's loser chooses who
-                # plays first — or, after a draw, the seat that made the choice
-                # in that game makes it again. No flip either way.
-                reason = session.regame_choice_reason or "loser"
-                name = game.players[chooser].name
-                game.log.append(
-                    f"The last game was a draw: {name} chose who played first then and chooses again"
-                    if reason == "draw"
-                    else f"{name} lost the last game and chooses who plays first"
-                )
                 session.pregame_phase = "coin_flip"
                 session.coin_flip_winner = chooser
                 session.coin_flip_is_loser_choice = reason == "loser"
@@ -544,8 +553,21 @@ class SessionStore:
                 session.coin_flip_is_loser_choice = False
                 session.coin_flip_choice_reason = "coin_flip"
         else:
-            # Skip interactive pregame (ai_vs_ai or legacy clients).
-            starting_player = game.select_starting_player(rng=random.Random(seed + 2))
+            # Skip interactive pregame (ai_vs_ai or legacy clients). Nobody is
+            # asked who plays first, so the seat that chooses plays first — the
+            # flip's winner ("wins and chooses to go first") or a rematch's
+            # CR 103.1 chooser, which is the AI's policy at a pregame table
+            # too. Until the kg3 round this branch flipped a coin on a rematch
+            # as well, and the previous game's loser never chose.
+            if chooser is not None:
+                starting_player = chooser
+                game.log.append(f"{name} chooses to go first")
+            else:
+                starting_player = game.select_starting_player(rng=random.Random(seed + 2))
+            # The seat that made the choice, as at a pregame table: a drawn
+            # game's rematch hands the choice back to it
+            # (`seats._rematch_first_chooser`).
+            session.coin_flip_winner = starting_player
             game.deal_opening_hands(starting_player)
             # CR 103.5 with nobody asked: a person keeps what they were dealt,
             # and an AI seat decides as it does at a pregame table and in the
@@ -565,8 +587,9 @@ class SessionStore:
             # 1 but priority sits with 0, so neither the AI step nor the UI advances.
             # (Legacy no-pregame human/test sessions keep seat 0 as the actor.) FFA
             # can equally start on an AI seat (or a non-zero human seat), so it needs
-            # the same alignment.
-            if session.mode in ("ai_vs_ai", "free_for_all"):
+            # the same alignment. So does a rematch: the seat-0 actor is a first
+            # deal's legacy, and the loser who chose must actually take turn one.
+            if session.mode in ("ai_vs_ai", "free_for_all") or chooser is not None:
                 game.active_player_index = starting_player
                 game.start_priority_window(starting_player)
 
@@ -801,6 +824,9 @@ class SessionStore:
         session.coin_flip_choice_reason = "coin_flip"
         session.mulligan_offer_seat = None
         session.mulligan_kept_seats = set()
+        session.mulligan_round = 0
+        session.mulligan_round_seats = []
+        session.mulligan_declared = set()
         session.mulligan_bottom_seat = None
         session.mulligan_bottom_required = 0
         session.mulligan_bottom_selected = []

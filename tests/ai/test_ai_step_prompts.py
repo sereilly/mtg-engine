@@ -349,15 +349,24 @@ def test_w2g6_a_simulated_seat_skips_the_turn_a_card_takes_from_it():
 @pytest.mark.full
 def test_w2g6_an_ordinary_game_still_alternates_its_two_seats():
     """…and nothing else moved: with no card that adds or skips a turn, the
-    engine's rotation is the alternation the loop used to spell out, seat A
-    first. (The five default seeded runs — LEA, DRK, TMP, M21, INV — are
-    byte-identical across the change.)"""
+    engine's rotation is the alternation the loop used to spell out. (The five
+    default seeded runs — LEA, DRK, TMP, M21, INV — are byte-identical across
+    the change.) It starts with the seat that won the coin flip and chose to
+    go first (CR 103.1, 103.8) — seat A in every game until the kg3 round,
+    whoever won the flip."""
+    import re
+
     report = run_ai_simulation(_w2g6_path("DRK"), games=2, seed=1337, max_turns=8)
     takers = _w2g6_turn_takers(report)
+    starters = {
+        found.group(2): found.group(1)
+        for line in report.log_lines
+        if (found := re.search(r"Coin flip: AI-([AB])-(\d+) wins and chooses to go first", line))
+    }
 
     assert len(takers) >= 20
     for game in {game for game, _seat in takers}:
         seats = [seat for taker_game, seat in takers if taker_game == game]
-        assert seats[0] == "A"
+        assert seats[0] == starters[game], (game, starters, seats[:2])
         assert all(first != second for first, second in zip(seats, seats[1:])), seats
     assert report.extra_turns_taken == 0

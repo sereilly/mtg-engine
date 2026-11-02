@@ -43,8 +43,11 @@ from engine.game import Game
 #: on the tree this was written against — a Seedling Charm and a Power Sink
 #: in response, a Fog in the declare-blockers step, all on the opponent's
 #: turn. The end-step window is held by its own board in
-#: ``test_ai_instant_speed_windows.py``.
-_RUN = dict(code="MIR", games=2, seed=1337, max_turns=10)
+#: ``test_ai_instant_speed_windows.py``. Seed 1342 replaced 1337 in the kg3
+#: round, when the flip's winner began to take the first turn: 1337's two
+#: games cast two instants on the opponent's turn, under the floor of three;
+#: 1342's cast five in each view.
+_RUN = dict(code="MIR", games=2, seed=1342, max_turns=10)
 
 
 @pytest.fixture(scope="module")

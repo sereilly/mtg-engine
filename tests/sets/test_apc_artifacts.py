@@ -239,12 +239,14 @@ def test_w1g1_the_golems_x_box_is_capped_by_the_colors_the_board_can_make(set_po
 def test_w1g1_the_ai_kicks_emblazoned_golem_for_the_colors_it_has():
     """Pinned into both decks of six simulated games: it is cast, it is kicked
     for an X the seat's lands can colour, and it is never refused. (The floors
-    sit under today's four casts and three kicks.)"""
+    sit under today's four casts and two kicks: seed 1338 since the kg3 round,
+    when the flip's winner began to take the first turn and 1337's six games
+    cast it once.)"""
     from engine.ai_simulator import run_ai_simulation
 
     report = run_ai_simulation(
         [_w1g1_manifest_set_path("APC", include_measured=True)],
-        games=6, seed=1337, max_turns=18, required_cards=[_W1G1_GOLEM],
+        games=6, seed=1338, max_turns=18, required_cards=[_W1G1_GOLEM],
     )
     assert report.games_completed == 6
     cast = [l for l in report.log_lines if f" cast {_W1G1_GOLEM} -> resolved" in l]
