@@ -36,7 +36,7 @@ from ...cost_x_definitions import (
     floors_cast_x,
 )
 from ...oracle_types import x_spend_colors_from_text
-from ...refusals import refuse
+from ...refusals import noting, refuse
 
 
 def _x_mana_actually_spent(
@@ -864,7 +864,7 @@ class PoolPaymentMixin:
         self, *, card, caster, caster_index, chosen_alternative,
         classification, cost_reduction, extra_generic_tax, extra_pip_tax,
         from_zone, held, offer_x_colorings, permission, resolved_x_value,
-        use_free_permission, x_colors, x_mana_spent,
+        use_free_permission, x_colors, x_mana_spent, price_notes=(),
     ):
         """The mana payment (CR 601.2g–h).
 
@@ -879,7 +879,11 @@ class PoolPaymentMixin:
         cast as that method runs it.
 
         Returns the refusal, or ``(permission, resolved_x_value,
-        x_mana_spent)``.
+        x_mana_spent)``. A refusal for mana names what moved the price
+        (*price_notes*, the taxes and reductions the cast gathered above, and
+        a keyword cost's own change here): the lines announcing them are taken
+        back with the refused attempt (CR 733.1), so the reason carries them
+        (``refusals.noting``).
         """
         # A cost waiver ("cast spells from your hand without paying their mana
         # costs", Chandra, Flame's Catalyst's −8). An X spell defaults to
@@ -964,6 +968,10 @@ class PoolPaymentMixin:
                         self, caster_index, chosen_alternative.keyword
                     )
                 )
+                keyword_notes = [
+                    f"{chosen_alternative.keyword or 'alternative'} cost changed "
+                    f"by {', '.join(sorted(set(keyword_names)))}"
+                ] if keyword_names else []
                 paid = self._pay_cast_cost(
                     caster, card, resolved_x_value, x_colors,
                     extra_generic=extra_generic_tax + keyword_more,
@@ -992,7 +1000,8 @@ class PoolPaymentMixin:
                             extra_generic_tax, extra_pip_tax, cost_reduction,
                         )
                     return refuse(
-                        card.name, classification.effect_kind, details,
+                        card.name, classification.effect_kind,
+                        noting(details, [*price_notes, *keyword_notes]),
                     )
                 x_mana_spent = paid
                 if keyword_names:
@@ -1042,7 +1051,8 @@ class PoolPaymentMixin:
                         extra_generic_tax, extra_pip_tax, cost_reduction,
                     )
                     return refuse(
-                        card.name, classification.effect_kind, details,
+                        card.name, classification.effect_kind,
+                        noting(details, price_notes),
                     )
             self.log.append(
                 f"{card.name} cast without paying its mana cost"
@@ -1075,5 +1085,8 @@ class PoolPaymentMixin:
                         f"insufficient mana for {card.name} "
                         f"(X can be paid only with {spelling} mana)"
                     )
-                return refuse(card.name, classification.effect_kind, details)
+                return refuse(
+                    card.name, classification.effect_kind,
+                    noting(details, price_notes),
+                )
         return permission, resolved_x_value, x_mana_spent

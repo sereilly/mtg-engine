@@ -32,7 +32,7 @@ from ...oracle import compile_card_oracle
 from ...stack_targets import names_a_target
 from ...subject_filters import filter_head_noun, subject_matches
 from ...target_requirements import narrow_offer
-from ...refusals import refuse, take_back_refused_attempt
+from ...refusals import noting, refuse, take_back_refused_attempt
 
 
 def hand_activation_cost(game, controller_index: int, card, ability):
@@ -310,7 +310,12 @@ class CardActivationMixin:
             controller, required_cost,
             purpose=PaymentPurpose(ACTIVATE, source=card),
         ):
-            details = f"{controller.name} cannot pay for {card.name}'s ability"
+            # The notes logged above go back with the refused attempt (CR
+            # 733.1), so the actor's reason carries them.
+            details = noting(
+                f"{controller.name} cannot pay for {card.name}'s ability",
+                cost_notes,
+            )
             return refuse(card.name, "unsupported", details)
 
         # The card leaves the hand as the cost is paid (CR 602.2b), before the
