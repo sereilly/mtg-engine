@@ -8,6 +8,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 from .action_registry import action_handler
 from .pregame import (
+    _may_take_mulligan,
     _pregame_confirm_bottom,
     _pregame_confirm_bottom_simultaneous,
     _pregame_declare_mulligan,
@@ -65,10 +66,10 @@ def _require_declaring_seat(session, req, seat_type) -> None:
 @action_handler("mulligan_take", pregame=True)
 def _action_mulligan_take(session, req, seat_type):
     _require_declaring_seat(session, req, seat_type)
-    if session.game.mulligan_effective_count(req.seat) >= 7:
+    if not _may_take_mulligan(session, req.seat):
         # CR 103.5: "A player can take mulligans until their opening hand
         # would be zero cards, after which they may not take further
-        # mulligans."
+        # mulligans." The offer's `may_mulligan` asks the same question.
         raise HTTPException(
             status_code=400, detail="cannot take another mulligan (hand would be 0 cards)"
         )

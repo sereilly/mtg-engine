@@ -10525,16 +10525,24 @@ function applyMulliganPrompt(info) {
 
   if (info.is_my_turn) {
     const taken = Number(info.mulligans_taken || 0);
-    const keepSize = 7 - taken;
+    // What a keep costs is the server's `bottom_owed`, never the mulligans
+    // taken: CR 103.5c makes the first mulligan free at a multiplayer table
+    // and in any Brawl game. Whether another may be taken is `may_mulligan`
+    // (CR 103.5's hand of zero cards, counted the same way).
+    const owed = Number(info.bottom_owed || 0);
+    const owedWords = owed > 0
+      ? `put ${owed} card${owed !== 1 ? "s" : ""} on the bottom`
+      : "put no cards on the bottom";
+    const freeNote = taken > owed ? " — your first mulligan is free" : "";
     title.textContent = taken > 0 ? `Mulligan (×${taken})` : "Keep or Mulligan?";
     body.textContent = taken > 0
-      ? `You have taken ${taken} mulligan${taken > 1 ? "s" : ""}. Keep this hand (you'll put ${taken} card${taken > 1 ? "s" : ""} on the bottom), or take another mulligan?`
+      ? `You have taken ${taken} mulligan${taken > 1 ? "s" : ""}. Keep this hand (you'll ${owedWords}${freeNote}), or take another mulligan?`
       : "Do you want to keep your opening hand or take a mulligan?";
     steps.innerHTML = `
-      <div>Your hand has 7 cards. If you keep, you will put ${taken} card${taken !== 1 ? "s" : ""} on the bottom.</div>
+      <div>Your hand has 7 cards. If you keep, you will ${owedWords}.</div>
       <div class="prompt-choice-row" style="margin-top:6px">
         <button type="button" class="prompt-choice-btn" id="mulliganKeepBtn">Keep Hand</button>
-        ${taken < 7 ? '<button type="button" class="prompt-choice-btn" id="mulliganTakeBtn">Take Mulligan</button>' : ""}
+        ${info.may_mulligan ? '<button type="button" class="prompt-choice-btn" id="mulliganTakeBtn">Take Mulligan</button>' : ""}
       </div>`;
     document.getElementById("mulliganKeepBtn").addEventListener("click", () =>
       sendAction({ seat, action: "mulligan_keep" })
@@ -10576,9 +10584,13 @@ function applyMulliganBottomPrompt(info) {
   if (info.is_my_turn) {
     const required = Number(info.required_count || 0);
     const selectedCount = Number(info.selected_count || 0);
+    // `required_count` is what is owed; the mulligans taken can be one more
+    // (CR 103.5c's free first mulligan), so each is said from its own key.
+    const taken = Number(info.mulligans_taken || 0);
+    const freeNote = taken > required ? " (your first one was free)" : "";
 
     title.textContent = `Put ${required} Card${required !== 1 ? "s" : ""} on the Bottom`;
-    body.textContent = `You took ${required} mulligan${required !== 1 ? "s" : ""}. Click ${required} card${required !== 1 ? "s" : ""} in your hand to put on the bottom of your library, then click Confirm.`;
+    body.textContent = `You took ${taken} mulligan${taken !== 1 ? "s" : ""}${freeNote}. Click ${required} card${required !== 1 ? "s" : ""} in your hand to put on the bottom of your library, then click Confirm.`;
 
     steps.innerHTML = `<div>Selected: ${selectedCount} / ${required}</div>`;
 

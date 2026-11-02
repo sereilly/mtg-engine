@@ -78,6 +78,7 @@ def _build_pregame_info(session: Session, viewer_seat: int | None) -> dict | Non
             info["bottom_name"] = players[viewer_seat].name
             info["is_my_turn"] = True
             info["required_count"] = session.mulligan_bottom_required_by_seat[viewer_seat]
+            info["mulligans_taken"] = players[viewer_seat].mulligans_taken
             info["selected_indices"] = list(selected)
             info["selected_count"] = len(selected)
         elif viewer_seat is not None and viewer_seat in deciding:
@@ -85,6 +86,7 @@ def _build_pregame_info(session: Session, viewer_seat: int | None) -> dict | Non
             info["offer_name"] = players[viewer_seat].name
             info["is_my_turn"] = True
             info["mulligans_taken"] = players[viewer_seat].mulligans_taken
+            info.update(_keep_terms(session, viewer_seat))
         else:
             pending = [
                 i
@@ -102,6 +104,8 @@ def _build_pregame_info(session: Session, viewer_seat: int | None) -> dict | Non
         info["offer_name"] = offer_name
         info["is_my_turn"] = viewer_seat is not None and viewer_seat == offer
         info["mulligans_taken"] = session.game.players[offer].mulligans_taken if offer is not None else 0
+        if offer is not None:
+            info.update(_keep_terms(session, offer))
         if not info["is_my_turn"]:
             info["waiting_for"] = offer_name
 
@@ -112,12 +116,38 @@ def _build_pregame_info(session: Session, viewer_seat: int | None) -> dict | Non
         info["bottom_name"] = bottom_name
         info["is_my_turn"] = viewer_seat is not None and viewer_seat == bottom
         info["required_count"] = session.mulligan_bottom_required
+        info["mulligans_taken"] = (
+            session.game.players[bottom].mulligans_taken if bottom is not None else 0
+        )
         info["selected_indices"] = list(session.mulligan_bottom_selected)
         info["selected_count"] = len(session.mulligan_bottom_selected)
         if not info["is_my_turn"]:
             info["waiting_for"] = bottom_name
 
     return info
+
+
+def _may_take_mulligan(session: Session, seat: int) -> bool:
+    """CR 103.5: "A player can take mulligans until their opening hand would
+    be zero cards, after which they may not take further mulligans" — counted
+    as CR 103.5c counts, so a multiplayer or Brawl player's free first
+    mulligan buys one more. The refusal (``action_pregame``) and the offer
+    (:func:`_keep_terms`) ask this one question."""
+    return session.game.mulligan_effective_count(seat) < 7
+
+
+def _keep_terms(session: Session, seat: int) -> dict:
+    """What the seat offered keep-or-mulligan is told it is choosing between:
+    ``bottom_owed``, the cards a keep now puts on the bottom
+    (``Game.mulligan_effective_count`` — CR 103.5's "number of times that
+    player has taken a mulligan", less CR 103.5c's free first one at a
+    multiplayer or Brawl table), and ``may_mulligan``. The client read
+    ``mulligans_taken`` for both until the kg3 round, so a three-seat table's
+    first mulligan said it would cost a card."""
+    return {
+        "bottom_owed": session.game.mulligan_effective_count(seat),
+        "may_mulligan": _may_take_mulligan(session, seat),
+    }
 
 
 def _pregame_enter_mulligan(session: Session, starting_player: int) -> None:
