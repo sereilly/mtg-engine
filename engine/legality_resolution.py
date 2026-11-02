@@ -22,6 +22,7 @@ from __future__ import annotations
 from .game_types import target_ids
 from .oracle import compile_card_oracle
 from .resolution_overrides import resolves_with_illegal_targets
+from .text_changes import spell_text_card
 from .modal_triggers import modal_trigger_modes
 from .targeting import (
     derive_cast_spec,
@@ -117,7 +118,7 @@ class ResolutionTargetsMixin:
         — the engine cannot know *which* copy left, and a fizzle there would
         be a guess dressed as a rule.
         """
-        card = item.card
+        card = spell_text_card(item)
         # "**This ability still resolves if its target becomes illegal.**"
         # (Gilded Drake.) CR 608.2b's exception, printed on the object itself,
         # so it is asked before every reason this engine has for declining the
@@ -221,7 +222,7 @@ class ResolutionTargetsMixin:
         item = self.resolving_items[-1] if self.resolving_items else None
         if item is None or item.ability_instruction is not None:
             return True
-        program = compile_card_oracle(item.card)
+        program = compile_card_oracle(spell_text_card(item))
         for spec, holder, mode_index in self._resolving_announcements(item, program):
             verdict = self._announcement_target_legality(
                 item, program, spec, holder, mode_index
@@ -256,7 +257,7 @@ class ResolutionTargetsMixin:
         was never judged, and a spell countered for a target it does not have
         the moment one is.
         """
-        card = item.card
+        card = spell_text_card(item)
         paid = (getattr(item, "choices", None) or {}).get("additional_costs_paid") or {}
         if not program.modes:
             return [(
@@ -309,7 +310,7 @@ class ResolutionTargetsMixin:
         to protect, and a Crosis's Charm whose target was turned black in
         response is countered by the rule instead of falling to its handler.
         """
-        card = item.card
+        card = spell_text_card(item)
         if spec is None or spec.get("kind") in ("none", "modal", "hand_card"):
             # This announcement does not target at all — a creature spell whose
             # caller passed a stray index still gets an id stamped, a mode that
@@ -605,7 +606,7 @@ class ResolutionTargetsMixin:
             return []
         from .stack_targets import ChosenTarget, announcement_targets
 
-        card = item.card
+        card = spell_text_card(item)
         paid = (getattr(item, "choices", None) or {}).get("additional_costs_paid") or {}
         chosen = list(announcement_targets(self, item, spec, holder))
         if not chosen:
@@ -839,7 +840,7 @@ class ResolutionTargetsMixin:
         # empty for it), so in practice this is the Auras.
         # The object is a spell (its card is the cast object, CR 709.3b), not
         # a permanent, so its printed type is the question.
-        spell = item.card
+        spell = spell_text_card(item)
         aura_spell = (
             item.ability_instruction is None
             and not getattr(item, "is_ability", False)
@@ -847,7 +848,7 @@ class ResolutionTargetsMixin:
         )
         if not (announced_by_a_choice(item) or aura_spell):
             return None
-        if resolves_with_illegal_targets(item.card, item.ability_text):
+        if resolves_with_illegal_targets(spell_text_card(item), item.ability_text):
             return None
         from .stack_targets import chosen_targets
 
@@ -929,12 +930,13 @@ class ResolutionTargetsMixin:
             return None
         if modal_trigger_modes(instruction):
             return None
-        if resolves_with_illegal_targets(item.card, item.ability_text):
+        if resolves_with_illegal_targets(spell_text_card(item), item.ability_text):
             return None
         from .targeting import graveyard_target_spec
 
+        said = spell_text_card(item)
         spec = graveyard_target_spec(
-            item.card, compile_card_oracle(item.card), instruction=instruction,
+            said, compile_card_oracle(said), instruction=instruction,
         )
         if spec is None or spec_is_a_cost(spec):
             return None
@@ -1040,9 +1042,9 @@ class ResolutionTargetsMixin:
                 # are the copied creature's, CR 707.2), a trigger the card on
                 # its stack object — ``stack_targets._candidates`` draws the
                 # same line for the flat announcement below.
-                card = item.card
+                card = spell_text_card(item)
                 if getattr(item, "activated", False):
-                    card = getattr(source, "effective_card", None) or item.card
+                    card = getattr(source, "effective_card", None) or spell_text_card(item)
                 role_specs = spec_roles(spec)
                 for target in targets:
                     if target.kind == "graveyard":
@@ -1172,7 +1174,7 @@ class ResolutionTargetsMixin:
         # creature given shroud in response — or, when its target had left,
         # for whichever creature had slid into that battlefield slot.
         if not names_several_targets(item) and not resolves_with_illegal_targets(
-            item.card, item.ability_text
+            spell_text_card(item), item.ability_text
         ):
             return 0
         illegal: list = []
@@ -1187,7 +1189,7 @@ class ResolutionTargetsMixin:
             # A spell, so the card *is* the object and its printed type is the
             # question — the bound ``illegal_targets_refusal`` draws in the
             # same words, for the reason it gives.
-            card = item.card
+            card = spell_text_card(item)
             if card.primary_type not in ("instant", "sorcery"):
                 return 0
             program = compile_card_oracle(card)
@@ -1322,7 +1324,7 @@ class ResolutionTargetsMixin:
                 and target.mode is None
             ]))
         else:
-            card = item.card
+            card = spell_text_card(item)
             if card.primary_type not in ("instant", "sorcery"):
                 return 0
             program = compile_card_oracle(card)

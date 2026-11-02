@@ -17,6 +17,7 @@ from engine.legality import _iter_instruction_tree
 from engine.oracle import compile_card_oracle
 from engine.oracle_types import CLAIMABLE_EXILED_CARDS, DISCARDED_CARDS_BY_SEAT
 from engine.search_filters import search_matches, search_slots, searched_seat
+from engine.text_changes import spell_text_card
 
 from .prompt_registry import PromptContext, prompt_renderer
 
@@ -1167,7 +1168,7 @@ def _pick_destination(choice) -> dict:
         return {}
     roots = [getattr(item, "ability_instruction", None)]
     if roots[0] is None:
-        roots = list(compile_card_oracle(item.card).instructions)
+        roots = list(compile_card_oracle(spell_text_card(item)).instructions)
     for root in roots:
         for step in _iter_instruction_tree(root):
             if (getattr(step, "payload", None) or {}).get("cards_from") == key:

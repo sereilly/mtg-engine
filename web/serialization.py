@@ -37,7 +37,7 @@ from engine.revealed_hands import hand_revealed_to
 from engine.targeting import derive_cast_spec
 from engine.target_roles import recorded_role_seats
 from engine.cost_pickers import spec_is_a_cost
-from engine.text_changes import changed_words
+from engine.text_changes import changed_words, spell_text_card
 
 from .runtime import CARD_BY_NAME
 from .seats import _player_has_lost
@@ -1210,7 +1210,7 @@ def _stack_item_targets(item, game: Game) -> list[dict]:
 
     # No permanent chosen: the seat is a real target only if the text says so —
     # otherwise it is just the affected/controlling player the effect resolves on.
-    text = (item.ability_text or item.card.oracle_text or "").lower()
+    text = (item.ability_text or spell_text_card(item).oracle_text or "").lower()
     if _TARGETS_PLAYER_RE.search(text):
         targets.append({"kind": "player", "seat": seat})
     return targets
@@ -1277,6 +1277,12 @@ def _serialize_stack_item(item, game: Game) -> dict:
     # badges from — "C", the swatch it already has, for a spell an effect made
     # colourless (Ersatz Gnomes), and the first of several.
     serialized_card = _serialize_card(item.card)
+    # A text change made to the spell (CR 612): the printed text is sent with
+    # the words it now reads differently, the shape a permanent's
+    # ``text_changes`` has, so the card preview strikes them through alike.
+    spell_edits = changed_words(item)
+    if spell_edits:
+        serialized_card["text_changes"] = spell_edits
     override = spell_color_change(item)
     recolored = None
     if override is not None:

@@ -59,6 +59,7 @@ from typing import TYPE_CHECKING
 from .divided_damage import DIVIDED_TARGETS, divided_entry, divided_entry_id
 from .game_types import target_ids
 from .modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
+from .text_changes import spell_text_card
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
@@ -257,7 +258,9 @@ def announcements(item: "StackItem") -> "tuple[_Announcement, ...] | None":
     from .oracle import compile_card_oracle
     from .targeting import _from_instructions, derive_cast_spec
 
-    card = getattr(item, "card", None)
+    # What the object says (CR 612, ``spell_text_card``): a spell's text as
+    # any text change made it, an ability's card as it is.
+    card = spell_text_card(item)
     if card is None:
         return None
     if getattr(item, "is_ability", False):
@@ -357,7 +360,7 @@ def permanent_spell_targets_nothing(item) -> bool:
     ``Game._announce_targeting`` emits "becomes the target" off the stamped
     ids, without asking this module what they are.
     """
-    card = getattr(item, "card", None)
+    card = spell_text_card(item)
     if card is None or getattr(item, "is_ability", False):
         return False
     type_line = (card.type_line or "").lower()
@@ -669,7 +672,7 @@ def _printed_target_instances(item: "StackItem") -> int | None:
                 return count(modes[index].get("label"))
             return 0
         return count(getattr(item, "ability_text", None))
-    card = item.card
+    card = spell_text_card(item)
     type_line = (card.type_line or "").lower()
     if "instant" in type_line or "sorcery" in type_line:
         # Only the lines that name a *cast* target: an instant's own triggered
@@ -747,10 +750,10 @@ def _candidates(
             return None
         if triggered and not _controller_narrowing_is_in(spec, instruction):
             return None
-    card = item.card
+    card = spell_text_card(item)
     if is_ability and getattr(item, "activated", False):
         source = getattr(item, "source_permanent", None)
-        card = getattr(source, "effective_card", None) or item.card
+        card = getattr(source, "effective_card", None) or card
     entries = game._enumerate_targets(
         item.caster_index, card, spec,
         for_cast=not is_ability,
@@ -828,7 +831,9 @@ def change_slots(game: "Game", item: "StackItem") -> "list[ChangeSlot] | str":
     if len(targeted) != 1:
         return "it chose targets for more than one mode"
     announcement, targets = targeted[0]
-    if not getattr(item, "is_ability", False) and compile_card_oracle(item.card).modes:
+    if not getattr(item, "is_ability", False) and compile_card_oracle(
+        spell_text_card(item)
+    ).modes:
         return "a modal spell's targets belong to its chosen mode"
     instances = _printed_target_instances(item)
     if instances is not None and instances != 1:

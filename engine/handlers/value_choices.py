@@ -691,23 +691,31 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
 def _first_creature_type_written_on_target(
     game: Game, context: OracleExecutionContext, excluded: tuple[str, ...],
 ) -> str | None:
-    """The first creature type written on the permanent this resolution
-    targeted (``text_changes.creature_types_written``, read off its current
-    text), skipping *excluded*; None with no such permanent or word."""
-    from ..text_changes import creature_types_written
+    """The first creature type written on the permanent — or the spell on the
+    stack — this resolution targeted (``text_changes.creature_types_written``,
+    read off its current text), skipping *excluded*; None with no such object
+    or word.
+
+    A spell is the target where the announcement named one ("target **spell**
+    or permanent", Artificial Evolution): the stack object in the context,
+    whose words are its folded text (``spell_text_card``) — the board holds
+    nothing that is that spell, and reading a permanent there would offer a
+    word from a bystander.
+    """
+    from ..text_changes import creature_types_written, spell_text_card
     from ._targets import resolve_target_permanent
 
-    target = resolve_target_permanent(
-        game, context, predicate=lambda perm: True,
-        fallback_on_invalid_choice=False,
-    )
-    if target is None:
-        return None
-    return next(
-        (word for word in creature_types_written(target.effective_card)
-         if word not in excluded),
-        None,
-    )
+    if context.stack_target is not None:
+        written = creature_types_written(spell_text_card(context.stack_target))
+    else:
+        target = resolve_target_permanent(
+            game, context, predicate=lambda perm: True,
+            fallback_on_invalid_choice=False,
+        )
+        if target is None:
+            return None
+        written = creature_types_written(target.effective_card)
+    return next((word for word in written if word not in excluded), None)
 
 
 def _best_creature_type_to_sweep(

@@ -51,7 +51,7 @@ from ._targets import (SEVERAL_DESTROY_NARROWINGS,
                        card_divided_each_description,
                        card_divided_shares_payload,
                        divided_target_description, _optional_slot_key,
-                       player_deed_payload)
+                       player_deed_payload, spell_or_permanent_description)
 # …and the ordered-roles half of the same subject, from the module it split
 # into (`_roles`). Imported from its own home rather than pulled through
 # `_targets`, which would be a re-export chain nobody reads the middle of;

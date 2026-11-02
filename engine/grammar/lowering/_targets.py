@@ -763,6 +763,39 @@ SEVERAL_DESTROY_NARROWINGS = frozenset({
 })
 
 
+def spell_or_permanent_description(
+    subject: ast.TargetSpec, node, *, effect: str,
+) -> dict[str, object]:
+    """The ``targets`` description of "target **spell or permanent**".
+
+    One chosen object in one of two zones (CR 115.1: a target is an object, a
+    player or a zone, and the phrase names two kinds of object). The kind says
+    so in the description's own words — ``spell`` for the stack, ``object`` for
+    the battlefield — and ``target_descriptions._from_targets_payload`` turns it
+    into the ``spell_or_permanent`` picker the Lace cycle's kind row has always
+    answered with, so the union has one spec whichever way a card reaches it.
+    Two families describe it — a recolour (Illusion, Blind Seer) and a text
+    change (Sleight of Mind, Magical Hack, Artificial Evolution) — which is why
+    it is here rather than in either; *effect* names the one refusing.
+
+    The bare union only. A narrowing beside it ("target **red** spell or
+    permanent") would have to be asked of both halves, and nothing here tests
+    one of a spell; "up to one" and a plural count are announcements the
+    one-object handlers do not read.
+    """
+    from ...oracle_types import SPELL_OR_OBJECT_TARGET
+    from ._filters import _restrictions_beyond
+
+    beyond = _restrictions_beyond(subject.filter, frozenset({"also_spell"}))
+    if beyond or subject.quantifier != "target" or _names_several_targets(subject):
+        raise LoweringError(
+            f"{effect} names one spell or permanent and narrows neither"
+            + (": " + ", ".join(beyond) if beyond else ""),
+            node=node,
+        )
+    return {"quantifier": "target", "kind": SPELL_OR_OBJECT_TARGET}
+
+
 def _names_several_targets(subject: ast.Recipient) -> bool:
     """Whether *subject* names more than one chosen target.
 

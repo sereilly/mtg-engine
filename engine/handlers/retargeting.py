@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from ..divided_damage import DIVIDED_TARGETS, divided_entry, stamped_entry
 from ..game_types import StackItem, single_chosen_id
 from ..resumption import run_resumable
+from ..text_changes import spell_text_card
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -173,7 +174,9 @@ def _legal_new_targets(game: Game, item: StackItem, bound) -> list[dict]:
         else None
     )
     entries = game._enumerate_targets(
-        item.caster_index, item.card, spec, for_cast=True,
+        # What the spell says (CR 612): a target its changed text no longer
+        # admits is not one CR 115.7a lets it be moved to.
+        item.caster_index, spell_text_card(item), spec, for_cast=True,
         ability_instruction=ability_instruction,
         ability_source=item.source_permanent,
         source_permanent=item.source_permanent,

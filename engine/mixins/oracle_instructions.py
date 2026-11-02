@@ -188,8 +188,16 @@ class OracleInstructionsMixin:
         # The announcement's graveyard stamps (``StackItem.target_graveyard_card``),
         # for a roles spell with a graveyard slot — see ``_resolve_card``.
         target_graveyard_card=None,
+        # What the spell **says** (``text_changes.spell_text_card``): *card*
+        # with the text changes made to it on the stack (CR 612). Its program
+        # is compiled from this, and its targets are read by it; *card* itself
+        # stays the context's card, because that is the object a handler
+        # moves, compares and names ("shuffle this card into its owner's
+        # library", a buyback, the damage source). None is *card* itself.
+        text_card: CardDefinition | None = None,
     ) -> None:
-        instruction = self._select_executable_instruction(card, mode_index)
+        program_card = card if text_card is None else text_card
+        instruction = self._select_executable_instruction(program_card, mode_index)
         if instruction is None:
             self.log.append(f"Resolved supported pattern for {card.name} without state mutation")
             return
@@ -200,7 +208,7 @@ class OracleInstructionsMixin:
         # battlefield has moved it — and nothing at all once it has left.
         target_permanent_index = resolving_slots(
             self, target, target_permanent_index, target_permanent_id,
-            card=card, mode_index=mode_index,
+            card=program_card, mode_index=mode_index,
         )
 
         # CR 702.16b / 702.18: a spell that targets a permanent with shroud, or with
@@ -214,7 +222,9 @@ class OracleInstructionsMixin:
         # was on the stack.
         chosen = (
             None
-            if graveyard_target_spec(card, compile_card_oracle(card), mode_index=mode_index)
+            if graveyard_target_spec(
+                program_card, compile_card_oracle(program_card), mode_index=mode_index,
+            )
             is not None
             else self.chosen_permanent(target, target_permanent_index, target_permanent_id)
         )

@@ -345,10 +345,12 @@ class PaymentChoicesMixin:
             return False
         from ....handlers._filters import _card_matches_filter
         from ....handlers.stack import _redirect_countered_card
+        from ....text_changes import spell_text_card
 
         described = data.get("countered_filter")
         if described and not _card_matches_filter(
-            target.card, described, game=self, owner=target.caster_index,
+            spell_text_card(target), described, game=self,
+            owner=target.caster_index,
         ):
             return False
         seat = data.get("counterer_index")

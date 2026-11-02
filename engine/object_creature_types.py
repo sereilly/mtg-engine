@@ -270,7 +270,13 @@ def object_creature_types(game, obj, seat=None) -> frozenset[str]:
         from .layer_bridge import computed_types
 
         return frozenset(computed_types(obj)[1])
-    return card_creature_types(game, getattr(obj, "card", obj), seat)
+    from .text_changes import spell_text_card
+
+    # A spell on the stack is asked what it says (CR 612, ``spell_text_card``):
+    # an Elf spell an Artificial Evolution rewrote is a Goblin spell.
+    return card_creature_types(
+        game, spell_text_card(obj) if hasattr(obj, "card") else obj, seat,
+    )
 
 
 # ---------------------------------------------------------------------------

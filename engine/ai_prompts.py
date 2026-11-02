@@ -566,7 +566,9 @@ def _target_change_side(game: Game, item) -> str | None:
         return ability_target_side(instruction) or activation_target_side(instruction)
     if getattr(item, "is_ability", False):
         return None
-    spell = item.card
+    from .text_changes import spell_text_card
+
+    spell = spell_text_card(item)
     side = spell_target_side(spell)
     if side is not None:
         return side

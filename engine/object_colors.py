@@ -157,7 +157,13 @@ def object_colors(game, obj, seat=None) -> tuple[str, ...]:
     effective = getattr(obj, "effective_colors", None)
     if effective is not None:
         return tuple(sorted(effective))
-    return card_colors(game, getattr(obj, "card", obj), seat)
+    from .text_changes import spell_text_card
+
+    # A spell on the stack is asked what it says (CR 612, ``spell_text_card``);
+    # a bare card is its own answer.
+    return card_colors(
+        game, spell_text_card(obj) if hasattr(obj, "card") else obj, seat,
+    )
 
 
 # ---------------------------------------------------------------------------

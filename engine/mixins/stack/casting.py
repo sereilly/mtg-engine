@@ -1297,14 +1297,12 @@ class SpellCastingMixin:
                 # object Celestial Dawn has made white is what "counter target
                 # white spell" finds — the same reading `_shares_a_color`
                 # twenty lines up already makes for the other half of CR 105.
-                from ...object_colors import object_colors
-
+                # The stack object's own colour reader — a Lace's recolour
+                # and a text-changed colour included — not its printed card's.
                 matching = [
                     it for it in self.stack
                     if not color_filter
-                    or color_filter in object_colors(
-                        self, it.card, getattr(it, "caster_index", None)
-                    )
+                    or color_filter in self._stack_item_colors(it)
                 ]
                 if matching:
                     target_stack_item_val = matching[-1]

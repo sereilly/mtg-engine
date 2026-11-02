@@ -65,8 +65,11 @@ def _would_destroy_a_land_you_control(
     """
     from .oracle import compile_card_oracle
     from .subject_filters import subject_matches
+    from .text_changes import spell_text_card
 
-    program = compile_card_oracle(spell.card)
+    # What the spell says now: a Tsunami a Magical Hack made "destroy all
+    # Swamps" threatens a different seat's lands (CR 612).
+    program = compile_card_oracle(spell_text_card(spell))
     kinds = _instruction_kinds(program.instructions)
     own_lands = [
         perm for perm in game.controlled_by(observer) if perm.has_type("land")

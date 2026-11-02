@@ -762,23 +762,27 @@ class ValueChoicesMixin:
     # -- Which vocabulary a text change replaces a word from -----------------
 
     def live_text_change_vocabularies(self, permanent, old_symbol: str) -> list[str]:
-        """The vocabularies whose printed word is actually on *permanent*.
+        """The vocabularies whose printed word is actually on *permanent* — a
+        permanent, or a spell on the stack (Crystal Spray's "target spell or
+        permanent").
 
         A text change that rewrites a word the permanent does not have is a
         legal choice (CR 612.1 puts no such condition on it) and changes
         nothing, so offering it would be a question one of whose answers is
         "do nothing" — the shortcut every other picker here takes when a choice
         has one real answer. The *written* text, not the printed card: a second
-        text change rewrites what the first wrote.
+        text change rewrites what the first wrote
+        (``text_changes.current_text_card``, which reads a spell's too).
         """
         # `text_changes`' own tables, both keyed by mana **symbol**. The
         # grammar's `COLOR_WORDS` is the same pairs the other way round (word →
         # symbol) and reading it here would look up "U" and find nothing, which
         # is a vocabulary silently never offered.
-        from ....text_changes import COLOR_WORDS, LAND_TYPE_WORDS
+        from ....text_changes import (COLOR_WORDS, LAND_TYPE_WORDS,
+                                     current_text_card)
 
         symbol = (old_symbol or "").upper()
-        effective = permanent.effective_card
+        effective = current_text_card(permanent)
         written = " ".join(
             (effective.type_line, effective.oracle_text, *effective.keywords)
         ).lower()
@@ -801,11 +805,20 @@ class ValueChoicesMixin:
         is not a prompt: the swap is performed straight away in the first case
         and nothing happens in the second, exactly as the pile choice one file
         over decides whether to ask at all.
+
+        *permanent* may be a spell on the stack (Crystal Spray), held on the
+        prompt as ``_spell`` rather than ``_permanent`` so the answer asks the
+        right zone whether it is still there (CR 608.2b).
         """
+        on_stack = not isinstance(getattr(permanent, "metadata", None), dict)
+        subject_name = (
+            f"{permanent.card.name} (on the stack)" if on_stack
+            else permanent.card.name
+        )
         live = self.live_text_change_vocabularies(permanent, old_symbol)
         if not live:
             self.log.append(
-                f"{card_name} had no effect: {permanent.card.name} has no such "
+                f"{card_name} had no effect: {subject_name} has no such "
                 "word in its text"
             )
             return
@@ -829,7 +842,7 @@ class ValueChoicesMixin:
             # resolution and dropped at the prompt would be a Whim of Volrath
             # that lasts forever whenever its target had both words.
             **({"duration": duration} if duration else {}),
-            _permanent=permanent,
+            **({"_spell": permanent} if on_stack else {"_permanent": permanent}),
         )
 
     def _apply_text_change_vocabulary(
@@ -838,10 +851,17 @@ class ValueChoicesMixin:
     ) -> None:
         """Perform the swap the seat named, through the same two writers the
         single-vocabulary cards use — a third copy here would be a third answer
-        to what a text change records."""
+        to what a text change records. *permanent* may be a spell on the
+        stack: the writers take either, and the record is then read where the
+        spell's text is (``text_changes.spell_text_card``)."""
         from ....text_changes import (LAND_TYPE_WORDS, change_color_word,
                                      change_land_word)
 
+        on_stack = not isinstance(getattr(permanent, "metadata", None), dict)
+        subject_name = (
+            f"{permanent.card.name} (on the stack)" if on_stack
+            else permanent.card.name
+        )
         if mode == "color_word":
             if change_color_word(
                 permanent, old_symbol, new_symbol, label=card_name,
@@ -849,7 +869,7 @@ class ValueChoicesMixin:
             ):
                 self.log.append(
                     f"{card_name} changed {old_symbol} text to {new_symbol} on "
-                    f"{permanent.card.name}"
+                    f"{subject_name}"
                 )
             return
         old_type = LAND_TYPE_WORDS.get((old_symbol or "").upper())
@@ -859,13 +879,14 @@ class ValueChoicesMixin:
         ):
             self.log.append(
                 f"{card_name} changed {old_type} to {new_type} in "
-                f"{permanent.card.name}'s text"
+                f"{permanent.card.name}'s text" + (" (on the stack)" if on_stack else "")
             )
             # A land word inside a lord's grant line ("Other Goblins have
             # mountainwalk") is part of a buff the board caches, so the swap has
             # to be re-derived — the same call the single-vocabulary handler
-            # makes for the same reason.
-            self._recalculate_lord_buffs()
+            # makes for the same reason. A spell's words are cached nowhere.
+            if not on_stack:
+                self._recalculate_lord_buffs()
 
     def confirm_text_change_vocabulary(self, player_index: int, mode) -> bool:
         return self.resolve_pending_choice(
@@ -873,10 +894,15 @@ class ValueChoicesMixin:
         )
 
     def _resolve_text_change_vocabulary(self, choice: PendingChoice, mode) -> bool:
-        permanent = choice.data.get("_permanent")
+        spell = choice.data.get("_spell")
+        permanent = spell if spell is not None else choice.data.get("_permanent")
         if mode not in (choice.data.get("options") or ()):
             return False
-        if permanent is None or not self.is_on_battlefield(permanent):
+        still_there = (
+            any(obj is spell for obj in self.stack) if spell is not None
+            else permanent is not None and self.is_on_battlefield(permanent)
+        )
+        if not still_there:
             # It left while the prompt was owed (CR 608.2b): nothing to rewrite,
             # and the decision is over either way.
             self.discard_pending_choice(choice)

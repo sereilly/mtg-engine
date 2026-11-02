@@ -27,6 +27,29 @@ can fall out of step with what was recorded. Reading is
 ``Permanent.effective_card``, which folds the contributions once — the readers
 (untap restrictions, cost taxes, protection colours, lord grants) never learn
 that text can change.
+
+A spell is an object too
+------------------------
+
+"Change the text of target **spell** or permanent" (Sleight of Mind, Magical
+Hack, Crystal Spray, Alter Reality, Artificial Evolution) rewrites an object on
+the stack, which has no metadata and no layers. Its records are the same
+dicts, kept on ``StackItem.text_change_effects`` and written by the same three
+writers (each takes a permanent or a stack object). A spell's ``card`` is two
+things at once — the object every reader asks what it says, and the physical
+card that goes to a graveyard as it leaves the stack — so the change cannot be
+written *into* it. :func:`spell_text_card` is the first half, folded: **every
+reader of what a spell on the stack says** (its compiled program at resolution,
+the spec CR 608.2b re-asks its targets by, a retarget's candidates, its colour
+and creature types) asks it, and ``item.card`` is left for identity and zone
+moves. ``tests/engine/test_kg3_textspell_spell_text_reads.py`` holds every
+stack-object ``.card`` read in ``engine/`` and ``web/`` to one side of that line.
+
+CR 400.7a is :func:`carry_spell_text_changes`: the records go onto the
+permanent the spell becomes with the timestamps and durations they were created
+with, as ``color_changes.carry_spell_color_change`` carries a colour. A copy
+drops them (CR 707.2: "text-changing effects … are not copied") because the
+copy builders construct a fresh ``StackItem`` and the field starts empty.
 """
 
 from __future__ import annotations
@@ -178,11 +201,25 @@ def _forms(kind: str, old: str, new: str) -> tuple[tuple[str, str], ...]:
 UNTIL_END_OF_TURN = "until_end_of_turn"
 
 
+def _record_list(holder) -> list:
+    """Where *holder*'s text changes are recorded: a permanent's metadata key,
+    or a spell's ``StackItem.text_change_effects`` (which has no metadata).
+
+    Told apart by the ``metadata`` dict a permanent has and a stack object does
+    not — the probe ``object_colors`` makes with ``effective_colors``, for its
+    reason: no import of either model is needed here.
+    """
+    metadata = getattr(holder, "metadata", None)
+    if isinstance(metadata, dict):
+        return metadata.setdefault(TEXT_CHANGE_EFFECTS, [])
+    return holder.text_change_effects
+
+
 def _record(
-    perm: Permanent, kind: str, old: str, new: str, *, label: str,
+    perm, kind: str, old: str, new: str, *, label: str,
     duration: str | None = None,
 ) -> None:
-    effects = perm.metadata.setdefault(TEXT_CHANGE_EFFECTS, [])
+    effects = _record_list(perm)
     record = {
         "kind": kind,
         "from": old,
@@ -205,8 +242,11 @@ def _record(
     # change that rewrote nothing read as a change, so an AI seat cast Magical
     # Hack, Sleight of Mind, Mind Bend, Crystal Spray, Whim of Volrath and
     # Alter Reality at its own Island with no words named — a card spent for
-    # nothing, every game it drew one.
-    perm.metadata["text_modified"] = True
+    # nothing, every game it drew one. A spell has no fields of that kind: the
+    # permanent it becomes is stamped by :func:`carry_spell_text_changes`.
+    metadata = getattr(perm, "metadata", None)
+    if isinstance(metadata, dict):
+        metadata["text_modified"] = True
 
 
 def change_color_word(
@@ -216,11 +256,14 @@ def change_color_word(
     """Sleight of Mind: replace one colour word with another in *perm*'s text.
 
     Takes the mana symbols the cast records; the words are this module's
-    business. Returns False when either symbol names no colour.
+    business. Returns False when either symbol names no colour, or when they
+    name the same one (the card's ruling: "Can't change a color word to the
+    same color word"). *perm* may be a spell on the stack (its
+    ``StackItem``), whose record :func:`spell_text_card` folds.
     """
     old = COLOR_WORDS.get((old_symbol or "").upper())
     new = COLOR_WORDS.get((new_symbol or "").upper())
-    if not old or not new:
+    if not old or not new or old == new:
         return False
     _record(perm, COLOR_WORD, old, new, label=label, duration=duration)
     return True
@@ -241,7 +284,8 @@ def change_land_word(
     old = (old_type or "").strip().lower()
     new = (new_type or "").strip().lower()
     basics = set(LAND_TYPE_WORDS.values())
-    if old not in basics or new not in basics:
+    # "It can't change a word to the same word" (the card's ruling).
+    if old not in basics or new not in basics or old == new:
         return False
     _record(perm, LAND_WORD, old, new, label=label, duration=duration)
     return True
@@ -318,6 +362,80 @@ def has_text_changes(perm: Permanent) -> bool:
     The fast path ``effective_card`` takes on nearly every rules query.
     """
     return bool(perm.metadata.get(TEXT_CHANGE_EFFECTS))
+
+
+def spell_text_changes(item) -> tuple[dict, ...]:
+    """The text changes recorded on the stack object *item*, oldest first.
+
+    Empty for an ability (CR 113.3: not a spell, so no "target spell" names
+    it), a copy (CR 707.2) and every spell nothing changed.
+    """
+    return tuple(getattr(item, "text_change_effects", None) or ())
+
+
+def spell_text_card(item) -> "CardDefinition":
+    """What the stack object *item* **says** — its card with every text change
+    recorded on it applied, oldest first (CR 613.1c, 613.7).
+
+    **The one reader of a spell's text on the stack.** Its compiled program at
+    resolution, the spec CR 608.2b re-asks its targets by, the candidates a
+    retarget offers, its creature types and colour: every one of them asks this
+    and never ``item.card``, which is also the physical card that goes to a
+    graveyard and must stay the printed one. Returns ``item.card`` itself when
+    nothing changed it — the common path, which allocates nothing — so an
+    ability (whose ``card`` is its source's, and which carries no record) reads
+    exactly what it always read.
+    """
+    card = getattr(item, "card", None)
+    changes = getattr(item, "text_change_effects", None)
+    if not changes or card is None:
+        return card
+    return apply_text_changes(card, changes)
+
+
+def carry_spell_text_changes(changes, perm: "Permanent") -> bool:
+    """CR 400.7a: a text change on a permanent spell goes on applying to the
+    permanent the spell becomes. Returns whether there was one to carry.
+
+    *changes* is the resolving spell's own record
+    (``StackItem.text_change_effects``), handed over where the permanent is
+    built and before it enters — so whatever reads its text as it arrives (an
+    entry replacement, its own entry trigger, a lord's grant) reads the text it
+    arrives with. Each record keeps its **timestamp** (CR 613.7b: when the
+    effect was created, not when its object changed zones) and its
+    **duration**, so Crystal Spray's "until end of turn" is swept by this
+    turn's cleanup on the permanent as it would have been on the spell. The
+    rulings for all five cards say it: "If you change the text of a spell
+    which is to become a permanent, the permanent will retain the text change
+    until the effect wears off."
+    """
+    records = [dict(change) for change in changes or ()]
+    if not records:
+        return False
+    perm.metadata.setdefault(TEXT_CHANGE_EFFECTS, []).extend(records)
+    perm.metadata["text_modified"] = True
+    return True
+
+
+def current_text_card(holder) -> "CardDefinition":
+    """What *holder* — a permanent or a spell on the stack — says right now.
+
+    A permanent's is ``effective_card`` (layer 1's copy, layer 3's changes,
+    layer 6's grants); a spell's is :func:`spell_text_card`. For the readers
+    that may be handed either: a text change asking whether the word it
+    replaces is written on its target, and the default word it offers.
+    """
+    if isinstance(getattr(holder, "metadata", None), dict):
+        return holder.effective_card
+    return spell_text_card(holder)
+
+
+def _changes_of(holder) -> tuple[dict, ...]:
+    """The recorded changes of a permanent (:func:`text_changes`) or a spell
+    (:func:`spell_text_changes`)."""
+    if isinstance(getattr(holder, "metadata", None), dict):
+        return text_changes(holder)
+    return spell_text_changes(holder)
 
 
 # ---------------------------------------------------------------------------
@@ -516,7 +634,7 @@ def _net_map(perm: Permanent, kind: str, vocabulary: Iterable[str]) -> dict[str,
     same fold ``apply_text_changes`` performs — not a merge of the entries,
     which is the thing that does not commute.
     """
-    changes = [c for c in text_changes(perm) if c.get("kind") == kind]
+    changes = [c for c in _changes_of(perm) if c.get("kind") == kind]
     result = {}
     for word in vocabulary:
         current = word
@@ -528,8 +646,9 @@ def _net_map(perm: Permanent, kind: str, vocabulary: Iterable[str]) -> dict[str,
 
 
 def changed_words(perm: Permanent) -> list[dict]:
-    """``{"from": word, "to": word}`` for every word this permanent's text now
-    reads differently, for the UI's struck-out/replacement rendering.
+    """``{"from": word, "to": word}`` for every word this permanent's — or
+    this spell's — text now reads differently, for the UI's
+    struck-out/replacement rendering.
 
     Derived from the fold rather than from the entries, so two changes that
     chain (black -> red, then red -> green) are reported as the one edit a
@@ -559,7 +678,7 @@ def changed_words(perm: Permanent) -> list[dict]:
     # catalog, so the net map is taken over the words the changes name rather
     # than over every creature type — the same fold, run from each "from" word.
     creature_changes = [
-        change for change in text_changes(perm) if change.get("kind") == CREATURE_WORD
+        change for change in _changes_of(perm) if change.get("kind") == CREATURE_WORD
     ]
     starts: list[str] = []
     for change in creature_changes:
@@ -581,8 +700,9 @@ def changed_words(perm: Permanent) -> list[dict]:
 __all__ = [
     "COLOR_WORD", "COLOR_WORDS", "CREATURE_WORD", "LAND_TYPE_WORDS", "LAND_WORD",
     "TEXT_CHANGE_EFFECTS", "TEXT_CHANGE_NEW_CREATURE_TYPE",
-    "TEXT_CHANGE_OLD_CREATURE_TYPE", "apply_text_changes", "change_color_word",
-    "change_creature_word", "change_land_word", "changed_words",
-    "creature_type_plural", "creature_types_written", "has_text_changes",
-    "one_pass", "text_changes",
+    "TEXT_CHANGE_OLD_CREATURE_TYPE", "apply_text_changes",
+    "carry_spell_text_changes", "change_color_word", "change_creature_word",
+    "change_land_word", "changed_words", "creature_type_plural",
+    "creature_types_written", "current_text_card", "has_text_changes",
+    "one_pass", "spell_text_card", "spell_text_changes", "text_changes",
 ]
