@@ -906,9 +906,13 @@ def _source_prices(game, permanent, options, watched, ability_index=None) -> tup
 def _priced_match(pips, used, pays, priced) -> "dict | None":
     """Which pip each used unit pays, the cheapest way
     (`mana_payment._cheapest_assignment`) — the colour each source is asked
-    for is the pip, so a painland beside a Mountain is asked for its {C}."""
+    for is the pip, so a painland beside a Mountain is asked for its {C}.
+    The matching it always was where no used unit's price depends on the pip
+    it pays (a City of Brass costs the same whatever it is asked for)."""
     if not pips:
         return {}
+    if not any(priced[index][1] for index in used):
+        return _match_colored(pips, [(index, pays[index]) for index in used])
     found = _cheapest_assignment(pips, [
         (pays[index], dict(priced[index][1])) for index in used
     ])
