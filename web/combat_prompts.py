@@ -465,13 +465,12 @@ def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict 
     if viewer_seat == defender_index and not game.combat_left_right_defender_locked and divide:
         info["divide_creatures"] = divide
     if viewer_seat == attacker_index and defender_done and not game.combat_left_right_attacker_locked:
-        attacker = game.players[attacker_index]
         label = [
-            {"index": i, "id": attacker.battlefield[i].permanent_id,
-             **_serialize_permanent_summary(attacker.battlefield[i], game),
+            {"index": i, "id": attacker.permanent_id,
+             **_serialize_permanent_summary(attacker, game),
              "pile": game.combat_attacker_piles.get(i)}
             for i in sorted(game.combat_attackers)
-            if 0 <= i < len(attacker.battlefield)
+            if (attacker := game.permanent_at(attacker_index, i)) is not None
         ]
         if label:
             info["label_attackers"] = label
