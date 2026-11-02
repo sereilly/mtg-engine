@@ -1506,3 +1506,83 @@ off, at the link.
 Four engine modules sit inside the 200-line band for Scourge's Phase 0:
 `ai_simulator` 1,812, `oracle_types` 1,811, `combat_damage_step` 1,805,
 `layer_bridge` 1,803.
+
+
+### KG3 — 2026-11-02 (a round, not a set)
+
+*Every entry in the playbook's Known gaps, in eighteen groups, then the parts
+those groups measured and left, in nine more (`leftovers`, `dealings`,
+`aiplay`, `client2`, `webturn`, `firstdeal`, `batch`, `leftovers2`,
+`entryfix`), a docs pass, and the pool-wide seat refactor last.* Of the
+thirty-three entries, twenty-nine drained and four came back rewritten to what
+is left: a sweep's "next instance" (no ruling settles it), sixteen defaults by
+position, the unreproduced GET flood, and the seat channel's permanent half.
+The seat half drained: the seat a trigger is about now rides
+`StackItem.about_player_index`, and 602 seeded pushes ran in the same order
+before and after, the 75 old stamps carrying the same seat in the new field.
+As at kg and kg2, nearly every group found the larger defect beside its
+entry, and a second wave was briefed from those findings rather than leaving
+them as entries:
+- CR 508.1d's search was missing for attacks, and no creature able to attack
+  only a planeswalker was ever compelled (665 mismatches over 194 cards).
+- The CR 704.5m sweep had never enforced the type, keyword or colour half of
+  an enchant clause.
+- A dealt-damage trigger fired once per chunk, so 17 source-keyed cards fired
+  once per recipient, beside the 24 recipient-keyed ones the entry named.
+- The "as it enters" choice now waits with the permanent in no zone, and one
+  event's newcomers enter together (the Goblin Assassin observation).
+- Coffin Puppets' graveyard cost was refused for everyone, Flicker exiled for
+  good, and a recoloured spell ignored protection.
+
+*What the integration learned.*
+- **A `full`-marked guard is a guard no agent runs.** Two meeting gates went
+  red on `test_face_blind_guards` (its repo scan is `full`). A census red
+  that `entry` introduced was found by a later agent's whole-file run, and a
+  seeded test that `aidefend`'s policy moved was found by `logs`. The briefs
+  now name the `full` structural guards, and the round's last wave-close
+  rehearsal ran the full pass.
+- **A meeting list is "changed since `main`".** A link's tests leave the list
+  once `main` passes it, and a per-set file is in no list unless a branch
+  edits it. A branch from an older base had wave 1's 47 test files run on its
+  link. Three per-set reds (Retribution, Barrin's Spite, Brontotherium)
+  surfaced only at a wave gate or a later meeting.
+- **Most reds at a merge were meetings, not regressions**: a later group's
+  guard over an earlier group's code. Chores' census ran over ai's role refs,
+  choosers' defaults table over ai's new prompt, client2's refused slot fields
+  under aiplay's tests, and logs' wording under aiplay's.
+- **Four merges composed two designs by hand**: Cuombajj Witches as damage's
+  loop with choosers' seam inside it; types' seat with textspell's text;
+  aidefend's window beside ai's; batch's `entering_together` around logs'
+  wording.
+
+The machine lost 17 GB to another application mid-round, and the gates ran at
+two or three workers from then on.
+
+*Edits in place:*
+- The Phase 4 rehearsal of the tree that closes the last wave runs the full
+  pass.
+- The meeting rule names the older-base and per-set cases and the `full`
+  guards a brief must name.
+- CLAUDE.md, ARCHITECTURE.md and ROADMAP carry the round's rules: one dealing
+  per event, an entry that asks waits, permanents entering together, the
+  attack requirements, the combat wire by id, the web AI's one priority
+  function, the about seat.
+
+*Known gaps:*
+- **Drained:** twenty-nine.
+- **Rewritten:** four (the sweep's next instance, sixteen defaults by
+  position, the GET flood, `target_permanent_index`).
+- **Added:** nine:
+  - the band modules;
+  - each-seat offers' puts;
+  - a mixed split sentence's order;
+  - a recoloured spell retargeted;
+  - CR 508.8's window;
+  - a seeded run's process state;
+  - AI leftovers;
+  - log and wire leftovers;
+  - seen, not measured (the band-blocks pop by blocker index, the GET flood).
+
+Two modules sit inside the 200-line band for the next set's Phase 0, and a
+third on its edge: `choices/table.py` 1,825, `web/action_prompt_answers.py`
+1,808, `ai_abilities.py` 1,800.

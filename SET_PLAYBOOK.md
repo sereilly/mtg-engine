@@ -219,10 +219,23 @@ And when writing one:
   list; the script refuses a path that does not exist, because xdist reports a
   typo as "no tests ran". Add by hand the censuses of any seam two merged
   branches both touched and every ratchet either side lowered — an instrument is
-  code that meets other code at a merge.
+  code that meets other code at a merge. **The list is "changed since `main`",
+  which has two blind spots** (kg3): once `main` moves past a link, that link's
+  files leave the list, so a branch whose base is older than `main` — it never
+  met the links merged since — also runs the test files those links added or
+  edited (kg3 kept them in `gate/wave1_tests.txt`); and a per-set file no branch
+  edited is in no list, so a link whose branch changes behaviour broadly (a
+  default, an entry road, combat assignment, log wording) also runs `tests/sets`
+  whole (three per-set reds surfaced late in kg3).
+- **Name the `full`-marked structural guards in every group brief**
+  (`tests/engine/test_face_blind_guards.py`, `test_grammar_layering.py`,
+  `test_cast_prohibition_readers.py`): an agent's quick-pass `tests/engine` never
+  runs them, and the meeting run does (it names files whole). kg3's first wave
+  went red on the face-blind scan at two meetings.
 - **The full gate** (`gate.sh <tree> <tag>`, read with `gate_report.sh`:
   `oracle_diff`, the duplicate and missing-name scans, the whole suite as
-  the quick pass — `full` as a fourth argument only on the promotion commit,
+  the quick pass — `full` as a fourth argument on the last wave-close
+  rehearsal and on the promotion commit,
   `check_all`, the support report) **runs at each wave's close and on the
   promotion commit — and after the first merge that changes a shared seam**
   (a new `PlayerState`/`Game` field, the static recompute, the rehearsal).
@@ -236,9 +249,9 @@ And when writing one:
   (`tests.helpers.stable_sample`), never by position. A position sample over
   a pool that includes the measured set re-samples at every merge that
   supports cards, so a red appears, or vanishes, at a merge that did not
-  cause it (Judgment). The censuses that still sample by position read only
-  the shipped pool and re-sample at a promotion (Known gaps): compute such a
-  sample on both trees before blaming the set.
+  cause it (Judgment). Every census does since kg3
+  (`tests/engine/test_kg_steps_stable_sampling.py`: `POSITIONAL_SAMPLERS` is
+  empty).
 - **A merge commit claims only what was verified when it was made** — the
   conflict resolutions, `oracle_diff` over that merge, the scans, the meeting
   run — and says where the full gate's result will be recorded.
@@ -770,7 +783,12 @@ green, the trackers agreeing the set ships.
    written as an equality can live in `tests/ai` or `tests/ui`). Rehearse a
    tree that closes a wave: Onslaught's first rehearsal, on a link three
    merges short of it, was read after those merges had fixed most of what it
-   found. The full pass waits for the promotion commit (step 9). Promotion
+   found. **The rehearsal of the tree that closes the last wave runs the full
+   pass** (`gate.sh <tree> <tag> <workers> full`; earlier rehearsals run the
+   quick pass): the `full`-marked inventories and censuses are the ones a set
+   widens, and read first on the promotion commit (step 9) they turn red after
+   it rather than while a group is still in the code (Onslaught's Charms rows,
+   Legions' zone-cast census; kg3 found two `full`-only reds this way). Promotion
    widens every `load_catalog()` guard and shows the set
    to `parse_coverage` for the first time, so findings surface here by
    construction; rehearsing early hands them to somebody still in the code. A
@@ -985,417 +1003,149 @@ drained the colour-blind planner with a test on the neighbouring board (the
 Angel already face down), and Legions' Phase 5 found Onslaught's own board
 (the Angel cast face down) still stranding its turn-up.
 
-- **CR 508.1d's maximisation is not computed for attacks.** The block side's
-  is (`engine/phases/block_requirements.py`); `declare_attackers_step.
-  declare_attackers` clears every requirement once a cap is reached, so under
-  Dueling Grounds a vanilla creature attacking alone is accepted (CR 508.1d's
-  own example says it is illegal), and its cost clause knows only tap costs
-  (Juggernaut under Propaganda is compelled to attack and pay). *Clears:* a
-  round of its own. Parts: one attack-requirement list over
-  `_must_attack_if_able` and `_must_attack_beside`; a search over attackers ×
-  defenders under `attack_declaration_refusal` and the per-defender caps;
-  costs (`_attack_mana_costs_of`, `_declaration_sacrifice_plan`) left out of
-  the maximum; how a conditional requirement counts (Ekundu Cyclops); the AI's
-  `_legal_declaration` asking it. Probes: `scratch/kg/blocks/attack_probe.py`,
-  `attack_cost_probe.py`. (Measured at kg.)
+- **Two modules sit in the 200-line band and a third on its edge.**
+  `engine/mixins/stack/choices/table.py` (the prompt table, 1,825) and
+  `web/action_prompt_answers.py` (1,808) are listed by
+  `scripts/integration/headroom.py`; `engine/ai_abilities.py` is at 1,800,
+  exactly 200 left, so its next line puts it in. *Clears:* the next set's Phase 0, code motion only (`oracle_diff`
+  0/0/0, `sim_fingerprint` 0 moved). The table's rows are order-bearing
+  (CLAUDE.md, "Prompts"): split it by family into modules the table imports in
+  order, not by cutting the list.
 
+- **`target_permanent_index` keeps two shapes and three meanings.** kg3 split
+  the seat channel (`StackItem.about_player_index` is the seat a trigger is
+  about; `target_player_index` is a choice and only a choice); the permanent
+  index is left. It is an int or a list of ints and Nones, on `StackItem`,
+  `ChosenMode`, `OracleExecutionContext` and `StackAnnouncement`; it means the
+  battlefield slot beside a chosen permanent's id, or a graveyard slot for a
+  graveyard target (whose identity is `target_graveyard_card`), and it is the
+  keyword every cast, activation and queue entry point and the AI's actions
+  take, fed by the web request field (`web/schemas.py`) that seven request
+  bodies in `web/static/app.js` send. Measured at kg3: engine and web, 74
+  files (107 attribute reads and writes, 80 keyword passes, 31 dict keys, 29
+  annotations, 17 `isinstance(..., list)` shape checks); tests, 331 files
+  (1,522 keyword uses). *Clears:* a round of its own, in parts: (1) one shape
+  at the holders — None or a list, with a write guard like
+  `game_types.check_target_ids` and readers through one accessor, replacing
+  the 17 shape checks; (2) graveyard targets read from the stamp
+  (`chosen_graveyard_index`), so the field never means a graveyard slot; (3) a
+  trigger's battlefield slot derived from its ids at resolution, as
+  `bare_announcements.resolving_slots` does for spells and activations, so
+  the field becomes a derived cache or goes; (4) the API keyword replaced by
+  `target_permanent_ids` (tests converted by script) and the client's seven
+  bodies switched to ids (a `web/static/` group).
 
-- **Twenty-one damage calls outside `engine/handlers` ask no CR 616.1e
-  question** — each dealt where no resumable loop holds the work behind it,
-  so the affected seat takes the default. The handlers and combat damage ask
-  (`tests/engine/test_kg_damage_handler_asks.py`). Upkeep effects resolved
-  inline (`phases/upkeep_effects.py`: Cyclone's two sweeps and two pay-or-damage
-  effects); prompt answers (`effects._apply_opponent_damage_choice` ×2,
-  `choices/card_names._resolve_name_then_reveal_top`,
-  `choices/optional_pay._apply_optional_pay_decline`,
-  `choices/sacrifice._apply_sacrifice_shortfall`); land riders
-  (`stack/resolution._resolve_card`'s extra-land damage,
-  `land_tapped_for_mana._resolve_tapped_land_trigger_step`); Earthbind
-  (`oracle_instructions._apply_aura_effect`); Eye for an Eye
-  (`effects._apply_mirror_damage`); and eight CR 614.9 redirects in
-  `replacements/redirects.py`, which deal a new event inside another event's
-  616.1 process (CR 616.1g wants a design). And a loop asks its recipients in
-  its own order, not APNAP (CR 616.1's last sentence), visible only when two
-  seats are asked in one effect. *Clears:* a round of its own per family; the
-  APNAP order moves the sim logs.
+- **Whether a sweep is one "next instance of damage from that source"
+  (CR 615.8) is read but not settled.** CR 615.8 never defines "instance".
+  Every ruling on a "next time" card is about the recipient-keyed template
+  (Mirrorwood Treefolk and Glarecaster, 2004-10-04: a time covers every chunk)
+  or a numeric source-keyed one (Harm's Way, 2009-10-01: "just 2" of a
+  Pyroclasm's simultaneous damage, not 2 per recipient). kg3 read the rulings
+  of all 56 "the next time … would deal damage" cards; none of the
+  source-keyed ones (Penance, both Pilgrims, Shadowbane, Reflect Damage,
+  Desperate Gambit, Impulsive Maneuvers) says. *Clears:* an official ruling.
+  Part, if it comes: a source-keyed `uses=1` record (`shields.Shield`,
+  `DamageRedirect`, Desperate Gambit's and Impulsive Maneuvers' replacements)
+  spent at a moment stays open for the rest of the dealing (the
+  `SharedNextTime` shape, closed by `simultaneous_damage.finish`);
+  `tests/regressions/test_kg3_events_next_instance_open.py` names the cards.
 
-- **A CR 614 replacement choice does not hold its stack object.** The prompt
-  queue holds a resolution until its last answer, but the replacement queue
-  does not: Blood of the Martyr's redirect is answered after Shock has
-  finished resolving, Mind Twist finishes before Library of Leng's choice,
-  and Mox Diamond's stack is empty while its discard toll is owed. End states
-  are right; the CR 608.2 timing is not, so anything that reads "while it
-  resolves" is wrong. ROADMAP had this as read and not measured; the boards in
-  `tests/regressions/test_kg_prompts_answered_choice_leaves_queue.py` measure it.
-  *Clears:* a round of its own, beside ROADMAP's "two prompts that meet".
-  Parts (Legions' W2G3, which found it a different mechanism from the
-  headless hold below): `pending_replacement_choices` are never stamped with
-  the stack item, and `choices_for_stack_item` reads only `pending_choices` —
-  stamp in `offer_replacement_choice`, have `choices_for_stack_item` /
-  `stack_item_is_waiting` read both queues, and answer
-  `resolve_replacement_choice` inside the `_answer_pending_choice` envelope so
-  `_release_stack_item` runs.
+- **Sixteen unasked defaults still pick by position.** kg3 weighed Strongarm
+  Tactics', Risky Move's and Meddle's, and
+  `tests/regressions/test_kg3_choosers_unasked_defaults.py::_DEFAULTS`
+  classifies every registered kind (worth / stated / preference / position).
+  By position, nothing weighed: `balance`, `cast_choice` (Backdraft),
+  `effect_order` (CR 616.1), `face_down_cast` (Illusionary Mask),
+  `hand_to_library`, `library_pile_split`, `linked_exile_return`,
+  `modal_mode_targets` (Fatal Lore's caster destroys the first two),
+  `opponent_mode_choice` (the first printed mode), `pile_search`,
+  `player_choice` (the first seat), `put_from_hand_choice`, `reflexive_target`,
+  `text_change_vocabulary`, `untap_up_to`, `word_of_command` (`hand[0]`); five
+  more rank by position behind a preference (`discard`, `permanent_choice`,
+  `permanent_set_choice`, `choose_cards_in_hand`, `look_top_pick`); and the
+  cleanup discard to hand size outside the registry (`hand.pop(0)`,
+  `phases/cleanup_step.py`). *Clears:* an engine-defaults round, one reader per
+  row, each moving its row in `_DEFAULTS`. A by-worth discard for every
+  discard was measured and declined (277 test files read discards).
 
-- **The AI never activates a graveyard ability.** No caller of
-  `activate_from_graveyard` exists outside the web route, so Ashen Ghoul,
-  Carrionette, Coffin Puppets, Glory, Hammer of Bogardan, Necrosavant, Shard
-  Phoenix and Whiteout are never used by a simulated seat. *Clears:* the next
-  AI round; it needs an honesty count (`activations_from_graveyard`) beside it.
+- **An each-seat offer's puts enter at each seat's own answer** (Show and
+  Tell's ruling, 2008-04-01: "After all choices are made, the cards are put
+  onto the battlefield simultaneously"). Show and Tell with Soul Warden on the
+  non-active seat gains 0, not 1, at both kinds of table
+  (`scratch/kg3/batch/probe_show_and_tell.py`); also Veteran Explorer, New
+  Frontiers, Hired Giant, Hunted Wumpus, Charmed Griffin. The `may` offer per
+  seat arms a prompt even for an AI seat, answered on drain, so a lexical
+  `entering_together()` block cannot hold it. *Clears:* an engine round.
+  Parts: `handlers/control_flow.may` (multi-seat, single-leaf action) opens an
+  event that outlives the offers' suspensions; `arm_pending_choice` stamps the
+  open event on prompts armed inside it; `_answer_inside_its_window` re-joins
+  it around the answer; the loop's `run_resumable(..., then=)` closes it, and
+  `_release_stack_item` closes one its loop never came back for; the entry
+  states run in APNAP order after the last pick. Smaller, same seam: one
+  state-based pass's sweeps are separate events (the `while changed:` body of
+  `game_ending._check_state_based_actions` would need extracting); a
+  multi-step `for_each` body is not batched; within a batch, timestamps and
+  entry choices follow caller order, not APNAP (CR 613.7m, 101.4).
 
-- **Printed types are still read off the battlefield and in two sweeps.**
-  `handlers/_filters.graveyard_card_matches`' `graveyard_subtypes` branch reads
-  printed subtypes (Conspiracy does not reach "target Griffin card"), and
-  `search_matches`' Conspiracy override is asked of the chooser rather than
-  the zone's owner — the type twin of the colour fix (every matcher already
-  takes `game=`/`owner=`). `mixins/game_ending.py`'s CR 704.5m / 702.16c
-  sweeps read the printed word "Aura", so a Gliding Licid that became an Aura
-  stays on a host given protection from blue (`scratch/kg/layers/
-  probe_licid_sba.py`). Two colour reads stay printed outside the matchers:
-  the wire's hand and stack cards (`web/serialization.py`, display only) and
-  `ai_valuation.CounterProfile.can_counter` (baselined in `test_layer_reads`).
-  *Clears:* one round, census over boards × the pool.
+- **A split damage sentence mixing a sweep or "each player" with a single
+  recipient asks its CR 616.1 questions in printed order.** kg3 deals a split
+  sentence's single-recipient steps in APNAP order
+  (`control_flow._in_apnap_order`); 13 of the 40 marked sequences mix
+  (Hail Storm, Sorrow's Path, Disorder, Flame Wave, Heart of Bogardan ×2,
+  Kaervek's Hex, Tropical Storm, Goblin Swine-Rider ×2, Warpath, Bellowing
+  Fiend ×2). *Clears:* a damage round. Part: `_one_recipient` returns each
+  step's affected seats, and `sequence` interleaves the steps' events into
+  one APNAP-ordered loop instead of ordering whole steps. (Each sweep is APNAP
+  within itself.)
 
-- **Ten censuses over the shipped pool sample by position**
-  (`tests/engine/test_kg_steps_stable_sampling.py`'s `POSITIONAL_SAMPLERS`),
-  so each re-samples at a promotion. Each is a one-line switch to
-  `tests.helpers.stable_sample` and one re-measure of its floors. *Clears:* any
-  round; until then a promotion's red in one of them is computed on both trees
-  before it is blamed on the set.
+- **A recoloured spell's legality asked while another object resolves reads
+  its printed colour** (CR 115.7: Deflection or Redirect choosing a new target
+  for a Laced spell). `object_colors.spell_colors` knows the *resolving*
+  object's colours only. *Clears:* any round in targeting. Part:
+  `_can_be_targeted` / `_enumerate_targets` take the stack item being
+  retargeted and read `_stack_item_colors` from it.
 
-- **Four prompts answer a permanent by index.** `untap_select` stores indices
-  across requests (the shape the upkeep target had); `opponent_damage_choose`
-  also takes an id; `optional_untap_confirm` has no id form
-  (`sacrifice_confirm` gained its id form at Legions' W2G3). *Clears:* the round that next opens those prompts. Parts per prompt:
-  an `id` on each offered entry, the answer read by id, a stale id a refusal.
+- **A turn with no attack still runs the declare blockers step's priority
+  window** (CR 508.8: "If no creatures are declared as attackers … skip the
+  declare blockers and combat damage steps"). Since kg3 the log says the step
+  is skipped; `combat_phase._leave_combat_step` still enters it. *Clears:* a
+  combat round, with `sim_fingerprint` (every seeded game has such turns; the
+  window's priority offers move).
 
-- **Activated roles with a seat role skip the all-targets-illegal check.**
-  `legality_resolution.ability_target_verdicts` has no per-role verdict for a
-  seat, so Keeper of the Dead, Planeswalker's Scorn and Favor and Goblin Welder
-  are judged per target only (CR 608.2b's "every target illegal" never
-  fires); and Keeper of the Dead's creature is not destroyed when its
-  opponent gains shroud in response though the creature is still legal.
-  *Clears:* a small round. Part: one branch in `ability_target_verdicts`.
+- **A seeded run depends on what ran before it in the process.**
+  `tests/ai/test_kg_layers_ai_balance_and_deaths.py` fails at a different
+  assertion when run after other files in one process than when run alone
+  (kg3/logs). Some module-level state survives between runs and reaches the
+  simulator. *Clears:* a determinism round: run the twelve
+  `sim_fingerprint` games in one process after a batch of other tests and
+  diff against a fresh process; find the state; reset it in
+  `run_ai_simulation`'s seeding.
 
-- **The seat channel still carries two meanings.** `StackItem.target_player_index`
-  holds either the player a controller chose or an event's seat ("that
-  player"). kg split the permanent half (`about_permanent_id`) and gated the
-  discard fire site's seat stamp (`trigger_utils.bound_event_seat`); a static
-  census of every seat stamp against lines that announce a player target found
-  only Goblin Cadets and Guerrilla Tactics, both fixed. The stamps left
-  (unblocked, attached-combat, "one or more attack", upkeep "that player",
-  delayed bound-player) are right only because no line beside them names a
-  player target. The "becomes the target" announcement read a stamp as a
-  target until Onslaught's promotion (Mindstab Thrull announced its own
-  controller, Psychic Purge the discard's causer, and Rayne drew); it now
-  asks a trigger `announces_a_target`, the picker's question. *Clears:* a round adding `about_player_index`, read the way
-  `about_permanent_id` is; `target_permanent_index` keeps its int-or-list shape
-  beside it and goes in the same round.
-
-
-- **The request-body guard derives presence, not shape.**
-  `tests/ui/test_kg_client_request_schemas.py` holds every body to its
-  route's required fields and its handler's refusals, but ten handlers refuse
-  on the prompt's own state (`activate` at three seats, `discard_confirm`,
-  `enter_choice_confirm`, `face_down_cast_confirm`,
-  `outside_game_pick_confirm`, `permanent_choice_confirm`,
-  `pile_search_confirm`, `put_from_hand_confirm`, `trigger_target_confirm`,
-  `word_of_command_confirm`) and no value's type is checked. *Clears:* Phase 5
-  of a set whose prompt reaches one of those routes.
-
-- **Effect labels that name one card's effect, not the moment.**
-  `("matching_permanent_enters", "may")` → `triggered_damage` (Thelon's and
-  Tourach's Chant), `("end_step_enchanted_controller", "if_then")` →
-  `triggered_destruction` (Insubordination deals damage), and
-  `TRIGGERED_LABELS["if_then"]` is `triggered_label`, a word naming neither.
-  Report-only since kg (dispatch reads `StackItem.ability_kind`), but
-  `triggered_abilities.py:130` still reads `effect_kind == "triggered_delayed"`
-  as a flag (one producer, self-consistent). *Clears:* a label round with
-  `oracle_diff`; each move is label-only.
-
-- **About thirty-five comments cite CR 109.5 for "a spell's damage source is
-  its printed card"**; the rule is CR 120.7 (the source of damage is the
-  object that dealt it). List: `scratch/kg/grammar/spell_source_family.txt`,
-  including `tests/rules/test_damage_source_identity.py`'s marker. The
-  citation guard reads only the 701 block. *Clears:* any time.
-
-- **A text change cannot name a spell.** Magical Hack, Sleight of Mind, Crystal
-  Spray, Alter Reality and Artificial Evolution print "target spell or
-  permanent" and offer only a permanent: a stack object has no text channel.
-  *Clears:* a round of its own (Onslaught's W2G4 declined it with its parts):
-  a `spell_or_permanent` target spec; a text-change record on the `StackItem`;
-  one `spell_text_card` reader at the thirteen sites that read a resolving
-  spell's text; the change carried to the permanent the spell becomes (CR
-  400.7a's exception, as `color_changes` carries a colour); copies dropping it.
-
-- **Seven "an opponent" picks made at announcement take the first opponent.**
-  With several opponents the controller chooses which (CR 601.7a, 602.3a,
-  700.2e); Callous Oppressor's entry and Wormfang Crab's pick ask it since
-  Onslaught, but a mode (Fatal Lore, Library of Lat-Nam, Misfortune) and a
-  target (Cuombajj Witches, Echo Chamber, Nova Pentacle, Preacher) chosen by
-  an opponent still go to the first one. Multiplayer only. *Clears:* a
-  multiplayer round; the census
-  `tests/regressions/test_an_opponent_chooses_asks_which.py` names the seven,
-  so a new silent pick fails.
-
-- **Whether a sweep is one "next instance of damage from that source" is not
-  settled.** CR 615.8's source-keyed shields (Penance, both Pilgrims,
-  Shadowbane, Reflect Damage, Desperate Gambit, Impulsive Maneuvers) answer
-  one chunk of an Earthquake; no ruling on any of the seven says whether a
-  sweep's simultaneous chunks are one instance. The recipient-keyed "next
-  time" is settled (Mirrorwood Treefolk's and Glarecaster's rulings:
-  `damage_redirects.SharedNextTime`). *Clears:* a rules reading with the
-  `mtg-rules` skill before any code;
-  `tests/regressions/test_next_time_is_a_time.py` counts them.
-
-
-
-
-- **Face-down leftovers on the wire.** Dream Halls beside a morph card is
-  two alternative costs, and the wire's `alternative_cost` is a bool (Force
-  of Will's limit); Chain of Vapor's two offers (sacrifice a land; copy the
-  spell) reach a person as the same card text with no question. *Clears:*
-  the next client group. Legions' W2G1 took the rest ("played from", the
-  {3} no longer called a morph cost, `hidden_card` in prompt lists) and its
-  Phase 5 the retarget prompt's two identical "Face-down creature" buttons.
-
-- **A cast announcement carries one seat and no graveyard slot.**
-  `ai_actions.CastAction` has no `target_role_refs` (`ActivationAction` has),
-  so an AI seat names at most one player in a chain of seat roles (Wheel and
-  Deal's weighing, `ai_targets._weighed_seat_prefix`, stops at the second
-  seat; Kaboom! names one) and never names Cruel Revival's optional Zombie
-  card. And Kaboom!'s players
-  are dealt with in turn-order groups as its 2022-09-09 ruling says, but the
-  caster is never asked the order within a group. *Clears:* the next AI round
-  that opens casting. Parts: the field on `CastAction`, read where
-  `cast_announcement` builds the cast's roles; the AI's role chain answering
-  it; the within-group order as a prompt.
-
-- **Three unasked defaults pick by position, not by worth.** Strongarm
-  Tactics' seat nobody asks discards its first cards (it lost 4 life holding a
-  creature card in 5 of 12 discards); Risky Move's permanent-choice default
-  takes board order (Butcher Orgg risked over Festering Goblin, 5 of 24);
-  Meddle's forced re-aim takes the first legal change
-  (`handlers/retargeting.py`), where `ai_prompts.choose_target_change` already
-  answers the optional "may change". *Clears:* an engine-defaults round, each
-  with a census of its prompt kind's defaults over the pool. Measured by
-  Onslaught's W2G5 (`scratch/ons/w2g5/probe_defaults.txt`).
-
-- **A quick-pass rehearsal leaves the `full`-marked inventories to the
-  promotion commit.** Phase 4's rehearsals run the quick pass, so step 9's
-  full pass is the first run over the promoted tree of every test marked
-  `full`, and an inventory there that the set widens turns red after the
-  promotion commit rather than while a group is still in the code. Measured
-  against Onslaught's second rehearsal (run before the passes split): of its
-  ten real findings nine came from quick-pass guards, and one — the Charms
-  rows of `tests/ai/test_ai_mode_chooser_census.py` — is `full`-only now.
-  Legions repeated it: the zone-cast census
-  (`tests/regressions/test_ody_w2g2_zone_cast_census.py`, `full`) first ran
-  over the promoted tree in the promotion's full pass and named two branches'
-  changes (a land's "played from" log line, and the rehearsal miscounting a
-  zone buyback's card), two follow-up commits on the promotion link. The
-  parse, grammar, hook and behaviour ratchets are untouched: `check_all` runs
-  their `--check`. *Clears:* the owner's call — the full pass on the
-  wave-close rehearsal tree (~1,300 s at `-n 6` on 2026-10-31), or the
-  `full`-marked files that read `load_catalog()` named in the rehearsal.
-
-- **No planner prices a source's own drawback** (a depletion counter, a
-  painland's damage, "doesn't untap"): kg2's preference kept an Island by
-  tapping Timberline Ridge. The other half of this entry is drained: since
-  Legions' closer C2, floating mana pays generic against the payer's wants at
-  every reader (`mana_payment.floating_units_for_generic`; 23,106 of 77,796
-  pool shapes stranded a colour before, 0 after). A payer told nothing still
-  spends colourless first (`scratch/kg2/payment/pool_order.py` reads 470 of
-  1,344 either way; 0 with the want named). *Clears:* a payment follow-up
-  round; part: a per-source price beside the wants in `_sparing_choice`.
-
-- **The web's sequential mulligan table is not CR 103.5's rounds.** Each seat
-  mulligans until it keeps before the next declares; CR 103.5 has every
-  player declare each round, then every mulligan of the round happen
-  together (the simulator's `ai_mulligan.take_opening_mulligans` does). And
-  in the simulator the coin flip's winner sets the deal and declaration
-  order, but seat 0 always takes turn one. *Clears:* the next pregame round;
-  parts: `web/pregame._pregame_advance_mulligan_offer` advancing by round,
-  and the simulator's first turn read from the flip.
-
-- **A refused cast's "insufficient mana" no longer says what taxed it.** The
-  tax line ("Memory Lapse is taxed by Kaervek's Torch") was an announcement
-  the refused attempt wrote, and kg2 takes it back with the attempt (CR
-  733.1), so the actor's reason reads only the shortfall; the web's
-  payment-plan preview still shows the whole price. *Clears:* any round that
-  opens `pool_payment`; part: fold the taxing sources into the refusal's own
-  reason.
-
-- **The simulator and a headless resolution do not hold a stack object while
-  an optional prompt is owed.** The web always does (CR 608.2): there the
-  object stays on the stack until its last answer. With a `prompt_driver` (the
-  simulator) the driver answers before the next object resolves, but after
-  one state-based check and after destruction triggers are announced. Legions'
-  W2G3 counted 120 of 1,071 driven resolutions that armed a prompt and held
-  nothing (optional_pay 87, revealed_hand_pick 12, discard 11,
-  reorder_library 10; 8 seeded games), and in 3 the state-based check acted
-  before the answer. *Clears:* an engine round with the simulator's games
-  reseeded, since most "finished resolving" lines move. Parts:
-  `resolution._settle` pauses when `prompt_driver` is set (with a held top,
-  skip the loop-top state check, drive the prompts, don't break);
-  `phase_steps._resolve_window_answering_prompts` calls
-  `resolve_top_of_stack(pause_for_choices=True)` and skips
-  `_check_between_resolutions` / `offer_priority` while the top is held;
-  Power Sink's `mana_payment` branch then reaches the driver (check its
-  default against `_auto_resolve_mana_payment`); `ai_rehearsal.scratch_copy`
-  carries the driver, so rehearsals change too. Probe:
-  `scratch/lgn/w2g3/probe_driven_hold.py`.
-
-- **A trigger fired during a resolution chooses before that resolution's
-  state-based check.** Legions' W2G2 made a trigger choose its targets as its
-  unit of play's window closes, after the event and its state-based check —
-  every windowed road. A trigger fired *inside* a resolving spell still
-  chooses at once: Chandra's Incinerator triggered by Earthquake's damage is
-  offered creatures Earthquake is about to kill. *Clears:* whoever opens
-  `Game.putting_triggers_on_stack` around a resolution; part: the resolution
-  is the unit of play, closed after its own state-based check
-  (`PhaseStepsMixin._check_between_resolutions`).
-
-- **Rishadan Brigand, Cutpurse and Footpad at three or more seats offer the
-  payment to one opponent.** Only `context.target`'s seat is asked, and its
-  decline makes every opponent sacrifice (`scratch/lgn/w2g3/probe_rishadan3p.py`:
-  P1 paid, P2 was never asked). Two-player games are right. *Clears:* a
-  multiplayer round; part: lower as `may` with actor `each_opponent` and the
-  otherwise branch's `who` None (moves these three cards in `oracle_diff`).
-
-- **The AI casts no ambush blocker and never toggles Swooping Talon.**
-  Legions' W2G4 taught the AI to cast flash creatures at another seat's end
-  step and in response, not in the opponent's declare-attackers step:
-  `ai_simulator._instant_speed_window` answers no priority there, and a
-  rehearsal started there declares no blocks on its copy (`_run_out_the_turn`
-  decides nothing; `_fight_the_combat` starts only from the active seat's main
-  phase) — ROADMAP's "other priority windows". Swooping Talon's provoke is
-  always declined when the target cannot block a flier: the activation is a
-  hamper on its own source (`harms_its_own_source` skips
-  `SOURCE_HAMPER_KINDS`), and `compelled_block_declined` would have to value
-  the block with flying removed, activated before blockers are declared.
-  *Clears:* the next AI round that opens the defending seat's windows.
-
-- **Three wire leftovers from Legions' client group.** Burnt Offering's
-  cast-side mana split (`mana_combination` on the cast) has no client chooser,
-  where Goblin Clearcutter's activation has one. `prompt_owed_by` reads the
-  pending-choice queue only, so a session-level decision (a cleanup discard,
-  an upkeep payment) leaves the other viewer's panel blank rather than naming
-  who owes it. And a human-vs-human host tab made thousands of state GETs in
-  minutes (the poll does not back off while nothing changes). *Clears:* the
-  next client group.
-
-- **Trample damage is assigned without asking a human attacker.** With one
-  blocker, the damage step divides lethal to the blocker and the rest to the
-  player (Scion of Darkness: a 3/3 split) without offering the attacker CR
-  510.1c–d's choice of more to the blocker. `_needs_manual_damage_assignment`
-  does not count trample as a choice. *Clears:* a combat round; part: a
-  trampler with an interactive controller and a choice to make (more than
-  lethal available) is manual, through the existing assignment announcement
-  (`engine/combat_assignment.py`).
-
-- **An "as it enters" choice is made with the permanent already on the
-  battlefield** (CR 614.12a: the choice is made before it enters). Legions'
-  closer C1 cast 40 choosers from a person's hand. All 40 sat on the
-  battlefield with their spell still on the stack while the prompt was open.
-  37 had a provisional `chosen_*` default recorded, and Soul Warden fired
-  before the choice for all 11 creatures. The wire now shows the board as it
-  was before the choice (`serialization.entry_choice_view`; the permanent
-  carries `entering: true`). What remains is what the engine sees. Nothing
-  can act in the window, but an entry trigger fires before the choice it
-  should follow. *Clears:* an engine round. Parts:
-  1. In `zone_funnels._enter_battlefield`, an entry that arms a person's
-     prompt makes everything from the battlefield append onward a
-     continuation, run at the last answer (the recompute,
-     `apply_entry_riders`, the `matching_permanent_enters` emit, its own enter
-     trigger). Meanwhile the permanent sits in no zone, as
-     `pending_replacement_choices` already does.
-  2. `_perform_entry_state` and `mixins/entry_choices` stamp no default
-     before arming a person's prompt (readers use `.get`).
-  3. The answer funnel runs the continuation on the last `_entering_permanent`
-     prompt, then releases the held spell.
-  4. Census every caller that acts on the permanent after `_enter_battlefield`
-     returns (an Aura's attach, tapped-and-attacking, token returns, linked
-     exile returns).
-  5. Amplify's `place_plus1_counters` must work outside a zone, or run after
-     the append.
-  6. The entry renderers in `web/prompt_values` must not assume a battlefield
-     position.
-  7. `tests/ui/test_entry_choice_prompt_ui_api.py`, which calls
-     `_initialize_permanent_state` directly, must change with it.
-
-- **What a payment's wants cannot see.** Since Legions' closer C2, a
-  face-down spell's hidden card wants its turn-up cost
-  (`mana_wants.wants_brought_by`). Two later costs are still not wants:
-  - A face-up permanent spell's own activated abilities. `wants_brought_by`
-    is not told the payment is a cast. Its callers know it:
-    `_PaymentPlanner.spell is not None`, `PaymentPurpose.kind == CAST` in
-    `web/payment_plan.planned_taps`, and `pool_payment._floating_mana_wants`.
-    Told, it adds the card's non-mana activated abilities to the abilities
-    tier, skipping a {T} ability on a creature without haste (CR 302.6).
-  - Flashback. `mana_wants` reads no graveyard. Two parts: each graveyard
-    card the seat may cast under a permission joins the cards tier at the
-    permission's cost (`ai_weighed_cast.permitted_casts`,
-    `flashback.has_flashback(game, …)`); and `wants_brought_by` adds the
-    flashback cost of an instant or sorcery cast from the hand, since it
-    lands in the graveyard as it resolves.
-
-  The turn-up special action also counts the permanent being turned up as one
-  of its own wants, which is redundant but harmless. *Clears:* a payment
+- **AI leftovers.** The engine plays each correctly; the AI chooses badly or
+  not at all. Balduvian Shaman's text change is an activated ability and
+  `ActivationAction` has no word fields (`ai_text_changes.py` serves casts
+  only; the executor near `ai_simulator.py`'s activation path passes none). A
+  web AI seat attacking gets no declare-attackers priority unless the person
+  holds that step (Swooping Talon's toggle in the browser). An AI defender
+  under banding never weighs a trampler's excess (it keeps the default
+  split). The instant-speed ability chooser reads only a non-land's first
+  ability, and removal-shaped rescues (Quicksilver Wall) stay skipped
+  (ROADMAP, "Abilities at instant speed, the rest"). *Clears:* the next AI
   round.
 
-- **Phase 5's log wording.** Each of these moves seeded logs, so a round
-  taking them reseeds once:
-  - A token's name is doubled ("Goblin Token token").
-  - A colour choice is logged by its letter ("chose U"), and a creature type
-    in lower case ("chose wizard").
-  - Bane of the Living's −X/−X is logged as "buffed".
-  - "Reanimated creature to battlefield".
-  - Toxin Sliver's untargeted "that creature" is logged as "its target is gone
-    (608.2b)".
-  - "Goblin Dynamo dealt 1 damage" names no recipient.
-  - "Declare attackers step complete" is written before the step's window
-    drains, in every game.
+- **Log and wire leftovers.** "slot N" internal indices in seven lines of
+  `handlers/keywords.py` and `handlers/pump.py`; "Camouflage matched …" names
+  the card by a literal with no card name in scope; a printed −1/−0 logs as
+  "−1/+0" (13 format sites); a held resolution logs both "resolved and moved
+  to graveyard" and "finished resolving"; Kaboom!'s role prompt reads "Choose
+  the player" for a players-or-planeswalkers role. Each moves seeded logs, so
+  a round taking them reseeds once. *Clears:* a log-wording round.
 
-  *Clears:* a log-wording round.
-
-- **Legions' Phase 5 client leftovers.**
-  - Two same-named permanents one seat controls read the same on the retarget
-    prompt ("Willbender — yours" twice).
-  - The floating main-phase prompt panel covers a permanent at 1920×1080.
-  - A session with `use_pregame=False` ignores the rematch's CR 103.1 chooser.
-    The UI always uses the pregame.
-
-  *Clears:* the next client group.
-
-- **A dealt-damage trigger fires once per source, not once per event.**
-  Blood Hound ("Whenever you're dealt damage, you may put that many +1/+1
-  counters on this creature") triggered four times when four attackers dealt
-  their combat damage together (CR 510.2: one simultaneous event). By CR
-  603.2c it triggers once, for the total. Boros Reckoner's 2017-03-14 ruling
-  states it for "is dealt damage": "If Boros Reckoner is dealt damage by
-  multiple sources at once, such as by two creatures blocking it, its ability
-  triggers once". The same game also logged "Blood Hound gets 3 +1/+1
-  counters" after it had died. 24 pool cards print a "whenever … dealt damage"
-  trigger (Jackal Pup, Filthy Cur, Saber Ants, Wall of Souls, Lich, Soul
-  Link, …), though "whenever a creature is dealt damage" (Repercussion)
-  rightly triggers per creature. *Clears:* an engine round. Parts:
-  - a census of the 24 under one multi-source combat damage step;
-  - the damage event's per-recipient total read by a recipient-keyed
-    trigger;
-  - the counters step refusing, with no log line, a source that has left
-    (CR 400.7: the card in the graveyard is a new object).
-
-- **Two observations seen once and not reproduced.**
-  - **Goblin Assassin triggered once, not twice**, when Planar Guide returned
-    it beside Goblin Clearcutter. Two browser and three headless re-runs
-    triggered twice (`scratch/lgn/p5/assassin_single_trigger_state.json`,
-    `repro_assassin_*.py`). C1's step censuses do not explain it: it is an
-    entry trigger, not a held window.
-  - **A turn-up from floating mana spent {W}{W} with seven colourless
-    floating**, on a browser board with an untapped Savannah and other cards
-    held. On the same board without the extra cards, headless
-    (`scratch/lgn/probe_savannah.py`), it spends {W} and {C}, and
-    `floating_units_for_generic` spends colourless first in every shape
-    probed.
-
-  *Clears:* whoever reproduces either.
+- **Seen, not measured.** `declare_blockers_step._remove_blocker_from_combat`
+  pops `combat_band_blocks` by blocker index, but that map is keyed by
+  attacker (kg3/leftovers2). The Legions human-vs-human GET flood (runs of
+  100–500 consecutive GETs from one seat with no POST, one right after a
+  rematch) was not reproduced in kg3; re-asks are now shared and back off to
+  4 s, the trigger is unidentified — a suspect is the stale-log guard in
+  `renderState` discarding the new game after a rematch. *Clears:* whoever
+  reproduces it, with a captured server log.

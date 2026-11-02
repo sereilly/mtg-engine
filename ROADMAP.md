@@ -457,13 +457,16 @@ one card prints this") reads as a work item long after it stopped being true.
     Cuombajj Witches (still deals 1 to a first target that gained shroud),
     Mogg Assassin. Needs the second slot announced - the
     CR 602.3 entry above is the same missing prompt.
-  * **A roles announcement with a non-permanent slot**: Planeswalker's Scorn
-    and Favor (a shrouded "target opponent" still reveals), Goblin Welder's
-    graveyard slot, Keeper of the Dead's opponent (a roles announcement since
-    kg) - one branch in `ability_target_verdicts` with a per-role
-    verdict for a seat or a stamp. On the spell side, still: a roles spell's
-    player role (Donate), and a mode an opponent chose (CR 700.2e), at both
-    ends, because the chooser's seat is held only by the prompt.
+  * **A roles announcement with a non-permanent slot** — the ability half
+    closed at kg3/seats: `ability_target_verdicts` judges a player role by
+    whether that role still offers the player (`Game.role_seat_is_offered`,
+    which the per-target half asks too), so Keeper of the Dead, Planeswalker's
+    Favor and Scorn, Shieldmage Advocate and Soldevi Heretic leave unresolved
+    with every target illegal (`test_kg3_seats_role_seat_verdicts.py`; Goblin
+    Welder's graveyard slot was already judged). On the spell side, still: a
+    roles spell's player role (Donate), and a mode an opponent chose (CR
+    700.2e), at both ends, because the chooser's seat is held only by the
+    prompt; an ability's spell role, which no card prints.
   * **A spell whose target may be a player — closed 2026-10-06, and the
     reason it stood is the lesson.** This bullet said a seat and a chosen
     player reach a stack item through the same `target_player_index`, so
@@ -1406,8 +1409,12 @@ one card prints this") reads as a work item long after it stopped being true.
     *returned* Aura choose its host and ask protection (CR 303.4f, 702.16c:
     Replenish, Cleansing Meditation); Onslaught did the same for several
     cards put from hands at once (`put_chosen_hand_cards_onto_battlefield`,
-    Tempting Wurm), and Ugin's −10 is now a pick and that put. Eureka,
-    Charmed Griffin and Retraced Image still put one Aura card with no
+    Tempting Wurm), Ugin's −10 is now a pick and that put, and Flicker's
+    return (`put_exiled_cards_into_zone`) settles the host too (kg3/entryfix,
+    through Worldgorger Dragon's `_return_pile_with_aura_hosts`). Eureka,
+    Show and Tell (measured at both tables, kg3/entryfix's
+    `probe_aura_puts.py`), Charmed Griffin and Retraced Image still put one
+    Aura card with no
     named host onto the battlefield attached to nothing, and it stays there
     doing nothing: the CR 704.5m sweep skips an Aura with no `attached_to`
     key ("manually placed without tracking"). Parts: in

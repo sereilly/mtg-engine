@@ -70,7 +70,7 @@ All Python runs through the workspace venv (Windows / PowerShell):
 # Tests (pytest.ini sets testpaths=tests, addopts=-q)
 python -m pytest                                  # the quick pass, serial
 python -m pytest -n 8 --dist worksteal            # the quick pass in parallel; -n 4 while agents are running
-python -m pytest -n 8 --dist worksteal --full     # the full pass: the promotion gate's run, and only that
+python -m pytest -n 8 --dist worksteal --full     # the full pass: the last wave-close rehearsal's and the promotion gate's run
 python -m pytest -n 4 --dist worksteal -m "not full" tests/ai   # one CI shard as ci.yml runs it (shards: tests/ai -m full [full pass only] | tests/ai -m "not full" | tests/engine | the rest)
 python -m pytest tests/ui/test_web_api.py -q      # one file (a file named runs whole, `full` tests too)
 python -m pytest tests/sets/test_lea_creatures.py::test_name -q   # one test
@@ -78,8 +78,12 @@ python -m pytest tests/regressions -q             # in-game bug regressions
 ```
 
 **Two passes** (`tests/passes.py`). `pytest` is the quick pass; `pytest
---full` is the full pass, run by the promotion gate (SET_PLAYBOOK Phase 4,
-`gate.sh <tree> <tag> <workers> full`) and nowhere else. A test marked
+--full` is the full pass, run by the rehearsal of the tree that closes the
+last wave and by the promotion gate (SET_PLAYBOOK Phase 4, `gate.sh <tree>
+<tag> <workers> full`). Some structural guards are `full`-marked too
+(`test_face_blind_guards`' repo scan, `test_grammar_layering`,
+`test_cast_prohibition_readers`), so a quick-pass run of `tests/engine` does
+not ask them: name them before calling a branch done. A test marked
 `@pytest.mark.full` runs only in the full pass — the seeded AI-game batches
 and whole-pool censuses that take 10 s or more, 163 functions holding 88% of
 the full pass's test-seconds on 2026-10-31 (at `-n 12`: 1,412 s against the
@@ -800,7 +804,15 @@ entries, not editing dispatch**.
   **The object a trigger is about is never its target**: a fire site records it
   as `StackItem.about_permanent_id` only for a line that names no target of
   its own (`trigger_utils.bound_event_object`), and the context builder hands
-  it to the effect. `target_permanent_id` is `None` or a list of ids on every
+  it to the effect. The seat it is about ("that player": whose upkeep, who
+  caused the discard, whom the attack was at, a delayed ability's bound
+  player, the controller whose attachment or unblocked attacker it is) rides
+  `StackItem.about_player_index`; `target_player_index` is a choice and only a
+  choice, and the context builder hands the about seat over where nothing
+  chose one (`tests/regressions/test_kg3_seats_about_player.py`). A player
+  role in an activated ability is judged at resolution by whether that role
+  still offers the player (`Game.role_seat_is_offered`, CR 608.2b).
+  `target_permanent_id` is `None` or a list of ids on every
   holder (`game_types.check_target_ids` on each write), read through
   `target_ids` / `single_chosen_id` / `first_target_id`.
 
@@ -818,7 +830,10 @@ entries, not editing dispatch**.
   entry trigger resolves, so a handler moving something "until this leaves the
   battlefield" asks `linked_exile.until_leaves_has_ended` (CR 610.3b; a
   phased-out source has not left). Censuses:
-  `test_entry_trigger_stack_census.py`, `test_entry_trigger_source_leaves_census.py`.
+  `test_entry_trigger_stack_census.py`, `test_entry_trigger_source_leaves_census.py`
+  — a census that seats a person answers an entry's "as it enters" prompt
+  before looking for its trigger: the entry waits on its way (CR 614.12a)
+  and has not triggered (CR 603.6a; `_answer_the_entry`).
 - **A cast trigger's "it" is a stack object, not a card** — the cast events carry
   `cast_item`, read by `handlers/_targets.triggering_spell`.
 - `engine/state_triggers.py` — a state trigger about another permanent, and CR

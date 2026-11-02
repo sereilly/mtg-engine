@@ -5624,8 +5624,9 @@ function _beamParticles() {
 
 // True for a battlefield creature that has the Flying keyword (case-insensitive).
 // Whether a battlefield permanent is still entering: its "as it enters"
-// choice is owed (CR 614.12a). The server sends `entering: true` then and
-// leaves the key off otherwise (web/serialization.entry_choice_view).
+// choice is owed (CR 614.12a). The server lists it on its way, marked
+// `entering: true`, and leaves the key off otherwise
+// (web/serialization._serialize_arriving).
 function _isEntering(card) {
   return !!card && card.entering === true;
 }
