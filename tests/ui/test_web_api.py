@@ -7,7 +7,7 @@ import web.session_store as web_session_store
 
 from engine.models import CardDefinition, Permanent
 from web.app import app, store
-from tests.helpers import combat_ids, LEA_PATH, resolve_stack
+from tests.helpers import combat_ids, LEA_PATH, resolve_stack, seat_plays_first
 
 
 client = TestClient(app)
@@ -564,7 +564,7 @@ def test_spell_stays_on_stack_until_both_players_pass_priority():
     ).json()
     sid = created["session_id"]
 
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     bolt = _mk_card(
         name="Bolt Test",
         mana_cost="{R}",
@@ -671,7 +671,7 @@ def test_modal_spell_resolves_chosen_mode_via_action():
     ).json()
     sid = created["session_id"]
 
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     salve = _mk_card(
         name="Salve Resolve Test",
         mana_cost="{W}",
@@ -1209,7 +1209,7 @@ def test_combat_actions_declare_attackers_and_blockers():
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
 
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     attacker = _mk_creature_card("Attacker", 3, 3)
     blocker = _mk_creature_card("Blocker", 2, 2)
     session.game.players[0].battlefield = [Permanent(card=attacker)]
@@ -1217,7 +1217,6 @@ def test_combat_actions_declare_attackers_and_blockers():
     session.game.current_turn_phase = "combat"
     session.game.current_step = "declare_attackers"
     session.game.current_phase = "combat"
-    session.current_turn = 0
 
     declare_attack = client.post(
         f"/api/sessions/{sid}/action",
@@ -1258,7 +1257,7 @@ def test_no_spells_during_declare_attackers_assignment_then_priority_after():
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
 
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     attacker = _mk_creature_card("Attacker", 3, 3)
     bolt = _mk_card(
         name="Bolt Test",
@@ -1272,7 +1271,6 @@ def test_no_spells_during_declare_attackers_assignment_then_priority_after():
     session.game.current_turn_phase = "combat"
     session.game.current_step = "declare_attackers"
     session.game.current_phase = "combat"
-    session.current_turn = 0
     session.game.clear_priority_window()  # assignment portion: nobody has priority
 
     blocked = client.post(
@@ -1315,7 +1313,7 @@ def test_no_spells_during_declare_blockers_assignment():
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
 
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     attacker = _mk_creature_card("Attacker", 3, 3)
     blocker = _mk_creature_card("Blocker", 2, 2)
     bolt = _mk_card(
@@ -1331,7 +1329,6 @@ def test_no_spells_during_declare_blockers_assignment():
     session.game.current_turn_phase = "combat"
     session.game.current_step = "declare_attackers"
     session.game.current_phase = "combat"
-    session.current_turn = 0
 
     client.post(
         f"/api/sessions/{sid}/action",
@@ -1373,15 +1370,13 @@ def test_assign_combat_damage_endpoint_changes_life():
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
 
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     attacker = _mk_creature_card("Trampler", 5, 5, "Trample")
     blocker = _mk_creature_card("Blocker", 2, 2)
     session.game.players[0].battlefield = [Permanent(card=attacker)]
     session.game.players[1].battlefield = [Permanent(card=blocker)]
     session.game.current_turn_phase = "combat"
     session.game.current_phase = "combat"
-    session.current_turn = 0
-    session.game.start_priority_window(0)
 
     session.game.current_step = "declare_attackers"
     client.post(
@@ -1807,9 +1802,10 @@ def test_next_phase_runs_end_then_cleanup_then_next_turn():
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
 
     session = store.get(sid)
-    session.game.current_turn_phase = "postcombat_main"
-    session.game.current_step = "postcombat_main"
-    session.game.current_phase = "main"
+    # Entered through the engine's own seam, which spends the turn's phase
+    # plan (CR 500.8); writing the three fields by hand left turn 1's plan
+    # still owing its combat phase, so the next step was combat.
+    session.game._set_phase_and_step("postcombat_main", "postcombat_main")
     session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 0}
     session.game.players[0].hand = [
         _mk_card(name=f"Spell {idx}", mana_cost="", type_line="Sorcery", oracle_text="")
@@ -1932,7 +1928,7 @@ def _make_session_with_card_in_hand(seed: int, card, mana_pool: dict | None = No
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     session.game.players[0].hand = [card]
     if mana_pool is not None:
         session.game.players[0].mana_pool = mana_pool
@@ -2756,11 +2752,13 @@ def test_fresh_game_coin_flip_is_not_a_loser_choice():
 
 def _hvh_no_pregame() -> str:
     """A live human_vs_human session with both seats joined and no pregame, so
-    raw-state can seat an exact board and actions run immediately."""
+    raw-state can seat an exact board and actions run immediately. Seeded: the
+    raw state seats the turn, but the deal and the flip before it are the
+    seed's, and an unseeded one is a new game every run."""
     created = client.post(
         "/api/sessions",
         json={"mode": "human_vs_human", "host_name": "P1", "host_colors": 2,
-              "enable_pregame": False},
+              "enable_pregame": False, "seed": 6603},
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "P2"})

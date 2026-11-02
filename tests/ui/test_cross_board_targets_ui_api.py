@@ -22,7 +22,8 @@ from fastapi.testclient import TestClient
 
 from engine import load_cards
 from engine.card_loader import manifest_set_path
-from web.app import app, store
+from web.app import app
+from tests.helpers import seat_plays_first
 
 client = TestClient(app)
 
@@ -43,7 +44,7 @@ def _make_session():
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     game = session.game
     game.enforce_mana_costs = False
     game.players[0].hand = [_M21["Rookie Mistake"]]
@@ -53,8 +54,6 @@ def _make_session():
     theirs = Permanent(card=_M21["Concordia Pegasus"])    # 1/3
     game.players[0].battlefield = [mine]
     game.players[1].battlefield = [theirs]
-    session.current_turn = 0
-    game.active_player_index = 0
     return sid, game, mine, theirs
 
 

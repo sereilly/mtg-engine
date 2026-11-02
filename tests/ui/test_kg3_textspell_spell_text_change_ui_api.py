@@ -15,8 +15,8 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from engine.models import Permanent
-from tests.helpers import _pass_priority
-from web.app import app, store
+from tests.helpers import _pass_priority, seat_plays_first
+from web.app import app
 from web.runtime import CARD_BY_NAME
 
 client = TestClient(app)
@@ -29,7 +29,7 @@ def _session():
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    game = store.get(sid).game
+    game = seat_plays_first(sid).game
     game.enforce_mana_costs = False
     me, you = game.players
     lions = Permanent(card=CARD_BY_NAME["savannah lions"])

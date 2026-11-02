@@ -21,7 +21,8 @@ from fastapi.testclient import TestClient
 
 from engine.card_loader import load_catalog
 from engine.models import Permanent
-from web.app import app, store
+from web.app import app
+from tests.helpers import seat_plays_first
 
 client = TestClient(app)
 
@@ -42,7 +43,7 @@ def _session(hand, opp_battlefield=(), opp_hand=()):
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     game = session.game
     game.enforce_mana_costs = False
     game.players[0].battlefield = []
@@ -50,8 +51,6 @@ def _session(hand, opp_battlefield=(), opp_hand=()):
     game.players[1].battlefield = [Permanent(card=_CARDS[name]) for name in opp_battlefield]
     game.players[1].hand = [_CARDS[name] for name in opp_hand]
     game._sync_control()
-    session.current_turn = 0
-    game.active_player_index = 0
     return sid, game
 
 

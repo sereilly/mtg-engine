@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 import web.app as web_app
 import web.session_store as web_session_store
 from web.app import app, store
+from web.turn_steps import _begin_first_turn
 from engine import Game, PlayerState, load_cards
 from engine.card_loader import manifest_set_path
 from engine.models import CardDefinition, Permanent
@@ -272,6 +273,41 @@ def _resolve_top_stack(session_id: str, first_pass_seat: int):
     second = _pass_priority(session_id, 1 - first_pass_seat)
     assert second.status_code == 200
     return second
+
+
+def seat_plays_first(session_id: str, seat: int = 0):
+    """*seat* takes turn 1 of a web session created without the pregame, for
+    a test that means "this seat acts first" and is not about the coin flip.
+
+    The no-pregame first deal plays first whoever its flip names
+    (``SessionStore._begin_pregame``), and the route that dealt has already
+    begun that seat's turn 1 (``turn_steps._begin_first_turn``). When the flip
+    went to the other seat, this begins turn 1 again for *seat* through the
+    same function — its untap, upkeep and draw step (the draw skipped, CR
+    103.8a), then its precombat main phase with its priority — so the session's
+    turn, the engine's active player and priority all name *seat*, and turn 1
+    is that seat's first turn (``Game.seat_turn_counts``). A seed chosen for
+    its flip would say the same thing silently, and a reseed deals other decks.
+
+    Call it straight after creating (and joining) the session, before the
+    test builds its board: a board already there is untapped and its upkeep
+    run, as turn 1's would be. Returns the session.
+    """
+    session = store.get(session_id)
+    if session.current_turn == seat:
+        return session
+    game = session.game
+    assert session.pregame_phase is None and game.turn == 1, (
+        "seat_plays_first sets up turn 1 of a game dealt without the pregame"
+    )
+    session.current_turn = seat
+    game.seat_turn_counts.clear()
+    session.first_turn_owed = True
+    _begin_first_turn(session)
+    assert (game.active_player_index, game.priority_player_index) == (seat, seat), (
+        "turn 1's beginning phase stopped before its main phase"
+    )
+    return session
 
 
 def app_js_function_body(name: str) -> str:

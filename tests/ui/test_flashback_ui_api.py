@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 from engine.card_loader import load_cards, manifest_set_path
 from engine.models import Permanent
 from web.app import app, store
+from tests.helpers import seat_plays_first
 
 client = TestClient(app)
 
@@ -48,10 +49,8 @@ def _session(*, mountains: int = 0):
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     game = session.game
-    session.current_turn = 0
-    game.active_player_index = 0
     cards = _cards()
     for player in game.players:
         player.hand.clear()

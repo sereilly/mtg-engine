@@ -14,8 +14,8 @@ from fastapi.testclient import TestClient
 from engine import load_cards
 from engine.models import Permanent
 import web.app as webapp
-from web.app import app, store
-from tests.helpers import LEA_PATH
+from web.app import app
+from tests.helpers import LEA_PATH, seat_plays_first
 
 client = TestClient(app)
 
@@ -28,8 +28,7 @@ def _session():
         json={"mode": "human_vs_ai", "host_name": "H", "host_colors": 2, "guest_colors": 2, "seed": 5},
     ).json()
     sid = created["session_id"]
-    session = store.get(sid)
-    session.current_turn = 0
+    session = seat_plays_first(sid)
     return sid, session, session.game
 
 

@@ -12,7 +12,8 @@ from fastapi.testclient import TestClient
 
 from engine.cast_permissions import grant_permission
 from engine.models import CardDefinition
-from web.app import app, store
+from web.app import app
+from tests.helpers import seat_plays_first
 
 client = TestClient(app)
 
@@ -52,11 +53,9 @@ def _session():
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     game = session.game
     game.enforce_mana_costs = False
-    session.current_turn = 0
-    game.active_player_index = 0
     return sid, session, game
 
 

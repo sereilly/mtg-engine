@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from tests.helpers import seat_plays_first
 from web.app import app, store
 
 client = TestClient(app)
@@ -23,6 +24,7 @@ class TestUndoEndpoint:
             json={"mode": "human_vs_ai", "host_name": "H", "host_colors": 2, "seed": 7},
         ).json()
         sid = created["session_id"]
+        seat_plays_first(sid)
 
         acted = client.post(
             f"/api/sessions/{sid}/action",

@@ -28,8 +28,8 @@ from fastapi.testclient import TestClient
 from engine import load_cards
 from engine.card_loader import manifest_set_path
 from engine.models import CardDefinition, Permanent
-from tests.helpers import app_js_function_body
-from web.app import app, store
+from tests.helpers import app_js_function_body, seat_plays_first
+from web.app import app
 
 client = TestClient(app)
 
@@ -63,7 +63,7 @@ def _session(hand, mine, theirs):
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     game = session.game
     game.enforce_mana_costs = False
     game.players[0].hand = list(hand)
@@ -71,8 +71,6 @@ def _session(hand, mine, theirs):
     game.players[1].battlefield = list(theirs)
     for permanent in list(mine) + list(theirs):
         permanent.metadata["summoning_sickness_turn"] = -99
-    session.current_turn = 0
-    game.active_player_index = 0
     return sid, game
 
 

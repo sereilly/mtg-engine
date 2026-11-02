@@ -20,8 +20,8 @@ from fastapi.testclient import TestClient
 from engine import load_cards
 from engine.card_loader import manifest_set_path
 from engine.models import Permanent
-from tests.helpers import resolve_stack
-from web.app import app, store
+from tests.helpers import resolve_stack, seat_plays_first
+from web.app import app
 
 client = TestClient(app)
 
@@ -43,15 +43,13 @@ def _sparks_session():
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     game = session.game
     game.enforce_mana_costs = False
     game.players[0].hand = [_USG["Shower of Sparks"]]
     game.players[0].battlefield = []
     theirs = Permanent(card=_M21["Concordia Pegasus"])
     game.players[1].battlefield = [theirs]
-    session.current_turn = 0
-    game.active_player_index = 0
     game._sync_control()
     return sid, game, theirs
 

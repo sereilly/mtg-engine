@@ -18,6 +18,7 @@ from tests.helpers import (
     _resolve_top_stack,
     client,
     _get,
+    seat_plays_first,
 )
 from tests.sets.lea_helpers import (
     _forest,
@@ -547,7 +548,7 @@ def test_winter_orb_turn_start_requires_untap_land_selection_for_human_player():
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
 
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     forest = _mk_card(
         name="Forest",
         mana_cost="",
@@ -562,8 +563,6 @@ def test_winter_orb_turn_start_requires_untap_land_selection_for_human_player():
         oracle_text="As long as this artifact is untapped, players can't untap more than one land during their untap steps.",
     )
 
-    session.current_turn = 0
-    session.game.active_player_index = 0
     session.game.players[0].battlefield = [Permanent(card=winter_orb, tapped=False)]
     session.game.players[1].battlefield = [
         Permanent(card=forest, tapped=True),

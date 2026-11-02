@@ -28,10 +28,10 @@ from engine.card_loader import load_catalog, manifest_set_path
 from engine.faces import face_cards, name_aliases
 from engine.models import CardDefinition, CardFace, Permanent
 from web import runtime
-from web.app import app, store
+from web.app import app
 from web.deck_builder import build_deck_from_entries
 
-from tests.helpers import app_js_function_body
+from tests.helpers import app_js_function_body, seat_plays_first
 
 client = TestClient(app)
 
@@ -81,14 +81,12 @@ def _session(*, turn: int = 0):
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    session = store.get(sid)
+    session = seat_plays_first(sid, turn)
     game = session.game
     game.enforce_mana_costs = True
     for player in game.players:
         player.battlefield = []
         player.hand = []
-    session.current_turn = turn
-    game.active_player_index = turn
     return sid, session, game
 
 

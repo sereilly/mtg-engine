@@ -33,7 +33,7 @@ from tests.sets.lea_helpers import (
     _start_session_with_p0_graveyard,
     _swamp,
 )
-from tests.helpers import combat_ids
+from tests.helpers import combat_ids, seat_plays_first
 
 
 def test_choose_activation_action_prefers_prodigal_for_lethal(all_cards):
@@ -555,6 +555,7 @@ def test_debug_action_casts_creature_with_summoning_sickness_flag():
         },
     ).json()
     sid = created["session_id"]
+    seat_plays_first(sid)
 
     response = client.post(
         f"/api/sessions/{sid}/action",
@@ -786,7 +787,7 @@ def test_activated_ability_stays_on_stack_until_priority_passes():
     ).json()
     sid = created["session_id"]
 
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     sorcerer = _mk_card(
         name="Prodigal Sorcerer",
         mana_cost="{2}{U}",
