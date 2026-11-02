@@ -6,15 +6,15 @@ The active player declares attackers (and any attacking bands) as a turn-based
 action, taps the attackers CR 508.1f taps, puts any attack triggers on the stack
 (CR 508.2), then receives priority (CR 508.2) so the triggers resolve as players
 pass. Also holds what declaring costs (CR 508.1g–j), the attack triggers and
-the banding-declaration validation. Whether a creature can attack, the
-"must attack if able" requirements and whether a whole declaration is legal
-are ``attack_legality.py``'s, composed onto ``Game`` directly after this.
+the banding-declaration validation. Whether a creature can attack and
+whether a whole declaration breaks a restriction are ``attack_legality.py``'s,
+and the "attacks if able" requirements and the CR 508.1d maximisation are
+``attack_requirements.py``'s, both composed onto ``Game`` directly after this.
 """
 
 from ..attack_tapping import attacking_causes_tap
 from ..aura_restrictions import attached_combat_restrictions
-from ..combat_restrictions import (declaration_tap_costs, defender_attack_cap,
-                                   participation_cap, toll_mana)
+from ..combat_restrictions import declaration_tap_costs, toll_mana
 from ..mana_payment import mana_cost_label, plan_payment
 from ..subject_filters import subject_matches
 from ..events import emit
@@ -107,52 +107,11 @@ class DeclareAttackersStepMixin:
             if target not in living_opponents_set:
                 return False, "that player has already left the game"
 
-        # The two caps are read here because the CR 508.1d requirement loop
-        # below needs the numbers, **not** because they are refused here: both
-        # are CR 508.1c restrictions on the declaration and both now live behind
-        # `attack_declaration_refusal` with the other three, so the seat that
-        # has to *build* a legal declaration can ask the same question the
-        # engine will. See that method for what the split used to cost.
-        #
-        # "No more than two creatures can attack each combat." (Caverns of
-        # Despair.) Read off the board rather than off the attacker, because the
-        # enchantment is a permanent nobody is attacking with.
-        attack_cap = participation_cap(self.all_permanents(), "attack")
-
-        # "No more than two creatures can attack **you** each combat."
-        # (Crawlspace.) The same CR 508.1c restriction on the declaration,
-        # counted **per defending player** rather than over the whole of it —
-        # so it is a second count beside the one above rather than a narrowing
-        # of it, and three attackers split two-and-one across two opponents is
-        # legal here and illegal above.
-        #
-        # An attacker aimed at a **planeswalker** is not attacking the player
-        # (CR 508.1b), so it is left out of the tally: the card protects a seat,
-        # and counting an attack at their Garruk against it would refuse a
-        # declaration the printed sentence never mentions.
-        #
-        # Every living opponent, not just the seats this declaration named: the
-        # CR 508.1d loop below asks whether an *undeclared* creature could
-        # legally attack somebody, and a seat with no attacker aimed at it yet
-        # is precisely the one it might be required to attack.
-        per_defender_caps = {
-            seat: defender_attack_cap(self.controlled_by(seat))
-            for seat in set(living_opponents) | set(per_attacker_defender.values())
-        }
-        aimed_at_player: dict[int, int] = {}
-        for idx, seat in per_attacker_defender.items():
-            if idx in per_attacker_walker:
-                continue
-            aimed_at_player[seat] = aimed_at_player.get(seat, 0) + 1
-
-        # The permanents this declaration names, needed *before* the requirement
-        # loop below: "If a creature you control attacks, this creature also
-        # attacks if able" (Ekundu Cyclops) is a requirement conditional on the
-        # rest of the declaration, so the loop cannot ask it one creature at a
-        # time off the board. Collected by index here rather than reusing the
-        # `declared_attackers` list built further down, which does not exist yet
-        # and which validates as it goes — this read only has to say who was
-        # named.
+        # The permanents this declaration names, for the CR 508.1c set
+        # restrictions just below. Collected by index here rather than reusing
+        # the `declared_attackers` list built further down, which does not exist
+        # yet and which validates as it goes — this read only has to say who
+        # was named.
         # Through the seam (`permanent_at`), never `controller.battlefield[i]`:
         # a slot is what the wire carries and this is the module that turns one
         # into a permanent.
@@ -184,51 +143,6 @@ class DeclareAttackersStepMixin:
         if refusal is not None:
             return False, refusal[1]
 
-        required_attackers: list[str] = []
-        for idx, attacker in enumerate(controller.battlefield):
-            if not self._is_creature(attacker) or attacker.tapped:
-                continue
-            if idx in unique_indices:
-                continue
-            if not (
-                self._must_attack_if_able(attacker)
-                or self._must_attack_beside(attacker, declared_now)
-            ):
-                continue
-            # CR 508.1d: "If a creature can't attack unless a player pays a cost,
-            # that player is not required to pay that cost." A creature whose
-            # attack costs a tap (Hollow Warrior) is therefore never compelled.
-            if declaration_tap_costs(attacker, "attack"):
-                continue
-            # …and the seat must have room under its own cap (Crawlspace). CR
-            # 508.1d obeys requirements *subject to* the restrictions, so a
-            # creature whose only legal defenders are already at their cap is
-            # under no obligation the declaration can satisfy — the same
-            # reasoning the global cap gets three lines down, asked per seat
-            # because this cap is.
-            if any(
-                self.can_attack(attacker, opp)
-                and (
-                    per_defender_caps.get(opp) is None
-                    or aimed_at_player.get(opp, 0) < per_defender_caps[opp]
-                )
-                for opp in living_opponents
-            ):
-                required_attackers.append(attacker.card.name)
-        # CR 508.1d: requirements are obeyed to the maximum **subject to** the
-        # restrictions. A declaration already sitting at the cap has obeyed as
-        # many "attacks each combat if able" requirements as it legally can, so
-        # a further one is not violated — Primordial Ooze under Caverns of
-        # Despair is exactly this, and enforcing the requirement anyway would
-        # make a legal declaration impossible.
-        if attack_cap is not None and len(unique_indices) >= attack_cap:
-            required_attackers = []
-        if required_attackers:
-            if len(required_attackers) == 1:
-                return False, f"{required_attackers[0]} must attack if able"
-            names = ", ".join(required_attackers)
-            return False, f"{names} must attack if able"
-
         declared_attackers: list[Permanent] = []
         for idx in unique_indices:
             if idx < 0 or idx >= len(controller.battlefield):
@@ -248,6 +162,24 @@ class DeclareAttackersStepMixin:
                 attacking_planeswalker=idx in per_attacker_walker,
             ):
                 return False, f"{attacker.card.name} cannot attack"
+
+        # CR 508.1d: the requirements — every "attacks each combat if able",
+        # each one-turn mark, the conditional ones (Ekundu Cyclops, Magnetic
+        # Web, Viashino Bey) — counted over the declaration and compared with
+        # the most any declaration could obey without disobeying a restriction
+        # or paying a cost (``attack_requirements.py``). After the
+        # restrictions, because a declaration that breaks one is illegal
+        # whatever it obeys, and the player is owed the rule they broke rather
+        # than one they under-obeyed. One loop used to stand here, asking each
+        # undeclared creature whether it could have attacked a player and
+        # clearing every requirement once a cap was reached — so under Dueling
+        # Grounds a Bear attacking alone beside a Juggernaut was accepted, and
+        # Juggernaut under Propaganda was compelled to attack and pay.
+        requirement_refusal = self.attack_requirement_refusal(
+            controller_index, declared_attackers
+        )
+        if requirement_refusal is not None:
+            return False, requirement_refusal
 
         # CR 702.22c: validate any declared attacking bands before committing.
         validated_bands, band_error = self._validate_attacking_bands(
@@ -589,6 +521,70 @@ class DeclareAttackersStepMixin:
         accepted and then left unpaid.
         """
         costs: list[dict[str, int]] = []
+        for payload in self._attack_mana_cost_clauses(attacker, attacked_seat):
+            # "…unless you pay {1} **for each +1/+1 counter on it**."
+            # (Phyrexian Marauder.) "…{1} **for each Cleric on the
+            # battlefield**" (Whipgrass Entangler's grant.) The price is a
+            # reading of the attacker's counters or of the board rather than a
+            # number, so it is multiplied here — at the one reader both the
+            # gate and the charge go through, which is what keeps a
+            # declaration from being approved at one price and billed at
+            # another. ``combat_restrictions.toll_mana`` is that
+            # multiplication, shared with the block step's toll.
+            #
+            # Zero counters means zero owed, and the falsy entries are dropped
+            # so the cost disappears entirely: a Marauder cast for X=0 is a 0/0
+            # that dies to the state-based sweep, and one whose counters were
+            # all removed attacks for free, which is what "for each" says.
+            cost = toll_mana(self, payload, attacker)
+            if cost:
+                costs.append(cost)
+        return costs
+
+    def _owes_a_cost_to_attack(
+        self, attacker: Permanent, target: "tuple[int, int | None]"
+    ) -> bool:
+        """Whether *attacker* owes **any** cost to attack *target* — a
+        ``(seat, planeswalker id or None)`` pair (CR 508.1h).
+
+        The one question CR 508.1d's cost clause asks — "if a creature can't
+        attack unless a player pays a cost, that player is not required to pay
+        that cost" — and so the one reader the maximisation
+        (``attack_requirements.py``) asks of every creature and target it
+        considers: ``_owes_a_cost_to_block``'s twin. Every currency the step
+        charges is here: mana (Brainwash, Propaganda, War Tax), a sacrifice
+        (Leviathan, Flooded Woodlands) and a tap (Hollow Warrior).
+
+        A mana toll is asked by whether it **names** the creature, not by what
+        it costs today: "a cost of zero is not automatically paid, so the
+        controller can choose to not pay" (War Tax ruling, 2004-10-04; CR
+        118.5). A War Tax for X=0, a Collective Restraint whose controller has
+        no basic land type and a Phyrexian Marauder with no counters each
+        charge nothing — and each still excuses the creature from a
+        requirement.
+
+        An attack at a planeswalker is not an attack at its controller (CR
+        508.1b), so a toll on attacking a *player* (Propaganda) is not owed by
+        a creature attacking that player's planeswalker — "Creatures may still
+        attack planeswalkers you control without their controller paying a
+        cost" (Windborn Muse ruling, 2022-12-08).
+        """
+        seat, walker_id = target
+        return bool(
+            self._attack_mana_cost_clauses(
+                attacker, None if walker_id is not None else seat
+            )
+            or self._attack_costs_of(attacker)
+            or declaration_tap_costs(attacker, "attack")
+        )
+
+    def _attack_mana_cost_clauses(
+        self, attacker: Permanent, attacked_seat: int | None = None
+    ) -> list[dict]:
+        """Every printed or recorded mana-cost clause that names *attacker*
+        when it attacks *attacked_seat* (None: a planeswalker, or no combat in
+        view), before its price is read — what ``_attack_mana_costs_of`` prices
+        and ``_owes_a_cost_to_attack`` asks."""
         sources = [
             instruction.payload
             for instruction in compile_card_oracle(attacker.effective_card).instructions
@@ -654,25 +650,7 @@ class DeclareAttackersStepMixin:
             if entry.get("toll")
             and subject_matches(self, attacker, dict(entry.get("filter") or {}))
         ]
-        for payload in sources:
-            # "…unless you pay {1} **for each +1/+1 counter on it**."
-            # (Phyrexian Marauder.) "…{1} **for each Cleric on the
-            # battlefield**" (Whipgrass Entangler's grant.) The price is a
-            # reading of the attacker's counters or of the board rather than a
-            # number, so it is multiplied here — at the one reader both the
-            # gate and the charge go through, which is what keeps a
-            # declaration from being approved at one price and billed at
-            # another. ``combat_restrictions.toll_mana`` is that
-            # multiplication, shared with the block step's toll.
-            #
-            # Zero counters means zero owed, and the falsy entries are dropped
-            # so the cost disappears entirely: a Marauder cast for X=0 is a 0/0
-            # that dies to the state-based sweep, and one whose counters were
-            # all removed attacks for free, which is what "for each" says.
-            cost = toll_mana(self, payload, attacker)
-            if cost:
-                costs.append(cost)
-        return costs
+        return sources
 
     def _counted_toll_payload(
         self, payload: dict, seat: int, permanent: Permanent

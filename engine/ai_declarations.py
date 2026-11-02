@@ -8,13 +8,14 @@ per-creature predicates (:func:`legal_attackers`, the engine's
 ``_can_block_attacker``) cannot see a restriction about who else was
 declared — "can only attack alone", "can't block unless another creature
 blocks", a cap per defender (:func:`_legal_declaration`,
-:func:`_legal_block_declaration`) — nor a requirement the set itself creates
-(:func:`_with_conditional_requirements`), nor a total cost the whole
-declaration has to pay (CR 508.1h, 509.1d: :func:`_unaffordable_attacker`,
-:func:`_unaffordable_blocker`). A block declaration's requirements are the
-engine's to settle last (CR 509.1c, ``Game.obeying_block_declaration``),
-because only a maximum over every declaration can say which compelled block a
-cap may cost.
+:func:`_legal_block_declaration`) —
+nor a total cost the whole declaration has to pay (CR 508.1h, 509.1d:
+:func:`_unaffordable_attacker`, :func:`_unaffordable_blocker`). Both
+declarations' requirements are the engine's to settle last (CR 508.1d,
+``Game.obeying_attack_declaration``, through :func:`_obeying_declaration`;
+CR 509.1c, ``Game.obeying_block_declaration``), because only a maximum over
+every declaration can say which compelled creature a cap may cost — and a
+requirement the set itself creates (Ekundu Cyclops) is one of them.
 
 Which trades are worth making is :func:`_score_block_pair`'s, with the
 damage estimates beside it — and a block that loses its blocker
@@ -155,43 +156,28 @@ def _legal_declaration(
     return [idx for idx in chosen if id(game.permanent_at(attacking_player_index, idx)) in kept]
 
 
-def _with_conditional_requirements(
-    game: Game, attacking_player_index: int, chosen: list[int], legal: list[int]
+def _obeying_declaration(
+    game: Game, attacking_player_index: int, chosen: list[int], *, against: int,
 ) -> list[int]:
-    """*chosen*, plus every legal attacker the set itself now **requires**.
+    """*chosen*, pruned until no restriction is disobeyed and no cost is owed
+    that cannot be paid (:func:`_legal_declaration`), then handed to the
+    engine's CR 508.1d maximisation (``Game.obeying_attack_declaration``).
 
-    The mirror of :func:`_legal_declaration` one rule over. That one prunes
-    until a restriction stops being disobeyed; this one adds until a
-    *requirement* is obeyed — "If a creature you control attacks, this creature
-    also attacks if able" (Ekundu Cyclops) is conditional on the rest of the
-    declaration, so a set that was legal before a creature was added can stop
-    being legal because of it.
-
-    Asked of the engine rather than re-read here, for ``_legal_declaration``'s
-    reason: a second copy of the rule in the AI drifts, and the direction it
-    drifts is a seat whose whole declaration is refused and which therefore
-    attacks with nobody all game.
-
-    Terminates because each pass adds at least one creature out of a finite
-    list, and a set that adds nothing is stable.
+    The prune cannot see a requirement — a cap's prune drops the weakest
+    creature, and under Dueling Grounds the weakest may be the Juggernaut
+    that must attack — and a requirement can be about the set itself: "If a
+    creature you control attacks, this creature also attacks if able" (Ekundu
+    Cyclops). Only a maximum over every declaration can say which compelled
+    creature a cap may cost, so the requirements are the engine's to settle
+    last, exactly as ``obeying_block_declaration`` settles a block's. Handed
+    back unchanged when it already obeys the most it can; otherwise the
+    nearest declaration that does, sending the more valuable of two compelled
+    creatures a cap must choose between.
     """
-    picked = list(chosen)
-    while True:
-        declared = [
-            perm for perm in
-            (game.permanent_at(attacking_player_index, idx) for idx in picked)
-            if perm is not None
-        ]
-        added = [
-            idx for idx in legal
-            if idx not in picked
-            and game._must_attack_beside(
-                game.permanent_at(attacking_player_index, idx), declared
-            )
-        ]
-        if not added:
-            return picked
-        picked.extend(added)
+    chosen = _legal_declaration(game, attacking_player_index, chosen, against=against)
+    return list(game.obeying_attack_declaration(
+        attacking_player_index, chosen, against=against, rank=_permanent_value,
+    ).attackers)
 
 
 def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
@@ -210,9 +196,10 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         return []
 
     # Creatures that must attack if able (Siren's Call, Lure-style "attacks each
-    # combat if able", etc.) are non-negotiable: declare_attackers rejects any
-    # declaration that omits them, so they must be in the result regardless of
-    # the profitability heuristic below.
+    # combat if able", etc.) start in the preference regardless of the
+    # profitability heuristic below; which of them a cap lets through, and
+    # whom a requirement the set creates adds, is the engine's maximisation's
+    # to settle (`_obeying_declaration`).
     forced = [idx for idx in legal_attackers_list if game._must_attack_if_able(player.battlefield[idx])]
 
     # A creature enchanted with Lure ("All creatures able to block it do so") is
@@ -232,7 +219,7 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         if perm.is_creature and not perm.tapped
     ]
     if not opponent_blockers:
-        return _legal_declaration(
+        return _obeying_declaration(
             game, attacking_player_index, legal_attackers_list,
             against=opponent_index,
         )
@@ -248,10 +235,7 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         # Attack when the best possible block is not clearly profitable for the opponent.
         if best_defender_score <= _permanent_value(attacker):
             chosen.append(idx)
-    chosen = _with_conditional_requirements(
-        game, attacking_player_index, chosen, legal_attackers_list
-    )
-    chosen = _legal_declaration(
+    chosen = _obeying_declaration(
         game, attacking_player_index, chosen, against=opponent_index
     )
 
@@ -260,7 +244,7 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     # legal set, so under either attack cap the lethal swing was refused whole
     # and the seat attacked with nobody on the turn it could have won.
     if sum(player.battlefield[i].effective_power for i in legal_attackers_list) >= opponent.life:
-        return _legal_declaration(
+        return _obeying_declaration(
             game, attacking_player_index, legal_attackers_list,
             against=opponent_index,
         )

@@ -39,6 +39,7 @@ from .combat_phase import CombatPhaseMixin
 from .beginning_of_combat_step import BeginningOfCombatStepMixin
 from .declare_attackers_step import DeclareAttackersStepMixin
 from .attack_legality import AttackLegalityMixin
+from .attack_requirements import AttackRequirementsMixin
 from .declare_blockers_step import DeclareBlockersStepMixin
 from .block_legality import BlockLegalityMixin
 from .block_requirements import BlockRequirementsMixin
@@ -61,6 +62,7 @@ __all__ = [
     "BeginningOfCombatStepMixin",
     "DeclareAttackersStepMixin",
     "AttackLegalityMixin",
+    "AttackRequirementsMixin",
     "DeclareBlockersStepMixin",
     "BlockLegalityMixin",
     "BlockRequirementsMixin",

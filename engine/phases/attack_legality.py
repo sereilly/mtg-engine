@@ -4,12 +4,12 @@ from __future__ import annotations
 
 Whether a creature can attack (``can_attack``: every restriction a card, an
 Aura, a static ability or a permission puts on it, and whether what it costs
-to attack can be paid), the requirements on a declaration ("attacks each
-combat if able", "also attacks if able" beside another attacker, CR 508.1d),
-and whether a declared *set* of attackers is legal
+to attack can be paid) and whether a declared *set* of attackers is legal
 (``attack_declaration_refusal``: the CR 508.1c restrictions only a whole
 declaration can disobey — "can only attack alone", a cap per defending
-player, "unless at least two other creatures attack").
+player, "unless at least two other creatures attack"). The requirements on a
+declaration ("attacks each combat if able", CR 508.1d) and the maximisation
+that judges by them are ``attack_requirements.py``'s.
 
 Split out of ``DeclareAttackersStepMixin``, which declares the attack and pays
 for it, and composed onto ``Game`` directly after it; each side calls the
@@ -34,8 +34,7 @@ from ..oracle import compile_card_oracle
 from ..static_bonuses import conditional_static_holds
 from ..turn_state import (attacked_during_seats_last_turn,
                           marked_for_this_turn, stamped_turn_is_now,
-                          CANT_ATTACK_ON_SEAT_TURN_KEY,
-                          MUST_ATTACK_ON_SEAT_TURN_KEY)
+                          CANT_ATTACK_ON_SEAT_TURN_KEY)
 
 
 class AttackLegalityMixin:
@@ -570,146 +569,6 @@ class AttackLegalityMixin:
                 if subject_matches(
                     self, attacker, dict(instr.payload.get("subject") or {}),
                     observer=source_seat, source=source_perm,
-                ):
-                    return True
-        return False
-
-    def _must_attack_if_able(self, attacker: Permanent) -> bool:
-        if attacker.metadata.get("must_attack_until_eot"):
-            return True
-        # "**During that player's next turn**, the chosen creatures attack if
-        # able" (Oracle en-Vec). The same CR 508.1d requirement the mark above
-        # carries, over a turn that had not started when the ability resolved —
-        # so it is the seat-turn stamp rather than the cleanup-swept flag, which
-        # would have been gone a whole turn before the requirement applied.
-        if marked_for_this_turn(self, attacker, MUST_ATTACK_ON_SEAT_TURN_KEY):
-            return True
-        # An Aura can impose the requirement too (Furor of the Bitten). Asked of
-        # the attached Auras rather than stamped on the creature, so the
-        # requirement ends when the Aura leaves and nothing has to undo it —
-        # the model every other Aura restriction already follows.
-        if aura_restriction_active(attacker, "must_attack_each_combat"):
-            return True
-        program = compile_card_oracle(attacker.effective_card)
-        if any(i.kind == "must_attack_each_combat" for i in program.instructions):
-            return True
-        # "**Creatures you control** attack each combat if able." (the Pirate
-        # token Pursued Whale gives each opponent.) CR 508.1d's requirement
-        # printed on one permanent about a *set* of others, so it is found by a
-        # board scan rather than on the attacker itself — the exact arrangement
-        # `can_attack` already has for `creatures_cant_attack`, the restriction
-        # that says the opposite, and read the same way: every noun phrase goes
-        # through `subject_matches` with the *carrier's* seat as CR 109.5's
-        # "you", which is what scopes the token's line to its own controller's
-        # creatures while a card printing no controller word would reach every
-        # seat's.
-        #
-        # Until this scan existed the token's second line compiled to a bare
-        # `static_line` and obliged nobody: it could not block, which is
-        # enforced, and was under no obligation to attack, which was not.
-        for source_seat, source_perm in self.permanents_with_controller():
-            for instr in compile_card_oracle(
-                source_perm.effective_card
-            ).instructions:
-                if instr.kind != "creatures_must_attack":
-                    continue
-                if subject_matches(
-                    self, attacker, dict(instr.payload.get("subject") or {}),
-                    observer=source_seat, source=source_perm,
-                ):
-                    return True
-        return False
-
-    def _must_attack_beside(
-        self, attacker: Permanent, declared: "list[Permanent]"
-    ) -> bool:
-        """""If a creature you control attacks, this creature **also** attacks
-        if able." (Ekundu Cyclops.)
-
-        CR 508.1d's requirement with a condition about the declaration rather
-        than about the board, which is the whole reason it is not one more row
-        in :meth:`_must_attack_if_able`: that predicate sees one creature and
-        cannot be told who else was named.
-
-        The condition is tested against the *other* declared attackers. "Also"
-        is what says so — a lone Cyclops would otherwise be the creature its
-        own condition names, and the requirement would demand it attack because
-        it is attacking. Identity, not value: two Cyclopes are two permanents
-        and each answers for the other, and ``is`` is the only comparison that
-        can tell them apart (idiom #11).
-
-        Through ``subject_matches`` with the requirement's own seat as CR 109.5's
-        observer, so "you control" means the seat whose printed line this is —
-        the same reader every other noun phrase in the combat steps goes
-        through.
-        """
-        seat = self.controller_index_of(attacker)
-        if seat is None:
-            return False
-        program = compile_card_oracle(attacker.effective_card)
-        for restriction in program.instructions:
-            if restriction.kind != "must_attack_if_partner_attacks":
-                continue
-            described = restriction.payload.get("subject") or {}
-            if any(
-                other is not attacker
-                and subject_matches(
-                    self, other, described, observer=seat, source=attacker
-                )
-                for other in declared
-            ):
-                return True
-        # "**If a creature with a magnet counter on it attacks**, all creatures
-        # with magnet counters on them attack if able." (Magnetic Web.) The
-        # same conditional requirement printed on one permanent about a *set*
-        # of others, so it is found by a board scan rather than on the attacker
-        # itself — the arrangement `_must_attack_if_able` above already has for
-        # the unconditional form and `can_attack` has for the restriction.
-        #
-        # Both noun phrases go through `subject_matches` with the **carrier's**
-        # seat as CR 109.5's "you", so a card printing "creatures you control"
-        # in either half would mean the seat whose permanent this is.
-        # `other is not attacker` is what keeps the requirement from being
-        # self-satisfying: a lone magnetized attacker is the creature its own
-        # condition names, and without the identity check it would be compelled
-        # to attack because it is attacking (idiom #11 — two magnetized
-        # creatures are two permanents and each answers for the other).
-        for source_seat, source_perm in self.permanents_with_controller():
-            for instr in compile_card_oracle(
-                source_perm.effective_card
-            ).instructions:
-                if instr.kind not in (
-                    "creatures_must_attack_if_partner_attacks",
-                    # "**If this creature attacks**, all creatures you control
-                    # attack if able." (Viashino Bey.) The same scan and the
-                    # same compelled set; only the condition differs, and it
-                    # differs in kind rather than in payload — what has to be
-                    # attacking is the permanent printing the line, which no
-                    # noun phrase names. Answered by identity below.
-                    "creatures_must_attack_if_source_attacks",
-                ):
-                    continue
-                if not subject_matches(
-                    self, attacker, dict(instr.payload.get("subject") or {}),
-                    observer=source_seat, source=source_perm,
-                ):
-                    continue
-                if instr.kind == "creatures_must_attack_if_source_attacks":
-                    # ``is``, never ``in``: ``Permanent`` compares by value, so
-                    # a second Bey — or an opponent's copy of the same
-                    # catalog-shared card — would answer for this one and
-                    # compel a board whose own Bey stayed home (idiom #11).
-                    if any(other is source_perm for other in declared):
-                        return True
-                    continue
-                condition = dict(instr.payload.get("condition_subject") or {})
-                if any(
-                    other is not attacker
-                    and subject_matches(
-                        self, other, condition,
-                        observer=source_seat, source=source_perm,
-                    )
-                    for other in declared
                 ):
                     return True
         return False
