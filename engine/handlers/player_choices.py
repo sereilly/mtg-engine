@@ -173,26 +173,90 @@ def choose_opponent(
     ``None`` rather than raising — "no legal choice" is an outcome.
     """
     key = str(instruction.payload["result_key"])
-    context.results[key] = None
     card_name = getattr(context.card, "name", "")
-    chooser = game.players.index(context.caster)
-    seats = [
-        seat
-        for seat, player in enumerate(game.players)
-        if seat != chooser and not player.lost
-    ]
-    if not seats:
-        game.log.append(f"{card_name}: no opponent to choose")
-        return True, "resolved"
-    if len(seats) == 1:
-        context.results[key] = seats[0]
-        return True, "resolved"
-    game.arm_player_choice(
-        chooser,
+    if not ask_which_opponent(
+        game, context,
         card_name=card_name,
         prompt=str(instruction.payload.get("prompt") or "Choose an opponent."),
         result_key=key,
-        seats=seats,
-        context=context,
-    )
+    ):
+        game.log.append(f"{card_name}: no opponent to choose")
     return True, "resolved"
+
+
+#: The scratchpad key the seat a controller named as "an opponent" is written
+#: under when the step that spends it is a pick *another* seat makes (CR
+#: 601.7a / 602.3a / 608.2d) — read by ``permanent_choices._chooser_seat``'s
+#: "opponent" row, so the seat asked and the battlefield it picks from
+#: ("…target creature **they** control", Echo Chamber, Preacher) are one
+#: answer. Its own key rather than ``chosen_player``, which every pick writes
+#: for its own chooser and so may already name the controller.
+NAMED_OPPONENT = "named_opponent"
+
+
+def ask_which_opponent(
+    game: "Game", context: "OracleExecutionContext", *,
+    card_name: str,
+    prompt: str = "Choose an opponent.",
+    result_key: str = NAMED_OPPONENT,
+    could_choose=None,
+    then=None,
+    announcing=None,
+) -> bool:
+    """**Which** opponent an unnamed "an opponent" is, asked of the effect's
+    controller — and then *then* with that seat (or None).
+
+    CR 601.7a / 602.3a for a choice made as a spell is cast or an ability
+    activated, CR 700.2e for a mode, CR 608.2d for one made as the effect is
+    applied: "If there is more than one opponent who could make such a
+    choice, the spell's controller decides which of those opponents will make
+    the choice." So the seats offered are the living opponents for whom
+    *could_choose* (a seat → bool) holds — every one of them when it is None
+    — and with one there is no question to ask. Several, and the controller is
+    asked through the ``player_choice`` prompt; a controller nobody asks takes
+    its stated default, the first seat offered, which is the seat this engine
+    handed every such choice to before it asked anyone.
+
+    The answer is recorded under *result_key* in the resolution's scratchpad
+    (None first, so a reader finds no seat rather than a key error), and
+    *then* runs once it is known — as the last step of a resumable loop
+    (``engine/resumption.py``), because an interactive controller's prompt
+    suspends the effect and the pick that spends the seat must wait for it.
+    Nothing may follow this call in its caller for the same reason. Returns
+    whether any opponent could be offered at all.
+
+    *announcing* is the stack object whose announcement the choice belongs to
+    (a mode, CR 700.2e): the prompt holds it there until it is answered
+    (``arm_player_choice``).
+    """
+    from ..resumption import run_resumable
+
+    context.results[result_key] = None
+    controller = game.players.index(context.caster)
+    seats = [
+        seat for seat in game.opponents_of(controller)
+        if could_choose is None or could_choose(seat)
+    ]
+    if len(seats) <= 1:
+        context.results[result_key] = seats[0] if seats else None
+        if then is not None:
+            then(context.results[result_key])
+        return bool(seats)
+
+    def step(which: str) -> None:
+        if which == "ask":
+            game.arm_player_choice(
+                controller,
+                card_name=card_name,
+                prompt=prompt,
+                result_key=result_key,
+                seats=seats,
+                context=context,
+                announcing=announcing,
+            )
+        elif then is not None:
+            seat = context.results.get(result_key)
+            then(seat if isinstance(seat, int) and seat in seats else None)
+
+    run_resumable(game, ("ask", "then"), step)
+    return True

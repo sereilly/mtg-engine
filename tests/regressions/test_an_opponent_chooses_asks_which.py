@@ -14,16 +14,19 @@ front of their picks.
 
 The census drives every printed "an opponent chooses / separates" and "… of an
 opponent's choice" in both manifest roles at a three-seat table with every
-seat interactive and reads who is asked first. The rows that still pick an
-opponent without asking are the choices CR 601.7a / 602.3a / 700.2e put **in
-the announcement** — a mode chosen by an opponent (Fatal Lore, Library of
-Lat-Nam, Misfortune) and a target of an opponent's choice (Cuombajj Witches,
-Echo Chamber, Nova Pentacle, Preacher) — which the engine models at resolution
-or at the mode prompt with the first opponent. They are named here, so a new
-card that picks an opponent silently fails rather than joining them.
+seat interactive and reads who is asked first. No row picks an opponent
+without asking. The last seven were the choices CR 601.7a / 602.3a / 700.2e
+put **in the announcement** — a mode chosen by an opponent (Fatal Lore,
+Library of Lat-Nam, Misfortune) and a target of an opponent's choice (Cuombajj
+Witches, Echo Chamber, Nova Pentacle, Preacher) — which went to the first
+opponent until kg3 put them through the one seam every unnamed "an opponent"
+now goes through (``handlers/player_choices.ask_which_opponent``; its own
+census and boards are ``test_kg3_choosers_opponent_picks.py``). A new card
+that picks an opponent silently fails here.
 
-Validated backwards: on the tree before the fix it names Callous Oppressor and
-Wormfang Crab among the silent picks.
+Validated backwards: on the tree before the Onslaught fix it names Callous
+Oppressor and Wormfang Crab among the silent picks, and on the tree before
+kg3's the seven above.
 """
 
 from __future__ import annotations
@@ -44,17 +47,10 @@ _CHOOSER = re.compile(
     re.I,
 )
 
-#: Announcement-time choices the engine still hands to the first opponent:
-#: a mode (CR 700.2e) or a target (CR 601.7a / 602.3a) an opponent chooses.
-#: Each needs the controller's pick of the opponent carried by the cast or
-#: activation itself — measured and left, see the module docstring.
-_ANNOUNCEMENT_TIME_PICKS = frozenset({
-    "Cuombajj Witches", "Echo Chamber", "Fatal Lore", "Library of Lat-Nam",
-    "Misfortune", "Nova Pentacle", "Preacher",
-})
-#: Printed rows when this was written (18), and those that ask the controller.
+#: Printed rows when this was written (18), and those that ask the controller
+#: (13 since kg3 named the opponent for the seven announcement-time picks).
 _POPULATION_FLOOR = 15
-_ASKING_FLOOR = 6
+_ASKING_FLOOR = 12
 
 
 def _put(game, seat, card):
@@ -159,4 +155,4 @@ def test_an_opponent_s_choice_asks_the_controller_which_opponent():
     assert len(asking) >= _ASKING_FLOOR, rows
     assert {"Callous Oppressor", "Wormfang Crab"} <= asking
     silent = {name for name, verdict in rows if verdict == "opponent"}
-    assert silent <= _ANNOUNCEMENT_TIME_PICKS, sorted(silent - _ANNOUNCEMENT_TIME_PICKS)
+    assert not silent, sorted(silent)

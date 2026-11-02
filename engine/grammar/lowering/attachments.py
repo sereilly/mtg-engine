@@ -617,10 +617,10 @@ def _lower_choose_permanent(
     # front of their own picks, writing the record ``_chooser_seat``'s
     # "chosen_player" row reads. Asked only where there is more than one
     # opponent and a person in the controller's seat; anyone else takes the
-    # first opponent, which is the seat ``_chooser_seat("opponent")`` took.
-    # Not for a printed "target" (Echo Chamber): that choice belongs to the
-    # announcement (CR 602.3a), and its activation gate reads the "opponent"
-    # seat directly.
+    # first opponent. Not for a printed "target" (Echo Chamber): that choice
+    # belongs to the announcement (CR 602.3a), its activation gate reads every
+    # opponent's board, and the "opponent" chooser's handler names the seat
+    # itself (``handlers/player_choices.ask_which_opponent``).
     announces_opponent = (
         node.chooser.kind == "opponent" and not scoped.get("announced_target")
     )

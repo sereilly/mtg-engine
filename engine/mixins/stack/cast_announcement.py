@@ -418,39 +418,57 @@ class CastAnnouncementMixin:
         but the three that print the head.
 
         **Which opponent** is the caster's choice when there is more than one
-        (CR 700.2e's second sentence), and this takes the first living one
-        instead of asking. That is a decision the engine does not model yet and
-        it is recorded as such rather than hidden: in a duel, the rule's
-        "if there is more than one" clause never applies and the seat is the
-        only opponent there is.
+        (CR 700.2e's second sentence, CR 601.7a): asked first, through the one
+        seam every unnamed "an opponent" goes through
+        (``handlers/player_choices.ask_which_opponent``), and the mode prompt
+        is armed for the seat named. A caster nobody asks takes the stated
+        default, the first living opponent; in a duel the rule's "if there is
+        more than one" clause never applies and nobody is asked.
         """
+        from ...game_types import OracleExecutionContext
+        from ...handlers.player_choices import ask_which_opponent
+
         program = compile_card_oracle(card)
         if program.mode_chooser is None or not program.modes:
             return
-        chooser = next(
-            (
-                seat for seat in self.opponents_of(caster_index)
-                if not self.players[seat].lost
-            ),
-            None,
-        )
-        if chooser is None:
-            # CR 700.2e names a player who has to exist; with none left the
-            # spell has nobody to ask and the first printed mode stands, which
-            # is the same stated policy the non-interactive default takes.
-            from ...game_types import ChosenMode
 
-            spell_item.chosen_mode_index = 0
-            spell_item.chosen_modes = (ChosenMode(index=0),)
-            return
-        self.arm_pending_choice(
-            "opponent_mode_choice", chooser,
+        def arm_for(chooser: int | None) -> None:
+            if chooser is None:
+                # CR 700.2e names a player who has to exist; with none left the
+                # spell has nobody to ask and the first printed mode stands,
+                # which is the same stated policy the non-interactive default
+                # takes.
+                from ...game_types import ChosenMode
+
+                spell_item.chosen_mode_index = 0
+                spell_item.chosen_modes = (ChosenMode(index=0),)
+                return
+            self.arm_pending_choice(
+                "opponent_mode_choice", chooser,
+                card_name=card.name,
+                labels=[mode.label for mode in program.modes],
+                _item=spell_item,
+                # Part of the spell's announcement (CR 601.2b), so it holds the
+                # spell on the stack until answered — the key every
+                # announcement-time prompt holds its object with.
+                _trigger_item=spell_item,
+            )
+            self.log.append(
+                f"{self.players[chooser].name} chooses a mode for {card.name}"
+            )
+
+        # No resolution is running, so the naming gets a scratchpad of its own
+        # to record the seat in — the same one a resolution's ``choose_opponent``
+        # step writes, read back by ``arm_for`` as the naming's last step.
+        ask_which_opponent(
+            self,
+            OracleExecutionContext(
+                caster=self.players[caster_index], target=None, card=card,
+            ),
             card_name=card.name,
-            labels=[mode.label for mode in program.modes],
-            _item=spell_item,
-        )
-        self.log.append(
-            f"{self.players[chooser].name} chooses a mode for {card.name}"
+            prompt=f"Choose the opponent who chooses {card.name}'s mode.",
+            then=arm_for,
+            announcing=spell_item,
         )
 
     def arm_modal_mode_targets(self, spell_item, chooser_seat: int) -> None:
@@ -527,4 +545,6 @@ class CastAnnouncementMixin:
             targets=offered,
             max_targets=int(spec.get("max_targets") or 1),
             _item=spell_item,
+            # Still the announcement (CR 601.2c): held like the mode before it.
+            _trigger_item=spell_item,
         )

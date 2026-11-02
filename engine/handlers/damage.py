@@ -1444,26 +1444,40 @@ def deal_damage_and_opponent_choice(game: Game, instruction: OracleInstruction, 
     target rides the normal context targeting (handled by deal_damage); the
     opposing choice becomes a pending prompt for a human chooser, or a
     deterministic pick (kill a creature of the activator's if able, else the
-    activator's face) for AI/headless play."""
+    activator's face) for AI/headless play.
+
+    **Which** opponent chooses is the activator's to say where there are
+    several (CR 602.3a; the card's 2020-11-10 ruling: "You choose which
+    opponent chooses the second target"), asked through the one seam every
+    unnamed "an opponent" goes through (``player_choices.ask_which_opponent``).
+    """
+    from .player_choices import ask_which_opponent
+
     deal_damage(game, instruction, context)
 
     caster_index = game.players.index(context.caster)
-    chooser_index = next(
-        (i for i, p in enumerate(game.players) if i != caster_index and not p.lost), None
-    )
-    if chooser_index is None:
-        return True, "resolved"
     amount = int(instruction.payload.get("opponent_amount", instruction.payload.get("amount", 0)))
-    # An interactive chooser is prompted; every other seat takes the kind's
-    # deterministic default the moment this is armed.
-    if game.arm_pending_choice(
-        "opponent_damage", chooser_index,
-        caster_index=caster_index, amount=amount, card_name=context.card.name,
-        _source_permanent=context.source_permanent,
-    ) is not None:
-        game.log.append(
-            f"{game.players[chooser_index].name} chooses any target for {context.card.name}'s {amount} damage"
-        )
+
+    def arm(chooser_index: int | None) -> None:
+        if chooser_index is None:
+            return
+        # An interactive chooser is prompted; every other seat takes the
+        # kind's deterministic default the moment this is armed.
+        if game.arm_pending_choice(
+            "opponent_damage", chooser_index,
+            caster_index=caster_index, amount=amount, card_name=context.card.name,
+            _source_permanent=context.source_permanent,
+        ) is not None:
+            game.log.append(
+                f"{game.players[chooser_index].name} chooses any target for {context.card.name}'s {amount} damage"
+            )
+
+    ask_which_opponent(
+        game, context,
+        card_name=context.card.name,
+        prompt=f"Choose the opponent who chooses a target for {context.card.name}'s {amount} damage.",
+        then=arm,
+    )
     return True, "resolved"
 
 

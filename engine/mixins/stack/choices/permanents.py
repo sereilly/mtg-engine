@@ -696,6 +696,7 @@ class PermanentChoicesMixin:
         result_key: str,
         seats,
         context,
+        announcing=None,
     ) -> PendingChoice | None:
         """Queue "choose one of these players" for *player_index*.
 
@@ -705,7 +706,15 @@ class PermanentChoicesMixin:
         "cast one or more sorcery spells this turn" is a fact about a turn that
         is already over. A seat that has *lost* is the one exception, and it is
         re-checked when the answer arrives.
+
+        *announcing* is the stack object this choice is part of the
+        announcement of — "which opponent chooses this spell's mode" (CR
+        700.2e) is asked after CR 601.2i has put the spell on the stack, and
+        the spell must not resolve before it is answered. Carried as
+        ``_trigger_item``, the key every announcement-time prompt holds its
+        object with (``announcement_choice_for``).
         """
+        extra = {} if announcing is None else {"_trigger_item": announcing}
         return self.arm_pending_choice(
             "player_choice", player_index,
             card_name=card_name,
@@ -714,6 +723,7 @@ class PermanentChoicesMixin:
             seats=[int(seat) for seat in seats],
             names=[self.players[int(seat)].name for seat in seats],
             _context=context,
+            **extra,
         )
 
     def live_player_choices(self, choice: PendingChoice) -> list[int]:
