@@ -784,10 +784,11 @@ def harms_its_own_source(instruction: OracleInstruction | None) -> bool:
     """Whether any step of an ability's effect removes or hampers the permanent
     the ability is printed on.
 
-    Asked by the activation chooser for its own seat's permanents, where the
-    answer is a reason **not** to activate: a self-bounce, a self-destruction
-    or a lost keyword is a rescue or a drawback, and a main-phase chooser with
-    no response window has nothing to rescue. 59 abilities on 58 cards print
+    Asked by the activation chooser for its own seat's permanents, where a
+    **removal** of the source is a reason not to activate (a self-bounce, a
+    self-destruction: a drawback printed for an opponent, or a rescue). A
+    **hamper** (:func:`hampers_its_own_source`) is rehearsed instead, since
+    kg3: sometimes it pays (Swooping Talon's provoke). 59 abilities on 58 cards print
     one across both manifest roles, 10 of them on cards any player may
     activate; of the 45 non-Aura permanents whose *first* ability is one — the
     ability that chooser reads — it proposed 30 before this existed.

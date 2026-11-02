@@ -961,9 +961,11 @@ def _instant_speed_window(game: Game, seat: int) -> str | None:
       ``ai_rehearsal.blocks_still_to_come``), for **every** seat: the
       defender's ambush blocker (a creature with flash), an ability that
       changes who can block whom (gaining flying to block a flier; Swooping
-      Talon shedding its own so the creature it provoked can block it). What
-      is done here is only what adds a block, read through the fight
-      (``ai_rehearsal.pays_before_the_blocks``); the rest waits for:
+      Talon shedding its own so the creature it provoked can block it; a seat
+      that is not defending casts nothing here, ``ai_policy.
+      _weighed_at_instant_speed_now``). What is done here is only what adds a
+      block, read through the fight (``ai_rehearsal.pays_before_the_blocks``);
+      the rest waits for:
     * ``"combat"`` — the declare-blockers step with attackers in it, for
       **both** seats (CR 509.2): the trick that wins a block, the removal that
       kills an attacker, the pump on an unblocked one.

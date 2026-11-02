@@ -560,6 +560,12 @@ def _weighed_at_instant_speed_now(
 
     if card.primary_type == "land":
         return False
+    if blocks_still_to_come(game) and player_index not in game.combat_defending_players():
+        # Before the blocks a spell is cast for a block it adds, and the
+        # blocks are the defending seats': the attacker's tricks wait for
+        # the declare-blockers step (its abilities are still weighed here —
+        # Swooping Talon's toggle).
+        return False
     if card.primary_type == "instant":
         return True
     # The moment first, then the engine: asked at every priority offer, of
