@@ -235,19 +235,21 @@ def _attach_if_aura(game, cards) -> bool:
 
 
 #: Tap prices the derivation does not read yet, each with what it misses —
-#: held to still disagree, so the day one is priced its entry goes.
-UNPRICED = {
-    # A counter put on the tapped permanent that another card's text keeps
-    # tapped (a "would untap" replacement, a board-wide untap restriction on
-    # "each permanent with an hourglass counter"): the price would need the
-    # untap step's own judgement of a counter that is not there yet.
-    "Freyalise's Winds": "a wind counter on the tapped permanent; the Winds replace its untap",
-    "Temporal Distortion": "an hourglass counter on the tapped permanent; the Distortion keeps it tapped",
-}
+#: held to still disagree, so the day one is priced its entry goes. Empty
+#: since round ``kg3``'s ``leftovers`` group priced the last two: a counter a
+#: tap trigger puts on the tapped permanent that the board keeps tapped
+#: (Freyalise's Winds, Temporal Distortion — ``mana_drawbacks.
+#: _counter_keeps_it_tapped``).
+UNPRICED: dict[str, str] = {}
+
+#: The tap-trigger cards whose price is a counter the board keeps the tapped
+#: permanent tapped by — priced, and named so the census says it examined them.
+COUNTER_KEPT = ("Freyalise's Winds", "Temporal Distortion")
 
 
 def _price_census() -> dict:
-    found = {"examined": 0, "priced": 0, "wrong": [], "unpriced": [], "sources": set()}
+    found = {"examined": 0, "priced": 0, "wrong": [], "unpriced": [], "sources": set(),
+             "counter_kept": []}
     for label, cards, theirs, active, position in _price_rows():
 
         def build(cards=cards, theirs=theirs, active=active):
@@ -271,6 +273,8 @@ def _price_census() -> dict:
             found["examined"] += 1
             found["sources"].add(label)
             found["priced"] += bool(derived)
+            if any(label.startswith(name) for name in COUNTER_KEPT):
+                found["counter_kept"].append((label, derived))
             if derived == measured:
                 continue
             row = (label, symbol, derived, measured)
@@ -290,6 +294,13 @@ def test_the_price_is_what_the_tap_costs(price_census):
     assert price_census["wrong"] == [], price_census["wrong"][:20]
     assert price_census["examined"] >= 500, price_census["examined"]
     assert price_census["priced"] >= 50, price_census["priced"]
+    # Each counter-kept card was examined on a board where its counter costs
+    # an untap (its own watched land, and an opponent's watching).
+    for name in COUNTER_KEPT:
+        assert any(
+            label.startswith(name) and derived >= 1
+            for label, derived in price_census["counter_kept"]
+        ), (name, price_census["counter_kept"])
 
 
 def test_the_unpriced_shapes_are_still_unpriced(price_census):
@@ -300,6 +311,22 @@ def test_the_unpriced_shapes_are_still_unpriced(price_census):
         if any(row[0].startswith(name) for row in price_census["unpriced"])
     }
     assert named == set(UNPRICED), (named, seen)
+
+
+@pytest.mark.full
+def test_the_price_census_names_the_counter_blind_price():
+    """Backwards: with no counter read as keeping the tapped permanent tapped
+    (the derivation before round ``kg3``'s ``leftovers`` group), both
+    counter-kept cards' rows are wrong."""
+    from engine import mana_drawbacks
+
+    with mock.patch.object(
+        mana_drawbacks, "_counter_keeps_it_tapped", lambda *args, **kwargs: False,
+    ):
+        found = _price_census()
+    wrong = {row[0] for row in found["wrong"]}
+    for name in COUNTER_KEPT:
+        assert any(label.startswith(name) for label in wrong), (name, found["wrong"][:20])
 
 
 def test_a_derivation_reading_nothing_is_wrong_wherever_a_tap_costs(price_census):
