@@ -38,14 +38,18 @@ Each is read from the compiled program the tap runs, never a name list:
   intervening "if", Storm Cauldron's return to the hand);
 * **its standing text about being tapped**: "doesn't untap during your untap
   step" (Mana Vault, the Monoliths, Forsaken City), and a trigger that hurts
-  while it is tapped (Mana Vault's draw step).
+  while it is tapped (Mana Vault's draw step);
+* **a counter a tap trigger puts on it that the board keeps tapped**:
+  Freyalise's Winds' "put a wind counter on it" beside its "would untap …
+  remove all wind counters from it instead", Temporal Distortion's hourglass
+  counter beside "each permanent with an hourglass counter on it doesn't
+  untap" — one missed untap, asked of the untap step's own readers with the
+  counter supposed (:func:`_counter_keeps_it_tapped`), and not added where
+  the tap already costs that untap.
 
 A step this does not recognise prices nothing: an unrecognised step is not
 read as a drawback, so the planners pay exactly as they did wherever nothing
-here speaks. Two shapes are known and unread — a counter a trigger puts on the
-tapped permanent that *another* card keeps tapped (Freyalise's Winds' "would
-untap" replacement, Temporal Distortion's hourglass): the price would need the
-untap step's judgement of a counter that is not there yet. ``tests/ai/test_kg3_payment_drawback_census.py`` holds the
+here speaks. ``tests/ai/test_kg3_payment_drawback_census.py`` holds the
 derived price to what the tap really costs, over every plannable source in
 the pool, by tapping it.
 """
@@ -91,11 +95,17 @@ def tap_prices(
         return {symbol: 0 for symbol in symbols}
     if watched is None:
         watched = tap_watchers(game)
-    standing = _standing_price(game, permanent, seat, watched)
+    standing, counters = _standing_price(game, permanent, seat, watched)
+    kept = any(_counter_keeps_it_tapped(game, permanent, seat, counter) for counter in counters)
     found: dict[str, int] = {}
     for symbol in symbols:
         instruction = _ability_run(game, permanent, symbol, ability_index)
-        found[symbol] = standing + _ability_harm(game, permanent, instruction)
+        harm = _ability_harm(game, permanent, instruction)
+        if kept and not _misses_its_untap_anyway(permanent, instruction):
+            # One missed untap, whatever number of reasons it has: a
+            # depletion land under the Winds stays tapped once.
+            harm += 1
+        found[symbol] = standing + harm
     return found
 
 
@@ -129,6 +139,62 @@ def _ability_run(game, permanent, symbol, ability_index):
         return usable[index].instruction
     free, _priced = game._land_mana_abilities(permanent)
     return free
+
+
+def _misses_its_untap_anyway(permanent, instruction) -> bool:
+    """Whether *permanent* misses its next untap after the tap without any
+    counter put on it: its own "doesn't untap" text, or a step of the mana
+    ability run that keeps it tapped (``_ability_harm``'s untap rows)."""
+    card = permanent.effective_card
+    if _untap_text(card.name, card.oracle_text or "")[0]:
+        return True
+    if instruction is None:
+        return False
+    from .mana_payment import _every_nested_step
+
+    untap_counters = _untap_blocking_counters(permanent)
+    for step in (instruction, *_every_nested_step(instruction)):
+        payload = step.payload or {}
+        if (
+            (step.kind == "skip_next_untap" and payload.get("subject") == "source")
+            or (step.kind == "add_named_counter_to_self"
+                and str(payload.get("counter")) in untap_counters)
+            or step.kind == "return_self_instead_of_untapping"
+        ):
+            return True
+    return False
+
+
+def _counter_keeps_it_tapped(game, permanent, seat: int, counter: str) -> bool:
+    """Whether *permanent*, with a *counter* counter on it, would stay tapped
+    through its controller's next untap step — asked of the untap step's own
+    readers, with the counter supposed rather than placed:
+
+    * its own text ("…doesn't untap … if it has a depletion counter on it",
+      :func:`_untap_blocking_counters`);
+    * a "would untap" replacement removing that counter instead (Freyalise's
+      Winds: ``replacements.permanents``' reader of the board's counter words);
+    * a board restriction on permanents carrying it ("Each permanent with an
+      hourglass counter on it doesn't untap …", Temporal Distortion: the
+      untap step's ``_untap_constraints``, its noun phrase asked through
+      ``subject_matches`` without the counter clause the supposition meets).
+    """
+    if not counter:
+        return False
+    if counter in _untap_blocking_counters(permanent):
+        return True
+    from .replacements.permanents import _untap_counter_kinds
+    from .subject_filters import subject_matches
+
+    if counter in _untap_counter_kinds(game):
+        return True
+    for described, source_seat, source in game._untap_constraints(seat)["blocked"]:
+        if str(described.get("with_named_counter") or "") != counter:
+            continue
+        rest = {key: value for key, value in described.items() if key != "with_named_counter"}
+        if subject_matches(game, permanent, rest, observer=source_seat, source=source):
+            return True
+    return False
 
 
 def _ability_harm(game, permanent, instruction) -> int:
@@ -167,14 +233,16 @@ def tap_watchers(game: "Game") -> bool:
     ) is not None
 
 
-def _standing_price(game, permanent, seat: int, watched: bool = True) -> int:
-    """What any tap of *permanent* costs: the triggers a tap fires, and its
-    own text about staying tapped."""
+def _standing_price(game, permanent, seat: int, watched: bool = True) -> "tuple[int, tuple]":
+    """What any tap of *permanent* costs — the triggers a tap fires, and its
+    own text about staying tapped — and the counters those triggers put on
+    it (``tap_prices`` asks whether the board then keeps it tapped)."""
     from .events import Event, collect
 
     harm = _stays_tapped_harm(game, permanent, seat)
+    counters: list = []
     if not watched:
-        return harm
+        return harm, ()
     for kind in _BECOMES_TAPPED_EVENTS:
         for fired in collect(game, Event(
             kind=kind, subject=permanent,
@@ -185,9 +253,23 @@ def _standing_price(game, permanent, seat: int, watched: bool = True) -> int:
                 game, fired["instruction"], fired["controller_index"], seat,
                 fired["source_permanent"], permanent,
             )
+            counters.extend(_counters_put_on_it(fired["instruction"]))
     if permanent.has_type("land"):
         harm += _land_tap_trigger_harm(game, permanent, seat)
-    return harm
+    return harm, tuple(counters)
+
+
+def _counters_put_on_it(instruction) -> list:
+    """The counter words a tap trigger puts on the permanent tapped — "put a
+    wind counter on **it**" (Freyalise's Winds), the event's own subject."""
+    from .mana_payment import _every_nested_step
+
+    return [
+        str((step.payload or {}).get("counter") or "")
+        for step in (instruction, *_every_nested_step(instruction))
+        if step.kind == "add_named_counter_to_target"
+        and (step.payload or {}).get("on_event_subject")
+    ]
 
 
 def _land_tap_trigger_harm(game, land, seat: int) -> int:

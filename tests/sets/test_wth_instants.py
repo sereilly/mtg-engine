@@ -381,7 +381,7 @@ def test_boiling_blood_forces_the_chosen_creature_to_attack(set_pool):
     game.resolve_stack()
 
     assert result.supported, result.details
-    assert lazy.metadata.get("must_attack_until_eot") is True, game.log
+    assert lazy.metadata.get("must_attack_until_eot") == 1, game.log
     assert idle.metadata.get("must_attack_until_eot") is None, game.log
 
     game.advance_combat_phase()

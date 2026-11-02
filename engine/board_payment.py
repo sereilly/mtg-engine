@@ -87,7 +87,8 @@ import itertools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .mana_payment import (MANA_PRODUCING_KINDS, PIP_SYMBOLS, _every_nested_step,
+from .mana_payment import (MANA_PRODUCING_KINDS, PIP_SYMBOLS, UNITS_UNCHANGED,
+                           ManaPayment, _every_nested_step, _prices_in_force,
                            pips_payable_by, plan_payment)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -548,6 +549,96 @@ def land_tap_yields(game: "Game", land: "Permanent", purpose=None) -> list[TapYi
     return yields
 
 
+def land_payment_units(game: "Game", land: "Permanent") -> "tuple[frozenset[str], ...] | None":
+    """The mana one tap of *land* adds, unit by unit, where that is **more
+    than one** unit and each is its own — Ancient Tomb's {C}{C}, a karoo's
+    {C}{U}, a Forest wearing Wild Growth — else None.
+
+    :func:`land_tap_yields`, the AI planner's reading of the tap seam, read
+    for the effect payer (:func:`plan_over_land_units`). None, and the land
+    is the one unit its colours make, wherever the tap can come out more
+    than one way or its units are one colour chosen once ("two mana of any
+    one color"): planning those units separately would promise {W}{U} from
+    a tap that makes two of one colour.
+    """
+    yields = land_tap_yields(game, land)
+    if len(yields) != 1 or yields[0].one_color:
+        return None
+    units = (*yields[0].units, *yields[0].extra)
+    return tuple(units) if len(units) > 1 else None
+
+
+def plan_over_land_units(game: "Game"):
+    """The effect payer's planner (``mana_payment.payment_units_in_force``,
+    set by ``Game._pay_planned_cost``): *lands* planned as their units, each
+    land the one source of its units (``plan_payment``'s *owners*), and the
+    answer told as the lands to tap.
+
+    The effect payer credited every land **one** mana (``plan_payment`` over
+    ``Game.payment_lands``), so Ancient Tomb's second {C} was invisible to
+    its sparing choice: a {3} on a Tomb, two Plains and a Mountain tapped a
+    Plains beside the Tomb and stranded the {W}{W} in hand that the Tomb and
+    the Mountain would have left payable. The tapping itself was right —
+    ``_pay_planned_cost`` plans again after every tap, and the Tomb's {C}{C}
+    in the pool pays — so what changes is only which lands the plan picks.
+    A board where no land makes more than one mana a tap, and a payer with a
+    CR 609.4b spending permission, plan exactly as before
+    (``UNITS_UNCHANGED``).
+    """
+    from .mana_drawbacks import land_price_profile
+
+    # One payment's reading of each land, by its id: the writer plans again
+    # after every tap, over the same untapped lands.
+    read: dict = {}
+
+    def units_of(land):
+        key = land.permanent_id
+        if key not in read:
+            read[key] = land_payment_units(game, land)
+        return read[key]
+
+    def plan(pool, lands, required, produces, *, payer=None, wants=None, prices=None):
+        if payer is not None and getattr(payer, "mana_spending_permissions", ()):
+            return UNITS_UNCHANGED
+        lands = list(lands)
+        several = [units_of(land) for land in lands]
+        if not any(several):
+            return UNITS_UNCHANGED
+        units: list = []
+        owner: list = []
+        for index, land in enumerate(lands):
+            made = several[index] or (frozenset(
+                produces(land) if produces else (land.effective_produced_mana or ())
+            ),)
+            for unit in made:
+                units.append(frozenset(unit))
+                owner.append(index)
+        priced = _prices_in_force(prices) or (lambda land: land_price_profile(game, land))
+        payment = plan_payment(
+            pool, range(len(units)), required, produces=units.__getitem__,
+            payer=payer, wants=wants, owners=owner,
+            prices=lambda unit: priced(lands[owner[unit]]),
+        )
+        if payment is None:
+            return None
+        order: list = []
+        asked: dict = {}
+        for unit, pip in zip(payment.tapped, payment.tapped_for):
+            index = owner[unit]
+            if index not in asked:
+                order.append(index)
+                asked[index] = pip
+            elif asked[index] is None:
+                asked[index] = pip
+        return ManaPayment(
+            from_pool=payment.from_pool,
+            tapped=tuple(lands[index] for index in order),
+            tapped_for=tuple(asked[index] for index in order),
+        )
+
+    return plan
+
+
 #: The order a land's symbols are listed in where nothing else orders them:
 #: CR 105.1's WUBRG, then colourless.
 _SYMBOL_ORDER: tuple[str, ...] = ("W", "U", "B", "R", "G", "C")
@@ -778,7 +869,8 @@ def board_can_pay(
 
 
 __all__ = [
-    "TapYield", "board_can_pay", "is_tap_cost_mana_ability", "land_tap_yields",
+    "TapYield", "board_can_pay", "is_tap_cost_mana_ability", "land_payment_units",
+    "land_tap_yields", "plan_over_land_units",
     "source_tap_yields", "tap_alone_ability_for", "tap_alone_symbols",
     "tap_cost_mana_abilities",
 ]

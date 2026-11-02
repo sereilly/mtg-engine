@@ -30,12 +30,15 @@ Two censuses:
   than that, or one that strands the want where a set of sources would have
   kept it. Run backwards with the prices switched off, both planners strand.
 
-One shape is left out and reported, not counted: the effect payer credits a
-land with **one** mana (``plan_payment`` over ``Game.payment_lands``), so
-Ancient Tomb's second {C} is invisible to its sparing choice, and a card in
-hand only that mana could keep payable can be stranded (``multi_mana``) —
-where the board order used to tap the Tomb first by luck. The AI's planner
-counts the Tomb's two units (``board_payment.land_tap_yields``) and keeps it.
+The effect payer used to credit a land with **one** mana (``plan_payment``
+over ``Game.payment_lands``), so Ancient Tomb's second {C} was invisible to
+its sparing choice and a card in hand only that mana could keep payable was
+stranded — 3 rows of the one-in-twenty sample, held out of the count as
+``multi_mana`` until round ``kg3``'s ``leftovers`` group. It now plans a land
+that makes several mana a tap as that many units of one source
+(``board_payment.land_payment_units``, the AI planner's ``land_tap_yields``),
+and those rows are counted like every other; with the units switched off
+(:func:`_one_mana_per_land`) they strand again.
 """
 from __future__ import annotations
 
@@ -232,19 +235,21 @@ def _attach_if_aura(game, cards) -> bool:
 
 
 #: Tap prices the derivation does not read yet, each with what it misses —
-#: held to still disagree, so the day one is priced its entry goes.
-UNPRICED = {
-    # A counter put on the tapped permanent that another card's text keeps
-    # tapped (a "would untap" replacement, a board-wide untap restriction on
-    # "each permanent with an hourglass counter"): the price would need the
-    # untap step's own judgement of a counter that is not there yet.
-    "Freyalise's Winds": "a wind counter on the tapped permanent; the Winds replace its untap",
-    "Temporal Distortion": "an hourglass counter on the tapped permanent; the Distortion keeps it tapped",
-}
+#: held to still disagree, so the day one is priced its entry goes. Empty
+#: since round ``kg3``'s ``leftovers`` group priced the last two: a counter a
+#: tap trigger puts on the tapped permanent that the board keeps tapped
+#: (Freyalise's Winds, Temporal Distortion — ``mana_drawbacks.
+#: _counter_keeps_it_tapped``).
+UNPRICED: dict[str, str] = {}
+
+#: The tap-trigger cards whose price is a counter the board keeps the tapped
+#: permanent tapped by — priced, and named so the census says it examined them.
+COUNTER_KEPT = ("Freyalise's Winds", "Temporal Distortion")
 
 
 def _price_census() -> dict:
-    found = {"examined": 0, "priced": 0, "wrong": [], "unpriced": [], "sources": set()}
+    found = {"examined": 0, "priced": 0, "wrong": [], "unpriced": [], "sources": set(),
+             "counter_kept": []}
     for label, cards, theirs, active, position in _price_rows():
 
         def build(cards=cards, theirs=theirs, active=active):
@@ -268,6 +273,8 @@ def _price_census() -> dict:
             found["examined"] += 1
             found["sources"].add(label)
             found["priced"] += bool(derived)
+            if any(label.startswith(name) for name in COUNTER_KEPT):
+                found["counter_kept"].append((label, derived))
             if derived == measured:
                 continue
             row = (label, symbol, derived, measured)
@@ -287,6 +294,13 @@ def test_the_price_is_what_the_tap_costs(price_census):
     assert price_census["wrong"] == [], price_census["wrong"][:20]
     assert price_census["examined"] >= 500, price_census["examined"]
     assert price_census["priced"] >= 50, price_census["priced"]
+    # Each counter-kept card was examined on a board where its counter costs
+    # an untap (its own watched land, and an opponent's watching).
+    for name in COUNTER_KEPT:
+        assert any(
+            label.startswith(name) and derived >= 1
+            for label, derived in price_census["counter_kept"]
+        ), (name, price_census["counter_kept"])
 
 
 def test_the_unpriced_shapes_are_still_unpriced(price_census):
@@ -297,6 +311,22 @@ def test_the_unpriced_shapes_are_still_unpriced(price_census):
         if any(row[0].startswith(name) for row in price_census["unpriced"])
     }
     assert named == set(UNPRICED), (named, seen)
+
+
+@pytest.mark.full
+def test_the_price_census_names_the_counter_blind_price():
+    """Backwards: with no counter read as keeping the tapped permanent tapped
+    (the derivation before round ``kg3``'s ``leftovers`` group), both
+    counter-kept cards' rows are wrong."""
+    from engine import mana_drawbacks
+
+    with mock.patch.object(
+        mana_drawbacks, "_counter_keeps_it_tapped", lambda *args, **kwargs: False,
+    ):
+        found = _price_census()
+    wrong = {row[0] for row in found["wrong"]}
+    for name in COUNTER_KEPT:
+        assert any(label.startswith(name) for label in wrong), (name, found["wrong"][:20])
 
 
 def test_a_derivation_reading_nothing_is_wrong_wherever_a_tap_costs(price_census):
@@ -462,7 +492,7 @@ def _real_costs() -> dict:
 
 def _payment_census(payer: str, *, with_want: bool = False) -> dict:
     costs = _real_costs()
-    found = {"examined": 0, "strands": [], "boards": set(), "multi_mana": []}
+    found = {"examined": 0, "strands": [], "boards": set(), "multi_mana": 0}
     pay = PAYERS[payer]
     for label, names in BOARDS.items():
         if payer == "effect" and label not in _LAND_ONLY:
@@ -492,21 +522,16 @@ def _payment_census(payer: str, *, with_want: bool = False) -> dict:
                     continue
                 found["examined"] += 1
                 found["boards"].add(label)
+                # Rows on a board with a land making several mana a tap:
+                # counted like the rest (the module's note), and counted here
+                # so the census says it examined them.
+                found["multi_mana"] += bool(want is not None and _makes_several(game))
                 if paid[0] > least:
                     found["strands"].append((label, printed, wanted, paid[0], least))
                 elif want is not None and not paid[1](want) and _a_set_keeps(
                     _drawback_board(names), cost, want,
                 ):
-                    row = (label, printed, wanted, "want stranded")
-                    if payer == "effect" and _makes_several(game):
-                        # The effect payer credits a land with one mana
-                        # (`plan_payment` over `payment_lands`), so a want
-                        # only an Ancient Tomb's second mana could keep is
-                        # invisible to its sparing choice — reported, not a
-                        # strand of the price (see the module's note).
-                        found["multi_mana"].append(row)
-                    else:
-                        found["strands"].append(row)
+                    found["strands"].append((label, printed, wanted, "want stranded"))
     return found
 
 
@@ -581,6 +606,27 @@ def test_a_price_is_weighed_after_the_wants(wanting_census):
     name, found = wanting_census
     assert found["strands"] == [], (name, found["strands"][:10])
     assert found["examined"] >= 180, (name, found["examined"])
+    assert found["multi_mana"] >= 3, (name, found["multi_mana"])
+
+
+@contextmanager
+def _one_mana_per_land():
+    """The effect payer before: every land one unit of mana."""
+    from engine import board_payment
+
+    with mock.patch.object(board_payment, "land_payment_units", lambda game, land: None):
+        yield
+
+
+@pytest.mark.full
+def test_the_wanting_census_names_the_one_mana_per_land_payer():
+    """Backwards: with each land credited one mana, the effect payer strands
+    a want only an Ancient Tomb's second {C} could keep — on the rows the
+    census used to hold out as ``multi_mana``."""
+    with _one_mana_per_land():
+        found = _payment_census("effect", with_want=True)
+    tomb = [row for row in found["strands"] if row[0] == "an Ancient Tomb"]
+    assert len(tomb) >= 3, found["strands"]
 
 
 @pytest.mark.full

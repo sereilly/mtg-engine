@@ -97,14 +97,35 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
             None if per_seat is not None
             else resolve_amount(instruction.payload.get("amount", 0), context.x_value)
         )
-        for seat in seats:
+        # One draw and then its report per seat, as one resumable loop
+        # (``engine/resumption.py``): an interactive draw replacement
+        # (Obstinate Familiar's offer) suspends a seat's draw, and the cards
+        # arrive with the answer — so the report is the step after the draw,
+        # read off the drawer's own record (:func:`_drew_since`), and the next
+        # seat's draw waits for the answer rather than running past it (CR
+        # 121.2c: the active player performs all of their draws first, then
+        # each other player in turn order).
+        drew_before: dict[int, int] = {}
+
+        def draw_then_report(step) -> None:
+            action, seat = step
             drawer = game.players[seat]
-            wanted = (
-                per_recipient_amount(game, context, per_seat, drawer)
-                if per_seat is not None else count
-            )
-            drawn = game._draw_with_replacements(drawer, wanted)
+            if action == "draw":
+                drew_before[seat] = len(drawer.cards_drawn_this_turn)
+                wanted = (
+                    per_recipient_amount(game, context, per_seat, drawer)
+                    if per_seat is not None else count
+                )
+                game._draw_with_replacements(drawer, wanted)
+                return
+            drawn = _drew_since(drawer, drew_before.get(seat, 0))
             game.log.append(f"{drawer.name} drew {drawn} cards")
+
+        run_resumable(
+            game,
+            [(action, seat) for seat in seats for action in ("draw", "report")],
+            draw_then_report,
+        )
         return True, "resolved"
     drawer_seat = instruction.payload.get("drawer_seat")
     # "…**that player** draws an additional card" (Malignant Growth). A seat a
@@ -146,17 +167,56 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
         if counted_from is not None
         else resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     )
-    drawn = game._draw_with_replacements(target, count)
     # "…then this enchantment deals damage to the player equal to **the number
     # of cards they drew this way**." (Malignant Growth.) How many really
     # arrived, which is the only place the sentence behind it can read the
     # number from: a replacement may have stopped some (CR 614) and an empty
     # library gives fewer than were asked for. Declared in
     # ``lowering/_records._PRODUCES``, so a back-reference with no draw in front
-    # of it refuses rather than reading zero.
-    context.results[DREW_COUNT] = drawn
-    game.log.append(f"{target.name} drew {drawn} cards")
+    # of it refuses rather than reading zero. Written by the draw's own last
+    # step (:func:`_draw_and_record`), because an interactive replacement
+    # suspends the draw and the cards arrive with its answer.
+    _draw_and_record(
+        game, context, target, count,
+        report=lambda drawn: f"{target.name} drew {drawn} cards",
+    )
     return True, "resolved"
+
+
+def _drew_since(drawer, before: int) -> int:
+    """How many cards *drawer* has drawn since their record stood at *before*
+    — ``PlayerState.cards_drawn_this_turn``, which every road a card is drawn
+    by feeds (the draw seam, a replaced draw that still draws, Aladdin's
+    Lamp's completion), and which a draw a replacement *skipped* or gave to
+    another player never reaches."""
+    return max(0, len(drawer.cards_drawn_this_turn) - int(before))
+
+
+def _draw_and_record(game: Game, context: OracleExecutionContext, drawer, count: int, *, report) -> None:
+    """Draw *count* cards for *drawer*, then record how many arrived under
+    ``DREW_COUNT`` and log *report* (a function of that number).
+
+    **The record is the loop's last step** (``run_resumable``'s *then*), not
+    the draw's return value. ``Game._draw_with_replacements`` reports 0 for a
+    draw an interactive replacement suspended — Obstinate Familiar's "you may
+    skip that draw" offered to a person — and the cards arrive with the
+    answer, after this handler has returned: Read the Runes for two under an
+    interactive Familiar, both draws answered "draw", drew two cards, recorded
+    0 and discarded nothing. Counted from the drawer's own record
+    (:func:`_drew_since`), because the answers make the draws, not this loop.
+    Nothing may follow this call in its caller (``engine/resumption.py``).
+    """
+    before = len(drawer.cards_drawn_this_turn)
+
+    def record() -> None:
+        drawn = _drew_since(drawer, before)
+        context.results[DREW_COUNT] = drawn
+        game.log.append(report(drawn))
+
+    run_resumable(
+        game, (count,), lambda wanted: game._draw_with_replacements(drawer, wanted),
+        then=record,
+    )
 
 
 @effect_handler("draw_controller_cards")
@@ -174,12 +234,13 @@ def draw_controller_cards(game: Game, instruction: OracleInstruction, context: O
         if counted_from is not None
         else resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     )
-    drawn = game._draw_with_replacements(caster, count)
     # "Draw X cards. **For each card drawn this way**, …" (Read the Runes.)
     # How many really arrived — the targeted draw's record above, for the
     # controller's own; declared in ``lowering/_records._PRODUCES``.
-    context.results[DREW_COUNT] = drawn
-    game.log.append(f"{card.name} drew {drawn} card")
+    _draw_and_record(
+        game, context, caster, count,
+        report=lambda drawn: f"{card.name} drew {drawn} card",
+    )
     return True, "resolved"
 
 

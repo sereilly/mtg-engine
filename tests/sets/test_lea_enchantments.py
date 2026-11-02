@@ -1979,7 +1979,7 @@ def test_sirens_call_marks_active_player_creatures(all_cards):
     assert any(c.name == "Siren's Call" for c in p1.graveyard)
 
     bear_perm, wall_perm = p2.battlefield[0], p2.battlefield[1]
-    assert bear_perm.metadata.get("must_attack_until_eot") is True
+    assert bear_perm.metadata.get("must_attack_until_eot") == 1
     assert bear_perm.metadata.get("destroy_if_did_not_attack_eot") is True
     # Walls are never destroyed by Siren's Call
     assert wall_perm.metadata.get("destroy_if_did_not_attack_eot") is None

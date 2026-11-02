@@ -340,7 +340,7 @@ class TestNettlingImp:
         )
 
         assert result.supported
-        assert victim.metadata.get("must_attack_until_eot") is True
+        assert victim.metadata.get("must_attack_until_eot") == 1
         assert victim.metadata.get("destroy_if_did_not_attack_eot") is True
 
 

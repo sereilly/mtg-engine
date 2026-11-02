@@ -1434,7 +1434,7 @@ def test_w3g2_refusing_the_whistles_price_forces_the_attack(set_pool):
     game.confirm_optional_pay(1, "Arcum's Whistle", accept=False)
     game._settle()
 
-    assert victim.metadata.get("must_attack_until_eot") is True
+    assert victim.metadata.get("must_attack_until_eot") == 1
     game.resolve_end_step(1)
     assert not any(
         perm is victim for perm in game.controlled_by(game.players[1])
@@ -1472,7 +1472,7 @@ def test_w3g2_a_payer_with_no_mana_is_never_offered_the_choice(set_pool):
     game._settle()
 
     assert not game.pending_optional_pays
-    assert victim.metadata.get("must_attack_until_eot") is True
+    assert victim.metadata.get("must_attack_until_eot") == 1
 
 
 def test_w3g2_the_whistle_is_refused_once_attackers_are_declared(set_pool):

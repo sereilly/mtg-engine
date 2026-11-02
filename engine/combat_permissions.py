@@ -117,14 +117,48 @@ CANT_BLOCK_ATTACKERS_UNTIL_EOT = "cant_block_attackers_until_eot"
 #: "That creature blocks this turn if able." (Provoke.) CR 509.1c's **weakest**
 #: requirement for one turn: block *something* — any one attacker this creature
 #: can legally block — where ``MUST_BLOCK_ATTACKERS_UNTIL_EOT`` names which
-#: attacker and Blaze of Glory's flag names all of them.
+#: attacker and Blaze of Glory's mark names all of them.
 #:
-#: A flag rather than a list, and that is the difference itself: the
-#: requirement is about the creature and not about a pair, so there is no id to
-#: keep and a second copy of the spell asks for nothing more. It is the
+#: A count rather than a list: the requirement is about the creature and not
+#: about a pair, so there is no id to keep — but a second copy of the spell is a
+#: second requirement CR 509.1c counts (:func:`add_turn_requirement`). It is the
 #: one-turn twin of Watchdog's printed static, read at the same place in the
 #: declare-blockers step so the two cannot come to mean different things.
 MUST_BLOCK_UNTIL_EOT = "must_block_until_eot"
+
+#: "Target creature attacks this turn if able." (Boiling Blood, Siren's Call,
+#: Norritt, Bullwhip, Kookus's upkeep.) CR 508.1d's requirement for one turn,
+#: on the creature, swept at cleanup — a count of the effects imposing it
+#: (:func:`add_turn_requirement`).
+MUST_ATTACK_UNTIL_EOT = "must_attack_until_eot"
+
+
+def add_turn_requirement(permanent, key: str) -> int:
+    """Put **one more** requirement for this turn on *permanent* under *key*
+    (:data:`MUST_ATTACK_UNTIL_EOT`, :data:`MUST_BLOCK_UNTIL_EOT`,
+    :data:`MUST_BLOCK_ALL_UNTIL_EOT`) and return how many it now carries.
+
+    A count, because CR 508.1d and 509.1c count requirements: two Boiling
+    Bloods on one creature are two, which matters wherever they cannot all be
+    obeyed — under Dueling Grounds that creature is the one that must attack
+    beside a creature carrying one. The marks were ``True``, so the second
+    effect did nothing at all.
+    """
+    count = turn_requirements(permanent, key) + 1
+    permanent.metadata[key] = count
+    return count
+
+
+def turn_requirements(permanent, key: str) -> int:
+    """How many requirements for this turn *permanent* carries under *key* —
+    the one reader of :func:`add_turn_requirement`'s count. ``True``, the
+    shape the marks had, is one."""
+    value = permanent.metadata.get(key)
+    if value is True:
+        return 1
+    if isinstance(value, bool) or not isinstance(value, int):
+        return 0
+    return max(0, value)
 
 
 #: The printed static permissions that lift CR 509.1a's default of **one**

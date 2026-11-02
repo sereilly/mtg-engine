@@ -292,7 +292,7 @@ def test_nettling_imp_marks_target_for_attack(all_cards):
     result = game.activate_permanent_ability(0, "Nettling Imp", target_player_index=1)
 
     assert result.supported
-    assert p2.battlefield[0].metadata.get("must_attack_until_eot") is True
+    assert p2.battlefield[0].metadata.get("must_attack_until_eot") == 1
 
 
 def test_stone_giant_grants_temp_flying_and_delayed_destroy(all_cards):
@@ -1746,7 +1746,7 @@ def test_nettling_imp_marks_the_creature_that_was_chosen(set_pool):
     )
     resolve_stack(game)
 
-    assert giant.metadata.get("must_attack_until_eot") is True
+    assert giant.metadata.get("must_attack_until_eot") == 1
     assert giant.metadata.get("destroy_if_did_not_attack_eot") is True
     assert bears.metadata.get("must_attack_until_eot") is None
 

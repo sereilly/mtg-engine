@@ -113,7 +113,10 @@ def _board(card, seat, attached, *, capped, walker, mark=None):
     and *mark* puts it on the plain creature the way a resolved spell or
     ability does — "eot" is the one-turn mark (Boiling Blood, Siren's Call,
     Norritt, Bullwhip, Kookus), "seat_turn" the stamp for a later turn
-    (Oracle en-Vec)."""
+    (Oracle en-Vec). "eot_twice" and "seat_turn_twice" put two effects' marks
+    on the plain creature and one on the other: CR 508.1d counts three
+    requirements, so under a cap the creature carrying two is the one that
+    attacks (:data:`_MARK_WEIGHTS`)."""
     p0 = PlayerState(name="P0")
     p1 = PlayerState(name="P1")
     first = (
@@ -159,6 +162,13 @@ def _board(card, seat, attached, *, capped, walker, mark=None):
         vanilla.metadata[MUST_ATTACK_ON_SEAT_TURN_KEY] = {
             "seat": 0, "seat_turn": game.seat_turn_counts.get(0, 0),
         }
+    elif mark == "eot_twice":
+        vanilla.metadata["must_attack_until_eot"] = 2
+        p0.battlefield[0].metadata["must_attack_until_eot"] = 1
+    elif mark == "seat_turn_twice":
+        stamp = {"seat": 0, "seat_turn": game.seat_turn_counts.get(0, 0)}
+        vanilla.metadata[MUST_ATTACK_ON_SEAT_TURN_KEY] = [dict(stamp), dict(stamp)]
+        p0.battlefield[0].metadata[MUST_ATTACK_ON_SEAT_TURN_KEY] = [dict(stamp)]
     game._close_current_priority_step()
     game.advance_combat_phase()
     game.advance_combat_phase()
@@ -189,8 +199,16 @@ def _payable(game, attackers, seats) -> bool:
     ) is not None
 
 
-def _judge(game):
+#: The requirements the two-mark boards write on each plain creature, by name —
+#: the census's own count, never the engine's.
+_MARK_WEIGHTS = {"Plain V": 2, "Plain W": 1}
+
+
+def _judge(game, weights=None):
     """Every declaration on *game*, with the verdict CR 508.1c–d gives it.
+
+    *weights* is how many unconditional requirements a creature carries, by
+    name, where the board wrote more than one; any other is one.
 
     Returns ``(declarations, best, requirement_count)`` where each declaration
     is ``(assignment, legal, restriction_legal_and_payable)`` and an
@@ -218,10 +236,13 @@ def _judge(game):
         if game._must_attack_beside(mine[s], [mine[o] for o in slots if o != s])
     }
 
+    def weight(slot: int) -> int:
+        return (weights or {}).get(mine[slot].card.name, 1)
+
     def obeyed(attacking: set[int]) -> int:
         declared = [mine[s] for s in sorted(attacking)]
         return (
-            sum(1 for s in unconditional if s in attacking)
+            sum(weight(s) for s in unconditional if s in attacking)
             + sum(
                 1 for s in conditional
                 if s in attacking or not game._must_attack_beside(mine[s], declared)
@@ -251,7 +272,7 @@ def _judge(game):
     return (
         [(a, payable and ob >= best, payable) for a, _r, _f, payable, ob in rows],
         best,
-        len(unconditional) + len(conditional),
+        sum(weight(s) for s in unconditional) + len(conditional),
     )
 
 
@@ -281,7 +302,7 @@ def _boards():
             for capped in (False, True):
                 for walker in (False, True):
                     yield card, seat, attached, capped, walker, None
-    for mark in ("eot", "seat_turn"):
+    for mark in ("eot", "seat_turn", "eot_twice", "seat_turn_twice"):
         for capped in (False, True):
             for walker in (False, True):
                 yield None, 0, None, capped, walker, mark
@@ -292,7 +313,7 @@ def _census():
     mismatches = []
     tallies = {"boards": 0, "declarations": 0, "requirement_bit": 0,
                "cost_excused": 0, "conditional": 0, "short_of_total": 0,
-               "marks": 0}
+               "marks": 0, "counted_marks": 0}
     for card, seat, attached, capped, walker, mark in _boards():
         build = lambda: _board(  # noqa: E731
             card, seat, attached, capped=capped, walker=walker, mark=mark,
@@ -300,10 +321,14 @@ def _census():
         game = build()
         if game is None:
             continue
-        rows, best, total = _judge(game)
+        rows, best, total = _judge(
+            game, _MARK_WEIGHTS if mark and mark.endswith("_twice") else None,
+        )
         tallies["boards"] += 1
         if mark is not None:
             tallies["marks"] += 1
+        if mark and mark.endswith("_twice") and capped:
+            tallies["counted_marks"] += 1
         if any(payable and not legal for _a, legal, payable in rows):
             tallies["requirement_bit"] += 1
         if total and best < total:
@@ -351,10 +376,12 @@ def test_every_attack_declaration_obeys_the_most_requirements_it_can():
     # which a requirement refused a declaration the restrictions allowed, 16
     # with a conditional requirement, 16 with a requirement a cost excused, 4
     # where the requirements could not all be obeyed together, 8 mark boards.
+    # Round kg3 (leftovers) added 8 two-mark boards, 4 of them capped.
     assert tallies["boards"] >= 900, tallies
     assert tallies["declarations"] >= 12000, tallies
     assert tallies["requirement_bit"] >= 700, tallies
     assert tallies["conditional"] >= 12, tallies
     assert tallies["cost_excused"] >= 12, tallies
     assert tallies["short_of_total"] >= 3, tallies
-    assert tallies["marks"] >= 8, tallies
+    assert tallies["marks"] >= 16, tallies
+    assert tallies["counted_marks"] >= 4, tallies

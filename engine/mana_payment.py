@@ -461,7 +461,16 @@ def plan_payment(
     consulted by the sparing choice after the wants; left out, whatever
     ``payment_prices_in_force`` names (``Game._pay_planned_cost`` names the
     board's). It never changes whether the cost can be paid.
+
+    A land that makes several mana a tap (Ancient Tomb's {C}{C}) is one unit
+    here unless a caller names *owners* — or the effect payer's writer has
+    named how its lands are planned (:func:`payment_units_in_force`).
     """
+    over_units = _UNITS_IN_FORCE.get() if owners is None and not spent_first else None
+    if over_units is not None:
+        planned = over_units(pool, lands, required, produces, payer=payer, wants=wants, prices=prices)
+        if planned is not UNITS_UNCHANGED:
+            return planned
     want = _normalized(required)
     if payer is not None and getattr(payer, "mana_spending_permissions", ()):
         return _plan_under_permissions(
@@ -618,6 +627,28 @@ def payment_prices_in_force(prices):
 
 def _prices_in_force(prices):
     return _PRICES_IN_FORCE.get() if prices is None else prices
+
+
+#: How the lands of a plan that names no *owners* are planned, when its
+#: caller is the effect payer's writer (``Game._pay_planned_cost`` sets it):
+#: a function taking :func:`plan_payment`'s arguments and returning its
+#: answer over each land's units, or :data:`UNITS_UNCHANGED` to plan the
+#: lands one unit each (``board_payment.plan_over_land_units``).
+_UNITS_IN_FORCE: ContextVar = ContextVar("payment_units_in_force", default=None)
+
+#: A units planner's "nothing here makes more than one mana a tap".
+UNITS_UNCHANGED = object()
+
+
+@contextmanager
+def payment_units_in_force(planner):
+    """Run a block in which every :func:`plan_payment` naming no *owners* is
+    planned by *planner* — ``payment_wants_in_force``'s shape and reason."""
+    token = _UNITS_IN_FORCE.set(planner)
+    try:
+        yield
+    finally:
+        _UNITS_IN_FORCE.reset(token)
 
 
 def _land_prices(lands, prices):
@@ -1738,7 +1769,7 @@ __all__ = [
     "fungible_colors_headroom",
     "fungible_types_headroom", "generic_cost", "land_text_is_run",
     "mana_cost_from_symbols",
-    "mana_cost_label", "payment_prices_in_force", "plan_payment",
-    "taps_for_payment", "total_pips",
+    "mana_cost_label", "payment_prices_in_force", "payment_units_in_force",
+    "plan_payment", "taps_for_payment", "total_pips", "UNITS_UNCHANGED",
     "untapped_mana_lands",
 ]

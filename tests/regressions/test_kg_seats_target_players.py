@@ -350,7 +350,7 @@ def test_instigator_compels_the_creatures_of_the_player_it_targets(catalog_by_na
 
     assert spec["kind"] == "player"
     assert result.supported, result.details
-    assert game.players[2].battlefield[0].metadata.get("must_attack_until_eot") is True
+    assert game.players[2].battlefield[0].metadata.get("must_attack_until_eot") == 1
     assert not game.players[1].battlefield[0].metadata.get("must_attack_until_eot")
 
 

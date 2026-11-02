@@ -295,6 +295,21 @@ def _scenarios() -> list[Scenario]:
             requirements=[(0, 0)], trade_off=True,
         ),
         Scenario(
+            "two Provokes' marks on one creature outweigh one on another under Dueling Grounds",
+            [_bear("Raider")], [_bear("Twice"), _bear("Once")], [dueling],
+            marks=[(0, MUST_BLOCK_UNTIL_EOT, 2), (1, MUST_BLOCK_UNTIL_EOT, 1)],
+            requirements=[(0, None), (0, None), (1, None)], trade_off=True,
+        ),
+        Scenario(
+            "two Blazes of Glory on one creature outweigh one on another under Dueling Grounds",
+            [_bear("Raider A"), _bear("Raider B")], [_bear("Hero"), _bear("Squire")], [dueling],
+            marks=[
+                (0, MUST_BLOCK_ALL_UNTIL_EOT, 2), (0, CAN_BLOCK_ANY_NUMBER_UNTIL_EOT, True),
+                (1, MUST_BLOCK_ALL_UNTIL_EOT, 1), (1, CAN_BLOCK_ANY_NUMBER_UNTIL_EOT, True),
+            ],
+            requirements=[(0, 0), (0, 0), (0, 1), (0, 1), (1, 0), (1, 1)], trade_off=True,
+        ),
+        Scenario(
             "a block owed to one attacker and a Watchdog's requirement on one creature",
             [_bear("Armodon"), _bear("Raider")], [watchdog], [dueling],
             marks=[(0, MUST_BLOCK_ATTACKERS_UNTIL_EOT, _owed(0))],

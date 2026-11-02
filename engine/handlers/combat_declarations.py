@@ -29,7 +29,9 @@ from ..destruction_events import mark_delayed_destruction
 from ..mana_payment import mana_cost_label
 from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
+                                  MUST_ATTACK_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
+                                  add_turn_requirement,
                                   MUST_BLOCK_ATTACKERS_THIS_COMBAT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   OWED_BLOCK_KEYS,
@@ -42,7 +44,7 @@ from ..turn_state import (CANT_ATTACK_ON_SEAT_TURN_KEY,
                           THAT_PLAYERS_NEXT_TURN,
                           DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
                           MUST_ATTACK_ON_SEAT_TURN_KEY,
-                          seats_next_turn_window)
+                          add_seat_turn_stamp, seats_next_turn_window)
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -99,7 +101,7 @@ def grant_unlimited_blocking(game: Game, instruction: OracleInstruction, context
         # Lets it block any number of attackers (_max_blocks_for) and requires it to
         # block each attacker it can (enforced when blocks are declared).
         blocker.metadata[CAN_BLOCK_ANY_NUMBER_UNTIL_EOT] = True
-        blocker.metadata[MUST_BLOCK_ALL_UNTIL_EOT] = True
+        add_turn_requirement(blocker, MUST_BLOCK_ALL_UNTIL_EOT)
         game.log.append(f"{card.name}: {blocker.card.name} can block any number of creatures this turn")
     else:
         game.log.append(f"{card.name} found no creature to grant unlimited blocking")
@@ -150,7 +152,7 @@ def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, c
     if chosen is None:
         game.log.append(f"{context.card.name}: no legal creature to force into combat")
         return True, "resolved"
-    chosen.metadata["must_attack_until_eot"] = True
+    add_turn_requirement(chosen, MUST_ATTACK_UNTIL_EOT)
     mark_delayed_destruction(game, chosen, "destroy_if_did_not_attack_eot")
     game.log.append(f"{chosen.card.name} marked to attack this turn")
     return True, "resolved"
@@ -195,7 +197,7 @@ def force_target_to_attack_until_eot(game: Game, instruction: OracleInstruction,
             f"{context.card.name}: its target is gone (608.2b)"
         )
         return True, "resolved"
-    chosen.metadata["must_attack_until_eot"] = True
+    add_turn_requirement(chosen, MUST_ATTACK_UNTIL_EOT)
     game.log.append(f"{chosen.card.name} must attack this turn if able")
     return True, "resolved"
 
@@ -224,7 +226,7 @@ def force_bound_to_attack_until_eot(game: Game, instruction: OracleInstruction, 
             f"{context.card.name}: nothing left for the attack requirement"
         )
         return True, "resolved"
-    chosen.metadata["must_attack_until_eot"] = True
+    add_turn_requirement(chosen, MUST_ATTACK_UNTIL_EOT)
     game.log.append(f"{chosen.card.name} must attack this turn if able")
     return True, "resolved"
 
@@ -275,7 +277,7 @@ def force_bound_to_block_until_eot(game: Game, instruction: OracleInstruction, c
             duration=instruction.payload.get("duration"),
         )
         return True, "resolved"
-    chosen.metadata[MUST_BLOCK_UNTIL_EOT] = True
+    add_turn_requirement(chosen, MUST_BLOCK_UNTIL_EOT)
     game.log.append(f"{chosen.card.name} blocks this turn if able")
     return True, "resolved"
 
@@ -565,14 +567,14 @@ def force_subject_to_attack_until_eot(game: Game, instruction: OracleInstruction
     marked: list[str] = []
     for perm in subjects:
         if stamp is not None:
-            perm.metadata[MUST_ATTACK_ON_SEAT_TURN_KEY] = dict(stamp)
+            add_seat_turn_stamp(perm, MUST_ATTACK_ON_SEAT_TURN_KEY, stamp)
             if destroy:
                 mark_delayed_destruction(
                     game, perm, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
                     dict(stamp),
                 )
         else:
-            perm.metadata["must_attack_until_eot"] = True
+            add_turn_requirement(perm, MUST_ATTACK_UNTIL_EOT)
             if destroy:
                 mark_delayed_destruction(
                     game, perm, "destroy_if_did_not_attack_eot"
@@ -615,7 +617,7 @@ def force_self_to_attack_until_eot(game: Game, instruction: OracleInstruction, c
     if source is None or not game.is_on_battlefield(source):
         game.log.append(f"{context.card.name}: nothing left to make attack")
         return True, "resolved"
-    source.metadata["must_attack_until_eot"] = True
+    add_turn_requirement(source, MUST_ATTACK_UNTIL_EOT)
     game.log.append(f"{source.card.name} must attack this turn if able")
     return True, "resolved"
 

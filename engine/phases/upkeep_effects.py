@@ -124,6 +124,10 @@ def offer_declined(human_choices: dict | None, permanent) -> bool:
 
 UpkeepEffect = Callable[[Any, UpkeepContext], None]
 
+#: The scratchpad key Demonic Hordes' land pick is recorded under
+#: (``UpkeepEffectsMixin._sacrifice_a_land_an_opponent_chooses``).
+_LAND_AN_OPPONENT_CHOSE = "land_an_opponent_chose"
+
 UPKEEP_EFFECTS: dict[tuple[str, str], UpkeepEffect] = {}
 
 
@@ -730,10 +734,122 @@ class UpkeepEffectsMixin:
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
         else:
             # "tap this creature and sacrifice a land of an opponent's
-            # choice" — the CONTROLLER sacrifices one of their own lands
-            # (the opponent merely chooses which; simplified to the first).
+            # choice" — the CONTROLLER sacrifices one of their own lands, and
+            # an opponent chooses which (:meth:`_sacrifice_a_land_an_opponent_chooses`).
             self.become_tapped(permanent)
-            self._force_sacrifice_first_land(controller, permanent)
+            self._sacrifice_a_land_an_opponent_chooses(controller, permanent)
+
+    def _upkeep_choice_context(self, controller, source):
+        """A resolution context for a choice an upkeep handler puts to a seat:
+        *controller*'s, about *source* — what ``ask_which_opponent`` and the
+        ``permanent_choice`` prompt record their answers into."""
+        from ..game_types import OracleExecutionContext
+
+        return OracleExecutionContext(
+            caster=controller, target=controller, card=source.card,
+            source_permanent=source,
+        )
+
+    def _cede_to_an_opponent(self, controller, source, ceded, *, prompt: str) -> None:
+        """"…then **an opponent** gains control of them." (Rohgahh of Kher
+        Keep, Rogue Skycaptain.) The ability's controller chooses which
+        opponent as it resolves (Rohgahh's ruling, 2009-10-01: "You don't
+        choose the opponent that will gain control of the creatures until the
+        ability resolves"; Rogue Skycaptain's, 2008-10-01: "you choose …
+        which opponent gains control of it"), through the choosers' seam
+        (``handlers/player_choices.ask_which_opponent``): with one living
+        opponent nobody is asked, with several an interactive controller is
+        asked and the control change waits for the answer — the loop's last
+        step (``engine/resumption.py``) — and a controller nobody asks names
+        the first opponent offered. It took the first living opponent in seat
+        order after the controller, and nobody was asked.
+
+        The control change is a CR 613 layer-2 contribution keyed on *source*
+        with no revert condition: neither card prints a duration. A permanent
+        that has left by the time the answer comes is a new object or none
+        (CR 400.7) and is not handed over.
+        """
+        from ..handlers.player_choices import ask_which_opponent
+
+        def cede(new_seat) -> None:
+            if new_seat is None:
+                return
+            handed = [perm for perm in ceded if self.is_on_battlefield(perm)]
+            for perm in handed:
+                self.take_control(perm, new_seat, source=source)
+            if handed:
+                self.log.append(
+                    f"{self.players[new_seat].name} gains control of "
+                    f"{', '.join(perm.card.name for perm in handed)}"
+                )
+
+        ask_which_opponent(
+            self, self._upkeep_choice_context(controller, source),
+            card_name=source.card.name, prompt=prompt, then=cede,
+        )
+
+    def _sacrifice_a_land_an_opponent_chooses(self, controller, source) -> None:
+        """"…sacrifice a land of an opponent's choice." (Demonic Hordes.)
+
+        *controller* sacrifices one of their own lands (CR 701.21a); an
+        opponent chooses which, as the ability resolves (CR 608.2d). Which
+        opponent is the controller's to say where several could choose — the
+        reading CR 601.7a and 602.3a give a choice made while casting or
+        activating ("If there is more than one opponent who could make such a
+        choice, the spell's controller decides which of those opponents will
+        make the choice"), through the choosers' seam,
+        ``handlers/player_choices.ask_which_opponent`` — and the opponent named
+        picks the land through the ``permanent_choice`` prompt. Nobody chose:
+        the first land on the board went, in every seat count.
+
+        One resumable loop (``engine/resumption.py``) — the opponent, the
+        pick, the sacrifice — so an interactive chooser's prompt suspends it
+        and its answer brings the next step back; a seat nobody asks answers
+        as its prompt is armed (``default_at_arm``: the first opponent
+        offered, the first live land). The sacrifice is
+        ``_force_sacrifice_first_land`` handed the land chosen.
+        """
+        from ..handlers.permanent_choices import permanent_choice_candidates
+        from ..handlers.player_choices import NAMED_OPPONENT, ask_which_opponent
+        from ..resumption import run_resumable
+
+        context = self._upkeep_choice_context(controller, source)
+        payload = {
+            "filter": {"type_filter": "land", "controller": "you"},
+            "result_key": _LAND_AN_OPPONENT_CHOSE,
+        }
+        context.results[_LAND_AN_OPPONENT_CHOSE] = None
+        if not permanent_choice_candidates(self, payload, context):
+            self.log.append(
+                f"{source.card.name}: {controller.name} controls no land to sacrifice"
+            )
+            return
+
+        def step(which: str) -> None:
+            if which == "opponent":
+                ask_which_opponent(
+                    self, context, card_name=source.card.name,
+                    prompt=f"Choose the opponent who chooses the land {controller.name} sacrifices.",
+                )
+                return
+            if which == "land":
+                chooser = context.results.get(NAMED_OPPONENT)
+                lands = permanent_choice_candidates(self, payload, context)
+                if chooser is None or not lands:
+                    return
+                self.arm_permanent_choice(
+                    int(chooser), card_name=source.card.name,
+                    prompt=f"Choose a land {controller.name} sacrifices.",
+                    result_key=_LAND_AN_OPPONENT_CHOSE, payload=payload,
+                    context=context, candidates=lands,
+                )
+                return
+            chosen_id = context.results.get(_LAND_AN_OPPONENT_CHOSE)
+            chosen = self.permanent_by_id(chosen_id) if chosen_id is not None else None
+            if chosen is not None:
+                self._force_sacrifice_first_land(controller, source, chosen=chosen)
+
+        run_resumable(self, ("opponent", "land", "sacrifice"), step)
 
     @upkeep_effect("upkeep_self", "upkeep_pay_or_cede_named_creatures")
     def _on__upkeep_self__upkeep_pay_or_cede_named_creatures(self, ctx: UpkeepContext) -> None:
@@ -749,12 +865,8 @@ class UpkeepEffectsMixin:
         with no revert condition: the card prints no duration, so nothing ends
         it — not even Rohgahh leaving the battlefield.
 
-        "An opponent" is the ability controller's choice on resolution; with
-        one living opponent there is nothing to choose, and in a larger game
-        this takes the first living opponent in seat order after the
-        controller (the same simplification Demonic Hordes' opponent-chosen
-        sacrifice takes, and honest to name: a multiplayer seat *choice* wants
-        the pending-choice queue).
+        "An opponent" is the ability controller's choice on resolution
+        (:meth:`_cede_to_an_opponent`); everything is tapped first, as printed.
         """
         from ..subject_filters import subject_matches
 
@@ -778,23 +890,11 @@ class UpkeepEffectsMixin:
             for _seat, perm in self.permanents_with_controller()
             if perm is not permanent and subject_matches(self, perm, described)
         ]
-        seat = ctx.player_index
-        living = [
-            index
-            for offset in range(1, len(self.players))
-            for index in [(seat + offset) % len(self.players)]
-            if not self.players[index].lost
-        ]
         for perm in ceded:
             self.become_tapped(perm)
-        if not living:
-            return
-        new_seat = living[0]
-        for perm in ceded:
-            self.take_control(perm, new_seat, source=permanent)
-        self.log.append(
-            f"{self.players[new_seat].name} gains control of "
-            f"{', '.join(perm.card.name for perm in ceded)}"
+        self._cede_to_an_opponent(
+            controller, permanent, ceded,
+            prompt="Choose the opponent who gains control of them.",
         )
 
     @upkeep_effect("upkeep_self", "set_source_base_pt_from_target_until_next_upkeep")
@@ -904,10 +1004,8 @@ class UpkeepEffectsMixin:
         new controller inheriting an escalation they never grew, which is the
         whole reason the card says it.
 
-        "An opponent" is the controller's choice; with one living opponent there
-        is nothing to choose, and in a larger game this takes the first living
-        opponent in seat order after them — the same simplification the Rohgahh
-        handler above names, and honest for the same reason.
+        "An opponent" is the controller's choice as the ability resolves
+        (:meth:`_cede_to_an_opponent`), after the counters come off.
 
         The control change is a CR 613 layer-2 contribution keyed on this
         permanent with no revert condition: the card prints no duration, so
@@ -937,21 +1035,9 @@ class UpkeepEffectsMixin:
             )
             return
         remove_counters(permanent, counter, total)
-        seat = ctx.player_index
-        new_seat = next(
-            (
-                index
-                for offset in range(1, len(self.players))
-                for index in [(seat + offset) % len(self.players)]
-                if not self.players[index].lost
-            ),
-            None,
-        )
-        if new_seat is None:
-            return
-        self.take_control(permanent, new_seat, source=permanent)
-        self.log.append(
-            f"{self.players[new_seat].name} gains control of {permanent.card.name}"
+        self._cede_to_an_opponent(
+            controller, permanent, [permanent],
+            prompt="Choose the opponent who gains control of it.",
         )
 
     @upkeep_effect("upkeep_self", "upkeep_pay_or_destroy_self")

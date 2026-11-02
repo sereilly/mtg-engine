@@ -14,6 +14,7 @@ from ....entry_choices import LIFE_PAID_AS_ENTERED
 from ....oracle_types import BIDDING_WINNER, DREW_BY_SEAT, MANA_PAID_BY_SEAT
 from ....pending_choices import PendingChoice
 from ....mana_payment import generic_cost, plan_payment
+from ....resumption import run_resumable
 
 
 class NumberChoicesMixin:
@@ -36,7 +37,13 @@ class NumberChoicesMixin:
         The draw goes through ``_draw_with_replacements`` like every other draw
         in the engine — a ceiling is not a reason to skip CR 614 — and what is
         recorded is what was actually drawn, which is what the sentence behind
-        it counts.
+        it counts: the drawer's own record (``cards_drawn_this_turn``), read
+        by the draw's last step. An interactive replacement (Obstinate
+        Familiar's offer) suspends the draw and the cards arrive with its
+        answer, so the seam's return value says 0 for cards that are coming —
+        Truce answered "two" under an interactive Familiar drew two and gained
+        4 life for them. The loop is the last thing here
+        (``engine/resumption.py``).
         """
         try:
             value = int(number)
@@ -46,21 +53,31 @@ class NumberChoicesMixin:
         if not (0 <= value <= ceiling):
             return False
         player = self.players[choice.player_index]
-        drawn = self._draw_with_replacements(player, value) if value else 0
-        if value:
-            self.log.append(f"{player.name} drew {drawn} card(s)")
-        else:
-            self.log.append(f"{player.name} drew no cards")
         results = choice.data.get("_results")
-        if results is not None:
-            # "**For each card less than two** a player draws this way…"
-            # (Truce.) What was drawn, per seat, under the key the sentence
-            # behind this one reads. Written even for a seat that drew none —
-            # a shortfall is a number for every player, and a seat the record
-            # never mentions has to read as zero rather than as a missing key.
-            by_seat = results.setdefault(DREW_BY_SEAT, {})
-            by_seat[choice.player_index] = drawn
+        seat = choice.player_index
+        before = len(player.cards_drawn_this_turn)
         self.discard_pending_choice(choice)
+
+        def record() -> None:
+            drawn = max(0, len(player.cards_drawn_this_turn) - before) if value else 0
+            if value:
+                self.log.append(f"{player.name} drew {drawn} card(s)")
+            else:
+                self.log.append(f"{player.name} drew no cards")
+            if results is not None:
+                # "**For each card less than two** a player draws this way…"
+                # (Truce.) What was drawn, per seat, under the key the
+                # sentence behind this one reads. Written even for a seat that
+                # drew none — a shortfall is a number for every player, and a
+                # seat the record never mentions has to read as zero rather
+                # than as a missing key.
+                results.setdefault(DREW_BY_SEAT, {})[seat] = drawn
+
+        run_resumable(
+            self, (value,),
+            lambda wanted: self._draw_with_replacements(player, wanted) if wanted else None,
+            then=record,
+        )
         return True
 
     def _default_draw_up_to(self, choice: PendingChoice) -> bool:
