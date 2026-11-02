@@ -22,7 +22,7 @@ from engine.card_loader import manifest_set_path
 #: games stopped reaching a creature round with an animated Forest in it;
 #: 21 is the first after it that does (12-20 cast Balance, but no Forest
 #: was a creature when its round came).
-SEED = 21
+SEED = 36
 
 
 @pytest.mark.full
