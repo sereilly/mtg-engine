@@ -6,6 +6,7 @@ from ..bare_announcements import resolving_slots
 from ..card_hooks import ON_SELF_RESOLVED
 from ..control import BASE_CONTROLLER, CONTROL_EFFECTS
 from ..destruction_events import instruction_finished
+from ..divided_damage import divided_entry_id
 from ..event_durations import end_event_durations
 from ..cast_costs import kicked
 from ..events import emit
@@ -115,10 +116,19 @@ class OracleInstructionsMixin:
             None if getattr(context, "about_permanent_id", None) is not None
             else getattr(context, "target_permanent_id", None)
         )
+        # …and a divided spell's targets, which ride their own channel
+        # (``choices["divided_targets"]``, CR 601.2d): a Fireball split
+        # between a Bronze Horse and its controller targets the Horse, and the
+        # seam read only the single-target field, so the Horse's share was
+        # dealt as if by a spell that did not.
+        divided = tuple(
+            divided_entry_id(entry)
+            for entry in (getattr(context, "choices", None) or {}).get("divided_targets") or ()
+        )
         self.resolving_targets.append(
             tuple(
                 identity
-                for identity in target_ids(recorded)
+                for identity in (*target_ids(recorded), *divided)
                 if identity is not None
             )
         )

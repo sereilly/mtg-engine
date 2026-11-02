@@ -106,6 +106,29 @@ def stamp_draw_of(game, choice) -> None:
         choice.data[DRAW_OF] = scopes[-1]
 
 
+#: The data keys a prompt carries for **what was resolving** when it was
+#: armed: the seat whose spell or ability armed it (CR 109.5) and what that
+#: object targets (CR 115.1, ``Game.resolving_targets``' entry). Read back
+#: by ``Game._answer_inside_its_window``, which pushes both for the length of
+#: the answer: the answer re-runs the event that asked and the loop behind it
+#: (``engine/resumption.py``), after the instruction that armed it has
+#: returned and both seams are empty. Engine-private (leading underscore).
+CAUSE_SEAT = "_cause_seat"
+RESOLVING_TARGETS = "_resolving_targets"
+
+
+def stamp_resolving(game, choice) -> None:
+    """Stamp *choice* with what was resolving as it was armed (``CAUSE_SEAT``,
+    ``RESOLVING_TARGETS``) — on either queue, by the one helper, since an
+    answer on either re-runs the same kind of work."""
+    seats = getattr(game, "resolving_seats", None)
+    if seats and CAUSE_SEAT not in choice.data:
+        choice.data[CAUSE_SEAT] = seats[-1]
+    targets = getattr(game, "resolving_targets", None)
+    if targets and RESOLVING_TARGETS not in choice.data:
+        choice.data[RESOLVING_TARGETS] = targets[-1]
+
+
 def offer_replacement_choice(game, choice: ReplacementChoice) -> tuple[bool, int]:
     """Present *choice* to its chooser.
 
@@ -128,6 +151,10 @@ def offer_replacement_choice(game, choice: ReplacementChoice) -> tuple[bool, int
     resolving = getattr(game, "resolving_stack_item", None)
     if resolving is not None and "_stack_item" not in choice.data:
         choice.data["_stack_item"] = resolving
+    # …and the seat and targets of what was resolving, which this queue
+    # never stamped: damage dealt from a Blood of the Martyr answer mid-
+    # Fireball was nobody's (CR 109.5), as the other queue's was until kg3.
+    stamp_resolving(game, choice)
     game.pending_replacement_choices.append(choice)
     return True, 0
 
