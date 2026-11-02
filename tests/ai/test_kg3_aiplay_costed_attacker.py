@@ -104,3 +104,22 @@ def test_nothing_is_added_back_that_the_maximum_cannot_carry():
         0, [_slot(game, "Craw Wurm")], against=1,
     )
     assert declaration.attackers == [juggernaut]
+
+
+@pytest.mark.cr("508.1d", "508.1h")
+def test_a_preference_the_lands_cannot_pay_for_is_not_handed_back_unchanged():
+    """Juggernaut and Craw Wurm facing Propaganda ("{2} for each creature …
+    attacking you") and a planeswalker, two Mountains: attacking the player
+    with both costs {4}. The preference obeys the requirement and breaks no
+    restriction, and was handed back as it stood — declared, it was refused
+    whole. The searched answer attacks the planeswalker with both, free, and
+    the AI's declaration is taken first time."""
+    game = _declaring(
+        ["Juggernaut", "Craw Wurm", "Mountain", "Mountain"], ["Propaganda", "Basri Ket"],
+    )
+    juggernaut, wurm = _slot(game, "Juggernaut"), _slot(game, "Craw Wurm")
+    outcome = CombatOutcome()
+    ok, why = declare_ai_attackers(game, 0, outcome=outcome)
+    assert ok, why
+    assert not outcome.refused_attacks, outcome.refused_attacks
+    assert juggernaut in game.combat_attackers

@@ -503,7 +503,11 @@ class AttackRequirementsMixin:
             for perm in chosen
         ) and self.attack_declaration_refusal(
             chosen, defenders={perm.permanent_id: target_seat for perm in chosen},
-        ) is None and self.attack_requirement_refusal(controller_index, chosen) is None:
+        ) is None and self.attack_requirement_refusal(
+            controller_index, chosen,
+        ) is None and self._declaration_is_payable(
+            controller_index, chosen, [target_seat] * len(chosen),
+        ):
             return unchanged
         found = self._most_obeyed_attack_declaration(
             controller_index, requirements, able=able,
@@ -512,11 +516,12 @@ class AttackRequirementsMixin:
             rank=rank,
         )
         return self._with_the_preference_kept(
-            found, requirements, mine, preferred, target_seat,
+            controller_index, found, requirements, mine, preferred, target_seat,
         )
 
     def _with_the_preference_kept(
-        self, found: AttackRequirementSearch, requirements: "list[AttackRequirement]",
+        self, controller_index: int, found: AttackRequirementSearch,
+        requirements: "list[AttackRequirement]",
         mine: "list[Permanent]", preferred: "list[int]", target_seat: "int | None",
     ) -> AttackDeclaration:
         """*found*'s declaration with each creature of *preferred* it left out
@@ -558,6 +563,11 @@ class AttackRequirementsMixin:
                 [mine[other] for other in trial], defenders=defenders,
             ) is not None:
                 continue
+            if not self._declaration_is_payable(
+                controller_index, [mine[other] for other in trial],
+                [None if other in walkers else seats.get(other, target_seat) for other in trial],
+            ):
+                continue
             if sum(
                 1 for requirement in requirements if requirement.obeyed(set(trial))
             ) < found.best:
@@ -565,6 +575,24 @@ class AttackRequirementsMixin:
             attackers = trial
             seats[slot] = target_seat
         return AttackDeclaration(attackers=sorted(attackers), seats=seats, walkers=walkers)
+
+    def _declaration_is_payable(
+        self, controller_index: int, attackers: "list[Permanent]",
+        attacked_seats: "list[int | None]",
+    ) -> bool:
+        """Whether the whole declaration's CR 508.1h costs — the mana and the
+        sacrifices, summed over every attacker — can be paid in full
+        (CR 508.1j allows no partial payment), through the declaration's own
+        planners. A preference that cannot be paid is not handed back
+        unchanged: declared, it is refused whole (the planeswalker beside a
+        Propaganda, where the requirement is obeyed for free and the toll for
+        two creatures is more than the lands make)."""
+        total, plan = self._declaration_mana_plan(
+            controller_index, list(attackers), list(attacked_seats),
+        )
+        if total and plan is None:
+            return False
+        return self._declaration_sacrifice_plan(controller_index, list(attackers)) is not None
 
     # ------------------------------------------------------------------
     # The most that can be obeyed
