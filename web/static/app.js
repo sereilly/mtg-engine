@@ -453,11 +453,41 @@ function getCombatDamagePassKey(state = currentState) {
   return `${getCombatDraftStepKey(state)}:${pass}`;
 }
 
+// Which permanent sits in which battlefield slot, by id. The combat drafts are
+// kept by slot (see `combatIdAt`), so a board that renumbers under them — a
+// permanent entering or leaving mid-step — would leave every draft naming the
+// creature that slid into its slot, and the request would send THAT one's id.
+let combatDraftBoardKey = "";
+
+function combatBoardKey(state) {
+  return JSON.stringify(
+    (state?.players || []).map((player) =>
+      (player?.battlefield || []).map((card) => (card && typeof card === "object" ? card.id ?? null : null)),
+    ),
+  );
+}
+
 function syncCombatDrafts(state = currentState) {
   if (!state) return;
   const nextKey = getCombatDraftStepKey(state);
-  if (nextKey === combatDraftStepKey) return;
+  const boardKey = combatBoardKey(state);
+  if (nextKey === combatDraftStepKey && boardKey === combatDraftBoardKey) return;
+  // The same step over a renumbered board: every draft is started again from
+  // what the server says, exactly as at a step's start, and an open damage
+  // dialog is closed so it reopens over the creatures where they are now.
+  const renumbered = nextKey === combatDraftStepKey;
+  const hadDeclarationDraft = combatAttackerDraft.length > 0 || Object.keys(combatBlockerDraft).length > 0;
   combatDraftStepKey = nextKey;
+  combatDraftBoardKey = boardKey;
+  if (renumbered) {
+    combatDamageDraft = {};
+    combatDamageOfferDraft = {};
+    combatBandBlockerDraft = {};
+    combatMultiblockDraft = {};
+    combatDividedDraft = { key: "", byAttacker: {} };
+    combatDamageDialogKey = "";
+    closeCombatDamageDialog();
+  }
 
   const combat = getCombatState(state);
   if (isCombatStep(state, "declare_attackers") && seat === state.current_turn) {
@@ -475,6 +505,12 @@ function syncCombatDrafts(state = currentState) {
     }
   } else {
     combatBlockerDraft = {};
+  }
+  const undeclared = isCombatStep(state, "declare_attackers")
+    ? !combat?.attackers_locked
+    : isCombatStep(state, "declare_blockers") && !combat?.blockers_locked;
+  if (renumbered && hadDeclarationDraft && undeclared) {
+    updateActionHint("The battlefield changed; choose again.", true);
   }
 }
 
@@ -507,6 +543,51 @@ function toggleCombatAttackerDraft(permanentIndex) {
     combatAttackerDraft = [...combatAttackerDraft, idx].sort((a, b) => a - b);
     SFX.onMenuToggle(true);
   }
+}
+
+// ---- The combat wire names creatures by permanent id (CR 400.7) ----
+//
+// The combat drafts are kept by battlefield slot, because the combat payload
+// (`combat.attackers`, `legal_blocker_assignments`, `band_forms`, the damage
+// prompts) and the board both speak slots. A request is written in ids, read
+// off the board the draft was drawn on: the server turns each id back into a
+// slot against the board it has NOW (`web.actions._resolve_combat_ids`), so a
+// creature that left between this poll and the post is a 404 rather than
+// whichever creature slid into its slot — and it refuses a slot field outright.
+
+// The id of the permanent in *slot* of *seatIndex*'s battlefield on *state*.
+// A slot with nothing in it is a draft drawn on another board: refused here,
+// with a hint, rather than sent as a guess.
+function combatIdAt(state, seatIndex, slot) {
+  const card = state?.players?.[seatIndex]?.battlefield?.[Number(slot)];
+  const id = card && typeof card === "object" ? Number(card.id) : NaN;
+  if (!Number.isInteger(id)) {
+    throw new Error("The battlefield changed before this was sent; choose again.");
+  }
+  return id;
+}
+
+function combatIdsAt(state, seatIndex, slots) {
+  return (slots || []).map((slot) => combatIdAt(state, seatIndex, slot));
+}
+
+// A slot-keyed map (`{slot: value}`) as the same map keyed by id, each value
+// through *valueOf*.
+function combatIdKeyed(state, seatIndex, map, valueOf = (value) => value) {
+  const out = {};
+  for (const [slot, value] of Object.entries(map || {})) {
+    out[combatIdAt(state, seatIndex, slot)] = valueOf(value);
+  }
+  return out;
+}
+
+// The slots *ids* sit in on *seatIndex*'s battlefield on *state* (an id no
+// longer there is left out) — for a parked declaration read again later.
+function combatSlotsOfIds(state, seatIndex, ids) {
+  const battlefield = state?.players?.[seatIndex]?.battlefield || [];
+  return (ids || [])
+    .map((id) => battlefield.findIndex((card) => card && typeof card === "object" && Number(card.id) === Number(id)))
+    .filter((slot) => slot >= 0);
 }
 
 // Combat legality is computed authoritatively by the backend (engine/legality.py)
@@ -1365,7 +1446,7 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
       await sendAction({
         seat,
         action: "declare_attackers",
-        attacker_indices: [],
+        attacker_ids: [],
         target_seat: Number.isInteger(combat?.defending_player_index)
           ? combat.defending_player_index
           : firstLivingOpponentSeat(state, seat, "auto-pass empty declare_attackers"),
@@ -1377,9 +1458,9 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
       // Camouflage replaces blocker declaration with pile assignment; an empty
       // division (every creature out of the piles) is the "no blocks" equivalent.
       if (combat?.camouflage_active) {
-        await sendAction({ seat, action: "assign_camouflage_piles", camouflage_piles: {} });
+        await sendAction({ seat, action: "assign_camouflage_piles", camouflage_piles_by_id: {} });
       } else {
-        await sendAction({ seat, action: "declare_blockers", blocker_pairs: {} });
+        await sendAction({ seat, action: "declare_blockers", blocker_pairs_by_id: {} });
       }
       return;
     }
@@ -1604,7 +1685,7 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
       await sendAction({
         seat,
         action: "declare_attackers",
-        attacker_indices: [],
+        attacker_ids: [],
         target_seat: Number.isInteger(combat?.defending_player_index)
           ? combat.defending_player_index
           : firstLivingOpponentSeat(state, seat, "auto-pass empty declare_attackers"),
@@ -1615,9 +1696,9 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
       // Camouflage replaces blocker declaration with pile assignment; an empty
       // division (every creature out of the piles) is the "no blocks" equivalent.
       if (combat?.camouflage_active) {
-        await sendAction({ seat, action: "assign_camouflage_piles", camouflage_piles: {} });
+        await sendAction({ seat, action: "assign_camouflage_piles", camouflage_piles_by_id: {} });
       } else {
-        await sendAction({ seat, action: "declare_blockers", blocker_pairs: {} });
+        await sendAction({ seat, action: "declare_blockers", blocker_pairs_by_id: {} });
       }
       return;
     }
@@ -1664,7 +1745,7 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
     const defendingSeat = Number.isInteger(combat.defending_player_index)
       ? combat.defending_player_index
       : firstLivingOpponentSeat(state, seat, "auto-advance empty declare_attackers");
-    actionBody = { seat, action: "declare_attackers", attacker_indices: [], target_seat: defendingSeat };
+    actionBody = { seat, action: "declare_attackers", attacker_ids: [], target_seat: defendingSeat };
   } else if (
     isCombatStep(state, "declare_blockers") &&
     iDeclareBlocks(state) &&
@@ -1674,7 +1755,7 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
     // Camouflage: the numbered pile buttons are the affordance; auto-submit an
     // empty division only when there is nothing left to divide.
     if (!getCamouflageInfo(state)) {
-      actionBody = { seat, action: "assign_camouflage_piles", camouflage_piles: {} };
+      actionBody = { seat, action: "assign_camouflage_piles", camouflage_piles_by_id: {} };
     }
   } else if (
     isCombatStep(state, "declare_blockers") &&
@@ -1682,7 +1763,7 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
     !combat.blockers_locked &&
     getValidBlockerAssignments(state).length === 0
   ) {
-    actionBody = { seat, action: "declare_blockers", blocker_pairs: {} };
+    actionBody = { seat, action: "declare_blockers", blocker_pairs_by_id: {} };
   } else if (
     // I'm the attacker stalled on the declare-blockers turn-based step (no priority
     // window), and the defender is the AI (or there are no attackers to block).
@@ -2661,6 +2742,18 @@ function cardRequiresCastColorChoice(card) {
 }
 
 const LAND_TYPE_BY_SYMBOL = { W: "plains", U: "island", B: "swamp", R: "mountain", G: "forest" };
+
+// What a text change's word is called on its button and in its hint. The wire
+// addresses a basic land type by its colour letter (W = Plains, …), but the
+// word being replaced is "Plains", not "White": Magical Hack's buttons read
+// as colours on both its permanent and its spell path.
+function textChangeWordLabel(symbol, isLandType) {
+  if (isLandType) {
+    const word = LAND_TYPE_BY_SYMBOL[symbol] || "";
+    return word ? word.charAt(0).toUpperCase() + word.slice(1) : String(symbol);
+  }
+  return MANA_COLOR_OPTIONS.find((option) => option.symbol === symbol)?.label || String(symbol);
+}
 
 // Magical Hack replaces an existing basic land type word — the "from" choices
 // are limited to land words actually present on the target (its land type,
@@ -3855,6 +3948,18 @@ function getOrderTriggersInfo(state = currentState) {
   return info;
 }
 
+// Kaboom!'s ruling ("You choose the relative order of targets within that
+// group"): the spell's targets, each player's group in turn order, for the
+// caster to order within each group — `{player_seat, card_name, targets:
+// [{index, name, seat, id, group}]}`. Armed only where a group holds two.
+function getTargetGroupOrderInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.target_group_order;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.targets) || info.targets.length < 2) return null;
+  return info;
+}
+
 // Tolarian Kraken: the reflexive trigger ("When you do, …") choosing its target.
 function getReflexiveTargetInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -4839,7 +4944,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state) || getTargetGroupOrderInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -4919,6 +5024,7 @@ async function handleCombatPromptOk() {
       return false;
     }
     const declared = [...combatAttackerDraft];
+    const declaredIds = combatIdsAt(state, seat, declared);
     let defendingSeat = Number.isInteger(combat.defending_player_index) ? combat.defending_player_index : null;
     if (defendingSeat === null) {
       // 3+ player game with no single defender established yet: the attacking
@@ -4929,8 +5035,10 @@ async function handleCombatPromptOk() {
       // branch); the declaration is sent by confirmPendingAttackTarget.
       const candidates = isFfaState(state) ? livingOpponentSeats(state, seat) : [1 - seat];
       if (candidates.length > 1) {
+        // Parked by id: the opponent is picked in a later click, after any
+        // number of polls.
         pendingAttackTarget = {
-          attackerIndices: declared,
+          attackerIds: declaredIds,
           band: !!(combatBandDraft && selectedAttackersCanBand(state)),
         };
         renderCombatControls(state); // hide the declare summary/Alpha Strike while picking
@@ -4942,19 +5050,19 @@ async function handleCombatPromptOk() {
     const declareBody = {
       seat,
       action: "declare_attackers",
-      attacker_indices: declared,
+      attacker_ids: declaredIds,
       target_seat: defendingSeat,
     };
     // CR 702.22c: declare the selected attackers as a single band when requested.
     if (combatBandDraft && selectedAttackersCanBand(state)) {
-      declareBody.bands = [declared];
+      declareBody.band_ids = [declaredIds];
     }
     // CR 508.1h: costs paid in permanents the player picks are asked first.
     if (startDeclarationCostPrompt(state, declareBody, "attack", declared)) return true;
     await sendAction(declareBody);
     combatBandDraft = false;
     updateActionHint(
-      `Attackers declared (${declared.length})${declareBody.bands ? " as a band" : ""}.` +
+      `Attackers declared (${declared.length})${declareBody.band_ids ? " as a band" : ""}.` +
         " Players may now cast spells/activate abilities before blockers.",
     );
     return true;
@@ -4965,7 +5073,16 @@ async function handleCombatPromptOk() {
       return false;
     }
     const blockerPairs = { ...combatBlockerDraft };
-    const blockBody = { seat, action: "declare_blockers", blocker_pairs: blockerPairs };
+    // Blockers on the defending player's battlefield, each blocking attackers
+    // on the active player's — both by id.
+    const blockBody = {
+      seat,
+      action: "declare_blockers",
+      blocker_pairs_by_id: combatIdKeyed(
+        state, blockDeclarationDefender(state), blockerPairs,
+        (attackers) => combatIdsAt(state, state.current_turn, attackers),
+      ),
+    };
     // CR 509.1d: a block's tap cost (Hollow Warrior) is the defender's choice.
     // Asked only of the defender's own board — a substituted chooser (Melee)
     // keeps the engine's default for the creatures it does not control.
@@ -4995,18 +5112,23 @@ async function confirmPendingAttackTarget(targetSeat) {
   const declareBody = {
     seat,
     action: "declare_attackers",
-    attacker_indices: pending.attackerIndices,
+    attacker_ids: pending.attackerIds,
     target_seat: targetSeat,
   };
-  if (pending.band) declareBody.bands = [pending.attackerIndices];
-  if (currentState && startDeclarationCostPrompt(currentState, declareBody, "attack", pending.attackerIndices)) {
+  if (pending.band) declareBody.band_ids = [pending.attackerIds];
+  if (
+    currentState
+    && startDeclarationCostPrompt(
+      currentState, declareBody, "attack", combatSlotsOfIds(currentState, seat, pending.attackerIds),
+    )
+  ) {
     return;
   }
   try {
     await sendAction(declareBody);
     combatBandDraft = false;
     updateActionHint(
-      `Attackers declared (${pending.attackerIndices.length})${declareBody.bands ? " as a band" : ""}.` +
+      `Attackers declared (${pending.attackerIds.length})${declareBody.band_ids ? " as a band" : ""}.` +
         " Players may now cast spells/activate abilities before blockers.",
     );
   } catch (e) {
@@ -8329,16 +8451,111 @@ function applyTriggerGraveyardCardsPrompt(info) {
 // It had no panel at all, so the glow was the only sign a decision was owed —
 // which works only while every candidate is on the board, and nothing glowed
 // for a spell.
-// The order being drafted for the open `order_triggers` prompt: `key` names the
-// prompt it belongs to (a new prompt starts from the order the server offered),
-// `order` is the offered indices, the first to resolve first.
-let orderTriggersDraft = null;
+// The order being drafted for the open ordering prompt (`order_triggers`,
+// `target_group_order`): `key` names the prompt it belongs to (a new prompt
+// starts from the order the server offered), `order` is the offered indices,
+// the first first.
+let orderListDraft = null;
 
 function orderTriggersKey(info) {
   return JSON.stringify([
+    "order_triggers",
     info.player_seat,
     (info.triggers || []).map((t) => [t.index, t.card_name, t.text, t.source_id]),
   ]);
+}
+
+// The order after the row at *from* trades places with its neighbour at *to*,
+// or null when that would carry it out of its group (`groupOf(index)`; an
+// index with no group moves anywhere) or off the list.
+function orderListMove(order, groupOf, from, to) {
+  if (from < 0 || to < 0 || from >= order.length || to >= order.length || Math.abs(from - to) !== 1) {
+    return null;
+  }
+  if (groupOf(order[from]) !== groupOf(order[to])) return null;
+  const next = [...order];
+  [next[from], next[to]] = [next[to], next[from]];
+  return next;
+}
+
+// The widget both ordering prompts share: one list, a move-up and a move-down
+// per row, and the panel's OK sending the whole order. An item with a `group`
+// moves only past a neighbour of the same group, and a group's first row
+// carries its `groupLabel` (an item with none moves anywhere). Nothing
+// resolves until the order is sent: the server holds it, and
+// `waiting_on_prompt` keeps the auto-pass off.
+function applyOrderListPrompt(config) {
+  const { key, items, title, body, okText, send } = config;
+  const panel = q("activationPanel");
+  const steps = q("promptSteps");
+  const okBtn = q("promptOkBtn");
+  panel.classList.remove("hidden");
+  q("promptCustomRow").classList.add("hidden");
+  q("promptCancelBtn").classList.add("hidden");
+  q("promptCancelBtn").disabled = true;
+  q("promptCustomOkBtn").disabled = true;
+  if (!orderListDraft || orderListDraft.key !== key) {
+    orderListDraft = { key, order: items.map((item) => Number(item.index)) };
+  }
+  const byIndex = new Map(items.map((item) => [Number(item.index), item]));
+  const order = orderListDraft.order;
+  const groupOf = (index) => byIndex.get(index)?.group;
+  const groupAt = (pos) => groupOf(order[pos]);
+  const canSwap = (from, to) => orderListMove(order, groupOf, from, to) !== null;
+  q("promptTitle").textContent = title;
+  q("promptBody").textContent = body;
+  const rows = order
+    .map((index, pos) => {
+      const item = byIndex.get(index) || {};
+      const header =
+        item.groupLabel && (pos === 0 || groupAt(pos - 1) !== item.group)
+          ? `<div class="order-group-label" style="font-weight:600;margin-top:${pos === 0 ? 0 : 4}px">` +
+            `${escapeHtml(item.groupLabel)}</div>`
+          : "";
+      // Inline layout on purpose: `.prompt-choice-column` stretches every
+      // button in it to the panel's width, which is right for a list of
+      // answers and wrong for two arrows beside a line of text.
+      return (
+        header +
+        `<div class="prompt-choice-row" data-order-row="${pos}" ` +
+        `style="flex-wrap:nowrap;align-items:flex-start;gap:6px">` +
+        `<span style="flex:0 0 auto;min-width:1.5em;padding-top:4px">${pos + 1}.</span>` +
+        `<button type="button" class="prompt-choice-btn" data-order-up="${pos}" style="flex:0 0 auto"` +
+        `${canSwap(pos, pos - 1) ? "" : " disabled"} title="Move up (earlier)">&#9650;</button>` +
+        `<button type="button" class="prompt-choice-btn" data-order-down="${pos}" style="flex:0 0 auto"` +
+        `${canSwap(pos, pos + 1) ? "" : " disabled"} title="Move down (later)">&#9660;</button>` +
+        `<span class="order-trigger-label" style="flex:1 1 auto;line-height:1.35">${escapeHtml(item.label || "")}</span>` +
+        `</div>`
+      );
+    })
+    .join("");
+  steps.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">${rows}</div>`;
+  const move = (from, to) => {
+    const next = orderListMove(orderListDraft.order, groupOf, from, to);
+    if (!next) return;
+    orderListDraft = { key, order: next };
+    applyOrderListPrompt(config);
+  };
+  steps.querySelectorAll("[data-order-up]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const pos = Number(btn.dataset.orderUp);
+      move(pos, pos - 1);
+    });
+  });
+  steps.querySelectorAll("[data-order-down]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const pos = Number(btn.dataset.orderDown);
+      move(pos, pos + 1);
+    });
+  });
+  okBtn.classList.remove("hidden");
+  okBtn.disabled = false;
+  okBtn.textContent = okText;
+  okBtn.onclick = async () => {
+    const chosen = [...orderListDraft.order];
+    orderListDraft = null;
+    await send(chosen);
+  };
 }
 
 // CR 603.3b: "each player … puts each triggered ability they control … on the
@@ -8348,72 +8565,56 @@ function orderTriggersKey(info) {
 // the server holds the abilities, and `waiting_on_prompt` keeps the auto-pass
 // off.
 function applyOrderTriggersPrompt(info) {
-  const panel = q("activationPanel");
-  const steps = q("promptSteps");
-  const okBtn = q("promptOkBtn");
-  panel.classList.remove("hidden");
-  q("promptCustomRow").classList.add("hidden");
-  q("promptCancelBtn").classList.add("hidden");
-  q("promptCancelBtn").disabled = true;
-  q("promptCustomOkBtn").disabled = true;
   const triggers = info.triggers || [];
-  const key = orderTriggersKey(info);
-  if (!orderTriggersDraft || orderTriggersDraft.key !== key) {
-    orderTriggersDraft = { key, order: triggers.map((t) => Number(t.index)) };
-  }
-  const byIndex = new Map(triggers.map((t) => [Number(t.index), t]));
-  const order = orderTriggersDraft.order;
-  q("promptTitle").textContent = "Order your triggered abilities";
-  q("promptBody").textContent =
-    "These abilities triggered together, and you choose the order they go on the stack. " +
-    "The first in the list resolves first.";
-  const rows = order
-    .map((index, pos) => {
-      const t = byIndex.get(index) || {};
-      const label = `${t.card_name || "Ability"}: ${t.text || ""}`;
-      // Inline layout on purpose: `.prompt-choice-column` stretches every
-      // button in it to the panel's width, which is right for a list of
-      // answers and wrong for two arrows beside a line of text.
-      return (
-        `<div class="prompt-choice-row" data-order-row="${pos}" ` +
-        `style="flex-wrap:nowrap;align-items:flex-start;gap:6px">` +
-        `<span style="flex:0 0 auto;min-width:1.5em;padding-top:4px">${pos + 1}.</span>` +
-        `<button type="button" class="prompt-choice-btn" data-order-up="${pos}" style="flex:0 0 auto"` +
-        `${pos === 0 ? " disabled" : ""} title="Move up (resolve earlier)">&#9650;</button>` +
-        `<button type="button" class="prompt-choice-btn" data-order-down="${pos}" style="flex:0 0 auto"` +
-        `${pos === order.length - 1 ? " disabled" : ""} title="Move down (resolve later)">&#9660;</button>` +
-        `<span class="order-trigger-label" style="flex:1 1 auto;line-height:1.35">${escapeHtml(label)}</span>` +
-        `</div>`
-      );
-    })
-    .join("");
-  steps.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">${rows}</div>`;
-  const move = (from, to) => {
-    const next = [...orderTriggersDraft.order];
-    [next[from], next[to]] = [next[to], next[from]];
-    orderTriggersDraft = { key, order: next };
-    applyOrderTriggersPrompt(info);
-  };
-  steps.querySelectorAll("[data-order-up]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const pos = Number(btn.dataset.orderUp);
-      if (pos > 0) move(pos, pos - 1);
-    });
+  applyOrderListPrompt({
+    key: orderTriggersKey(info),
+    items: triggers.map((t) => ({
+      index: Number(t.index),
+      label: `${t.card_name || "Ability"}: ${t.text || ""}`,
+    })),
+    title: "Order your triggered abilities",
+    body:
+      "These abilities triggered together, and you choose the order they go on the stack. " +
+      "The first in the list resolves first.",
+    okText: "Put on the stack",
+    send: (chosen) => sendAction({ seat, action: "order_triggers_confirm", trigger_order: chosen }),
   });
-  steps.querySelectorAll("[data-order-down]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const pos = Number(btn.dataset.orderDown);
-      if (pos < orderTriggersDraft.order.length - 1) move(pos, pos + 1);
-    });
-  });
-  okBtn.classList.remove("hidden");
-  okBtn.disabled = false;
-  okBtn.textContent = "Put on the stack";
-  okBtn.onclick = async () => {
-    const chosen = [...orderTriggersDraft.order];
-    orderTriggersDraft = null;
-    await sendAction({ seat, action: "order_triggers_confirm", trigger_order: chosen });
+}
+
+// Kaboom!'s ruling (2022-09-09): "those targets will be handled one at a time
+// in turn order. Start with targets that are either the player whose turn it
+// is … or permanents that player controls. You choose the relative order of
+// targets within that group." The same list as the triggers' order, each
+// player's group under its player's name and its moves kept inside it; OK
+// sends every index once (`target_order`), the first handled first.
+function applyTargetGroupOrderPrompt(info) {
+  const targets = info.targets || [];
+  const cardName = info.card_name || "The spell";
+  const groupLabelOf = (target) => {
+    const owner = currentState?.players?.[Number(target.seat)];
+    if (Number(target.seat) === seat) return "Your targets";
+    return owner?.name ? `${owner.name}'s targets` : `Group ${Number(target.group) + 1}`;
   };
+  applyOrderListPrompt({
+    key: JSON.stringify([
+      "target_group_order",
+      info.player_seat,
+      cardName,
+      targets.map((t) => [t.index, t.name, t.seat, t.id, t.group]),
+    ]),
+    items: targets.map((t) => ({
+      index: Number(t.index),
+      label: t.id == null ? `${t.name || "Player"} (player)` : `${t.name || "Planeswalker"} (planeswalker)`,
+      group: Number(t.group),
+      groupLabel: groupLabelOf(t),
+    })),
+    title: `Order ${cardName}'s targets`,
+    body:
+      `${cardName} handles its targets one player's group at a time, in turn order. ` +
+      "You choose the order within each group: the first in a group is handled first.",
+    okText: "Confirm order",
+    send: (chosen) => sendAction({ seat, action: "target_group_order_confirm", target_order: chosen }),
+  });
 }
 
 // A trigger another player controls whose target this seat chooses ("that
@@ -10300,7 +10501,9 @@ function buildRagingRiverCanvasData(state) {
     const isDefender = Array.isArray(info.divide_creatures);
     const items = isDefender ? info.divide_creatures : info.label_attackers;
     const promptSeat = isDefender ? defenderSeat : attackerSeat;
-    const sig = `${promptSeat}:${items.map((it) => it.index).join(",")}`;
+    // By slot and id: a selection kept by slot is a selection of the
+    // creatures in those slots, and a renumbered board starts it again.
+    const sig = `${promptSeat}:${items.map((it) => `${it.index}#${it.id}`).join(",")}`;
     // Start fresh (every creature unset) whenever the prompt changes, so the
     // player explicitly assigns each creature rather than accepting a default.
     if (ragingRiverPromptSig !== sig) {
@@ -10337,14 +10540,15 @@ function handleRagingRiverPileClick({ idx, side }) {
     (it) => ragingRiverSelection[it.index] === "left" || ragingRiverSelection[it.index] === "right"
   );
   if (allChosen) {
+    // By id: each item carries the creature's `id` beside its slot.
     const piles = {};
-    for (const it of items) piles[it.index] = ragingRiverSelection[it.index];
+    for (const it of items) piles[it.id] = ragingRiverSelection[it.index];
     ragingRiverSelection = null;
     ragingRiverPromptSig = null;
     sendAction({
       seat,
       action: isDefender ? "assign_defender_piles" : "assign_attacker_piles",
-      piles,
+      piles_by_id: piles,
     }).catch((e) => updateActionHint(e.message, true));
   } else {
     renderBoard(currentState);
@@ -10367,7 +10571,7 @@ function buildCamouflageCanvasData(state) {
     return null;
   }
   const items = info.divide_creatures;
-  const sig = `${info.defender_seat}:${info.pile_count}:${items.map((it) => it.index).join(",")}`;
+  const sig = `${info.defender_seat}:${info.pile_count}:${items.map((it) => `${it.index}#${it.id}`).join(",")}`;
   // Start fresh (every creature unset) whenever the prompt changes, so the
   // player explicitly assigns each creature rather than accepting a default.
   if (camouflagePromptSig !== sig) {
@@ -10397,14 +10601,15 @@ function handleCamouflagePileClick({ idx, pile }) {
 
   const allChosen = items.every((it) => camouflageSelection[it.index] !== undefined);
   if (allChosen) {
+    // By id: each item carries the creature's `id` beside its slot.
     const piles = {};
     for (const it of items) {
       const chosen = camouflageSelection[it.index];
-      if (chosen !== "none") piles[it.index] = chosen;
+      if (chosen !== "none") piles[it.id] = chosen;
     }
     camouflageSelection = null;
     camouflagePromptSig = null;
-    sendAction({ seat, action: "assign_camouflage_piles", camouflage_piles: piles }).catch((e) =>
+    sendAction({ seat, action: "assign_camouflage_piles", camouflage_piles_by_id: piles }).catch((e) =>
       updateActionHint(e.message, true)
     );
   } else {
@@ -13279,6 +13484,14 @@ function renderActivationPrompt() {
     return;
   }
 
+  // A resolving spell's target order (Kaboom!): asked mid-resolution, the
+  // spell held on the stack until it is answered.
+  const targetGroupOrderInfo = getTargetGroupOrderInfo();
+  if (targetGroupOrderInfo) {
+    applyTargetGroupOrderPrompt(targetGroupOrderInfo);
+    return;
+  }
+
   const reflexiveTargetInfo = getReflexiveTargetInfo();
   if (reflexiveTargetInfo) {
     applyReflexiveTargetPrompt(reflexiveTargetInfo);
@@ -14605,6 +14818,12 @@ function renderActivationPrompt() {
       `<div>Ability: ${renderSymbolsInline(pendingManaColor.oracleText || "Activated mana ability")}</div>`,
       `<div class="prompt-choice-row">${(pendingManaColor.colorOptions || MANA_COLOR_OPTIONS).map(
         ({ symbol, label }) => {
+          // A land type is a word, not a colour: its button names the type
+          // and carries no mana symbol.
+          if (pendingManaColor.kind === "cast" && pendingManaColor.isLandType) {
+            return `<button type="button" class="prompt-choice-btn" data-mana-color="${symbol}">` +
+              `${escapeHtml(textChangeWordLabel(symbol, true))}</button>`;
+          }
           const token = `{${symbol}}`;
           const src = symbolSrc(token);
           const symbolHtml = src
@@ -15993,10 +16212,12 @@ function resolvePendingManaColor(manaColor) {
       old_color: pending.fromColor,
       mana_color: manaColor,
     };
-    updateActionHint(`Casting ${pending.cardName} (${pending.fromColor} → ${manaColor})...`);
+    const fromWord = textChangeWordLabel(pending.fromColor, pending.isLandType);
+    const toWord = textChangeWordLabel(manaColor, pending.isLandType);
+    updateActionHint(`Casting ${pending.cardName} (${fromWord} → ${toWord})...`);
     sendAction(actionBody)
       .then(() => {
-        updateActionHint(`Cast ${pending.cardName}: replaced ${pending.fromColor} with ${manaColor}.`);
+        updateActionHint(`Cast ${pending.cardName}: replaced ${fromWord} with ${toWord}.`);
         clearPendingHandCast();
       })
       .catch((e) => {
@@ -22701,17 +22922,31 @@ function openBandBlockerDialog(state = currentState) {
   const confirmBtn = q("combatDamageConfirmBtn");
   if (confirmBtn) {
     confirmBtn.onclick = async () => {
+      // By id, off the board this dialog was drawn on: the blocker on the
+      // defending player's battlefield, each band member on the active
+      // player's.
       const blockerDamageSplit = {};
-      for (const b of info.blockers) {
-        const power = Number(defenderBf[b.blocker_idx]?.power) || 0;
-        const split = combatBandBlockerDraft[b.blocker_idx] || {};
-        const total = b.member_indices.reduce((sum, m) => sum + (Number(split[m]) || 0), 0);
-        if (total !== power) {
-          updateActionHint(`Assign all of the blocker's damage (${total} of ${power} assigned).`, true);
-          return;
+      const idOf = (bf, slot) => {
+        const id = Number(bf[slot]?.id);
+        if (!Number.isInteger(id)) throw new Error("The battlefield changed before this was sent; choose again.");
+        return id;
+      };
+      try {
+        for (const b of info.blockers) {
+          const power = Number(defenderBf[b.blocker_idx]?.power) || 0;
+          const split = combatBandBlockerDraft[b.blocker_idx] || {};
+          const total = b.member_indices.reduce((sum, m) => sum + (Number(split[m]) || 0), 0);
+          if (total !== power) {
+            updateActionHint(`Assign all of the blocker's damage (${total} of ${power} assigned).`, true);
+            return;
+          }
+          const shares = {};
+          for (const m of b.member_indices) shares[idOf(attackerBf, m)] = Number(split[m]) || 0;
+          blockerDamageSplit[idOf(defenderBf, b.blocker_idx)] = shares;
         }
-        blockerDamageSplit[b.blocker_idx] = {};
-        for (const m of b.member_indices) blockerDamageSplit[b.blocker_idx][m] = Number(split[m]) || 0;
+      } catch (e) {
+        updateActionHint(e.message, true);
+        return;
       }
       // As in openDamageDialog: what this seat is still owed after the answer
       // (the second combat damage step's assignment, CR 510.4) is opened once
@@ -22719,7 +22954,7 @@ function openBandBlockerDialog(state = currentState) {
       let accepted = false;
       try {
         confirmBtn.disabled = true;
-        await sendAction({ seat, action: "assign_combat_damage", blocker_damage_split: blockerDamageSplit });
+        await sendAction({ seat, action: "assign_combat_damage", blocker_damage_split_by_id: blockerDamageSplit });
         updateActionHint("Band blocker damage assigned.");
         combatBandBlockerDraft = {};
         accepted = true;
@@ -22863,22 +23098,35 @@ function openMultiblockDamageDialog(state = currentState) {
   const confirmBtn = q("combatDamageConfirmBtn");
   if (confirmBtn) {
     confirmBtn.onclick = async () => {
+      // By id, off the board this dialog was drawn on: the blocker on the
+      // defending player's battlefield, each attacker on the active player's.
       const blockerDamageSplit = {};
-      for (const b of info.blockers) {
-        const power = Number(defenderBf[b.blocker_idx]?.power) || 0;
-        const split = combatMultiblockDraft[b.blocker_idx] || {};
-        const total = b.attacker_indices.reduce((sum, a) => sum + (Number(split[a]) || 0), 0);
-        if (total !== power) {
-          updateActionHint(`Assign all of the blocker's damage (${total} of ${power} assigned).`, true);
-          return;
+      const idOf = (bf, slot) => {
+        const id = Number(bf[slot]?.id);
+        if (!Number.isInteger(id)) throw new Error("The battlefield changed before this was sent; choose again.");
+        return id;
+      };
+      try {
+        for (const b of info.blockers) {
+          const power = Number(defenderBf[b.blocker_idx]?.power) || 0;
+          const split = combatMultiblockDraft[b.blocker_idx] || {};
+          const total = b.attacker_indices.reduce((sum, a) => sum + (Number(split[a]) || 0), 0);
+          if (total !== power) {
+            updateActionHint(`Assign all of the blocker's damage (${total} of ${power} assigned).`, true);
+            return;
+          }
+          const shares = {};
+          for (const a of b.attacker_indices) shares[idOf(attackerBf, a)] = Number(split[a]) || 0;
+          blockerDamageSplit[idOf(defenderBf, b.blocker_idx)] = shares;
         }
-        blockerDamageSplit[b.blocker_idx] = {};
-        for (const a of b.attacker_indices) blockerDamageSplit[b.blocker_idx][a] = Number(split[a]) || 0;
+      } catch (e) {
+        updateActionHint(e.message, true);
+        return;
       }
       let accepted = false;
       try {
         confirmBtn.disabled = true;
-        await sendAction({ seat, action: "assign_multiblock_damage", blocker_damage_split: blockerDamageSplit });
+        await sendAction({ seat, action: "assign_multiblock_damage", blocker_damage_split_by_id: blockerDamageSplit });
         updateActionHint("Blocker damage divided.");
         combatMultiblockDraft = {};
         accepted = true;
@@ -23350,13 +23598,30 @@ function openDamageDialog(state = currentState, mode = "attacker") {
       // the engine refuses an attacker that is given both.
       const asThoughUnblockedIds = [];
       const dividedAmongDefenders = collectDividedAmongDefenders(groups);
+      let boardMoved = false;
       for (const g of groups) {
         if (dividedGroupSkipsAttackerDamage(g)) continue;
         if (g.offer && combatDamageOfferDraft[g.attackerIdx] === "unblocked") {
           asThoughUnblockedIds.push(g.offer.attackerId);
           continue;
         }
-        assignment[g.attackerIdx] = combatDamageDraft[g.attackerIdx] || {};
+        // By id, off the cards the group was drawn with: the attacker, and
+        // each of its blockers.
+        const draft = combatDamageDraft[g.attackerIdx] || {};
+        const attackerId = Number(g.attackerCard?.id);
+        if (!Number.isInteger(attackerId)) boardMoved = true;
+        const division = {};
+        for (const { blockerIdx, card } of g.blockers) {
+          if (draft[blockerIdx] === undefined) continue;
+          const blockerId = Number(card?.id);
+          if (!Number.isInteger(blockerId)) boardMoved = true;
+          division[blockerId] = draft[blockerIdx];
+        }
+        assignment[attackerId] = division;
+      }
+      if (boardMoved) {
+        updateActionHint("The battlefield changed before this was sent; choose again.", true);
+        return;
       }
       // One answer per combat damage step (CR 510.4): with first or double
       // strike there is a second step, and it is assigned afresh — an offer
@@ -23383,7 +23648,7 @@ function openDamageDialog(state = currentState, mode = "attacker") {
           await sendAction({
             seat,
             action: "assign_banding_damage",
-            banding_damage: assignment,
+            banding_damage_by_id: assignment,
             as_though_unblocked_ids: asThoughUnblockedIds,
           });
           updateActionHint("Attackers' combat damage assigned.");
@@ -23391,7 +23656,7 @@ function openDamageDialog(state = currentState, mode = "attacker") {
           const announcement = {
             seat,
             action: "assign_combat_damage",
-            attacker_damage: assignment,
+            attacker_damage_by_id: assignment,
             as_though_unblocked_ids: asThoughUnblockedIds,
           };
           // Butcher Orgg's offer taken, by attacker id; left out, declined.

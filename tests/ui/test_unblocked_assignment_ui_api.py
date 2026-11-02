@@ -33,7 +33,7 @@ from engine.combat_assignment import (AS_THOUGH_UNBLOCKED_LOG,
 from engine.models import Permanent
 from web.app import app, store
 
-from tests.helpers import _mk_creature_card, app_js_function_body
+from tests.helpers import _mk_creature_card, app_js_function_body, combat_ids
 
 client = TestClient(app)
 
@@ -59,7 +59,9 @@ def _session(mode: str = "human_vs_human") -> str:
 
 
 def _act(sid: str, **body):
-    return client.post(f"/api/sessions/{sid}/action", json=body)
+    # The combat fields are written by slot and sent by id (the wire refuses
+    # a slot field from a client): tests.helpers.combat_ids.
+    return client.post(f"/api/sessions/{sid}/action", json=combat_ids(store.get(sid).game, body))
 
 
 def _state(sid: str, seat: int) -> dict:
@@ -472,7 +474,7 @@ def test_confirm_announces_the_offer_by_id_and_sends_no_division_for_it():
     assert "as_though_unblocked_ids: asThoughUnblockedIds" in dialog
     assert "asThoughUnblockedIds.push(g.offer.attackerId)" in dialog
     taken = dialog.index('combatDamageOfferDraft[g.attackerIdx] === "unblocked"')
-    division = dialog.index("assignment[g.attackerIdx] = combatDamageDraft[g.attackerIdx]")
+    division = dialog.index("assignment[attackerId] = division")
     assert dialog.index("continue;", taken) < division, (
         "an attacker taking the offer must skip the division"
     )

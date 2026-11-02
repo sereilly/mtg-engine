@@ -405,3 +405,77 @@ def declare_attack(game, attacker_seat: int, *, blocks: "dict | None" = None) ->
     ok, why = game.declare_blockers(defender_seat, dict(blocks or {}))
     assert ok, why
     return attackers
+
+
+def combat_ids(game, body: dict) -> dict:
+    """*body* — a combat action's request, written by battlefield slot — with
+    each slot field sent as its by-id twin (``web.actions.COMBAT_ID_FIELDS``:
+    ``attacker_indices`` → ``attacker_ids``, ``blocker_pairs`` →
+    ``blocker_pairs_by_id`` …), every slot read off *game*'s board as it stands
+    when the request is built.
+
+    The wire refuses the slot fields from a client (CR 400.7: a slot names
+    whatever sits in it when it is read). This is the test-side twin of what
+    the browser does with a draft it keeps by slot (``combatIdKeyed`` in
+    ``app.js``): the test reasons about the board by slot, and the request
+    names creatures by id. Each slot is read on the battlefield the engine
+    reads that position on — an attacker on the active player's, a blocker in
+    a damage map on that of the player its attacker attacks, a declaration's
+    blockers on the defending player's, a pile on the acting seat's. A slot
+    with nothing in it is sent as id 0, which names nothing (a 404).
+    """
+    from web.actions import COMBAT_ID_FIELDS
+
+    body = dict(body)
+    active = game.active_player_index
+
+    def id_at(seat, slot):
+        permanent = game.permanent_at(seat, int(slot)) if isinstance(seat, int) else None
+        return permanent.permanent_id if permanent is not None else 0
+
+    def attacker(slot):
+        return id_at(active, slot)
+
+    def blocker_seat(attacker_slots):
+        seats = {game._combat_seat_of_blocker(int(a)) for a in attacker_slots}
+        return seats.pop() if len(seats) == 1 else game.combat_defending_player_index
+
+    def listed(value):
+        return value if isinstance(value, list) else [value]
+
+    def declaring_seat():
+        seat = body.get("seat")
+        if seat in game.combat_defending_players():
+            return seat
+        pending = body.get("target_seat")
+        return pending if pending is not None else game._pending_block_declarer()
+
+    convert = {
+        "attacker_indices": lambda v: [attacker(a) for a in v],
+        "bands": lambda v: [[attacker(a) for a in band] for band in v],
+        "attacker_planeswalker_ids": lambda v: {attacker(a): w for a, w in v.items()},
+        "blocker_pairs": lambda v: {
+            id_at(declaring_seat(), b): [attacker(a) for a in listed(a_s)] for b, a_s in v.items()
+        },
+        "attacker_damage": lambda v: {
+            attacker(a): {id_at(blocker_seat([a]), b): n for b, n in split.items()}
+            for a, split in v.items()
+        },
+        "banding_damage": lambda v: {
+            attacker(a): {id_at(blocker_seat([a]), b): n for b, n in split.items()}
+            for a, split in v.items()
+        },
+        "blocker_damage": lambda v: {id_at(blocker_seat([a]), b): attacker(a) for b, a in v.items()},
+        "blocker_damage_split": lambda v: {
+            id_at(blocker_seat(split), b): {attacker(a): n for a, n in split.items()}
+            for b, split in v.items()
+        },
+        "piles": lambda v: {id_at(body.get("seat"), c): side for c, side in v.items()},
+        "camouflage_piles": lambda v: {id_at(body.get("seat"), c): p for c, p in v.items()},
+    }
+    by_id = {slot: field for field, slot in COMBAT_ID_FIELDS.items()}
+    assert set(convert) == set(by_id), "a combat slot field this helper cannot convert"
+    for slot_field, field in by_id.items():
+        if body.get(slot_field) is not None:
+            body[field] = convert[slot_field](body.pop(slot_field))
+    return body

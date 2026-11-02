@@ -31,7 +31,7 @@ from fastapi.testclient import TestClient
 from engine.models import Permanent
 from web.app import app, store
 
-from tests.helpers import _mk_card, _mk_creature_card, app_js_function_body
+from tests.helpers import _mk_card, _mk_creature_card, app_js_function_body, combat_ids
 
 client = TestClient(app)
 
@@ -58,7 +58,9 @@ def _session(mode: str = "human_vs_human") -> str:
 
 
 def _act(sid: str, **body):
-    return client.post(f"/api/sessions/{sid}/action", json=body)
+    # The combat fields are written by slot and sent by id (the wire refuses
+    # a slot field from a client): tests.helpers.combat_ids.
+    return client.post(f"/api/sessions/{sid}/action", json=combat_ids(store.get(sid).game, body))
 
 
 def _state(sid: str, seat: int) -> dict:
@@ -409,7 +411,7 @@ def test_the_dialog_sends_the_defenders_answer_by_id():
     attacker = dialog.index('action: "assign_combat_damage"')
     assert banding < attacker
     assert "as_though_unblocked_ids: asThoughUnblockedIds" in dialog[banding:attacker]
-    assert "banding_damage: assignment" in dialog[banding:attacker]
+    assert "banding_damage_by_id: assignment" in dialog[banding:attacker]
     # Auto-assign answers as the engine would unasked — which for a defender
     # is to keep the damage on the blockers.
     assert 'mode === "banding" ? "blockers" : "unblocked"' in dialog

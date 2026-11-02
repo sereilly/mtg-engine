@@ -530,6 +530,26 @@ class GameActionRequest(BaseModel):
     # colour one: the answer is not a word but *how to read* the two words the
     # cast already named.
     text_change_mode: Literal["color_word", "land_type"] | None = None
+    # The combat declarations and assignments **by permanent id** (CR 400.7)
+    # — the only spelling a client may send. Each mirrors the battlefield-slot
+    # field of the same name without its ``_by_id`` (`attacker_ids` →
+    # `attacker_indices`, `band_ids` → `bands`), every slot replaced by the
+    # creature's `id`, and is turned into it once, at the top of the dispatch,
+    # against the board of this request (`web.actions._resolve_combat_ids`,
+    # table `COMBAT_ID_FIELDS`): an id that has left is a 404, and one on a
+    # battlefield its position is not read on a 400. **The slot fields below
+    # are that conversion's output** — the engine's combat maps are keyed by
+    # slot — and a request that carries one is refused.
+    attacker_ids: list[int] | None = None
+    band_ids: list[list[int]] | None = None
+    attacker_planeswalker_ids_by_id: dict[int, int] | None = None
+    blocker_pairs_by_id: dict[int, int | list[int]] | None = None
+    attacker_damage_by_id: dict[int, dict[int, int]] | None = None
+    blocker_damage_by_id: dict[int, int] | None = None
+    blocker_damage_split_by_id: dict[int, dict[int, int]] | None = None
+    banding_damage_by_id: dict[int, dict[int, int]] | None = None
+    piles_by_id: dict[int, str] | None = None
+    camouflage_piles_by_id: dict[int, int | list[int]] | None = None
     attacker_indices: list[int] | None = None
     # CR 508.1b: attackers sent at a planeswalker — maps attacker battlefield
     # index to the attacked planeswalker's permanent_id. The attacker's

@@ -391,7 +391,7 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # web/actions.py's four sites moved with their handlers when the dispatch
     # became a registry: the cast plumbing's one and the turn handlers' three.
     "web/action_helpers.py": 1,
-    "web/combat_prompts.py": 3,
+    "web/combat_prompts.py": 2,
     "web/debug_actions.py": 3,
     # (`web/prompt_board.py`'s one, the forced-sacrifice list subscripting its
     # seat's battlefield by the engine's slot, reads `permanent_at` since

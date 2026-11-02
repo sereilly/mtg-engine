@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from engine import load_cards
 from engine.models import Permanent
 from web.app import app, store
-from tests.helpers import LEA_PATH
+from tests.helpers import combat_ids, LEA_PATH
 
 client = TestClient(app)
 
@@ -72,7 +72,7 @@ def test_players_are_prompted_to_assign_piles_in_sequence():
     # Once the defender divides, the attacker gets their labeling prompt.
     client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "assign_defender_piles", "piles": {"0": "left", "1": "right"}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "assign_defender_piles", "piles": {"0": "left", "1": "right"}}),
     )
     attacker_view = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()["raging_river"]
     assert attacker_view is not None
@@ -84,12 +84,12 @@ def test_assigning_piles_via_the_api():
 
     r1 = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "assign_defender_piles", "piles": {"0": "left", "1": "right"}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "assign_defender_piles", "piles": {"0": "left", "1": "right"}}),
     )
     assert r1.status_code == 200, r1.text
     r2 = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "assign_attacker_piles", "piles": {"1": "left"}},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "assign_attacker_piles", "piles": {"1": "left"}}),
     )
     assert r2.status_code == 200, r2.text
 
@@ -105,11 +105,11 @@ def test_attacker_prompt_clears_after_assignment():
     # Defender commits, then attacker commits.
     client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "assign_defender_piles", "piles": {"0": "left", "1": "right"}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "assign_defender_piles", "piles": {"0": "left", "1": "right"}}),
     )
     client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "assign_attacker_piles", "piles": {"1": "left"}},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "assign_attacker_piles", "piles": {"1": "left"}}),
     )
     attacker_view = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()["raging_river"]
     defender_view = client.get(f"/api/sessions/{sid}/state", params={"seat": 1}).json()["raging_river"]
@@ -128,7 +128,7 @@ def test_no_prompt_when_defender_has_no_nonflying_creatures():
     # The attacker still labels, then their prompt clears.
     client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "assign_attacker_piles", "piles": {"1": "left"}},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "assign_attacker_piles", "piles": {"1": "left"}}),
     )
     attacker_view = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()["raging_river"]
     assert attacker_view is None
@@ -138,18 +138,18 @@ def test_wrong_pile_block_is_rejected_after_assignment():
     sid, session, game = _session()
     client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "assign_defender_piles", "piles": {"0": "left", "1": "right"}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "assign_defender_piles", "piles": {"0": "left", "1": "right"}}),
     )
     client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "assign_attacker_piles", "piles": {"1": "left"}},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "assign_attacker_piles", "piles": {"1": "left"}}),
     )
     game.advance_combat_phase()  # -> declare_blockers
 
     # Minotaur (right pile) blocking a left-pile attacker is illegal.
     bad = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"1": 1}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "declare_blockers", "blocker_pairs": {"1": 1}}),
     )
     assert bad.status_code == 400
     assert "pile" in bad.json()["detail"].lower()

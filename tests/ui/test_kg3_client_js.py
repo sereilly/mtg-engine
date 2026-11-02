@@ -19,6 +19,7 @@ from engine.card_loader import load_catalog
 from engine.models import Permanent
 from tests.helpers import run_app_js
 from web.app import app, store
+from tests.helpers import combat_ids
 
 client = TestClient(app)
 _CARDS = {card.name: card for card in load_catalog()}
@@ -61,9 +62,9 @@ def test_juggernaut_is_told_and_end_turn_does_not_send_the_refused_empty_attack(
     sid, _game, state = _juggernaut_at_declare_attackers()
     entry = state["combat"]["attack_requirements"][0]
     assert entry["attacking_player_index"] == 0 and entry["most_obeyable"] == 1
-    refused = client.post(f"/api/sessions/{sid}/action", json={
+    refused = client.post(f"/api/sessions/{sid}/action", json=combat_ids(store.get(sid).game, {
         "seat": 0, "action": "declare_attackers", "attacker_indices": [], "target_seat": 1,
-    })
+    }))
     assert refused.status_code == 400 and "Juggernaut must attack if able" in refused.text
 
     seen = run_app_js(

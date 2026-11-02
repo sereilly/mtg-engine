@@ -19,7 +19,7 @@ from engine.combat_assignment import AS_THOUGH_UNBLOCKED_LOG
 from engine.models import Permanent
 from web.app import app, store
 
-from tests.helpers import _mk_creature_card
+from tests.helpers import _mk_creature_card, combat_ids
 
 client = TestClient(app)
 
@@ -27,7 +27,9 @@ OFFER = "You may have this creature assign its combat damage as though it weren'
 
 
 def _act(sid: str, **body):
-    return client.post(f"/api/sessions/{sid}/action", json=body)
+    # The combat fields are written by slot and sent by id (the wire refuses
+    # a slot field from a client): tests.helpers.combat_ids.
+    return client.post(f"/api/sessions/{sid}/action", json=combat_ids(store.get(sid).game, body))
 
 
 def _state(sid: str, seat: int) -> dict:
