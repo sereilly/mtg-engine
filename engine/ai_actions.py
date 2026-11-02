@@ -4,7 +4,8 @@ announcement.
 A chooser answers with an action — :class:`CastAction` (a spell, out of
 whichever zone a permission opens), :class:`ActivationAction` (an ability of
 a permanent), :class:`HandActivationAction` (an ability of a card in a hand,
-CR 113.6j) — and an executor turns it into the engine's call. **That turn is
+CR 113.6j), :class:`GraveyardActivationAction` (one of a card in a
+graveyard, CR 113.6b/m) — and an executor turns it into the engine's call. **That turn is
 made here, once**: :func:`cast_announcement` is every keyword a cast
 announces (CR 601.2b–d), and :func:`zone_being_cast_from` /
 :func:`spell_being_cast` are which pile and which spell. There were five
@@ -125,6 +126,20 @@ class CastAction:
     # `cast_announcement` does not carry it; it is for the executor, which
     # reads the card off the zone (`zone_being_cast_from`).
     zone_seat: int | None = None
+    # CR 601.2c said **one role at a time**, for a spell naming several kinds
+    # of target — the shape `ActivationAction.target_role_refs` has carried
+    # since Goblin Welder and `queue_from_hand` takes (each a dict naming a
+    # ``permanent_id``, a ``seat``, ``{"stack": True}`` or a
+    # ``graveyard_seat`` / ``graveyard_index`` pair; the cast path derives the
+    # positional fields above from it, `_role_announcement_stamps`). The only
+    # spelling that can say **two players** — "Any number of target opponents"
+    # (Wheel and Deal), "any number of target players or planeswalkers"
+    # (Kaboom!) — or **a card in a graveyard** ("Return up to one target
+    # Zombie card from your graveyard", Cruel Revival). The field did not
+    # exist, so an AI seat named at most one player in a chain of seat roles
+    # and never named Cruel Revival's card. None for every spell naming no
+    # roles. See `ai_targets._role_answer`.
+    target_role_refs: list[dict] | None = None
 
 
 @dataclass(frozen=True)
@@ -202,6 +217,38 @@ class HandActivationAction:
     land_tap_colors: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class GraveyardActivationAction:
+    """An ability activated from a card **in the seat's graveyard** (CR 113.6b:
+    "Activate only if this card is in your graveyard"; CR 113.6m: "Return this
+    card from your graveyard …") — `Game.activate_from_graveyard`'s
+    announcement, chosen by `ai_graveyard_activations`.
+
+    A third action shape for :class:`HandActivationAction`'s reason: the
+    engine door is its own (no permanent, no summoning sickness, no tap), and
+    its source is addressed by a graveyard slot. Its targets are named by id
+    (``target_permanent_ids``), never by battlefield slot, so a payment that
+    renumbers the battlefield moves nothing this action names.
+    """
+
+    card_name: str
+    graveyard_index: int
+    #: Into the card's printed activated abilities — the list
+    #: `Game.activate_from_graveyard` indexes (Shard Phoenix's graveyard
+    #: ability is its second).
+    ability_index: int
+    land_tap_indices: tuple[int, ...]
+    score: float
+    target_player_index: int | None = None
+    target_permanent_ids: list[int] | None = None
+    # See `CastAction.land_tap_colors`.
+    land_tap_colors: tuple[str, ...] = ()
+    # Which card in hand pays a "Discard a card" cost (Undead Gladiator), by
+    # hand position: the cheapest (`ai_graveyard_activations._discard_pick`).
+    # None for every other ability.
+    cost_hand_index: int | None = None
+
+
 def cast_announcement(action: CastAction) -> dict:
     """Everything *action* announces (CR 601.2b–d), as the keywords
     ``Game.queue_from_hand`` / ``cast_from_hand`` take it by.
@@ -239,6 +286,10 @@ def cast_announcement(action: CastAction) -> dict:
         "mode_index": action.mode_index,
         "mode_choices": action.mode_choices,
         "target_stack_index": action.target_stack_index,
+        # CR 601.2c, one answer per role (see `CastAction.target_role_refs`):
+        # where given it is the announcement, and the cast path derives the
+        # seat and the ids above from it.
+        "target_role_refs": action.target_role_refs,
     }
 
 

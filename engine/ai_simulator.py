@@ -25,6 +25,11 @@ from .ai_abilities import (
     choose_foreign_activation_action,
     choose_hand_activation_action,
 )
+from .ai_graveyard_activations import (
+    activate_chosen_graveyard_ability,
+    choose_graveyard_activation_action,
+    holds_a_graveyard_ability,
+)
 from .ai_payment import tap_planned_lands
 from .ai_rehearsal import mid_resolution, rehearsing
 from .ai_special_actions import special_action_before_combat
@@ -210,7 +215,8 @@ class SimulationReport:
     priority_offers: int = 0
     priority_offers_weighed: int = 0
     #: Abilities activated at the same moments, by window (``"response"``,
-    #: ``"combat"``, ``"end_step"`` — `_instant_speed_window`), and the
+    #: ``"combat"``, ``"end_step"`` — `_instant_speed_window` — and
+    #: ``"upkeep"``, the seat's own, for its graveyard alone), and the
     #: refusals among them. Empty in every run before round 4 for the casts'
     #: reason: the only activations a simulated seat made were its own main
     #: phase's, so a regeneration shield was never raised in front of the
@@ -245,6 +251,16 @@ class SimulationReport:
     #: dealt, so a one-land seven was played out. Zero over a run of games is
     #: that coming back (one seat in nine is dealt 0-1 or 6-7 lands).
     mulligans_taken: int = 0
+    #: Abilities activated from a card **in its owner's graveyard** (CR
+    #: 113.6b/m — Ashen Ghoul, Carrionette, Glory, Necrosavant, Shard
+    #: Phoenix, Whiteout), by the card. **Empty in every run before the kg3
+    #: round**: no AI path called `Game.activate_from_graveyard`, so each such
+    #: card was put in a graveyard and left there, and the run read exactly as
+    #: clean as it does now. Counted wherever one is taken — the main phase,
+    #: the seat's own upkeep (where most of them may only be activated) and
+    #: the priority windows (`_answer_priority`). A pool printing one that
+    #: reads empty here is that coming back.
+    activations_from_graveyard: Counter[str] = field(default_factory=Counter)
 
     @property
     def ok(self) -> bool:
@@ -672,9 +688,9 @@ def _casts_on_loan(game: Game, seat: int) -> frozenset:
 def _play_activations(
     game: Game, active: int, report: SimulationReport, game_index: int, turn: int
 ) -> None:
-    """One ability on the seat's own battlefield, one from its hand and one on
-    another seat's battlefield, each planned against the lands the casts left
-    untapped and paid for the same way."""
+    """One ability on the seat's own battlefield, one from its hand, one from
+    its graveyard and one on another seat's battlefield, each planned against
+    the lands the casts left untapped and paid for the same way."""
     active_player = game.players[active]
     activation_action = None if game.is_game_over() else choose_activation_action(game, active)
     if activation_action is not None:
@@ -748,6 +764,34 @@ def _play_activations(
         if not result.supported:
             report.refused_activations[
                 f"{hand_activation.card_name} (from hand): {result.details}"
+            ] += 1
+
+    # An ability activated from the seat's **graveyard** (CR 113.6b/m) —
+    # Whiteout's return, Carrionette's exile, Glory's shield. The engine's
+    # third activation door, so a third pass, after the hand's for its reason.
+    # Settled here as the hand's is: `activate_from_graveyard` is the queue
+    # form too.
+    graveyard_activation = (
+        None if game.is_game_over()
+        else choose_graveyard_activation_action(game, active)
+    )
+    if graveyard_activation is not None:
+        result = activate_chosen_graveyard_ability(game, active, graveyard_activation)
+        if result.supported:
+            game._settle()
+            game.clear_priority_window()
+        _resolve_pending_choices(game)
+        report.interaction_count += 1
+        report.log_lines.append(
+            f"G{game_index} T{turn} {active_player.name} "
+            f"activate {graveyard_activation.card_name} from graveyard "
+            f"-> {result.details}"
+        )
+        if result.supported:
+            report.activations_from_graveyard[graveyard_activation.card_name] += 1
+        else:
+            report.refused_activations[
+                f"{graveyard_activation.card_name} (from graveyard): {result.details}"
             ] += 1
 
     # An ability on a permanent **another seat controls** that this seat may
@@ -953,8 +997,14 @@ def _instant_speed_window(game: Game, seat: int) -> str | None:
       kills an attacker, the pump on an unblocked one.
     * ``"end_step"`` — the opponent's end step with the stack empty: removal
       for a creature cast on that turn, a draw that was held up.
+    * ``"upkeep"`` — the seat's **own** upkeep with the stack empty, and only
+      for an ability of a card in its graveyard (`_answer_priority`): most of
+      those print "Activate only during your upkeep" (Necrosavant, Shard
+      Phoenix, Ashen Ghoul, Hammer of Bogardan), and a seat that answered no
+      upkeep could never activate one. Nothing else is weighed there, so
+      every other card is played where it always was.
 
-    Everything else — the upkeep, the draw step, beginning of combat, the
+    Everything else — the opponent's upkeep, the draw step, beginning of combat, the
     declare-attackers step, the combat-damage and end-of-combat steps, a seat's
     own end step — is passed without asking (named in ROADMAP as what is
     left); the engine still gives priority there, so adding one is a line here.
@@ -969,6 +1019,8 @@ def _instant_speed_window(game: Game, seat: int) -> str | None:
         return "combat"
     if game.current_step == "end" and seat != game.active_player_index:
         return "end_step"
+    if game.current_step == "upkeep" and seat == game.active_player_index:
+        return "upkeep"
     return None
 
 
@@ -1015,6 +1067,13 @@ def _answer_priority(
     window = _instant_speed_window(game, seat)
     if window is None or mid_resolution(game):
         return False
+    if window == "upkeep":
+        # The seat's own upkeep is answered for its graveyard alone (see
+        # `_instant_speed_window`), and is not one of the windows the offer
+        # counts below are about.
+        return _activate_from_graveyard_at_priority(
+            game, seat, window, report, game_index, turn,
+        )
     report.priority_offers += 1
     action = None
     if holds_an_instant_it_could_pay_for(game, seat):
@@ -1023,13 +1082,18 @@ def _answer_priority(
     if action is None:
         # No spell worth casting: an ability, then (a regeneration shield in
         # front of a burn spell, a ping in the opponent's end step), asked
-        # the same cheap question first.
-        if not holds_an_ability_it_could_activate(game, seat):
-            return False
-        activation = choose_instant_speed_activation(game, seat)
-        if activation is None:
-            return False
-        return _activate_at_priority(game, seat, activation, window, report, game_index, turn)
+        # the same cheap question first — and then one of a card in the
+        # graveyard (Glory in front of a burn spell, Carrionette at the end
+        # of the opponent's turn).
+        if holds_an_ability_it_could_activate(game, seat):
+            activation = choose_instant_speed_activation(game, seat)
+            if activation is not None:
+                return _activate_at_priority(
+                    game, seat, activation, window, report, game_index, turn,
+                )
+        return _activate_from_graveyard_at_priority(
+            game, seat, window, report, game_index, turn,
+        )
     answering = game.stack[-1].card.name if game.stack else None
     in_combat = game.current_turn_phase == "combat"
     off_turn = seat != game.active_player_index
@@ -1085,6 +1149,49 @@ def _activate_at_priority(
         ] += 1
         return False
     report.activations_at_instant_speed[window] += 1
+    return True
+
+
+def _when_at_upkeep(game: Game, answering: str | None, in_combat: bool) -> str:
+    """`_when_at_priority`'s bracket, with the seat's own upkeep named."""
+    if answering is None and not in_combat and game.current_step == "upkeep":
+        return "in the upkeep"
+    return _when_at_priority(game, answering, in_combat)
+
+
+def _activate_from_graveyard_at_priority(
+    game: Game, seat: int, window: str, report: SimulationReport,
+    game_index: int, turn: int,
+) -> bool:
+    """Activate the ability of a card in *seat*'s graveyard that
+    `ai_graveyard_activations.choose_graveyard_activation_action` chooses
+    given priority — in a response, combat or end-step window only where
+    what it does outlasts the turn (``lasting_only``), and in the seat's own
+    upkeep by the main phase's rule, since that is the only moment most of
+    them allow — and record it: True when it went on the stack."""
+    if not holds_a_graveyard_ability(game, seat):
+        return False
+    action = choose_graveyard_activation_action(
+        game, seat, lasting_only=window != "upkeep",
+    )
+    if action is None:
+        return False
+    answering = game.stack[-1].card.name if game.stack else None
+    in_combat = game.current_turn_phase == "combat"
+    result = activate_chosen_graveyard_ability(game, seat, action)
+    report.interaction_count += 1
+    report.log_lines.append(
+        f"G{game_index} T{turn} {game.players[seat].name} "
+        f"activate {action.card_name} from graveyard -> {result.details} "
+        f"[{_when_at_upkeep(game, answering, in_combat)}]"
+    )
+    if not result.supported:
+        report.refused_instant_activations[
+            f"{action.card_name} (from graveyard): {result.details}"
+        ] += 1
+        return False
+    report.activations_at_instant_speed[window] += 1
+    report.activations_from_graveyard[action.card_name] += 1
     return True
 
 

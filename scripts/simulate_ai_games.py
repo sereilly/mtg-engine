@@ -149,6 +149,17 @@ def main() -> int:
             f"Activations on another seat's permanent: {report.foreign_activations}"
         )
 
+    # CR 113.6b/m: abilities activated from a card in a graveyard (Necrosavant,
+    # Shard Phoenix, Glory, Whiteout). No AI path activated one before the kg3
+    # round, so only a pool printing one can move it, and it is shown when it
+    # did — its absence over Ice Age or Visions is that coming back.
+    if report.activations_from_graveyard:
+        print(
+            "Abilities activated from a graveyard: "
+            f"{sum(report.activations_from_graveyard.values())} "
+            f"({len(report.activations_from_graveyard)} distinct cards)"
+        )
+
     # CR 116.2c-e: special actions a seat took — a creature bought a turn off
     # Volrath's Curse or Lost in Thought. Until JUD's wave 2 no AI path took
     # one, so only a pool printing an offer can move it, and it is shown when
