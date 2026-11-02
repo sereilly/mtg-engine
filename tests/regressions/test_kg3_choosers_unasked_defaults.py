@@ -138,6 +138,7 @@ _DEFAULTS: dict[str, str] = {
     "secret_number": "worth",
     "skip_draw": "stated",
     "tap_any_number": "stated",           # the whole offer
+    "target_group_order": "stated",       # the slot order, as before the prompt
     "text_change_vocabulary": "position", # the first word
     "trigger_target": "worth",            # the trigger's side
     "untap_up_to": "position",            # board order, as many as affordable

@@ -138,6 +138,17 @@ def proposal(card, mode, world: str) -> "dict | None":
         if permanent is not None
     ]
     said = cast_announcement(replace(action, target_permanent_ids=None))
+    # A role's permanent by seat and slot too (`ai_targets.role_ref`).
+    said["target_role_refs"] = [
+        (
+            {"permanent": (
+                game.controller_index_of(game.permanent_by_id(ref["permanent_id"])),
+                game.battlefield_index_of(game.permanent_by_id(ref["permanent_id"])),
+            )}
+            if isinstance(ref, dict) and "permanent_id" in ref else ref
+        )
+        for ref in said.get("target_role_refs") or ()
+    ] or None
     return {
         **said, "named": named, "score": action.score,
         "taps": (action.land_tap_indices, action.land_tap_colors),
