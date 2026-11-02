@@ -16,7 +16,6 @@
   "tests/sets/test_legends_enchantments_round_36_onward.py": 1,
   "tests/sets/test_m21_planeswalkers.py": 2,
   "tests/sets/test_tmp_creatures.py": 2,
-  "tests/sets/test_tmp_creatures_early_rounds.py": 2,
   "tests/sets/test_tmp_instants.py": 2,
   "tests/sets/test_tmp_sorceries.py": 1,
   "tests/sets/test_vis_creatures.py": 1,
