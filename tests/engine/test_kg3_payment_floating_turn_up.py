@@ -17,14 +17,14 @@ unpayable and fitted the three — so the {W}{W} spend scored higher, although
 every cost it leaves payable the {W}{C} spend leaves payable too. Wrong: a
 richer pool must never score lower. The wants are now packed smallest first.
 
-The census: the board, and every hand of one to seven of the browser deck's
-cards in a seeded sample, with and without the Savannah: the turn-up must
+The census: the board, and the observed hands, every single card of the
+browser deck and 120 hands drawn from it by digest, with and without the
+Savannah: the turn-up must
 spend {W} and {C}, tap nothing, and be accepted. Run backwards (the wants
 packed in the order listed) it finds the observation's hands.
 """
 from __future__ import annotations
 
-import random
 from unittest import mock
 
 from engine import Game, PlayerState, mana_payment
@@ -32,7 +32,7 @@ from engine.card_loader import load_catalog
 from engine.face_down import face_down_card
 from engine.models import Permanent
 from engine.special_actions import take_permanent_special_action
-from tests.helpers import _nosick, resolve_stack
+from tests.helpers import _nosick, resolve_stack, stable_digest
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -88,10 +88,16 @@ def _turn_up(hand, *, savannah: bool):
 
 
 def _hands():
-    rng = random.Random(7)
+    """The observed hands, every single card, and hands whose membership is
+    a digest of the hand's number and the card's name (``stable_digest``: a
+    fact about the row, never about where a card sits in the list) — about
+    seven, five and three cards each."""
     sample = [(name,) for name in DECK]
-    sample += [tuple(rng.sample(DECK, size)) for size in (3, 5, 7) for _ in range(40)]
-    return [*OBSERVED, *sample]
+    sample += [
+        tuple(name for name in DECK if stable_digest(f"{size}|{number}|{name}") % size == 0)
+        for size in (6, 8, 12) for number in range(40)
+    ]
+    return [*OBSERVED, *(hand for hand in sample if hand)]
 
 
 def _census() -> dict:
