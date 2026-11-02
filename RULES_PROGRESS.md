@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**429 / 640 tracked rules covered (67%)** — 3296 tests, 0 unannotated.
+**429 / 640 tracked rules covered (67%)** — 3303 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -692,7 +692,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(120 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
-- [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(16 tests, subrules acd)*
+- [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(17 tests, subrules acd)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(41 tests, subrules abcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(14 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
@@ -738,7 +738,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(2 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(179 tests, subrules bcdghmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(180 tests, subrules bcdghmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -805,8 +805,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(15 tests)*
 - [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(6 tests, subrules a)*
 - [x] **614.11** Some effects replace card draws. These effects are applied even if no cards could be drawn becaus... *(4 tests)*
-- [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(23 tests, subrules a)*
-- [x] **614.13** An effect that modifies how a permanent enters the battlefield may cause other objects to change ... *(1 tests, subrules a)*
+- [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(30 tests, subrules a)*
+- [x] **614.13** An effect that modifies how a permanent enters the battlefield may cause other objects to change ... *(2 tests, subrules a)*
 - [ ] **614.14** An object may have one ability printed on it that generates a replacement effect which causes one...
 - [x] **614.15** Some replacement effects are not continuous effects. Rather, they are an effect of a resolving sp... *(3 tests)*
 - [ ] **614.16** Some replacement effects apply “if an effect would create one or more tokens” or “if an effect wo...
@@ -836,7 +836,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 700. General
 
 - [ ] **700.1** Anything that happens in a game is an event. Multiple events may take place during the resolution...
-- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(29 tests, subrules abde)*
+- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(30 tests, subrules abde)*
 - [ ] **700.3** Some effects cause objects to be temporarily grouped into piles.
 - [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(10 tests)*
 - [ ] **700.5** A player’s devotion to [color] is equal to the number of mana symbols of that color among the man...
@@ -907,7 +907,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.32** Fading *(14 tests, subrules a)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
 - [x] **702.37** Morph *(11 tests, subrules ace)*
-- [x] **702.38** Amplify *(10 tests, subrules ab)*
+- [x] **702.38** Amplify *(11 tests, subrules ab)*
 - [x] **702.39** Provoke *(5 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
