@@ -47,7 +47,7 @@ from engine.land_types import added_land_types
 from engine.mana_payment import taps_for_payment, untapped_mana_lands
 from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.models import Permanent
-from tests.helpers import _nosick
+from tests.helpers import _nosick, stable_sample
 
 SYMBOLS = ("W", "U", "B", "R", "G", "C")
 
@@ -165,7 +165,7 @@ def _sampled_lands(by_name):
         card.name for card in by_name.values()
         if "land" in card.type_line.lower().split("—")[0]
     )
-    chosen = set(lands[::STRIDE]) | set(PINNED)
+    chosen = {name for name in lands if stable_sample(name, STRIDE)} | set(PINNED)
     return [name for name in lands if name in chosen]
 
 
@@ -173,7 +173,10 @@ def _sampled_lands(by_name):
 def test_every_reader_counts_a_land_that_gained_a_type_as_the_seam_taps_it(_by_name):
     counts, wrong = _census(_by_name, _sampled_lands(_by_name))
 
-    assert counts["lands"] >= 25 and counts["cases"] >= 150, counts
+    # Floors: a sweep that reaches nothing passes. Measured at kg3 on the
+    # digest sample: 31 lands and 186 cases (the whole pool, under the full
+    # pass: 243 and 1,458, none wrong).
+    assert counts["lands"] >= 28 and counts["cases"] >= 165, counts
     assert wrong == [], f"{len(wrong)} readings disagree with the tap: {wrong[:15]}"
 
 

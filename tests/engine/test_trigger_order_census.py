@@ -34,7 +34,6 @@ by a failure rather than by nobody.
 
 from __future__ import annotations
 
-import random
 import re
 from collections import defaultdict
 
@@ -44,24 +43,36 @@ from engine import Game
 from engine.faces import compilation_units
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
+from tests.helpers import full_census, stable_part
 
-#: Pairs sampled per family. Small on purpose: the families are the census,
-#: the sample is what keeps it a few seconds rather than a few minutes.
-SAMPLE = 12
+#: Each pair family's share. A pair is in the sample when a digest of its own
+#: label falls in one class of this many (``tests.helpers.stable_part``), so a
+#: card added to the pool adds pairs and moves none — the seeded draw this
+#: replaced (``random.Random(6033)`` over the sorted family) redrew every pair
+#: whenever a promotion added a name. Sized at kg3 for about a dozen pairs
+#: each: upkeep 249 cards fire alone (30,876 pairs), end 41 (820), dies 62
+#: (1,891), attacks 47 (1,081), and entry 38 observers by 249 entrants.
+PAIR_PARTS = {"upkeep": 2000, "end": 60, "entry": 700, "dies": 120, "attacks": 60}
+
+#: The full pass takes this many times the share. Not the whole: the
+#: population is pairs, and every pair of the upkeep family alone is thirty
+#: thousand games.
+FULL_FACTOR = 16
+
+
+def _share(family: str) -> int:
+    parts = PAIR_PARTS[family]
+    return max(1, parts // FULL_FACTOR) if full_census() else parts
+
 
 #: What each family must count (scenarios with a choice to make). Measured
-#: at SAMPLE = 12, the same before and after round 4: upkeep 9, end 5,
-#: entry 10, dies 10, attacks 11 — on an unscreened draw.
-#:
-#: Since Torment's promotion rehearsal the pairs are drawn from cards that
-#: fire alone (``_scenarios``' *fires*), so a pair family reaches nearly its
-#: whole sample: measured upkeep 15 / 16, end 12 / 12, dies 12 / 12, attacks
-#: 10 / 10 (two pairs each hold an "attacks alone" trigger, which fires alone
-#: and rightly not beside a second attacker), entry 10 / 11 (unscreened: an
-#: observer fires only for the entrant it describes) — without and with
-#: Torment shipped. Two under the lower of each, and never below the floor
-#: the family had before.
-FLOORS = {"upkeep": 13, "end": 10, "entry": 8, "dies": 10, "attacks": 9}
+#: at kg3 on the digest sample, of scenarios: upkeep 19 / 26 (the cards
+#: printing two upkeep triggers, alone, are among them), end 12 / 12, entry 12 / 23
+#: (unscreened: an observer fires only for the entrant it describes), dies
+#: 18 / 18, attacks 11 / 12 — every one asked and reversed. Two under each,
+#: and never below the floor the seeded draw had. The full pass's share
+#: (``FULL_FACTOR``) counted 236, 265, 123, 257 and 192.
+FLOORS = {"upkeep": 17, "end": 10, "entry": 10, "dies": 16, "attacks": 9}
 
 
 def _kinds(card):
@@ -101,33 +112,23 @@ def _scenarios(cards: dict, family: str, fires=None) -> list[dict]:
     alone" trigger beside a second attacker, and two fading upkeeps
     ``trigger_order.interchangeable`` rightly does not ask about.
     """
-    rng = random.Random(6033)
     by_kind: dict[str, list[str]] = defaultdict(list)
     for name in sorted(cards):
         for kind in _kinds(cards[name]):
             by_kind[kind].append(name)
+    parts = _share(family)
 
-    def pairs(pool, k):
+    def pairs(pool):
+        """Every pair of the family's cards that fire alone whose label is in
+        the share — screening the whole family, which costs a few
+        milliseconds a card."""
         pool = sorted(set(pool))
         if fires is not None:
-            # Screened in a seeded order, and only as far as the draw needs:
-            # twice the pairs' worth of cards that fire is enough to draw *k*
-            # distinct pairs from, and screening the whole family would cost a
-            # game per card printing the kind.
-            order = list(pool)
-            rng.shuffle(order)
-            firing: list[str] = []
-            for name in order:
-                if len(firing) >= 2 * k:
-                    break
-                if fires(name):
-                    firing.append(name)
-            pool = sorted(firing)
-        out: set = set()
-        while len(out) < min(k, len(pool) * (len(pool) - 1) // 2):
-            a, b = rng.sample(pool, 2)
-            out.add(tuple(sorted((a, b))))
-        return [list(pair) for pair in sorted(out)]
+            pool = [name for name in pool if fires(name)]
+        return [
+            [a, b] for i, a in enumerate(pool) for b in pool[i + 1:]
+            if stable_part(f"{a} + {b}", parts) == 0
+        ]
 
     if family == "upkeep":
         upkeep = by_kind["upkeep_self"] + by_kind["upkeep_each"]
@@ -136,10 +137,10 @@ def _scenarios(cards: dict, family: str, fires=None) -> list[dict]:
             if _kinds(cards[name]).get("upkeep_self", 0)
             + _kinds(cards[name]).get("upkeep_each", 0) >= 2
         ]
-        return [{"board": board} for board in alone + pairs(upkeep, SAMPLE)]
+        return [{"board": board} for board in alone + pairs(upkeep)]
     if family == "end":
         end = by_kind["end_step"] + by_kind["end_step_self"]
-        return [{"board": board} for board in pairs(end, SAMPLE)]
+        return [{"board": board} for board in pairs(end)]
     if family == "entry":
         alone = [
             {"board": [], "enters": name}
@@ -152,17 +153,18 @@ def _scenarios(cards: dict, family: str, fires=None) -> list[dict]:
             if _is_creature(cards[name])
         )
         return alone + [
-            {"board": [rng.choice(observers)], "enters": rng.choice(entrants)}
-            for _ in range(SAMPLE)
+            {"board": [observer], "enters": entrant}
+            for observer in observers for entrant in entrants
+            if stable_part(f"{observer} <- {entrant}", parts) == 0
         ]
     if family == "dies":
         dies = [name for name in by_kind["dies"] if _is_creature(cards[name])]
-        return [{"board": board} for board in pairs(dies, SAMPLE)]
+        return [{"board": board} for board in pairs(dies)]
     if family == "attacks":
         attacks = [
             name for name in by_kind["creature_attacks"] if _is_creature(cards[name])
         ]
-        return [{"board": board} for board in pairs(attacks, SAMPLE)]
+        return [{"board": board} for board in pairs(attacks)]
     raise AssertionError(family)
 
 
