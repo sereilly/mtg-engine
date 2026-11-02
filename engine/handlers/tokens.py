@@ -153,30 +153,32 @@ def create_copy_token(game: Game, instruction: OracleInstruction, context: Oracl
         )
         for _ in range(max(0, count))
     ]
-    for seat in makers:
-        token = game.create_token_copy(seat, source)
-        # "When this enchantment leaves the battlefield, exile **the token**."
-        # (Dance of Many.) Which permanent made this one, stamped for the same
-        # reason `create_token` beside it stamps it: the sentences that name
-        # the token belong to *other* abilities of the same permanent, fired
-        # turns after the resolution that made it, so the resolution scratchpad
-        # is long gone and nothing about the token itself records its maker.
-        if context.source_permanent is not None:
-            token.metadata[CREATED_WITH_PERMANENT_ID] = (
-                context.source_permanent.permanent_id
+    # One event (CR 603.6a): the copies enter together.
+    with game.entering_together():
+        for seat in makers:
+            token = game.create_token_copy(seat, source)
+            # "When this enchantment leaves the battlefield, exile **the token**."
+            # (Dance of Many.) Which permanent made this one, stamped for the same
+            # reason `create_token` beside it stamps it: the sentences that name
+            # the token belong to *other* abilities of the same permanent, fired
+            # turns after the resolution that made it, so the resolution scratchpad
+            # is long gone and nothing about the token itself records its maker.
+            if context.source_permanent is not None:
+                token.metadata[CREATED_WITH_PERMANENT_ID] = (
+                    context.source_permanent.permanent_id
+                )
+            # "…**That token** gains haste until end of turn." (Echo Chamber.) The
+            # permanent this step made, for the sentences behind it in the same
+            # resolution — written under the key ``create_token`` beside this one
+            # has written since Stangg, and for that handler's stated reason: a
+            # token is a new object with a fresh id (CR 400.7), so nothing about it
+            # can be looked up afterwards. The last one when several are made, which
+            # is the same reading, and the lowering admits the singular phrase only
+            # behind a maker.
+            context.results[CREATED_TOKEN_RESULT_KEY] = token.permanent_id
+            game.log.append(
+                f"{context.card.name} created a token copy of {source.card.name}"
             )
-        # "…**That token** gains haste until end of turn." (Echo Chamber.) The
-        # permanent this step made, for the sentences behind it in the same
-        # resolution — written under the key ``create_token`` beside this one
-        # has written since Stangg, and for that handler's stated reason: a
-        # token is a new object with a fresh id (CR 400.7), so nothing about it
-        # can be looked up afterwards. The last one when several are made, which
-        # is the same reading, and the lowering admits the singular phrase only
-        # behind a maker.
-        context.results[CREATED_TOKEN_RESULT_KEY] = token.permanent_id
-        game.log.append(
-            f"{context.card.name} created a token copy of {source.card.name}"
-        )
     return True, "resolved"
 
 
@@ -504,53 +506,56 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     else:
         count = resolve_amount(raw_count, context.x_value)
     recipients = token_recipient_seats(game, payload, context, controller_index)
-    for seat in recipients:
-      # The per-recipient count, evaluated here rather than above: "for each
-      # untapped Forest **they** control" is a different number for each seat,
-      # and evaluating it once would make every player create as many tokens as
-      # the caster's own board carried. ``per_recipient`` false is the same
-      # spec taken on the caster's board every time (nothing prints it yet, and
-      # refusing it in the lowering would refuse a sentence this can answer).
-      if isinstance(raw_count, dict) and "seat_record" in raw_count:
-          count = per_recipient_amount(
-              game, context, raw_count, game.players[seat],
-              source=context.source_permanent,
-          )
-          # One number per seat (Kamahl's Summons, Liege of the Hollows), so
-          # the one summary line below would report whichever seat came last
-          # — "created 2 Bear Token tokens" for a resolution that made three,
-          # and nothing at all when the last seat made none. Said per seat.
-          if count > 0:
-              game.log.append(
-                  f"{card.name}: {game.players[seat].name} created {count} "
-                  f"{token_card.name} token(s)"
+    # Every token this instruction creates, for every seat it names, in one
+    # event (CR 603.6a): each sees the others enter.
+    with game.entering_together():
+        for seat in recipients:
+          # The per-recipient count, evaluated here rather than above: "for each
+          # untapped Forest **they** control" is a different number for each seat,
+          # and evaluating it once would make every player create as many tokens as
+          # the caster's own board carried. ``per_recipient`` false is the same
+          # spec taken on the caster's board every time (nothing prints it yet, and
+          # refusing it in the lowering would refuse a sentence this can answer).
+          if isinstance(raw_count, dict) and "seat_record" in raw_count:
+              count = per_recipient_amount(
+                  game, context, raw_count, game.players[seat],
+                  source=context.source_permanent,
               )
-      elif isinstance(raw_count, dict) and "per_each" in raw_count:
-          owner = game.players[seat] if raw_count.get("per_recipient") else caster
-          # "…for each permanent **of that color**" (Rith, the Awakener): the
-          # colour the step in front of this one chose (CR 608.2d) is resolved
-          # into the spec first, because `evaluate_count` holds no resolution
-          # and the matcher refuses the word unresolved.
-          count = evaluate_count(
-              game, owner,
-              count_spec_in_resolution(raw_count["per_each"], context),
-              source=context.source_permanent,
-          )
-      for _ in range(count):
-        metadata: dict = {"is_token": True}
-        # "…any number of tokens **created with this creature**." (Tetravus.)
-        # Which permanent made the token is a fact about its history that
-        # nothing about the token itself records, and it is stamped by
-        # `permanent_id` rather than by identity: a Tetravus that leaves and
-        # comes back is a new object (CR 400.7), and its old Tetravites were
-        # not created with *it*.
-        if context.source_permanent is not None:
-            metadata[CREATED_WITH_PERMANENT_ID] = context.source_permanent.permanent_id
-        token = Permanent(card=token_card, metadata=metadata)
-        game._put_permanent_onto_battlefield(
-            seat, token, None,
-            then=lambda token=token: _token_arrived(game, payload, context, token),
-        )
+              # One number per seat (Kamahl's Summons, Liege of the Hollows), so
+              # the one summary line below would report whichever seat came last
+              # — "created 2 Bear Token tokens" for a resolution that made three,
+              # and nothing at all when the last seat made none. Said per seat.
+              if count > 0:
+                  game.log.append(
+                      f"{card.name}: {game.players[seat].name} created {count} "
+                      f"{token_card.name} token(s)"
+                  )
+          elif isinstance(raw_count, dict) and "per_each" in raw_count:
+              owner = game.players[seat] if raw_count.get("per_recipient") else caster
+              # "…for each permanent **of that color**" (Rith, the Awakener): the
+              # colour the step in front of this one chose (CR 608.2d) is resolved
+              # into the spec first, because `evaluate_count` holds no resolution
+              # and the matcher refuses the word unresolved.
+              count = evaluate_count(
+                  game, owner,
+                  count_spec_in_resolution(raw_count["per_each"], context),
+                  source=context.source_permanent,
+              )
+          for _ in range(count):
+            metadata: dict = {"is_token": True}
+            # "…any number of tokens **created with this creature**." (Tetravus.)
+            # Which permanent made the token is a fact about its history that
+            # nothing about the token itself records, and it is stamped by
+            # `permanent_id` rather than by identity: a Tetravus that leaves and
+            # comes back is a new object (CR 400.7), and its old Tetravites were
+            # not created with *it*.
+            if context.source_permanent is not None:
+                metadata[CREATED_WITH_PERMANENT_ID] = context.source_permanent.permanent_id
+            token = Permanent(card=token_card, metadata=metadata)
+            game._put_permanent_onto_battlefield(
+                seat, token, None,
+                then=lambda token=token: _token_arrived(game, payload, context, token),
+            )
     if isinstance(raw_count, dict) and "seat_record" in raw_count:
         # Already said per seat, inside the loop.
         return True, "resolved"

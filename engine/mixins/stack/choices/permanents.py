@@ -211,8 +211,11 @@ class PermanentChoicesMixin:
                 payer, lambda: self._optional_pay_plan(payer, {"cost": total})
             ):
                 return False
-        for perm in chosen:
-            self.become_untapped(perm)
+        # Untapped together: what the untaps give back (Tawnos's Coffin, CR 610.3)
+        # enters in one event (CR 610.3d, 603.6a).
+        with self.entering_together():
+            for perm in chosen:
+                self.become_untapped(perm)
         names = ", ".join(perm.card.name for perm in chosen) if chosen else "nothing"
         self.log.append(
             f"{self.players[choice.player_index].name} untapped {names} "

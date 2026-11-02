@@ -463,6 +463,12 @@ class Game(
     # owed (``engine/entry_awaiting.py``). Empty between entries in every
     # game, so a ``vars()`` walker reads it the same before and after.
     entries_in_progress: list = field(default_factory=list)
+    # CR 603.6a: the records of the permanents one event is putting onto the
+    # battlefield together, while that event's caller is still handing them
+    # in (``ZoneFunnelsMixin.entering_together``). None between events and
+    # while a newcomer's own entry state is performed; never left set across
+    # a decision, so a ``vars()`` walker reads None before and after.
+    entry_batch: "list | None" = None
     # Seats controlled by a human, set by the web layer each action. Empty in
     # headless/AI play, so forced sacrifices there resolve inline without a prompt.
     interactive_seats: set[int] = field(default_factory=set)

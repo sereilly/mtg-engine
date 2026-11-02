@@ -774,25 +774,29 @@ class SacrificeChoicesMixin:
         batch["applied"] = True
         stage = batch["stage"]
         if stage == "hand":
-            for choice, chosen in batch["answers"]:
-                player = self.players[choice.player_index]
-                for index, card in chosen:
-                    # By slot, checked by identity — every copy of a card in a
-                    # hand is the same object, so the slot is what keeps the
-                    # hand's order — and through the hand seam if it moved.
-                    if 0 <= index < len(player.hand) and player.hand[index] is card:
-                        player.hand.pop(index)
-                    elif not self.take_card_from_hand(player, card):
-                        continue
-                    # "…Players **discard** cards … the same way." Through the
-                    # discard seam, never straight to the graveyard: it is
-                    # CR 701.9a's event, so "whenever a player discards a
-                    # card" (Megrim) hears it. The cause is the seat that cast
-                    # it, off the prompt.
-                    self._discard_card(
-                        player, card, cause_seat=choice.data.get("_cause_seat"),
-                    )
-                self.log.append(f"{player.name} discarded {len(chosen)} card(s) (Balance)")
+            # One event: a discard an opponent causes can put the card onto the
+            # battlefield instead (Dodecapod), and every such card enters together
+            # (CR 603.6a).
+            with self.entering_together():
+                for choice, chosen in batch["answers"]:
+                    player = self.players[choice.player_index]
+                    for index, card in chosen:
+                        # By slot, checked by identity — every copy of a card in a
+                        # hand is the same object, so the slot is what keeps the
+                        # hand's order — and through the hand seam if it moved.
+                        if 0 <= index < len(player.hand) and player.hand[index] is card:
+                            player.hand.pop(index)
+                        elif not self.take_card_from_hand(player, card):
+                            continue
+                        # "…Players **discard** cards … the same way." Through the
+                        # discard seam, never straight to the graveyard: it is
+                        # CR 701.9a's event, so "whenever a player discards a
+                        # card" (Megrim) hears it. The cause is the seat that cast
+                        # it, off the prompt.
+                        self._discard_card(
+                            player, card, cause_seat=choice.data.get("_cause_seat"),
+                        )
+                    self.log.append(f"{player.name} discarded {len(chosen)} card(s) (Balance)")
         else:
             # Every seat's unchosen permanents in one event (CR 701.21a), the
             # ruling's "sacrificed simultaneously".

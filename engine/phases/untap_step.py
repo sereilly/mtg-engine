@@ -355,29 +355,32 @@ class UntapStepMixin:
         for source, seat, described in others_untaps:
             by_seat.setdefault(seat, []).append((source, described))
         seats = len(self.players)
-        for offset in range(1, seats):
-            seat = (player_index + offset) % seats
-            sources = by_seat.get(seat)
-            if not sources:
-                continue
-            untapped = 0
-            for permanent in list(self.controlled_by(seat)):
-                if not permanent.tapped or not self.is_on_battlefield(permanent):
+        # Untapped together, so what the untaps give back enters in one event
+        # (CR 610.3d, 603.6a).
+        with self.entering_together():
+            for offset in range(1, seats):
+                seat = (player_index + offset) % seats
+                sources = by_seat.get(seat)
+                if not sources:
                     continue
-                if not any(
-                    subject_matches(
-                        self, permanent, described, observer=seat, source=source
-                    )
-                    for source, described in sources
-                ):
-                    continue
-                self.become_untapped(permanent)
-                untapped += 1
-            names = sorted({source.card.name for source, _ in sources})
-            self.log.append(
-                f"{self.players[seat].name} untapped {untapped} permanent(s) during "
-                f"{self.players[player_index].name}'s untap step ({', '.join(names)})"
-            )
+                untapped = 0
+                for permanent in list(self.controlled_by(seat)):
+                    if not permanent.tapped or not self.is_on_battlefield(permanent):
+                        continue
+                    if not any(
+                        subject_matches(
+                            self, permanent, described, observer=seat, source=source
+                        )
+                        for source, described in sources
+                    ):
+                        continue
+                    self.become_untapped(permanent)
+                    untapped += 1
+                names = sorted({source.card.name for source, _ in sources})
+                self.log.append(
+                    f"{self.players[seat].name} untapped {untapped} permanent(s) during "
+                    f"{self.players[player_index].name}'s untap step ({', '.join(names)})"
+                )
 
     # -- The type the untapping player names (CR 502.3) ---------------------
 
@@ -707,6 +710,14 @@ class UntapStepMixin:
         # caller's `keep_tapped_indices` and per-type selections were built
         # against. The indices stay the ones the caller was offered, and the
         # liveness check below is what keeps a departed permanent out.
+        # CR 502.3: "the active player determines which permanents they
+        # control will untap. **Then they untap them all simultaneously.**"
+        # So the loop below determines, and the untapping is done after it, at
+        # once: whatever an untap gives back (Tawnos's Coffin's "until … it
+        # becomes untapped", CR 610.3) is then given back by every permanent
+        # untapping in one event, as CR 610.3d says one-shot effects created
+        # after simultaneous events are (``entering_together``, CR 603.6a).
+        untapping = []
         for idx, permanent in enumerate(list(player.battlefield)):
             if not permanent.tapped or not self.is_on_battlefield(permanent):
                 continue
@@ -868,8 +879,11 @@ class UntapStepMixin:
             if consumed:
                 continue
 
-            self.become_untapped(permanent)
+            untapping.append(permanent)
             untapped += 1
+        with self.entering_together():
+            for permanent in untapping:
+                self.become_untapped(permanent)
 
         # "…during each other player's untap step" (Seedborn Muse): the seats
         # that untap in this step although it is not theirs.

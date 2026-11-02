@@ -83,9 +83,11 @@ def put_cards_from_hand_onto_battlefield(game: Game, instruction: OracleInstruct
     # at the same time, so none is still in the hand while another's entry
     # replacement reads it (``_put_entrants``' reason, CR 702.38a's amplify).
     chosen = [card for card in chosen if game.take_card_from_hand(caster, card)]
-    for card in chosen:
-        game._put_permanent_onto_battlefield(caster_index, Permanent(card=card), None)
-        game.log.append(f"{caster.name} put {card.name} onto the battlefield")
+    # One event (CR 603.6a): every newcomer sees every other enter.
+    with game.entering_together():
+        for card in chosen:
+            game._put_permanent_onto_battlefield(caster_index, Permanent(card=card), None)
+            game.log.append(f"{caster.name} put {card.name} onto the battlefield")
     if not chosen:
         game.log.append(f"{caster.name} put no cards onto the battlefield")
     return True, "resolved"
@@ -711,35 +713,38 @@ def _put_entrants(game, context, entrants, hosts) -> None:
             continue
         if game.take_card_from_hand(owner, card):
             movers.append((position, seat, card, host))
-    for position, seat, card, host in movers:
-        owner = game.players[seat]
-        if host is not None and (
-            not game.is_on_battlefield(host)
-            or enchant_card_refusal(game, card, seat, host) is not None
-        ):
-            # An earlier entrant's entry replacement took the host away (an
-            # Overlaid Terrain sacrificing every land as it enters): the Aura
-            # has nothing to enchant and stays where it was (CR 303.4g).
-            game.put_card_into_hand(owner, card)
-            stays(card, owner, "has nothing it could enchant", "303.4g")
-            continue
-        permanent = Permanent(card=card)
+    # …and they enter together (CR 603.6a): each one's entry state as it comes,
+    # and every one of them announced with all of them there.
+    with game.entering_together():
+        for position, seat, card, host in movers:
+            owner = game.players[seat]
+            if host is not None and (
+                not game.is_on_battlefield(host)
+                or enchant_card_refusal(game, card, seat, host) is not None
+            ):
+                # An earlier entrant's entry replacement took the host away (an
+                # Overlaid Terrain sacrificing every land as it enters): the Aura
+                # has nothing to enchant and stays where it was (CR 303.4g).
+                game.put_card_into_hand(owner, card)
+                stays(card, owner, "has nothing it could enchant", "303.4g")
+                continue
+            permanent = Permanent(card=card)
 
-        # Once it is there — at the answer, when an "as it enters" choice
-        # keeps it on its way (CR 614.12a, the entry's ``then``).
-        def arrived(permanent=permanent, host=host, owner=owner, card=card) -> None:
-            if host is not None:
-                attach_aura(permanent, host)
+            # Once it is there — at the answer, when an "as it enters" choice
+            # keeps it on its way (CR 614.12a, the entry's ``then``).
+            def arrived(permanent=permanent, host=host, owner=owner, card=card) -> None:
+                if host is not None:
+                    attach_aura(permanent, host)
+                    game.log.append(
+                        f"{owner.name} puts {card.name} onto the battlefield attached "
+                        f"to {host.card.name} ({context.card.name})"
+                    )
+                    return
                 game.log.append(
-                    f"{owner.name} puts {card.name} onto the battlefield attached "
-                    f"to {host.card.name} ({context.card.name})"
+                    f"{owner.name} puts {card.name} onto the battlefield ({context.card.name})"
                 )
-                return
-            game.log.append(
-                f"{owner.name} puts {card.name} onto the battlefield ({context.card.name})"
-            )
 
-        game._put_permanent_onto_battlefield(seat, permanent, None, then=arrived)
+            game._put_permanent_onto_battlefield(seat, permanent, None, then=arrived)
 
 
 @effect_handler("reveal_cards_from_hand")
