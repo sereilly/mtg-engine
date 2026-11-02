@@ -140,6 +140,15 @@ class CastAction:
     # and never named Cruel Revival's card. None for every spell naming no
     # roles. See `ai_targets._role_answer`.
     target_role_refs: list[dict] | None = None
+    # The two words a text change announces (CR 612), as mana symbols —
+    # `queue_from_hand`'s ``old_color`` replaced by ``new_color``: "replacing
+    # all instances of one color word with another" (Sleight of Mind), "…one
+    # basic land type with another" (Magical Hack, the symbol naming the land
+    # type). The fields did not exist, so every text change an AI seat cast
+    # rewrote nothing, and the rehearsal never proposed one. None for every
+    # other cast. See `ai_text_changes.choose_object_or_spell`.
+    old_color: str | None = None
+    new_color: str | None = None
 
 
 @dataclass(frozen=True)
@@ -290,6 +299,9 @@ def cast_announcement(action: CastAction) -> dict:
         # where given it is the announcement, and the cast path derives the
         # seat and the ids above from it.
         "target_role_refs": action.target_role_refs,
+        # CR 612's two words (see `CastAction.old_color`).
+        "old_color": action.old_color,
+        "new_color": action.new_color,
     }
 
 

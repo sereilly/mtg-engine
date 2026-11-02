@@ -94,6 +94,7 @@ from .ai_targets import (
     _chosen_stack_target,
 )
 from .ai_divisions import choose_divided_targets
+from .ai_text_changes import choose_object_or_spell
 from .ai_abilities import (
     choose_activation_action,
     _abilities_weighed,
@@ -710,6 +711,7 @@ def _combat_instant_candidate(
     # only chooser that ever sees a spell to name.
     roles = _choose_role_targets(game, player_index, card) if divided is None else None
     role_refs: "list[dict] | None" = None
+    text_words: tuple = (None, None)
     if roles is not None:
         if roles == ():
             return None
@@ -719,6 +721,19 @@ def _combat_instant_candidate(
         ) = roles
         if role_stack is not None:
             stack_target = role_stack
+    elif divided is None and (chosen := choose_object_or_spell(
+        game, player_index, card, target, x_value=x_value,
+    )) is not None:
+        # "Target spell or permanent" and a text change's words, as the
+        # main-phase chooser weighs them (`ai_text_changes`).
+        if chosen == ():
+            return None
+        target = chosen.seat
+        target_permanent_index = chosen.permanent_index
+        target_permanent_ids = chosen.permanent_ids
+        if chosen.stack_index is not None:
+            stack_target = chosen.stack_index
+        text_words = (chosen.old_color, chosen.new_color)
     elif divided is None:
         single = _choose_single_object_target(
             game, player_index, card, target, x_value=x_value,
@@ -761,6 +776,8 @@ def _combat_instant_candidate(
         mode_index=_announced_mode(card),
         target_stack_index=stack_target,
         target_role_refs=role_refs,
+        old_color=text_words[0],
+        new_color=text_words[1],
         # Where the card is and which permission the cast names — "hand" and
         # no alternative cost for every candidate this chooser built before.
         from_zone=_cast_zone(card),

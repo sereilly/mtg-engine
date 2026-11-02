@@ -106,6 +106,7 @@ from .ai_targets import (
     _choose_single_object_target,
 )
 from .ai_divisions import choose_divided_targets
+from .ai_text_changes import choose_object_or_spell
 
 
 #: What casting from the command zone is worth over casting the same card from
@@ -904,6 +905,8 @@ def _cast_candidate_announcing(
     # …and the roles announcement itself, one answer per role
     # (`CastAction.target_role_refs`); None for a spell naming no roles.
     role_refs: list[dict] | None = None
+    # A text change's two words (`CastAction.old_color` / ``new_color``).
+    text_words: tuple = (None, None)
     if aura_enchant_noun(card) is not None:
         aura_choice = _choose_aura_target(game, player_index, card)
         if aura_choice is None:
@@ -955,6 +958,19 @@ def _cast_candidate_announcing(
                 if _names_x_targets(card):
                     x_value = len(target_permanent_index)
                 # --- end W2G2 ---------------------------------------------------
+            elif (chosen := choose_object_or_spell(
+                game, player_index, card, target, x_value=x_value,
+            )) is not None:
+                # "Target spell or permanent" (a Lace, a text change) and a
+                # text change's words: the object and the words weighed
+                # together (`ai_text_changes`), or nothing worth the card.
+                if chosen == ():
+                    return None
+                target = chosen.seat
+                target_permanent_index = chosen.permanent_index
+                target_permanent_ids = chosen.permanent_ids
+                role_stack_index = chosen.stack_index
+                text_words = (chosen.old_color, chosen.new_color)
             else:
                 single = _choose_single_object_target(
                     game, player_index, card, target, x_value=x_value,
@@ -1160,6 +1176,8 @@ def _cast_candidate_announcing(
         mode_index=_announced_mode(card),
         target_stack_index=role_stack_index,
         target_role_refs=role_refs,
+        old_color=text_words[0],
+        new_color=text_words[1],
     )
     # **What the cast would do, asked of the engine** — for a spell, whose
     # whole worth is its resolution. The finished announcement is carried out
