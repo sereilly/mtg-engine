@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**429 / 640 tracked rules covered (67%)** — 3303 tests, 0 unannotated.
+**430 / 640 tracked rules covered (67%)** — 3311 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -29,7 +29,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [117. Timing and Priority](#117-timing-and-priority) | 6/6 | 100% |
 | [118. Costs](#118-costs) | 10/14 | 71% |
 | [119. Life](#119-life) | 5/10 | 50% |
-| [120. Damage](#120-damage) | 5/10 | 50% |
+| [120. Damage](#120-damage) | 6/10 | 60% |
 | [121. Drawing a Card](#121-drawing-a-card) | 5/9 | 55% |
 | [122. Counters](#122-counters) | 5/9 | 55% |
 | [200. General](#200-general) | 0/3 | 0% |
@@ -318,7 +318,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **119.6** If a player has 0 or less life, that player loses the game as a state-based action. See rule 704.
 - [x] **119.7** If an effect says that a player can’t gain life, that player can’t make an exchange such that the... *(6 tests)*
 - [ ] **119.8** If an effect says that a player can’t lose life, that player can’t make an exchange such that the...
-- [x] **119.9** Some triggered abilities are written, “Whenever [a player] gains life, . . . .” Such abilities ar... *(3 tests)*
+- [x] **119.9** Some triggered abilities are written, “Whenever [a player] gains life, . . . .” Such abilities ar... *(4 tests)*
 - [ ] **119.10** Some replacement effects are written, “If [a player] would gain life, . . . .” Such abilities are...
 
 ### 120. Damage
@@ -331,7 +331,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **120.6** Damage marked on a creature remains until the cleanup step, even if that permanent stops being a ...
 - [x] **120.7** The source of damage is the object that dealt it. If an effect requires a player to choose a sour... *(10 tests)*
 - [x] **120.8** If a source would deal 0 damage, it does not deal damage at all. That means abilities that trigge... *(3 tests)*
-- [ ] **120.9** If an ability triggers on damage being dealt by a specific source or sources, and the effect refe...
+- [x] **120.9** If an ability triggers on damage being dealt by a specific source or sources, and the effect refe... *(1 tests)*
 - [ ] **120.10** Some triggered abilities check whether a permanent has been dealt excess damage. These abilities ...
 
 ### 121. Drawing a Card
@@ -641,7 +641,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 510. Combat Damage Step
 
 - [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(92 tests, subrules abcde)*
-- [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(8 tests)*
+- [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(11 tests)*
 - [x] **510.3** Third, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(15 tests)*
 
@@ -669,7 +669,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(319 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(320 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(30 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [ ] **601.5** While announcing the choices of any targets and/or the division or distribution of any effects as...
@@ -688,12 +688,12 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 603. Handling Triggered Abilities
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
-- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(37 tests, subrules bcd)*
+- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(44 tests, subrules bcd)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(120 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(17 tests, subrules acd)*
-- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(41 tests, subrules abcde)*
+- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(44 tests, subrules abcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(14 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(17 tests, subrules a)*
@@ -738,7 +738,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(2 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(180 tests, subrules bcdghmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(184 tests, subrules bcdfghmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -830,7 +830,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(59 tests, subrules efg)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(60 tests, subrules efg)*
 - [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General
@@ -889,7 +889,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.11** Hexproof *(2 tests, subrules bd)*
 - [x] **702.12** Indestructible *(3 tests, subrules b)*
 - [x] **702.14** Landwalk *(17 tests, subrules abc)*
-- [x] **702.15** Lifelink *(11 tests, subrules b)*
+- [x] **702.15** Lifelink *(12 tests, subrules be)*
 - [x] **702.16** Protection *(61 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(11 tests, subrules a)*
