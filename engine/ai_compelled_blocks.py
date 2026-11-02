@@ -86,15 +86,25 @@ def compelled_block_worth(game: "Game", attacker: "Permanent", blocker: "Permane
     shed, less the damage the evasion would have dealt. The shedding itself
     is the controller's later decision, rehearsed through the fight before
     the blocks (``ai_policy.choose_instant_speed_activation``).
+
+    **A grounded attacker is open to every blocker, not only the one it
+    compelled** (:func:`_ganged_on`): where the defender's other creatures
+    that could then block it would kill it alongside the compelled one, the
+    fight is the attacker lost. Three Grizzly Bears against a 2/6 Talon is
+    six damage — the window then rightly declined to shed, and the provoke
+    had untapped a Bears for nothing (kg3).
     """
     if not game._can_block_attacker(blocker, attacker):
         shed = _shed_for_the_block(game, attacker, blocker)
         if shed is not None:
             table, shed_attacker, shed_blocker = shed
-            return (
-                compelled_block_worth(table, shed_attacker, shed_blocker)
-                - _evasion_damage_worth(game, attacker, blocker)
-            )
+            worth = compelled_block_worth(table, shed_attacker, shed_blocker)
+            if _ganged_on(table, shed_attacker, shed_blocker):
+                kills, _dies = fight_outcome(table, shed_attacker, shed_blocker)
+                worth = min(worth, (
+                    permanent_worth(shed_blocker, now=False) if kills else 0.0
+                ) - permanent_worth(shed_attacker, now=False))
+            return worth - _evasion_damage_worth(game, attacker, blocker)
         return -permanent_worth(blocker, now=False) * _UNTAPPED_FOR_NOTHING_SHARE
     kills, dies = fight_outcome(game, attacker, blocker)
     worth = 0.0
@@ -162,6 +172,42 @@ def _shed_for_the_block(game: "Game", attacker: "Permanent", blocker: "Permanent
         if table._can_block_attacker(held, shed):
             return table, shed, held
     return None
+
+
+def _ganged_on(game: "Game", attacker: "Permanent", blocker: "Permanent") -> bool:
+    """Whether *attacker*, blocked by *blocker* and by every other untapped
+    creature *blocker*'s controller has that could block it too, would be
+    destroyed: their combat damage together (each as the damage step deals
+    it, a prevention shield read as damage that may not arrive) against what
+    destroys it — none where it is indestructible or has a regeneration
+    shield, one point from deathtouch (CR 702.2c).
+
+    The defender's blocks are its own to declare later, and a gang that
+    kills the attacker is the block a defender makes; nothing here is a
+    rehearsal, because the question is asked part-way through the provoke's
+    resolution, where no copy can be run."""
+    from .ai_combat import _would_be_prevented
+
+    if game._has_keyword(attacker, "indestructible") or attacker.regeneration_shield:
+        return False
+    seat = game.controller_index_of(blocker)
+    gang = [blocker] + [
+        other for other in game.controlled_by(seat)
+        if other is not blocker and other.is_creature and not other.tapped
+        and game._can_block_attacker(other, attacker)
+    ]
+    if len(gang) < 2:
+        return False
+    needed = max(0, attacker.effective_toughness - attacker.damage_marked)
+    dealt = 0
+    for member in gang:
+        amount = combat_damage_assigned_by(member)
+        if not amount or _would_be_prevented(game, member, attacker, amount):
+            continue
+        if game._has_keyword(member, "deathtouch"):
+            return True
+        dealt += amount
+    return needed > 0 and dealt >= needed
 
 
 def _evasion_damage_worth(game: "Game", attacker: "Permanent", blocker: "Permanent") -> float:

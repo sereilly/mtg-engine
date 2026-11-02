@@ -595,22 +595,32 @@ def combat_is_still_to_come(game, seat: int) -> bool:
     return game.active_player_index == seat and _combat_ahead(game)
 
 
-def blocks_still_to_come(game) -> bool:
+def blocks_owed(game) -> bool:
     """Whether *game* is in a declare-attackers step whose attackers are
-    declared and whose blocks are not, with nothing on the stack — CR 508.2's
-    priority, before CR 509.1's declaration. The one moment a creature can be
-    cast to block with, or an ability used to change who can block whom, and
-    the moment a rehearsal plays the rest of that combat out from
-    (:func:`_fight_the_combat`), the blocks declared by the policy."""
+    declared and whose blocks are not — whatever is on the stack. A copy
+    made here owes the blocks once its stack has resolved, so a rehearsal
+    that does not fight the rest of the combat (:func:`_fight_the_combat`)
+    reads a combat that deals no damage at all: a response to an attack
+    trigger (kg3) was read that way."""
     return (
         game.current_turn_phase == "combat"
         and game.current_step == "declare_attackers"
         and bool(game.combat_attackers)
         and game.combat_attackers_locked
         and not game.combat_blockers_locked
-        and not game.stack
         and not game.is_game_over()
     )
+
+
+def blocks_still_to_come(game) -> bool:
+    """Whether *game* is in a declare-attackers step whose attackers are
+    declared and whose blocks are not, with nothing on the stack — CR 508.2's
+    priority, before CR 509.1's declaration (:func:`blocks_owed`, the stack
+    empty). The one moment a creature can be cast to block with, or an
+    ability used to change who can block whom, and the moment a rehearsal
+    plays the rest of that combat out from (:func:`_fight_the_combat`), the
+    blocks declared by the policy."""
+    return blocks_owed(game) and not game.stack
 
 
 def _combat_ahead(game) -> bool:
@@ -1596,6 +1606,7 @@ __all__ = [
     "CARD_WORTH",
     "REHEARSALS_RAISED",
     "Rehearsal",
+    "blocks_owed",
     "blocks_still_to_come",
     "conceal_from",
     "combat_is_still_to_come",

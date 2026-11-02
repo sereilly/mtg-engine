@@ -53,7 +53,8 @@ from .ai_weighed_cast import (
     permitted_casts,
     castable_commanders,
 )
-from .ai_rehearsal import blocks_still_to_come, deliberating, pays_before_the_blocks
+from .ai_rehearsal import (blocks_owed, blocks_still_to_come, deliberating,
+                           pays_before_the_blocks)
 from .ai_valuation import entry_sacrifice_is_unavoidable, entry_targets_a_spell, is_mana_ability
 from .faces import castable_faces
 from .game import Game
@@ -389,10 +390,13 @@ def choose_instant_speed_activation(
     In the declare-attackers step with the blocks still to come
     (``ai_rehearsal.blocks_still_to_come``) the proposal is read again with
     the rest of that combat fought, and made only where it adds a block that
-    pays (``ai_rehearsal.pays_before_the_blocks``).
+    pays (``ai_rehearsal.pays_before_the_blocks``); in a response there
+    (``ai_rehearsal.blocks_owed``, an attack trigger on the stack) it is read
+    with that combat fought, which the copy owes once its stack resolves.
     """
     set_aside: set[int] = set(_ACTIVATIONS_SET_ASIDE.get())
     before_blocks = blocks_still_to_come(game)
+    responding_before_blocks = not before_blocks and blocks_owed(game)
     with deliberating():
         for _ in range(INSTANT_ACTIVATIONS_WEIGHED):
             token = _ACTIVATIONS_SET_ASIDE.set(frozenset(set_aside))
@@ -410,6 +414,12 @@ def choose_instant_speed_activation(
                     game, player_index, action, through_combat=True,
                 )
                 rehearsal = fought if pays_before_the_blocks(rehearsal, fought) else None
+            elif responding_before_blocks and rehearsal is not None and rehearsal.accepted:
+                fought = _rehearse_activation(
+                    game, player_index, action, through_combat=True,
+                )
+                if fought is not None:
+                    rehearsal = fought
             if (
                 rehearsal is not None
                 and _worth_proposing(rehearsal)
@@ -808,6 +818,17 @@ def _combat_instant_candidate(
         if not pays_before_the_blocks(rehearsal, fought):
             return None
         rehearsal = fought
+    elif blocks_owed(game) and rehearsal is not None and rehearsal.accepted:
+        # A response before the blocks (an attack trigger on the stack): the
+        # copy resolves the stack and then owes the blocks, so it is read
+        # with the rest of the combat fought — or the attack it answers deals
+        # no damage on either copy.
+        fought = _rehearse_announcement(
+            game, player_index, card, cast_announcement(candidate),
+            planned=candidate, through_combat=True,
+        )
+        if fought is not None:
+            rehearsal = fought
     if not _worth_proposing(rehearsal):
         return None
     if rehearsal is None and _names_an_unweighed_seat(game, player_index, card):
