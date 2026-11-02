@@ -228,17 +228,20 @@ def _cast_bought_back(card, source: str, *, asked: bool):
         if game.pending_choice_of("effect_order") is not None:
             break
         if not game.resolve_top_of_stack(pause_for_choices=True):
-            # Something else the spell asked on its way (a discard, a search):
-            # take the registry's default for **that** prompt and carry on.
-            # One at a time, and never the effect-order prompt the answer may
-            # arm behind it: that one is the subject.
+            # Something else the spell asked on its way (a discard, a search,
+            # a draw's replacement offer — Forbidden Crypt's own "return a card
+            # instead", which holds Whispers of the Muse until it is answered,
+            # CR 608.2): take the registry's default for **that** prompt, on
+            # whichever queue it sits, and carry on. One at a time, and never
+            # the effect-order prompt the answer may arm behind it: that one
+            # is the subject.
             owed = next(
-                (c for c in game.pending_choices if c.kind != "effect_order"), None
+                (c for _spec, c in game.iter_pending_prompts() if c.kind != "effect_order"),
+                None,
             )
             if owed is None:
                 break
-            game.take_choice_default(owed)
-            game.discard_pending_choice(owed)
+            game.auto_resolve_choice(owed)
     return game, _where(game, card), game.pending_choice_of("effect_order")
 
 

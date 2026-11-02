@@ -142,14 +142,18 @@ def _mox_diamond():
     return game
 
 
-@board("commander_zone_change", "Gadrak, the Crown-Scourge (a commander)", "Terror")
-def _a_commander_dies():
+@board("commander_zone_change", "Gadrak, the Crown-Scourge (a commander)", "Unsummon")
+def _a_commander_is_returned_to_hand():
+    """CR 903.9b, the half that is a replacement and so is offered as the
+    spell resolves: "if a commander would be put into its owner's hand …".
+    (A dying commander is 903.9a's state-based action, offered at the check
+    after the resolution, with nothing resolving to hold.)"""
     from engine.commander import COMMANDER
 
     gadrak = card("Gadrak, the Crown-Scourge")
     game = Game(
         players=[
-            PlayerState(name="P0", library=[card("Mountain")] * 8, hand=[card("Terror")]),
+            PlayerState(name="P0", library=[card("Mountain")] * 8, hand=[card("Unsummon")]),
             PlayerState(name="P1", library=[card("Mountain")] * 8),
         ],
         commander_variant=COMMANDER,
@@ -163,7 +167,7 @@ def _a_commander_dies():
     game._set_phase_and_step("precombat_main", "precombat_main")
     game.start_priority_window(0)
     game.cast_from_hand(0, gadrak.name, from_zone="command")
-    game.cast_from_hand(0, "Terror", target_permanent_ids=[on_board(game, 0, gadrak.name).permanent_id])
+    game.cast_from_hand(0, "Unsummon", target_permanent_ids=[on_board(game, 0, gadrak.name).permanent_id])
     return game
 
 
