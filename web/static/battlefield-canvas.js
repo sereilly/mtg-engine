@@ -109,6 +109,7 @@ const BF_AURA_SIDE_X = BF_CARD_W + 26;
 const BF_MIN_ZOOM = 0.3;
 const BF_MAX_ZOOM = 1.15;
 const BF_FIT_PADDING = 44; // world-space padding around the fitted bounding box
+const BF_DOCK_GAP_PX = 16; // screen gap kept between the board and the prompt dock
 const BF_CAM_EASE = 0.16; // per-frame easing toward the camera target
 const BF_CARD_EASE = 0.22; // per-frame easing of cards toward their slots
 // The DOM hand fans overlay the top/bottom of the stage, so the camera must
@@ -297,6 +298,10 @@ class BattlefieldCanvas {
     this.onCardHover = callbacks.onCardHover || null;
     this.onHandCardDrop = callbacks.onHandCardDrop || null;
     this.onBlockerAssign = callbacks.onBlockerAssign || null;
+    // The page x of the left edge of whatever DOM overlays the stage's right
+    // side (app.js: the floating prompt dock), or null. Read by the camera
+    // fit (`_updateCameraTarget`) so no permanent is framed underneath it.
+    this.rightObstructionPageX = callbacks.rightObstructionPageX || null;
     this.onStackCardHover = callbacks.onStackCardHover || null;
     this.onStackCardClick = callbacks.onStackCardClick || null;
     this.onEmblemClick = callbacks.onEmblemClick || null;
@@ -2268,6 +2273,44 @@ class BattlefieldCanvas {
       y: vy + (vh - bh * zoom) / 2 - by * zoom,
       zoom,
     };
+    // The floating prompt dock overlays the stage's right side (styles.css
+    // `.floating-dock`), and a board wide enough to reach it was framed
+    // underneath it: at 1920x1080 the main-phase prompt covered the
+    // rightmost permanent of a seven-creature row (Legions' Phase 5). Such a
+    // board is refitted into the width left of the dock. A board that fits
+    // beside it keeps the centred framing, and the dock's own visibility is
+    // not consulted, so the board does not jump each time a prompt opens.
+    const dockLeft = typeof this.rightObstructionPageX === "function"
+      ? this.rightObstructionPageX() : null;
+    if (stage && stage.width > 0 && Number.isFinite(dockLeft) && dockLeft > stage.left) {
+      const edgeX = dockLeft - BF_DOCK_GAP_PX;
+      // The tilt narrows the table toward the top of the screen, so the
+      // dock's edge is measured where it bites deepest over the visible band.
+      const limit = Math.min(
+        this._pageToCanvas(edgeX, stage.top + stage.height * 0.15).x,
+        this._pageToCanvas(edgeX, stage.top + stage.height * 0.85).x,
+      );
+      // …and between the dock and the zone piles pinned down the stage's
+      // left side (`_retargetZonePiles`: an inset plus one pile's on-screen
+      // width), so moving clear of one does not slide the row under the other.
+      const pilesRightX = stage.left + BF_ZONE_LEFT_INSET_PX
+        + BF_CARD_W * BF_ZONE_PILE_SCALE + BF_DOCK_GAP_PX;
+      const floor = Math.max(
+        vx,
+        this._pageToCanvas(pilesRightX, stage.top + stage.height * 0.15).x,
+        this._pageToCanvas(pilesRightX, stage.top + stage.height * 0.85).x,
+      );
+      const right = this.camTarget.x + (bx + bw) * zoom;
+      if (right > limit && limit > floor) {
+        const room = limit - floor;
+        const fitted = Math.max(BF_MIN_ZOOM, Math.min(BF_MAX_ZOOM, room / bw, vh / bh));
+        this.camTarget = {
+          x: floor + (room - bw * fitted) / 2 - bx * fitted,
+          y: vy + (vh - bh * fitted) / 2 - by * fitted,
+          zoom: fitted,
+        };
+      }
+    }
   }
 
   // Free-For-All: fit one camera per seat, framing that seat's quadrant

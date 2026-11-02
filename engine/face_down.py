@@ -342,6 +342,7 @@ def is_morph_cost(cost) -> bool:
 
 def announced_morph_cost(
     game: "Game", seat: int, card, *, alternative_cost, permission,
+    chosen_index: "int | None" = None,
 ) -> "AlternativeCost | None":
     """The morph cost this cast announces, or None (CR 702.37c, CR 601.2b).
 
@@ -363,13 +364,18 @@ def announced_morph_cost(
     if is_face_down_card(card):
         return None
     offered = game.applicable_alternative_costs(seat, card)
-    if len(offered) == 1 and is_morph_cost(offered[0]):
-        return offered[0]
-    return None
+    # *chosen_index* is CR 118.9a's choice where several apply (the morph
+    # beside Dream Halls' discard); with one offered, naming none is naming it.
+    if chosen_index is not None:
+        picked = offered[chosen_index] if 0 <= chosen_index < len(offered) else None
+    else:
+        picked = offered[0] if len(offered) == 1 else None
+    return picked if is_morph_cost(picked) else None
 
 
 def cast_timing_card(
     game: "Game", seat: int, card, *, alternative_cost, permission=None,
+    chosen_index: "int | None" = None,
 ):
     """The object a cast's **timing** is judged by: the face-down 2/2 for a
     morph cast, *card* for every other.
@@ -388,6 +394,7 @@ def cast_timing_card(
     """
     if announced_morph_cost(
         game, seat, card, alternative_cost=alternative_cost, permission=permission,
+        chosen_index=chosen_index,
     ) is not None:
         return face_down_card(card)
     return card

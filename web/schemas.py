@@ -618,6 +618,12 @@ class GameActionRequest(BaseModel):
     # Absent is the engine's deterministic pick; the choices are
     # `legality_cast_spec.cast_cost_offers`' `other_hand_choices`.
     alternative_cost_other_hand_indices: list[int] | None = None
+    # …and **which** alternative cost, when more than one applies (CR 118.9a:
+    # one may be applied, the caster's choice) — the offer's
+    # ``alternative_index`` in ``target_spec.cost_offers``. A morph card under
+    # Dream Halls is face down for {3} *or* a discard; with both offered and
+    # none named, the cast is refused rather than guessed.
+    alternative_cost_index: int | None = None
     # CR 601.2b's *optional* additional cost, and how many times each offer was
     # taken: ``{"{1}{R}": 2}``. Its own field beside the two above for their
     # reason — CR 118.9d keeps every price in force on one cast, so a shared

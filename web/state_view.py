@@ -68,7 +68,8 @@ from engine.targeting import (derive_activation_spec, derive_cast_spec,
                               spec_roles, usable_activated_abilities)
 from engine.untap_restrictions import permanent_in_limited_scope
 
-from .prompts import PromptContext, blocking_prompt, prompt_owed_by, render_prompts
+from .prompts import (PromptContext, blocking_prompt, owed_entry, prompt_owed_by,
+                      render_prompts)
 from .session_store import Session
 
 from .presence import seat_is_connected
@@ -106,6 +107,70 @@ from .combat_prompts import (
     _build_unblocked_assignment_info,
 )
 from .game_flow import settle_before_observation
+
+
+#: The decisions held on the **session** rather than on the pending-choice
+#: queue, in the order a turn reaches them: (kind, what the seat owing it is
+#: doing — said to that seat — and whether *seat* owes it now). Each test is
+#: the one its own payload is served by, so "who owes it" and "who is shown
+#: it" are one answer. ``prompt_owed_by`` read the queue alone, so while a
+#: person chose their cleanup discard or answered an upkeep payment the other
+#: viewer's panel was blank rather than naming them (the "Three wire
+#: leftovers" Known-gaps entry). The pregame names its own seat
+#: (``pregame.waiting_for``) and is not repeated here.
+_SESSION_DECISIONS = (
+    ("time_vault", "decide whether to skip your turn",
+     lambda s, seat: seat == s.current_turn and bool(s.time_vault_pending)),
+    ("untap_land_selection", "choose which of your permanents untap",
+     lambda s, seat: seat == s.current_turn and _untap_land_selection_requirement(s) > 0),
+    ("optional_untap", "choose which of your permanents stay tapped",
+     lambda s, seat: seat == s.current_turn and bool(s.optional_untap_pending)),
+    ("upkeep_pay", "decide whether to pay your upkeep costs",
+     lambda s, seat: bool((_build_upkeep_pay_info(s, seat) or {}).get("pending"))),
+    ("upkeep_mana_prevention", "choose how much mana to pay to prevent damage",
+     lambda s, seat: bool((_build_upkeep_mana_prevention_info(s, seat) or {}).get("pending"))),
+    ("optional_trigger", "answer your upkeep trigger",
+     lambda s, seat: bool((_build_optional_trigger_info(s, seat) or {}).get("pending"))),
+    ("island_sanctuary", "decide whether to skip your draw",
+     lambda s, seat: seat == s.current_turn and bool(s.island_sanctuary_pending)),
+    ("raging_river", "divide the creatures into left and right piles",
+     lambda s, seat: _build_raging_river_info(s, seat) is not None),
+    ("camouflage", "divide your creatures into piles",
+     lambda s, seat: _build_camouflage_info(s, seat) is not None),
+    ("banding_assignment", "assign the combat damage of the attackers your creatures block",
+     lambda s, seat: _build_banding_assignment_info(s, seat) is not None),
+    ("multiblock_blocker_assignment", "divide your blocking creature's combat damage",
+     lambda s, seat: _build_multiblock_assignment_info(s, seat) is not None),
+    ("band_blocker_assignment", "choose which band member each blocker damages",
+     lambda s, seat: _build_band_blocker_assignment_info(s, seat) is not None),
+    ("unblocked_assignment", "decide how your attackers assign their combat damage",
+     lambda s, seat: _build_unblocked_assignment_info(s, seat) is not None),
+    ("divided_assignment", "divide your attacker's combat damage",
+     lambda s, seat: _build_divided_assignment_info(s, seat) is not None),
+    ("cleanup_discard", "discard down to your maximum hand size",
+     lambda s, seat: seat == s.current_turn and _cleanup_discard_requirement(s) > 0),
+)
+
+
+def _prompt_owed_by(session: Session, viewer_seat: int | None) -> dict | None:
+    """Who the game is waiting on: the pending-choice queue's open decision
+    (``prompts.prompt_owed_by``), else the first session-level decision a
+    person owes (:data:`_SESSION_DECISIONS`), asked of each seat from the
+    active one round (CR 101.4). An AI seat's session decisions are answered
+    in the request that arms them, so only a person is ever named for one."""
+    owed = prompt_owed_by(session.game, viewer_seat)
+    if owed is not None:
+        return owed
+    count = len(session.game.players)
+    turn = session.current_turn if isinstance(session.current_turn, int) else 0
+    seats = [(turn + step) % count for step in range(count)]
+    for kind, doing, owes in _SESSION_DECISIONS:
+        for seat in seats:
+            if _seat_type(session, seat) == "ai":
+                continue
+            if owes(session, seat):
+                return owed_entry(session.game, seat, kind, doing, viewer_seat)
+    return None
 
 
 def _serialize_reveal_events(game: Game) -> list[dict]:
@@ -1231,6 +1296,11 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             game=session.game,
             viewer_seat=viewer_seat,
             serialize_card=_serialize_card_summary,
+            # Another seat's cards in a prompt list, coloured by their owner's
+            # statics (Celestial Dawn) — ``PromptContext.owned_card``.
+            serialize_owned_card=lambda card, owner: _serialize_card_summary(
+                card, session.game, owner
+            ),
             seat_type=lambda seat: _seat_type(session, seat),
             serialize_permanent=lambda perm: _prompt_permanent_summary(
                 viewer_seat, perm, session.game
@@ -1417,7 +1487,9 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         # (this viewer's pass, refused or not) cannot say: the status line
         # names the seat that owes the open decision and what it is doing,
         # rather than "<holder> has priority." (``prompts.prompt_owed_by``).
-        "prompt_owed_by": prompt_owed_by(session.game, viewer_seat),
+        # A session-level decision (a cleanup discard, an upkeep payment) is
+        # named too (``_prompt_owed_by``).
+        "prompt_owed_by": _prompt_owed_by(session, viewer_seat),
         "rematch": _build_rematch_info(session, viewer_seat),
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,

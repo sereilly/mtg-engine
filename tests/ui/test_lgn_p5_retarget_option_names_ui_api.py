@@ -179,7 +179,7 @@ return [...html.matchAll(/data-choice-value="([^"]*)">([^<]*)<\/button>/g)]
 
 _FUNCTIONS = [
     "applyChoiceButtonPrompt", "applyRetargetChoicePrompt", "retargetOptionLabel",
-    "candidatePermanentName", "candidateOwnerLabel",
+    "retargetOptionLabels", "candidatePermanentName", "candidateOwnerLabel",
 ]
 
 
@@ -221,5 +221,10 @@ def test_another_viewer_is_not_told_what_a_face_down_option_is(set_pool):
     buttons = run_app_js(_FUNCTIONS, _BODY, {"info": info, "state": theirs, "seat": 1}, prelude=_PRELUDE)
     labels = [label for _, label in buttons]
 
-    assert labels.count(f"{FACE_DOWN_NAME} — Host's") == 2, labels
+    # Told apart by where each sits (kg3 `client`: two same-named options
+    # read the same), and by nothing of the card under it.
+    assert [label for label in labels if label.startswith(f"{FACE_DOWN_NAME} — Host's")] == [
+        f"{FACE_DOWN_NAME} — Host's (1st from the left)",
+        f"{FACE_DOWN_NAME} — Host's (2nd from the left)",
+    ], labels
     assert not any("Dermoplasm" in label or "Weaver" in label for label in labels), labels

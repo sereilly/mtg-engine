@@ -374,7 +374,7 @@ def _balance(ctx: PromptContext, choices: list) -> dict:
         "cards_to_discard": plan["hand"],
         "lands": offered("lands"),
         "creatures": offered("creatures"),
-        "hand": [ctx.serialize_card(card) for card in player.hand],
+        "hand": [ctx.owned_card(card, player) for card in player.hand],
     }
 
 

@@ -38,6 +38,30 @@ class PromptContext:
     #: as "Basic Land — Swamp" in a list of creatures. Read through
     #: :meth:`describe_permanent`.
     serialize_permanent: Callable[[Any], dict] | None = None
+    #: A card **off the battlefield** described as its owner's statics leave it
+    #: (``serialization._serialize_card_summary(card, game, owner)``): under
+    #: that owner's Celestial Dawn a nonland card in their hand, library or
+    #: graveyard is white (CR 613.1e), and a prompt listing another seat's
+    #: cards showed them printed. Read through :meth:`owned_card`.
+    serialize_owned_card: Callable[[Any, int], dict] | None = None
+
+    def owned_card(self, card, owner) -> dict:
+        """*card*, owned by *owner* (a seat index or that seat's
+        ``PlayerState``), for a prompt that lists cards in a zone.
+
+        A context built without :attr:`serialize_owned_card` (a test's), or
+        an owner this game does not seat, falls back to :attr:`serialize_card`
+        — the printed colours, which is what every list showed before."""
+        seat = owner
+        if not isinstance(seat, int):
+            seat = next(
+                (index for index, player in enumerate(getattr(self.game, "players", ()))
+                 if player is owner),
+                None,
+            )
+        if self.serialize_owned_card is not None and isinstance(seat, int):
+            return self.serialize_owned_card(card, seat)
+        return self.serialize_card(card)
 
     def describe_permanent(self, permanent) -> dict:
         """*permanent* for a prompt that lists permanents.
