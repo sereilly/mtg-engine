@@ -155,6 +155,18 @@ def _substituted(value: object, resolved: int) -> object:
 # checks that, and refuses otherwise).
 X_FROM_COUNT_PER_RECIPIENT = "x_from_count_per_recipient"
 
+# The ``sequence`` payload key saying its steps are **one printed damage
+# sentence** the lowering split into an instruction per clause or per recipient
+# — "…deals 2 damage to any target **and** 3 damage to you" (Orcish
+# Artillery), "…to target player **and** each creature that player controls"
+# (Heart of Bogardan) — and so one simultaneous damage event (CR 608.2f): the
+# handler runs the steps inside one dealing (``engine/simultaneous_damage.py``),
+# so "whenever <source> deals damage" sees the sentence's total once. Written
+# by ``grammar/lowering/_conjuncts.py``, read by ``handlers/control_flow``'s
+# ``sequence``; a sequence of two *sentences* (Tracker's bite and bite back)
+# never carries it, because two sentences are two events.
+ONE_DEALING = "one_dealing"
+
 # The resolution-scratchpad key a discard offered to several seats records its
 # per-seat tally under — ``{seat: cards discarded}`` — read by the damage that
 # is sized from it ("3 minus the number of cards **they** discarded this way",

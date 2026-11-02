@@ -141,10 +141,6 @@ def test_every_damage_call_outside_the_handlers_can_ask_and_none_runs_past_the_q
 #: owes it. A loop missing from here and not ordered fails; an entry naming no
 #: such loop fails too, so the table cannot outlive what it excuses.
 _NOT_APNAP = {
-    ("handlers/bites.py", "bound_bites_source"):
-        "every bite is dealt to one creature: one seat is asked, in turn",
-    ("handlers/bites.py", "_exiled_card_bites_source"):
-        "every bite is dealt to one creature: one seat is asked, in turn",
     ("handlers/damage.py", "deal_damage_and_opponent_choice"):
         "the second half's recipient is the opponent's pick, made as that "
         "half is reached, so no order can be computed over the two in advance",
@@ -204,6 +200,13 @@ def _ordered(items, function) -> bool:
     return False
 
 
+#: ``simultaneous_damage.deal_at_once``: the one loop every effect dealing
+#: damage to several recipients at once runs (kg3 `dealings`). A call to it is
+#: a damage loop by construction, and walks its items through
+#: ``in_apnap_order`` itself.
+_AT_ONCE = "deal_at_once"
+
+
 def _damage_loops():
     loops = []
     for path in sorted(_ENGINE.rglob("*.py")):
@@ -212,12 +215,18 @@ def _damage_loops():
         parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
         where_file = path.relative_to(_ENGINE).as_posix()
         for node in ast.walk(tree):
-            if not (isinstance(node, ast.Call) and _name(node) == "run_resumable"):
+            if not (
+                isinstance(node, ast.Call)
+                and _name(node) in ("run_resumable", _AT_ONCE)
+            ):
                 continue
             if len(node.args) < 3:
                 continue
             items, step = node.args[1], node.args[2]
-            if not (_deals(step, defs, set()) or _deals(items, defs, set())):
+            at_once = _name(node) == _AT_ONCE
+            if not at_once and not (
+                _deals(step, defs, set()) or _deals(items, defs, set())
+            ):
                 continue
             function = _enclosing(parents, node)
             outer = function
@@ -225,7 +234,7 @@ def _damage_loops():
                 outer = _enclosing(parents, outer)
             loops.append((
                 where_file, node.lineno, outer.name if outer is not None else "",
-                _ordered(items, function),
+                at_once or _ordered(items, function),
             ))
     return loops
 

@@ -674,23 +674,24 @@ class EffectsMixin:
         return outcome.dealt
 
     def _apply_or_tally_lifelink(self, event: dict, dealt: int) -> None:
-        """CR 702.15b for one dealt *event*: gained now, or — for a chunk of the
-        combat damage step's dealing — added to the dealing's tally, which
-        gains each controller's total once the step's damage is all dealt
-        (CR 510.2; ``engine/simultaneous_damage.py``)."""
+        """CR 702.15b for one dealt *event*: gained now, or — for a chunk of a
+        simultaneous dealing (the combat damage step's, a sweep's, a divided
+        spell's) — added to the dealing's tally, which gains each source's
+        total once the dealing's damage is all dealt: one life-gain event per
+        lifelink source (CR 702.15e; ``engine/simultaneous_damage.py``)."""
         from .. import simultaneous_damage
 
         source = event.get("source")
         combat = bool(event.get("combat"))
         dealing = simultaneous_damage.joined(self, combat=combat, source=source)
-        if dealing is not None and dealing.combat:
+        if dealing is not None:
             gained = lifelink_life_gained(source, dealt)
             if gained > 0:
                 seat = (
                     self.controller_or_last_known(source)
                     if isinstance(source, Permanent) else event.get("source_seat")
                 )
-                simultaneous_damage.record_lifelink(dealing, seat, gained)
+                simultaneous_damage.record_lifelink(dealing, source, seat, gained)
             return
         self._apply_lifelink(source, dealt, seat=event.get("source_seat"))
 

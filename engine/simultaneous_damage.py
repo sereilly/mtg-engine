@@ -50,16 +50,48 @@ source's total once, as it finishes.
 **Who opens a dealing.** The combat damage step, once per strike pass (CR 510.2,
 510.4), for every combat chunk — a redirected one included, since damage
 redirected during combat is still combat damage (Wall of Souls' ruling,
-2004-10-04). And a sweep (``handlers/damage_sweeps._sweep``): one source dealing
-damage to each member of a set at once, for that source's chunks. Anything
-else is a dealing of one chunk, announced whole as it is dealt.
+2004-10-04). And **every spell or ability that deals damage to several
+recipients at once** (CR 608.2f: "Some spells and abilities include actions
+taken on multiple players and/or objects. In most cases, each such action is
+processed simultaneously"): a sweep, a divided Fireball, "each of up to two
+target creatures", "each opponent", "each player", The Fallen's opponents and
+planeswalkers, Winter Blast's recorded creatures, Cuombajj Witches' two
+halves, a fight's two (CR 701.14a), the bites — through :func:`deal_at_once`,
+the one loop they share — and a printed sentence the lowering split into
+several instructions ("…2 damage to any target **and** 3 damage to you",
+Orcish Artillery; "…to target player **and** each creature that player
+controls", Heart of Bogardan), whose ``sequence`` carries
+``oracle_types.ONE_DEALING``. A non-combat dealing is joined only by the chunks
+of the sources it names (:attr:`SimultaneousDamage.dealers`). Anything else is
+a dealing of one chunk, announced whole as it is dealt.
 
-**The combat dealing also carries the two tallies the step used to keep in its
-own closures**, because they are facts about the same simultaneous event and a
-redirected chunk never reached the step's closures: the life lifelink gains
-(CR 702.15b, gained once the damage is dealt — CR 510.2's one life-gain event
-per controller) and which creatures dealt combat damage to each player (the
-batched "one or more … deal combat damage to a player").
+**What is not one dealing**, each with its reason: the combat damage step's
+first-strike and regular passes (CR 510.4: two steps, two dealings); Mana
+Clash's flips ("Each point of damage is dealt separately", its ruling,
+2004-10-04); a modal spell's modes chosen twice (Fiery Confluence's ruling,
+2015-11-04: "each of those modes represents a separate damage-dealing event");
+and two printed sentences ("This creature deals damage … **.** That creature
+deals damage …", Tracker — "Tracker will deal damage to itself equal to its
+power, then immediately do it again", 2009-10-01).
+
+**The dealing also carries the tallies a simultaneous event's results need**,
+because they are facts about the same event and a redirected chunk never
+reached a loop's closures: the life lifelink gains — once per *source* per
+dealing (CR 702.15e: "If multiple sources with lifelink deal damage at the same
+time, they cause separate life gain events"; Ajani's Pridemate's ruling,
+2024-11-08: a single lifelinker dealing combat damage to several recipients at
+once triggers it "only once", two lifelinkers twice) — and which creatures
+dealt combat damage to each player (the batched "one or more … deal combat
+damage to a player").
+
+**Delayed damage triggers** (CR 603.7) read the same ends of the same event:
+"whenever target creature deals damage" (Spiritualize) and "whenever that
+creature deals combat damage this turn" (Vigorous Charge) name the source
+alone; "whenever that creature is dealt damage by an attacking creature this
+turn" (Glyph of Life) names the recipient, and its "that much" is only the
+damage the sources it names dealt (CR 120.9); "whenever target creature deals
+combat damage to a non-Wall creature this turn" (Acidic Dagger) names both
+(:func:`delayed_occurrence`).
 
 ``Game.simultaneous_damage`` is None outside a dealing — bookkeeping to every
 ``vars()`` walker, since nothing is ever left open across a priority window.
@@ -113,23 +145,62 @@ def answers(condition_payload: dict, announced: str | None) -> bool:
     """Whether a ``damage_dealt`` trigger with *condition_payload* answers an
     announcement made under *announced* (``None``: a chunk dealt alone, which
     is the whole event and so every trigger's)."""
-    if announced is None:
+    return _reading_answers(occurrence(condition_payload), announced)
+
+
+def _reading_answers(reading: str | None, announced: str | None) -> bool:
+    if announced is None or reading is None:
         return True
-    reading = occurrence(condition_payload)
     if announced == CHUNK:
         return reading == PAIR
     return announced == reading
+
+
+#: The delayed damage events (CR 603.7, ``delayed_triggers.DELAYED_EVENTS``),
+#: and which end of the event each is once per: (unnarrowed, narrowed by an
+#: ``agent_filter``). The agent is the *other* end from the object the entry
+#: watches, so on a "deals" event a narrowing names the recipient — "…deals
+#: combat damage **to a non-Wall creature**" (Acidic Dagger) is both ends —
+#: while on the "is dealt" event it names the sources, which CR 120.9 makes a
+#: narrowing of what the total counts rather than a second end: "dealt damage
+#: **by an attacking creature**" (Glyph of Life) is once per recipient for the
+#: damage the attacking creatures dealt it.
+DELAYED_DAMAGE_EVENTS: dict[str, tuple[str, str]] = {
+    "bound_permanent_dealt_damage": (RECIPIENT, RECIPIENT),
+    "bound_permanent_deals_damage": (SOURCE, PAIR),
+    "bound_permanent_deals_combat_damage": (SOURCE, PAIR),
+}
+
+
+def delayed_occurrence(event: str, agent_filter) -> str | None:
+    """Which end of a damage event a delayed entry armed for *event* is once
+    per (:data:`DELAYED_DAMAGE_EVENTS`), or None for an event that is not a
+    damage event."""
+    row = DELAYED_DAMAGE_EVENTS.get(event)
+    if row is None:
+        return None
+    return row[1] if agent_filter else row[0]
+
+
+def delayed_answers(event: str, agent_filter, announced: str | None) -> bool:
+    """Whether a delayed entry armed for *event* answers an announcement made
+    under *announced* — :func:`answers`, for the entries ``emit`` never
+    reaches."""
+    return _reading_answers(delayed_occurrence(event, agent_filter), announced)
 
 
 @dataclass(eq=False)
 class _Tally:
     """One party's share of a dealing: who, how much, and the announcement
     payload of its first chunk, whose seat and identity keys the total reuses
-    (CR 603.10: frozen as the chunk was dealt)."""
+    (CR 603.10: frozen as the chunk was dealt). *parts* is each chunk's other
+    end and amount, in the order dealt — what a delayed trigger narrowed by
+    that end counts (CR 120.9)."""
 
     party: Any
     amount: int = 0
     payload: dict = field(default_factory=dict)
+    parts: list = field(default_factory=list)
 
 
 @dataclass(eq=False)
@@ -137,18 +208,27 @@ class SimultaneousDamage:
     """One simultaneous dealing, from its first chunk to its finish.
 
     combat  -- the combat damage step's dealing (CR 510.2): every combat chunk
-               joins. Otherwise a sweep's, which only its *source*'s chunks join.
-    source  -- the sweep's one source; None for the combat dealing.
+               joins. Otherwise one spell's or ability's, which only the
+               chunks of its *dealers* join.
+    dealers -- the non-combat dealing's sources, by identity: the one object
+               a sweep or a divided spell deals as, or each biter of a bite;
+               empty for the combat dealing.
     """
 
     combat: bool
-    source: Any = None
+    dealers: tuple = ()
     players: list[_Tally] = field(default_factory=list)
     creatures: list[_Tally] = field(default_factory=list)
     sources: list[_Tally] = field(default_factory=list)
-    #: Seat -> life its lifelink sources gain, in the order first dealt
-    #: (CR 702.15b); combat only — elsewhere lifelink is gained as dealt.
-    lifelink: dict[int, int] = field(default_factory=dict)
+    #: Each permanent a chunk was dealt to, with each chunk's source and
+    #: amount (``_Tally.parts``) — the delayed "is dealt damage by <agent>"
+    #: totals (Glyph of Life). The creature's own "is dealt damage" triggers
+    #: are :attr:`creatures`, fed by the creature seam's fire site.
+    damaged: list[_Tally] = field(default_factory=list)
+    #: Each lifelink source's gain, in the order first dealt, with the seat it
+    #: goes to in ``payload["seat"]`` — one life-gain event per source
+    #: (CR 702.15e), gained as the dealing finishes.
+    lifelink: list[_Tally] = field(default_factory=list)
     #: Damaged player's seat -> the creatures that dealt it combat damage, for
     #: the batched "one or more … deal combat damage to a player" triggers.
     damagers_by_defender: dict[int, list] = field(default_factory=dict)
@@ -158,31 +238,84 @@ class SimultaneousDamage:
         this dealing."""
         if self.combat:
             return bool(combat)
-        return not combat and source is not None and source is self.source
+        return (
+            not combat and source is not None
+            and any(source is dealer for dealer in self.dealers)
+        )
 
 
-def _tally(rows: list[_Tally], party, amount: int, payload: dict) -> None:
+def _tally(rows: list[_Tally], party, amount: int, payload: dict, part=None) -> None:
     for row in rows:
         if row.party is party:
             row.amount += amount
+            if part is not None:
+                row.parts.append(part)
             return
-    rows.append(_Tally(party=party, amount=amount, payload=dict(payload)))
+    rows.append(_Tally(
+        party=party, amount=amount, payload=dict(payload),
+        parts=[part] if part is not None else [],
+    ))
 
 
-def begin(game, *, combat: bool, source=None) -> SimultaneousDamage | None:
-    """Open a dealing, or None when one is already open (the chunks then join
-    that one, and only its opener finishes it).
+def begin(game, *, combat: bool, source=None, sources=()) -> SimultaneousDamage | None:
+    """Open a dealing by *source* (or each of *sources*), or None when one is
+    already open (the chunks then join that one, and only its opener finishes
+    it).
+
+    A non-combat dealing opened inside another non-combat one is part of the
+    same action — a split sentence's sweep half (Heart of Bogardan), a loop
+    inside a sentence a ``sequence`` marks — so its sources join the open one.
+    A non-combat loop inside the combat dealing does not: combat damage and
+    the damage an effect deals are two events.
 
     A combat damage pass never starts inside another dealing — the previous
     pass finished its own, and nothing deals combat damage in between — so a
     dealing still open when one starts was abandoned part-way (a question
     nobody answered) and is dropped rather than joined: joined, it would hold
     this pass's triggers for a finish that never comes."""
-    if getattr(game, "simultaneous_damage", None) is not None and not combat:
+    dealers = tuple(sources) + ((source,) if source is not None else ())
+    open_dealing = getattr(game, "simultaneous_damage", None)
+    if open_dealing is not None and not combat:
+        if not open_dealing.combat:
+            open_dealing.dealers += tuple(
+                dealer for dealer in dealers
+                if not any(dealer is known for known in open_dealing.dealers)
+            )
         return None
-    dealing = SimultaneousDamage(combat=combat, source=source)
+    dealing = SimultaneousDamage(combat=combat, dealers=() if combat else dealers)
     game.simultaneous_damage = dealing
     return dealing
+
+
+def deal_at_once(
+    game, items, step, *, source=None, sources=(), then=None, affected=None,
+) -> None:
+    """*step* each of *items* as **one** simultaneous dealing by *source* (or
+    *sources*), and then run *then* — the loop every spell or ability that
+    deals damage to several recipients at once runs (CR 608.2f).
+
+    One resumable loop (``engine/resumption.py``): a step whose event stops to
+    ask which effect applies first (CR 616.1e) takes the rest with it, and the
+    dealing stays open across the answer — its finish is the loop's last step,
+    before *then*. So, like every resumable loop, this must be the last thing
+    its caller does.
+
+    The items are dealt in APNAP order of the seat each one's question goes to
+    (CR 616.1's last sentence, ``effect_ordering.in_apnap_order``; *affected*
+    maps an item to its recipient where the item is something else)."""
+    from .effect_ordering import in_apnap_order
+    from .resumption import run_resumable
+
+    dealing = begin(game, combat=False, source=source, sources=sources)
+
+    def last() -> None:
+        finish(game, dealing)
+        if then is not None:
+            then()
+
+    run_resumable(
+        game, in_apnap_order(game, items, affected=affected), step, then=last,
+    )
 
 
 def joined(game, *, combat: bool, source) -> SimultaneousDamage | None:
@@ -207,8 +340,13 @@ def record_chunk(dealing: SimultaneousDamage, payload: dict, dealt: int) -> None
     source = payload.get("subject")
     if isinstance(recipient, PlayerState):
         _tally(dealing.players, recipient, dealt, payload)
+    elif isinstance(recipient, Permanent):
+        _tally(dealing.damaged, recipient, dealt, {}, part=(source, dealt))
     if source is not None:
-        _tally(dealing.sources, source, dealt, payload)
+        _tally(
+            dealing.sources, source, dealt, payload,
+            part=(recipient if isinstance(recipient, Permanent) else None, dealt),
+        )
 
 
 def record_creature(dealing: SimultaneousDamage, permanent, dealt: int) -> None:
@@ -217,9 +355,13 @@ def record_creature(dealing: SimultaneousDamage, permanent, dealt: int) -> None:
         _tally(dealing.creatures, permanent, dealt, {})
 
 
-def record_lifelink(dealing: SimultaneousDamage, seat: int | None, gained: int) -> None:
+def record_lifelink(
+    dealing: SimultaneousDamage, source, seat: int | None, gained: int,
+) -> None:
+    """*source*'s lifelink gain for one chunk, gained once for the source's
+    total as the dealing finishes (CR 702.15e)."""
     if gained > 0 and isinstance(seat, int):
-        dealing.lifelink[seat] = dealing.lifelink.get(seat, 0) + gained
+        _tally(dealing.lifelink, source, gained, {"seat": seat})
 
 
 def record_combat_damager(dealing: SimultaneousDamage, defender_seat: int, source) -> None:
@@ -238,6 +380,7 @@ def finish(game, dealing: SimultaneousDamage | None) -> None:
     if dealing is None or getattr(game, "simultaneous_damage", None) is not dealing:
         return
     game.simultaneous_damage = None
+    from .delayed_triggers import fire_delayed_totals
     from .events import emit
 
     combat = dealing.combat
@@ -265,9 +408,38 @@ def finish(game, dealing: SimultaneousDamage | None) -> None:
             subject=row.party, amount=row.amount, combat=combat,
             recipient=None, occurrence=SOURCE, **payload,
         )
+    # The delayed abilities watching one end (CR 603.7), which ``emit`` cannot
+    # reach: each permanent's total from the sources an entry names (Glyph of
+    # Life, CR 120.9), then each permanent source's total (Spiritualize; and,
+    # in the combat dealing, Vigorous Charge).
+    for row in dealing.damaged:
+        fire_delayed_totals(
+            game, "bound_permanent_dealt_damage", subject=row.party,
+            parts=[
+                (source if isinstance(source, Permanent) else None, dealt)
+                for source, dealt in row.parts
+            ],
+            occurrence=RECIPIENT,
+        )
+    for row in dealing.sources:
+        if not isinstance(row.party, Permanent):
+            continue
+        events = ("bound_permanent_deals_damage",) + (
+            ("bound_permanent_deals_combat_damage",) if combat else ()
+        )
+        for event in events:
+            fire_delayed_totals(
+                game, event, subject=row.party, parts=row.parts,
+                occurrence=SOURCE,
+            )
     if dealing.damagers_by_defender:
         game._fire_batched_combat_damage_triggers(dealing.damagers_by_defender)
-    # CR 702.15b, after the damage (CR 510.2: one life-gain event per
-    # controller), in APNAP order of the gaining seats.
-    for seat in game.apnap_seats(dealing.lifelink, include_lost=True):
-        game._gain_life(game.players[seat], dealing.lifelink[seat], source_name="lifelink")
+    # CR 702.15b, after the damage: one life-gain event per lifelink source
+    # (CR 702.15e), in APNAP order of the gaining seats and, within a seat, in
+    # the order the sources first dealt.
+    by_seat: dict[int, list[_Tally]] = {}
+    for row in dealing.lifelink:
+        by_seat.setdefault(row.payload["seat"], []).append(row)
+    for seat in game.apnap_seats(by_seat, include_lost=True):
+        for row in by_seat[seat]:
+            game._gain_life(game.players[seat], row.amount, source_name="lifelink")

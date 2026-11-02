@@ -1290,6 +1290,11 @@ register_choice(
     prompt_key="opponent_damage_choice",
     blocked_detail="choose a target for the opponent-choice damage before other actions",
     default_at_arm=True,
+    # The answer deals the second half of the sentence's one dealing
+    # (``handlers/damage.deal_damage_and_opponent_choice``), whose finish is the
+    # loop's later step: it waits for the answer rather than closing the
+    # dealing before the opponent's half is dealt.
+    suspends=True,
 )
 
 register_choice(

@@ -43,13 +43,14 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING
 
-from ..oracle_types import (COIN_FLIPS_MADE, COIN_FLIPS_WON,
+from .. import simultaneous_damage
+from ..oracle_types import (COIN_FLIPS_MADE, COIN_FLIPS_WON, ONE_DEALING,
                             PER_OBJECT_SEAT_RECORDS, OracleInstruction,
                             STACK_TARGET_CONTROLLER)
 from ..resumption import run_resumable
 from ..mana_payment import mana_cost_label
 from ._color_conditions import evaluate_color_condition
-from ._common import COIN_FACES_BY_SEAT, flip_coin, flip_coin_for
+from ._common import COIN_FACES_BY_SEAT, damage_dealer, flip_coin, flip_coin_for
 from ._conditions import evaluate_state_condition
 from ._filters import permanent_matches_filter
 from ._record_conditions import evaluate_record_condition
@@ -71,7 +72,9 @@ def _steps(instruction: OracleInstruction, key: str) -> tuple:
     return tuple(value)
 
 
-def _run(game: Game, steps: tuple, context: OracleExecutionContext) -> tuple[bool, str]:
+def _run(
+    game: Game, steps: tuple, context: OracleExecutionContext, *, then=None,
+) -> tuple[bool, str]:
     """Execute nested instructions in order against the shared context.
 
     The context is deliberately *not* copied: results recorded by one step
@@ -104,7 +107,7 @@ def _run(game: Game, steps: tuple, context: OracleExecutionContext) -> tuple[boo
         supported, _ = game._execute_oracle_instruction(step, scoped)
         outcome["resolved"] = outcome["resolved"] or supported
 
-    run_resumable(game, steps, run_step)
+    run_resumable(game, steps, run_step, then=then)
     return True, "resolved" if outcome["resolved"] else "no effect"
 
 
@@ -457,8 +460,23 @@ def _role_its_branches_spend(step: OracleInstruction):
 @effect_handler("sequence")
 def sequence(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Perform each step in order (CR 608.2: a spell's instructions resolve in
-    the order written)."""
-    return _run(game, _steps(instruction, "steps"), context)
+    the order written).
+
+    A sequence marked ``ONE_DEALING`` is one printed damage sentence the
+    lowering split into a step per clause or recipient ("…2 damage to any
+    target and 3 damage to you"): its steps are one simultaneous damage event
+    (CR 608.2f), so they run inside one dealing by the effect's source, which
+    the loop's last step finishes (``engine/simultaneous_damage.py``)."""
+    steps = _steps(instruction, "steps")
+    if not instruction.payload.get(ONE_DEALING):
+        return _run(game, steps, context)
+    dealing = simultaneous_damage.begin(
+        game, combat=False, source=damage_dealer(context),
+    )
+    return _run(
+        game, steps, context,
+        then=lambda: simultaneous_damage.finish(game, dealing),
+    )
 
 
 def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dict) -> bool:

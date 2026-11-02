@@ -203,17 +203,18 @@ class UpkeepEffectsMixin:
         the event.
 
         The set is fixed as the sweep begins: "each creature" is the creatures
-        on the battlefield as the effect is carried out.
+        on the battlefield as the effect is carried out. And it is one
+        simultaneous dealing by the enchantment (CR 608.2f,
+        ``simultaneous_damage.deal_at_once``), as every sweep is.
         """
-        from ..effect_ordering import in_apnap_order
         from ..handlers._common import apply_damage_to_creature
         from ..models import PlayerState
-        from ..resumption import run_resumable
+        from ..simultaneous_damage import deal_at_once
 
-        recipients = in_apnap_order(self, [
+        recipients = [
             *self.players,
             *(perm for perm in self.all_permanents() if perm.is_creature),
-        ])
+        ]
 
         def hit(victim) -> None:
             if isinstance(victim, PlayerState):
@@ -226,8 +227,8 @@ class UpkeepEffectsMixin:
                     self, victim, counters, permanent, asks=True,
                 )
 
-        run_resumable(
-            self, recipients, hit,
+        deal_at_once(
+            self, recipients, hit, source=permanent,
             then=lambda: self.log.append(
                 f"{permanent.card.name} dealt {counters} damage to each "
                 "creature and each player"

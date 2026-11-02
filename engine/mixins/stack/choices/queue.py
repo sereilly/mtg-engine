@@ -370,6 +370,21 @@ class PendingChoicesMixin:
         previous = self.resolving_stack_item
         if item is not None:
             self.resolving_stack_item = item
+        # …and with the seat whose spell or ability armed it still the one
+        # resolving (CR 109.5): the answer re-runs the event that asked and the
+        # loop behind it (``engine/resumption.py``), and a spell reaches the
+        # damage paths as its bare card, whose seat is read off
+        # ``resolving_seats`` (``damage_events.damage_source_seat``). Empty by
+        # the time anyone answers, so a divided Fireball that stopped to ask
+        # dealt the rest of its damage as nobody's: Justice ("…deals that much
+        # damage to that creature's or spell's controller") found no
+        # controller, a spell's lifelink gained nobody, and "a source an
+        # opponent controls" answered no. The seat the arming stamped
+        # (``_cause_seat``), pushed for the answer and popped after it.
+        cause_seat = choice.data.get("_cause_seat")
+        pushed = isinstance(cause_seat, int) and not isinstance(cause_seat, bool)
+        if pushed:
+            self.resolving_seats.append(cause_seat)
         try:
             # A prompt a draw armed is answered inside that draw (CR 121.2):
             # the draws parked behind it are released here, with the object
@@ -378,6 +393,8 @@ class PendingChoicesMixin:
             with self.answering_draw_prompt(choice):
                 answered = apply()
         finally:
+            if pushed:
+                self.resolving_seats.pop()
             self.resolving_stack_item = previous
         # An answer is a step of a resolution (CR 608.2), so the resolution
         # seam's recompute (``resolve_top_of_stack``) is owed here too: the

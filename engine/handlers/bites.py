@@ -19,9 +19,8 @@ Split out of ``damage.py`` at the 2,000-line cap's split round.
 
 from __future__ import annotations
 
-from ..effect_ordering import in_apnap_order
 from ..game_types import target_ids
-from ..resumption import run_resumable
+from ..simultaneous_damage import deal_at_once
 from ._common import apply_damage_to_creature
 from ._filters import permanent_matches_filter
 from ._targets import (recorded_permanent_ids, attached_host,
@@ -210,7 +209,12 @@ def bound_bites_source(game, instruction, context):
             asks=True,
         )
 
-    run_resumable(game, biters, bite)
+    # Every biter's damage is dealt at once (CR 608.2f): one dealing by all of
+    # them, so "whenever this creature is dealt damage" sees the total once.
+    deal_at_once(
+        game, biters, bite, sources=[biter for biter, _ in biters],
+        affected=lambda entry: target,
+    )
     return True, "resolved"
 
 
@@ -266,7 +270,11 @@ def _exiled_card_bites_source(game, instruction, context, target) -> None:
             source_seat=owner_seat,
         )
 
-    run_resumable(game, biters, bite)
+    # One dealing by every exiled card, as ``bound_bites_source``'s is.
+    deal_at_once(
+        game, biters, bite, sources=[card for card, _seat, _power in biters],
+        affected=lambda entry: target,
+    )
 
 
 @effect_handler("bound_bites_player")
@@ -327,9 +335,12 @@ def bound_bites_player(game, instruction, context):
             victim, power, source=biter, then=_report, asks=True,
         )
 
-    # Each to its own controller, at once: asked in APNAP order.
-    run_resumable(
-        game, in_apnap_order(game, biters, affected=lambda entry: entry[1]), bite,
+    # Each to its own controller, at once: asked in APNAP order, as one
+    # dealing by every biter (CR 608.2f) — two biters one player controls are
+    # one "you're dealt damage" for that player.
+    deal_at_once(
+        game, biters, bite, sources=[biter for biter, _victim, _power in biters],
+        affected=lambda entry: entry[1],
     )
     return True, "resolved"
 
@@ -465,10 +476,11 @@ def each_matching_bites_itself(game, instruction, context):
                 + ", ".join(struck)
             )
 
-    # Each creature to itself, at once: asked in APNAP order of controllers.
-    run_resumable(
-        game, in_apnap_order(game, biters, affected=lambda entry: entry[0]), bite,
-        then=summary,
+    # Each creature to itself, at once: asked in APNAP order of controllers,
+    # as one dealing by every creature (CR 608.2f).
+    deal_at_once(
+        game, biters, bite, sources=[perm for perm, _amount in biters],
+        then=summary, affected=lambda entry: entry[0],
     )
     return True, "resolved"
 
