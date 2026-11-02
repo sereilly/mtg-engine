@@ -1794,3 +1794,23 @@ register_choice(
     # reason: the candidates are cards in a hand (CR 400.2, a hidden zone),
     # and only the ones the seat chooses become public.
 )
+
+register_choice(
+    # Kaboom!'s 2022-09-09 ruling: a loop over "any number of target players or
+    # planeswalkers" handles each player's group in turn order, and "You choose
+    # the relative order of targets within that group" (``handlers/_role_order``).
+    # Armed only where a group holds two targets; answered with every target's
+    # index in the order it is handled (`order`).
+    "target_group_order",
+    resolve=lambda game, choice, r: game._resolve_target_group_order(choice, r.get("order")),
+    default=lambda game, choice: game._default_target_group_order(choice),
+    action="target_group_order_confirm",
+    prompt_key="target_group_order",
+    blocked_detail="choose the order of the spell's targets before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    # The loop's later steps read the answer: the resolution waits (CR 608.2).
+    suspends=True,
+    # A seat nobody asks takes the slot order there and then.
+    default_at_arm=True,
+)

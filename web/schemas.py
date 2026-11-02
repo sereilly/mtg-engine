@@ -93,6 +93,7 @@ ActionKind = Literal[
     "sacrifice_confirm",
     "effect_order_confirm",
     "order_triggers_confirm",
+    "target_group_order_confirm",
     "resolve_optional_pay",
     "pay_life_to_save_confirm",
     "discard_unless_pay_life_confirm",
@@ -723,6 +724,11 @@ class GameActionRequest(BaseModel):
     # the stack in, as indices into the prompt's `triggers`, the first to
     # resolve first. Sent with `order_triggers_confirm`.
     trigger_order: list[int] | None = None
+    # Kaboom!'s ruling: the order a spell's targets are handled in, as indices
+    # into the `target_group_order` prompt's `targets`, the first handled
+    # first; each player's group stays in turn order. Sent with
+    # `target_group_order_confirm`.
+    target_order: list[int] | None = None
     # Raging River: map of battlefield/attacker index → "left"/"right" pile label,
     # sent with assign_defender_piles / assign_attacker_piles.
     piles: dict[int, str] | None = None

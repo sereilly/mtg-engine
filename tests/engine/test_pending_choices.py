@@ -533,6 +533,12 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # that one's readers are continuous effects, and it neither suspends nor
         # may start.
         "color_choice",
+        # "Choose any number of target players or planeswalkers. **For each of
+        # them**, … Kaboom! deals damage …" (its 2022-09-09 ruling: "You
+        # choose the relative order of targets within that group"). The loop's
+        # every later turn is the target in the position this answer gives it,
+        # so no turn may run until it is given (``handlers/_role_order``).
+        "target_group_order",
     }, suspending
 
 

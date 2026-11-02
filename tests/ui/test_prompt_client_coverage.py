@@ -39,7 +39,15 @@ def _client_reads(js: str, key: str) -> bool:
 #: ``outside_game_pick`` (W1G6, the Wishes), whose client is
 #: ``renderOutsideGamePickModal``, and Torment's ``madness_cast`` (W1G1),
 #: whose client is ``applyMadnessCastPrompt``.
-_AWAITING_CLIENT: dict[str, str] = {}
+_AWAITING_CLIENT: dict[str, str] = {
+    # kg3/ai: Kaboom!'s within-group target order. The client: a getter for
+    # ``state.target_group_order`` ({player_seat, card_name, targets: [{index,
+    # name, seat, id, group}]}), and the ``order_triggers`` draft widget
+    # (``applyOrderTriggersPrompt``) over the targets, moves kept inside one
+    # ``group``, sending ``target_order`` (every index once) with
+    # ``target_group_order_confirm``.
+    "target_group_order": "target_group_order_confirm",
+}
 
 
 def test_every_prompt_has_a_client_renderer():

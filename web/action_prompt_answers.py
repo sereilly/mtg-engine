@@ -1786,6 +1786,16 @@ def _action_order_triggers_confirm(session, req, seat_type):
     if not session.game.confirm_order_triggers(req.seat, req.trigger_order):
         raise HTTPException(status_code=400, detail="invalid trigger order")
 
+@action_handler("target_group_order_confirm")
+def _action_target_group_order_confirm(session, req, seat_type):
+    # Kaboom!'s ruling: the order within each player's group of targets. An
+    # order that is not every target once, groups in turn order, is refused
+    # and the prompt stays owed.
+    if req.target_order is None:
+        raise HTTPException(status_code=400, detail="target_order is required")
+    if not session.game.confirm_target_group_order(req.seat, req.target_order):
+        raise HTTPException(status_code=400, detail="no such target order pending for you")
+
 @action_handler("dismiss_hand_reveal")
 def _action_dismiss_hand_reveal(session, req, seat_type):
     session.game.dismiss_hand_reveal(req.seat)

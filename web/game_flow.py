@@ -26,6 +26,10 @@ from engine.ai_abilities import (
     choose_foreign_activation_action,
     choose_hand_activation_action,
 )
+from engine.ai_graveyard_activations import (
+    activate_chosen_graveyard_ability,
+    choose_graveyard_activation_action,
+)
 from engine.ai_payment import tap_planned_lands
 from engine.ai_special_actions import special_action_before_combat
 
@@ -217,6 +221,16 @@ def _ai_step(session: Session) -> bool:
             ability_index=hand_activation.ability_index,
             hand_index=hand_activation.hand_index,
         )
+        _auto_resolve_ai_pending(session)
+
+    # An ability activated from the seat's **graveyard** (CR 113.6b/m) — the
+    # engine's third activation door, through the chooser and the executor
+    # the simulator shares (`engine.ai_graveyard_activations`). Until the kg3
+    # round no AI seat used one: a Whiteout or a Glory in an AI's graveyard
+    # stayed there.
+    graveyard_activation = choose_graveyard_activation_action(game, seat)
+    if graveyard_activation is not None:
+        activate_chosen_graveyard_ability(game, seat, graveyard_activation)
         _auto_resolve_ai_pending(session)
 
     # An ability on a permanent **another seat controls** that this one may

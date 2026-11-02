@@ -743,3 +743,50 @@ class SpellChoicesMixin:
             current = {"permanent_id": held}
         if not self._resolve_copy_spell_target(choice, current):
             self.discard_pending_choice(choice)
+
+    # -- The order of a spell's targets within one player's group -----------
+
+    def confirm_target_group_order(self, player_index: int, order: list) -> bool:
+        return self.resolve_pending_choice(
+            "target_group_order", player_index, order=order,
+        )
+
+    def _resolve_target_group_order(self, choice: PendingChoice, order) -> bool:
+        """Kaboom!'s 2022-09-09 ruling: "You choose the relative order of
+        targets within that group." *order* is every offered target, by its
+        index in the prompt, in the order it is to be handled; the groups stay
+        in turn order (``handlers._role_order.group_order_refusal``), and an
+        order that breaks either rule is refused with the prompt kept.
+
+        Written to the resolution's records (``target_roles.TARGET_GROUP_ORDER``)
+        for the loop's later steps to read as they run."""
+        from ....handlers._role_order import group_order_refusal
+        from ....target_roles import TARGET_GROUP_ORDER
+
+        targets = list(choice.data.get("targets") or ())
+        if group_order_refusal(targets, order) is not None:
+            return False
+        context = choice.data.get("_context")
+        if context is not None:
+            context.results[TARGET_GROUP_ORDER] = [targets[i]["role"] for i in order]
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{self.players[choice.player_index].name} handles "
+            f"{choice.data.get('card_name', 'the spell')}'s targets in the order "
+            + ", ".join(targets[i]["name"] for i in order)
+        )
+        return True
+
+    def _default_target_group_order(self, choice: PendingChoice) -> None:
+        """The slot order — the player, then their planeswalkers by permanent
+        id: the order every Kaboom! resolved in before the prompt existed, so
+        a seat nobody asks plays exactly as it did. Nothing is logged; nothing
+        was chosen."""
+        from ....target_roles import TARGET_GROUP_ORDER
+
+        context = choice.data.get("_context")
+        if context is not None:
+            context.results[TARGET_GROUP_ORDER] = [
+                entry["role"] for entry in choice.data.get("targets") or ()
+            ]
+        self.discard_pending_choice(choice)

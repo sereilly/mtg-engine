@@ -752,7 +752,8 @@ def _action_activate_graveyard(session, req, seat_type):
     definition), ``ability_index`` which of its abilities — the program's
     index, the one ``state.graveyard_abilities`` lists and
     ``Game.activate_from_graveyard`` reads. A sacrifice the cost names rides
-    ``cost_permanent_id`` as on every other activation. ``auto_tap`` pays from
+    ``cost_permanent_id`` (several, ``cost_permanent_ids``) and a discard
+    ``cost_hand_index`` as on every other activation. ``auto_tap`` pays from
     the board first, as for a hand ability.
 
     **The target rides the fields every activation's does** (CR 602.2b: it is
@@ -789,6 +790,10 @@ def _action_activate_graveyard(session, req, seat_type):
             graveyard_index=index,
             cost_permanent_id=req.cost_permanent_id,
             cost_permanent_ids=req.cost_permanent_ids,
+            # "Discard a card" (Undead Gladiator): which cards, by hand
+            # position, as every activation's discard cost is named.
+            cost_hand_index=req.cost_hand_index,
+            cost_other_hand_indices=req.cost_other_hand_indices,
             target_player_index=req.target_seat,
             target_permanent_index=req.target_permanent_index,
             target_permanent_ids=req.target_permanent_ids,

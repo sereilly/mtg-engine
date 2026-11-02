@@ -126,6 +126,15 @@ def test_kaboom_cast_through_the_action_endpoint(set_pool):
         ],
     })
     assert response.status_code == 200, response.text
+    # B and B's planeswalker are one player's group, and the ruling gives the
+    # caster their order (kg3: the `target_group_order` prompt, armed as the
+    # spell resolves): the slot order, B first.
+    game.resolve_stack()
+    assert [p.life for p in game.players] == [20, 20, 20]
+    response = client.post(f"/api/sessions/{sid}/action", json={
+        "seat": 0, "action": "target_group_order_confirm", "target_order": [0, 1, 2],
+    })
+    assert response.status_code == 200, response.text
     game.resolve_stack()
     assert [p.life for p in game.players] == [20, 19, 17]
     assert counters_on(walker, "loyalty") == 1

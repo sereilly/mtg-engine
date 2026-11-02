@@ -170,10 +170,12 @@ def _announcement(
     permanent_ids: "list[int] | None" = None,
     x_value: int | None = None,
     stack_index: int | None = None,
+    role_refs: "list[dict] | None" = None,
 ) -> dict:
     """What a cast of the candidate being built announces when it names
     *target* (and the permanent given — and the spell, *stack_index*, for a
-    stack role), in `cast_announcement`'s own shape —
+    stack role; and one answer per role, *role_refs*, for a roles spell —
+    `CastAction.target_role_refs`), in `cast_announcement`'s own shape —
     so a rehearsal of a half-built candidate and of the finished `CastAction`
     are one question asked once.
 
@@ -196,6 +198,7 @@ def _announcement(
         target_permanent_index=permanent_index,
         target_permanent_ids=permanent_ids,
         target_stack_index=stack_index,
+        target_role_refs=role_refs,
         optional_cost_payments=(
             dict(offers) if _announces_any_offer(card, offers) else None
         ),
@@ -763,10 +766,11 @@ def _score_spell_target(
         else _late.ai_targets._choose_role_targets(game, caster_index, card)
     )
     if roles:
-        seat, indices, ids, stack_index = roles
+        seat, indices, ids, stack_index, refs = roles
         announcement = _announcement(
             card, target=seat, caster=caster_index, permanent_index=indices,
             permanent_ids=ids, x_value=x_value, stack_index=stack_index,
+            role_refs=refs,
         )
     rehearsal = _rehearse_announcement(game, caster_index, card, announcement)
     if rehearsal is None:
