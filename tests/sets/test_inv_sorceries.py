@@ -1413,20 +1413,21 @@ def test_barrins_spite_their_controller_picks_and_the_other_is_bounced(set_pool)
 
 
 def test_barrins_spite_bounces_the_one_the_pick_left_not_the_first_named(set_pool):
-    """A headless seat sacrifices its first candidate — the first creature the
-    caster named — so the bounce has to be the *second*: the record, and not
-    slot 0 of the announcement."""
+    """A headless seat sacrifices the cheaper of its two creatures (kg3/
+    choosers' permanent-choice default) — here the first creature the caster
+    named — so the bounce has to be the *second*: the record, and not slot 0
+    of the announcement."""
     game, made = _w2g2_spite_table(set_pool)
     giant, bears = made["Hill Giant"], made["Grizzly Bears"]
 
     game.cast_from_hand(
         0, "Barrin's Spite",
-        target_permanent_ids=[giant.permanent_id, bears.permanent_id],
+        target_permanent_ids=[bears.permanent_id, giant.permanent_id],
     )
     _w2g2s_resolve_stack(game)
 
-    assert [card.name for card in game.players[1].graveyard] == ["Hill Giant"]
-    assert [card.name for card in game.players[1].hand] == ["Grizzly Bears"]
+    assert [card.name for card in game.players[1].graveyard] == ["Grizzly Bears"]
+    assert [card.name for card in game.players[1].hand] == ["Hill Giant"]
     assert not game.is_on_battlefield(giant) and not game.is_on_battlefield(bears)
 
 
