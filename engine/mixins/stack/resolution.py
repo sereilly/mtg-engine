@@ -732,9 +732,7 @@ class StackResolutionMixin:
         CR 608.2b to re-check."""
         if item.ability_instruction is not None:
             return False
-        # The spell's own card: an instant or sorcery on the stack *is* the
-        # card (no permanent's layers to read through) — as any text change
-        # made it (CR 612, ``spell_text_card``).
+        # The spell's own card, as any text change made it (CR 612).
         spell = spell_text_card(item)
         spec = graveyard_target_spec(spell, compile_card_oracle(spell)) or {}
         return bool(spec.get(ANNOUNCED_SEAT) and spec.get("own_graveyard_only"))
@@ -891,9 +889,7 @@ class StackResolutionMixin:
                 caster,
                 target,
                 item.card,
-                # What the copy says: its copiable values, which CR 707.2 says
-                # no text-changing effect is part of — a copy is built fresh
-                # and carries no record, so this is its printed text.
+                # CR 707.2: a copy carries no text change, so its printed text.
                 text_card=spell_text_card(item),
                 target_permanent_index=item.target_permanent_index,
                 target_permanent_id=item.target_permanent_id,
@@ -950,10 +946,8 @@ class StackResolutionMixin:
             owner_index=item.owner_index,
             leaves_to_exile=leaves_stack_to_exile(item),
             target_graveyard_card=item.target_graveyard_card,
-            # CR 612: what this spell's text was changed to while it waited —
-            # read as it resolves, and carried onto the permanent it becomes
-            # (CR 400.7a). ``card`` above stays the printed card, which is
-            # the one that goes to a graveyard.
+            # CR 612: read as it resolves, carried onto the permanent it
+            # becomes (CR 400.7a); ``card`` stays the printed card.
             text_change_effects=item.text_change_effects,
         )
         return
@@ -1008,11 +1002,9 @@ class StackResolutionMixin:
         # channel an ability's context already carries, which the role scope
         # reads its card from (``handlers/_targets.resolve_role_graveyard_card``).
         target_graveyard_card=None,
-        # The text changes recorded on the spell's stack object
-        # (``StackItem.text_change_effects``, CR 612). *card* is the printed
-        # card — the object that goes to a graveyard, a hand or the
-        # battlefield — and what the spell **says** is that card with these
-        # applied: folded once here, and read wherever this method reads text.
+        # ``StackItem.text_change_effects`` (CR 612): *card* is the printed
+        # card that moves; what the spell says is *card* with these applied,
+        # folded once below (``text_card``) for every text read here.
         text_change_effects=(),
     ) -> None:
         caster = self.players[caster_index]
@@ -1056,12 +1048,8 @@ class StackResolutionMixin:
             # reads the colour it arrives with — and with the effect's own
             # duration and timestamp (``color_changes``).
             carry_spell_color_change(choices, permanent)
-            # …and its text twin: a text change made while it was a spell
-            # (Sleight of Mind, Magical Hack, Artificial Evolution at a
-            # creature spell) — "the permanent will retain the text change
-            # until the effect wears off" (the cards' rulings). Before the
-            # entry, so the permanent's own entry trigger and every static
-            # watching it arrive read the changed words.
+            # …and its text twin (the rulings: "the permanent will retain the
+            # text change until the effect wears off"), before the entry.
             carry_spell_text_changes(text_change_effects, permanent)
             # CR 400.7c, its prevention twin: "Prevention effects that apply to
             # damage from a permanent spell on the stack continue to apply to

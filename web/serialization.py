@@ -1277,9 +1277,7 @@ def _serialize_stack_item(item, game: Game) -> dict:
     # badges from — "C", the swatch it already has, for a spell an effect made
     # colourless (Ersatz Gnomes), and the first of several.
     serialized_card = _serialize_card(item.card)
-    # A text change made to the spell (CR 612): the printed text is sent with
-    # the words it now reads differently, the shape a permanent's
-    # ``text_changes`` has, so the card preview strikes them through alike.
+    # A text change on the spell (CR 612), in a permanent's ``text_changes`` shape.
     spell_edits = changed_words(item)
     if spell_edits:
         serialized_card["text_changes"] = spell_edits

@@ -270,3 +270,38 @@ def test_the_five_offer_a_spell_and_a_permanent_and_never_an_ability(catalog_by_
         assert sorted((e["kind"], e["name"]) for e in spec["valid_targets"]) == [
             ("permanent", "Grizzly Bears"), ("stack", "Lightning Bolt"),
         ], card.name
+
+
+@pytest.mark.cr("612.1", "400.7a")
+def test_crystal_spray_asks_which_vocabulary_of_an_interactive_seat_for_a_spell(
+    catalog_by_name,
+):
+    """Sol'kanar the Swamp King prints "black" and "Swamp": Crystal Spray
+    naming B to U on the creature spell asks its interactive caster which word
+    it rewrites (CR 612.1: the card offers either vocabulary). The prompt is
+    held on the spell, and the answer — the land type — is what the permanent
+    enters with, until end of turn."""
+    game = _duel(interactive=(1,))
+    game.players[0].hand = [catalog_by_name["Sol'kanar the Swamp King"]]
+    assert game.queue_from_hand(0, "Sol'kanar the Swamp King").supported
+    spell = game.stack[-1]
+
+    _cast_at_the_spell(
+        game, 1, catalog_by_name["Crystal Spray"], old_color="B", new_color="U",
+    )
+    game.resolve_top_of_stack(pause_for_choices=True)
+    (prompt,) = game.pending_choices_of("text_change_vocabulary")
+    assert prompt.data["options"] == ["color_word", "land_type"]
+    assert prompt.data["_spell"] is spell and "_permanent" not in prompt.data
+    assert game.confirm_text_change_vocabulary(1, "land_type")
+    resolve_stack(game)
+
+    assert (
+        "Crystal Spray changed swamp to island in Sol'kanar the Swamp King's text "
+        "(on the stack)" in game.log
+    )
+    (solkanar,) = game.players[0].battlefield
+    assert game._has_keyword(solkanar, "islandwalk")
+    assert "black spell" in solkanar.effective_card.oracle_text, "the colour word stood"
+    game.resolve_cleanup_step(0)
+    assert game._has_keyword(solkanar, "swampwalk")
