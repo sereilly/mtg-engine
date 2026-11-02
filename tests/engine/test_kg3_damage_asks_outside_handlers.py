@@ -128,3 +128,125 @@ def test_every_damage_call_outside_the_handlers_can_ask_and_none_runs_past_the_q
         "before the first one's answer; make them one run_resumable loop: "
         f"{back_to_back}"
     )
+
+
+# ---------------------------------------------------------------------------
+# CR 616.1's last sentence: several seats asked about one effect's damage are
+# asked in APNAP order
+# ---------------------------------------------------------------------------
+
+#: Loops that deal damage and are *not* walked through
+#: ``effect_ordering.in_apnap_order``, by (module, enclosing function), each
+#: with the reason its order is not a CR 616.1 question — or the round that
+#: owes it. A loop missing from here and not ordered fails; an entry naming no
+#: such loop fails too, so the table cannot outlive what it excuses.
+_NOT_APNAP = {
+    ("handlers/bites.py", "bound_bites_source"):
+        "every bite is dealt to one creature: one seat is asked, in turn",
+    ("handlers/bites.py", "_exiled_card_bites_source"):
+        "every bite is dealt to one creature: one seat is asked, in turn",
+    ("handlers/damage.py", "deal_damage_and_opponent_choice"):
+        "the second half's recipient is the opponent's pick, made as that "
+        "half is reached, so no order can be computed over the two in advance",
+    ("phases/combat_damage_step.py", "_deal_combat_damage_pass"):
+        "Known gap: the combat damage step walks blockers by defender, then "
+        "attackers' events, then defenders, which is APNAP in a duel (the "
+        "active player's attackers are dealt to first) and not among several "
+        "defending players; the module is being split this round (p0)",
+    ("phases/combat_damage_step.py", "resolve_all_combat_damage"):
+        "first-strike and regular passes, not recipients (CR 510.4)",
+}
+
+
+def _enclosing(parents, node):
+    current = node
+    while current in parents:
+        current = parents[current]
+        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return current
+    return None
+
+
+def _defs(tree):
+    found = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            found.setdefault(node.name, node)
+    return found
+
+
+def _deals(node, defs, seen) -> bool:
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Call):
+            if _is_entry(sub):
+                return True
+            called = _name(sub)
+            if called in defs and called not in seen:
+                seen.add(called)
+                if _deals(defs[called], defs, seen):
+                    return True
+        if isinstance(sub, ast.Name) and sub.id in defs and sub.id not in seen:
+            seen.add(sub.id)
+            if _deals(defs[sub.id], defs, seen):
+                return True
+    return False
+
+
+def _ordered(items, function) -> bool:
+    """*items* is ``in_apnap_order(...)``, or a name the enclosing function
+    assigned from it."""
+    if isinstance(items, ast.Call) and _name(items) == "in_apnap_order":
+        return True
+    if isinstance(items, ast.Name) and function is not None:
+        for node in ast.walk(function):
+            if (
+                isinstance(node, ast.Assign)
+                and any(isinstance(t, ast.Name) and t.id == items.id for t in node.targets)
+                and isinstance(node.value, ast.Call)
+                and _name(node.value) == "in_apnap_order"
+            ):
+                return True
+    return False
+
+
+def _damage_loops():
+    loops = []
+    for path in sorted(_ENGINE.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        defs = _defs(tree)
+        parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+        where_file = path.relative_to(_ENGINE).as_posix()
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and _name(node) == "run_resumable"):
+                continue
+            if len(node.args) < 3:
+                continue
+            items, step = node.args[1], node.args[2]
+            if not (_deals(step, defs, set()) or _deals(items, defs, set())):
+                continue
+            function = _enclosing(parents, node)
+            outer = function
+            while outer is not None and _enclosing(parents, outer) is not None:
+                outer = _enclosing(parents, outer)
+            loops.append((
+                where_file, node.lineno, outer.name if outer is not None else "",
+                _ordered(items, function),
+            ))
+    return loops
+
+
+def test_every_loop_dealing_damage_asks_its_seats_in_apnap_order():
+    loops = _damage_loops()
+    assert len(loops) >= 20, loops
+    unordered = [
+        f"{where}:{line} ({function})" for where, line, function, ordered in loops
+        if not ordered and (where, function) not in _NOT_APNAP
+    ]
+    assert not unordered, (
+        "a loop dealing damage to several recipients at once asks their seats "
+        "in its own order; walk it through effect_ordering.in_apnap_order "
+        f"(CR 616.1's last sentence): {unordered}"
+    )
+    excused = {(where, function) for where, _, function, _ in loops}
+    stale = [key for key in _NOT_APNAP if key not in excused]
+    assert not stale, f"exemptions naming no damage loop: {stale}"

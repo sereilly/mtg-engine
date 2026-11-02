@@ -24,6 +24,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..damage_events import DAMAGE_DENIES_REGENERATION, DAMAGE_EXILES_INSTEAD
+from ..effect_ordering import in_apnap_order
 from ..divided_damage import (DIVIDED_TARGETS, EVENLY, announced_no_targets,
                               divide, divided_entry)
 from ..destruction_events import mark_delayed_destruction
@@ -355,8 +356,10 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             return True, "resolved"
         # One resumable loop: a target whose event stops to ask which effect
         # applies first (CR 616.1e) takes the targets behind it with it.
+        # In APNAP order of the creatures' controllers (CR 616.1's last
+        # sentence): one event dealt to every target at once.
         run_resumable(
-            game, chosen,
+            game, in_apnap_order(game, chosen),
             lambda perm: apply_damage_to_creature(
                 game, perm, damage, source_permanent or card, asks=True,
             ),
@@ -768,7 +771,10 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             # narrows and for the same reason: a seat the clause does not name
             # is dealt no damage at all rather than zero, because a loop that
             # visited it would still ask every shield and replacement it has.
-            seats_controlling(
+            #
+            # In APNAP order (CR 616.1's last sentence): every seat is dealt
+            # its damage at once, so the active player's question comes first.
+            in_apnap_order(game, seats_controlling(
                 game,
                 seats_matching_deed(
                     game, context,
@@ -776,14 +782,16 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                     instruction.payload.get("recipient_did"),
                 ),
                 instruction.payload.get("recipient_controls"),
-            ),
+            )),
             _hit_player,
         )
         return True, "resolved"
     if instruction.payload.get("recipient") == "each_opponent":
         # "…deals N damage to each opponent": one player-damage event per
-        # living opponent, in seat order, resumable so a shield or replacement
-        # that stops to ask carries the rest of the loop with it.
+        # living opponent, in APNAP order (CR 616.1's last sentence: dealt at
+        # once, so their questions are asked active player first), resumable
+        # so a shield or replacement that stops to ask carries the rest of the
+        # loop with it.
         def _hit_opponent(opponent_index: int) -> None:
             face = game.players[opponent_index]
             game._deal_damage_to_player(
@@ -793,7 +801,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
 
         run_resumable(
             game,
-            seats_controlling(
+            in_apnap_order(game, seats_controlling(
                 game,
                 seats_matching_deed(
                     game, context,
@@ -801,7 +809,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                     instruction.payload.get("recipient_did"),
                 ),
                 instruction.payload.get("recipient_controls"),
-            ),
+            )),
             _hit_opponent,
         )
         return True, "resolved"
@@ -881,7 +889,16 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 then=_damage_reporter(game, card, target_perm),
             )
 
-        run_resumable(game, ordered, hit)
+        # In APNAP order of the seats the shares' questions go to (CR 616.1's
+        # last sentence) — one event, dealt to every target at once.
+        run_resumable(
+            game,
+            in_apnap_order(
+                game, ordered,
+                affected=lambda entry: entry[0] if entry[0] is not None else entry[1],
+            ),
+            hit,
+        )
         return True, "resolved"
     # Support multiple target indices for spells like Fireball
     if isinstance(target_perm_idx, list):
@@ -913,10 +930,10 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # targets behind it with it.
         run_resumable(
             game,
-            sorted(
+            in_apnap_order(game, sorted(
                 chosen, key=lambda perm: game.battlefield_index_of(perm) or 0,
                 reverse=True,
-            ),
+            )),
             lambda target_perm: game._mark_damage_on_permanent(
                 target_perm, per_target, source=source_permanent or card,
                 then=_damage_reporter(game, card, target_perm), asks=True,
@@ -1133,7 +1150,17 @@ def deal_damage_and_self_damage(game: Game, instruction: OracleInstruction, cont
 
     # Two damage events, one resumable loop: the self-damage waits for any
     # question the first event asks (CR 616.1e) rather than landing past it.
-    run_resumable(game, [to_target, to_caster], lambda event: event())
+    # Dealt at once, so asked in APNAP order of the two recipients' seats.
+    run_resumable(
+        game,
+        in_apnap_order(
+            game,
+            [(target_perm if target_perm is not None else target, to_target),
+             (caster, to_caster)],
+            affected=lambda entry: entry[0],
+        ),
+        lambda entry: entry[1](),
+    )
     return True, "resolved"
 
 
@@ -1201,8 +1228,8 @@ def coin_flip_damage_loop(
             if caster_heads and opponent_heads:
                 finish()
                 return
-            # "…1 damage to each player whose coin comes up tails" — the
-            # caster's, then the opponent's, as before.
+            # "…1 damage to each player whose coin comes up tails" — dealt
+            # at once, so asked in APNAP order (CR 616.1's last sentence).
             tails = [
                 player for player, heads in
                 ((caster, caster_heads), (opponent, opponent_heads)) if not heads
@@ -1216,7 +1243,7 @@ def coin_flip_damage_loop(
                     play()
 
             run_resumable(
-                game, tails,
+                game, in_apnap_order(game, tails),
                 lambda player: game._deal_damage_to_player(
                     player, damage, source=damage_dealer(context), asks=True,
                 ),
@@ -1291,7 +1318,7 @@ def deal_damage_to_those_damaged_this_game(
         game._deal_damage_to_player(victim, damage, source=source, asks=True)
 
     run_resumable(
-        game, recipients, hit,
+        game, in_apnap_order(game, recipients), hit,
         then=lambda: game.log.append(
             f"{card.name} dealt {damage} damage to {', '.join(struck)}"
             if struck else f"{card.name} has dealt damage to nobody yet"
@@ -1341,7 +1368,7 @@ def deal_damage_to_recorded_permanents(
         recipients.append(permanent)
     struck = [permanent.card.name for permanent in recipients]
     run_resumable(
-        game, recipients,
+        game, in_apnap_order(game, recipients),
         lambda permanent: apply_damage_to_creature(
             game, permanent, damage, damage_dealer(context), asks=True,
         ),

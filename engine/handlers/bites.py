@@ -19,6 +19,7 @@ Split out of ``damage.py`` at the 2,000-line cap's split round.
 
 from __future__ import annotations
 
+from ..effect_ordering import in_apnap_order
 from ..game_types import target_ids
 from ..resumption import run_resumable
 from ._common import apply_damage_to_creature
@@ -326,7 +327,10 @@ def bound_bites_player(game, instruction, context):
             victim, power, source=biter, then=_report, asks=True,
         )
 
-    run_resumable(game, biters, bite)
+    # Each to its own controller, at once: asked in APNAP order.
+    run_resumable(
+        game, in_apnap_order(game, biters, affected=lambda entry: entry[1]), bite,
+    )
     return True, "resolved"
 
 
@@ -461,7 +465,11 @@ def each_matching_bites_itself(game, instruction, context):
                 + ", ".join(struck)
             )
 
-    run_resumable(game, biters, bite, then=summary)
+    # Each creature to itself, at once: asked in APNAP order of controllers.
+    run_resumable(
+        game, in_apnap_order(game, biters, affected=lambda entry: entry[0]), bite,
+        then=summary,
+    )
     return True, "resolved"
 
 
