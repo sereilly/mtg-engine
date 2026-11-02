@@ -664,9 +664,10 @@ class DrawsAndDiscardsMixin:
                 effect_kind=trig.effect_kind,
                 ability_text=trig.source_line,
                 # The causer, for "that player loses 5 life" (Psychic Purge) —
-                # never over a target the line chooses (Guerrilla Tactics'
-                # "any target", CR 603.3d).
-                target_player_index=bound_event_seat(trig.instruction, causer),
+                # what the event is about, never a target, and never beside a
+                # target the line chooses (Guerrilla Tactics' "any target",
+                # CR 603.3d).
+                about_player_index=bound_event_seat(trig.instruction, causer),
                 trigger_context={"event_subject_player": causer},
             )
         # "Whenever a spell or ability an opponent controls causes you to
@@ -699,7 +700,7 @@ class DrawsAndDiscardsMixin:
                     effect_kind=trig.effect_kind,
                     ability_text=trig.source_line,
                     source_permanent=observer,
-                    target_player_index=bound_event_seat(trig.instruction, causer),
+                    about_player_index=bound_event_seat(trig.instruction, causer),
                     trigger_context={
                         "event_subject_player": causer,
                         "discarded_name": getattr(card, "name", None),

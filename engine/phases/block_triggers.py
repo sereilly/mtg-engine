@@ -232,7 +232,8 @@ class BlockTriggersMixin:
                         # CR 603.3a: the attachment's controller controls the
                         # ability, and is the "you" its cost is offered to.
                         caster_index=seat,
-                        target_player_index=seat,
+                        target_player_index=None,
+                        about_player_index=seat,
                         target_permanent_index=None,
                         x_value=None,
                         ability_instruction=trig.instruction,
@@ -349,7 +350,8 @@ class BlockTriggersMixin:
                     StackItem(
                         card=source.card,
                         caster_index=source_seat,
-                        target_player_index=source_seat,
+                        target_player_index=None,
+                        about_player_index=source_seat,
                         target_permanent_index=None,
                         x_value=None,
                         ability_instruction=trig.instruction,

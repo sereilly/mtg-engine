@@ -1431,10 +1431,15 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                             # condition named. For both of the conditions that
                             # name one, the gate above has already checked it is
                             # the seat whose upkeep this is.
-                            "target_player_index": (
-                                picked[0] if picked
-                                else player_index
-                                if cond in ("upkeep_chosen", "upkeep_enchanted_controller")
+                            # A pick is a choice (``targets_chosen``); the
+                            # seat the condition named is what the event is
+                            # about (``StackItem.about_player_index``).
+                            "target_player_index": picked[0] if picked else None,
+                            "about_player_index": (
+                                player_index
+                                if not picked and cond in (
+                                    "upkeep_chosen", "upkeep_enchanted_controller",
+                                )
                                 else None
                             ),
                             "target_permanent_index": picked[1] if picked else None,

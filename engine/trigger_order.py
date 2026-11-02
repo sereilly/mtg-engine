@@ -116,6 +116,9 @@ def _targets(item) -> tuple:
         # the event named is not a target, and it tells two firings apart all
         # the same (two Leprechauns blocked by two different creatures).
         item.about_permanent_id,
+        # …and so does the seat it named (two upkeep triggers about two
+        # different players' upkeeps).
+        item.about_player_index,
     )
 
 

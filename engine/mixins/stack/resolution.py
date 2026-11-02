@@ -380,12 +380,19 @@ class StackResolutionMixin:
                 target_permanent_index = self.battlefield_index_of(found[1])
             else:
                 target_permanent_index = None
+        # **The player the sentence acts on, where nothing was chosen**: the
+        # seat the firing event named (``StackItem.about_player_index`` —
+        # whose upkeep, who caused the discard, the delayed ability's bound
+        # player), the seat twin of the object above and handed over here for
+        # its reason. A seat a player chose (``target_player_index``) is never
+        # displaced by it.
         if target_idx is None:
-            target_idx = (
-                item.target_player_index
-                if item.target_player_index is not None
-                else self._default_opposing_seat(item.caster_index)
-            )
+            if item.target_player_index is not None:
+                target_idx = item.target_player_index
+            elif item.about_player_index is not None:
+                target_idx = item.about_player_index
+            else:
+                target_idx = self._default_opposing_seat(item.caster_index)
         if item.activated:
             # CR 602.2b: an activated ability's slot is re-read off the ids
             # its announcement stamped, as a spell's is

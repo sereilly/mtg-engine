@@ -828,7 +828,10 @@ class DeclareAttackersStepMixin:
                     StackItem(
                         card=permanent.card,
                         caster_index=controller_index,
-                        target_player_index=target_index,
+                        # The seat the attack was at: what the event is about,
+                        # never a target (``StackItem.about_player_index``).
+                        target_player_index=None,
+                        about_player_index=target_index,
                         target_permanent_index=None,
                         x_value=None,
                         ability_instruction=trig.instruction,
@@ -946,7 +949,8 @@ class DeclareAttackersStepMixin:
                         # attachment's controller, which is who "you may pay
                         # {1}" is offered to — never the attacking creature's.
                         caster_index=seat,
-                        target_player_index=seat,
+                        target_player_index=None,
+                        about_player_index=seat,
                         target_permanent_index=None,
                         x_value=None,
                         ability_instruction=trig.instruction,

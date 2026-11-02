@@ -469,6 +469,14 @@ def frozen_that_player_seat(game: Game, context: OracleExecutionContext) -> int 
     chosen = (context.results or {}).get("chosen_player")
     if isinstance(chosen, int) and 0 <= chosen < len(game.players):
         return chosen
+    # …and where that step chose nobody because its seat is **no longer a
+    # legal target** (a shroud gained in response, CR 608.2b), the seat the
+    # announcement named for the player role this step's own role depends on
+    # (``OracleExecutionContext.relation_seat``). The illegal player is not
+    # affected; the creature "that player controls" is still legal and is.
+    related = getattr(context, "relation_seat", None)
+    if isinstance(related, int) and 0 <= related < len(game.players):
+        return related
     # A **spell** has no firing event, so there is nothing frozen to read — and
     # the pronoun still has an antecedent: the sentence in front of it. "Cast
     # this spell only during an opponent's turn. Tap target creature **that
@@ -725,6 +733,53 @@ def announced_context(context: OracleExecutionContext) -> OracleExecutionContext
     )
 
 
+def announced_relation_seat(
+    game: Game, announced: OracleExecutionContext, payload: dict, entry: dict,
+) -> int | None:
+    """The seat the announcement named for the **player** role *entry*'s
+    relation points at ("…target nonblack creature **that player** controls",
+    the player being "target opponent" — Keeper of the Dead), **legal or not**;
+    None for a role related to no seat role.
+
+    CR 608.2b judges each target on its own: an opponent given shroud in
+    response is an illegal target and is not affected by the parts of the
+    effect for which they are illegal, but the creature is still a nonblack
+    creature controlled by the player that announcement chose, so it is still
+    legal and is still destroyed. Read off the announcement rather than through
+    ``resolve_role_player``, whose answer is the seat *as a target* and is None
+    once that seat is illegal — which left "that player" naming nobody and the
+    legal creature standing.
+    """
+    from ..targeting import spec_roles
+    from ..target_roles import (payload_role_slot, recorded_role_seats,
+                                role_dependency, role_is_seat)
+
+    _relation, depends_on = role_dependency(entry)
+    if depends_on is None:
+        return None
+    roles = spec_roles(payload.get("targets"))
+    earlier = next((role for role in roles if role.get("role") == depends_on), None)
+    if earlier is None or not role_is_seat(earlier):
+        return None
+    recorded = recorded_role_seats(announced)
+    if recorded is not None:
+        slot = payload_role_slot(payload, depends_on)
+        seat = recorded[slot] if slot is not None and slot < len(recorded) else None
+    elif [role for role in roles if role_is_seat(role)] == [earlier]:
+        # The one player role rides the scalar seat (``resolve_role_player``'s
+        # reading), by identity.
+        seat = next(
+            (index for index, player in enumerate(game.players)
+             if player is announced.target),
+            None,
+        )
+    else:
+        return None
+    if isinstance(seat, bool) or not isinstance(seat, int):
+        return None
+    return seat if 0 <= seat < len(game.players) else None
+
+
 def announced_role_seat(
     game: Game, context: OracleExecutionContext, instruction, role: str,
 ) -> "int | None":
@@ -831,25 +886,18 @@ def _role_seat_is_still_a_target(
     True where the resolving object's controller cannot be found: a context
     with no seat to ask from is not evidence that a target went illegal.
     """
-    from ..player_comparisons import comparison_at_resolution
-
     caster = next(
         (index for index, player in enumerate(game.players) if player is context.caster),
         None,
     )
     if caster is None:
         return True
-    source = context.source_permanent
     # …without a comparison the card bounds to the announcement ("…as you
-    # activate this ability", Keeper of the Dead's rulings): see
-    # ``player_comparisons.comparison_at_resolution``.
-    role = comparison_at_resolution(role)
-    return any(
-        entry.get("kind") == "player" and entry.get("seat") == seat
-        for entry in game._enumerate_targets(
-            caster, context.card, dict(role), for_cast=False,
-            source_permanent=source, ability_source=source, triggered=True,
-        )
+    # activate this ability", Keeper of the Dead's rulings): the one predicate
+    # the whole-object verdict asks too (``Game.role_seat_is_offered``).
+    return game.role_seat_is_offered(
+        caster, context.card, role, seat,
+        source=context.source_permanent, triggered=True,
     )
 
 

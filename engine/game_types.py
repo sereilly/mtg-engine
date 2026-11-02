@@ -594,6 +594,27 @@ class StackItem(_TargetIdsGuard):
     # ``handlers/_targets.resolve_own_combatant``. None for a spell, an
     # activated ability and every trigger whose event named no such object.
     about_permanent_id: int | None = None
+    # **The player this triggered ability is about**, by seat: the one its
+    # firing event named for "that player" — whose upkeep it is ("…deals 1
+    # damage to that player", the upkeep of the chosen or the enchanted
+    # permanent's controller), who caused the discard ("that player loses 5
+    # life", Psychic Purge), whom the attack was at, the seat a delayed
+    # ability is bound to (CR 603.7c), the controller of the attachment or the
+    # unblocked attacker whose ability it is. Frozen by the fire site as the
+    # ability triggers (CR 603.10).
+    #
+    # **Never a target**, for ``about_permanent_id``'s reasons: nobody chose
+    # it, so CR 603.3d has nothing left to choose, CR 608.2b does not ask about
+    # it and nothing "becomes the target" of it. ``target_player_index`` is the
+    # seat a player chose (or the battlefield a chosen permanent stood on) and
+    # only that: until this field existed the fire sites stamped the event's
+    # seat there, so the channel held a choice *or* such a seat, and a line
+    # that printed "target player" beside one of those stamps would have had
+    # its choice read as made. Read by the context builder
+    # (``_ability_execution_context``), which hands it to the effect as the
+    # player the ability resolves at where nothing chose one; None for a spell,
+    # an activated ability and every trigger whose event named no seat.
+    about_player_index: int | None = None
     # CR 612 on a **spell**: the text-changing effects that rewrote this object
     # while it was on the stack ("Change the text of target spell or
     # permanent", Sleight of Mind, Magical Hack, Artificial Evolution) — the
@@ -727,6 +748,14 @@ class OracleExecutionContext(_TargetIdsGuard):
     # a branch inside one role's scope can spend another role (Crooked Scales'
     # toll buys a repeat of the whole flip, opponent's creature included).
     announced_targets: tuple | None = None
+    # The seat a several-role announcement named for the **player** role the
+    # scoped step's own role depends on — "…target nonblack creature **that
+    # player** controls" after "target opponent" (Keeper of the Dead) — as it
+    # was named, whether or not that player is still a legal target (CR
+    # 608.2b judges the creature on its own). Set by
+    # ``handlers/control_flow._role_scoped``; read by
+    # ``handlers/_targets.frozen_that_player_seat``. None everywhere else.
+    relation_seat: int | None = None
     # **This resolution's targets were chosen by a player's announcement** —
     # a spell (CR 601.2c) or an activated ability (CR 602.2b), whose every
     # owed target was named by its caller or defaulted from the picker's own

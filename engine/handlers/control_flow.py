@@ -219,7 +219,8 @@ def _role_scoped(
     from ..targeting import spec_roles
     from ..target_roles import (payload_own_role, payload_role_slot,
                                 role_is_seat)
-    from ._targets import resolve_role_permanent, resolve_role_player
+    from ._targets import (announced_relation_seat, resolve_role_permanent,
+                           resolve_role_player)
 
     payload = step.payload
     role = payload_own_role(payload)
@@ -348,6 +349,7 @@ def _role_scoped(
         target_permanent_index=game.battlefield_index_of(permanent),
         target_permanent_id=[permanent.permanent_id],
         announced_targets=remembered,
+        relation_seat=announced_relation_seat(game, announced, payload, entry),
     )
 
 
