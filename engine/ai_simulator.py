@@ -1178,11 +1178,16 @@ def run_ai_simulation(
         # `game.turn` starts at 1 and `start_next_turn` increments it before
         # each turn, so it is reset to 0 for the first increment to land on 1.
         game.turn = 0
-        # Seat 0 takes the first turn, as it always has here. The engine works
+        # **The starting player takes the first turn** (CR 103.8): the seat
+        # that won the flip, whose choice — the AI's, to play first — is the
+        # one `select_starting_player` logs (CR 103.1). Until the kg3 round
+        # seat 0 always took it: the flip set the deal and the mulligan
+        # declarations (CR 103.5) and then the log's "chooses to go first"
+        # was untrue in every game the flip went to seat 1. The engine works
         # out whose turn is next from whose turn it was (CR 500.7 keeps the
-        # rotation's place across extra turns), so the seat "before" the first
-        # one is the last.
-        game.active_player_index = len(game.players) - 1
+        # rotation's place across extra turns), so the seat "before" the
+        # starting player is recorded as the one whose turn it was.
+        game.active_player_index = (starting_player - 1) % len(game.players)
 
         # *max_turns* is rounds, as it always was: two turns each. An extra
         # turn is one of them, so a game with Time Walk in it still ends.

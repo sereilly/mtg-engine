@@ -14,7 +14,13 @@ the board as declared, with ``ai_declarations``' own estimate of a fight
 (``_gang_kills``: first strike, deathtouch, a shield):
 
 * **beyond the minimum** — when the blockers together kill the attacker, how
-  many more of them there are than the fewest of them that do;
+  many more of them there are than the fewest of them that do, counting the
+  ones the attacker could destroy (``_extras_at_risk``). Until the kg3 round
+  this counted every extra blocker; once the flip's winner took the first
+  turn, three declarations in these runs kept a 0/2 or 0/3 blocker (a safe
+  block, made first) beside the two 1/1s that then killed a 1/2 — a creature
+  the attacker cannot destroy, which "costs that gang nothing"
+  (``ai_declarations._gang_blocks``), so no creature given away;
 * **beside a compelled blocker that wins alone** — the blockers added to an
   attacker one creature was already required to block (CR 509.1c: provoke's
   mark, ``Game.block_requirements``) and kills alone.
@@ -35,7 +41,7 @@ from unittest import mock
 import pytest
 
 from engine import ai_declarations, ai_rehearsal, ai_simulator
-from engine.ai_declarations import _gang_kills
+from engine.ai_declarations import _gang_kills, _kills_back
 from engine.card_loader import manifest_set_path
 from engine.game import Game
 
@@ -54,6 +60,22 @@ def _fewest_that_kill(game, attacker, members) -> int | None:
         if any(_gang_kills(game, attacker, list(gang)) for gang in combinations(members, size)):
             return size
     return None
+
+
+def _extras_at_risk(game, attacker, members, fewest: int) -> int:
+    """How many blockers beyond a kill of *fewest* the attacker could destroy
+    — the least over the kills of that size, so a gang is read at its best.
+    A blocker the attacker's damage cannot destroy (a 0/3 wall before a 1/2)
+    is no creature it may choose to destroy: it "costs that gang nothing"
+    (``ai_declarations._gang_blocks``)."""
+    at_risk = None
+    for gang in combinations(members, fewest):
+        if not _gang_kills(game, attacker, list(gang)):
+            continue
+        extras = [member for member in members if not any(member is kept for kept in gang)]
+        count = sum(1 for member in extras if _kills_back(game, attacker, [member]))
+        at_risk = count if at_risk is None else min(at_risk, count)
+    return at_risk or 0
 
 
 def _read(game: Game, defender: int, blocks: dict) -> dict:
@@ -79,8 +101,10 @@ def _read(game: Game, defender: int, blocks: dict) -> dict:
         read["gangs"] += 1
         fewest = _fewest_that_kill(game, attacker, members)
         if fewest is not None and fewest < len(members):
-            read["beyond"] += len(members) - fewest
-            read["rows"].append(("beyond", attacker.card.name, [m.card.name for m in members]))
+            at_risk = _extras_at_risk(game, attacker, members, fewest)
+            if at_risk:
+                read["beyond"] += at_risk
+                read["rows"].append(("beyond", attacker.card.name, [m.card.name for m in members]))
         alone = [
             slot for slot in slots
             if compelled.get(slot) == attacker_idx

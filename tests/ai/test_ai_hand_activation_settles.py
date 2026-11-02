@@ -76,11 +76,13 @@ def test_a_cycled_card_has_resolved_before_the_pass_that_cycled_it_returns(catal
 #: ULG 1347 replaced 1337 and UDS 1355 replaced 1352 in the kg2 round, when
 #: the AI began to take mulligans and those games stopped cycling a card;
 #: USG 1353 replaced 1346 in LGN W2G4, when the defending AI stopped making
-#: losing blocks.
+#: losing blocks. USG 1346 replaced 1340, and UDS 1356 and 1357 replaced 1343
+#: and 1348, in the kg3 round, when the flip's winner began to take the first
+#: turn (seat 0 had taken it in every game) and those games stopped cycling.
 _CYCLING_GAMES = {
-    "USG": (1337, 1339, 1340, 1345, 1353),
+    "USG": (1337, 1339, 1346, 1345, 1353),
     "ULG": (1347, 1338, 1341, 1344, 1345),
-    "UDS": (1339, 1341, 1343, 1348, 1355),
+    "UDS": (1339, 1341, 1356, 1357, 1355),
 }
 
 

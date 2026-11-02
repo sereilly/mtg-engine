@@ -49,8 +49,11 @@ _SEEDS = {
     # longer walk Lone Wolf past a block; nor do 1338-1343's. Seed 1344's
     # reached both answers until Legions' closer C2 changed the AI's blocks
     # and its main-phase shields (green on the link beneath it, red on its):
-    # neither 1344's four nor 1345's reach both now. Seed 1346's do.
-    "Lone Wolf": 1346,
+    # neither 1344's four nor 1345's reach both now. Seed 1346's did, until
+    # the kg3 round gave the first turn to the flip's winner (seat 0 had
+    # taken it in every game): 1346's four keep the damage but never walk
+    # past a block. Seed 1347's reach both.
+    "Lone Wolf": 1347,
 }
 
 
