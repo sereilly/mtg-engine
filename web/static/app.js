@@ -2707,6 +2707,18 @@ function cardRequiresCastColorChoice(card) {
 
 const LAND_TYPE_BY_SYMBOL = { W: "plains", U: "island", B: "swamp", R: "mountain", G: "forest" };
 
+// What a text change's word is called on its button and in its hint. The wire
+// addresses a basic land type by its colour letter (W = Plains, …), but the
+// word being replaced is "Plains", not "White": Magical Hack's buttons read
+// as colours on both its permanent and its spell path.
+function textChangeWordLabel(symbol, isLandType) {
+  if (isLandType) {
+    const word = LAND_TYPE_BY_SYMBOL[symbol] || "";
+    return word ? word.charAt(0).toUpperCase() + word.slice(1) : String(symbol);
+  }
+  return MANA_COLOR_OPTIONS.find((option) => option.symbol === symbol)?.label || String(symbol);
+}
+
 // Magical Hack replaces an existing basic land type word — the "from" choices
 // are limited to land words actually present on the target (its land type,
 // override, oracle text or granted/printed landwalk keywords).
@@ -14669,6 +14681,12 @@ function renderActivationPrompt() {
       `<div>Ability: ${renderSymbolsInline(pendingManaColor.oracleText || "Activated mana ability")}</div>`,
       `<div class="prompt-choice-row">${(pendingManaColor.colorOptions || MANA_COLOR_OPTIONS).map(
         ({ symbol, label }) => {
+          // A land type is a word, not a colour: its button names the type
+          // and carries no mana symbol.
+          if (pendingManaColor.kind === "cast" && pendingManaColor.isLandType) {
+            return `<button type="button" class="prompt-choice-btn" data-mana-color="${symbol}">` +
+              `${escapeHtml(textChangeWordLabel(symbol, true))}</button>`;
+          }
           const token = `{${symbol}}`;
           const src = symbolSrc(token);
           const symbolHtml = src
@@ -16057,10 +16075,12 @@ function resolvePendingManaColor(manaColor) {
       old_color: pending.fromColor,
       mana_color: manaColor,
     };
-    updateActionHint(`Casting ${pending.cardName} (${pending.fromColor} → ${manaColor})...`);
+    const fromWord = textChangeWordLabel(pending.fromColor, pending.isLandType);
+    const toWord = textChangeWordLabel(manaColor, pending.isLandType);
+    updateActionHint(`Casting ${pending.cardName} (${fromWord} → ${toWord})...`);
     sendAction(actionBody)
       .then(() => {
-        updateActionHint(`Cast ${pending.cardName}: replaced ${pending.fromColor} with ${manaColor}.`);
+        updateActionHint(`Cast ${pending.cardName}: replaced ${fromWord} with ${toWord}.`);
         clearPendingHandCast();
       })
       .catch((e) => {
