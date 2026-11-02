@@ -1015,7 +1015,7 @@ def test_w1g9_quicksilver_dagger_grants_both_sentences_of_its_ability(set_pool):
     assert host.tapped
     assert game.players[1].life == 19
     assert len(game.players[0].hand) == hand + 1
-    assert "Host dealt 1 damage" in game.log
+    assert any(line.startswith("Host dealt 1 damage to ") for line in game.log), game.log[-6:]
     assert "Host drew 1 card" in game.log
 
 

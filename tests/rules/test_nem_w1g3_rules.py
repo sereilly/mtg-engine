@@ -107,7 +107,7 @@ def test_a_board_wide_becomes_blocked_watcher_hears_an_effect_block():
     resolve_stack(game)
 
     assert attacker.blocked
-    assert "Close Quarters dealt 1 damage" in game.log
+    assert "Close Quarters dealt 1 damage to P1" in game.log
     assert game.players[1].life == 19
 
 
