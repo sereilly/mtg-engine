@@ -79,7 +79,7 @@ def _finish_own_turn(sid: str) -> None:
         if state.get("cleanup_discard"):
             code, _ = _act(sid, action="cleanup_select", hand_index=0)
         elif state["current_step"] == "declare_attackers" and state["priority_player"] is None:
-            code, _ = _act(sid, action="declare_attackers", attacker_indices=[], target_seat=1)
+            code, _ = _act(sid, action="declare_attackers", attacker_ids=[], target_seat=1)
         else:
             code, _ = _act(sid, action="pass_priority")
             if code != 200:
@@ -147,7 +147,7 @@ def test_the_web_ai_flashes_in_a_blocker_before_the_blocks():
     assert _state(sid)["current_step"] == "declare_attackers"
     code, body = _act(
         sid, action="declare_attackers",
-        attacker_indices=[game.battlefield_index_of(bears)], target_seat=1,
+        attacker_ids=[bears.permanent_id], target_seat=1,
     )
     assert code == 200, body
     for _ in range(12):

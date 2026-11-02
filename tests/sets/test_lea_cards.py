@@ -755,6 +755,12 @@ def test_pass_priority_triggers_ai_instant_response_on_opponent_turn():
     session.game.players[1].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
     session.game.players[0].life = 20
     session.game.players[1].life = 20
+    # The opponent's end step: one of the windows the AI acts in at instant
+    # speed (``ai_priority.instant_speed_window`` — the simulator's and, since
+    # kg3/aiplay, the web AI seat's). An empty stack in the human's main phase
+    # is not one, so the Bolt is held there.
+    session.game.current_phase = session.game.current_turn_phase = "ending"
+    session.game.current_step = "end"
 
     passed = _pass_priority(sid, 0)
     assert passed.status_code == 200
