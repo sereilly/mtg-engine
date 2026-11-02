@@ -890,14 +890,23 @@ class SacrificeChoicesMixin:
     # they behave uniformly. ``arm_forced_sacrifice`` either arms an interactive
     # prompt (human seat) or resolves the sacrifice inline with a deterministic
     # heuristic (AI / headless). The choice's payload is
-    #   {"count", "filter", "exclude", "reason", "on_short"}
+    #   {"count", "filter", "exclude", "reason"}
     # where ``filter`` is the printed noun phrase as a filter payload
     # (``{"nontoken": True}`` for Lich, ``{"type_filter": "creature"}`` for Lord of
     # the Pit, ``{"type_filter": "creature", "with_keywords": ["flying"]}`` for Run
-    # Afoul), ``exclude`` is a Permanent that can't be chosen (Lord of the Pit
-    # excludes itself), and ``on_short`` is the effect applied when the player owes
-    # more sacrifices than they can make (None, {"kind": "lose"}, or
-    # {"kind": "damage", "amount": N}).
+    # Afoul), and ``exclude`` is a Permanent that can't be chosen (Lord of the Pit
+    # excludes itself).
+    #
+    # **What happens when a player cannot sacrifice what they owe is not this
+    # mechanism's.** A printed "If you can't, ..." is decided before anything is
+    # armed, by the step that knows the sentence: the sacrifice handler records
+    # whether the payer controls the printed number (``sacrificed_this_way``,
+    # read by the compiled branch behind it -- Lich's loss, Infernal Denizen's
+    # control change), and Lord of the Pit's upkeep arms the sacrifice only
+    # when a creature can be given up and deals its 7 damage otherwise. A
+    # consequence riding the prompt (``on_short``) was offered here and no
+    # caller ever passed one; it went in round ``kg3``
+    # (``tests/regressions/test_kg3_leftovers_sacrifice_shortfall.py``).
     #
     # It used to be one of two words, "nontoken" or "creature", tested by two
     # hand-written lines here. That is why a narrowed sacrifice had to be refused
@@ -917,25 +926,7 @@ class SacrificeChoicesMixin:
             out.append(i)
         return out
 
-    def _apply_sacrifice_shortfall(self, player_index: int, owed: int, on_short, reason: str) -> None:
-        """Apply the consequence for a player who can't sacrifice all they owe."""
-        if not on_short or owed <= 0:
-            return
-        player = self.players[player_index]
-        if on_short.get("kind") == "lose":
-            player.lost = True
-            self.log.append(
-                f"{player.name} couldn't sacrifice a nontoken permanent and lost the game ({reason})"
-            )
-        elif on_short.get("kind") == "damage":
-            self._deal_damage_to_player(
-                player, int(on_short.get("amount", 0)), asks=True,
-                then=lambda dealt: self.log.append(
-                    f"{reason} dealt {dealt} damage to {player.name}"
-                ),
-            )
-
-    def _resolve_sacrifice_inline(self, player_index: int, count: int, filter: dict | None, exclude, reason: str, on_short, record: dict | None = None, up_to: bool = False, count_onto=None) -> None:
+    def _resolve_sacrifice_inline(self, player_index: int, count: int, filter: dict | None, exclude, reason: str, record: dict | None = None, up_to: bool = False, count_onto=None) -> None:
         """Sacrifice ``count`` of the player's permanents with the deterministic
         heuristic (permanents whose death loses the game are kept for last).
 
@@ -952,7 +943,6 @@ class SacrificeChoicesMixin:
         for _ in range(count):
             valid = self._sacrifice_candidate_indices(player, filter, exclude)
             if not valid:
-                self._apply_sacrifice_shortfall(player_index, 1, on_short, reason)
                 return
             # `default_sacrifice_pick`'s docstring already named this as one of
             # the three callers of the one rule; it was in fact a fourth copy,
@@ -975,7 +965,6 @@ class SacrificeChoicesMixin:
         filter: dict,
         exclude=None,
         reason: str = "Sacrifice",
-        on_short=None,
         record: dict | None = None,
         up_to: bool = False,
         count_onto=None,
@@ -1023,12 +1012,6 @@ class SacrificeChoicesMixin:
             # sacrifice is *answered* by that — zero is a legal answer — so the
             # count it owes is recorded rather than left unset.
             self._record_sacrifice_count(count_onto, 0)
-            if batch is not None:
-                # Held with the round's answers: a consequence of giving up
-                # too few is part of the simultaneous action (CR 101.4).
-                batch["shortfalls"].append((player_index, count, on_short, reason))
-                return
-            self._apply_sacrifice_shortfall(player_index, count, on_short, reason)
             return
         queued = None if batch is not None else self.pending_choice_of(
             "sacrifice", player_index
@@ -1049,7 +1032,7 @@ class SacrificeChoicesMixin:
                 # A differently-shaped sacrifice is already owed; this one can't be
                 # folded into that prompt, so it resolves inline.
                 self._resolve_sacrifice_inline(
-                    player_index, count, filter, exclude, reason, on_short, record,
+                    player_index, count, filter, exclude, reason, record,
                     up_to=up_to, count_onto=count_onto,
                 )
             return
@@ -1057,7 +1040,7 @@ class SacrificeChoicesMixin:
         self.arm_pending_choice(
             "sacrifice", player_index,
             count=count, filter=filter, exclude=exclude, reason=reason,
-            on_short=on_short, record=record, up_to=up_to, _count_onto=count_onto,
+            record=record, up_to=up_to, _count_onto=count_onto,
             **extra,
         )
 
@@ -1083,7 +1066,7 @@ class SacrificeChoicesMixin:
         rather than by reading the queue, because the round is a
         ``run_resumable`` loop that already knows when its last seat has
         answered."""
-        return {"answers": [], "shortfalls": [], "applied": False}
+        return {"answers": [], "applied": False}
 
     def _default_sacrifice_slots(self, player, data: dict) -> list[int]:
         """The battlefield slots a seat nobody asks gives up: the shared
@@ -1111,9 +1094,8 @@ class SacrificeChoicesMixin:
         (CR 608.2h's last-known information, the rule
         :meth:`_resolve_sacrifice` follows for one seat), then
         :meth:`sacrifice_permanents` — so a watcher going in the same event
-        sees the rest go (CR 603.10a). A seat that could give up fewer than it
-        owed has its printed consequence applied after the sacrifices, with
-        the others'. Returns the permanents sacrificed. Runs once.
+        sees the rest go (CR 603.10a). Returns the permanents sacrificed. Runs
+        once.
         """
         if batch.get("applied"):
             return []
@@ -1138,13 +1120,6 @@ class SacrificeChoicesMixin:
             for perm in went:
                 self.log.append(f"{player.name} sacrificed {perm.card.name} ({data['reason']})")
             self._record_sacrifice_count(data.get("_count_onto"), len(went), totals)
-            short = int(data.get("_short", 0))
-            if short > 0:
-                self._apply_sacrifice_shortfall(
-                    choice.player_index, short, data["on_short"], data["reason"],
-                )
-        for seat, owed, on_short, reason in batch["shortfalls"]:
-            self._apply_sacrifice_shortfall(seat, owed, on_short, reason)
         return gone
 
     def _record_sacrifice_count(
@@ -1201,9 +1176,8 @@ class SacrificeChoicesMixin:
         """Resolve the pending forced sacrifice with the player's chosen
         permanents — by stable id (*permanent_ids*, authoritative when given)
         or by battlefield slot. Requires exactly ``min(count, eligible
-        permanents)`` distinct eligible permanents; if the player owed more
-        than they could sacrifice, the shortfall consequence applies (Lich
-        loses; Lord of the Pit deals damage)."""
+        permanents)`` distinct eligible permanents (CR 609.3: as much as
+        possible)."""
         return self.resolve_pending_choice(
             "sacrifice", player_index, indices=indices, permanent_ids=permanent_ids,
         )
@@ -1257,8 +1231,6 @@ class SacrificeChoicesMixin:
             # until the round's last answer (:meth:`finish_sacrifice_batch`).
             held = [self.permanent_at(player, i) for i in sorted(chosen)]
             self.discard_pending_choice(choice)
-            if count > len(valid) and not data.get("up_to"):
-                data["_short"] = count - len(valid)
             batch["answers"].append((choice, held))
             self.log.append(
                 f"{player.name} chose "
@@ -1285,9 +1257,6 @@ class SacrificeChoicesMixin:
         self._record_sacrifice_count(
             data.get("_count_onto"), len(chosen), (total_power, total_toughness)
         )
-        # A ceiling nobody filled is not a shortfall: "any number" was answered.
-        if count > len(valid) and not data.get("up_to"):
-            self._apply_sacrifice_shortfall(player_index, count - len(valid), data["on_short"], reason)
         self.check_state_based_actions()
         return True
 
@@ -1303,6 +1272,6 @@ class SacrificeChoicesMixin:
             return
         self._resolve_sacrifice_inline(
             choice.player_index, int(data["count"]), data["filter"],
-            data["exclude"], data["reason"], data["on_short"], data.get("record"),
+            data["exclude"], data["reason"], data.get("record"),
             up_to=bool(data.get("up_to")), count_onto=data.get("_count_onto"),
         )
