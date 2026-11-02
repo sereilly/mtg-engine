@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**430 / 640 tracked rules covered (67%)** — 3315 tests, 0 unannotated.
+**430 / 640 tracked rules covered (67%)** — 3319 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -692,7 +692,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(120 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
-- [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(17 tests, subrules acd)*
+- [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(20 tests, subrules acd)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(44 tests, subrules abcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(14 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
@@ -755,7 +755,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **610.1** A one-shot effect does something just once and doesn’t have a duration. Examples include dealing ... *(10 tests)*
 - [ ] **610.2** Some one-shot effects create a delayed triggered ability, which instructs a player to do somethin...
-- [x] **610.3** Some one-shot effects cause an object to change zones “until” a specified event occurs. A second ... *(16 tests, subrules bcd)*
+- [x] **610.3** Some one-shot effects cause an object to change zones “until” a specified event occurs. A second ... *(17 tests, subrules bcd)*
 - [ ] **610.4** Some one-shot effects cause a permanent to phase out “until” a specified event occurs. A second o...
 - [ ] **610.5** Some static abilities create one-shot effects that cause spells a player casts to gain an ability...
 
@@ -805,7 +805,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(15 tests)*
 - [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(6 tests, subrules a)*
 - [x] **614.11** Some effects replace card draws. These effects are applied even if no cards could be drawn becaus... *(4 tests)*
-- [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(30 tests, subrules a)*
+- [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(32 tests, subrules a)*
 - [x] **614.13** An effect that modifies how a permanent enters the battlefield may cause other objects to change ... *(2 tests, subrules a)*
 - [ ] **614.14** An object may have one ability printed on it that generates a replacement effect which causes one...
 - [x] **614.15** Some replacement effects are not continuous effects. Rather, they are an effect of a resolving sp... *(3 tests)*
@@ -942,7 +942,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(41 tests, subrules abc)*
 - [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(2 tests)*
 - [x] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain... *(2 tests)*
-- [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(13 tests)*
+- [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(14 tests)*
 - [ ] **707.6** When copying a permanent, any choices that have been made for that permanent aren’t copied. Inste...
 - [ ] **707.7** If a pair of linked abilities are copied, those abilities will be similarly linked to one another...
 - [ ] **707.8** When copying a melded permanent or other double-faced permanent, use the copiable values of the f...
