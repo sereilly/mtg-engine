@@ -1,6 +1,6 @@
-"""Handlers for the pregame flow: the coin flip and the mulligan loop
-(CR 103.5). The only specs registered with ``pregame=True`` - everything
-else waits until the game proper has begun.
+"""Handlers for the pregame flow: the coin flip and the mulligan rounds
+(CR 103.5, ``web/pregame.py``). The only specs registered with
+``pregame=True`` - everything else waits until the game proper has begun.
 """
 
 from __future__ import annotations
@@ -11,8 +11,10 @@ from .pregame import (
     _pregame_auto_advance,
     _pregame_confirm_bottom,
     _pregame_confirm_bottom_simultaneous,
+    _pregame_declare_mulligan,
     _pregame_enter_mulligan,
     _pregame_keep_player,
+    _round_undecided,
 )
 
 
@@ -38,31 +40,44 @@ def _action_coin_flip_choose(session, req, seat_type):
     _pregame_enter_mulligan(session, starting_player)
     _pregame_auto_advance(session)
 
-@action_handler("mulligan_take", pregame=True)
-def _action_mulligan_take(session, req, seat_type):
+def _require_declaring_seat(session, req, seat_type) -> None:
+    """The seat may declare keep or mulligan now (CR 103.5): the sequential
+    table's offered seat, or on the simultaneous table any seat of the round
+    still to declare."""
     if session.pregame_phase != "mulligan":
         raise HTTPException(status_code=400, detail="not in mulligan phase")
     if session.simultaneous_mulligan:
         if req.seat in session.mulligan_kept_seats:
             raise HTTPException(status_code=400, detail="you already kept your hand")
+        if req.seat in session.mulligan_declared:
+            raise HTTPException(
+                status_code=400,
+                detail="you declared a mulligan; it is taken once every player has declared",
+            )
+        if req.seat not in _round_undecided(session):
+            raise HTTPException(status_code=400, detail="not your turn to decide on mulligan")
     elif req.seat != session.mulligan_offer_seat:
         raise HTTPException(status_code=400, detail="not your turn to decide on mulligan")
     if seat_type != "human":
         raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
-    if not session.game.pregame_mulligan_draw(req.seat):
-        raise HTTPException(status_code=400, detail="cannot take another mulligan (7 mulligans taken)")
+
+
+@action_handler("mulligan_take", pregame=True)
+def _action_mulligan_take(session, req, seat_type):
+    _require_declaring_seat(session, req, seat_type)
+    if session.game.mulligan_effective_count(req.seat) >= 7:
+        # CR 103.5: "A player can take mulligans until their opening hand
+        # would be zero cards, after which they may not take further
+        # mulligans."
+        raise HTTPException(
+            status_code=400, detail="cannot take another mulligan (hand would be 0 cards)"
+        )
+    _pregame_declare_mulligan(session, req.seat)
+    _pregame_auto_advance(session)
 
 @action_handler("mulligan_keep", pregame=True)
 def _action_mulligan_keep(session, req, seat_type):
-    if session.pregame_phase != "mulligan":
-        raise HTTPException(status_code=400, detail="not in mulligan phase")
-    if session.simultaneous_mulligan:
-        if req.seat in session.mulligan_kept_seats:
-            raise HTTPException(status_code=400, detail="you already kept your hand")
-    elif req.seat != session.mulligan_offer_seat:
-        raise HTTPException(status_code=400, detail="not your turn to decide on mulligan")
-    if seat_type != "human":
-        raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
+    _require_declaring_seat(session, req, seat_type)
     _pregame_keep_player(session, req.seat)
     _pregame_auto_advance(session)
 

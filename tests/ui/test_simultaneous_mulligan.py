@@ -1,10 +1,13 @@
 """Tests for the host-game "Simultaneous mulligans" setting.
 
-With ``simultaneous_mulligan=True`` (and pregame enabled) every player decides
-keep/mulligan at the same time instead of in turn order: each undecided seat
-sees its own keep/mulligan prompt immediately (``is_my_turn`` for several
-viewers at once), bottom-card selection runs per-seat while others are still
-deciding, and the game starts once every seat has kept (and bottomed).
+With ``simultaneous_mulligan=True`` (and pregame enabled) every player of a
+round declares keep/mulligan at the same time instead of in turn order: each
+seat still to declare sees its own keep/mulligan prompt immediately
+(``is_my_turn`` for several viewers at once), bottom-card selection runs
+per-seat while others are still deciding, and the game starts once every seat
+has kept (and bottomed). A declared mulligan is still CR 103.5's: it is taken
+with the round's others once every seat of the round has declared (kg3;
+``tests/ui/test_kg3_pregame_mulligan_rounds.py``).
 """
 
 from fastapi.testclient import TestClient
@@ -63,8 +66,10 @@ class TestSimultaneousMulliganVsAi:
         _enter_mulligan_as_host(sid)
         session = store.get(sid)
 
-        # Every AI seat already kept; only the host (seat 0) is pending.
-        assert session.mulligan_kept_seats == {1, 2, 3}
+        # Every AI seat has already declared — kept, or declared a mulligan
+        # that waits on the round (CR 103.5); only the host (seat 0) is
+        # still to declare.
+        assert session.mulligan_kept_seats | session.mulligan_declared == {1, 2, 3}
         info = _state(sid, 0)["pregame"]
         assert info["phase"] == "mulligan"
         assert info["simultaneous"] is True
@@ -206,8 +211,13 @@ class TestSimultaneousMulliganTwoHumans:
     def test_bottom_selection_runs_while_other_seat_still_deciding(self):
         sid = self._create_two_human_game()
 
-        # Seat 1 mulligans and keeps while seat 0 hasn't decided at all.
+        # Round 1: both declare a mulligan (seat 1 first, out of turn order),
+        # and the two are taken together once both have declared (CR 103.5).
         _action(sid, 1, "mulligan_take")
+        _action(sid, 0, "mulligan_take")
+        assert [p.mulligans_taken for p in store.get(sid).game.players] == [1, 1]
+
+        # Round 2: seat 1 keeps while seat 0 hasn't declared at all.
         _action(sid, 1, "mulligan_keep")
 
         # Seat 1 is picking bottom cards WHILE seat 0 still holds its prompt.
@@ -224,6 +234,9 @@ class TestSimultaneousMulliganTwoHumans:
         assert store.get(sid).pregame_phase == "mulligan"
 
         _action(sid, 0, "mulligan_keep")
+        assert _state(sid, 0)["pregame"]["phase"] == "bottom_select"
+        _action(sid, 0, "mulligan_bottom_select", hand_index=0)
+        _action(sid, 0, "mulligan_bottom_confirm")
         assert store.get(sid).pregame_phase is None
 
 

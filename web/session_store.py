@@ -169,13 +169,20 @@ class Session:
     coin_flip_choice_reason: str = "coin_flip"
     mulligan_offer_seat: int | None = None
     mulligan_kept_seats: set[int] = field(default_factory=set)
+    # CR 103.5's rounds (web/pregame.py): the round's number, the seats
+    # declaring in it (turn order from the starting player), and those of them
+    # that declared a mulligan — taken together once the last has declared.
+    mulligan_round: int = 0
+    mulligan_round_seats: list[int] = field(default_factory=list)
+    mulligan_declared: set[int] = field(default_factory=set)
     mulligan_bottom_seat: int | None = None
     mulligan_bottom_required: int = 0
     mulligan_bottom_selected: list[int] = field(default_factory=list)
-    # Host setting: every player decides keep/mulligan at once instead of in
-    # turn order. mulligan_offer_seat is unused; per-seat bottom selections run
-    # concurrently in the dicts below (seat -> required count / selected hand
-    # indices) while other seats may still be deciding.
+    # Host setting: every player of a round declares keep/mulligan at once
+    # instead of in turn order (the round's mulligans are still taken together
+    # once all of it has declared). mulligan_offer_seat is unused; per-seat
+    # bottom selections run concurrently in the dicts below (seat -> required
+    # count / selected hand indices) while other seats may still be deciding.
     simultaneous_mulligan: bool = False
     mulligan_bottom_required_by_seat: dict[int, int] = field(default_factory=dict)
     mulligan_bottom_selected_by_seat: dict[int, list[int]] = field(default_factory=dict)
@@ -798,6 +805,9 @@ class SessionStore:
         session.coin_flip_choice_reason = "coin_flip"
         session.mulligan_offer_seat = None
         session.mulligan_kept_seats = set()
+        session.mulligan_round = 0
+        session.mulligan_round_seats = []
+        session.mulligan_declared = set()
         session.mulligan_bottom_seat = None
         session.mulligan_bottom_required = 0
         session.mulligan_bottom_selected = []
