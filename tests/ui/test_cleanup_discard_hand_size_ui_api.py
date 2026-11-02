@@ -37,9 +37,10 @@ def _session_in_second_main(hand_size: int, *statics: str):
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
     session = store.get(sid)
     game = session.game
-    game.current_turn_phase = "postcombat_main"
-    game.current_step = "postcombat_main"
-    game.current_phase = "main"
+    # Entered through the engine's own seam, which spends the turn's phase
+    # plan (CR 500.8); writing the three fields by hand left turn 1's plan
+    # still owing its combat phase, so the next step was combat.
+    game._set_phase_and_step("postcombat_main", "postcombat_main")
     game.players[0].hand = [
         _card(f"Spell {index}", "Sorcery", "") for index in range(hand_size)
     ]

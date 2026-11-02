@@ -659,7 +659,11 @@ def test_equip_through_the_web_api_offers_own_creatures_and_renders_the_attachme
     state afterwards reports the Equipment attached to that creature."""
     created = client.post(
         "/api/sessions",
-        json={"mode": "human_vs_human", "host_name": "P1", "host_colors": 2, "enable_pregame": False},
+        # Seeded: the raw state below seats the turn, but the deal and the
+        # flip before it are the seed's, and an unseeded one is a new game
+        # every run.
+        json={"mode": "human_vs_human", "host_name": "P1", "host_colors": 2,
+              "enable_pregame": False, "seed": 6601},
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "P2"})

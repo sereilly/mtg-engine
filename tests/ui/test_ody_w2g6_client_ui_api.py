@@ -29,8 +29,8 @@ from fastapi.testclient import TestClient
 
 from engine.card_loader import load_cards, manifest_set_path
 from engine.models import Permanent
-from tests.helpers import app_js_function_body
-from web.app import app, store
+from tests.helpers import app_js_function_body, seat_plays_first
+from web.app import app
 from web.prompt_values import offer_wording
 
 client = TestClient(app)
@@ -65,10 +65,8 @@ def _session():
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     game = session.game
-    session.current_turn = 0
-    game.active_player_index = 0
     for player in game.players:
         player.hand.clear()
         player.graveyard.clear()

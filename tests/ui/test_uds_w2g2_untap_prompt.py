@@ -20,7 +20,8 @@ from fastapi.testclient import TestClient
 
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
-from web.app import app, store
+from web.app import app
+from tests.helpers import seat_plays_first
 
 client = TestClient(app)
 
@@ -51,15 +52,13 @@ def _armed(seed: int = 5502):
     """Seat 1 holding a Storage Matrix and three tapped permanents, with seat
     0's turn about to end — so the next untap step is the one under test."""
     sid = _session(seed)
-    session = store.get(sid)
-    game = session.game
-    game.enforce_mana_costs = False
     # The coin flip decides who starts, and which seat that is changes with the
     # seed — so it is pinned rather than left to the pregame: this test is about
     # the untap step that follows, and a seed whose flip went the other way would
     # have seat 0's ``end_turn`` refused and nothing under test at all.
-    session.current_turn = 0
-    game.active_player_index = 0
+    session = seat_plays_first(sid)
+    game = session.game
+    game.enforce_mana_costs = False
     game.players[1].battlefield = [
         Permanent(card=_CARDS["Storage Matrix"]),
         Permanent(card=_CARDS["Mountain"], tapped=True),

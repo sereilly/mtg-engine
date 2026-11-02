@@ -29,7 +29,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from engine.models import Permanent
-from tests.helpers import _pass_priority, app_js_function_body
+from tests.helpers import _pass_priority, app_js_function_body, seat_plays_first
 from web.app import app, store
 from web.runtime import CARD_BY_NAME
 
@@ -230,7 +230,7 @@ def test_fork_cast_as_the_client_now_sends_it_asks_for_a_permanent_targets_copy(
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    game = store.get(sid).game
+    game = seat_plays_first(sid).game
     game.enforce_mana_costs = False
     me, _you = game.players
     first = Permanent(card=CARD_BY_NAME["grizzly bears"])

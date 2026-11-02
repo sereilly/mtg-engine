@@ -18,8 +18,8 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from engine.models import Permanent
-from tests.helpers import _mk_card, resolve_stack
-from web.app import app, store
+from tests.helpers import _mk_card, resolve_stack, seat_plays_first
+from web.app import app
 from web.runtime import CARD_BY_NAME
 
 client = TestClient(app)
@@ -35,10 +35,8 @@ def test_the_activators_own_graveyard_then_the_order_then_their_draw():
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     game = session.game
-    session.current_turn = 0
-    game.active_player_index = 0
     game._set_phase_and_step("precombat_main", "main")
     game.interactive_seats = {0, 1}
     me, you = game.players

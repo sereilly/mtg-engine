@@ -53,9 +53,10 @@ def test_the_cleanup_discard_is_named_to_the_other_viewer():
     game = session.game
     game.active_player_index = 0
     session.current_turn = 0
-    game.current_turn_phase = "postcombat_main"
-    game.current_step = "postcombat_main"
-    game.current_phase = "main"
+    # Entered through the engine's own seam, which spends the turn's phase
+    # plan (CR 500.8); writing the three fields by hand left turn 1's plan
+    # still owing its combat phase, so the next step was combat.
+    game._set_phase_and_step("postcombat_main", "postcombat_main")
     game.players[0].hand = [_sorcery(f"Spell {i}") for i in range(9)]
     for _ in range(2):
         moved = client.post(f"/api/sessions/{sid}/action", json={

@@ -594,24 +594,18 @@ class SessionStore:
                 ],
             )
             session.current_turn = starting_player
-            # Align the engine's active player and priority window with the chosen
-            # starter. The Game constructor defaults both to seat 0, so without this
-            # an AI-vs-AI game where seat 1 wins the flip deadlocks: current_turn is
-            # 1 but priority sits with 0, so neither the AI step nor the UI advances.
-            # (Legacy no-pregame human/test sessions keep seat 0 as the actor.) FFA
-            # can equally start on an AI seat (or a non-zero human seat), so it needs
-            # the same alignment. So does a rematch: the seat-0 actor is a first
-            # deal's legacy, and the loser who chose must actually take turn one.
-            if session.mode in ("ai_vs_ai", "free_for_all") or chooser is not None:
-                game.active_player_index = starting_player
-                game.start_priority_window(starting_player)
-                # CR 103.8: and that seat's first turn begins with its
-                # beginning phase, run by the route that dealt
-                # (`turn_steps._begin_first_turn`). Not the legacy first
-                # deal's: there the engine's actor is seat 0 whatever the flip
-                # said, and beginning a turn for either seat would settle
-                # that split one way or the other.
-                session.first_turn_owed = True
+            # The engine's active player and priority window follow the seat
+            # that plays first (CR 103.8): the Game constructor defaults both
+            # to seat 0. Every table dealt here is aligned, whatever its mode.
+            # Until the kg3 round a human_vs_ai or human_vs_human first deal
+            # was not: `current_turn` named the flip's winner while the engine
+            # kept seat 0 as the actor, so a seat-1 start was a split seat
+            # (an ai_vs_ai game deadlocked on it before it was aligned).
+            game.active_player_index = starting_player
+            game.start_priority_window(starting_player)
+            # And that seat's first turn begins with its beginning phase, run
+            # by the route that dealt (`turn_steps._begin_first_turn`).
+            session.first_turn_owed = True
 
     def _resolve_format(self, request: CreateSessionRequest) -> str:
         """The constructed format this session is played under.

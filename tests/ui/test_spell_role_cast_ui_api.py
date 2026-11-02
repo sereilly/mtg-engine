@@ -26,7 +26,7 @@ from fastapi.testclient import TestClient
 from engine import load_cards
 from engine.card_loader import manifest_set_path
 from engine.models import Permanent
-from tests.helpers import app_js_function_body
+from tests.helpers import app_js_function_body, seat_plays_first
 from web.app import app, store
 
 client = TestClient(app)
@@ -50,14 +50,12 @@ def _session():
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    session = store.get(sid)
+    session = seat_plays_first(sid, 1)
     game = session.game
     game.enforce_mana_costs = False
     for player in game.players:
         player.hand = []
         player.battlefield = []
-    session.current_turn = 1
-    game.active_player_index = 1
     return sid, game
 
 
@@ -70,8 +68,12 @@ def _put(game, seat, card):
 
 
 def _opposing_bolt(game):
+    """Seat 1, on its own turn, casts a Lightning Bolt at seat 0 and passes
+    (CR 117.3c-d): seat 0 holds priority with the Bolt on the stack."""
     game.players[1].hand = [_LEA["Lightning Bolt"]]
+    game.start_priority_window(1)
     assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    game.pass_priority(1)
     return game.stack[-1]
 
 
@@ -146,6 +148,9 @@ def test_a_roles_cast_with_its_spell_slot_empty_is_refused():
     )
 
     assert resp.status_code == 400, resp.text
+    # Refused for the hole, not for a priority seat 0 does not hold — a bare
+    # 400 also passed while the no-pregame first deal gave seat 1 priority.
+    assert "requires 2 targets" in resp.json()["detail"], resp.text
     assert [card.name for card in game.players[0].hand] == ["Suffocating Blast"]
 
 

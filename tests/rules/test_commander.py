@@ -38,7 +38,7 @@ from engine.models import CardDefinition, CardFace, Permanent
 from web.app import store
 from web.deck_legality import validate_deck
 
-from tests.helpers import _mk_card, _nosick, client
+from tests.helpers import _mk_card, _nosick, client, seat_plays_first
 
 
 # ---------------------------------------------------------------------------
@@ -1330,6 +1330,7 @@ def test_the_served_state_crowns_the_designated_commander_card():
 @pytest.mark.cr("903.8")
 def test_the_api_refuses_a_commander_that_is_not_yours():
     session_id = _commander_session()
+    seat_plays_first(session_id)
     response = client.post(f"/api/sessions/{session_id}/action", json={
         "action": "cast", "seat": 0, "card_name": "Azusa, Lost but Seeking",
         "from_zone": "command",

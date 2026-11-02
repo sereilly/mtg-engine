@@ -44,9 +44,9 @@ from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.land_types import change_land_type
-from tests.helpers import _game, _nosick
+from tests.helpers import _game, _nosick, seat_plays_first
 from tests.helpers import CARDS_BY_NAME as _C
-from web.app import app, store, _begin_turn
+from web.app import app, _begin_turn
 
 client = TestClient(app)
 
@@ -57,8 +57,7 @@ def _session():
         json={"mode": "human_vs_ai", "host_name": "H", "host_colors": 2, "guest_colors": 2, "seed": 5},
     ).json()
     sid = created["session_id"]
-    session = store.get(sid)
-    session.current_turn = 0
+    session = seat_plays_first(sid)
     return sid, session, session.game
 
 

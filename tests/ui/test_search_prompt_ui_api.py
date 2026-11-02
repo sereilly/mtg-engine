@@ -2,10 +2,11 @@
 
 A search, a scry and a library reorder suspend the resolution they are part of
 (``ChoiceSpec.suspends``), so the spell is *still resolving* while the prompt is
-open: it has left the stack, it is out of hand, and CR 608.2n's move to the
-graveyard is behind the answer. That is a state the client can observe, and
-these pin what it sees — the prompt rendered, the actions around it refused, and
-the resolution finishing the whole way through on confirm.
+open: it stays on the stack until the answer (a person's table holds the
+resolution, ``Game.holds_for_answers``), it is out of hand, and CR 608.2n's move
+to the graveyard is behind the answer. That is a state the client can observe,
+and these pin what it sees — the prompt rendered, the actions around it refused,
+and the resolution finishing the whole way through on confirm.
 
 Demonic Tutor because it is the shipped card with the shape; the mechanism is
 the same for every kind registered ``suspends``.
@@ -16,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from engine import load_cards
 from web.app import app, store
-from tests.helpers import LEA_PATH
+from tests.helpers import LEA_PATH, seat_plays_first
 
 client = TestClient(app)
 
@@ -37,13 +38,11 @@ def _session():
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     game = session.game
     game.enforce_mana_costs = False
     game.players[0].hand = [_CARDS["Demonic Tutor"]]
     game.players[0].library = [_CARDS["Black Lotus"], _CARDS["Swamp"], _CARDS["Swamp"]]
-    session.current_turn = 0
-    game.active_player_index = 0
     game.cast_from_hand(0, "Demonic Tutor", target_player_index=1)
     return sid, session, game
 
@@ -57,7 +56,14 @@ def test_the_prompt_is_rendered_while_the_spell_is_still_resolving():
 
     state = _state(sid)
     assert state["search_library"] is not None
-    assert not game.stack, "the spell has left the stack"
+    # Until the kg3 round this read "the spell has left the stack": the cast
+    # ran before any request had told the engine its seats are people's, so
+    # the resolution did not hold. Every web table marks them as it deals.
+    assert [item.card.name for item in game.stack] == ["Demonic Tutor"], (
+        "the spell stays on the stack, resolving, until the answer"
+    )
+    assert [entry["card"]["name"] for entry in state["stack"]] == ["Demonic Tutor"]
+    assert "Demonic Tutor is resolving, awaiting a choice" in game.log
     assert not any(c.name == "Demonic Tutor" for c in game.players[0].hand)
     assert not any(c.name == "Demonic Tutor" for c in game.players[0].graveyard), (
         "the card reaches the graveyard as the last part of resolution (CR 608.2n), "

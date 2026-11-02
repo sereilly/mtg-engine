@@ -37,8 +37,8 @@ from fastapi.testclient import TestClient
 
 from engine import load_cards
 from engine.models import Permanent
-from web.app import app, store
-from tests.helpers import LEA_PATH
+from web.app import app
+from tests.helpers import LEA_PATH, seat_plays_first
 
 client = TestClient(app)
 
@@ -80,11 +80,9 @@ def _session(seed: int = 4242):
         },
     ).json()
     sid = created["session_id"]
-    session = store.get(sid)
+    session = seat_plays_first(sid)
     game = session.game
     game.enforce_mana_costs = False
-    session.current_turn = 0
-    game.active_player_index = 0
 
     watcher = Permanent(card=_watcher_card())
     game.players[1].battlefield = [watcher]
