@@ -26,7 +26,8 @@ from fastapi.testclient import TestClient
 
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
-from web.app import app, store
+from web.app import app
+from tests.helpers import seat_plays_first
 from web.game_flow import _auto_resolve_ai_pending
 from web.serialization import _serialize_permanent
 
@@ -49,8 +50,7 @@ def _w3g1_session(*, opponent_islands: int):
               "guest_colors": 2, "seed": 5},
     ).json()
     sid = created["session_id"]
-    session = store.get(sid)
-    session.current_turn = 0
+    session = seat_plays_first(sid)
     game = session.game
     game.players[0].battlefield = [
         Permanent(card=_w3g1_card("Rhystic Cave")),
@@ -117,9 +117,12 @@ def test_an_opponent_who_can_pay_denies_the_mana():
         "seat": 0, "action": "activate", "permanent_index": 0,
         "permanent_name": "Rhystic Cave", "mana_color": "G",
     })
-    client.post(f"/api/sessions/{sid}/action", json={
+    declined = client.post(f"/api/sessions/{sid}/action", json={
         "seat": 0, "action": "resolve_optional_pay", "accept": False,
     })
+    # The active player is asked first: an unchecked decline also passed
+    # while the AI was the active player, asked first, and had already paid.
+    assert declined.status_code == 200, declined.text
     _auto_resolve_ai_pending(session)
     assert _w3g1_pool(game) == {}
     assert game.players[1].battlefield[0].tapped, "the AI paid its {1} from its Island"

@@ -17,10 +17,10 @@ that ended it runs the beginning phase (``turn_steps._settle_pregame`` →
 ``_begin_first_turn``) through the same resumable pieces as every later turn.
 
 The census drives each mode × pregame setting through the routes a client
-calls and reads every seat's payload. **Left out, by name:** the legacy
-no-pregame first deal of ``human_vs_ai`` / ``human_vs_human`` (no rematch),
-whose engine actor is seat 0 whatever the flip said — beginning a turn there
-would settle that split one way or the other, which is its own entry.
+calls and reads every seat's payload — the no-pregame first deal of
+``human_vs_ai`` / ``human_vs_human`` included, whose engine actor was seat 0
+whatever the flip said until the same round's ``firstdeal`` group aligned it
+(``tests/ui/test_kg3_firstdeal_no_pregame_seat.py``).
 """
 
 from __future__ import annotations
@@ -164,6 +164,16 @@ def test_every_mode_s_first_turn_begins_with_its_beginning_phase():
     # ai_vs_ai has no pregame: the flip's winner plays first.
     for seed in (3, 4):
         record(_create({"mode": "ai_vs_ai", "seed": seed}), f"ai_vs_ai seed={seed}")
+    # Nor does a two-seat table created without it: each seat's flip, both modes.
+    for mode, seeds in (("human_vs_ai", (7777, 5)), ("human_vs_human", (99002, 3434))):
+        starts = []
+        for seed in seeds:
+            # Dealt as it is created, before anyone joins (a join would rename
+            # the guest after turn 1's log lines named it).
+            sid = _create({"mode": mode, "seed": seed, "enable_pregame": False})
+            record(sid, f"{mode} no pregame seed={seed}")
+            starts.append(store.get(sid).current_turn)
+        assert starts == [0, 1], (mode, starts)
     # Free-For-All, with the pregame (sequential and simultaneous) and without.
     three = [
         {"name": "Host", "is_ai": False},
@@ -205,7 +215,7 @@ def test_every_mode_s_first_turn_begins_with_its_beginning_phase():
 
     # Floors: the census examined every table it names, and both of CR
     # 103.8's outcomes on a human starting seat and an AI one.
-    assert len(seen) == 13, seen
+    assert len(seen) == 17, seen
     two_seat_starts = {kind for _l, seats, _s, kind in seen if seats == 2}
     multi_starts = {kind for _l, seats, _s, kind in seen if seats > 2}
     assert two_seat_starts == {"human", "ai"}, seen
