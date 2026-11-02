@@ -31,6 +31,16 @@ from ..combat_assignment import (DEFENDER_ANNOUNCED_THIS_STEP,
 from ..models import Permanent
 
 
+def _lethal_damage(blocker: Permanent, deathtouch: bool) -> int:
+    """Lethal damage for *blocker* in an attacker's assignment (CR 702.19b):
+    its toughness less the damage already marked on it — and any nonzero
+    amount from a source with deathtouch (CR 702.2c)."""
+    need = max(0, blocker.effective_toughness - blocker.damage_marked)
+    if deathtouch and need > 0:
+        return 1
+    return need
+
+
 class CombatDamageAssignmentMixin:
     def _attacker_band(self, attacker_idx: int) -> list[int] | None:
         for band in self.combat_bands:
@@ -186,9 +196,7 @@ class CombatDamageAssignmentMixin:
         for blocker_idx in blockers:
             amount = amounts.get(blocker_idx, 0)
             blocker = defender.battlefield[blocker_idx]
-            lethal = max(0, blocker.effective_toughness - blocker.damage_marked)
-            if has_deathtouch and lethal > 0:
-                lethal = 1
+            lethal = _lethal_damage(blocker, has_deathtouch)
             if amount < lethal:
                 under_lethal = True
             total += amount
@@ -255,11 +263,7 @@ class CombatDamageAssignmentMixin:
         def lethal_for(blocker_idx: int) -> int:
             if defender is None or blocker_idx >= len(defender.battlefield):
                 return 0
-            blocker = defender.battlefield[blocker_idx]
-            need = max(0, blocker.effective_toughness - blocker.damage_marked)
-            if has_deathtouch and need > 0:
-                return 1
-            return need
+            return _lethal_damage(defender.battlefield[blocker_idx], has_deathtouch)
 
         if len(blockers) == 1:
             blocker_idx = blockers[0]
@@ -357,6 +361,13 @@ class CombatDamageAssignmentMixin:
         the engine. ``web/combat_prompts.py`` reads this list — it used to
         rebuild it from the wire payload and required two blockers, which is
         how a Thorn Elemental blocked by one Benalish Hero went unasked.
+
+        **Except a trampler in front of one blocker** (CR 702.19b), which is a
+        decision — lethal to the blocker and the rest to this seat, or more
+        of it to the blocker — only for a defending player who is **sitting
+        there**: like the active player's (:meth:`trample_assignments_to_ask`)
+        its unasked answer is the stated default, so an AI defender keeps it
+        and is not handed a decision its chooser has never weighed.
         """
         owed: list[int] = []
         for attacker_idx in sorted(self.combat_attackers):
@@ -369,7 +380,10 @@ class CombatDamageAssignmentMixin:
             if attacker is None or combat_damage_assigned_by(attacker) <= 0:
                 continue
             declared = self._combat_blockers_for_attacker(attacker_idx)
-            offered = self.unblocked_assignment_chooser(attacker_idx) == seat
+            offered = self.unblocked_assignment_chooser(attacker_idx) == seat or (
+                seat in self.interactive_seats
+                and self._has_trample_choice(attacker_idx)
+            )
             if len(declared) < (1 if offered else 2):
                 continue
             if self._defender_assignment_recorded(attacker_idx):
@@ -635,6 +649,92 @@ class CombatDamageAssignmentMixin:
             asked.append(attacker_idx)
         return asked
 
+    # -- trample in front of one blocker (CR 702.19b) --------------------------
+
+    def _has_trample_choice(self, attacker_idx: int) -> bool:
+        """Whether this attacker's trample leaves whoever assigns its combat
+        damage a choice that CR 510.1c alone would not: it is blocked by
+        **exactly one** creature and assigns **more than lethal** damage to it
+        (CR 702.19b — lethal first, then "any excess damage is assigned as its
+        controller chooses among those blocking creatures and the player,
+        planeswalker, or battle the creature is attacking"). Seat-blind.
+
+        Two or more blockers are a division already, owed to every seat;
+        lethal or less leaves nothing to choose (all of it to the blocker). A
+        deathtouch attacker's lethal is 1 (CR 702.2c). Never a creature whose
+        damage goes past its blockers whatever is announced
+        (:meth:`assigns_past_its_blockers`), nor one with nothing left to deal
+        this combat (a first striker once the first-strike step is done,
+        CR 510.4). A creature that deals its damage in the second step is
+        still a choice during the first, as a division is: the step is not
+        dealt past it unasked, and the second step asks again.
+        """
+        if self.current_step != "combat_damage" or self.combat_damage_resolved:
+            return False
+        if attacker_idx not in self.combat_attackers:
+            return False
+        attacker = self.permanent_at(self.active_player_index, attacker_idx)
+        if attacker is None or not self._has_keyword(attacker, "trample"):
+            return False
+        if self.assigns_past_its_blockers(attacker_idx):
+            return False
+        blockers = self._attacker_all_blockers(attacker_idx)
+        if len(blockers) != 1:
+            return False
+        defending_index = self.combat_attackers[attacker_idx]
+        if not (isinstance(defending_index, int)
+                and 0 <= defending_index < len(self.players)):
+            return False
+        blocker = self.permanent_at(defending_index, blockers[0])
+        if blocker is None:
+            return False
+        if self.combat_first_strike_done and not self._participates_in_second_strike(attacker):
+            return False
+        lethal = _lethal_damage(blocker, self._has_keyword(attacker, "deathtouch"))
+        return combat_damage_assigned_by(attacker) > lethal
+
+    def trample_assignments_to_ask(self, seat: int | None = None) -> list[int]:
+        """The tramplers whose combat damage an **interactive** seat assigns,
+        with a choice to make (:meth:`_has_trample_choice`) that it has not
+        yet announced, ascending by battlefield slot — every such seat's, or
+        with *seat* given, that seat's alone.
+
+        This is what makes the game *stop* for a trampler blocked by one
+        creature. It resolved as the step was entered — lethal to the blocker,
+        the rest to the player — so a person attacking with a 6/6 trampler
+        into a 1/1 could not put more than one point on the blocker, though
+        CR 702.19b gives them the excess "as its controller chooses among
+        those blocking creatures and the player". The assignment gate always
+        accepted that answer (``_attacker_division_refusal``); nothing asked.
+
+        Interactive only, like :meth:`unblocked_assignments_to_ask`: every
+        other seat keeps the stated default (``_default_attacker_division``,
+        lethal to the blocker and the rest past it), which is what keeps an AI
+        or headless combat resolving without a stop nobody would answer.
+
+        Whoever **assigns** is asked (:meth:`combat_damage_assigner`): the
+        active player, whose answer rides the assignment itself, or a
+        defending player under banding or Defensive Formation (CR 702.22j),
+        whose answer is held (:meth:`assign_banding_combat_damage`) — once per
+        step, so one they have given is not asked again.
+        """
+        asked: list[int] = []
+        for attacker_idx in sorted(self.combat_attackers):
+            assigner = self.combat_damage_assigner(attacker_idx)
+            if assigner is None or assigner not in self.interactive_seats:
+                continue
+            if seat is not None and assigner != seat:
+                continue
+            if not self._has_trample_choice(attacker_idx):
+                continue
+            if (
+                assigner != self.active_player_index
+                and self._defender_assignment_recorded(attacker_idx)
+            ):
+                continue
+            asked.append(attacker_idx)
+        return asked
+
     def _validate_unblocked_announcement(
         self,
         attacker_damage: dict[int, dict[int, int]],
@@ -729,8 +829,14 @@ class CombatDamageAssignmentMixin:
         player has not answered (:meth:`unblocked_assignments_to_ask`). The
         other four are owed by the rules to whoever the seat is; this one has a
         default every non-interactive seat takes, so only a person stops it.
+        A trampler in front of one blocker with more than lethal to assign
+        (:meth:`trample_assignments_to_ask`, CR 702.19b) is the same kind.
         """
-        if self.unblocked_assignments_to_ask() or self.divided_assignments_to_ask():
+        if (
+            self.unblocked_assignments_to_ask()
+            or self.divided_assignments_to_ask()
+            or self.trample_assignments_to_ask()
+        ):
             return True
         if self.combat_band_blocks:
             return True
@@ -771,8 +877,16 @@ class CombatDamageAssignmentMixin:
         resolve it — and two people did the moment the defender had answered.
         Where no dialog can surface it, the default stands and the web layer's
         auto-resolve is what this returning False permits.
+
+        A trampler in front of one blocker (:meth:`trample_assignments_to_ask`)
+        is surfaced by whichever dialog its assigner answers, with one blocker,
+        as the offer is.
         """
-        if self.unblocked_assignments_to_ask() or self.divided_assignments_to_ask():
+        if (
+            self.unblocked_assignments_to_ask()
+            or self.divided_assignments_to_ask()
+            or self.trample_assignments_to_ask()
+        ):
             return True
         for attacker_idx in self.combat_attackers:
             if len(self._combat_blockers_for_attacker(attacker_idx)) < 2:

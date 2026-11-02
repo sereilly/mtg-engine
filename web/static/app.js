@@ -4248,16 +4248,26 @@ function refreshPromptSelection(state = currentState) {
   renderBoard(state);
 }
 
+// The `id` of the "can't untap more than N" candidate drawn at
+// `permanentIndex` (Winter Orb, Smoke, Static Orb, Damping Field): the server
+// sends `candidate_ids` beside `candidate_indices`, in the same order, and the
+// answer names the permanent by id (CR 400.7) — the slot is only where the
+// click found it. Null for a click on nothing offered.
+function untapCandidateId(untapInfo, permanentIndex) {
+  const indices = Array.isArray(untapInfo?.candidate_indices) ? untapInfo.candidate_indices : [];
+  const ids = Array.isArray(untapInfo?.candidate_ids) ? untapInfo.candidate_ids : [];
+  const at = indices.findIndex((idx) => Number(idx) === Number(permanentIndex));
+  return at >= 0 && Number.isInteger(ids[at]) ? ids[at] : null;
+}
+
 // The target of an upkeep trigger's answer: the clicked `valid_targets`
-// entry's `id`, which every entry carries (`web/turn_steps`). The seat and slot
-// are sent only for an entry without one, which the server still converts on
-// arrival — never both, so the request names one permanent one way.
+// entry's `id`, which every entry carries (`web/turn_steps`). The slot is only
+// how the click found it; the request names the permanent by id alone.
 function upkeepTriggerTargetFields(targets, targetSeat, permanentIndex) {
   const entry = (targets || []).find(
     (t) => Number(t.seat) === Number(targetSeat) && Number(t.index) === Number(permanentIndex),
   );
-  if (Number.isInteger(entry?.id)) return { target_permanent_id: entry.id };
-  return { target_seat: targetSeat, target_permanent_index: permanentIndex };
+  return { target_permanent_id: entry?.id ?? null };
 }
 
 // The board-targeting descriptor for the prompt currently on screen, or null.
@@ -4276,14 +4286,21 @@ function getPromptBoardTargeting(state = currentState) {
   // Old Man of the Sea: toggle which permanents stay tapped, then confirm.
   const optionalUntapInfo = getOptionalUntapInfo(state);
   if (optionalUntapInfo) {
+    // Drawn by slot, kept by id: the picks are the permanents' ids (CR 400.7),
+    // so a board that renumbers between two clicks moves no pick.
     const permanents = optionalUntapInfo.permanents || [];
+    const idAt = new Map(permanents.map((p) => [Number(p.index), p.id]));
     return promptTargeting({
       permanentKeys: permanents.map((p) => `${seat}-${Number(p.index)}`),
-      selectedKeys: optionalUntapKeepSelection.map((idx) => `${seat}-${idx}`),
+      selectedKeys: permanents
+        .filter((p) => optionalUntapKeepSelection.includes(p.id))
+        .map((p) => `${seat}-${Number(p.index)}`),
       onPermanent: (_targetSeat, idx) => {
-        const at = optionalUntapKeepSelection.indexOf(idx);
+        const id = idAt.get(Number(idx));
+        if (!Number.isInteger(id)) return;
+        const at = optionalUntapKeepSelection.indexOf(id);
         if (at >= 0) optionalUntapKeepSelection.splice(at, 1);
-        else optionalUntapKeepSelection.push(idx);
+        else optionalUntapKeepSelection.push(id);
         refreshPromptSelection(state);
       },
       invalidHint: "That permanent untaps normally — pick one of the highlighted ones.",
@@ -4295,9 +4312,14 @@ function getPromptBoardTargeting(state = currentState) {
   if (opponentDamageInfo) {
     const permanentKeys = [];
     const playerSeats = [];
+    // Each creature is drawn at `seat-index` and answered by its `id`.
+    const idAtKey = new Map();
     for (const t of opponentDamageInfo.valid_targets || []) {
       if (t.kind === "player") playerSeats.push(Number(t.seat));
-      else if (t.kind === "permanent") permanentKeys.push(`${t.seat}-${t.index}`);
+      else if (t.kind === "permanent") {
+        permanentKeys.push(`${t.seat}-${t.index}`);
+        idAtKey.set(`${t.seat}-${t.index}`, t.id);
+      }
     }
     return promptTargeting({
       permanentKeys,
@@ -4307,7 +4329,7 @@ function getPromptBoardTargeting(state = currentState) {
           seat,
           action: "opponent_damage_choose",
           target_seat: targetSeat,
-          target_permanent_index: idx,
+          target_permanent_id: idAtKey.get(`${targetSeat}-${idx}`),
         }),
       onPlayer: (targetSeat) =>
         submitPromptAction({ seat, action: "opponent_damage_choose", target_seat: targetSeat }),
@@ -4364,13 +4386,19 @@ function getPromptBoardTargeting(state = currentState) {
     const owner = Number(sacrificeSelectInfo.player_seat);
     const permanents = sacrificeSelectInfo.permanents || [];
     const need = Math.min(sacrificeSelectInfo.count || 0, permanents.length);
+    // Drawn by slot, picked by id (`permanents[].id`, CR 400.7).
+    const idAt = new Map(permanents.map((p) => [Number(p.index), p.id]));
     return promptTargeting({
       permanentKeys: permanents.map((p) => `${owner}-${p.index}`),
-      selectedKeys: sacrificeSelection.map((idx) => `${owner}-${idx}`),
+      selectedKeys: permanents
+        .filter((p) => sacrificeSelection.includes(p.id))
+        .map((p) => `${owner}-${p.index}`),
       onPermanent: (_targetSeat, idx) => {
-        const at = sacrificeSelection.indexOf(idx);
+        const id = idAt.get(Number(idx));
+        if (!Number.isInteger(id)) return;
+        const at = sacrificeSelection.indexOf(id);
         if (at >= 0) sacrificeSelection.splice(at, 1);
-        else if (sacrificeSelection.length < need) sacrificeSelection.push(idx);
+        else if (sacrificeSelection.length < need) sacrificeSelection.push(id);
         refreshPromptSelection(state);
       },
       invalidHint: "That permanent can't be sacrificed.",
@@ -5928,24 +5956,36 @@ function balanceBoardTargeting(state, info) {
     creatures: info.creatures_to_sacrifice || 0,
   };
   // Lands and creatures index into the same battlefield array, so one map
-  // resolves a clicked index to the section it belongs to.
+  // resolves a clicked index to the section it belongs to — and to the `id`
+  // the pick is kept and answered by (CR 400.7), not the slot.
   const kindByIndex = new Map();
+  const idByIndex = new Map();
   if (need.lands) {
-    for (const land of info.lands || []) kindByIndex.set(Number(land.index), "lands");
+    for (const land of info.lands || []) {
+      kindByIndex.set(Number(land.index), "lands");
+      idByIndex.set(Number(land.index), land.id);
+    }
   }
   if (need.creatures) {
-    for (const c of info.creatures || []) kindByIndex.set(Number(c.index), "creatures");
+    for (const c of info.creatures || []) {
+      kindByIndex.set(Number(c.index), "creatures");
+      idByIndex.set(Number(c.index), c.id);
+    }
   }
+  const picked = new Set([...balanceSelection.lands, ...balanceSelection.creatures]);
   return promptTargeting({
     permanentKeys: [...kindByIndex.keys()].map((idx) => `${owner}-${idx}`),
-    selectedKeys: [...balanceSelection.lands, ...balanceSelection.creatures].map((idx) => `${owner}-${idx}`),
+    selectedKeys: [...idByIndex.entries()]
+      .filter(([, id]) => picked.has(id))
+      .map(([idx]) => `${owner}-${idx}`),
     onPermanent: (_targetSeat, idx) => {
       const kind = kindByIndex.get(idx);
-      if (!kind) return;
-      const picked = balanceSelection[kind];
-      const at = picked.indexOf(idx);
-      if (at >= 0) picked.splice(at, 1);
-      else if (picked.length < need[kind]) picked.push(idx);
+      const id = idByIndex.get(idx);
+      if (!kind || !Number.isInteger(id)) return;
+      const picks = balanceSelection[kind];
+      const at = picks.indexOf(id);
+      if (at >= 0) picks.splice(at, 1);
+      else if (picks.length < need[kind]) picks.push(id);
       refreshPromptSelection(state);
     },
     invalidHint: "Balance only takes the highlighted lands and creatures.",
@@ -6040,13 +6080,17 @@ function applyBalanceSelectPrompt(info) {
   const confirmBtn = document.getElementById("balanceConfirmBtn");
   if (confirmBtn) {
     confirmBtn.addEventListener("click", async () => {
+      // The round's permanents by id (each offered entry's `id`) — only one
+      // round is answered at a time, so lands and creatures are never both
+      // owed — and the hand round's cards by slot in the hand.
       const payload = {
         seat,
         action: "balance_confirm",
-        land_indices: balanceSelection.lands.slice(),
-        creature_indices: balanceSelection.creatures.slice(),
         discard_indices: balanceSelection.hand.slice(),
       };
+      if (need.lands || need.creatures) {
+        payload.target_permanent_ids = [...balanceSelection.lands, ...balanceSelection.creatures];
+      }
       // Cleared before the request, so the next round's prompt (rendered by
       // the response) starts empty; put back if the answer is refused, with
       // the server's reason — a refusal used to vanish into an unhandled
@@ -6090,9 +6134,9 @@ function applySacrificeSelectPrompt(info) {
   const customOkBtn = q("promptCustomOkBtn");
 
   const permanents = info.permanents || [];
-  const validIndices = new Set(permanents.map((p) => p.index));
-  // Drop any stale picks that are no longer valid permanents.
-  sacrificeSelection = sacrificeSelection.filter((i) => validIndices.has(i));
+  const validIds = new Set(permanents.map((p) => p.id));
+  // Drop any stale picks (ids) that are no longer offered.
+  sacrificeSelection = sacrificeSelection.filter((id) => validIds.has(id));
   const need = Math.min(info.count || 0, permanents.length);
 
   panel.classList.remove("hidden");
@@ -6122,20 +6166,15 @@ function applySacrificeSelectPrompt(info) {
   const confirmBtn = document.getElementById("sacrificeConfirmBtn");
   if (confirmBtn) {
     confirmBtn.addEventListener("click", async () => {
+      // By id (`permanents[].id`), the picks as they were kept: an id names
+      // one object (CR 400.7) while a slot renumbers when anything leaves,
+      // and the server refuses a stale one rather than sacrificing whatever
+      // moved into its place.
       const payload = {
         seat,
         action: "sacrifice_confirm",
-        sacrifice_indices: sacrificeSelection.slice(),
+        sacrifice_permanent_ids: sacrificeSelection.slice(),
       };
-      // By id where the prompt gives one (`permanents[].id`): an id names one
-      // object (CR 400.7) while a slot renumbers when anything leaves, and the
-      // server takes `sacrifice_permanent_ids` over the slots and refuses a
-      // stale one rather than sacrificing whatever moved into its place.
-      const idBySlot = new Map(permanents.map((p) => [Number(p.index), p.id]));
-      const ids = sacrificeSelection.map((slot) => idBySlot.get(Number(slot)));
-      if (ids.length && ids.every((id) => Number.isInteger(id))) {
-        payload.sacrifice_permanent_ids = ids;
-      }
       sacrificeSelection = [];
       await sendAction(payload);
     });
@@ -6554,15 +6593,16 @@ function applyOptionalUntapPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  const validIndices = new Set((info.permanents || []).map((p) => Number(p.index)));
-  optionalUntapKeepSelection = optionalUntapKeepSelection.filter((i) => validIndices.has(i));
+  // The picks are ids (`permanents[].id`); one no longer offered is dropped.
+  const validIds = new Set((info.permanents || []).map((p) => p.id));
+  optionalUntapKeepSelection = optionalUntapKeepSelection.filter((id) => validIds.has(id));
 
   title.textContent = "Choose not to untap?";
   body.textContent = "These permanents may stay tapped this turn (e.g. Old Man of the Sea keeps control of its stolen creature while tapped).";
   // Toggled on the board: the eligible permanents are highlighted and the ones
   // picked to stay tapped read back here, so no card list is needed.
   const keeping = (info.permanents || []).filter((p) =>
-    optionalUntapKeepSelection.includes(Number(p.index)),
+    optionalUntapKeepSelection.includes(p.id),
   );
   const keepLine = keeping.length
     ? `Staying tapped: ${keeping.map((p) => p.name).join(", ")}`
@@ -6576,7 +6616,7 @@ function applyOptionalUntapPrompt(info) {
   steps.querySelector("[data-optional-untap-confirm]")?.addEventListener("click", async () => {
     const keep = [...optionalUntapKeepSelection];
     optionalUntapKeepSelection = [];
-    await sendAction({ seat, action: "optional_untap_confirm", creature_indices: keep });
+    await sendAction({ seat, action: "optional_untap_confirm", target_permanent_ids: keep });
   });
 }
 
@@ -19292,21 +19332,29 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     // The cost pick — either the whole choice (__costOnly) or the second half
     // of it (__costStage) — rides the cost field, never the target one.
     if (pending.__costOnly || pending.__costStage) {
+      // The source by its id as well as the cost: an activation that names
+      // neither a seat nor its permanent's id is refused at a table of three
+      // or more ("target_seat is required in a 3+ player game"), and a
+      // cost-only pick ("Sacrifice a creature: …" with no target) named
+      // neither.
       const costBody = withPermanentId(
-        {
-          seat,
-          action: "activate",
-          permanent_name: pending.cardName,
-          permanent_index: pending.sourcePermanentIndex,
-          cost_permanent_index: selectedPermanentIndex,
-          ...(pending.__costStage
-            ? {
-                target_seat: pending.chosenTargetSeat,
-                target_permanent_index: pending.chosenTargetIndex,
-              }
-            : {}),
-        },
-        "cost_permanent_id", selectedTarget, selectedPermanentIndex,
+        withPermanentId(
+          {
+            seat,
+            action: "activate",
+            permanent_name: pending.cardName,
+            permanent_index: pending.sourcePermanentIndex,
+            cost_permanent_index: selectedPermanentIndex,
+            ...(pending.__costStage
+              ? {
+                  target_seat: pending.chosenTargetSeat,
+                  target_permanent_index: pending.chosenTargetIndex,
+                }
+              : {}),
+          },
+          "cost_permanent_id", selectedTarget, selectedPermanentIndex,
+        ),
+        "permanent_id", seat, pending.sourcePermanentIndex,
       );
       if (Number.isInteger(pending.abilityIndex)) costBody.ability_index = pending.abilityIndex;
       // "{T}, Sacrifice a Forest: Add three mana in any combination of {R}
@@ -20704,12 +20752,12 @@ function createCardElement(card, options = {}) {
           Number.isInteger(permanentIndex) &&
           targetSeat === seat
         ) {
-          const candidateIndices = Array.isArray(untapInfo.candidate_indices) ? untapInfo.candidate_indices : [];
-          if (!candidateIndices.includes(permanentIndex)) {
+          const permanentId = untapCandidateId(untapInfo, permanentIndex);
+          if (permanentId === null) {
             updateActionHint(`${cardName} is not a valid untap choice.`, true);
             return;
           }
-          await sendAction({ seat, action: "untap_select", permanent_index: permanentIndex });
+          await sendAction({ seat, action: "untap_select", permanent_id: permanentId });
           const nextInfo = getUntapLandSelectionInfo(currentState);
           const selectedCount = Number(nextInfo?.selected_count || 0);
           const maxCount = Number(nextInfo?.max_count || 0);
@@ -21859,23 +21907,28 @@ function selectStackSpellTarget(arrayIndex) {
   if (pending.castAction === "activate") {
     // Jade Monolith's second stage: the clicked stack spell is the chosen
     // damage SOURCE — send it alongside the already-chosen creature target.
-    const body = pending.__sourceStage
-      ? {
-          seat,
-          action: "activate",
-          permanent_name: pending.cardName,
-          permanent_index: pending.sourcePermanentIndex,
-          target_seat: pending.chosenTargetSeat,
-          target_permanent_index: pending.chosenTargetIndex,
-          source_stack_index: arrayIndex,
-        }
-      : {
-          seat,
-          action: "activate",
-          permanent_name: pending.cardName,
-          permanent_index: pending.sourcePermanentIndex,
-          target_stack_index: arrayIndex,
-        };
+    // Both by the source's id too: a stack target names no seat, and an
+    // activation naming neither is refused at a table of three or more.
+    const body = withPermanentId(
+      pending.__sourceStage
+        ? {
+            seat,
+            action: "activate",
+            permanent_name: pending.cardName,
+            permanent_index: pending.sourcePermanentIndex,
+            target_seat: pending.chosenTargetSeat,
+            target_permanent_index: pending.chosenTargetIndex,
+            source_stack_index: arrayIndex,
+          }
+        : {
+            seat,
+            action: "activate",
+            permanent_name: pending.cardName,
+            permanent_index: pending.sourcePermanentIndex,
+            target_stack_index: arrayIndex,
+          },
+      "permanent_id", seat, pending.sourcePermanentIndex,
+    );
     // Which ability, as every other activate body says — without it a
     // multi-ability permanent resolved its *first* ability, and the cost the
     // ability announced (`pendingActivationCost`) could not find its body.
@@ -22294,8 +22347,13 @@ function renderCombatControls(state) {
     const offered = groups.filter((g) => g.offer);
     const divided = groups.some((g) => !g.offer && !g.divide);
     const dividing = groups.filter((g) => g.divide);
+    const trampling = groups.filter((g) => g.trampleTo && g.blockers.length === 1 && !g.offer && !g.divide);
     if (dividing.length > 0) {
       prompt.textContent = dividedAssignmentPanelText(dividing, divided || offered.length > 0);
+    } else if (offered.length === 0 && trampling.length === groups.length) {
+      const names = trampling.map((g) => g.attackerCard?.name || "A creature").join(", ");
+      prompt.textContent =
+        `${names} ${trampling.length === 1 ? "has" : "have"} trample. Open the dialog to choose how much damage goes to the blocker and how much tramples over.`;
     } else if (offered.length === 0) {
       prompt.textContent = "An attacker is blocked by multiple creatures. Open the dialog to split its damage.";
     } else {
@@ -22331,6 +22389,27 @@ function renderCombatControls(state) {
 function getUnblockedAssignmentOffers(state = currentState) {
   const offers = new Map();
   const info = state?.unblocked_assignment;
+  if (!info || seat === null || seat !== info.attacker_seat) return offers;
+  for (const entry of info.attackers || []) {
+    offers.set(Number(entry.attacker_index), {
+      attackerId: Number(entry.attacker_id),
+      damage: Math.max(0, Number(entry.damage) || 0),
+      recipient: entry.recipient || {},
+    });
+  }
+  return offers;
+}
+
+// A trampler blocked by ONE creature with more than lethal damage to assign
+// (CR 702.19b): the excess over lethal is this seat's to place, on the blocker
+// or past it. The attackers the server says THIS seat has to answer that for
+// (`state.trample_assignment`, the engine's `trample_assignments_to_ask` — the
+// list that holds the combat damage step until this seat answers), by attacker
+// index: { attackerId, damage, recipient }. With two or more blockers a
+// trampler is a division already and is in the dialog for that reason.
+function getTrampleAssignmentOffers(state = currentState) {
+  const offers = new Map();
+  const info = state?.trample_assignment;
   if (!info || seat === null || seat !== info.attacker_seat) return offers;
   for (const entry of info.attackers || []) {
     offers.set(Number(entry.attacker_index), {
@@ -22834,15 +22913,23 @@ function openMultiblockDamageDialog(state = currentState) {
 // dealt to the player.
 function getAttackerAssignGroups(state = currentState) {
   const offers = getUnblockedAssignmentOffers(state);
+  // …and a trampler blocked by one creature with damage to spare (CR 702.19b),
+  // listed with that one blocker: what its row leaves of the attacker's damage
+  // tramples over to `trampleTo`.
+  const trample = getTrampleAssignmentOffers(state);
   const pastBlockers = new Set(
     (getCombatState(state)?.assigns_past_blockers || []).map((idx) => Number(idx)),
   );
-  return withDividedAssignmentGroups(state, getBlockedAttackerGroups(state, (attackerIdx) => (offers.has(attackerIdx) ? 1 : 2))
+  return withDividedAssignmentGroups(state, getBlockedAttackerGroups(
+    state,
+    (attackerIdx) => (trample.has(attackerIdx) ? 1 : offers.has(attackerIdx) ? 1 : 2),
+  )
     .filter((g) => !pastBlockers.has(g.attackerIdx))
     .filter(
       (g) => offers.has(g.attackerIdx) || !defenderAssignsAttackerDamage(state, g.attackerIdx),
     )
-    .map((g) => (offers.has(g.attackerIdx) ? { ...g, offer: offers.get(g.attackerIdx) } : g)));
+    .map((g) => (offers.has(g.attackerIdx) ? { ...g, offer: offers.get(g.attackerIdx) } : g))
+    .map((g) => (trample.has(g.attackerIdx) ? { ...g, trampleTo: trample.get(g.attackerIdx).recipient } : g)));
 }
 
 // ---- Butcher Orgg: "You may assign this creature's combat damage divided as
@@ -23186,10 +23273,16 @@ function getDefenderBandingGroups(state = currentState) {
   const owed = new Map();
   for (const attackerIdx of info.attacker_indices || []) owed.set(Number(attackerIdx), null);
   for (const entry of info.attackers || []) owed.set(Number(entry.attacker_index), entry);
-  return getBlockedAttackerGroups(state, (attackerIdx) => (owed.get(attackerIdx)?.offer ? 1 : 2))
+  return getBlockedAttackerGroups(
+    state,
+    (attackerIdx) => (owed.get(attackerIdx)?.trample ? 1 : owed.get(attackerIdx)?.offer ? 1 : 2),
+  )
     .filter((g) => owed.has(g.attackerIdx))
     .map((g) => {
       const entry = owed.get(g.attackerIdx);
+      // A trampler in front of one blocker (CR 702.19b): this defending
+      // player places its excess, on the blocker or past it to themself.
+      if (entry?.trample) g = { ...g, trampleTo: entry.trample.recipient || {} };
       if (!entry?.offer) return g;
       return {
         ...g,
@@ -23520,6 +23613,18 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
       ? `Assigned ${group.power} / ${group.power} to ${unblockedRecipientLabel(group.offer.recipient)}`
       : `Assigned ${result.total} / ${group.power}`;
     footer.appendChild(totalEl);
+    // Trample (CR 702.19b): what the blockers' rows leave of the attacker's
+    // damage is assigned past them, to the player or planeswalker it attacks —
+    // said here, because no input names that recipient.
+    if (group.trample && !sentPast && result.valid && result.total < group.power) {
+      const over = document.createElement("span");
+      over.className = "cda-trample-over";
+      over.dataset.attackerIndex = String(group.attackerIdx);
+      over.textContent =
+        ` — ${group.power - result.total} tramples over to `
+        + unblockedRecipientLabel(group.trampleTo || group.offer?.recipient || {});
+      footer.appendChild(over);
+    }
     if (result.violation) {
       const warn = document.createElement("span");
       warn.className = "cda-warning";
@@ -25049,12 +25154,12 @@ function initBattlefieldCanvas() {
       try {
         const untapInfo = getUntapLandSelectionInfo(currentState);
         if (untapInfo && cardSeat === seat) {
-          const candidates = Array.isArray(untapInfo.candidate_indices) ? untapInfo.candidate_indices : [];
-          if (!candidates.includes(permanentIndex)) {
+          const permanentId = untapCandidateId(untapInfo, permanentIndex);
+          if (permanentId === null) {
             updateActionHint(`${card.name} is not a valid untap choice.`, true);
             return;
           }
-          sendAction({ seat, action: "untap_select", permanent_index: permanentIndex })
+          sendAction({ seat, action: "untap_select", permanent_id: permanentId })
             .then(() => {
               const nextInfo = getUntapLandSelectionInfo(currentState);
               updateActionHint(`Untap selection: ${nextInfo?.selected_count ?? "?"}/${nextInfo?.max_count ?? "?"} land(s) selected.`);

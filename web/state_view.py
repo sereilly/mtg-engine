@@ -26,7 +26,7 @@ but it happens somewhere it can be seen, and the serializer is now a function
 you can call to ask what the game looks like without changing the answer.
 
 The session *view* fields (``cleanup_selected_indices``,
-``untap_selected_indices``, ``untap_required_lands``) are still normalized in
+``untap_selected_ids``, ``untap_required_lands``) are still normalized in
 the serializer, deliberately: they are the viewer's own pending selection, owned
 by the ``Session`` rather than the ``Game``, and clamping them to what is
 currently legal is part of rendering the prompt rather than a change to the
@@ -66,7 +66,6 @@ from engine.cast_costs import additional_costs
 from engine.face_down import is_face_down
 from engine.targeting import (derive_activation_spec, derive_cast_spec,
                               spec_roles, usable_activated_abilities)
-from engine.untap_restrictions import permanent_in_limited_scope
 
 from .prompts import (PromptContext, blocking_prompt, owed_entry, prompt_owed_by,
                       render_prompts)
@@ -96,6 +95,7 @@ from .turn_steps import (
     _optional_trigger_pending,
     _untap_land_selection_requirement,
     _upkeep_pay_pending,
+    untap_candidates,
 )
 from .combat_prompts import (
     _build_band_blocker_assignment_info,
@@ -104,6 +104,7 @@ from .combat_prompts import (
     _build_divided_assignment_info,
     _build_multiblock_assignment_info,
     _build_raging_river_info,
+    _build_trample_assignment_info,
     _build_unblocked_assignment_info,
 )
 from .game_flow import settle_before_observation
@@ -1203,6 +1204,24 @@ def build_state(session: Session, viewer_seat: int | None) -> dict:
     return _serialize_state(session, viewer_seat)
 
 
+def _optional_untap_entries(session: Session) -> list[dict]:
+    """Old Man of the Sea's keep-tapped offer as this payload's board has it:
+    each entry by its ``id`` (what ``optional_untap_confirm`` answers with,
+    ``target_permanent_ids``) and the slot it is drawn at **now** — the offer
+    was made at the start of the turn and a slot stored then may since name
+    something else. An entry whose permanent has gone is not offered."""
+    game = session.game
+    entries = []
+    for entry in session.optional_untap_pending:
+        permanent = game.permanent_by_id(entry.get("id"))
+        if permanent is None or not game.controls(session.current_turn, permanent):
+            continue
+        entries.append({
+            **entry, "index": game.battlefield_index_of(permanent),
+        })
+    return entries
+
+
 def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     """The payload for one viewer. Reads the game; never changes it.
 
@@ -1242,43 +1261,36 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     if viewer_seat == session.current_turn and untap_required > 0:
         # Which permanent types are constrained (Winter Orb → lands, Smoke →
         # creatures, Damping Field → artifacts, Static Orb → every permanent).
-        # Read before the candidate list rather than after it, because it is
-        # what says whether a candidate belongs on that list at all.
         untap_options = session.game.get_untap_land_selection_options(session.current_turn) or {}
-        untap_limits = untap_options.get("limits") or {}
-        battlefield = session.game.players[viewer_seat].battlefield
-        # ``permanent_in_limited_scope`` — the same predicate the untap step
-        # itself and ``web/action_turn.py`` ask, so the list the board offers
-        # and the list the engine accepts are one answer. This re-validation
-        # used to read ``card.primary_type in ("land", "creature")``, which is
-        # the printed line *and* only two of the four scopes a limit may name:
-        # under **Damping Field** the engine offered three tapped artifacts and
-        # the wire carried an empty candidate list beside ``max_count: 1``, so
-        # the player was told to untap one artifact and given nothing to click
-        # — and the pruned list was written straight back onto the session, so
-        # the action handler then refused the click too. **Static Orb**'s
-        # "permanent" scope is not a card type at all.
-        valid_candidates = [
-            idx
-            for idx in sorted(set(session.untap_candidate_indices))
-            if 0 <= idx < len(battlefield)
-            and battlefield[idx].tapped
-            and any(
-                permanent_in_limited_scope(battlefield[idx], scope)
-                for scope in untap_limits
-            )
-        ]
-        session.untap_candidate_indices = valid_candidates
-
-        valid_selected = [idx for idx in sorted(set(session.untap_selected_indices)) if idx in set(valid_candidates)]
+        # The engine's offer, read now (``untap_candidates``), and the same
+        # predicate the untap step itself and ``web/action_turn.py`` ask
+        # (``permanent_in_limited_scope``) — so the list the board offers and
+        # the list the engine accepts are one answer. Under Damping Field this
+        # once carried an empty list beside ``max_count: 1`` (a printed-type
+        # filter), and under Static Orb's "permanent" scope, which is not a
+        # card type at all, it would have again.
+        candidates = untap_candidates(session)
+        candidate_ids = [perm.permanent_id for perm in candidates]
+        # The selection by id: a chosen permanent that is no longer offered
+        # (it left, or untapped) is no longer chosen.
+        valid_selected = [pid for pid in session.untap_selected_ids if pid in set(candidate_ids)]
         if len(valid_selected) > untap_required:
             valid_selected = valid_selected[:untap_required]
-        session.untap_selected_indices = valid_selected
+        session.untap_selected_ids = valid_selected
         session.untap_required_lands = untap_required
+        slot_of = {
+            perm.permanent_id: session.game.battlefield_index_of(perm)
+            for perm in candidates
+        }
         untap_info = {
             "max_count": untap_required,
-            "candidate_indices": valid_candidates,
-            "selected_indices": valid_selected,
+            # ``*_ids`` name the permanents (the answer is ``permanent_id``);
+            # ``*_indices`` are where each is drawn on this payload's board,
+            # in the same order.
+            "candidate_ids": candidate_ids,
+            "candidate_indices": [slot_of[pid] for pid in candidate_ids],
+            "selected_ids": valid_selected,
+            "selected_indices": sorted(slot_of[pid] for pid in valid_selected),
             "selected_count": len(valid_selected),
             # One entry per constrained card type — Winter Orb's land, Smoke's
             # creature, Damping Field's artifact. It was two named fields, and
@@ -1494,7 +1506,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,
         "optional_untap": (
-            {"permanents": list(session.optional_untap_pending)}
+            {"permanents": _optional_untap_entries(session)}
             if session.optional_untap_pending and viewer_seat == session.current_turn
             else None
         ),
@@ -1512,6 +1524,10 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         # among defending player and/or any number of creatures they control"
         # (Butcher Orgg): the attackers that may, and whom they may divide among.
         "divided_assignment": _build_divided_assignment_info(session, viewer_seat),
+        # A trampler blocked by one creature with more than lethal to assign
+        # (CR 702.19b): the active player's attackers whose excess the dialog
+        # asks them to place, on the blocker or past it.
+        "trample_assignment": _build_trample_assignment_info(session, viewer_seat),
         "raging_river": _build_raging_river_info(session, viewer_seat),
         "camouflage": _build_camouflage_info(session, viewer_seat),
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,

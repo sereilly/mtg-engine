@@ -481,16 +481,22 @@ def _word_of_command(ctx: PromptContext, choices: list) -> dict:
 
 @prompt_renderer("opponent_damage")
 def _opponent_damage(ctx: PromptContext, choices: list) -> dict:
-    """Cuombajj Witches: "any target", so every player face and every creature."""
+    """Cuombajj Witches: "any target", so every player face and every creature.
+
+    Each creature carries its ``id``, the address ``opponent_damage_choose``
+    answers with (``target_permanent_id``); ``index`` and ``key`` are where it
+    is drawn on the board this payload describes, not how it is named back."""
     data = choices[0].data
     targets: list[dict] = [
         {"kind": "player", "seat": seat} for seat in range(len(ctx.game.players))
     ]
-    for seat, player in enumerate(ctx.game.players):
-        for idx, perm in enumerate(player.battlefield):
+    for seat in range(len(ctx.game.players)):
+        for perm in ctx.game.controlled_by(seat):
             if perm.is_creature:
+                idx = ctx.game.battlefield_index_of(perm)
                 targets.append(
                     {"kind": "permanent", "seat": seat, "index": idx,
+                     "id": perm.permanent_id,
                      "key": f"{seat}-{idx}", "name": perm.card.name}
                 )
     return {

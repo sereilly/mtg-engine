@@ -664,8 +664,7 @@ def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0)):
     session.cleanup_required_discards = snapshot.cleanup_required_discards
     session.cleanup_selected_indices = snapshot.cleanup_selected_indices
     session.untap_required_lands = snapshot.untap_required_lands
-    session.untap_candidate_indices = snapshot.untap_candidate_indices
-    session.untap_selected_indices = snapshot.untap_selected_indices
+    session.untap_selected_ids = snapshot.untap_selected_ids
     session.upkeep_pay_choices = snapshot.upkeep_pay_choices
     session.upkeep_resolved_choices = snapshot.upkeep_resolved_choices
     session.optional_trigger_choices = snapshot.optional_trigger_choices

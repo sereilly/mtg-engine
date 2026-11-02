@@ -51,9 +51,30 @@ def _clear_cleanup_selection(session: Session) -> None:
 
 def _clear_untap_selection(session: Session) -> None:
     session.untap_required_lands = 0
-    session.untap_candidate_indices = []
-    session.untap_selected_indices = []
+    session.untap_selected_ids = []
     session.optional_untap_pending = []
+
+
+def untap_candidates(session: Session) -> list:
+    """The permanents the active seat may choose to untap under a "can't
+    untap more than N" restriction (Winter Orb, Smoke, Static Orb, Damping
+    Field), in battlefield order — the engine's own offer
+    (``get_untap_land_selection_options``), read **now**.
+
+    Read live rather than kept on the session: the list the step offered was
+    stored as battlefield slots across requests, so a permanent leaving
+    between two clicks moved every later slot onto its neighbour and the
+    stored offer named permanents nobody was offered. The selection is kept by
+    ``permanent_id`` (``Session.untap_selected_ids``) for the same reason.
+    """
+    game = session.game
+    seat = session.current_turn
+    options = game.get_untap_land_selection_options(seat) or {}
+    return [
+        permanent
+        for idx in sorted(int(i) for i in options.get("candidate_indices") or ())
+        if (permanent := game.permanent_at(seat, idx)) is not None
+    ]
 
 
 def _clear_upkeep_pay_choices(session: Session) -> None:
@@ -483,8 +504,7 @@ def _finish_untap_step(session: Session, player_index: int) -> bool:
     if options:
         game._set_phase_and_step("beginning", "untap")
         session.untap_required_lands = int(options["max_count"])
-        session.untap_candidate_indices = [int(idx) for idx in options["candidate_indices"]]
-        session.untap_selected_indices = []
+        session.untap_selected_ids = []
         return False
 
     # Old Man of the Sea: "You may choose not to untap this creature during

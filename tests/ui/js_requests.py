@@ -59,8 +59,9 @@ _STARTS_CONTINUATION = set("?:.&|+-*/%<>=,")
 
 
 def mask(source: str) -> str:
-    """*source* with comments, string bodies, template text and regex literals
-    replaced by ``x`` filler of the same length (newlines kept).
+    """*source* with string bodies, template text and regex literals replaced
+    by ``x`` filler of the same length, and comments by spaces (newlines
+    kept).
 
     A template's ``${…}`` stays code — its braces are a pair like any other —
     and its text either side is blanked; a ``/`` is a regex where an operand
@@ -75,10 +76,10 @@ def mask(source: str) -> str:
     last_sig = ""
     last_word = ""
 
-    def blank(start: int, end: int) -> None:
+    def blank(start: int, end: int, filler: str = "x") -> None:
         for k in range(start, min(end, n)):
             if out[k] != "\n":
-                out[k] = "x"
+                out[k] = filler
 
     def template_text(start: int) -> int:
         nonlocal depth
@@ -101,16 +102,20 @@ def mask(source: str) -> str:
 
     while i < n:
         c = source[i]
+        # A comment is blanked to **spaces**, not filler: it is no operand,
+        # and filler left a comment inside an object literal reading as the
+        # start of the property after it — the key and its value were dropped
+        # from every body that put a comment above them.
         if c == "/" and source.startswith("//", i):
             end = source.find("\n", i)
             end = n if end < 0 else end
-            blank(i, end)
+            blank(i, end, " ")
             i = end
             continue
         if c == "/" and source.startswith("/*", i):
             end = source.find("*/", i + 2)
             end = n if end < 0 else end + 2
-            blank(i, end)
+            blank(i, end, " ")
             i = end
             continue
         if c in "'\"":

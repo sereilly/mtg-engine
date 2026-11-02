@@ -92,11 +92,15 @@ class Session:
     cleanup_required_discards: int = 0
     cleanup_selected_indices: list[int] = field(default_factory=list)
     untap_required_lands: int = 0
-    untap_candidate_indices: list[int] = field(default_factory=list)
-    untap_selected_indices: list[int] = field(default_factory=list)
+    # The permanents chosen so far under a "can't untap more than N"
+    # restriction, by ``permanent_id`` — the offer itself is the engine's,
+    # read live (``turn_steps.untap_candidates``). Slots stored across requests
+    # named whatever slid into them once anything left the battlefield.
+    untap_selected_ids: list[int] = field(default_factory=list)
     # Old Man of the Sea: tapped permanents whose controller may choose not to
-    # untap them this turn ({"index", "name"} each). Set at the start of a human
-    # turn; answered by the optional_untap_confirm action (keep-tapped indices).
+    # untap them this turn ({"index", "id", "name"} each). Set at the start of
+    # a human turn; answered by the optional_untap_confirm action (keep-tapped
+    # ids, `target_permanent_ids`).
     optional_untap_pending: list[dict] = field(default_factory=list)
     upkeep_pay_choices: list[dict] = field(default_factory=list)
     upkeep_resolved_choices: dict[str, bool] = field(default_factory=dict)
@@ -777,8 +781,7 @@ class SessionStore:
         session.cleanup_required_discards = 0
         session.cleanup_selected_indices = []
         session.untap_required_lands = 0
-        session.untap_candidate_indices = []
-        session.untap_selected_indices = []
+        session.untap_selected_ids = []
         session.upkeep_pay_choices = []
         session.upkeep_resolved_choices = {}
         session.draw_step_life_loss_choices = {}

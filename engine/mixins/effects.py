@@ -752,17 +752,24 @@ class EffectsMixin:
         return False
 
     def _apply_opponent_damage_choice(
-        self, pending: dict, target_seat: int, target_permanent_index: int | None
+        self, pending: dict, target_seat: int, target: Permanent | None
     ) -> None:
         """Deal a pending opponent-chosen damage packet (Cuombajj Witches) to the
-        chosen player face (index None) or creature."""
+        chosen player face (*target* None) or creature.
+
+        **The creature by identity, not by slot.** It was a battlefield index
+        on *target_seat*, read when the packet was dealt; the answer is now the
+        permanent itself, resolved from the chooser's ``permanent_id`` (or the
+        default's own pick) — so what is hit is what was chosen, and one that
+        has left since is no target at all (CR 608.2b), never whatever slid
+        into its slot."""
         from ..handlers._common import apply_damage_to_creature
 
         amount = int(pending["amount"])
         source = pending.get("_source_permanent") or pending.get("card_name")
         card_name = pending["card_name"]
         victim_player = self.players[target_seat]
-        if target_permanent_index is None:
+        if target is None:
             self._deal_damage_to_player(
                 victim_player, amount, source=source, asks=True,
                 then=lambda dealt: self.log.append(
@@ -770,35 +777,56 @@ class EffectsMixin:
                 ),
             )
             return
-        if not (0 <= target_permanent_index < len(victim_player.battlefield)):
+        if not self.is_on_battlefield(target):
             self.log.append(f"{card_name}: chosen target is gone, no effect")
             return
-        perm = victim_player.battlefield[target_permanent_index]
-        if not perm.is_creature:
-            self.log.append(f"{card_name}: '{perm.card.name}' is not a valid 'any target' target (115.4)")
+        if not target.is_creature:
+            self.log.append(f"{card_name}: '{target.card.name}' is not a valid 'any target' target (115.4)")
             return
         apply_damage_to_creature(
-            self, perm, amount, source, asks=True,
-            log_message=lambda dealt: f"{card_name} dealt {dealt} damage to {perm.card.name} (opponent's choice)",
+            self, target, amount, source, asks=True,
+            log_message=lambda dealt: f"{card_name} dealt {dealt} damage to {target.card.name} (opponent's choice)",
         )
 
     def confirm_opponent_damage_choice(
-        self, chooser_index: int, target_seat: int, target_permanent_index: int | None = None
+        self, chooser_index: int, target_seat: int,
+        target_permanent_index: int | None = None, *, permanent_id: int | None = None,
     ) -> bool:
         """Resolve the pending opponent-chosen damage (Cuombajj Witches) with the
-        chooser's pick. Returns False when no such choice is pending for them."""
+        chooser's pick: a player's face (neither address), or a creature by its
+        ``permanent_id`` — the address the prompt offers — or, for a caller
+        that still names a slot, by its index on *target_seat*, turned into the
+        permanent in that slot now. Returns False when no such choice is
+        pending for them, or the address names nothing."""
         return self.resolve_pending_choice(
             "opponent_damage", chooser_index,
             target_seat=target_seat, target_permanent_index=target_permanent_index,
+            permanent_id=permanent_id,
         )
 
     def _resolve_opponent_damage_choice(
-        self, choice, target_seat: int, target_permanent_index: int | None
+        self, choice, target_seat: int, target_permanent_index: int | None,
+        permanent_id: int | None = None,
     ) -> bool:
         if not (0 <= target_seat < len(self.players)):
             return False
+        target = None
+        if permanent_id is not None:
+            target = self.permanent_by_id(permanent_id)
+            if target is None:
+                return False
+            # The face it is on, whatever seat the caller named beside it.
+            target_seat = self.controller_index_of(target)
+        elif target_permanent_index is not None:
+            target = self.permanent_at(target_seat, target_permanent_index)
+            if target is None:
+                return False
+        if target is not None and not target.is_creature:
+            # Not one of the offered targets (CR 115.4's "any target" reaches
+            # creatures here): refused, and the prompt stays owed.
+            return False
         self.discard_pending_choice(choice)
-        self._apply_opponent_damage_choice(choice.data, target_seat, target_permanent_index)
+        self._apply_opponent_damage_choice(choice.data, target_seat, target)
         return True
 
     def _default_opponent_damage_choice(self, choice) -> None:
@@ -817,16 +845,15 @@ class EffectsMixin:
             )
         if target_seat is None:
             return
-        victim = self.players[target_seat]
-        best_index: int | None = None
+        best: Permanent | None = None
         best_power = -1
-        for idx, perm in enumerate(victim.battlefield):
+        for perm in self.controlled_by(target_seat):
             if not perm.is_creature:
                 continue
             if perm.effective_toughness - perm.damage_marked <= amount and perm.effective_power > best_power:
-                best_index = idx
+                best = perm
                 best_power = perm.effective_power
-        self._apply_opponent_damage_choice(pending, target_seat, best_index)
+        self._apply_opponent_damage_choice(pending, target_seat, best)
 
     def _record_damage_source(self, victim: Permanent, source: Permanent) -> None:
         """Remember that *source* dealt damage to *victim* this turn — the

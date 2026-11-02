@@ -171,9 +171,11 @@ def test_three_rounds_two_seats_each_answered_by_the_client(by_name):
     assert out["shown"]["title"] == "Balance — Lands (1 of 3)" and out["shown"]["ready"]
     assert out["keys"] == sorted(f"0-{e['index']}" for e in info["lands"])
     assert f"0-{game.battlefield_index_of(factory)}" in out["keys"], "the Factory is a land here"
-    assert sorted(out["sent"][0]["land_indices"]) == sorted(
-        game.battlefield_index_of(p) for p in plains[1:]
+    # By id (kg3 wire: a prompt answers a permanent by id, CR 400.7).
+    assert sorted(out["sent"][0]["target_permanent_ids"]) == sorted(
+        p.permanent_id for p in plains[1:]
     )
+    assert "land_indices" not in out["sent"][0]
     assert _post(sid, out).status_code == 200
     assert sorted(p.card.name for p in game.controlled_by(0)) == [
         "Grizzly Bears", "Mishra's Factory", "Plains",
@@ -196,7 +198,7 @@ def test_three_rounds_two_seats_each_answered_by_the_client(by_name):
     info, out = _answer(sid, 1, permanents=[(1, game.battlefield_index_of(wall))])
     assert out["stage"] == "creatures" and info["creatures_to_sacrifice"] == 1
     assert out["shown"]["title"] == "Balance — Creatures (3 of 3)"
-    assert out["sent"][0]["creature_indices"] == [game.battlefield_index_of(wall)]
+    assert out["sent"][0]["target_permanent_ids"] == [wall.permanent_id]
     assert _post(sid, out).status_code == 200
     assert client.get(f"/api/sessions/{sid}/state", params={"seat": 1}).json()["balance_select"] is None
     assert sorted(p.card.name for p in game.controlled_by(1)) == [
@@ -225,4 +227,4 @@ def test_a_refused_confirm_keeps_the_picks_and_says_why(by_name):
     picks = [(0, game.battlefield_index_of(p)) for p in plains[1:]]
     _info, out = _answer(sid, 0, permanents=picks, refuse=True)
     assert out["hints"] == ["invalid balance selection"]
-    assert sorted(out["kept"]["lands"]) == sorted(idx for _seat, idx in picks)
+    assert sorted(out["kept"]["lands"]) == sorted(p.permanent_id for p in plains[1:])

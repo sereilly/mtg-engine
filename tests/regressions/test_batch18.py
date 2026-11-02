@@ -543,7 +543,9 @@ class TestOldManOfTheSea:
         p1 = PlayerState(name="P1", battlefield=[old_man])
         p2 = PlayerState(name="P2")
         game = _game(p1, p2)
-        assert game.get_optional_untap_permanents(0) == [{"index": 0, "name": "Old Man of the Sea"}]
+        assert game.get_optional_untap_permanents(0) == [
+            {"index": 0, "id": old_man.permanent_id, "name": "Old Man of the Sea"}
+        ]
 
     def test_keep_tapped_choice_is_honored(self, arn_by_name):
         old_man = Permanent(card=arn_by_name["Old Man of the Sea"], tapped=True)
@@ -576,10 +578,11 @@ class TestOldManOfTheSea:
 
         done = _begin_turn(session, 0, defer_untap_selection=True)
         assert done is False
-        assert session.optional_untap_pending == [{"index": idx, "name": "Old Man of the Sea"}]
+        entry = {"index": idx, "id": old_man.permanent_id, "name": "Old Man of the Sea"}
+        assert session.optional_untap_pending == [entry]
 
         state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
-        assert state["optional_untap"] == {"permanents": [{"index": idx, "name": "Old Man of the Sea"}]}
+        assert state["optional_untap"] == {"permanents": [entry]}
 
         # Other actions are blocked until the choice is made.
         resp = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"})

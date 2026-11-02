@@ -11,6 +11,7 @@ from engine.untap_restrictions import permanent_in_limited_scope
 from engine.phases.upkeep_step import upkeep_prompt_key
 from fastapi import HTTPException
 
+from .action_helpers import answered_permanent_id
 from .action_registry import HUMAN_ONLY, action_handler
 from .combat_prompts import _ai_declare_attackers, _banding_assignment_pending
 from .game_flow import _advance_ai_turn, _advance_phase, _ai_step
@@ -29,6 +30,7 @@ from .turn_steps import (
     _upkeep_decisions_pending,
     _upkeep_mana_prevention_pending,
     _upkeep_pay_pending,
+    untap_candidates,
 )
 
 
@@ -185,58 +187,61 @@ def _action_cleanup_select(session, req, seat_type):
 
 @action_handler("untap_select", human_only=HUMAN_ONLY)
 def _action_untap_select(session, req, seat_type):
+    # One click of a "can't untap more than N" choice (Winter Orb, Smoke,
+    # Static Orb, Damping Field): toggles the permanent named by
+    # ``permanent_id`` — the ``candidate_ids`` entry clicked — in the
+    # selection, which is kept by id across requests (``untap_selected_ids``).
+    # It was kept by slot, and the offer beside it too, so anything leaving
+    # the battlefield between two clicks moved both onto the neighbours.
     if req.seat != session.current_turn:
         raise HTTPException(status_code=400, detail="not your turn")
     if session.game.current_step != "untap":
         raise HTTPException(status_code=400, detail="untap selection is only available during untap")
-    if req.permanent_index is None:
-        raise HTTPException(status_code=400, detail="permanent_index is required")
+    if req.permanent_id is None and req.permanent_index is None:
+        raise HTTPException(status_code=400, detail="permanent_id is required")
 
     required = _untap_land_selection_requirement(session)
     if required <= 0:
         raise HTTPException(status_code=400, detail="no untap land selection is required")
 
-    candidates = set(session.untap_candidate_indices)
-    if req.permanent_index not in candidates:
+    chosen_id = answered_permanent_id(
+        session.game, req, id_field="permanent_id", slot_field="permanent_index",
+        seat=req.seat,
+    )
+    candidates = {perm.permanent_id: perm for perm in untap_candidates(session)}
+    if chosen_id not in candidates:
         raise HTTPException(status_code=400, detail="permanent is not a valid untap land choice")
 
-    selected = sorted(set(session.untap_selected_indices))
-    if req.permanent_index in selected:
-        selected = [idx for idx in selected if idx != req.permanent_index]
+    selected = [pid for pid in session.untap_selected_ids if pid in candidates]
+    if chosen_id in selected:
+        selected = [pid for pid in selected if pid != chosen_id]
     else:
         # Enforce the per-type cap first (Winter Orb constrains lands, Smoke
         # constrains creatures) so the error names the constrained type
         # rather than the combined total.
         options = session.game.get_untap_land_selection_options(session.current_turn) or {}
-        battlefield = session.game.players[session.current_turn].battlefield
+        limits = options.get("limits") or {}
 
-        def _ptype(idx: int) -> str:
+        def _ptype(permanent) -> str:
             # The first constrained type this permanent answers to — which is
             # the one whose cap the message should name. "" when it answers to
             # none, because then there is no cap to charge it against: the
             # printed ``card.primary_type`` stood here as the fallback and
             # could name a scope the permanent is **not** in, which is a Licid
             # that became an Aura being charged against Smoke's creature cap.
-            if not 0 <= idx < len(battlefield):
-                return ""
-            permanent = battlefield[idx]
-            limits = options.get("limits") or {}
             return next(
-                (
-                    t for t in sorted(limits)
-                    if permanent_in_limited_scope(permanent, t)
-                ),
+                (t for t in sorted(limits) if permanent_in_limited_scope(permanent, t)),
                 "",
             )
 
-        new_type = _ptype(req.permanent_index)
+        new_type = _ptype(candidates[chosen_id])
         # The per-type cap, read from the limits map the engine reports rather
         # than from a pair of named fields — the message that names the type is
         # what tells a player *why* the click was refused, and it should not go
         # generic the moment a third type is constrained.
-        type_max = (options.get("limits") or {}).get(new_type)
+        type_max = limits.get(new_type)
         if type_max is not None:
-            already = sum(1 for idx in selected if _ptype(idx) == new_type)
+            already = sum(1 for pid in selected if _ptype(candidates[pid]) == new_type)
             if already >= int(type_max):
                 raise HTTPException(
                     status_code=400,
@@ -244,10 +249,9 @@ def _action_untap_select(session, req, seat_type):
                 )
         if len(selected) >= required:
             raise HTTPException(status_code=400, detail="already selected maximum untap permanents")
-        selected.append(req.permanent_index)
-        selected = sorted(set(selected))
+        selected.append(chosen_id)
 
-    session.untap_selected_indices = selected
+    session.untap_selected_ids = selected
     session.untap_required_lands = required
 
 @action_handler("untap_confirm", human_only=HUMAN_ONLY)
@@ -261,32 +265,33 @@ def _action_untap_confirm(session, req, seat_type):
     if required <= 0:
         raise HTTPException(status_code=400, detail="no untap land selection is required")
 
-    selected = sorted(set(session.untap_selected_indices))
+    candidates = {perm.permanent_id: perm for perm in untap_candidates(session)}
+    selected = [pid for pid in session.untap_selected_ids if pid in candidates]
     if len(selected) > required:
         raise HTTPException(status_code=400, detail="selected too many permanents to untap")
 
-    # Split the chosen battlefield indices by type and hand one list per
-    # constrained type to the untap resolver. Only a *constrained* type gets a
-    # (possibly empty) selection; an unconstrained one stays absent so it
+    # Split the chosen permanents by type and hand one list per constrained
+    # type to the untap resolver — **by id**, which the engine turns into
+    # slots after the phasing event (CR 702.26a takes permanents off the
+    # battlefield list before anything untaps). Only a *constrained* type gets
+    # a (possibly empty) selection; an unconstrained one stays absent so it
     # untaps freely. Generic over the limits map, so Damping Field's artifact
     # needed no branch of its own here.
     options = session.game.get_untap_land_selection_options(session.current_turn) or {}
-    battlefield = session.game.players[session.current_turn].battlefield
     by_type = {
         card_type: [
-            i for i in selected
-            if 0 <= i < len(battlefield)
+            pid for pid in selected
             # The engine's own scope predicate, not a second spelling of it —
             # an artifact creature answers to both Damping Field's limit and
             # Smoke's, every permanent answers to Static Orb's, and a split that
             # disagreed would hand the resolver a selection it then rejected.
-            and permanent_in_limited_scope(battlefield[i], card_type)
+            if permanent_in_limited_scope(candidates[pid], card_type)
         ]
         for card_type in (options.get("limits") or {})
     }
     try:
         session.game.resolve_untap_step(
-            session.current_turn, selected_indices_by_type=by_type
+            session.current_turn, selected_ids_by_type=by_type
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -297,17 +302,28 @@ def _action_untap_confirm(session, req, seat_type):
 @action_handler("optional_untap_confirm")
 def _action_optional_untap_confirm(session, req, seat_type):
     # Old Man of the Sea: the player picked which "may choose not to untap"
-    # permanents stay tapped (creature_indices; empty/omitted = untap all).
+    # permanents stay tapped — by id (``target_permanent_ids``, each offered
+    # entry's ``id``; the preamble has 404'd a stale one), or by slot
+    # (``creature_indices``, read as the permanents in those slots now).
+    # Empty or omitted is untap them all.
     if req.seat != session.current_turn:
         raise HTTPException(status_code=400, detail="not your turn")
     if not session.optional_untap_pending:
         raise HTTPException(status_code=400, detail="no optional untap choice is pending")
-    valid = {int(entry["index"]) for entry in session.optional_untap_pending}
-    keep = sorted(set(req.creature_indices or []))
-    if any(idx not in valid for idx in keep):
+    valid = {entry.get("id") for entry in session.optional_untap_pending}
+    if req.target_permanent_ids is not None:
+        keep = list(dict.fromkeys(req.target_permanent_ids))
+    else:
+        keep = []
+        for slot in dict.fromkeys(req.creature_indices or []):
+            named = session.game.permanent_at(req.seat, slot)
+            if named is None:
+                raise HTTPException(status_code=400, detail="invalid keep-tapped choice")
+            keep.append(named.permanent_id)
+    if any(pid not in valid for pid in keep):
         raise HTTPException(status_code=400, detail="invalid keep-tapped choice")
     session.optional_untap_pending = []
-    session.game.resolve_untap_step(session.current_turn, keep_tapped_indices=keep)
+    session.game.resolve_untap_step(session.current_turn, keep_tapped_ids=keep)
     _clear_untap_selection(session)
     _resolve_upkeep_step(session, session.current_turn)
 
