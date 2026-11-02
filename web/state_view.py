@@ -1296,6 +1296,11 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             game=session.game,
             viewer_seat=viewer_seat,
             serialize_card=_serialize_card_summary,
+            # Another seat's cards in a prompt list, coloured by their owner's
+            # statics (Celestial Dawn) — ``PromptContext.owned_card``.
+            serialize_owned_card=lambda card, owner: _serialize_card_summary(
+                card, session.game, owner
+            ),
             seat_type=lambda seat: _seat_type(session, seat),
             serialize_permanent=lambda perm: _prompt_permanent_summary(
                 viewer_seat, perm, session.game

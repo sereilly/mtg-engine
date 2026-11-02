@@ -132,7 +132,7 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
         # nothing. `zones` has said which zones since searches grew a second
         # one; this is the payload reading it.
         "cards": (
-            [ctx.serialize_card(card) for card in caster.library]
+            [ctx.owned_card(card, caster) for card in caster.library]
             if "library" in zones else []
         ),
         # Asked the way the resolver asks (``_resolve_search_library_picks``):
@@ -204,7 +204,7 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
         ]
     if "graveyard" in zones:
         payload["graveyard_cards"] = [
-            ctx.serialize_card(card) for card in caster.graveyard
+            ctx.owned_card(card, caster) for card in caster.graveyard
         ]
         payload["legal_graveyard_indices"] = [
             index for index, card in enumerate(caster.graveyard)
@@ -218,7 +218,7 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
     # so nothing hidden from the chooser is shown; a pick naming it answers
     # with ``search_zone: "hand"`` and its index in this list.
     if "hand" in zones:
-        payload["hand_cards"] = [ctx.serialize_card(card) for card in caster.hand]
+        payload["hand_cards"] = [ctx.owned_card(card, caster) for card in caster.hand]
         payload["legal_hand_indices"] = [
             index for index, card in enumerate(caster.hand)
             if search_matches(
@@ -272,7 +272,7 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
         "pile_seat": pile_seat,
         "top_count": top_count,
         "card_name": choice.data.get("card_name", ""),
-        "cards": [ctx.serialize_card(card) for card in pile_owner.library[:top_count]],
+        "cards": [ctx.owned_card(card, pile_owner) for card in pile_owner.library[:top_count]],
         # What the pick *is*, which the family varies and the prompt has to be
         # able to say: where the chosen card goes, where the rest go, and how
         # many picks are still owed. Sealed Fate exiles from an opponent's
@@ -386,7 +386,7 @@ def _graveyard_pick_for_price(ctx: PromptContext, choices: list) -> dict:
         "owner_seat": owner_index,
         "card_name": choice.data.get("card_name", ""),
         "options": [
-            {"index": index, "card": ctx.serialize_card(graveyard[index])}
+            {"index": index, "card": ctx.owned_card(graveyard[index], owner_index)}
             for index in legal
         ],
     }
@@ -497,11 +497,11 @@ def _search_exile(ctx: PromptContext, choices: list) -> dict:
         # way; this is what stops the UI offering a fourth pick that will be
         # rejected whole.
         "maximum": choice.data.get("maximum"),
-        "cards": [ctx.serialize_card(card) for card in caster.library],
+        "cards": [ctx.owned_card(card, caster) for card in caster.library],
         "legal_indices": [
             index for index, card in enumerate(caster.library) if _matches(card)
         ],
-        "graveyard_cards": [ctx.serialize_card(card) for card in caster.graveyard],
+        "graveyard_cards": [ctx.owned_card(card, caster) for card in caster.graveyard],
         "legal_graveyard_indices": [
             index for index, card in enumerate(caster.graveyard) if _matches(card)
         ],
@@ -553,7 +553,7 @@ def _scry(ctx: PromptContext, choices: list) -> dict:
         # The printed number, which can exceed top_count on a short library —
         # the prompt still says "Scry 3" when only two cards are there.
         "amount": choice.data["amount"],
-        "cards": [ctx.serialize_card(card) for card in owner.library[:top_count]],
+        "cards": [ctx.owned_card(card, owner) for card in owner.library[:top_count]],
         # Where the cards the seat does not keep go: "bottom" is a scry
         # (CR 701.22a) and "graveyard" a surveil (CR 701.25a). Sent because
         # the one answer shape serves both and only the words on the prompt
@@ -582,12 +582,12 @@ def _revealed_hand_pick(ctx: PromptContext, choices: list) -> dict:
     shown = choice.data.get("shown_indices")
     if shown is not None:
         cards = [
-            ctx.serialize_card(card) if index in shown
+            ctx.owned_card(card, victim) if index in shown
             else {"name": "Face-down card", "hidden": True, "image_uri": None}
             for index, card in enumerate(victim.hand)
         ]
     else:
-        cards = [ctx.serialize_card(card) for card in victim.hand]
+        cards = [ctx.owned_card(card, victim) for card in victim.hand]
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name"),
@@ -661,7 +661,7 @@ def _discard(ctx: PromptContext, choices: list) -> dict:
         # player confirm with fewer (none included).
         "up_to": bool(choice.data.get("up_to")),
         "allow_top_of_library": bool(choice.data.get("allow_top_of_library")),
-        "cards": [ctx.serialize_card(card) for card in discarder.hand],
+        "cards": [ctx.owned_card(card, discarder) for card in discarder.hand],
         "eligible": ctx.game.live_discard_candidates(choice),
     }
     # What made this seat discard, when a resolution did — the prompt said
@@ -718,7 +718,7 @@ def _hand_to_library(ctx: PromptContext, choices: list) -> dict:
         "destination": (
             "bottom" if choice.data.get("destination") == "bottom" else "top"
         ),
-        "cards": [ctx.serialize_card(card) for card in player.hand],
+        "cards": [ctx.owned_card(card, player) for card in player.hand],
         # "**Shuffle** a card from your hand into your library."
         # (Lat-Nam's Legacy.) The same decision — which cards leave the hand —
         # with the order stripped out of the answer, because a shuffle destroys
@@ -775,7 +775,7 @@ def _hand_reveal(ctx: PromptContext, choices: list) -> dict:
         "viewer_seat": choice.player_index,
         "target_seat": choice.data["target_index"],
         "target_name": revealed.name,
-        "cards": [ctx.serialize_card(card) for card in revealed.hand],
+        "cards": [ctx.owned_card(card, revealed) for card in revealed.hand],
     }
 
 
@@ -1008,7 +1008,7 @@ def _library_cycle_offer(ctx: PromptContext, choices: list) -> dict:
         "card_name": choice.data.get("card_name", ""),
         "life_cost": life_cost,
         "payable": player.life >= life_cost,
-        "cards": [ctx.serialize_card(card) for card in player.library[:count]],
+        "cards": [ctx.owned_card(card, player) for card in player.library[:count]],
     }
 
 
@@ -1260,7 +1260,7 @@ def _graveyard_exile_pick(ctx: PromptContext, choices: list) -> dict:
         "count": ctx.game._how_many_graveyard_cards(choice),
         "up_to": bool(choice.data.get("up_to")),
         "legal_indices": ctx.game.live_graveyard_exile_candidates(choice),
-        "cards": [ctx.serialize_card(card) for card in owner.graveyard],
+        "cards": [ctx.owned_card(card, owner) for card in owner.graveyard],
     }
 
 
@@ -1291,7 +1291,7 @@ def _entry_exile(ctx: PromptContext, choices: list) -> dict:
         # says the Confirm is ready at every size.
         "any_number": bool(choice.data.get("any_number")),
         "counters": list(choice.data.get("counters") or ()),
-        "cards": [ctx.serialize_card(card) for card in player.graveyard],
+        "cards": [ctx.owned_card(card, player) for card in player.graveyard],
         "legal_indices": ctx.game._entry_exile_candidates(choice),
     }
 

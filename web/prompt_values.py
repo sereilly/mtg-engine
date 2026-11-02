@@ -45,7 +45,7 @@ def _commander_zone_change(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]
     return {
         "player_seat": choice.player_index,
-        "card": ctx.serialize_card(choice.data["card"]),
+        "card": ctx.owned_card(choice.data["card"], choice.player_index),
         "destination": choice.data["destination"],
         "rule": choice.data["rule"],
         "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
@@ -58,7 +58,7 @@ def _leng_discard(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]
     return {
         "player_seat": choice.player_index,
-        "card": ctx.serialize_card(choice.data["card"]),
+        "card": ctx.owned_card(choice.data["card"], choice.player_index),
         "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
     }
 
@@ -96,7 +96,7 @@ def _entry_discard_toll(ctx: PromptContext, choices: list) -> dict:
         "player_seat": choice.player_index,
         "card_name": choice.data["permanent"].card.name,
         "hand_indices": indices,
-        "cards": [ctx.serialize_card(player.hand[i]) for i in indices],
+        "cards": [ctx.owned_card(player.hand[i], player) for i in indices],
     }
 
 
@@ -965,7 +965,7 @@ def _lamp_draw(ctx: PromptContext, choices: list) -> dict:
     library = ctx.game.players[choice.player_index].library
     return {
         "card_names": names,
-        "cards": [ctx.serialize_card(card) for card in library[: len(names)]],
+        "cards": [ctx.owned_card(card, choice.player_index) for card in library[: len(names)]],
     }
 
 
@@ -981,7 +981,7 @@ def _return_from_graveyard_instead_of_draw(ctx: PromptContext, choices: list) ->
     graveyard = ctx.game.players[choice.player_index].graveyard
     return {
         "card_names": names,
-        "cards": [ctx.serialize_card(card) for card in graveyard[: len(names)]],
+        "cards": [ctx.owned_card(card, choice.player_index) for card in graveyard[: len(names)]],
     }
 
 

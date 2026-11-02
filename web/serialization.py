@@ -981,7 +981,15 @@ def _serialize_card(
     *,
     from_zone: str = "hand",
     hand_index: int | None = None,
+    owner_seat: int | None = None,
 ) -> dict:
+    # *owner_seat* is whose card this is when it is **not** being prepared
+    # for casting (no *caster_index*: another seat's graveyard, a revealed
+    # hand, the library top, the ante): it colours the card as its owner's
+    # statics leave it (CR 613.1e — under that owner's Celestial Dawn a
+    # nonland card off the battlefield is white) and touches nothing else, so
+    # no target spec, tax or zone cost is computed for a card nobody is
+    # casting from here.
     # Cost increasers (Gloom) are applied at payment time by the engine; reflect
     # them in the cost the UI shows and auto-taps for, so the pay-mana prompt
     # matches what the player actually pays. ``printed_mana_cost`` keeps the
@@ -1014,7 +1022,9 @@ def _serialize_card(
         # under its owner's Celestial Dawn a nonland card off the battlefield
         # is white, and the hand drew it in its printed colours. A preview
         # with no seat keeps the printed ones (``_card_preview``).
-        "colors": list(card_colors(game, card, caster_index)),
+        "colors": list(card_colors(
+            game, card, caster_index if caster_index is not None else owner_seat,
+        )),
         "modes": _serialize_modes(card, game, caster_index),
         # "Choose one **or more** —" (Sublime Epiphany, CR 700.2d). Sent
         # alongside the modes because the mode list alone cannot say it: a
@@ -1050,14 +1060,21 @@ def _serialize_card(
         serialized["faces"] = [
             _serialize_card(
                 face, game, caster_index, from_zone=from_zone, hand_index=hand_index,
+                owner_seat=owner_seat,
             )
             for face in faces
         ]
     return serialized
 
 
-def _serialize_card_summary(card) -> dict:
+def _serialize_card_summary(card, game: Game | None = None, owner_seat: int | None = None) -> dict:
+    """A card as a list shows it — a prompt's cards, the catalog. With *game*
+    and *owner_seat* its colours are its owner's statics' answer
+    (``object_colors.card_colors``: Celestial Dawn's white); without them,
+    printed, as a card nobody owns yet (the catalog) has to be."""
     serialized = _card_preview(card)
+    if owner_seat is not None:
+        serialized["colors"] = list(card_colors(game, card, owner_seat))
     serialized.update({
         "mana_cost": card.mana_cost,
         "modes": _serialize_modes(card),
@@ -1463,7 +1480,7 @@ def _exile_payload(
             continue
         payload.append(
             _serialize_card(card, game, seat, from_zone="exile") if viewer_seat == seat
-            else _serialize_card(card)
+            else _serialize_card(card, game, owner_seat=seat)
         )
     return payload
 
@@ -1549,7 +1566,7 @@ def _serialize_player(
         # An active reveal (Glasses of Urza's look, Word of Command's forced-play
         # choice) lets the viewer see this player's actual cards, so the opponent
         # hand fan renders real card faces instead of card backs.
-        hand = [_serialize_card(card) for card in player.hand]
+        hand = [_serialize_card(card, game, owner_seat=seat) for card in player.hand]
     else:
         # A hidden hand can still hold a face-up card: "that player plays with
         # that card revealed in their hand" (Firestorm Phoenix, CR 701.20a).
@@ -1557,7 +1574,7 @@ def _serialize_player(
         # card — the rest of the hand stays a hidden zone.
         revealed = locked_hand_indices(game, seat)
         hand = [
-            _serialize_card(card) if index in revealed else "<hidden>"
+            _serialize_card(card, game, owner_seat=seat) if index in revealed else "<hidden>"
             for index, card in enumerate(player.hand)
         ]
 
@@ -1653,7 +1670,7 @@ def _serialize_player(
         # not otherwise see — so the card face rides the payload for every
         # viewer while a source stands, and is absent otherwise.
         "library_top": (
-            _serialize_card(player.library[0])
+            _serialize_card(player.library[0], game, owner_seat=seat)
             if top_public
             else None
         ),
@@ -1664,7 +1681,7 @@ def _serialize_player(
         # and sent only to that owner and only while the top is not public
         # anyway (``engine.library_top.top_is_visible``).
         "library_top_private": (
-            _serialize_card(player.library[0])
+            _serialize_card(player.library[0], game, owner_seat=seat)
             if viewer_seat == seat and player.library and not top_public
             and top_is_visible(game, seat)
             else None
@@ -1674,13 +1691,13 @@ def _serialize_player(
         # make one castable — and the cast prompts read the spec off the card.
         "graveyard": _crowned([
             _serialize_card(card, game, seat, from_zone="graveyard")
-            if viewer_seat == seat else _serialize_card(card)
+            if viewer_seat == seat else _serialize_card(card, game, owner_seat=seat)
             for card in player.graveyard
         ], player.graveyard),
         "exile": _crowned(_exile_payload(game, player, viewer_seat, seat), player.exile),
         # The ante zone (CR 407) — public, like exile. Empty unless an ante card
         # (Contract from Below, Demonic Attorney, Jeweled Bird) has resolved.
-        "ante": [_serialize_card(card) for card in player.ante],
+        "ante": [_serialize_card(card, game, owner_seat=seat) for card in player.ante],
         # The command zone (CR 408), public like the ante zone: CR 903.6 puts a
         # commander there *face up*. Serialized with the viewer's seat when it
         # is their own, because a commander in it is castable (CR 903.8) and the
@@ -1688,7 +1705,7 @@ def _serialize_player(
         # card's. Empty outside a Commander game.
         "command_zone": _crowned([
             _serialize_card(card, game, seat, from_zone="command")
-            if viewer_seat == seat else _serialize_card(card)
+            if viewer_seat == seat else _serialize_card(card, game, owner_seat=seat)
             for card in player.command_zone
         ], player.command_zone),
         # CR 903.8: what each commander in that zone would cost extra to cast
