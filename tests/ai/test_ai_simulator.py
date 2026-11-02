@@ -6,7 +6,8 @@ from dataclasses import replace
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_simulator import build_limited_deck, run_ai_simulation
+from engine.ai_simulator import run_ai_simulation
+from engine.limited_deck import build_limited_deck
 from engine.ai_rehearsal import rehearsing
 from engine.models import Permanent
 from tests.helpers import LEA_PATH
@@ -20,7 +21,7 @@ def _expected_card_names() -> set[str]:
     An AST read rather than a hand-kept list: a list would be the third place
     these names live, and it would go stale the same way the thing it guards
     would."""
-    tree = ast.parse((ROOT / "engine" / "ai_simulator.py").read_text(encoding="utf-8"))
+    tree = ast.parse((ROOT / "engine" / "simulation_checks.py").read_text(encoding="utf-8"))
     function = next(
         node for node in ast.walk(tree)
         if isinstance(node, ast.FunctionDef) and node.name == "_assert_expected"
@@ -62,7 +63,7 @@ def test_every_simulator_expectation_names_a_card_the_deck_can_play(all_cards):
 
     missing = sorted(name for name in expected if name not in cards)
     assert not missing, (
-        "engine/ai_simulator.py::_assert_expected checks cards that are not in "
+        "engine/simulation_checks.py::_assert_expected checks cards that are not in "
         f"the pool it runs over, so the checks never run: {missing}"
     )
     dealt = {
@@ -71,7 +72,7 @@ def test_every_simulator_expectation_names_a_card_the_deck_can_play(all_cards):
     }
     orphaned = sorted(expected - dealt)
     assert not orphaned, (
-        "engine/ai_simulator.py::_assert_expected checks cards the deck builder "
+        "engine/simulation_checks.py::_assert_expected checks cards the deck builder "
         f"will not deal even when asked for them by name: {orphaned}"
     )
 
@@ -487,7 +488,7 @@ def test_the_simulators_oracle_is_not_fooled_by_a_cast_trigger_gaining_life(
     expectation is still the human-read 3; what changed is which record it is
     compared against.
     """
-    from engine.ai_simulator import _assert_expected, _snap
+    from engine.simulation_checks import _assert_expected, _snap
     from tests.helpers import _game, _nosick, resolve_stack
 
     cards = {card.name: card for card in all_cards}

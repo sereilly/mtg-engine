@@ -23,7 +23,7 @@ from engine.card_loader import manifest_set_path
 from engine.search_filters import card_has_type
 
 #: Sets across the pool's eras. ARN prints no basic land, so its decks take
-#: the manifest's (``ai_simulator._basic_land_pool``).
+#: the manifest's (``limited_deck._basic_land_pool``).
 CENSUS_SETS = ("LEA", "ARN", "ICE", "TMP", "INV", "ONS", "M21")
 GAMES = 30
 SEED = 4

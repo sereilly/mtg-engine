@@ -1,6 +1,6 @@
 """The AI and cards from outside the game (the Judgment Wishes, CR 400.11).
 
-Every simulated seat is dealt a sideboard (``ai_simulator.limited_sideboard``):
+Every simulated seat is dealt a sideboard (``limited_deck.limited_sideboard``):
 CR 100.4b — "In limited play involving individual players, all cards in a
 player's card pool not included in their deck are in that player's
 sideboard" — over the pool the deck was built from, the whole set but its
@@ -23,13 +23,13 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.ai_policy import choose_cast_action
-from engine.ai_simulator import (
+from engine.ai_simulator import run_ai_simulation
+from engine.limited_deck import (
     _basic_land_pool,
-    _zone_counter,
     build_limited_deck,
     limited_sideboard,
-    run_ai_simulation,
 )
+from engine.simulation_checks import _zone_counter
 from engine.card_loader import load_cards, manifest_set_path
 from engine.models import Permanent
 from tests.helpers import CARDS_BY_NAME as _C

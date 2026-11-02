@@ -81,7 +81,7 @@ ACKNOWLEDGED: dict[str, str] = {
         "controller's battlefield, and this is the function that honours that "
         "index; it takes a PlayerState and no Game, so there is no seam to ask."
     ),
-    "engine/ai_simulator.py::_assert_expected": (
+    "engine/simulation_checks.py::_assert_expected": (
         "Reads detached PlayerState clones taken before and after a spell, not "
         "the live board. A clone belongs to no Game, and comparing snapshots is "
         "the whole point of the check."

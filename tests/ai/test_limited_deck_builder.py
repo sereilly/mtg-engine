@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from engine.ai_simulator import (
+from engine.limited_deck import (
     LIMITED_DECK_SIZE,
     LIMITED_LAND_COUNT,
     build_limited_deck,

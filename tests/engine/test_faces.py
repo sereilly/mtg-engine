@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 from engine import Game
-from engine.ai_simulator import _zone_counter
+from engine.simulation_checks import _zone_counter
 from engine.behaviour_signature import behaviour_signature
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import (CAST_FACE_LAYOUTS, castable_faces, combined_oracle_text,

@@ -80,9 +80,9 @@ def test_the_simulator_does_not_ask_primary_type_about_a_card_type():
     import io as _io
     import tokenize
 
-    from engine import ai_simulator
+    from engine import simulation_checks
 
-    source = inspect.getsource(ai_simulator._assert_expected)
+    source = inspect.getsource(simulation_checks._assert_expected)
     used = [
         token
         for token in tokenize.generate_tokens(_io.StringIO(source).readline)
