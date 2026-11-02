@@ -20,6 +20,11 @@ them all; the exile door also retires the record the departing card carried
 And the one entry path onto the battlefield, ``_enter_battlefield``, wrapped
 by ``_put_permanent_onto_battlefield`` in one CR 603.3b window so the
 entering permanent's triggers and every observer's go on the stack together.
+Its entry state is performed with the permanent in no zone (CR 614.12a), and
+an entry that leaves a choice owed at a table that holds for answers waits
+on its way until the last answer (``engine/entry_awaiting.py``,
+``_finish_answered_entries``); a caller acts on the entered permanent through
+``then``.
 """
 
 from __future__ import annotations

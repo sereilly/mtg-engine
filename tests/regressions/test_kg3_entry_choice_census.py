@@ -90,7 +90,7 @@ def test_every_chooser_is_on_its_way_while_a_person_chooses():
             if not game.stack or game.waiting_prompt() is not None:
                 break
             game.resolve_top_of_stack(pause_for_choices=True)
-        waiting = [r.permanent for r in game.entries_in_progress if game.entry_is_awaited(r.permanent)]
+        waiting = [r.permanent for r in getattr(game, "entries_in_progress", ()) if r.finish is not None]
         if game.waiting_prompt() is None:
             # No question to ask from this board (one opponent, nothing to
             # reveal): it entered at once, and that is the whole of it.
@@ -118,7 +118,7 @@ def test_every_chooser_is_on_its_way_while_a_person_chooses():
             game.take_choice_default(owed)
         if not game.is_on_battlefield(permanent):
             wrong.append(f"{name}: not on the battlefield after the answer")
-        if game.entries_in_progress:
+        if getattr(game, "entries_in_progress", ()):
             wrong.append(f"{name}: an entry is still waiting after every answer")
         if creature and not _warden(game):
             wrong.append(f"{name}: Soul Warden never saw it enter")
@@ -142,7 +142,7 @@ def test_a_seat_nobody_asks_enters_every_chooser_at_once():
         examined += 1
         if not any(p.card is _C[name] for p in game.controlled_by(0)):
             wrong.append(f"{name}: not on the battlefield after resolving")
-        if game.entries_in_progress:
+        if getattr(game, "entries_in_progress", ()):
             wrong.append(f"{name}: an entry waits at a table nobody is asked at")
     assert not wrong, "\n".join(wrong)
     assert examined >= 45, examined

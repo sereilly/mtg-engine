@@ -884,17 +884,18 @@ def chosen_as_entered(game, permanent) -> "list[dict[str, str]]":
     ``test_entry_choices_reach_the_client.py`` fails if one ever does, because
     a hidden choice must not be sent to a viewer who may not see it.
 
-    **A choice still being asked has not been made.** The entry state stamps a
-    provisional default on the permanent before it arms the prompt, so that no
-    reader ever meets the record missing; until the seat answers, that value
-    is the engine's placeholder and not anything a player chose. Reported, it
-    read "Chosen color: white" beside a Voice of All whose colour prompt was
-    still on the screen — found by driving the card in a browser, since every
-    test of this field entered its permanent at a seat nobody asks. The
-    question is the one the state-based sweep already asks of a permanent
-    whose entry is unfinished (``Game.permanent_is_entering``), so it covers
-    every prompt kind an entry arms: the colour and name choices, a number
-    (Shapeshifter), a life payment (Phyrexian Processor).
+    **A choice still being asked has not been made.** It read "Chosen color:
+    white" beside a Voice of All whose colour prompt was still on the screen,
+    when the entry state stamped a provisional default before arming a
+    person's prompt — found by driving the card in a browser, since every test
+    of this field entered its permanent at a seat nobody asks. A person's
+    prompt now has nothing stamped and its permanent waits on its way until the
+    answer (CR 614.12a, ``engine/entry_awaiting.py``); what is left is a table
+    that holds nothing, where a seat nobody asks may enter with a queued
+    prompt and its default stamped (Shapeshifter's number). The question is
+    the one the state-based sweep asks of a permanent whose entry is
+    unfinished (``Game.permanent_is_entering``), so it covers every prompt
+    kind an entry arms.
     """
     if game.permanent_is_entering(permanent):
         return []
