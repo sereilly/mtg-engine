@@ -207,7 +207,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d... *(4 tests, subrules a)*
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
 - [x] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th... *(4 tests, subrules b)*
-- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(27 tests)*
+- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(25 tests)*
 
 ### 110. Permanents
 
@@ -329,7 +329,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **120.4** Damage is processed in a four-part sequence. *(16 tests, subrules bc)*
 - [ ] **120.5** Damage dealt to a creature, planeswalker, or battle doesn’t destroy it. Likewise, the source of t...
 - [ ] **120.6** Damage marked on a creature remains until the cleanup step, even if that permanent stops being a ...
-- [x] **120.7** The source of damage is the object that dealt it. If an effect requires a player to choose a sour... *(9 tests)*
+- [x] **120.7** The source of damage is the object that dealt it. If an effect requires a player to choose a sour... *(10 tests)*
 - [x] **120.8** If a source would deal 0 damage, it does not deal damage at all. That means abilities that trigge... *(3 tests)*
 - [ ] **120.9** If an ability triggers on damage being dealt by a specific source or sources, and the effect refe...
 - [ ] **120.10** Some triggered abilities check whether a permanent has been dealt excess damage. These abilities ...
