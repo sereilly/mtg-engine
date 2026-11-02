@@ -590,9 +590,10 @@ def test_retribution_offers_only_the_two_creatures_it_targeted(set_pool):
 
 
 def test_retribution_headless_still_marks_the_creature_left_standing(set_pool):
-    """A non-interactive opponent takes the stated default (the first live
-    candidate) and the counter still lands on the *other* one — the record the
-    pick leaves behind, not "whichever is still on the board"."""
+    """A non-interactive opponent takes the stated default (the cheaper of its
+    own creatures, by worth — kg3/choosers' permanent-choice default) and the
+    counter still lands on the *other* one — the record the pick leaves
+    behind, not "whichever is still on the board"."""
     game, caster, victim, big, small = _w2g1_retribution(set_pool)
 
     game.cast_from_hand(
@@ -601,8 +602,8 @@ def test_retribution_headless_still_marks_the_creature_left_standing(set_pool):
     )
     _w2g1_resolve(game)
 
-    assert [c.name for c in victim.graveyard] == ["Hill Giant"]
-    assert (small.effective_power, small.effective_toughness) == (1, 1)
+    assert [c.name for c in victim.graveyard] == ["Grizzly Bears"]
+    assert (big.effective_power, big.effective_toughness) == (2, 2)
 
 
 # --- Winter Sky ------------------------------------------------------------

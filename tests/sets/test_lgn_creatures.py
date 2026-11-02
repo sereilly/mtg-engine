@@ -871,7 +871,11 @@ def test_w1g2_lowland_tracker_provokes_the_creature_its_first_strike_kills(set_p
 
 def test_w1g2_brontotherium_tramples_over_the_creature_it_provoked(set_pool):
     """Brontotherium, 5/3 trample. Provoked, the Bear blocks it; lethal
-    damage to the Bear is 2 and the other 3 trample over (CR 702.19b)."""
+    damage to the Bear is 2 and the other 3 trample over (CR 702.19b).
+
+    The attacker's seat is a person's, so how much tramples over is its to
+    say (CR 510.1c–d, `Game.trample_assignments_to_ask`): it answers
+    lethal-then-the-rest."""
     bronto = set_pool("LGN")["Brontotherium"]
     game, (attacker,), (bear,) = _w1g2_table(
         [bronto], [_w1g2_creature("Bear", 2, 2)], interactive=(0, 1), tapped=(0,),
@@ -880,6 +884,12 @@ def test_w1g2_brontotherium_tramples_over_the_creature_it_provoked(set_pool):
     _w1g2_provoke(game, bear)
     game.advance_combat_phase()
     assert game.declare_blockers(1, {0: 0})[0]
+    for _ in range(6):
+        if game.trample_assignments_to_ask(0):
+            break
+        game.advance_combat_phase()
+    assert game.trample_assignments_to_ask(0) == [0]
+    assert game.resolve_combat_damage(0, attacker_damage={0: {0: 2}})[0]
     _w1g2_finish_combat(game)
     assert bear not in game.players[1].battlefield
     assert game.players[1].life == 17
