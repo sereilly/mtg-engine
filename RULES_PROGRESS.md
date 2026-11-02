@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**429 / 640 tracked rules covered (67%)** — 3265 tests, 0 unannotated.
+**429 / 640 tracked rules covered (67%)** — 3269 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -288,7 +288,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ... *(1 tests, subrules c)*
 - [x] **117.3** Which player has priority is determined by the following rules: *(28 tests, subrules abcd)*
 - [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(7 tests)*
-- [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(9 tests)*
+- [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(11 tests)*
 - [x] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ... *(2 tests)*
 
 ### 118. Costs
@@ -689,7 +689,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(37 tests, subrules bcd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(116 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(120 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(16 tests, subrules acd)*
@@ -923,7 +923,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **704.1** State-based actions are game actions that happen automatically whenever certain conditions (liste... *(1 tests)*
 - [x] **704.2** State-based actions are checked throughout the game and are not controlled by any player. *(1 tests)*
-- [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(11 tests)*
+- [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(13 tests)*
 - [x] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol... *(1 tests)*
 - [x] **704.5** The state-based actions are as follows: *(99 tests, subrules abcdefghijkmnpqrsz)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
