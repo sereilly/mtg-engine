@@ -49,7 +49,9 @@ from .cost_modifiers import (
 from .game import Game
 from .mana_payment import (
     COLOR_SYMBOLS,
+    FREE_TAP,
     PIP_SYMBOLS,
+    _cheapest_assignment,
     _match_colored,
     may_pay_pip,
     plan_payment,
@@ -519,6 +521,10 @@ class _ManaSource:
     rank: int
     #: The symbol it makes unasked — what a generic pip is paid with.
     default: str
+    #: ``((symbol, price), …)`` — what tapping it asked for each symbol it
+    #: makes costs beyond the tap (``mana_drawbacks.tap_prices``); empty
+    #: where nothing does.
+    prices: tuple = ()
 
 
 #: The most ways of tapping the sources that are tried one by one. Past it
@@ -617,6 +623,11 @@ class _PaymentPlanner:
         self.sacrificed: list[_ManaSource] = []
         if self.seat is None:
             return
+        # Whether any trigger on the board watches a permanent being tapped:
+        # read once for every source's price (`mana_drawbacks.tap_prices`).
+        from .mana_drawbacks import tap_watchers
+
+        watched = tap_watchers(game)
         # Only a land the tap seam will make mana from, and only what it will
         # make (`land_tap_yields` asks `land_mana_tap_refusal`, the seam's own
         # gate): an untapped land is not a mana. A storage land with no
@@ -654,14 +665,17 @@ class _PaymentPlanner:
                 if options:
                     self.sources.append(_ManaSource(
                         slot, options, 0, _land_symbols(game, permanent)[0],
+                        _source_prices(game, permanent, options, watched),
                     ))
                 continue
             source = _nonland_mana_source(game, self.seat, permanent, may_sacrifice=True)
             if source is None:
                 continue
+            options = _nonland_tap_options(source)
             entry = _ManaSource(
-                slot, _nonland_tap_options(source), 3 if source.sacrifices else 1,
+                slot, options, 3 if source.sacrifices else 1,
                 source.symbols[0],
+                _source_prices(game, permanent, options, watched, source.ability_index),
             )
             if not source.sacrifices:
                 self.sources.append(entry)
@@ -783,13 +797,18 @@ class _PaymentPlanner:
                 units.append(unit)
                 owner.append(position)
         pays = [_unit_pays(self.player, unit, reading) for unit in units]
+        # What each unit costs beyond the tap, asked the way `_asked_color`
+        # will ask its source (`mana_drawbacks`): None where nothing on the
+        # board charges anything, so such a board plans as it always did.
+        priced = self._unit_prices(sources, picked, units, owner, reading)
         # Which units pay is chosen with the seat's other wants in view
-        # (`mana_payment._sparing_choice`): the floating ones first, as they
-        # always were, then the sources that leave the most of the rest of
-        # the turn payable.
+        # (`mana_payment._sparing_choice`), then by those prices: the floating
+        # ones first, as they always were, then the sources that leave the
+        # most of the rest of the turn payable and cost least.
         payment = plan_payment(
             {}, range(len(units)), required, produces=pays.__getitem__,
             wants=self.wants, spent_first=len(self.floating), owners=owner,
+            prices=priced.__getitem__ if priced is not None else None,
         )
         if payment is None:
             return None
@@ -801,7 +820,10 @@ class _PaymentPlanner:
             symbol for symbol in COLOR_SYMBOLS
             for _ in range(max(0, int(required.get(symbol, 0) or 0)))
         ]
-        assigned = _match_colored(pips, [(index, pays[index]) for index in used]) if pips else {}
+        assigned = (
+            _priced_match(pips, used, pays, priced) if priced is not None
+            else _match_colored(pips, [(index, pays[index]) for index in used]) if pips else {}
+        )
         if assigned is None:
             return None
         tapped: dict[int, list] = {}
@@ -830,6 +852,69 @@ class _PaymentPlanner:
                 for position in order
             ),
         )
+
+    def _unit_prices(self, sources, picked, units, owner, reading):
+        """Each unit's `mana_payment.FREE_TAP`-shaped price profile — its
+        source's price when it pays generic (asked for the source's default
+        symbol, as `_asked_color` asks), and what asking it for each pip adds
+        — or None where no source picked charges anything."""
+        if not any(source.prices for source in sources):
+            return None
+        profiles: list = []
+        for unit, position in zip(units, owner):
+            if position is None:
+                profiles.append(FREE_TAP)
+                continue
+            source, option = sources[position], picked[position]
+            price = dict(source.prices)
+            if option.ask is not None:
+                profiles.append((price.get(option.ask, 0), ()))
+                continue
+            generic_symbol = (
+                source.default if source.default in unit
+                else next((s for s in _MANA_SYMBOLS if s in unit), None)
+            )
+            generic = price.get(generic_symbol, 0)
+            extra = []
+            for pip in _unit_pays(self.player, unit, reading):
+                if pip not in COLOR_SYMBOLS:
+                    continue
+                asked = next(
+                    (s for s in _MANA_SYMBOLS
+                     if s in unit and pip in _unit_pays(self.player, frozenset({s}), reading)),
+                    None,
+                )
+                if asked is not None and price.get(asked, 0) != generic:
+                    extra.append((pip, price.get(asked, 0) - generic))
+            profiles.append((generic, tuple(sorted(extra))))
+        return profiles if any(profile != FREE_TAP for profile in profiles) else None
+
+
+def _source_prices(game, permanent, options, watched, ability_index=None) -> tuple:
+    """``((symbol, price), …)`` for every symbol *options* can make
+    (`mana_drawbacks.tap_prices`), or () where none costs anything."""
+    from .mana_drawbacks import tap_prices
+
+    symbols = sorted({
+        symbol for option in options for unit in option.units for symbol in unit
+        if symbol in _MANA_SYMBOLS
+    })
+    prices = tap_prices(game, permanent, symbols, ability_index=ability_index, watched=watched)
+    return tuple(sorted(prices.items())) if any(prices.values()) else ()
+
+
+def _priced_match(pips, used, pays, priced) -> "dict | None":
+    """Which pip each used unit pays, the cheapest way
+    (`mana_payment._cheapest_assignment`) — the colour each source is asked
+    for is the pip, so a painland beside a Mountain is asked for its {C}."""
+    if not pips:
+        return {}
+    found = _cheapest_assignment(pips, [
+        (pays[index], dict(priced[index][1])) for index in used
+    ])
+    if found is None:
+        return None
+    return {index: pip for index, pip in zip(used, found[1]) if pip is not None}
 
 
 def _asked_color(
