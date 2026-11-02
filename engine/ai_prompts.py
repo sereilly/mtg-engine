@@ -1108,7 +1108,7 @@ def choose_amount_paid(game: Game, choice) -> int:
     of the turn; a seat holding a spell for its second main phase is the
     case this does not weigh.
     """
-    from .mana_payment import generic_cost, plan_payment
+    from .mana_payment import generic_cost
 
     worth = _amount_worth_paying(game, choice)
     if worth == 0:
@@ -1123,10 +1123,7 @@ def choose_amount_paid(game: Game, choice) -> int:
         limit = min(limit, worth)
     affordable = 0
     for amount in range(1, limit + 1):
-        if plan_payment(
-            player.mana_pool, lands, generic_cost(amount),
-            produces=game._land_payment_colors, payer=player,
-        ) is None:
+        if game.effect_payment_plan(player, generic_cost(amount), lands=lands) is None:
             break
         affordable = amount
     return affordable

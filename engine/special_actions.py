@@ -503,16 +503,9 @@ def _payment_plan(game: "Game", seat: int, cost: "dict[str, int]"):
     other "you may pay" in this engine goes through
     (``mana_payment.plan_payment``).
     """
-    from .mana_payment import plan_payment
-
     if not any(cost.values()):
         return {}
-    return plan_payment(
-        game.players[seat].mana_pool,
-        game.payment_lands(seat),
-        cost,
-        produces=game._land_payment_colors, payer=game.players[seat],
-    )
+    return game.effect_payment_plan(seat, cost)
 
 
 def _offer_price(

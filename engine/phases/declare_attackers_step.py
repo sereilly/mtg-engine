@@ -15,7 +15,7 @@ and the "attacks if able" requirements and the CR 508.1d maximisation are
 from ..attack_tapping import attacking_causes_tap
 from ..aura_restrictions import attached_combat_restrictions
 from ..combat_restrictions import declaration_tap_costs, toll_mana
-from ..mana_payment import mana_cost_label, plan_payment
+from ..mana_payment import mana_cost_label
 from ..subject_filters import subject_matches
 from ..events import emit
 from ..handlers._amounts import evaluate_count
@@ -721,9 +721,7 @@ class DeclareAttackersStepMixin:
             for land in self.payment_lands(controller)
             if not any(land is attacker for attacker in attackers)
         ]
-        return total, plan_payment(
-            controller.mana_pool, available, total, payer=controller,
-        )
+        return total, self.effect_payment_plan(controller, total, lands=available)
 
     def _pay_declaration_mana(
         self, controller_index: int, total: dict[str, int], plan
@@ -745,13 +743,12 @@ class DeclareAttackersStepMixin:
         planned = list(plan.tapped)
         paid = self._pay_planned_cost(
             controller,
-            lambda: plan_payment(
-                controller.mana_pool,
-                [
+            lambda: self.effect_payment_plan(
+                controller, total,
+                lands=[
                     land for land in self.payment_lands(controller)
                     if any(land is named for named in planned)
                 ],
-                total, payer=controller,
             ),
         )
         # Said as it happened. The plan is made over ``Game.payment_lands``,

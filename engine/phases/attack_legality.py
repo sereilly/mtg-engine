@@ -27,7 +27,6 @@ from ..combat_restrictions import (declaration_company_required,
                                    defender_attack_cap,
                                    participation_cap,
                                    restriction_condition_holds)
-from ..mana_payment import plan_payment
 from ..subject_filters import subject_matches
 from ..models import Permanent
 from ..oracle import compile_card_oracle
@@ -384,14 +383,13 @@ class AttackLegalityMixin:
             attacker,
             None if attacking_planeswalker else defending_player_index,
         ):
-            if plan_payment(
-                self.players[attacker_seat].mana_pool,
-                [
+            if self.effect_payment_plan(
+                attacker_seat, cost,
+                lands=[
                     land
                     for land in self.payment_lands(attacker_seat)
                     if land is not attacker
                 ],
-                cost, payer=self.players[attacker_seat],
             ) is None:
                 return False
 

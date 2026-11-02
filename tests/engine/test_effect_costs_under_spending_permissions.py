@@ -200,9 +200,6 @@ _PAYERLESS_PLANNERS = {
     # (``_unit_pays``, the permissions asked a unit at a time), so the payer
     # is already in what the matching is handed.
     "engine/ai_payment.py",
-    # "Pay any amount of mana": a generic cost, which every unit pays whatever
-    # the seat may spend it as.
-    "web/prompt_values.py",
 }
 
 
@@ -230,5 +227,7 @@ def test_every_payment_planner_names_its_payer():
                 named = any(keyword.arg == "payer" for keyword in node.keywords)
                 if not named and relative not in _PAYERLESS_PLANNERS:
                     missing.append(f"{relative}:{node.lineno}")
-    assert calls >= 17, calls
+    # 9 since kg3/leftovers2 moved the effect payer's thirteen reads into
+    # one seam (``Game.effect_payment_plan``), which names its payer.
+    assert calls >= 8, calls
     assert missing == [], missing

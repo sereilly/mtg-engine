@@ -34,7 +34,7 @@ from ..trigger_utils import iter_triggered_abilities, matching_triggers
 from ..turn_state import record_controllers_upkeep
 from ..mixins._constants import _UPKEEP_PAY_KINDS
 from ..cumulative_upkeep import upcoming_cost
-from ..mana_payment import mana_cost_label, plan_payment
+from ..mana_payment import mana_cost_label
 from ..upkeep_costs import (UpkeepCost, cost_from_payload, cost_prompt_fields,
                             resolved_toll_instruction)
 from ..effect_labels import triggered_label
@@ -219,11 +219,8 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         """How *player* would pay *mana* now, or None — asked once by the
         affordability test and once by the spend, so the two cannot disagree
         about which lands and which units are in play."""
-        return plan_payment(
-            self._upkeep_pool(player, purpose),
-            self.payment_lands(player),
-            mana,
-            produces=self._land_payment_colors, payer=player,
+        return self.effect_payment_plan(
+            player, mana, pool=self._upkeep_pool(player, purpose),
         )
 
     def _upkeep_pool(self, player, purpose) -> dict[str, int]:
@@ -437,40 +434,54 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         is the opponent — so this pays with the engine's one token maker rather
         than with a second construction of "1/1 red Survivor creature token".
 
-        "An opponent" is the payer's choice; with one living opponent there is
-        nothing to choose, and in a larger game this takes the first living
-        opponent in seat order after them — the same simplification the
-        Rohgahh handler names in ``upkeep_effects.py``, and honest for the same
-        reason: a real multiplayer choice wants the pending-choice queue, and
-        CR 702.24a would want it made once **per age counter** rather than once
-        per payment.
+        **One opponent per age counter, named by the payer.** CR 702.24a: "pay
+        [cost] for each age counter on it", and the card's ruling (2004-10-04):
+        "If you have multiple opponents, you can put the Survivor tokens onto
+        the battlefield under the control of different players." Each is asked
+        through the choosers' seam (``handlers/player_choices.
+        ask_which_opponent``: one opponent is no question, a payer nobody asks
+        takes the first offered), in one resumable loop whose last step makes
+        the tokens — one creation per opponent named, so a payer nobody asks
+        makes them in one, as before. Every token went to the first living
+        opponent after the payer until then, whoever the payer was.
+
+        The loop is the last thing here (``engine/resumption.py``): a person's
+        answers suspend it, and what follows in :meth:`pay_upkeep_cost` (a
+        self-action cost, which no card prints beside this one) runs as the
+        payment's other parts do, before them.
         """
         from ..game_types import OracleExecutionContext
+        from ..handlers.player_choices import ask_which_opponent
+        from ..resumption import run_resumable
 
-        seat = self.seat_index(player)
-        recipient = next(
-            (
-                index
-                for offset in range(1, len(self.players))
-                for index in [(seat + offset) % len(self.players)]
-                if not self.players[index].lost
-            ),
-            None,
+        card = source.card if source is not None else _reason_card(reason)
+        asking = OracleExecutionContext(
+            caster=player, target=player, card=card, source_permanent=source,
         )
-        if recipient is None:
-            # Unreachable behind `can_pay_upkeep_cost`, and a return rather than
-            # an assumption: a token made here would go to the payer.
-            return
-        payload = dict(cost.opponent_token or {})
-        payload["count"] = cost.opponent_tokens
-        instruction = OracleInstruction("create_token", "", payload)
-        context = OracleExecutionContext(
-            caster=self.players[recipient],
-            target=self.players[recipient],
-            card=source.card if source is not None else _reason_card(reason),
-            source_permanent=source,
-        )
-        self._execute_oracle_instruction(instruction, context)
+        named: list[int] = []
+
+        def ask(_counter) -> None:
+            ask_which_opponent(
+                self, asking, card_name=card.name,
+                prompt=f"Choose the opponent who creates a token for {reason}.",
+                then=lambda seat: named.append(seat) if seat is not None else None,
+            )
+
+        def create() -> None:
+            for recipient in dict.fromkeys(named):
+                payload = dict(cost.opponent_token or {})
+                payload["count"] = named.count(recipient)
+                self._execute_oracle_instruction(
+                    OracleInstruction("create_token", "", payload),
+                    OracleExecutionContext(
+                        caster=self.players[recipient],
+                        target=self.players[recipient],
+                        card=card,
+                        source_permanent=source,
+                    ),
+                )
+
+        run_resumable(self, range(cost.opponent_tokens), ask, then=create)
 
     def _upkeep_answers_by_permanent(self, answers: dict | None) -> dict | None:
         """Normalise one prompt-answer map so every battlefield answer is keyed

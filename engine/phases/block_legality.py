@@ -30,7 +30,6 @@ from ..combat_restrictions import (declaration_company_required,
                                   restriction_condition_holds)
 from ..evasion_negation import negated_evasion_abilities
 from ..landwalk import LANDWALK, land_satisfies, landwalk_requirement
-from ..mana_payment import plan_payment
 from ..layer_bridge import computed_abilities
 from ..subject_filters import subject_matches
 from ..models import Permanent
@@ -736,18 +735,10 @@ class BlockLegalityMixin:
             # cost in this file is: a per-pair predicate is what "blocks if
             # able" reads, and a defender who cannot cover the toll is not able.
             toll = self._block_toll_of(blocker)
-            if toll and plan_payment(
-                self.players[blocker_seat].mana_pool,
-                self.payment_lands(blocker_seat),
-                toll, payer=self.players[blocker_seat],
-            ) is None:
+            if toll and self.effect_payment_plan(blocker_seat, toll) is None:
                 return False
             for cost in self._block_mana_costs_of(blocker, attacker):
-                if plan_payment(
-                    self.players[blocker_seat].mana_pool,
-                    self.payment_lands(blocker_seat),
-                    cost, payer=self.players[blocker_seat],
-                ) is None:
+                if self.effect_payment_plan(blocker_seat, cost) is None:
                     return False
             # "…unless you tap an untapped creature you control not declared as
             # a blocking creature this combat." (Hollow Warrior.) The tap cost,

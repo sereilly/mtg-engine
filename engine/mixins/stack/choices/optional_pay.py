@@ -46,14 +46,11 @@ class OptionalPayChoicesMixin:
         if option is not None:
             options = options[option:option + 1]
         for cost in options:
-            plan = plan_payment(
-                player.mana_pool, lands, cost,
-                produces=self._land_payment_colors,
-                # What the payer may spend that mana *as* (CR 609.4b): white as
-                # any colour under Celestial Dawn or False Dawn, where no land
-                # "produces" the pip an effect is charging.
-                payer=player,
-            )
+            # What the payer may spend that mana *as* (CR 609.4b): white as any
+            # colour under Celestial Dawn or False Dawn, where no land
+            # "produces" the pip an effect is charging — and each land as what
+            # one tap of it adds (``effect_payment_plan``).
+            plan = self.effect_payment_plan(player, cost, lands=lands)
             if plan is not None:
                 return plan
         return None
@@ -774,10 +771,7 @@ class OptionalPayChoicesMixin:
                 may_tap.append(
                     optional_pay_may_tap_lands(self, choice.player_index, entry)
                 )
-            return may_tap[0] and plan_payment(
-                player.mana_pool, self.payment_lands(player),
-                cost, produces=self._land_payment_colors, payer=player,
-            ) is not None
+            return may_tap[0] and self.effect_payment_plan(player, cost) is not None
 
         # A life cost has no "already floating" reading — nothing is held in
         # reserve to spend — so the stated policy is the one a player at a
