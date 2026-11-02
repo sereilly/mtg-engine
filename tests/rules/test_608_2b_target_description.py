@@ -38,7 +38,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.control import change_control
-from engine.layer_bridge import SET_CARD_TYPES
+from engine.type_layer import SET_CARD_TYPES
 from engine.models import Permanent
 from engine.pt import add_pt_modifier
 from tests.helpers import resolve_stack

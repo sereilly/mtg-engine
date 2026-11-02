@@ -1,10 +1,13 @@
-"""Collect the engine's stored P/T channels as CR 613 continuous effects.
+"""Collect the engine's stored channels as CR 613 continuous effects.
 
 ``engine/continuous.py`` is the layer system; this module is the adapter that
 feeds it. Each of the metadata channels a permanent carries becomes a
 :class:`ContinuousEffect` placed in its proper layer and sublayer, and the
 layer engine — not the order the reading code happens to be written in —
-decides how they combine.
+decides how they combine. Layers 7 (P/T), 6 (abilities), 2 (control) and 5
+(colour) are collected here, with the computed accessors that apply them; the
+seed they start from is ``engine/printed_characteristics.py`` and layer 4 is
+``engine/type_layer.py``.
 
 Keeping the adapter separate from the layer engine means the engine stays pure
 and testable against the rule text, while the storage it reads from can move
@@ -14,41 +17,33 @@ rules logic changing.
 
 from __future__ import annotations
 
-import re
-from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from . import fast_paths
-from .oracle_types import compilation_cache
-from .banding import band_quality
-from .aura_grants import (animating_auras, aura_card_type_grants,
-                          aura_color_grants, aura_conditional_grant_holds,
+from .aura_grants import (animating_auras, aura_color_grants,
+                          aura_conditional_grant_holds,
                           aura_conditional_keyword_grants,
-                          aura_creature_type_sets, aura_keyword_grants,
-                          aura_keyword_removals, aura_land_animation,
-                          aura_pt_grant_per_counter, aura_static_pt_grant,
-                          aura_type_grants, chosen_landwalk_grants)
+                          aura_keyword_grants, aura_keyword_removals,
+                          aura_land_animation, aura_pt_grant_per_counter,
+                          aura_static_pt_grant, chosen_landwalk_grants)
 from .aura_attachment import auras_attached_to
 from .color_changes import color_changes
 from .named_counters import counters_on
 from .control import control_changes, has_control_change
 from .entry_choices import CHOSEN_COLOR_KEY, own_chosen_color
-from .global_statics import (STACK_STATIC_STAMPS_KEY, STACK_STATICS_KEY,
-                             changes_types, global_static_sources,
-                             removes_all_abilities, stack_statics_applying_to)
+from .global_statics import (global_static_sources, removes_all_abilities,
+                             stack_statics_applying_to)
 from .land_animation import LAND_ANIMATIONS_REACHING
 from .pt import BASE_PT_TIMESTAMP_KEY, CDA_POWER_KEY, CDA_TOUGHNESS_KEY
 from .continuous import (
     Characteristics,
     ContinuousEffect,
     State,
-    add_types,
     apply_layers,
     change_control,
     grant_abilities,
     modify_pt,
     remove_abilities,
-    remove_types,
     scope_only,
     set_colors,
     set_pt,
@@ -56,20 +51,15 @@ from .continuous import (
 )
 from .keywords import (abilities_lost_at, ability_effects, derived_grant_stamps,
                        derived_removals)
-from .landwalk import BOARD_NAMED_LANDWALKS, landwalk_requirement
-from .land_types import DERIVED_LAND_TYPES, LAND_TYPE_EFFECTS, land_type_changes
+from .landwalk import BOARD_NAMED_LANDWALKS
 from .late_modules import LateModules
 from .lord_buffs import QUALIFIER_FIELDS
-from .object_creature_types import (every_creature_type_subtypes,
-                                    restore_struck_every_creature_type)
-from .type_changes import (
-    LAND_ANIMATION_ORDER,
-    LAYER_4_CHANNELS,
-    derived_lost_supertypes,
-    gained_types,
-    lost_types,
-    static_type_order,
-)
+# Where ``object_creature_types`` was first imported, so the package loads its
+# modules in the order it did before the split (``engine/late_modules.py``).
+from .printed_characteristics import (_seed_shape, printed_supertypes,
+                                      seed_characteristics)
+from .type_changes import gained_types
+from .type_layer import TYPE_EFFECT_CHANNELS, collect_type_effects
 
 if TYPE_CHECKING:
     from .models import Permanent
@@ -85,49 +75,18 @@ _late_grammar = LateModules(f"{__package__}.grammar")
 #: earlier in the package's load order (``engine/late_modules.py``).
 _late = LateModules(__package__)
 
-#: The three animation records layer 4 reads, one per duration
-#: (:func:`collect_own_type_effects`).
-_ANIMATION_RECORDS = (
-    "animate_until_end_of_turn", "animate_indefinitely",
-    "animate_until_end_of_combat",
-)
 
 # Channels whose values are recomputed from the board on every pass carry no
 # timestamp of their own; they are all layer 7c, where order does not matter
 # because addition commutes.
 _DERIVED_TIMESTAMP = 0
 
-#: The place in a layer of something that is part of the object's **copiable
-#: values** but is recorded as an effect rather than folded into the seed: what
-#: an "as this enters" choice made the permanent (Primal Clay's body — a
-#: layer-1 copiable effect by CR 613.2a). Copiable values are where every later
-#: layer *starts* (CR 613.2c, CR 707.2), so such a contribution applies before
-#: every effect the clock has stamped — the same number an unstamped record
-#: reads as, and a different claim: this one is first by rule, that one by
-#: omission.
-COPIABLE_VALUE = 0
 
 # Derived layer-7c contributions from a lord buff whose filter names a state the
 # buffed creature must be in. ``{qualifier: (power, toughness)}``, cleared and
 # rebuilt by ``_recalculate_lord_buffs``; the qualifier itself is checked here,
 # at read time.
 QUALIFIED_BUFFS = "lord_buff_while"
-# ``GAINED_TYPES`` / ``LOST_TYPES`` — the types a resolved effect added to or
-# took from a permanent — are ``engine/type_changes.py``'s, the write API that
-# stamps them (CR 613.7b). This module re-exported the two names for three
-# tests that built a board by indexing with them; those go through
-# ``gain_types`` / ``lose_types`` now, and nothing here names either key.
-#: The card types an effect **set** a permanent to (CR 205.1a): "{0}: This
-#: permanent becomes an enchantment." (Opal Acrolith), "Target creature becomes
-#: an enchantment…" (Soul Sculptor). One slot rather than a list, exactly as an
-#: animation record is one slot: a replacement says what the permanent now is,
-#: so a second one is not a second contribution to fold but the same question
-#: answered again — and the timestamp on the record is what decides it against
-#: the animation channel, which is the effect it is printed to undo.
-SET_CARD_TYPES = "set_card_types"
-# ``DERIVED_LOST_SUPERTYPES`` — the supertypes a board-wide static takes away
-# (Melting) — is ``engine/type_changes.py``'s too, rebuilt by
-# ``engine/type_statics.py`` and read through ``derived_lost_supertypes``.
 
 #: Each entry takes the permanent **and the seat whose lord contributed the
 #: buff** (CR 109.5's "you"), because one qualifier is a relation to that seat
@@ -182,260 +141,6 @@ def qualifier_holds(
     ("attacking you") and ignored by the rest.
     """
     return _QUALIFIER_HOLDS[qualifier](perm, observer)
-
-
-@lru_cache(maxsize=None)
-def _printed_shape(
-    type_line: str, name: str, oracle_text: str, keywords: tuple[str, ...]
-) -> tuple[frozenset[str], frozenset[str]]:
-    """A card's printed types and subtypes, parsed once per distinct card.
-
-    Seeding runs on every characteristic read — ``is_creature`` alone is called
-    in tight state-based-action and combat loops — so the text parsing behind it
-    is cached on the same immutable fields ``compile_card_oracle`` keys on.
-    """
-    lowered = type_line.lower()
-    card_types = frozenset(
-        word for word in ("artifact", "creature", "enchantment", "instant", "land", "planeswalker", "sorcery")
-        if word in lowered
-    )
-    subtypes: frozenset[str] = frozenset()
-    if "—" in type_line or "-" in type_line:
-        tail = type_line.replace("—", "-").split("-", 1)[-1]
-        subtypes = frozenset(word.lower() for word in tail.split() if word)
-    # "…is every creature type" (Mistform Ultimus): a CDA works in every zone
-    # (CR 604.3), so it is in the one parse the off-battlefield answer and the
-    # layer seed share — applied before every layer-4 effect (CR 613.3).
-    return card_types, every_creature_type_subtypes(
-        card_types, subtypes, oracle_text, name
-    )
-
-
-def _seed_shape(perm: Permanent, card) -> tuple[frozenset[str], frozenset[str]]:
-    """``_printed_shape`` of *card*, *perm*'s effective card, with a type CDA
-    layer 6 struck put back (``restore_struck_every_creature_type``)."""
-    card_types, subtypes = _printed_shape(
-        card.type_line, card.name, card.oracle_text, card.keywords
-    )
-    return card_types, restore_struck_every_creature_type(
-        perm, card, card_types, subtypes
-    )
-
-
-@lru_cache(maxsize=None)
-def printed_supertypes(type_line: str) -> frozenset[str]:
-    """The supertypes printed on *type_line* — "legendary", "basic", "snow".
-
-    Its own reader rather than a third return value from ``_printed_shape``,
-    because it answers for two different kinds of object and one of them is a
-    ``Permanent``: a supertype is not something layers 4 or 6 compute here, so
-    the answer is whatever line the object *effectively* has (a copy's, a text
-    change's) and there is no computed accessor to defer to. Callers pass the
-    line they mean and the difference stays visible at the call site.
-
-    Read against the vocabulary rather than a literal list, so a set printing a
-    new supertype needs ``fetch_vocabulary.py`` and nothing else.
-    """
-    from .grammar.vocabulary import TYPE_LINE_SUPERTYPES
-
-    head = type_line.replace("—", "-").split("-", 1)[0].lower()
-    return frozenset(word for word in head.split() if word in TYPE_LINE_SUPERTYPES)
-
-
-def printed_shape(card) -> tuple[frozenset[str], frozenset[str]]:
-    """The card types and subtypes *card* is printed with.
-
-    The answer for an object **outside** the battlefield — a card in a hand, a
-    graveyard or a library — where CR 613 does not apply at all and there is no
-    permanent to ask ``has_type``. On the battlefield this is only the seed;
-    layers 4 and 6 may have moved it since, so a caller holding a ``Permanent``
-    wants ``has_type`` and never this.
-    """
-    return _printed_shape(card.type_line, card.name, card.oracle_text, card.keywords)
-
-
-def seed_characteristics(perm: Permanent) -> Characteristics:
-    """An object's copiable values — where layer application starts (613.2c).
-
-    Every field reads the *same* card: ``effective_card`` is layer 1 (the copy)
-    and then layer 3 (the text change), and CR 613.2c says the result of layer 1
-    **is** the copiable values. While copies were stamped as overrides this
-    function could not do that — colour had to seed from ``perm.card`` so
-    Vesuvan Doppelganger's blue survived, and P/T had to seed from ``perm.card``
-    so the copy's ``absolute_power`` stamp did not get counted twice in 7b. Both
-    of those were the stamped model showing through the seam; layer 1 puts the
-    exception where it belongs, in the copy effect.
-
-    ``None`` power/toughness means the printed value is variable ("*"), so a
-    characteristic-defining ability in 7a supplies it. That is the distinction
-    the old code could not make, having no value for "not a number".
-    """
-    card = perm.effective_card
-    card_types, subtypes = _seed_shape(perm, card)
-    return Characteristics(
-        card_types=set(card_types),
-        subtypes=set(subtypes),
-        # CR 205.4a's half of the line, seeded here for the reason every other
-        # field is: a supertype an effect adds or removes (Arcum's Weathervane,
-        # Melting) is a layer-4 change like any other, and a channel that starts
-        # empty could only ever *add*. ``Characteristics.supertypes`` and
-        # ``add_types``' keyword had been here since the layer system was
-        # written with nothing seeding them and nothing reading them back — a
-        # channel built at both ends and connected at neither.
-        supertypes=set(printed_supertypes(card.type_line)),
-        colors=set(card.colors),
-        abilities=_printed_abilities(card),
-        power=card.base_power,
-        toughness=card.base_toughness,
-    )
-
-
-# Keywords the engine recognizes on a card's own text. Kept here rather than as
-# a fallback *after* layer 6, because a printed ability is part of the object's
-# copiable values: it has to be in the seed so a removal in layer 6 can take it
-# away. Consulted after the parsed `keywords` field so a card whose keyword only
-# appears in its oracle text still has it.
-_TEXT_KEYWORDS = (
-    "flying", "first strike", "double strike", "trample", "vigilance", "haste",
-    "defender", "reach", "banding", "fear", "deathtouch", "islandwalk",
-    "mountainwalk", "swampwalk", "forestwalk", "plainswalk", "desertwalk",
-    "indestructible", "menace", "prowess", "flash",
-    # "rampage" is the word alone, and the printed line is "Rampage 2" — so the
-    # ingested keywords field seeds "rampage 2" and nothing asking for the
-    # *ability* found it. CR 702.23c counts instances of rampage, which is what
-    # "does it have rampage" means (Rapid Fire's "if it doesn't have rampage"),
-    # and the number is the instance's parameter rather than part of the name.
-    # A substring scan is safe here for the reason it is not for hexproof:
-    # there is no narrower keyword whose name contains this one.
-    "rampage",
-    # …and "flanking", for the same two reasons: it is what a *granted* line
-    # (Agility) puts back into the ability set, and it is what the next
-    # flanker's own "without flanking" filter asks. The substring scan is safe
-    # here on the same test — no narrower keyword's name contains this word.
-    "flanking",
-    # …and "provoke" (CR 702.39), line-derived like flanking and granted the
-    # same way — by a lord (Hunter Sliver), whose granted "Provoke" line is
-    # what puts the word back in the set. The substring test holds: no
-    # narrower keyword's name contains this word.
-    "provoke",
-    # …and "phasing", which a card can carry as a printed line alone: Teferi's
-    # Curse grants it as a keyword and Shimmer as a board-wide static, and the
-    # untap step reads the word off this set. Same substring test as the two
-    # above — no narrower keyword's name contains it.
-    "phasing",
-    # "hexproof" is deliberately absent: this is a substring scan, and bare
-    # hexproof is a *stronger* keyword than "hexproof from <colour>" — matching
-    # the word inside the phrase would upgrade Sporeweb Weaver's blue-only
-    # shield to a full one. Printed hexproof arrives through the ingested
-    # keywords field, which the seed consults first.
-)
-
-
-#: "<qualifier> <type>walk" as it is printed inside a keyword line. The
-#: qualifier is captured and handed to `landwalk_requirement`, which decides
-#: whether it is a real one — so this pattern is deliberately permissive.
-_QUALIFIED_WALK = r"(\w+) %s\b"
-
-
-def _text_keywords_in(value: str) -> set[str]:
-    """The keywords printed in one keyword line.
-
-    A substring scan, and the one place its hazard is answered rather than
-    assumed. ``_TEXT_KEYWORDS``' own comment says a bare word is safe "for the
-    reason it is not for hexproof: there is no narrower keyword whose name
-    contains this one" — Ice Age is where that stopped being true. "Snow
-    forestwalk" (Rime Dryad, Legions of Lim-Dul) *contains* "forestwalk", and
-    the containing phrase is the **narrower** ability: seeded as plain
-    forestwalk, Rime Dryad was unblockable against any Forest at all, which is a
-    strictly better creature than the one printed.
-
-    So a walk word is dropped when the printed text qualifies it, and the
-    qualified ability takes its place. Which qualifiers count is asked of
-    ``landwalk_requirement`` — the reader that *enforces* the ability — rather
-    than of a list here, so a supertype the vocabulary gains later is covered
-    the day it is fetched, and a word that is not a real qualifier leaves the
-    bare ability alone.
-    """
-    found = {word for word in _TEXT_KEYWORDS if word in value}
-    for word in list(found):
-        if not word.endswith("walk"):
-            continue
-        for match in re.finditer(_QUALIFIED_WALK % word, value):
-            if landwalk_requirement(f"{match.group(1)} {word}") is not None:
-                found.discard(word)
-                found.add(f"{match.group(1)} {word}")
-    return found
-
-
-def _printed_abilities(card) -> set[str]:
-    return set(_printed_abilities_cached(
-        card.name, card.type_line, card.oracle_text, card.keywords
-    ))
-
-
-@compilation_cache
-@lru_cache(maxsize=None)
-def _printed_abilities_cached(
-    name: str, type_line: str, oracle_text: str, keywords: tuple[str, ...]
-) -> frozenset[str]:
-    """Printed keywords, including any the compiler only finds in oracle text.
-
-    Cached per distinct card: this scans every compiled instruction for every
-    known keyword, and it runs on each characteristic read.
-    """
-    from .models import CardDefinition
-    from .oracle import compile_card_oracle
-
-    card = CardDefinition(
-        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text=oracle_text,
-        colors=(), color_identity=(), keywords=keywords, produced_mana=(), raw={},
-    )
-    abilities = {kw.lower() for kw in keywords}
-    for instruction in compile_card_oracle(card).instructions:
-        # **A keyword line, and nothing else.** "Does this line give *this
-        # permanent* this keyword?" is a question about the line's subject, and
-        # the compiler's line classifier has already answered it: a line that
-        # states the object's own keyword abilities is a ``keyword_line``
-        # (CR 702), one that gives them to it on a condition is a
-        # ``conditional_static`` and one that gives them to a class of
-        # permanents is a ``lord_buff`` -- the last two contributed in layer 6
-        # by their own readers, with the condition and the class enforced.
-        #
-        # A ``static_line`` is what is left: a sentence some text-keyed table
-        # claimed and no instruction carries. This scan used to read those too,
-        # and a word search has no subject, so it seeded whatever keyword the
-        # sentence *mentioned*: Gliding Licid flew because it says "enchanted
-        # creature has flying", Guardian Beast was indestructible because the
-        # artifacts beside it are, Rootwater Shaman had flash because Auras may
-        # be cast "as though they had flash", and Gosta Dirk had the islandwalk
-        # his own text switches off. Faerie Squadron ("…and with flying", for a
-        # *kicked* one) was the first found and was skipped by pattern; a skip
-        # per sentence is a deny-list of a table that names no legitimate
-        # entry. Over both manifest roles the pool carries 199 static lines, 18
-        # of them mention a keyword, and not one of the 18 gives it to the
-        # permanent printing it
-        # (``tests/engine/test_printed_keyword_seed.py``).
-        if instruction.kind != "keyword_line":
-            continue
-        value = instruction.value or ""
-        abilities.update(_text_keywords_in(value))
-        # A printed "bands with other [quality]" line (CR 702.22b) — the Wolves
-        # of the Hunt token Master of the Hunt makes carries one. It cannot ride
-        # the word scan above: the ability's name *is* the printed quality, so
-        # there is no word to look for. Each comma-joined part is asked
-        # separately, exactly as the keyword-line gate admits them.
-        for part in value.split(","):
-            part = part.strip()
-            if band_quality(part) is not None:
-                abilities.add(part)
-            # "Legendary landwalk" (Livonya Silone) — the same shape, and it
-            # cannot ride the word scan above either: CR 702.14a builds the
-            # ability's name out of the printed quality, so there is no fixed
-            # word to look for. The ingested keywords field usually carries it,
-            # but a fixture card built from oracle text alone has only this.
-            if landwalk_requirement(part) is not None:
-                abilities.add(part)
-    return frozenset(abilities)
 
 
 def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
@@ -857,538 +562,6 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
     return effects
 
 
-#: Every metadata key the two layer-4 collectors read off a permanent. With
-#: all of them empty the collectors return nothing, so layer 4 leaves the
-#: permanent with the types its copiable values give it: :func:`computed_types`
-#: and :func:`computed_supertypes` answer that case from the printed shape of
-#: ``effective_card`` without seeding a state and applying no effects to it.
-#: Layer 4 was read 780,000 times in two simulated Mirage games, nearly always
-#: of a permanent nothing had made anything else.
-#:
-#: **A channel either collector starts reading belongs here**, or the
-#: permanent it is the only channel on keeps its printed types.
-#: ``tests/engine/test_effective_card_fast_path.py`` runs both collectors
-#: over a permanent whose metadata records every key read, and
-#: ``engine/fast_paths.py``'s checking mode compares every shortcut answer
-#: with the full computation.
-TYPE_EFFECT_CHANNELS: tuple[str, ...] = (
-    # ``type_changes``' own three: what an effect added and took away, and
-    # what a static is taking (its keys are that module's to spell).
-    *LAYER_4_CHANNELS,
-    # The rest of what is recorded on the permanent
-    # (:func:`collect_own_type_effects`).
-    *_ANIMATION_RECORDS, SET_CARD_TYPES, "chosen_body", "attached_auras",
-    LAND_TYPE_EFFECTS,
-    # …and what the board says of it (:func:`collect_static_type_effects`).
-    "land_animated", "global_static_sources", STACK_STATICS_KEY,
-    STACK_STATIC_STAMPS_KEY, DERIVED_LAND_TYPES,
-)
-
-
-def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
-    """Layer 4: type- and subtype-changing effects.
-
-    Animation (Kormus Bell's Swamps, Living Lands' Forests, Jade Statue) *adds*
-    the creature type; a basic-land-type change (Evil Presence, Phantasmal
-    Terrain, Blood Moon) *replaces* the land's subtypes, which is why the two
-    cannot share one flag.
-
-    Two halves, because two different things decide them. What a resolved
-    spell or ability did to this permanent, and what is attached to it, is
-    **its own** (:func:`collect_own_type_effects`): the set of objects such an
-    effect applies to was fixed when it was created (CR 611.2c) and its
-    timestamp is the whole of its place in the order. What a board-wide
-    **static** says of it (:func:`collect_static_type_effects`) is neither —
-    which permanents a static reaches is a question about the layer's own
-    intermediate state, and where it applies can be moved by dependency
-    (CR 613.8) — so that half is decided once for the whole board, by
-    ``engine/type_statics.py``, and re-applied here at the key that pass gave
-    it.
-    """
-    return collect_own_type_effects(perm, oid) + collect_static_type_effects(perm, oid)
-
-
-def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
-    """The layer-4 effects that belong to *perm* itself: recorded on it by a
-    resolution, or contributed by something attached to it.
-
-    Every one applies to exactly this object and does the same thing whatever
-    state it finds, so none can *depend* on another effect (CR 613.8a) — which
-    is what lets ``engine/type_statics.py`` treat these as the fixed points the
-    board-wide statics are ordered around.
-    """
-    only = scope_only(oid)
-    effects: list[ContinuousEffect] = []
-    meta = perm.metadata
-
-    # "…becomes a 3/3 Sphinx creature with flying **in addition to its other
-    # types** until end of turn." (Riddleform.) One record, three layers: the
-    # creature type and its subtypes are layer 4, the keyword is layer 6, and
-    # the P/T was set through `engine/pt.py` when the ability resolved. Added
-    # rather than replacing, which is what the printed phrase says.
-    # "That creature becomes an **artifact** in addition to its other types."
-    # (Ashnod's Transmogrant) / "…becomes an artifact **creature** …" (Xenic
-    # Poltergeist.) One record for a type an effect *added* to a permanent,
-    # with the duration it lasts for; layer 4 reads it here and layer 7b reads
-    # the P/T half below, so a card adding a type without changing P/T costs
-    # nothing extra.
-    #
-    # Stamped by ``type_changes.gain_types`` as the effect was created
-    # (CR 613.7b). Both this list and the one below carried the constant 0, so
-    # every addition applied before every removal whichever came first: a
-    # Snow-Covered Forest thawed by Arcum's Weathervane and then frozen again
-    # was not snow.
-    for gained in gained_types(perm):
-        # "Target creature **becomes that type** until end of turn."
-        # (Unnatural Selection.) CR 205.1a's subtype *set*: "the new
-        # subtype(s) replaces any existing subtypes from the appropriate set" —
-        # the creature types, and no other subtype the permanent has, which is
-        # the scoped replacement Conspiracy's static makes below. The record
-        # says so rather than this collector inferring it: an *addition* of a
-        # creature type ("is a Knight in addition to its other types") is the
-        # same list with nothing replaced.
-        replaced: frozenset[str] = frozenset()
-        if gained.get("replaces_creature_types"):
-            replaced = _late_grammar.vocabulary.CREATURE_TYPES
-        effects.append(add_types(
-            only,
-            card_types=list(gained.get("card_types") or ()),
-            subtypes=list(gained.get("subtypes") or ()),
-            supertypes=list(gained.get("supertypes") or ()),
-            replaces_subtypes_from=replaced,
-            timestamp=int(gained.get("timestamp") or 0),
-            label=f"gained:{gained.get('source', 'effect')}",
-        ))
-
-    # Layer 4's removing half, each at its own timestamp, so a later add wins
-    # and a later removal wins (CR 613.7). "…as a non-Aura enchantment"
-    # (Takklemaggot): the returning permanent is still an enchantment and is no
-    # longer an Aura, which is one subtype off the printed line and nothing
-    # else. Read here rather than at the CR 704.5m sweep, so every reader of
-    # "is this an Aura?" gets the same answer.
-    for lost in lost_types(perm):
-        effects.append(remove_types(
-            only,
-            card_types=list(lost.get("card_types") or ()),
-            subtypes=list(lost.get("subtypes") or ()),
-            supertypes=list(lost.get("supertypes") or ()),
-            timestamp=int(lost.get("timestamp") or 0),
-            label=f"lost:{lost.get('source', 'effect')}",
-        ))
-
-    # Both animation records again, for the reason the keyword collector above
-    # reads both: the layer-4 contribution an animation makes does not depend on
-    # when it ends. The cleanup sweep clears the first key and never hears of
-    # the second (``handlers/animation.ANIMATE_INDEFINITELY``), which is the
-    # whole of the difference between them.
-    # …and the third (Jade Statue), for the reason the second is read here:
-    # what an animation contributes to its layer does not depend on when it
-    # ends. This key held a bare ``True`` until Jade Statue stopped being a
-    # card hook, so the Statue was a creature and not a **Golem**: a lord did
-    # not pump it and "destroy target Golem" missed it.
-    for _key in _ANIMATION_RECORDS:
-        animation = meta.get(_key)
-        if animation:
-            # CR 205.1a where the sentence printed none of CR 205.1b's
-            # retention clauses ("it becomes a 2/2 Gargoyle creature with
-            # flying", Opal Gargoyle): the animation *replaces* the printed
-            # card types instead of joining them, which is what makes the
-            # cycle's own "if this permanent is an enchantment" false
-            # afterwards. Subtypes are replaced only when the sentence named
-            # some — CR 205.1a's third clause, that a removed card type takes
-            # its own subtypes with it, is not modelled, and no card in the
-            # pool animates a permanent carrying a subtype of the type it
-            # loses.
-            replaces = bool(animation.get("replaces_types"))
-            subtypes = animation.get("subtypes") or ()
-            effects.append(add_types(
-                only,
-                # "…a 2/2 Assembly-Worker **artifact** creature" (Mishra's
-                # Factory): every type the sentence named, not just the head
-                # noun. A land animated without the artifact type is a permanent
-                # Shatter cannot reach and Titania's Song does not see.
-                card_types=["creature", *(animation.get("card_types") or ())],
-                subtypes=subtypes,
-                replace_card_types=replaces,
-                replace_subtypes=replaces and bool(subtypes),
-                # CR 613.7b: the stamp the effect was created with
-                # (``handlers/animation._animation_record``, the one writer).
-                # It mattered first for a replacement — Opal Acrolith turns
-                # itself back into an enchantment and then animates again —
-                # and an addition carries one for the same reason one layer
-                # of argument down: it commutes with other additions and not
-                # with an effect that *sets* the card types. Zero only for a
-                # record a test built by hand.
-                timestamp=int(animation.get("timestamp") or 0),
-                label=f"animated ({_key})",
-            ))
-    # "{0}: This permanent becomes an enchantment." (Opal Acrolith, Hidden
-    # Stag's second line, Soul Sculptor's target.) CR 205.1a again, with no
-    # creature body behind it: the record says what the permanent now is, and
-    # the timestamp is what puts it after or before the animation it undoes.
-    replacement = meta.get(SET_CARD_TYPES)
-    if replacement:
-        effects.append(add_types(
-            only,
-            card_types=list(replacement.get("card_types") or ()),
-            subtypes=(),
-            replace_card_types=True,
-            replace_subtypes=True,
-            timestamp=int(replacement.get("timestamp") or 0),
-            label=f"set types ({replacement.get('source', 'effect')})",
-        ))
-    # "…it becomes your choice of … a 1/6 **Wall** artifact creature with
-    # defender" (Primal Clay). The body's P/T is layer 7b and its keyword is
-    # layer 6; its creature type is here, added rather than replacing, and
-    # derived from the recorded choice so swapping bodies needs nothing undone.
-    #
-    # **Before every other layer-4 effect, and that is the rule rather than a
-    # missing stamp.** CR 613.2a puts it in layer 1: "'As … enters' … abilities
-    # generate copiable effects if they set power and toughness, even if they
-    # also define other characteristics" — and CR 613.2c makes what layer 1
-    # leaves the object's copiable values (CR 707.2), which is where every
-    # later layer starts, ahead of any timestamp. So a Conspiracy that was
-    # already out and one that arrives later both find a Wall and leave an
-    # Elf; stamped with the permanent's own timestamp, the older Conspiracy
-    # would have applied first and the Clay been an Elf Wall.
-    # ``COPIABLE_VALUE`` says which kind of zero this one is.
-    chosen_body = meta.get("chosen_body") or {}
-    body_subtypes = list(chosen_body.get("subtypes") or ())
-    if body_subtypes:
-        effects.append(add_types(
-            only, subtypes=body_subtypes, timestamp=COPIABLE_VALUE,
-            label="chosen body",
-        ))
-
-    # "…and is a Knight in addition to its other types" (Dub, Demonic Embrace).
-    # *Added*, not replacing — which is the whole difference from the land-type
-    # change below, and why the two cannot share a call. Derived from the Aura's
-    # own text on every recompute and stamped with the moment it attached
-    # (CR 613.7b), so detaching one simply stops contributing the type.
-    #
-    # "…and is an **artifact** in addition to its other types."
-    # (Transmogrifying Licid.) The same rider one level up CR 205's hierarchy,
-    # so it is the same contribution with the words in the other field: a card
-    # type (CR 205.2) rather than a creature subtype (CR 205.3). Read from a
-    # separate function for that reason — handing "artifact" to ``subtypes``
-    # would make the permanent an artifact-*subtype* nothing on any board is,
-    # and handing "Knight" to ``card_types`` would make it a card type.
-    for aura in auras_attached_to(perm):
-        added = aura_type_grants(aura.effective_card.oracle_text)
-        added_card_types = aura_card_type_grants(aura.effective_card.oracle_text)
-        if not added and not added_card_types:
-            continue
-        effects.append(
-            add_types(
-                only,
-                subtypes=list(added),
-                card_types=list(added_card_types),
-                timestamp=int(aura.metadata.get("aura_timestamp", 0)),
-                label=f"aura:{aura.card.name}",
-            )
-        )
-    # "Enchanted creature **is a Flagbearer**." (Coalition Flag.) The same
-    # sentence without CR 205.1b's rider, so CR 205.1a applies: the new creature
-    # type *replaces* the creature types it had and nothing else — scoped to
-    # CR 205.3m's list, so an animated Forest under the Flag is still a Forest.
-    # Timestamped like the addition above; two such Auras on one creature do
-    # not commute, and the later one is what the creature is (CR 613.7).
-    for aura in auras_attached_to(perm):
-        set_types = aura_creature_type_sets(aura.effective_card.oracle_text)
-        if not set_types:
-            continue
-        # Read late for `global_static_type_effect`'s reason below: a
-        # top-level import of the vocabulary closes a cycle through the grammar.
-        effects.append(
-            add_types(
-                only,
-                subtypes=list(set_types),
-                replaces_subtypes_from=_late_grammar.vocabulary.CREATURE_TYPES,
-                timestamp=int(aura.metadata.get("aura_timestamp", 0)),
-                label=f"aura sets type:{aura.card.name}",
-            )
-        )
-    # "Enchanted land is a 5/6 green **Treefolk creature** that's still a land."
-    # (Living Terrain.) CR 205.1b: "still a land" is the addition — the creature
-    # type and the printed creature types join the land's own, nothing is
-    # replaced, and the Aura leaving simply stops contributing them.
-    for aura in auras_attached_to(perm):
-        body = aura_land_animation(aura.effective_card.oracle_text)
-        if body is None:
-            continue
-        effects.append(
-            add_types(
-                only,
-                card_types=["creature"],
-                subtypes=list(body["subtypes"]),
-                timestamp=int(aura.metadata.get("aura_timestamp", 0)),
-                label=f"animated:{aura.card.name}",
-            )
-        )
-
-    # CR 305.7: setting a land's subtype *replaces* its old ones, so two of
-    # these on one land do not commute — the newer contribution is what the land
-    # is. They are collected rather than merged, and each carries the timestamp
-    # of the effect that recorded it, so 613.7 decides that and not the order the
-    # writes happened to run in (engine/land_types.py). The **recorded** ones
-    # here — an Aura's, a mire counter's, a turn-long change; a static's are the
-    # other half.
-    for change in land_type_changes(perm, derived=False):
-        effects.append(land_type_effect(
-            perm, oid, str(change["land_type"]),
-            additive=bool(change.get("additive")),
-            timestamp=int(change.get("timestamp", 0)),
-        ))
-
-    return effects
-
-
-def collect_static_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
-    """What the board's statics say *perm* is in layer 4, each at the
-    applied-order key ``engine/type_statics.py`` gave it.
-
-    That pass applied every layer-4 effect on the battlefield once, in CR 613.7
-    timestamp order as CR 613.8 dependency rearranges it, and wrote down which
-    statics reached this permanent and **where in the order** each one did —
-    ``(timestamp, order)``, the timestamp it applied at and its position among
-    the statics applied there. Sorting by that key (``ContinuousEffect``'s
-    ``timestamp`` and ``sequence``) against this permanent's own effects
-    replays the pass's answer for this one object, which is all a per-object
-    collector can do: it cannot see the board, so it cannot decide a
-    dependency, only re-apply one.
-
-    A contribution with no key (a board built by hand, a flag poked in a test)
-    falls back to its source's own timestamp, or to 0 where it has none.
-    """
-    only = scope_only(oid)
-    effects: list[ContinuousEffect] = []
-    meta = perm.metadata
-
-    # "All Swamps are 1/1 black **creatures** that are still lands." (Kormus
-    # Bell, Living Lands, Natural Emergence.) Its place in the order used to
-    # be the constant 0, which no effect that depends on it could wait behind.
-    if meta.get("land_animated"):
-        stamp, order = static_type_order(perm, LAND_ANIMATION_ORDER) or (0, 0)
-        effects.append(land_animation_type_effect(oid, timestamp=stamp, sequence=order))
-
-    # "All lands are no longer snow." (Melting.) Rebuilt from the board on
-    # every refresh and stamped with its source's timestamp (CR 613.7a), so a
-    # land an effect made snow *after* Melting arrived is snow: the later
-    # effect applies last. The channel held bare words and applied at the
-    # constant 0 in a list behind every addition, so the static always won.
-    for removal in derived_lost_supertypes(perm):
-        effects.append(lost_supertype_effect(
-            oid, str(removal["supertype"]),
-            timestamp=int(removal.get("timestamp") or 0),
-            sequence=int(removal.get("order") or 0),
-        ))
-
-    # Animate Artifact (CR 613.1d): "As long as enchanted artifact isn't a
-    # creature, it's an artifact creature…". Derived from the attached Aura, so
-    # the artifact stops being a creature the moment the Aura leaves — and on
-    # this half of the collector although it is one permanent's, because the
-    # Aura's own condition is a *scope*: whether it applies is decided by the
-    # board pass against the layer's intermediate state (``auras
-    # .animating_auras``), and where, against Titania's Song, by the loop rule.
-    for aura in animating_auras(perm):
-        stamp, order = static_type_order(perm, aura.permanent_id) or (0, 0)
-        effects.append(attached_animation_type_effect(
-            oid, timestamp=stamp, sequence=order,
-        ))
-
-    # The board-wide statics recorded as **sources** on this permanent
-    # (``engine/global_statics.py``), each one's layer-4 part:
-    #
-    # * "Each noncreature artifact … becomes an artifact creature" (Titania's
-    #   Song) and "Each other non-Aura enchantment is a creature in addition
-    #   to its other types" (Opalescence) — the creature type, added.
-    # * "Creatures you control are the chosen type." (Conspiracy.) The one
-    #   global static whose effect is not in its own text: the creature type
-    #   was chosen as the **source** entered (CR 614.1c) and is recorded on
-    #   that permanent. CR 205.1a's scoped replacement, not the blanket one:
-    #   the chosen type replaces the creature's *creature* types and leaves any
-    #   others alone, so a Forest this seat has animated is a Goblin **and
-    #   still a Forest**.
-    # * "All Goblins … **are Zombies in addition to their other creature
-    #   types**." (Dralnu's Crusade.) CR 205.1b's addition: no replacement
-    #   flag, so the Goblin keeps "goblin" and every other subtype it had.
-    #
-    # Derived on every recompute like the rest of the family — a source leaving
-    # ends the effect by dropping out of the list, with nothing to sweep — and
-    # **placed by the board pass**: the Crusade's scope is a creature type, so
-    # it depends on Conspiracy (CR 613.8a) and applies just after it whichever
-    # is older; Conspiracy's scope is "creature", so it waits behind whatever
-    # makes a permanent one. This loop used to say the first of those by hand
-    # (a `max` over the type-setting statics' timestamps) and could not say
-    # the second at all.
-    for source, static in global_static_sources(
-        meta.get("global_static_sources") or ()
-    ):
-        if not changes_types(static):
-            continue
-        stamp, order = static_type_order(perm, source.permanent_id) or (
-            source.timestamp, 0,
-        )
-        effect = global_static_type_effect(
-            oid, source, static, timestamp=stamp, sequence=order,
-        )
-        if effect is not None:
-            effects.append(effect)
-    # …and the same from a spell on the stack (CR 113.6b). No stack static in
-    # the pool has a layer-4 part; read so that one printed tomorrow is not a
-    # type change the collector silently never applies.
-    for static, stamp in stack_statics_applying_to(perm):
-        if changes_types(static):
-            effect = global_static_type_effect(oid, None, static, timestamp=stamp)
-            if effect is not None:
-                effects.append(effect)
-
-    # "All Mountains are Plains." (Conversion.) "Nonbasic lands are Mountains."
-    # (Blood Moon.) The **derived** land-type contributions, in the order the
-    # board pass applied them — which is the statics' timestamp order unless
-    # one depends on another: Conversion waits behind Blood Moon whichever
-    # arrived first, because applying the Moon changes which lands are
-    # Mountains (CR 613.8a).
-    for change in land_type_changes(perm, derived=True):
-        effects.append(land_type_effect(
-            perm, oid, str(change["land_type"]),
-            additive=bool(change.get("additive")),
-            timestamp=int(change.get("timestamp", 0)),
-            sequence=int(change.get("order") or 0),
-        ))
-
-    return effects
-
-
-def land_type_effect(
-    perm: Permanent, oid: int, land_type: str, *, additive: bool = False,
-    timestamp: int, sequence: int = 0,
-) -> ContinuousEffect:
-    """Layer 4: *perm*'s land types become *land_type* (CR 305.7), or gain it.
-
-    One builder for the recorded changes, the derived ones and the board pass
-    that decides the derived ones, so what the pass applied and what a later
-    read re-applies cannot differ.
-
-    "…**in addition to its other land types**" (Blanket of Night) is the one
-    printed rider that switches CR 305.7 off, and it is the *record* that says
-    so: the collector has the contribution and not the sentence. Dropping it
-    would make a Swamp-granting static take away every Island's blue mana,
-    which is the same effect written as a strictly harsher card.
-    """
-    return add_types(
-        scope_only(oid),
-        subtypes=[land_type],
-        # CR 305.7: "the new land type(s) replaces any existing **land**
-        # types" — CR 205.1a's "subtypes from the appropriate set". It
-        # was the blanket flag, which replaced every subtype the
-        # permanent had: a Forest wearing Living Terrain stopped being
-        # a Treefolk when Evil Presence arrived after it, and an
-        # animated Mishra's Factory stopped being an Assembly-Worker
-        # under a later Blood Moon — but only when the land-type change
-        # was the *later* effect, so the same two cards gave two
-        # answers by the order they were played in.
-        replaces_subtypes_from=() if additive else _land_subtypes_of(perm),
-        timestamp=timestamp,
-        sequence=sequence,
-        label=("is also a " if additive else "is a ") + land_type,
-    )
-
-
-def lost_supertype_effect(
-    oid: int, supertype: str, *, timestamp: int, sequence: int = 0
-) -> ContinuousEffect:
-    """Layer 4: a board-wide static takes *supertype* away (CR 205.4a)."""
-    return remove_types(
-        scope_only(oid), supertypes=[supertype], timestamp=timestamp,
-        sequence=sequence, label=f"static:no longer {supertype}",
-    )
-
-
-def land_animation_type_effect(
-    oid: int, *, timestamp: int, sequence: int = 0
-) -> ContinuousEffect:
-    """Layer 4: a land animator makes this land a creature "that's still a
-    land" (CR 205.1b) — the creature type, added."""
-    return add_types(
-        scope_only(oid), card_types=["creature"], timestamp=timestamp,
-        sequence=sequence, label="animated",
-    )
-
-
-def attached_animation_type_effect(
-    oid: int, *, timestamp: int, sequence: int = 0
-) -> ContinuousEffect:
-    """Layer 4: an attached Aura makes this artifact "an artifact creature"
-    (Animate Artifact) — the creature type, added (CR 205.1b)."""
-    return add_types(
-        scope_only(oid), card_types=["creature"], timestamp=timestamp,
-        sequence=sequence, label="animated artifact",
-    )
-
-
-def global_static_type_effect(
-    oid: int, source, static, *, timestamp: int, sequence: int = 0
-) -> ContinuousEffect | None:
-    """The layer-4 part of *static* as it applies to one object, or None.
-
-    One effect for everything the static's sentence says about types, because
-    it is one continuous effect with one place in the order. None when it sets
-    a type its source has not chosen yet: no contribution rather than an empty
-    replacement — wiping every creature's types on the strength of an
-    unanswered choice is the card doing something much larger than it says.
-    """
-    card_types = ["creature"] if static.adds_creature_type else []
-    subtypes = list(static.adds_subtypes)
-    replaced: frozenset[str] = frozenset()
-    if static.sets_creature_type:
-        # Read late rather than at module scope: this module is pulled in
-        # by ``handlers/_filters`` long before ``engine.grammar`` finishes
-        # importing, and a top-level import of the vocabulary closes a cycle
-        # through the grammar package.
-        CREATURE_TYPES = _late_grammar.vocabulary.CREATURE_TYPES
-
-        chosen = (
-            source.metadata.get("chosen_creature_type") if source is not None else None
-        )
-        if not chosen:
-            return None
-        subtypes.append(str(chosen).lower())
-        replaced = CREATURE_TYPES
-    if not card_types and not subtypes:
-        return None
-    described = "+".join([*card_types, *subtypes])
-    return add_types(
-        scope_only(oid),
-        card_types=card_types,
-        subtypes=subtypes,
-        replaces_subtypes_from=replaced,
-        timestamp=timestamp,
-        sequence=sequence,
-        label=f"{static.name}:{described}",
-    )
-
-
-def _land_subtypes_of(perm: Permanent) -> frozenset[str]:
-    """The subtypes a land-type change replaces on *perm* (CR 305.7): every
-    land type there is, and — on a card printed as a land and nothing else —
-    every subtype it prints.
-
-    The second half is what keeps this from depending on a catalog's spelling.
-    A subtype correlates to a card type (CR 205.3d), so every word after the
-    dash on a card whose only type is Land *is* a land type whether or not the
-    vocabulary lists it that way ("Urza's"), and a Blood Moon must not leave
-    one behind. On a card printed with a second type — a land creature — the
-    printed words are of two sets and only the catalog can tell them apart.
-    """
-    LAND_TYPES = _late_grammar.vocabulary.LAND_TYPES
-
-    printed_types, printed_subtypes = printed_shape(perm.effective_card)
-    if printed_types == {"land"}:
-        return frozenset(LAND_TYPES | printed_subtypes)
-    return frozenset(LAND_TYPES)
-
-
 def collect_control_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     """Layer 2: control-changing effects (Control Magic, Steal Artifact,
     Aladdin, Old Man of the Sea, Ghazbán Ogre).
@@ -1794,10 +967,6 @@ def computed_pt(perm: Permanent) -> tuple[int, int]:
 
 
 __all__ = [
-    "attached_animation_type_effect",
-    "collect_control_effects", "collect_own_type_effects", "collect_pt_effects",
-    "collect_static_type_effects", "computed_controller", "computed_pt",
-    "computed_supertypes", "global_static_type_effect",
-    "land_animation_type_effect", "land_type_effect", "lost_supertype_effect",
-    "seed_characteristics",
+    "collect_control_effects", "collect_pt_effects", "computed_controller",
+    "computed_pt", "computed_supertypes",
 ]

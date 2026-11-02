@@ -12,7 +12,7 @@ only ever un-stamp everything. Two of those effects on one land meant the second
 silently overwrote the first, and whichever ended first took the other with it.
 
 This module records each one as a **contribution**: what it makes the land, who
-made it, and when (CR 613.7). ``layer_bridge.collect_type_effects`` turns each
+made it, and when (CR 613.7). ``type_layer.collect_type_effects`` turns each
 contribution into its own layer-4 effect, so the layer engine — not the order
 the writes happened to run in — decides which applies last. Removal is dropping
 one contribution, which is why nothing here has a delta to get wrong: an
@@ -252,7 +252,7 @@ def land_type_changes(
     derived channels are concatenated precisely so that storage order and
     timestamp order need not agree.
 
-    Read by ``layer_bridge`` and nothing else: "what type is this?" has one
+    Read by ``type_layer`` and nothing else: "what type is this?" has one
     answer, ``Permanent.has_type`` / ``Permanent.basic_land_types``, and a
     second reader of this list would be a second opinion about CR 305.7.
     """

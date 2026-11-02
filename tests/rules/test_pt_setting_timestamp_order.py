@@ -68,7 +68,8 @@ from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.continuous import Characteristics, apply_layers
 from engine.faces import compilation_units, whole_card
-from engine.layer_bridge import collect_pt_effects, seed_characteristics
+from engine.layer_bridge import collect_pt_effects
+from engine.printed_characteristics import seed_characteristics
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
@@ -638,8 +639,8 @@ def test_a_body_chosen_as_it_entered_is_under_a_humility(_by_name):
     """CR 613.2a: "'As … enters' … abilities generate copiable effects if they
     set power and toughness". A copiable value is where the layers start, so
     Primal Clay's 3/3 is beneath every 7b effect — written at the place
-    copiable values have (``layer_bridge.COPIABLE_VALUE``), not at "now"."""
-    from engine.layer_bridge import COPIABLE_VALUE
+    copiable values have (``printed_characteristics.COPIABLE_VALUE``), not at "now"."""
+    from engine.printed_characteristics import COPIABLE_VALUE
     from engine.pt import BASE_PT_TIMESTAMP_KEY
 
     game = _new_game(_by_name)

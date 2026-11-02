@@ -26,7 +26,7 @@ travel together. They do, and the mechanism is already built: a grant of a
 line-derived keyword grants the printed *line*
 (``keywords.LINE_DERIVED_KEYWORDS``, because layer 6's word set holds no
 triggered ability), ``Permanent.effective_card`` folds that line into the rules
-text, the compiler makes the trigger out of it — and ``layer_bridge``'s
+text, the compiler makes the trigger out of it — and ``printed_characteristics``'s
 ``_TEXT_KEYWORDS`` scan over the compiled keyword lines puts "flanking" back in
 the ability set, so the *next* flanker's filter sees it. Rampage takes the same
 two channels for the same reason; what is new here is that a card in the pool

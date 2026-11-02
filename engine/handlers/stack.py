@@ -427,7 +427,7 @@ def _spell_is_one_of_classes(card, classes) -> bool:
     permanent, so CR 613 has nothing to say about it and the printed line is the
     whole of what there is.
     """
-    from ..layer_bridge import printed_shape
+    from ..printed_characteristics import printed_shape
 
     types, subtypes = printed_shape(card)
     for axis, name in classes:

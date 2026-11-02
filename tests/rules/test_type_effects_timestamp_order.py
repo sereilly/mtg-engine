@@ -1130,7 +1130,7 @@ def test_j6_an_animation_is_stamped_as_it_is_created(catalog_by_name, set_pool, 
     clock's stamp for the moment it resolved, and the layer-4 effect the
     collector builds from it is ordered by that stamp."""
     from engine.continuous import next_timestamp
-    from engine.layer_bridge import collect_own_type_effects
+    from engine.type_layer import collect_own_type_effects
 
     b = _W2G4Board(catalog_by_name, set_pool)
     before = next_timestamp()
@@ -1853,7 +1853,7 @@ def test_j6_an_animators_keyword_goes_to_the_lands_the_layer_4_pass_reached(
     animator in the pool is in one."""
     from engine.continuous import next_timestamp
     from engine.land_animation import LAND_ANIMATIONS_REACHING
-    from engine.layer_bridge import SET_CARD_TYPES
+    from engine.type_layer import SET_CARD_TYPES
 
     b = _W2G4Board(catalog_by_name, set_pool)
     game = b.game

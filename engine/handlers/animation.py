@@ -3,7 +3,8 @@
 until end of turn, until end of combat, or indefinitely.
 
 An animation is one **record** on the permanent, read by the CR 613 layer
-bridge (``engine/layer_bridge.py``) and nothing else: the types it adds, its
+bridge (``engine/layer_bridge.py``, with ``engine/type_layer.py`` for layer
+4) and nothing else: the types it adds, its
 size, its colours, the keywords and abilities it grants, each under the key
 for its lifetime (:data:`ANIMATE_UNTIL_EOT`, :data:`ANIMATE_INDEFINITELY`,
 :data:`ANIMATE_UNTIL_END_OF_COMBAT`). :func:`_animation_record` is the one

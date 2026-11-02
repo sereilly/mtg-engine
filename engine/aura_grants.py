@@ -705,7 +705,7 @@ def aura_granted_line_derived_lines(oracle_text: str) -> tuple[str, ...]:
     (`handlers/keywords._grant_one_keyword`) — this is that same rule on the
     continuous path, derived per read like every other half of this file so
     detaching the Aura takes the ability away with nothing to undo. The word
-    comes back for free: ``layer_bridge._TEXT_KEYWORDS`` scans the compiled
+    comes back for free: ``printed_characteristics._TEXT_KEYWORDS`` scans the compiled
     keyword lines, so the appended line puts "flanking" back in the ability set
     and both halves travel together.
 

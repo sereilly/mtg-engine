@@ -936,7 +936,7 @@ def test_w1g5_whipgrass_entangler_taxes_the_block_too(set_pool):
 # battlefield)." A characteristic-defining ability (CR 604.3; changeling's
 # CR 702.73a), read off the card's own text by the one type parse both the
 # off-battlefield answer and the layer seed share
-# (`layer_bridge._printed_shape`).
+# (`printed_characteristics._printed_shape`).
 
 
 def test_w1g5_mistform_ultimus_is_supported_and_shows_its_printed_line(set_pool):

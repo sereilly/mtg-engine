@@ -59,7 +59,8 @@ from .keywords import (clear_all_abilities_removals,
                        clear_granted_ability_lines, clear_granted_keywords,
                        clear_removed_ability_keywords,
                        clear_removed_ability_lines)
-from .layer_bridge import SET_CARD_TYPES, printed_shape
+from .printed_characteristics import printed_shape
+from .type_layer import SET_CARD_TYPES
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .models import Permanent
@@ -118,7 +119,7 @@ def clear_set_card_types(perm: "Permanent", duration: str) -> bool:
     The fifth channel swept at a duration boundary, and the only one whose
     record is a single slot rather than a list: a replacement says what the
     permanent now **is**, so a second one is the same question answered again
-    (see ``layer_bridge.SET_CARD_TYPES``) and there is nothing to fold.
+    (see ``type_layer.SET_CARD_TYPES``) and there is nothing to fold.
 
     Popped only when the slot's own window is the one closing. A record with no
     duration is Opal Acrolith's — it turned *itself* into an enchantment and

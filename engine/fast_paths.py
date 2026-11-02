@@ -7,7 +7,7 @@ two simulated Mirage games — and nearly every read is of a permanent nothing
 has touched: no copy, no text change, no grant, no type change. Each of them
 answers that case **without running its fold**, by asking whether any of the
 metadata channels the fold reads holds anything (``models.fold_channels``,
-``layer_bridge.type_effect_channels``). Nothing is remembered between reads, so
+``type_layer.TYPE_EFFECT_CHANNELS``). Nothing is remembered between reads, so
 there is nothing to go stale.
 
 What can go wrong is the tuple: a channel the fold reads and the tuple does

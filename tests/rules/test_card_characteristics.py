@@ -36,7 +36,8 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.layer_bridge import displayed_type_line, printed_supertypes
+from engine.layer_bridge import displayed_type_line
+from engine.printed_characteristics import printed_supertypes
 from engine.mana_payment import total_pips
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle

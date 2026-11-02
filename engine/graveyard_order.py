@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .layer_bridge import printed_shape
+from .printed_characteristics import printed_shape
 
 
 def is_printed_type(card: Any, wanted: str) -> bool:

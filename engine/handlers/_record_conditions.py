@@ -570,7 +570,7 @@ def evaluate_record_condition(
         #
         # No target or no record answers False: there is then nothing "it"
         # names, and the return this guards must not happen.
-        from ..layer_bridge import printed_shape
+        from ..printed_characteristics import printed_shape
 
         slot = context.target_permanent_index
         pile = context.caster.graveyard

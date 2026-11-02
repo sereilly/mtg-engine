@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 from ..continuous import next_timestamp
 from ..land_types import MIRE_COUNTER, change_land_type
 from ..aura_attachment import BECAME_AURA_ENCHANT, BECAME_AURA_RECORD
-from ..layer_bridge import SET_CARD_TYPES
+from ..type_layer import SET_CARD_TYPES
 from ..type_changes import gain_types, lose_types
 from ..models import Permanent
 from ._amounts import resolve_amount
@@ -450,7 +450,7 @@ def _replaced_printed_types(source, gained: list[str]):
     """
     if not gained:
         return None
-    from ..layer_bridge import printed_shape
+    from ..printed_characteristics import printed_shape
 
     card_types, subtypes = printed_shape(source.effective_card)
     removed_types = tuple(sorted(set(card_types) - set(gained)))
@@ -615,7 +615,7 @@ def _set_creature_type(
             duration=duration,
             # CR 205.1a: a subtype *set* replaces the subtypes "from the
             # appropriate set" — the creature types, and nothing else the
-            # permanent is. Read by ``layer_bridge.collect_own_type_effects``.
+            # permanent is. Read by ``type_layer.collect_own_type_effects``.
             replaces_creature_types=not in_addition,
         )
     # A creature that changed type is one a type-scoped static now reaches or
@@ -726,7 +726,7 @@ def set_card_types_self(game: Game, instruction: OracleInstruction, context: Ora
     enchantment." (Hidden Stag.)
 
     CR 205.1a's replacement, written as one record the CR 613 layer-4 collector
-    reads (`layer_bridge.SET_CARD_TYPES`). Nothing is restored and the
+    reads (`type_layer.SET_CARD_TYPES`). Nothing is restored and the
     animation record it undoes is **not** deleted: both are layer-4
     contributions and CR 613.7 applies them in timestamp order, so the later
     one wins — which is the whole of what makes Opal Acrolith work when it

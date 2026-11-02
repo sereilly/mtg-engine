@@ -70,7 +70,7 @@ import pytest
 from engine import Game, PlayerState, faces
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.keywords import grant_keyword
-from engine.layer_bridge import SET_CARD_TYPES
+from engine.type_layer import SET_CARD_TYPES
 from engine.legality import _activation_spec, targeting_instruction
 from engine.mana_payment import is_mana_ability
 from engine.models import CardDefinition, Permanent

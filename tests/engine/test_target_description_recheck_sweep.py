@@ -27,7 +27,7 @@ from __future__ import annotations
 from engine.faces import compilation_units, whole_card
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
-from engine.layer_bridge import SET_CARD_TYPES
+from engine.type_layer import SET_CARD_TYPES
 from engine.legality import _resolution_rechecks_description
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
