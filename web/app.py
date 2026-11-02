@@ -74,8 +74,7 @@ from .catalog import (
     _search_cards,
 )
 from .verification_report import _verification_listing, write_verification_markdown
-from .pregame import _pregame_auto_advance
-from .turn_steps import _end_turn
+from .turn_steps import _end_turn, _settle_pregame
 from .game_flow import _advance_phase, _ai_step
 from .state_view import build_card_target_spec, build_state
 from .debug_actions import _apply_raw_state
@@ -374,7 +373,7 @@ def create_session(req: CreateSessionRequest, request: Request):
         raise HTTPException(status_code=400, detail="selected deck not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    _pregame_auto_advance(session)
+    _settle_pregame(session)
     join_url = _build_join_url(request, session.id)
     lan_join_url = _build_lan_join_url(request, session.id)
     public_join_url = _build_public_join_url(request, session.id)
@@ -407,7 +406,7 @@ def join_session(session_id: str, req: JoinSessionRequest, request: Request):
         raise HTTPException(status_code=400, detail="selected deck not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    _pregame_auto_advance(session)
+    _settle_pregame(session)
     _notify_session_change(session.id, "join")
     join_url = _build_join_url(request, session.id)
     lan_join_url = _build_lan_join_url(request, session.id)
@@ -463,7 +462,7 @@ def start_session(session_id: str, req: StartGameRequest):
         store.start(session, req.seat)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    _pregame_auto_advance(session)
+    _settle_pregame(session)
     _notify_session_change(session.id, "start")
     return build_state(session, viewer_seat=req.seat)
 
@@ -493,10 +492,11 @@ def rematch_session(session_id: str, req: RematchRequest):
         # The previous game's loser, not a coin flip, chooses who plays first
         # — after a draw, the seat that chose then (CR 103.1). Captured before
         # restart() resets the board (and the life totals). An AI chooser
-        # decides at once by its own play/draw policy (_pregame_auto_advance).
+        # decides at once by its own play/draw policy, and turn 1 begins once
+        # the pregame is over (`turn_steps._settle_pregame`).
         chooser, reason = _rematch_first_chooser(session)
         store.restart(session, first_chooser=chooser, choice_reason=reason or "loser")
-        _pregame_auto_advance(session)
+        _settle_pregame(session)
         _notify_session_change(session.id, "rematch_start")
     else:
         _notify_session_change(session.id, "rematch_vote")
@@ -519,7 +519,7 @@ def restart_match(session_id: str, req: RematchRequest):
         raise HTTPException(status_code=400, detail="seat has not joined")
 
     store.restart(session)
-    _pregame_auto_advance(session)
+    _settle_pregame(session)
     _notify_session_change(session.id, "match_restart")
     return build_state(session, viewer_seat=req.seat)
 

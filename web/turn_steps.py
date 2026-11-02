@@ -20,9 +20,11 @@ from .prompts import auto_resolve_ai_prompts
 from .seats import (
     _ai_should_hold,
     _hold_priority_for_human,
+    _mark_interactive_seats,
     _seat_type,
     _self_should_hold,
 )
+from .pregame import _pregame_auto_advance
 
 
 def _cleanup_discard_requirement(session: Session) -> int:
@@ -632,6 +634,49 @@ def _start_next_turn(session: Session) -> None:
     session.current_turn = session.game._compute_next_active_player()
     should_defer_untap = _seat_type(session, session.current_turn) == "human"
     _begin_turn(session, session.current_turn, defer_untap_selection=should_defer_untap)
+
+
+def _begin_first_turn(session: Session) -> None:
+    """Turn 1's beginning phase, once the pregame is over (CR 103.8: "The
+    starting player takes their first turn").
+
+    The same pieces as every later turn — ``_begin_turn``'s untap step, the
+    upkeep and the draw step, each able to stop on a decision a person owes —
+    without :func:`_start_next_turn`'s ``turn += 1``: ``Game.turn`` is already
+    1, which is what the draw step reads for CR 103.8a's skip in a two-player
+    game. In a multiplayer game nobody skips it (CR 103.8c), so the starting
+    player draws. Idempotent: it runs once per game, when
+    ``Session.first_turn_owed`` says the pregame has just ended.
+
+    Until the kg3 round no web game ran this — every one opened in turn 1's
+    precombat main phase, so a Free-For-All's starting player kept seven
+    cards, and an upkeep trigger on a permanent already on the battlefield
+    (a Debug-Menu board set up during the pregame) never fired on turn 1.
+    """
+    if not session.first_turn_owed or session.pregame_phase is not None:
+        return
+    if not session.game_started or session.game.is_game_over():
+        return
+    session.first_turn_owed = False
+    # A route may run this before any action has told the engine who is a
+    # person; a decision this phase owes a human is asked, not defaulted.
+    _mark_interactive_seats(session)
+    starting_player = session.current_turn
+    _begin_turn(
+        session,
+        starting_player,
+        defer_untap_selection=_seat_type(session, starting_player) == "human",
+    )
+
+
+def _settle_pregame(session: Session) -> None:
+    """Everything a route or a pregame action owes the table once it has
+    moved the pregame: the AI seats' declarations (``pregame._pregame_auto_advance``)
+    and, if that ended the pregame, turn 1's beginning phase
+    (:func:`_begin_first_turn`). The one call every caller makes, so none can
+    end a pregame and leave its first turn unbegun."""
+    _pregame_auto_advance(session)
+    _begin_first_turn(session)
 
 
 #: How a phase name reads in the log. Only the two CR 500.8 can add are

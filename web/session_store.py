@@ -137,6 +137,19 @@ class Session:
     # with its prompt still on screen — the pause is about the queue, not about
     # which card filled it.
     paused_beginning_phase: tuple[str, int] | None = None
+    # CR 103.8: "The starting player takes their first turn" — all of it, its
+    # beginning phase included (CR 500.1: every phase takes place every turn).
+    # True from the moment the pregame is over (``pregame._pregame_start_game``,
+    # or ``_begin_pregame`` with no pregame) until
+    # ``turn_steps._begin_first_turn`` has run turn 1's untap, upkeep and draw
+    # steps — the draw skipped in a two-player game (CR 103.8a) and taken in a
+    # multiplayer one (CR 103.8c). A flag rather than a call because both of
+    # those modules sit below ``turn_steps`` in ``web.LAYERS``: the route or
+    # pregame action that ended the pregame begins the turn
+    # (``turn_steps._settle_pregame``). Until the kg3 round every web game
+    # opened straight in turn 1's precombat main phase, so a Free-For-All's
+    # starting player never drew on turn 1 and no upkeep trigger fired.
+    first_turn_owed: bool = False
     # Time Vault: the begin-of-turn "skip your turn to untap" decision. Holds the
     # permanent names offering the skip while the human decides; cleared once they
     # skip or decline. `time_vault_resolved_turn` records the turn already decided
@@ -592,6 +605,13 @@ class SessionStore:
             if session.mode in ("ai_vs_ai", "free_for_all") or chooser is not None:
                 game.active_player_index = starting_player
                 game.start_priority_window(starting_player)
+                # CR 103.8: and that seat's first turn begins with its
+                # beginning phase, run by the route that dealt
+                # (`turn_steps._begin_first_turn`). Not the legacy first
+                # deal's: there the engine's actor is seat 0 whatever the flip
+                # said, and beginning a turn for either seat would settle
+                # that split one way or the other.
+                session.first_turn_owed = True
 
     def _resolve_format(self, request: CreateSessionRequest) -> str:
         """The constructed format this session is played under.
@@ -813,6 +833,18 @@ class SessionStore:
         session.optional_trigger_targets = {}
         session.upkeep_decisions_deferred = False
         session.island_sanctuary_pending = False
+        # The new game's turn 1 runs its beginning phase on this session
+        # (`turn_steps._begin_first_turn`), so nothing the last game's
+        # beginning phase left half-asked may carry into it: a stale pause
+        # would be resumed by the next action's tail, and a Time Vault turn
+        # already "decided" would be the new game's turn 1.
+        session.upkeep_mana_prevention_choices = []
+        session.upkeep_mana_prevention_resolved = {}
+        session.optional_untap_pending = []
+        session.paused_beginning_phase = None
+        session.time_vault_pending = []
+        session.time_vault_resolved_turn = None
+        session.first_turn_owed = False
         session.force_ai_attack_all = False
         session.history = GameHistory()
         session.pregame_phase = None

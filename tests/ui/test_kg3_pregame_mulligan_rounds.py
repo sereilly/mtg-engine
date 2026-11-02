@@ -271,7 +271,9 @@ def test_a_four_seat_table_declares_in_turn_order_and_mulligans_together():
     assert declared == [(2, 0), (3, 0), (1, 0), (2, 1), (1, 1), (1, 2)]
     assert served[0]["pregame"] is None
     assert served[0]["current_turn"] == 2
-    assert [len(p.hand) for p in game.players] == [7, 6, 7, 7]
+    # The opening hands are 7, 6, 7, 7; Bot2 starts and, at a four-seat table,
+    # draws in its first turn's draw step (CR 103.8c).
+    assert [len(p.hand) for p in game.players] == [7, 6, 8, 7]
     assert [p.mulligans_taken for p in game.players] == [1, 2, 1, 0]
 
 
@@ -359,4 +361,6 @@ def test_a_simultaneous_table_s_ai_seats_declare_each_round_at_once():
     game = store.get(sid).game
     assert store.get(sid).pregame_phase is None
     assert [p.mulligans_taken for p in game.players] == [1, 1, 0]
-    assert [len(p.hand) for p in game.players] == [7, 7, 7]
+    # Seven cards each (CR 103.5c's free first mulligan); the host starts and
+    # draws in its first turn's draw step (CR 103.8c).
+    assert [len(p.hand) for p in game.players] == [8, 7, 7]
