@@ -290,7 +290,8 @@ class PendingChoicesMixin:
         the whole stack, not its top: an answer that sets off a trigger puts
         it above the object still waiting on the next answer."""
         return any(
-            item.resolution_held and self.stack_item_is_waiting(item)
+            getattr(item, "resolution_held", False)
+            and self.stack_item_is_waiting(item)
             for item in self.stack
         )
 

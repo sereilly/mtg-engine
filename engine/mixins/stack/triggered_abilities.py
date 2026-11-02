@@ -307,7 +307,8 @@ class TriggeredAbilitiesMixin:
         held = next(
             (
                 item for item in reversed(self.stack)
-                if item.resolution_held and self.stack_item_is_waiting(item)
+                if getattr(item, "resolution_held", False)
+                and self.stack_item_is_waiting(item)
             ),
             None,
         )
