@@ -34,7 +34,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Callable
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import ONE_DEALING, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import (_amount_payload, card_divided_shares_payload,
@@ -102,7 +102,8 @@ def lower_split_recipients(
             dataclasses.replace(node, recipients=(recipient,)),
             event, produced, event_subject,
         )
-    return lowered
+    # The pieces are one printed clause, so one event (``one_dealing``).
+    return one_dealing(lowered)
 
 
 #: The pronoun a described set uses for the recipient its own sentence targeted,
@@ -184,7 +185,50 @@ def _lower_target_and_its_board(
                     instruction.payload | {"target_controller_if_permanent": True},
                 )
             lowered += (instruction,)
-    return lowered
+    return one_dealing(lowered)
+
+
+def one_dealing(
+    instructions: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """*instructions* — the pieces of **one** printed damage sentence — as one
+    ``sequence`` marked :data:`~engine.oracle_types.ONE_DEALING`, or unchanged
+    when there is only one.
+
+    CR 608.2f: "Some spells and abilities include actions taken on multiple
+    players and/or objects. In most cases, each such action is processed
+    simultaneously." The split into an instruction per piece is this module's
+    (each piece is lowered by the function a card printing it alone would
+    reach), and it made one event several — so "whenever enchanted creature
+    deals damage" (Spirit Link) on Orcish Artillery fired for the 2 and again
+    for the 3, and Justice dealt its controller damage twice for one Hail
+    Storm. The marker is what lets the handler deal the pieces as one dealing
+    (``engine/simultaneous_damage.py``) without guessing which steps of a
+    sequence were one sentence.
+
+    A piece that is itself a marked sequence (the "you and each creature you
+    control" half of Hail Storm's second clause) is flattened into this one:
+    the whole sentence is the one event, and nesting would only re-open it.
+    """
+    flat = dealing_pieces(instructions)
+    if len(flat) < 2:
+        return flat
+    return (OracleInstruction("sequence", "", {"steps": flat, ONE_DEALING: True}),)
+
+
+def dealing_pieces(
+    instructions: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """*instructions* with every :func:`one_dealing` sequence among them opened
+    into its pieces — what a post-condition on a damage clause reads, so a
+    marked split is checked piece by piece as it was before it was marked."""
+    flat: tuple[OracleInstruction, ...] = ()
+    for instruction in instructions:
+        if instruction.kind == "sequence" and instruction.payload.get(ONE_DEALING):
+            flat += tuple(instruction.payload.get("steps") or ())
+        else:
+            flat += (instruction,)
+    return flat
 
 
 def lower_damage_conjunction(
@@ -240,7 +284,8 @@ def lower_damage_conjunction(
     # exactly the fragment fork `statement_dispatch`'s own docstring says the
     # threading exists to prevent (Gloom Sower), reintroduced by the one branch
     # that dropped the argument on its way down.
-    return (
+    # …and the two clauses are one sentence, so one event (``one_dealing``).
+    return one_dealing(
         lower_damage(first, event, produced, event_subject)
         + lower_damage(second, event, produced, event_subject)
     )

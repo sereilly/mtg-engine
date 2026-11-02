@@ -36,11 +36,9 @@ from typing import TYPE_CHECKING
 
 from .. import simultaneous_damage
 from ..dexterity import flip_lands_on
-from ..effect_ordering import in_apnap_order
 from ..game_types import single_chosen_id
 from ..models import Permanent
 from ..named_counters import counters_on
-from ..resumption import run_resumable
 from ._amounts import resolve_amount
 from ._common import apply_damage_to_creature, damage_dealer
 from ._targets import defending_player_seat
@@ -99,17 +97,10 @@ def _sweep(game: Game, recipients, hit, done, *, source, affected=None) -> None:
     red creature or spell deals damage" (Justice's ruling: "If a single source
     does damage to multiple targets at once, Justice will add up all the
     damage done") — is announced once, for the total, as the loop's last step
-    finishes the dealing."""
-    dealing = simultaneous_damage.begin(game, combat=False, source=source)
-
-    def finished() -> None:
-        simultaneous_damage.finish(game, dealing)
-        if done is not None:
-            done()
-
-    run_resumable(
-        game, in_apnap_order(game, recipients, affected=affected), hit,
-        then=finished,
+    finishes the dealing. ``simultaneous_damage.deal_at_once`` is that loop,
+    shared with every other effect dealing damage to several recipients."""
+    simultaneous_damage.deal_at_once(
+        game, recipients, hit, source=source, then=done, affected=affected,
     )
 
 

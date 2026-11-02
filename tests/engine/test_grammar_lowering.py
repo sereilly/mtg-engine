@@ -85,10 +85,22 @@ def test_earthquake_and_hurricane_keep_their_dedicated_sweep_handlers():
 
 def test_self_damage_conjunction_decomposes_into_two_instructions():
     """The legacy compiler minted `deal_damage_and_self_damage` for this shape.
-    Composition removes the need for a fused kind."""
-    assert _instructions(
-        "Psionic Blast deals 4 damage to any target and 2 damage to you.", "Psionic Blast"
-    ) == [
+    Composition removes the need for a fused kind: two ordinary `deal_damage`
+    steps — held in one `sequence` marked as one dealing, because the sentence
+    is one simultaneous damage event (CR 608.2f; kg3 `dealings`)."""
+    from engine.oracle_types import ONE_DEALING
+
+    result = compile_line(
+        "Psionic Blast deals 4 damage to any target and 2 damage to you.",
+        card_name="Psionic Blast",
+    )
+    assert result.lowered, result.failure_reason
+    [wrapper] = result.instructions
+    assert wrapper.kind == "sequence" and wrapper.payload.get(ONE_DEALING) is True
+    assert [
+        (step.kind, behavioural_payload(step.payload))
+        for step in wrapper.payload["steps"]
+    ] == [
         ("deal_damage", {"amount": 4}),
         ("deal_damage", {"amount": 2, "recipient": "caster"}),
     ]

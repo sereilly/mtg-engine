@@ -55,7 +55,8 @@ from ._common import (
 from ._events import (_chosen_cast_amount, SWEPT_CONTROLLER_SEATS,
                       _back_reference_payload, dealer_is_event_subject)
 from ._recipients import lower_damage_recipient
-from ._conjuncts import lower_damage_conjunction, lower_split_recipients
+from ._conjuncts import (dealing_pieces, lower_damage_conjunction,
+                         lower_split_recipients)
 
 
 # ---------------------------------------------------------------------------
@@ -191,11 +192,16 @@ def _lower_damage(
     # place: only two arms carry the clause, and a recipient that printed one
     # and reached any other arm would be a sentence damaging every player. A
     # branch added later gets the check for free.
+    #
+    # The pieces of a split clause are one dealing's steps (``one_dealing``),
+    # so they are read through its marker: the arm that carries the clause is
+    # one of them.
     if any(
         getattr(recipient, "controls", None) is not None
         for recipient in node.recipients
     ) and not any(
-        instruction.payload.get("recipient_controls") for instruction in lowered
+        instruction.payload.get("recipient_controls")
+        for instruction in dealing_pieces(lowered)
     ):
         raise LoweringError(
             "no damage handler carries the printed seat narrowing here", node=node

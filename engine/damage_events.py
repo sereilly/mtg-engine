@@ -111,12 +111,12 @@ def lifelink_life_gained(source, dealt: int) -> int:
     **The rule lives here; the timing does not.** Two callers share it
     (``Game._apply_lifelink`` and ``Game._apply_or_tally_lifelink``), and the
     difference between them is a real one rather than a missing abstraction. A
-    chunk of the combat damage step's dealing is tallied on the dealing and
-    gained once the step's damage is all dealt, because combat damage is dealt
-    simultaneously (CR 510.2) — a creature and its blocker trading lethal
-    damage produce one life-gain event, not two interleaved with deaths
-    (``engine/simultaneous_damage.py``). Everything else gains as the damage
-    is dealt.
+    chunk of a simultaneous dealing — the combat damage step's (CR 510.2), a
+    sweep's, a divided spell's — is tallied on the dealing and gained once the
+    dealing's damage is all dealt: one life-gain event per lifelink source
+    (CR 702.15e), not one per chunk interleaved with the rest of the damage
+    (``engine/simultaneous_damage.py``). A chunk dealt alone gains as it is
+    dealt.
 
     Lifelink applies to *any* damage the source deals, not only combat damage —
     which is what this function existing separately is for. It was combat-only
@@ -655,8 +655,13 @@ def _announce(game, event: dict, dealt: int) -> None:
     dealing = simultaneous_damage.joined(
         game, combat=bool(event.get("combat")), source=source,
     )
+    # …and so is a delayed one (CR 603.7): a chunk of a dealing wakes only the
+    # entries naming both its ends (Acidic Dagger), the dealing's finish
+    # announcing the totals the others answer (Spiritualize, Vigorous Charge,
+    # Glyph of Life). None outside a dealing: the chunk is the whole event.
+    chunk = simultaneous_damage.CHUNK if dealing is not None else None
     if dealing is not None:
-        payload["occurrence"] = simultaneous_damage.CHUNK
+        payload["occurrence"] = chunk
         simultaneous_damage.record_chunk(dealing, payload, dealt)
     emit(game, "damage_dealt", **payload)
     if event.get("combat") and isinstance(recipient, PlayerState) and dealt > 0:
@@ -687,6 +692,7 @@ def _announce(game, event: dict, dealt: int) -> None:
             subject=source,
             agent=recipient if isinstance(recipient, Permanent) else None,
             trigger_context={"damage_dealt": dealt},
+            occurrence=chunk,
         )
     if not isinstance(recipient, PlayerState):
         # "Whenever that creature is dealt damage by an attacking creature this
@@ -705,6 +711,7 @@ def _announce(game, event: dict, dealt: int) -> None:
             # not an attacking creature.
             agent=source if isinstance(source, Permanent) else None,
             trigger_context={"damage_dealt": dealt},
+            occurrence=chunk,
         )
         # "Whenever target creature **deals** combat damage to a non-Wall
         # creature this turn, destroy that non-Wall creature." (Acidic Dagger.)
@@ -724,6 +731,7 @@ def _announce(game, event: dict, dealt: int) -> None:
                     "damage_dealt": dealt,
                     DELAYED_AGENT_ID: recipient.permanent_id,
                 },
+                occurrence=chunk,
             )
     elif event.get("combat") and isinstance(source, Permanent):
         # "Whenever that creature deals combat damage this turn, … you gain
@@ -741,6 +749,7 @@ def _announce(game, event: dict, dealt: int) -> None:
             game, "bound_permanent_deals_combat_damage",
             subject=source, agent=None,
             trigger_context={"damage_dealt": dealt},
+            occurrence=chunk,
         )
 
 

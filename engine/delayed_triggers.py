@@ -45,6 +45,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from .simultaneous_damage import delayed_answers
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
     from .models import Permanent
@@ -710,6 +712,7 @@ def matching_delayed_triggers(
     subject: "Permanent | None" = None,
     agent: "Permanent | None" = None,
     seat: int | None = None,
+    occurrence: str | None = None,
 ) -> list[DelayedTrigger]:
     """Every armed ability answering to *event*, with the one-shot ones already
     taken off the waiting list.
@@ -731,6 +734,10 @@ def matching_delayed_triggers(
     A ``once`` entry is removed **before** the caller does anything with it, so
     an effect that re-announces the same event while resolving cannot fire it
     twice.
+
+    *occurrence* is a damage announcement's (``engine/simultaneous_damage.py``):
+    a chunk of a simultaneous dealing wakes only the entries naming both its
+    ends, the others answering the dealing's totals.
     """
     if not game.delayed_triggers:
         return []
@@ -748,17 +755,74 @@ def matching_delayed_triggers(
         )
         if seat is not None and entry_seat != seat:
             continue
+        if not delayed_answers(entry.event, entry.agent_filter, occurrence):
+            continue
         if not entry.matches(game, event, subject, agent):
             continue
         if entry.instruction is None:
             continue
         fired.append(entry)
+    _spend_once(game, fired)
+    return fired
+
+
+def _spend_once(game: "Game", fired: list[DelayedTrigger]) -> None:
+    """CR 603.7b: take the one-shot entries among *fired* off the waiting list,
+    before anything is done with them."""
     if fired:
         game.delayed_triggers = [
             entry for entry in game.delayed_triggers
-            if not (entry.once and entry in fired)
+            if not (entry.once and any(entry is done for done in fired))
         ]
-    return fired
+
+
+def fire_delayed_totals(
+    game: "Game",
+    event: str,
+    *,
+    subject: "Permanent",
+    parts: list,
+    occurrence: str,
+) -> int:
+    """Announce a simultaneous dealing's total for one end of it (*subject*),
+    once per armed entry: each entry is handed the sum of the *parts* —
+    ``(agent, amount)`` per chunk, the agent being the chunk's other end —
+    whose agent it answers, and fires only if that sum is above 0. Returns
+    how many fired.
+
+    The sum is per entry because the narrowing is: "dealt damage **by an
+    attacking creature**" (Glyph of Life) counts only what the attacking
+    creatures dealt, not the damage dealt at the same time by other sources
+    (CR 120.9), while an entry naming no agent counts every part
+    (Spiritualize's "deals damage"). ``engine/simultaneous_damage.finish`` is
+    the caller, with *occurrence* the end announced
+    (:func:`simultaneous_damage.delayed_answers`)."""
+    if not game.delayed_triggers:
+        return 0
+    fired: list[tuple[DelayedTrigger, int]] = []
+    for entry in list(game.delayed_triggers):
+        if entry.instruction is None:
+            continue
+        if not delayed_answers(entry.event, entry.agent_filter, occurrence):
+            continue
+        amount = sum(
+            int(dealt) for agent, dealt in parts
+            if entry.matches(game, event, subject, agent)
+        )
+        if amount > 0:
+            fired.append((entry, amount))
+    if not fired:
+        return 0
+    _spend_once(game, [entry for entry, _ in fired])
+    game._enqueue_triggered_batch([
+        entry.trigger_event(
+            source_permanent=game.permanent_by_id(entry.source_permanent_id),
+            trigger_context={"damage_dealt": amount},
+            game=game,
+        )
+        for entry, amount in fired
+    ])
+    return len(fired)
 
 
 def fire_delayed_triggers(
@@ -770,6 +834,7 @@ def fire_delayed_triggers(
     seat: int | None = None,
     source_permanent: "Permanent | None" = None,
     trigger_context: dict | None = None,
+    occurrence: str | None = None,
 ) -> int:
     """Announce *event*, putting every delayed ability waiting for it onto the
     stack (CR 603.3). Returns how many fired.
@@ -784,9 +849,12 @@ def fire_delayed_triggers(
 
     A ``once`` entry is removed **before** the batch is enqueued, so an effect
     that re-announces the same event while resolving cannot fire it twice.
+
+    *occurrence* is a damage announcement's (:func:`matching_delayed_triggers`).
     """
     fired = matching_delayed_triggers(
-        game, event, subject=subject, agent=agent, seat=seat
+        game, event, subject=subject, agent=agent, seat=seat,
+        occurrence=occurrence,
     )
     if not fired:
         return 0

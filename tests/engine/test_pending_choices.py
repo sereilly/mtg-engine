@@ -449,6 +449,13 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # both are steps a later step of the same resolution reads.
         "player_choice",
         "cast_choice",
+        # "…deals 1 damage to any target and 1 damage to any target of an
+        # opponent's choice." (Cuombajj Witches.) The answer deals the second
+        # half of the sentence's one simultaneous dealing, and the dealing's
+        # finish — each source's total announced once (CR 603.2c) — is the
+        # loop's later step: run ahead of the answer, it closed before the
+        # opponent's half was dealt (kg3 `dealings`).
+        "opponent_damage",
         # "Change the target of target spell with a single target."
         # (Deflection.) The answer *is* the new target, and the step behind it
         # in the same sentence is what writes it onto the stack item.

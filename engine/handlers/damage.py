@@ -31,6 +31,9 @@ from ..destruction_events import mark_delayed_destruction
 from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
+from ..simultaneous_damage import begin as begin_dealing
+from ..simultaneous_damage import deal_at_once
+from ..simultaneous_damage import finish as finish_dealing
 from ..game_types import single_chosen_id, target_ids
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_DAMAGER_CONTROLLER,
@@ -82,19 +85,23 @@ def _record_damage_recipient(context, permanent, player=None) -> None:
     }
 
 
-def _damage_reporter(game: Game, card, permanent):
+def _damage_reporter(game: Game, card, permanent, source):
     """What a divided-damage site does once one creature's share is dealt: log
     it and fire "dealt damage" triggers.
 
     Handed to `_mark_damage_on_permanent` as its `then` rather than run after
     it, because a damage event can stop to ask the affected player which effect
-    applies first — and while it waits, nothing has been dealt to report."""
+    applies first — and while it waits, nothing has been dealt to report.
+
+    *source* is what dealt the share, so a share of a simultaneous dealing adds
+    to the creature's total rather than triggering on its own
+    (``engine/simultaneous_damage.py``)."""
 
     def report(dealt: int) -> None:
         game.log.append(f"{card.name} dealt {dealt} damage to {permanent.card.name}")
         # See apply_damage_to_creature: the trigger is not gated on survival.
         if dealt > 0:
-            game._fire_dealt_damage_triggers(permanent, dealt)
+            game._fire_dealt_damage_triggers(permanent, dealt, source=source)
 
     return report
 
@@ -357,12 +364,14 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # One resumable loop: a target whose event stops to ask which effect
         # applies first (CR 616.1e) takes the targets behind it with it.
         # In APNAP order of the creatures' controllers (CR 616.1's last
-        # sentence): one event dealt to every target at once.
-        run_resumable(
-            game, in_apnap_order(game, chosen),
+        # sentence): one event dealt to every target at once — one dealing
+        # (CR 608.2f, ``simultaneous_damage.deal_at_once``).
+        deal_at_once(
+            game, chosen,
             lambda perm: apply_damage_to_creature(
                 game, perm, damage, source_permanent or card, asks=True,
             ),
+            source=source_permanent or card,
         )
         return True, "resolved"
     # "…to target creature or planeswalker **that player** controls."
@@ -422,7 +431,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             return True, "resolved"
         game._mark_damage_on_permanent(
             own_permanent, damage, source=source_permanent or own_permanent,
-            asks=True, then=_damage_reporter(game, card, own_permanent),
+            asks=True, then=_damage_reporter(
+                game, card, own_permanent, source_permanent or own_permanent,
+            ),
         )
         return True, "resolved"
     if instruction.payload.get("recipient") == "bound_permanent":
@@ -758,7 +769,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 then=lambda dealt, face=face: _record_and_log(dealt, face),
             )
 
-        run_resumable(
+        deal_at_once(
             game,
             # "…deals 2 damage to **each player who sacrificed a Plains this
             # way**." (Desolation.) The printed relative clause, narrowing the
@@ -773,8 +784,10 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             # visited it would still ask every shield and replacement it has.
             #
             # In APNAP order (CR 616.1's last sentence): every seat is dealt
-            # its damage at once, so the active player's question comes first.
-            in_apnap_order(game, seats_controlling(
+            # its damage at once, so the active player's question comes first
+            # — and it is one dealing (CR 608.2f): "whenever <source> deals
+            # damage" sees the total once.
+            seats_controlling(
                 game,
                 seats_matching_deed(
                     game, context,
@@ -782,8 +795,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                     instruction.payload.get("recipient_did"),
                 ),
                 instruction.payload.get("recipient_controls"),
-            )),
+            ),
             _hit_player,
+            source=source_permanent or card,
         )
         return True, "resolved"
     if instruction.payload.get("recipient") == "each_opponent":
@@ -791,7 +805,8 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # living opponent, in APNAP order (CR 616.1's last sentence: dealt at
         # once, so their questions are asked active player first), resumable
         # so a shield or replacement that stops to ask carries the rest of the
-        # loop with it.
+        # loop with it — and one dealing (CR 608.2f; Fiery Confluence's ruling,
+        # 2015-11-04, calls one such mode "a separate damage-dealing event").
         def _hit_opponent(opponent_index: int) -> None:
             face = game.players[opponent_index]
             game._deal_damage_to_player(
@@ -799,9 +814,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 then=lambda dealt, face=face: _record_and_log(dealt, face),
             )
 
-        run_resumable(
+        deal_at_once(
             game,
-            in_apnap_order(game, seats_controlling(
+            seats_controlling(
                 game,
                 seats_matching_deed(
                     game, context,
@@ -809,8 +824,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                     instruction.payload.get("recipient_did"),
                 ),
                 instruction.payload.get("recipient_controls"),
-            )),
+            ),
             _hit_opponent,
+            source=source_permanent or card,
         )
         return True, "resolved"
     # A divided spell's cross-seat list: any mix of creatures and player faces
@@ -886,18 +902,16 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 return
             game._mark_damage_on_permanent(
                 target_perm, share, source=source_permanent or card, asks=True,
-                then=_damage_reporter(game, card, target_perm),
+                then=_damage_reporter(game, card, target_perm, source_permanent or card),
             )
 
         # In APNAP order of the seats the shares' questions go to (CR 616.1's
-        # last sentence) — one event, dealt to every target at once.
-        run_resumable(
-            game,
-            in_apnap_order(
-                game, ordered,
-                affected=lambda entry: entry[0] if entry[0] is not None else entry[1],
-            ),
-            hit,
+        # last sentence) — one event, dealt to every target at once: one
+        # dealing (CR 608.2f), so "whenever <source> deals damage" (Justice)
+        # adds the shares up once.
+        deal_at_once(
+            game, ordered, hit, source=source_permanent or card,
+            affected=lambda entry: entry[0] if entry[0] is not None else entry[1],
         )
         return True, "resolved"
     # Support multiple target indices for spells like Fireball
@@ -927,17 +941,21 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         #
         # One resumable loop, as the divided branch above is: a target whose
         # event stops to ask which effect applies first (CR 616.1e) takes the
-        # targets behind it with it.
-        run_resumable(
+        # targets behind it with it — and one dealing, as that one is.
+        deal_at_once(
             game,
-            in_apnap_order(game, sorted(
+            sorted(
                 chosen, key=lambda perm: game.battlefield_index_of(perm) or 0,
                 reverse=True,
-            )),
+            ),
             lambda target_perm: game._mark_damage_on_permanent(
                 target_perm, per_target, source=source_permanent or card,
-                then=_damage_reporter(game, card, target_perm), asks=True,
+                then=_damage_reporter(
+                    game, card, target_perm, source_permanent or card,
+                ),
+                asks=True,
             ),
+            source=source_permanent or card,
         )
         return True, "resolved"
     if isinstance(target_perm_idx, int) or single_chosen_id(
@@ -1150,16 +1168,15 @@ def deal_damage_and_self_damage(game: Game, instruction: OracleInstruction, cont
 
     # Two damage events, one resumable loop: the self-damage waits for any
     # question the first event asks (CR 616.1e) rather than landing past it.
-    # Dealt at once, so asked in APNAP order of the two recipients' seats.
-    run_resumable(
+    # Dealt at once, so asked in APNAP order of the two recipients' seats, as
+    # one dealing (CR 608.2f).
+    deal_at_once(
         game,
-        in_apnap_order(
-            game,
-            [(target_perm if target_perm is not None else target, to_target),
-             (caster, to_caster)],
-            affected=lambda entry: entry[0],
-        ),
+        [(target_perm if target_perm is not None else target, to_target),
+         (caster, to_caster)],
         lambda entry: entry[1](),
+        source=damage_dealer(context),
+        affected=lambda entry: entry[0],
     )
     return True, "resolved"
 
@@ -1230,6 +1247,12 @@ def coin_flip_damage_loop(
                 return
             # "…1 damage to each player whose coin comes up tails" — dealt
             # at once, so asked in APNAP order (CR 616.1's last sentence).
+            # **Not** one simultaneous dealing, though: the card's ruling
+            # (2004-10-04) is that "Each point of damage is dealt separately,
+            # so if you are damaged twice by this spell, each time is
+            # considered a separate time this source deals damage" — so each
+            # point is its own event, announced whole as it is dealt
+            # (``engine/simultaneous_damage.py``).
             tails = [
                 player for player, heads in
                 ((caster, caster_heads), (opponent, opponent_heads)) if not heads
@@ -1317,8 +1340,9 @@ def deal_damage_to_those_damaged_this_game(
             return
         game._deal_damage_to_player(victim, damage, source=source, asks=True)
 
-    run_resumable(
-        game, in_apnap_order(game, recipients), hit,
+    # One dealing (CR 608.2f): every recipient is dealt its point at once.
+    deal_at_once(
+        game, recipients, hit, source=source,
         then=lambda: game.log.append(
             f"{card.name} dealt {damage} damage to {', '.join(struck)}"
             if struck else f"{card.name} has dealt damage to nobody yet"
@@ -1367,11 +1391,13 @@ def deal_damage_to_recorded_permanents(
             continue
         recipients.append(permanent)
     struck = [permanent.card.name for permanent in recipients]
-    run_resumable(
-        game, in_apnap_order(game, recipients),
+    # One dealing (CR 608.2f): "each of those creatures" is dealt at once.
+    deal_at_once(
+        game, recipients,
         lambda permanent: apply_damage_to_creature(
             game, permanent, damage, damage_dealer(context), asks=True,
         ),
+        source=damage_dealer(context),
         then=lambda: game.log.append(
             f"{card.name} dealt {damage} damage to {', '.join(struck)}"
             if struck else f"{card.name} found none of those permanents to damage"
@@ -1512,9 +1538,14 @@ def deal_damage_and_opponent_choice(game: Game, instruction: OracleInstruction, 
             then=arm,
         )
 
+    # One sentence, one source: the two halves are one dealing (CR 608.2f), so
+    # "whenever this creature deals damage" sees 2 once. It stays open across
+    # the opponent's answer, and the loop's last step finishes it.
+    dealing = begin_dealing(game, combat=False, source=damage_dealer(context))
     run_resumable(
         game, [lambda: deal_damage(game, instruction, context), opponents_half],
         lambda half: half(),
+        then=lambda: finish_dealing(game, dealing),
     )
     return True, "resolved"
 
