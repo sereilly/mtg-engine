@@ -598,7 +598,7 @@ class HandChoicesMixin:
                     took=took,
                 ):
                     break
-            discarded += 1
+                discarded += 1
         self.discard_pending_choice(choice)
         # The stated policy for "up to" is to take the whole offer, and the
         # reason has widened rather than changed. It used to be "this pairing
