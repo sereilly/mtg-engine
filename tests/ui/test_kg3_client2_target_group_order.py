@@ -67,6 +67,10 @@ def _kaboom_at_a_table_of_three():
     walkers = [_walker(name) for name in _WALKERS]
     game.players[0].hand = [_CARDS["Kaboom!"]]
     game.players[0].library = [_CARDS[n] for n in ("Hill Giant", "Shock", "Gray Ogre", "Island", "Island")]
+    # Empty hands for the two AI seats: their random decks would otherwise
+    # answer Kaboom! with whatever the run's dealing put in them.
+    for player in game.players[1:]:
+        player.hand = []
     for player in game.players:
         player.battlefield = []
         player.life = 20
@@ -87,6 +91,7 @@ def _kaboom_at_a_table_of_three():
         if client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json().get("target_group_order"):
             break
         client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"})
+    assert _state(sid)["target_group_order"], game.log[-12:]
     return sid, game, walkers
 
 
