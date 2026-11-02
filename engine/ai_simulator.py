@@ -10,14 +10,8 @@ from . import ai_rehearsal
 from .ai_combat import run_ai_combat_phase
 from .ai_mulligan import take_opening_mulligans
 from .ai_policy import (
-    activate_chosen_ability,
-    cast_chosen_instant,
     choose_cast_action,
-    choose_combat_instant_cast_action,
-    choose_instant_speed_activation,
     choose_land_drop,
-    holds_an_ability_it_could_activate,
-    holds_an_instant_it_could_pay_for,
 )
 from .ai_actions import cast_announcement, spell_being_cast, zone_being_cast_from
 from .ai_abilities import (
@@ -28,10 +22,10 @@ from .ai_abilities import (
 from .ai_graveyard_activations import (
     activate_chosen_graveyard_ability,
     choose_graveyard_activation_action,
-    holds_a_graveyard_ability,
 )
 from .ai_payment import tap_planned_lands
-from .ai_rehearsal import blocks_still_to_come, mid_resolution, rehearsing
+from .ai_priority import PriorityAct, PriorityAsk, act_at_priority
+from .ai_rehearsal import rehearsing
 from .ai_special_actions import special_action_before_combat
 from .ai_weighed_cast import permitted_casts
 from .card_loader import load_cards
@@ -214,7 +208,7 @@ class SimulationReport:
     #: mana its taps floated, and the seat proposes it again at the next window.
     refused_instant_casts: Counter[str] = field(default_factory=Counter)
     #: How many times a seat was given priority in one of the windows the
-    #: simulator answers (`_instant_speed_window`), and in how many of those it
+    #: simulator answers (`ai_priority.instant_speed_window`), and in how many of those it
     #: held an instant it could pay for, so the chooser was asked. The zeroes
     #: above mean something only beside these: a run whose windows were never
     #: opened reports no response cast in exactly the way a run with no
@@ -223,7 +217,7 @@ class SimulationReport:
     priority_offers_weighed: int = 0
     #: Abilities activated at the same moments, by window (``"response"``,
     #: ``"declare_attackers"``, ``"combat"``, ``"end_step"`` —
-    #: `_instant_speed_window` — and ``"upkeep"``, the seat's own, for its
+    #: `ai_priority.instant_speed_window` — and ``"upkeep"``, the seat's own, for its
     #: graveyard alone), and the
     #: refusals among them. Empty in every run before round 4 for the casts'
     #: reason: the only activations a simulated seat made were its own main
@@ -972,7 +966,7 @@ def _play_rest_of_turn(
     # active player's priority window. The window gives each seat priority
     # before each trigger resolves and once more with the stack empty
     # (`Game.offer_priority`), which is where the opponent's end-of-turn
-    # instant is cast (`_instant_speed_window`).
+    # instant is cast (`ai_priority.instant_speed_window`).
     _drain_step(game)
     report.end_steps += 1
     if game.is_game_over():
@@ -985,63 +979,6 @@ def _play_rest_of_turn(
     _drain_step(game)
     report.cleanup_steps += 1
     report.cleanup_discards += max(0, hand_before - len(game.players[active].hand))
-
-
-def _instant_speed_window(game: Game, seat: int) -> str | None:
-    """Which of the moments a simulated seat answers priority in *seat* has
-    just been given it in, or None for one it passes in without asking.
-
-    The engine gives every seat priority before each resolution and at each
-    step's end (`Game.offer_priority`); this is the simulator's choice of
-    which of those to spend a deliberation on, in the order of what they are
-    worth:
-
-    * ``"response"`` — an object **another seat** controls is on the stack: a
-      counterspell, a shield in front of a burn spell, removal in response to
-      a pump. A seat does not answer its own object — it lets it resolve and
-      is asked again (CR 117.3c gives it priority first, and it passes).
-    * ``"declare_attackers"`` — the declare-attackers step with the attack
-      declared and the blocks still to come (CR 508.2,
-      ``ai_rehearsal.blocks_still_to_come``), for **every** seat: the
-      defender's ambush blocker (a creature with flash), an ability that
-      changes who can block whom (gaining flying to block a flier; Swooping
-      Talon shedding its own so the creature it provoked can block it; a seat
-      that is not defending casts nothing here, ``ai_policy.
-      _weighed_at_instant_speed_now``). What is done here is only what adds a
-      block, read through the fight (``ai_rehearsal.pays_before_the_blocks``);
-      the rest waits for:
-    * ``"combat"`` — the declare-blockers step with attackers in it, for
-      **both** seats (CR 509.2): the trick that wins a block, the removal that
-      kills an attacker, the pump on an unblocked one.
-    * ``"end_step"`` — the opponent's end step with the stack empty: removal
-      for a creature cast on that turn, a draw that was held up.
-    * ``"upkeep"`` — the seat's **own** upkeep with the stack empty, and only
-      for an ability of a card in its graveyard (`_answer_priority`): most of
-      those print "Activate only during your upkeep" (Necrosavant, Shard
-      Phoenix, Ashen Ghoul, Hammer of Bogardan), and a seat that answered no
-      upkeep could never activate one. Nothing else is weighed there, so
-      every other card is played where it always was.
-
-    Everything else — the opponent's upkeep, the draw step, beginning of
-    combat, the combat-damage and end-of-combat steps, a seat's own end step —
-    is passed without asking (named in ROADMAP as what is left); the engine
-    still gives priority there, so adding one is a line here.
-    """
-    if game.stack:
-        return "response" if game.stack[-1].caster_index != seat else None
-    if blocks_still_to_come(game):
-        return "declare_attackers"
-    if (
-        game.current_turn_phase == "combat"
-        and game.current_step == "declare_blockers"
-        and game.combat_attackers
-    ):
-        return "combat"
-    if game.current_step == "end" and seat != game.active_player_index:
-        return "end_step"
-    if game.current_step == "upkeep" and seat == game.active_player_index:
-        return "upkeep"
-    return None
 
 
 def _priority_answerer(table: Game, report: SimulationReport, game_index: int, clock: list):
@@ -1070,56 +1007,28 @@ def _priority_answerer(table: Game, report: SimulationReport, game_index: int, c
 def _answer_priority(
     game: Game, seat: int, report: SimulationReport, game_index: int, turn: int
 ) -> bool:
-    """*seat* has priority (`Game.offer_priority`): cast what
-    `ai_policy.choose_combat_instant_cast_action` chooses — the chooser the
-    web AI seat answers priority with — or, with no spell worth casting,
-    activate what `ai_policy.choose_instant_speed_activation` chooses, or
-    pass. True when something went on the stack.
+    """*seat* has priority (`Game.offer_priority`): the answer every table
+    that plays a seat nobody asks gives — the web AI seat's too
+    (`ai_priority.act_at_priority`: its windows, ``instant_speed_window``;
+    an instant, then an ability at instant speed, then one of a card in the
+    graveyard) — recorded. True when something went on the stack.
 
-    Asked only in `_instant_speed_window`'s moments, only where no
-    resolution is part-way through (a rehearsal cannot be run there, and a
-    response nobody weighed is a guess — `ai_rehearsal.mid_resolution`), and
-    only once the cheap question has said there is something the seat could
-    pay for (`ai_policy.holds_an_instant_it_could_pay_for`,
-    `holds_an_ability_it_could_activate`); both choosers rehearse what they
-    propose, and the engine asks this dozens of times a turn.
+    The offer counts are for the windows the instant choosers weigh: the
+    seat's own upkeep, answered for its graveyard alone, is not one of them.
     """
-    window = _instant_speed_window(game, seat)
-    if window is None or mid_resolution(game):
+    asked = PriorityAsk()
+    act = act_at_priority(game, seat, asked=asked)
+    report.priority_offers += asked.offered
+    report.priority_offers_weighed += asked.weighed
+    if act is None:
         return False
-    if window == "upkeep":
-        # The seat's own upkeep is answered for its graveyard alone (see
-        # `_instant_speed_window`), and is not one of the windows the offer
-        # counts below are about.
-        return _activate_from_graveyard_at_priority(
-            game, seat, window, report, game_index, turn,
-        )
-    report.priority_offers += 1
-    action = None
-    if holds_an_instant_it_could_pay_for(game, seat):
-        report.priority_offers_weighed += 1
-        action = choose_combat_instant_cast_action(game, seat)
-    if action is None:
-        # No spell worth casting: an ability, then (a regeneration shield in
-        # front of a burn spell, a ping in the opponent's end step), asked
-        # the same cheap question first — and then one of a card in the
-        # graveyard (Glory in front of a burn spell, Carrionette at the end
-        # of the opponent's turn).
-        if holds_an_ability_it_could_activate(game, seat):
-            activation = choose_instant_speed_activation(game, seat)
-            if activation is not None:
-                return _activate_at_priority(
-                    game, seat, activation, window, report, game_index, turn,
-                )
-        return _activate_from_graveyard_at_priority(
-            game, seat, window, report, game_index, turn,
-        )
-    answering = game.stack[-1].card.name if game.stack else None
-    in_combat = game.current_turn_phase == "combat"
-    off_turn = seat != game.active_player_index
-    card, result = cast_chosen_instant(game, seat, action)
     report.interaction_count += 1
-    when = _when_at_priority(game, answering, in_combat)
+    if act.kind == "activate":
+        return _record_activation(game, seat, act, report, game_index, turn)
+    if act.kind == "graveyard":
+        return _record_graveyard_activation(game, seat, act, report, game_index, turn)
+    card, action, result = act.card, act.action, act.result
+    when = _when_at_priority(game, act.answering, act.in_combat)
     modes_named = _modes_named(card, action)
     named = "".join(f" [mode {index}: {label}]" for index, label in modes_named)
     report.log_lines.append(
@@ -1129,10 +1038,10 @@ def _answer_priority(
     if not result.supported:
         report.refused_instant_casts[f"{card.name}: {result.details}"] += 1
         return False
-    report.casts_in_response += answering is not None
-    report.casts_in_combat += in_combat
-    report.casts_before_blocks += window == "declare_attackers"
-    report.casts_on_opponents_turn += off_turn
+    report.casts_in_response += act.answering is not None
+    report.casts_in_combat += act.in_combat
+    report.casts_before_blocks += act.window == "declare_attackers"
+    report.casts_on_opponents_turn += act.off_turn
     report.modal_casts.update(index for index, _label in modes_named)
     if action.from_zone != "hand":
         report.casts_from_zones[action.from_zone] += 1
@@ -1149,27 +1058,24 @@ def _when_at_priority(game: Game, answering: str | None, in_combat: bool) -> str
     return "in the end step"
 
 
-def _activate_at_priority(
-    game: Game, seat: int, action, window: str, report: SimulationReport,
+def _record_activation(
+    game: Game, seat: int, act: PriorityAct, report: SimulationReport,
     game_index: int, turn: int,
 ) -> bool:
-    """Carry out `ai_policy.choose_instant_speed_activation`'s choice and
-    record it: True when the ability went on the stack."""
-    answering = game.stack[-1].card.name if game.stack else None
-    in_combat = game.current_turn_phase == "combat"
-    result = activate_chosen_ability(game, seat, action)
-    report.interaction_count += 1
+    """Record an ability `act_at_priority` activated at instant speed: True
+    when it went on the stack."""
+    action, result = act.action, act.result
     report.log_lines.append(
         f"G{game_index} T{turn} {game.players[seat].name} "
         f"activate {action.permanent_name} -> {result.details} "
-        f"[{_when_at_priority(game, answering, in_combat)}]"
+        f"[{_when_at_priority(game, act.answering, act.in_combat)}]"
     )
     if not result.supported:
         report.refused_instant_activations[
             f"{action.permanent_name}: {result.details}"
         ] += 1
         return False
-    report.activations_at_instant_speed[window] += 1
+    report.activations_at_instant_speed[act.window] += 1
     return True
 
 
@@ -1180,38 +1086,24 @@ def _when_at_upkeep(game: Game, answering: str | None, in_combat: bool) -> str:
     return _when_at_priority(game, answering, in_combat)
 
 
-def _activate_from_graveyard_at_priority(
-    game: Game, seat: int, window: str, report: SimulationReport,
+def _record_graveyard_activation(
+    game: Game, seat: int, act: PriorityAct, report: SimulationReport,
     game_index: int, turn: int,
 ) -> bool:
-    """Activate the ability of a card in *seat*'s graveyard that
-    `ai_graveyard_activations.choose_graveyard_activation_action` chooses
-    given priority — in a response, combat or end-step window only where
-    what it does outlasts the turn (``lasting_only``), and in the seat's own
-    upkeep by the main phase's rule, since that is the only moment most of
-    them allow — and record it: True when it went on the stack."""
-    if not holds_a_graveyard_ability(game, seat):
-        return False
-    action = choose_graveyard_activation_action(
-        game, seat, lasting_only=window != "upkeep",
-    )
-    if action is None:
-        return False
-    answering = game.stack[-1].card.name if game.stack else None
-    in_combat = game.current_turn_phase == "combat"
-    result = activate_chosen_graveyard_ability(game, seat, action)
-    report.interaction_count += 1
+    """Record an ability of a card in *seat*'s graveyard `act_at_priority`
+    activated: True when it went on the stack."""
+    action, result = act.action, act.result
     report.log_lines.append(
         f"G{game_index} T{turn} {game.players[seat].name} "
         f"activate {action.card_name} from graveyard -> {result.details} "
-        f"[{_when_at_upkeep(game, answering, in_combat)}]"
+        f"[{_when_at_upkeep(game, act.answering, act.in_combat)}]"
     )
     if not result.supported:
         report.refused_instant_activations[
             f"{action.card_name} (from graveyard): {result.details}"
         ] += 1
         return False
-    report.activations_at_instant_speed[window] += 1
+    report.activations_at_instant_speed[act.window] += 1
     report.activations_from_graveyard[action.card_name] += 1
     return True
 

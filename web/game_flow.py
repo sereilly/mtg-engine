@@ -17,7 +17,6 @@ from engine.ai_combat import declare_ai_blockers
 
 from engine.ai_actions import cast_announcement, spell_being_cast, zone_being_cast_from
 from engine.ai_policy import (
-    cast_chosen_instant,
     choose_cast_action,
     choose_combat_instant_cast_action,
 )
@@ -31,6 +30,7 @@ from engine.ai_graveyard_activations import (
     choose_graveyard_activation_action,
 )
 from engine.ai_payment import tap_planned_lands
+from engine.ai_priority import act_at_priority
 from engine.ai_special_actions import special_action_before_combat
 
 from .prompts import auto_resolve_ai_prompts
@@ -129,6 +129,15 @@ def _ai_step(session: Session) -> bool:
 
     if game.priority_player_index is not None and game.priority_player_index != seat:
         return False
+
+    # **The seat's own upkeep is a priority window it answers**, for an
+    # ability of a card in its graveyard ("Activate only during your
+    # upkeep": Hammer of Bogardan, Necrosavant): the upkeep stopped here for
+    # it (`turn_steps._resolve_upkeep_step`), and the answer is the
+    # simulator's own (`engine.ai_priority`). Nothing the main phase plays is
+    # played here; with nothing done, the step is left.
+    if game.current_turn_phase == "beginning" and game.current_step == "upkeep":
+        return not _ai_answer_priority(session, seat)
 
     # choose_cast_action covers sorcery-speed plays (enchantments, sorceries,
     # creatures, artifacts, lands), which are legal only during the active player's
@@ -265,29 +274,40 @@ def _ai_step(session: Session) -> bool:
 
 
 def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
+    """An AI seat handed priority by the exchange: the simulator's answer to
+    priority (`engine.ai_priority.act_at_priority` — its windows, its
+    choosers, each one's executor: an instant, an ability at instant speed,
+    an ability of a card in the graveyard), then a pass.
+
+    This was a copy of a third of that answer: it cast an instant whenever
+    it was handed priority, in any step, and never activated anything — so
+    no web AI seat used a regeneration shield in front of a burn spell, a
+    Glory in its graveyard, or Swooping Talon's toggle (CLAUDE.md: the
+    simulator plays the engine's turn, never a copy of it)."""
     game = session.game
     if not game.has_priority(seat):
         return None
 
-    instant_action = choose_combat_instant_cast_action(game, seat)
-    if instant_action is not None:
-        # Through the executor the AI simulator's answer to priority shares
-        # (`engine.ai_policy.cast_chosen_instant`): out of the zone the action
-        # names (the hand, or a graveyard holding a flashback instant), paid
-        # for, and the whole announcement (`cast_announcement`, as in
-        # `_ai_step`) — the chosen permanent (a spell whose handler has no
-        # board scan, Sivvi's Valor, resolved doing nothing while only the
-        # seat was forwarded), the division (CR 601.2d; dropped, the cast is
-        # refused and the seat offers the same instant every combat) and the
-        # mode (CR 601.2b: this is the one window in which a mode that
-        # counters a spell can be announced at all) — left on the stack.
-        _card, result = cast_chosen_instant(game, seat, instant_action)
-        if result.supported:
-            game.note_priority_action_taken(seat)
+    act = act_at_priority(game, seat)
+    if act is not None and act.supported:
+        game.note_priority_action_taken(seat)
 
     if game.has_priority(seat):
         return game.pass_priority(seat)
     return None
+
+
+def _ai_answer_priority(session: Session, seat: int) -> bool:
+    """The active AI seat's answer to its own priority (its upkeep): what
+    `engine.ai_priority.act_at_priority` does, put on the stack and handed
+    round the table (`_run_priority_exchange`) so a human may respond before
+    it resolves. True when something went on the stack."""
+    act = act_at_priority(session.game, seat)
+    if act is None or not act.supported:
+        return False
+    session.game.note_priority_action_taken(seat)
+    _run_priority_exchange(session, seat)
+    return True
 
 
 def _auto_advance_after_all_passed(session: Session, pass_result: str | None) -> None:

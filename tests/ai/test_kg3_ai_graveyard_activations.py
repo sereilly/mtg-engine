@@ -22,6 +22,7 @@ from collections import Counter
 import pytest
 
 from engine import ai_simulator
+from engine import ai_priority
 from engine.activation_zones import GRAVEYARD, ability_functions_from
 from engine.ai_graveyard_activations import (
     activate_chosen_graveyard_ability,
@@ -239,13 +240,13 @@ def _simulated(*, active=0, graveyards=((), ()), boards=((), ()), hands=((), ())
 
 def test_the_seat_answers_its_own_upkeep_for_its_graveyard():
     """CR 117.3a: the active player receives priority in the upkeep, and the
-    simulator now answers it (`_instant_speed_window`'s ``"upkeep"``) — the
+    simulator now answers it (`ai_priority.instant_speed_window`'s ``"upkeep"``) — the
     one moment "Activate only during your upkeep" allows."""
     game, report = _simulated(
         graveyards=(("Shard Phoenix",), ()), boards=(["Mountain"] * 3, ()),
     )
     game._set_phase_and_step("beginning", "upkeep")
-    assert ai_simulator._instant_speed_window(game, 0) == "upkeep"
+    assert ai_priority.instant_speed_window(game, 0) == "upkeep"
 
     game._resolve_priority_window()
 

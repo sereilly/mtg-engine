@@ -10,6 +10,7 @@ up when the answer arrives.
 
 from __future__ import annotations
 
+from engine.ai_graveyard_activations import graveyard_abilities
 from engine.hand_size import maximum_hand_size
 from engine.phases.upkeep_step import upkeep_prompt_key
 from engine.upkeep_costs import cost_from_payload
@@ -545,6 +546,21 @@ def _resolve_upkeep_step(session: Session, player_index: int) -> bool:
     # On the human's own turn, open a priority window at upkeep if flagged on the
     # phase rail, instead of resolving straight through to the main phase.
     if _self_should_hold(session, "upkeep"):
+        game.resolve_upkeep(player_index, defer_priority=True)
+        return True
+
+    # **The AI's own upkeep is a window it answers** when it holds an ability
+    # of a card in its graveyard — the simulator's ``"upkeep"`` window
+    # (`engine.ai_priority.instant_speed_window`): most of those print
+    # "Activate only during your upkeep", and an upkeep resolved straight
+    # through is one no web AI seat ever used. The step stops with the AI's
+    # priority open; the next `ai_step` answers it and leaves the step
+    # (`game_flow._ai_step`). Asked of any graveyard ability rather than one
+    # activatable now: "only during your upkeep" is not yet true of a step
+    # that has not begun, and the answer asks CR 602.5 itself.
+    if _seat_type(session, player_index) == "ai" and any(
+        True for _ability in graveyard_abilities(game, player_index)
+    ):
         game.resolve_upkeep(player_index, defer_priority=True)
         return True
 

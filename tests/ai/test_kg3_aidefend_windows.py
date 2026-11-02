@@ -5,7 +5,7 @@ block whom — and the hamper an ability puts on its own source when the
 rehearsal says it pays (Swooping Talon shedding its flying for the creature
 it provoked; a phase-out or shroud in front of a removal spell).
 
-**The defect.** `ai_simulator._instant_speed_window` answered no priority in
+**The defect.** `ai_priority.instant_speed_window` answered no priority in
 the declare-attackers step, a rehearsal started there declared no blocks on
 its copy (`_run_out_the_turn` stopped at the owed declaration, so that combat
 dealt no damage at all), and the activation chooser skipped every ability
@@ -21,6 +21,7 @@ from dataclasses import replace
 import pytest
 
 from engine import ai_simulator
+from engine import ai_priority
 from engine.ai_abilities import choose_activation_action
 from engine.ai_combat import run_ai_combat_phase
 from engine.ai_rehearsal import blocks_still_to_come
@@ -121,7 +122,7 @@ def test_the_window_is_the_declare_attackers_step_before_the_blocks(
         ))
     if stack and seat == 0:
         expected = None
-    assert ai_simulator._instant_speed_window(game, seat) == expected
+    assert ai_priority.instant_speed_window(game, seat) == expected
 
 
 # --- the defender's ambush ----------------------------------------------------
