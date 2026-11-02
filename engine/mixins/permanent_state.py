@@ -104,10 +104,32 @@ class PermanentStateMixin:
         seeing it — with the prompt still queued, about a permanent that no
         longer existed.
         """
-        armed_before = len(self.pending_choices)
+        queued_before = {id(choice) for choice in self.pending_choices}
         self._perform_entry_state(permanent, caster_index, target_player_index)
-        for choice in self.pending_choices[armed_before:]:
-            choice.data.setdefault("_entering_permanent", permanent)
+        # By identity rather than by position: the entry state can take a
+        # choice off the queue as well as put one on (a toll's sacrifice can
+        # end whatever the sacrificed permanent was owed), and a slice from the
+        # old length would then stamp the wrong prompts.
+        for choice in self.pending_choices:
+            if id(choice) not in queued_before:
+                choice.data.setdefault("_entering_permanent", permanent)
+
+    def _stamps_entry_default(self, chooser: int | None) -> bool:
+        """Whether a default is written onto an entering permanent before the
+        prompt for *chooser* is armed.
+
+        For a seat nobody asks, yes: its prompt takes the default as it is
+        armed (``default_at_arm``) or when the queue is drained, and the record
+        is what its answer *is*. For a person, no (CR 614.12a: the choice is
+        made before the permanent enters). A provisional value written there
+        was a choice nobody had made — a person's Ward Sliver gave every Sliver
+        protection from the default colour while its prompt was open — and the
+        permanent now waits on its way until the answer
+        (``engine/entry_awaiting.py``), so nothing reads the record before it
+        exists. The prompt still carries the default (``default_*``), which is
+        what a person's prompt answered by default writes
+        (``_default_enter_choice``, ``_default_body_choice``)."""
+        return chooser not in self.interactive_seats
 
     def _perform_entry_state(
         self,
@@ -210,7 +232,10 @@ class PermanentStateMixin:
             # Primal Clay had both until that clear ran. The seed reads keyword
             # lines only now -- ``printed_characteristics._printed_abilities_cached``.)
             permanent.metadata["body_options"] = list(bodies)
-            self._apply_chosen_body(permanent, bodies[0])
+            # A person who is asked has no body applied before answering
+            # (``_stamps_entry_default``); the answer applies theirs.
+            if len(bodies) == 1 or self._stamps_entry_default(caster_index):
+                self._apply_chosen_body(permanent, bodies[0])
             if len(bodies) > 1:
                 self.arm_pending_choice(
                     "body_choice", caster_index,
@@ -246,14 +271,21 @@ class PermanentStateMixin:
                 chosen = opponents[0]
             else:
                 chosen = 1 - caster_index
-            permanent.metadata["chosen_player_index"] = chosen
+            # Whether anybody is asked: a lone opponent with nothing else to
+            # choose is the whole choice, and is recorded for every seat.
+            asks = bool(needs_color or needs_name or len(opponents) > 1)
+            stamps = not asks or self._stamps_entry_default(caster_index)
+            if stamps:
+                permanent.metadata["chosen_player_index"] = chosen
             default_color = None
             if needs_color:
                 default_color = self._dominant_nontoken_color(self.players[chosen]) if 0 <= chosen < len(self.players) else "W"
-                permanent.metadata["chosen_color"] = default_color
-                # Jihad's anthem is conditioned on the stored choices, and the
-                # entry recalculation ran before they were stamped — recompute.
-                self._recalculate_lord_buffs()
+                if stamps:
+                    permanent.metadata["chosen_color"] = default_color
+                    # Jihad's anthem is conditioned on the stored choices, and
+                    # the entry recalculation ran before they were stamped —
+                    # recompute.
+                    self._recalculate_lord_buffs()
             default_name = None
             if needs_name:
                 # The default names a card the chooser can actually see — one
@@ -271,8 +303,9 @@ class PermanentStateMixin:
                 default_name = self._default_named_card(
                     caster_index, exclude=permanent.card.name
                 )
-                permanent.metadata["chosen_card_name"] = default_name or ""
-            if needs_color or needs_name or len(opponents) > 1:
+                if stamps:
+                    permanent.metadata["chosen_card_name"] = default_name or ""
+            if asks:
                 self.arm_pending_choice(
                     "enter_choice", caster_index,
                     card_name=permanent.card.name, permanent=permanent,
@@ -309,7 +342,8 @@ class PermanentStateMixin:
             and CHOOSE_COLOR_AND_OPPONENT_ON_ENTER not in text
         ):
             default_color = self._default_chosen_color(caster_index)
-            permanent.metadata["chosen_color"] = default_color
+            if self._stamps_entry_default(caster_index):
+                permanent.metadata["chosen_color"] = default_color
             self.arm_pending_choice(
                 "enter_choice", caster_index,
                 card_name=permanent.card.name, permanent=permanent,
@@ -330,11 +364,12 @@ class PermanentStateMixin:
         # seat never blocks, exactly as Black Vise's opponent is.
         if chooses_two_land_types_on_enter(text):
             first, second = self._default_terrain_land_types(caster_index)
-            permanent.metadata[CHOSEN_LAND_TYPES] = (first, second)
-            # The static reads the record, and the record did not exist when
-            # the entry recalculation ran — recompute, the way Jihad's anthem
-            # does one branch up.
-            self._refresh_dynamic_creatures()
+            if self._stamps_entry_default(caster_index):
+                permanent.metadata[CHOSEN_LAND_TYPES] = (first, second)
+                # The static reads the record, and the record did not exist
+                # when the entry recalculation ran — recompute, the way
+                # Jihad's anthem does one branch up.
+                self._refresh_dynamic_creatures()
             self.arm_pending_choice(
                 "enter_choice", caster_index,
                 card_name=permanent.card.name, permanent=permanent,
@@ -373,31 +408,31 @@ class PermanentStateMixin:
         chooses_pair = chooses_color_and_creature_type_on_enter(text)
         if chooses_pair:
             default_color = self._default_chosen_color(caster_index)
-            permanent.metadata["chosen_color"] = default_color
-            permanent.metadata["chosen_creature_type"] = (
-                self._default_chosen_creature_type(
-                    caster_index, permanent.effective_card
-                )
+            default_type = self._default_chosen_creature_type(
+                caster_index, permanent.effective_card
             )
+            if self._stamps_entry_default(caster_index):
+                permanent.metadata["chosen_color"] = default_color
+                permanent.metadata["chosen_creature_type"] = default_type
             self.arm_pending_choice(
                 "enter_choice", caster_index,
                 card_name=permanent.card.name, permanent=permanent,
                 needs_color=True, opponents=[], default_seat=None,
                 default_color=default_color, needs_creature_type=True,
-                default_creature_type=permanent.metadata["chosen_creature_type"],
+                default_creature_type=default_type,
             )
         if chooses_creature_type_on_enter(text) and not chooses_pair:
-            permanent.metadata["chosen_creature_type"] = (
-                self._default_chosen_creature_type(
-                    caster_index, permanent.effective_card
-                )
+            default_type = self._default_chosen_creature_type(
+                caster_index, permanent.effective_card
             )
+            if self._stamps_entry_default(caster_index):
+                permanent.metadata["chosen_creature_type"] = default_type
             self.arm_pending_choice(
                 "enter_choice", caster_index,
                 card_name=permanent.card.name, permanent=permanent,
                 needs_color=False, opponents=[], default_seat=None,
                 default_color=None, needs_creature_type=True,
-                default_creature_type=permanent.metadata["chosen_creature_type"],
+                default_creature_type=default_type,
             )
 
         # "As this creature enters, **an opponent chooses** a creature type."
@@ -431,16 +466,16 @@ class PermanentStateMixin:
         # recalculation ran — so recompute, the way Illusionary Terrain's pair
         # and Jihad's anthem both do.
         if chooses_land_type_on_enter(text):
-            permanent.metadata["chosen_land_type"] = (
-                self._default_chosen_land_type(caster_index)
-            )
-            self._recalculate_lord_buffs()
+            default_land_type = self._default_chosen_land_type(caster_index)
+            if self._stamps_entry_default(caster_index):
+                permanent.metadata["chosen_land_type"] = default_land_type
+                self._recalculate_lord_buffs()
             self.arm_pending_choice(
                 "enter_choice", caster_index,
                 card_name=permanent.card.name, permanent=permanent,
                 needs_color=False, opponents=[], default_seat=None,
                 default_color=None, needs_land_type=True,
-                default_land_type=permanent.metadata["chosen_land_type"],
+                default_land_type=default_land_type,
             )
 
         # "As this enchantment enters, choose **black or red**." (Mangara's
@@ -477,12 +512,13 @@ class PermanentStateMixin:
             default = self._default_entry_choice_option(
                 caster_index, record_key, options
             )
-            permanent.metadata[record_key] = default
-            # A static may read either record ("permanents of the chosen
-            # color", "each land of the chosen type"), and the record did not
-            # exist when the entry recalculation ran — so recompute, exactly as
-            # the colour and land-type branches above do.
-            self._recalculate_lord_buffs()
+            if self._stamps_entry_default(caster_index):
+                permanent.metadata[record_key] = default
+                # A static may read either record ("permanents of the chosen
+                # color", "each land of the chosen type"), and the record did
+                # not exist when the entry recalculation ran — so recompute,
+                # exactly as the colour and land-type branches above do.
+                self._recalculate_lord_buffs()
             self.arm_pending_choice(
                 "enter_choice", caster_index,
                 card_name=permanent.card.name, permanent=permanent,
@@ -537,7 +573,19 @@ class PermanentStateMixin:
                     if opponent_index is not None else ""
                 ),
             ]
-            permanent.metadata[CHOSEN_CARD_NAMES] = names
+            # A person's slot holds no name until they answer
+            # (``_stamps_entry_default``); a seat nobody asks has named its
+            # default by the time its prompt is armed. No record at all while
+            # every slot is a person's.
+            stamped = [
+                name if seat is not None and self._stamps_entry_default(seat) else ""
+                for name, seat in zip(names, (caster_index, opponent_index))
+            ]
+            if any(
+                seat is not None and self._stamps_entry_default(seat)
+                for seat in (caster_index, opponent_index)
+            ):
+                permanent.metadata[CHOSEN_CARD_NAMES] = stamped
             for slot, seat in enumerate([caster_index, opponent_index]):
                 if seat is None:
                     continue
@@ -595,8 +643,9 @@ class PermanentStateMixin:
                 for named in castable_faces(card)
                 if not (excluded_type and card_has_type(named, excluded_type))
             ]
-            permanent.metadata["chosen_card_name"] = seen[0] if seen else ""
-            if caster_index not in self.interactive_seats:
+            default_name = seen[0] if seen else ""
+            if self._stamps_entry_default(caster_index):
+                permanent.metadata["chosen_card_name"] = default_name
                 # A chosen name is public (CR 201.4: the player *chooses a
                 # card name*, out loud), and for a seat nobody asks the default
                 # stamped above is the whole choice — the prompt below is
@@ -606,14 +655,14 @@ class PermanentStateMixin:
                 # answer is logged by the resolver, in these words.
                 self.log.append(
                     f"{self.players[caster_index].name} named "
-                    f"{permanent.metadata['chosen_card_name'] or 'nothing'} "
+                    f"{default_name or 'nothing'} "
                     f"for {permanent.card.name}"
                 )
             self.arm_pending_choice(
                 "enter_choice", caster_index,
                 card_name=permanent.card.name, permanent=permanent,
                 needs_card_name=True, choices=sorted(set(seen)),
-                default_card_name=permanent.metadata["chosen_card_name"],
+                default_card_name=default_name,
                 # Absent for Runed Halo, so the prompt that card raises is
                 # byte-identical to what it was.
                 **(
@@ -641,12 +690,14 @@ class PermanentStateMixin:
             if bounds is None:
                 continue
             low, high = bounds
-            permanent.metadata["chosen_number"] = (low + high) // 2
+            default_number = (low + high) // 2
+            if self._stamps_entry_default(caster_index):
+                permanent.metadata["chosen_number"] = default_number
             self.arm_pending_choice(
                 "number_choice", caster_index,
                 card_name=permanent.card.name, permanent=permanent,
                 minimum=low, maximum=high,
-                default_number=permanent.metadata["chosen_number"],
+                default_number=default_number,
             )
             break
 
@@ -670,8 +721,9 @@ class PermanentStateMixin:
             capped = pay_any_life_on_enter(raw_line, permanent.effective_card.name)
             if capped is None:
                 continue
-            permanent.metadata[LIFE_PAID_AS_ENTERED] = 0
             maximum = self._nameless_race_cap(caster_index, capped)
+            if maximum <= 0 or self._stamps_entry_default(caster_index):
+                permanent.metadata[LIFE_PAID_AS_ENTERED] = 0
             if maximum > 0:
                 self.arm_pending_choice(
                     "number_choice", caster_index,
@@ -699,10 +751,11 @@ class PermanentStateMixin:
             )
             if offered is None:
                 continue
-            permanent.metadata["sacrificed_as_entered"] = 0
             candidates = self._sacrifice_candidate_indices(
                 self.players[caster_index], offered, None
             )
+            if not candidates or self._stamps_entry_default(caster_index):
+                permanent.metadata["sacrificed_as_entered"] = 0
             # "Any number" of nothing is zero, already recorded — and arming a
             # prompt over an empty board would ask a question with one answer.
             if candidates:

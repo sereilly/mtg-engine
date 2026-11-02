@@ -116,10 +116,16 @@ def test_the_entering_permanent_cannot_pay_for_its_own_entry(pool):
     """"You can't choose the object that will become that permanent."
 
     Asked of a land whose toll its own printed type would answer: a Mountain
-    that says "sacrifice an untapped Mountain instead". It is on the battlefield
-    by the time the toll is charged, so it matches its own noun phrase -- and
-    without the exclusion it would pay for itself, arriving and dying in one
-    step while the Mountain it was supposed to cost stayed put.
+    that says "sacrifice an untapped Mountain instead". Paid for itself, it
+    would arrive and die in one step while the Mountain it was supposed to
+    cost stayed put.
+
+    It used to be on the battlefield by the time the toll was charged, which is
+    why the prompt carried an exclusion. Now the toll is charged as it enters
+    and before it is anywhere (CR 614.12a; ``engine/entry_awaiting.py``): a
+    person's toll keeps it on its way until the answer, so the offer is the two
+    Mountains already there and nothing else, and paying with one completes
+    the entry.
     """
     self_paying = _land("Self-Paying Post", _TOLL)
     self_paying = CardDefinition(
@@ -138,14 +144,17 @@ def test_the_entering_permanent_cannot_pay_for_its_own_entry(pool):
     game._put_permanent_onto_battlefield(0, entering, None)
     offered = game.pending_sacrifice_state()
 
-    # Three untapped Mountains are on the battlefield and the prompt offers two:
-    # the exclusion is what the third one is missing for. Asserted against what
-    # the *engine* queued rather than by re-deriving the candidate list, so a
-    # version that forgot the exclusion fails here rather than agreeing with
-    # itself.
-    assert len(p1.battlefield) == 3
-    assert offered is not None and len(offered["valid_indices"]) == 2
-    assert p1.battlefield.index(entering) not in offered["valid_indices"]
+    # Two untapped Mountains are on the battlefield, the entering one is on its
+    # way, and the prompt offers exactly the two. Asserted against what the
+    # *engine* queued rather than by re-deriving the candidate list.
+    assert [p.card.name for p in p1.battlefield] == ["Mountain", "Mountain"]
+    assert game.entry_is_awaited(entering)
+    assert offered is not None and offered["valid_indices"] == [0, 1]
+
+    assert game.confirm_sacrifice(0, [0])
+    assert game.is_on_battlefield(entering)
+    assert sorted(p.card.name for p in p1.battlefield) == ["Mountain", "Self-Paying Post"]
+    assert [c.name for c in p1.graveyard] == ["Mountain"]
 
 
 @pytest.mark.cr("611.2a")

@@ -1396,8 +1396,10 @@ register_choice(
         r.get("land_types"), r.get("creature_type"), r.get("land_type"),
     ),
     # Black Vise / Jihad stamp their deterministic defaults on the permanent as
-    # it enters, so a non-interactive controller has nothing left to apply.
-    default=lambda game, choice: game.discard_pending_choice(choice),
+    # it enters for a seat nobody asks, so a non-interactive controller has
+    # nothing left to apply; a person's prompt answered by default writes the
+    # defaults it carries (CR 614.12a: nothing was stamped for a person).
+    default=lambda game, choice: game._default_enter_choice(choice),
     action="enter_choice_confirm",
     prompt_key="enter_choice",
     blocked_detail="make the entering permanent's choice before other actions",
@@ -1425,9 +1427,10 @@ register_choice(
 register_choice(
     "body_choice",
     resolve=lambda game, choice, r: game._resolve_body_choice(choice, r["option_index"]),
-    # Primal Clay's first printed body is applied as it enters, so the default
-    # is already in place; the prompt only offers to replace it.
-    default=lambda game, choice: game.discard_pending_choice(choice),
+    # Primal Clay's first printed body is applied as it enters for a seat
+    # nobody asks, so the default is already in place; a person has none
+    # applied until they answer (CR 614.12a), and the default applies it.
+    default=lambda game, choice: game._default_body_choice(choice),
     action="body_choice_confirm",
     prompt_key="body_choice",
     blocked_detail="choose the entering creature's body before other actions",

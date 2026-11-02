@@ -8,17 +8,18 @@ showed "Protection from red" — the engine's provisional default — on every
 Sliver. Canopy Crawler sat on the battlefield as a 2/2 while its amplify reveal
 was open and its spell was still on the stack.
 
-The engine places the permanent and stamps a default before it arms the
+The engine placed the permanent and stamped a default before it armed the
 prompt. Measured over every entry chooser in the pool cast from a person's
-hand: of 40 that open a prompt, all 40 are on the battlefield with their spell
-still on the stack, 37 have a provisional record written, 37 send a default
-the client can pre-select, and the 11 creatures among them fire "whenever
-another creature enters" (Soul Warden) before the choice. Moving the permanent
-off the battlefield until the answer is the engine-side fix and is a parts list
-in the Legions C1 report; what this holds is the measured wire partial
-(``web.serialization.entry_choice_view``): while a permanent is entering, the
-battlefield is sent as it reads with no entering permanent's choice recorded,
-and the entering permanent is marked ``entering``.
+hand: of 40 that open a prompt, all 40 were on the battlefield with their spell
+still on the stack, 37 had a provisional record written, and the 11 creatures
+among them fired "whenever another creature enters" (Soul Warden) before the
+choice. C1 built the wire partial (``web.serialization.entry_choice_view``);
+kg3's ``entry`` group built the engine half (``engine/entry_awaiting.py``): the
+permanent now waits on its way, in no zone and with nothing recorded, until
+the answer, and is sent beside its controller's board marked ``entering``
+(``serialization._serialize_arriving``). What this holds is what the wire says
+in that window: the rest of the board reads as it did before the cast, and the
+arriving permanent is marked.
 """
 from __future__ import annotations
 
@@ -67,7 +68,11 @@ def _cast_and_open_the_prompt(name: str, *, beside=(), hand_extra=()):
         if not game.stack or game.waiting_prompt() is not None:
             break
         game.resolve_top_of_stack(pause_for_choices=True)
-    entering = [perm for perm in game.controlled_by(0) if game.permanent_is_entering(perm)]
+    # On its way, not on the battlefield (CR 614.12a): the record of its entry.
+    entering = [
+        record.permanent for record in game.entries_in_progress
+        if game.entry_is_awaited(record.permanent)
+    ]
     if game.waiting_prompt() is None or not entering:
         return None
     return game, entering[0], before
@@ -93,8 +98,9 @@ def test_ward_slivers_colour_is_not_shown_on_any_sliver_before_it_is_chosen():
     opened = _cast_and_open_the_prompt("Ward Sliver", beside=("Plated Sliver",))
     assert opened is not None
     game, ward, _before = opened
-    # The engine's provisional default is there…
-    assert ward.metadata.get("chosen_color")
+    # No provisional default is recorded, and the Sliver is on no battlefield…
+    assert "chosen_color" not in ward.metadata
+    assert not game.is_on_battlefield(ward)
     for viewer in (0, 1):
         board = _board(game, 0, viewer=viewer)
         # …and no seat is told about it.
@@ -103,10 +109,17 @@ def test_ward_slivers_colour_is_not_shown_on_any_sliver_before_it_is_chosen():
         assert _by_name(board, "Ward Sliver")["entering"] is True
         assert "entering" not in _by_name(board, "Plated Sliver")
 
-    assert game.resolve_pending_choice("enter_choice", 0, color="U")
+    # ``mana_color`` — the key the resolver reads. This answered ``color="U"``,
+    # which nothing reads, and passed while the provisional default stood in
+    # for the answer; with nothing stamped it would have recorded the prompt's
+    # default instead of blue.
+    assert game.resolve_pending_choice("enter_choice", 0, mana_color="U")
+    assert game.is_on_battlefield(ward) and ward.metadata["chosen_color"] == "U"
     board = _board(game, 0, viewer=1)
     assert "entering" not in _by_name(board, "Ward Sliver")
-    assert _protections(_by_name(board, "Plated Sliver")), _by_name(board, "Plated Sliver")
+    assert any(
+        "blue" in str(k).lower() for k in _protections(_by_name(board, "Plated Sliver"))
+    ), _by_name(board, "Plated Sliver")
 
 
 def test_an_amplify_creature_is_sent_as_entering_while_its_reveal_is_open():

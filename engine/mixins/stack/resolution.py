@@ -1196,6 +1196,182 @@ class StackResolutionMixin:
             # reads the right owner too.
             if owner_seat != caster_index:
                 permanent.metadata["owner_player_index"] = owner_seat
+            # Everything below is what watches a permanent *enter* — the log
+            # line, the global buff, its own entry trigger, the Aura's attach,
+            # a land play's bookkeeping — so it is the entry's ``then``: run
+            # once the permanent is on the battlefield, which is at once unless
+            # an "as it enters" choice is owed at a table that holds for the
+            # answer (CR 614.12a, ``engine/entry_awaiting.py``), and then at
+            # the last answer.
+            def arrived() -> None:
+                # CR 614: an entry replacement may have consumed the event, and then
+                # the permanent is on no battlefield at all - Frankenstein's Monster
+                # cast for an X its graveyard cannot pay goes to its owner's
+                # graveyard "instead of onto the battlefield".
+                #
+                # Everything below this line is something that watches a permanent
+                # *enter*: the log line, the global buff, the enters-the-battlefield
+                # trigger, the Aura's attach. Running any of them for an entry that
+                # did not happen is the "when it enters, do X instead" reading that
+                # engine/replacements/ exists to avoid, one layer up from the
+                # interceptor - and the log line saying the permanent was put onto
+                # the battlefield is the same claim in the one place a player reads.
+                if not self.is_on_battlefield(permanent):
+                    return
+                self.log.append(f"{caster.name} put {card.name} onto battlefield")
+                self._apply_global_buff(caster, card)
+                is_aura = "Aura" in card.type_line
+                if not is_aura and copy_on_enter_type(
+                    compile_card_oracle(text_card).normalized_text or ""
+                ) is not None:
+                    # **The cast's target was the object to copy.** A permanent
+                    # that offers a copy choice as it enters (Clone, Vesuvan
+                    # Doppelganger, Copy Artifact — CR 707.5's "as a copy", a
+                    # CR 614.1c replacement) announces *that* at cast:
+                    # ``cast_targets._cast_target_spec`` raises the copy picker in
+                    # place of an entry trigger's. So whatever entry trigger the
+                    # copied object brings (CR 707.5) was announced by nobody, and
+                    # handing it the cast's target would aim it at the creature
+                    # that was copied — a Clone of Man-o'-War bouncing the
+                    # Man-o'-War. It chooses its own as it is put on the stack
+                    # (CR 603.3d), exactly as the same trigger does on an entry
+                    # nothing cast.
+                    self._apply_self_enters_battlefield_triggers(
+                        caster_index, permanent, None, None, None,
+                        targets_announced=False,
+                    )
+                elif not is_aura:
+                    # ...and a cast that announced **nothing** — a headless or
+                    # scripted cast with no picker in front of it — is the same
+                    # "nobody chose" as an entry nothing cast. Handed in as if it
+                    # were an announcement, the inline path fell back to scanning
+                    # the *caster's* board: a bare Nekrataal destroyed its
+                    # caster's Savannah Lions and a bare Ravenous Rats made its
+                    # caster discard.
+                    announced = any(
+                        value is not None
+                        for value in (
+                            target_player_index, target_permanent_index,
+                            target_permanent_id, stack_target,
+                        )
+                    )
+                    self._apply_self_enters_battlefield_triggers(
+                        caster_index, permanent, target_player_index,
+                        target_permanent_index, target_permanent_id,
+                        targets_announced=announced,
+                        # "When this creature enters, counter target spell" (Mystic
+                        # Snake): the spell the cast named. It was dropped here, so
+                        # the trigger named nothing and countered the top of the
+                        # stack whichever spell the caster had picked.
+                        target_stack_item=stack_target,
+                    )
+                ran_entry_text = self._apply_aura_effect(
+                    caster_index,
+                    permanent,
+                    target_player_index,
+                    target_permanent_index,
+                    target_permanent_id,
+                )
+                # An Aura's own "when this Aura enters" trigger, for every Aura whose
+                # entry text `_apply_aura_effect` did *not* perform itself.
+                #
+                # This used to be skipped for all of them, on the strength of the two
+                # it does perform bespokely (Animate Dead's reanimation, Earthbind's
+                # conditional damage) — so an Aura whose entry trigger compiled to an
+                # ordinary instruction did nothing at all while reporting supported.
+                # Three cards were in that state.
+                #
+                # After the attach rather than before it, which is the order the rest
+                # of the engine already keeps: "when this Aura enters, tap enchanted
+                # creature" has nothing to tap until the Aura is attached.
+                if is_aura and not ran_entry_text:
+                    self._apply_self_enters_battlefield_triggers(
+                        caster_index, permanent, target_player_index,
+                        target_permanent_index, target_permanent_id,
+                    )
+                # An Aura that failed to attach (its target left the battlefield while the
+                # spell was on the stack) goes to its owner's graveyard instead of
+                # remaining on the battlefield unattached (MTG Rule 303.4g)
+                if (
+                    "Aura" in card.type_line
+                    and aura_enchant_clause(text_card.oracle_text) is not None
+                    and permanent.metadata.get("attached_to") is None
+                ):
+                    holder = self.controller_index_of(permanent)
+                    if holder is not None:
+                        self.remove_from_battlefield(permanent)
+                    self.put_card_into_graveyard(owner, card)
+                    self.log.append(f"{card.name} had no legal target and was put into {owner.name}'s graveyard")
+                    self._refresh_dynamic_creatures()
+                    return
+                self._refresh_dynamic_creatures()
+                if primary_type == "land":
+                    if self.enforce_mana_costs:
+                        self.lands_played_this_turn[caster_index] = self.lands_played_this_turn.get(caster_index, 0) + 1
+                        if self.lands_played_this_turn.get(caster_index, 0) > 1:
+                            # "…if it wasn't the first land you played this turn,
+                            # ~ deals N damage to you". The rider is read off each
+                            # source's own text alongside the allowance it came
+                            # with, so the sources name themselves in the log
+                            # instead of the engine naming one of them.
+                            sources = [
+                                (permanent, allowance)
+                                for permanent, allowance in self._land_play_allowances(caster_index)
+                                if allowance.damage_per_extra_land
+                            ]
+                            if sources:
+                                total = sum(a.damage_per_extra_land for _, a in sources)
+                                names = ", ".join(
+                                    dict.fromkeys(permanent.card.name for permanent, _ in sources)
+                                )
+                                # Asks CR 616.1e's question (``asks``). The
+                                # rider is a triggered ability by its own text,
+                                # resolved here rather than on the stack, so
+                                # what this land play does next — the entry, the
+                                # "plays a land" announcement — happening before
+                                # the answer is the order the rules would give
+                                # that trigger anyway.
+                                self._deal_damage_to_player(
+                                    caster, total, asks=True,
+                                    then=lambda damage: self.log.append(
+                                        f"{names} dealt {damage} damage to {caster.name}"
+                                    ),
+                                )
+                    self._process_land_enters(caster_index)
+                    # "Whenever an opponent **plays** a land" (Dirtcowl Wurm).
+                    # CR 305.1's special action, announced here because here is
+                    # where it happens — `_process_land_enters` above is the
+                    # *entry*, which a land put onto the battlefield by an effect
+                    # also makes and this one does not.
+                    #
+                    # ``event_subject_player`` beside ``seat``: the first is the
+                    # one key every reader of a printed "**that player**" asks for
+                    # (CR 603.10) and the second is what this event's own filter
+                    # compares against the observer. Horn of Greed's "that player
+                    # draws a card" is a different seat on every land drop, and
+                    # nothing on a board records who played one — so the freeze has
+                    # to happen here, where it is known.
+                    # ``played_permanent_id`` is what "**another** land" (City of
+                    # Traitors) is compared against. The entry above has already
+                    # happened, so a land whose own trigger watches land drops is
+                    # on the battlefield and observing by the time this is
+                    # announced — and the exclusion cannot be answered from
+                    # ``card``, because a deck repeats one immutable
+                    # ``CardDefinition`` per copy and a second printing of the same
+                    # land would read as the first. CR 400.7's id is the identity.
+                    emit(
+                        self, "land_played", subject=card, seat=caster_index,
+                        event_subject_player=caster_index,
+                        played_permanent_id=permanent.permanent_id,
+                    )
+                    # "When **you play a card**" (Juju Bubble). CR 701.18b's other
+                    # half: a land is played rather than cast, so the cast
+                    # announcement never reaches it. Beside `_process_land_enters`
+                    # rather than beside the `lands_played_this_turn` bump above,
+                    # because that bump is inside the cost-enforcement branch and
+                    # a land played in a game with costs off is still a land
+                    # played.
+                    emit(self, "you_play_card", subject=card, caster_index=caster_index)
             self._put_permanent_onto_battlefield(
                 caster_index, permanent, target_player_index,
                 was_cast=True, from_zone=cast_from_zone,
@@ -1203,175 +1379,15 @@ class StackResolutionMixin:
                 # (CR 305.1) — the same road, so the same flag, and this one
                 # beside it for the two readers that mean a *spell*.
                 played_as_land=primary_type == "land",
+                then=arrived,
             )
-            # CR 614: an entry replacement may have consumed the event, and then
-            # the permanent is on no battlefield at all - Frankenstein's Monster
-            # cast for an X its graveyard cannot pay goes to its owner's
-            # graveyard "instead of onto the battlefield".
-            #
-            # Everything below this line is something that watches a permanent
-            # *enter*: the log line, the global buff, the enters-the-battlefield
-            # trigger, the Aura's attach. Running any of them for an entry that
-            # did not happen is the "when it enters, do X instead" reading that
-            # engine/replacements/ exists to avoid, one layer up from the
-            # interceptor - and the log line saying the permanent was put onto
-            # the battlefield is the same claim in the one place a player reads.
-            if not self.is_on_battlefield(permanent):
-                return
-            self.log.append(f"{caster.name} put {card.name} onto battlefield")
-            self._apply_global_buff(caster, card)
-            is_aura = "Aura" in card.type_line
-            if not is_aura and copy_on_enter_type(
-                compile_card_oracle(text_card).normalized_text or ""
-            ) is not None:
-                # **The cast's target was the object to copy.** A permanent
-                # that offers a copy choice as it enters (Clone, Vesuvan
-                # Doppelganger, Copy Artifact — CR 707.5's "as a copy", a
-                # CR 614.1c replacement) announces *that* at cast:
-                # ``cast_targets._cast_target_spec`` raises the copy picker in
-                # place of an entry trigger's. So whatever entry trigger the
-                # copied object brings (CR 707.5) was announced by nobody, and
-                # handing it the cast's target would aim it at the creature
-                # that was copied — a Clone of Man-o'-War bouncing the
-                # Man-o'-War. It chooses its own as it is put on the stack
-                # (CR 603.3d), exactly as the same trigger does on an entry
-                # nothing cast.
-                self._apply_self_enters_battlefield_triggers(
-                    caster_index, permanent, None, None, None,
-                    targets_announced=False,
-                )
-            elif not is_aura:
-                # ...and a cast that announced **nothing** — a headless or
-                # scripted cast with no picker in front of it — is the same
-                # "nobody chose" as an entry nothing cast. Handed in as if it
-                # were an announcement, the inline path fell back to scanning
-                # the *caster's* board: a bare Nekrataal destroyed its
-                # caster's Savannah Lions and a bare Ravenous Rats made its
-                # caster discard.
-                announced = any(
-                    value is not None
-                    for value in (
-                        target_player_index, target_permanent_index,
-                        target_permanent_id, stack_target,
-                    )
-                )
-                self._apply_self_enters_battlefield_triggers(
-                    caster_index, permanent, target_player_index,
-                    target_permanent_index, target_permanent_id,
-                    targets_announced=announced,
-                    # "When this creature enters, counter target spell" (Mystic
-                    # Snake): the spell the cast named. It was dropped here, so
-                    # the trigger named nothing and countered the top of the
-                    # stack whichever spell the caster had picked.
-                    target_stack_item=stack_target,
-                )
-            ran_entry_text = self._apply_aura_effect(
-                caster_index,
-                permanent,
-                target_player_index,
-                target_permanent_index,
-                target_permanent_id,
-            )
-            # An Aura's own "when this Aura enters" trigger, for every Aura whose
-            # entry text `_apply_aura_effect` did *not* perform itself.
-            #
-            # This used to be skipped for all of them, on the strength of the two
-            # it does perform bespokely (Animate Dead's reanimation, Earthbind's
-            # conditional damage) — so an Aura whose entry trigger compiled to an
-            # ordinary instruction did nothing at all while reporting supported.
-            # Three cards were in that state.
-            #
-            # After the attach rather than before it, which is the order the rest
-            # of the engine already keeps: "when this Aura enters, tap enchanted
-            # creature" has nothing to tap until the Aura is attached.
-            if is_aura and not ran_entry_text:
-                self._apply_self_enters_battlefield_triggers(
-                    caster_index, permanent, target_player_index,
-                    target_permanent_index, target_permanent_id,
-                )
-            # An Aura that failed to attach (its target left the battlefield while the
-            # spell was on the stack) goes to its owner's graveyard instead of
-            # remaining on the battlefield unattached (MTG Rule 303.4g)
-            if (
-                "Aura" in card.type_line
-                and aura_enchant_clause(text_card.oracle_text) is not None
-                and permanent.metadata.get("attached_to") is None
-            ):
-                holder = self.controller_index_of(permanent)
-                if holder is not None:
-                    self.remove_from_battlefield(permanent)
-                self.put_card_into_graveyard(owner, card)
-                self.log.append(f"{card.name} had no legal target and was put into {owner.name}'s graveyard")
-                self._refresh_dynamic_creatures()
-                return
-            self._refresh_dynamic_creatures()
-            if primary_type == "land":
-                if self.enforce_mana_costs:
-                    self.lands_played_this_turn[caster_index] = self.lands_played_this_turn.get(caster_index, 0) + 1
-                    if self.lands_played_this_turn.get(caster_index, 0) > 1:
-                        # "…if it wasn't the first land you played this turn,
-                        # ~ deals N damage to you". The rider is read off each
-                        # source's own text alongside the allowance it came
-                        # with, so the sources name themselves in the log
-                        # instead of the engine naming one of them.
-                        sources = [
-                            (permanent, allowance)
-                            for permanent, allowance in self._land_play_allowances(caster_index)
-                            if allowance.damage_per_extra_land
-                        ]
-                        if sources:
-                            total = sum(a.damage_per_extra_land for _, a in sources)
-                            names = ", ".join(
-                                dict.fromkeys(permanent.card.name for permanent, _ in sources)
-                            )
-                            # Asks CR 616.1e's question (``asks``). The
-                            # rider is a triggered ability by its own text,
-                            # resolved here rather than on the stack, so
-                            # what this land play does next — the entry, the
-                            # "plays a land" announcement — happening before
-                            # the answer is the order the rules would give
-                            # that trigger anyway.
-                            self._deal_damage_to_player(
-                                caster, total, asks=True,
-                                then=lambda damage: self.log.append(
-                                    f"{names} dealt {damage} damage to {caster.name}"
-                                ),
-                            )
-                self._process_land_enters(caster_index)
-                # "Whenever an opponent **plays** a land" (Dirtcowl Wurm).
-                # CR 305.1's special action, announced here because here is
-                # where it happens — `_process_land_enters` above is the
-                # *entry*, which a land put onto the battlefield by an effect
-                # also makes and this one does not.
-                #
-                # ``event_subject_player`` beside ``seat``: the first is the
-                # one key every reader of a printed "**that player**" asks for
-                # (CR 603.10) and the second is what this event's own filter
-                # compares against the observer. Horn of Greed's "that player
-                # draws a card" is a different seat on every land drop, and
-                # nothing on a board records who played one — so the freeze has
-                # to happen here, where it is known.
-                # ``played_permanent_id`` is what "**another** land" (City of
-                # Traitors) is compared against. The entry above has already
-                # happened, so a land whose own trigger watches land drops is
-                # on the battlefield and observing by the time this is
-                # announced — and the exclusion cannot be answered from
-                # ``card``, because a deck repeats one immutable
-                # ``CardDefinition`` per copy and a second printing of the same
-                # land would read as the first. CR 400.7's id is the identity.
-                emit(
-                    self, "land_played", subject=card, seat=caster_index,
-                    event_subject_player=caster_index,
-                    played_permanent_id=permanent.permanent_id,
-                )
-                # "When **you play a card**" (Juju Bubble). CR 701.18b's other
-                # half: a land is played rather than cast, so the cast
-                # announcement never reaches it. Beside `_process_land_enters`
-                # rather than beside the `lands_played_this_turn` bump above,
-                # because that bump is inside the cost-enforcement branch and
-                # a land played in a game with costs off is still a land
-                # played.
-                emit(self, "you_play_card", subject=card, caster_index=caster_index)
+            if self.entry_is_awaited(permanent):
+                # CR 608.2: the spell is still resolving while its permanent's
+                # entry choice is owed — the line a held spell writes, so the
+                # log does not go quiet where the player is being asked.
+                held = self.resolving_stack_item
+                if held is not None and held.card is card:
+                    self._log_spell_awaiting_choice(card)
             return
 
         # Sorceries and instants resolve immediately in this basic engine.

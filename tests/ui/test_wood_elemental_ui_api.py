@@ -11,10 +11,9 @@ demand. The wire carries ``up_to`` beside ``count`` for that reason, and
 
 The second is that the creature is a 0/0 until the answer lands — its P/T is
 *defined* by how many Forests were sacrificed as it entered (CR 604.3). It must
-still be on the battlefield when the player is looking at the prompt, or they
-are being asked about a permanent already in the graveyard. CR 614.1c: the
-sacrifice is part of entering, so entering is not finished and CR 704.5f has
-nothing settled to test yet.
+not be in the graveyard when the player is looking at the prompt, or they are
+being asked about a permanent already gone. CR 614.12a: the sacrifice is made
+before it enters, so it waits on its way, where CR 704.5f cannot reach it.
 """
 from __future__ import annotations
 
@@ -90,13 +89,20 @@ def test_the_offer_reaches_its_controller_as_a_ceiling():
 
 
 def test_the_creature_is_still_there_to_be_asked_about():
-    """CR 614.1c: entering is not finished while the choice is owed, so the
-    state-based check has no settled toughness to sweep."""
+    """CR 614.12a: the choice is made before the permanent enters, so while it
+    is owed the creature is on its way — on no battlefield, so the state-based
+    check has no 0/0 to sweep, and not in the graveyard either — and it is
+    shown arriving to both seats."""
     sid, _session, game = _r31_session()
 
     names = [p.card.name for p in game.players[0].battlefield]
-    assert "Wood Elemental" in names
+    assert "Wood Elemental" not in names
     assert game.players[0].graveyard == []
+    assert [r.permanent.card.name for r in game.entries_in_progress] == ["Wood Elemental"]
+    for seat in (0, 1):
+        state = client.get(f"/api/sessions/{sid}/state", params={"seat": seat}).json()
+        arriving = [p for p in state["players"][0]["battlefield"] if p.get("entering")]
+        assert [p["name"] for p in arriving] == ["Wood Elemental"], seat
 
 
 def test_sacrificing_two_forests_makes_it_a_two_two():

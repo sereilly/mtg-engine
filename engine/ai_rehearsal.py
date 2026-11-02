@@ -35,6 +35,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 
 from .ai_weighed_cast import permitted_casts
+from .entry_awaiting import awaited_entries
 
 
 # --- The measure: what a seat's position is worth -----------------------------
@@ -484,6 +485,10 @@ def held_for_an_answer(game) -> bool:
             for choice in game.pending_choices
             for value in choice.data.values()
         )
+        # A permanent waiting on its way for its "as it enters" choice (CR
+        # 614.12a): the rest of its entry is a closure over this game
+        # (``engine/entry_awaiting.py``).
+        or bool(awaited_entries(game))
     )
 
 
@@ -510,6 +515,10 @@ def _detach(game, *, owing_nothing: bool = False) -> None:
     if owing_nothing:
         game.pending_choices = []
         game.pending_replacement_choices = []
+        # …and the entries those prompts kept waiting: never finished on the
+        # copy, so their permanents never arrive there (they were on no
+        # battlefield on the original either).
+        game.entries_in_progress = []
         dropped = [
             item for item in game.stack
             if getattr(item, "finish_resolution", None) is not None

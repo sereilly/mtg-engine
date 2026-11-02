@@ -1474,16 +1474,16 @@ def entry_choice_view(game: Game) -> Game | None:
 
     CR 614.12a: "If a replacement effect that modifies how a permanent enters
     the battlefield requires a choice, that choice is made before the permanent
-    enters the battlefield." The engine instead places the permanent and stamps
-    a provisional default on it before it arms the prompt (so no reader ever
-    meets the record missing), and every static that reads the record applies
-    it: while a person's Ward Sliver colour prompt was open, both seats were
-    sent "Protection from red" on every Sliver — the default, shown as a choice
-    nobody had made. A scratch copy with each entering permanent's ``chosen_*``
-    records taken away, and the board's statics recomputed, is what may be
-    shown until the answer. Nothing can act in that window (the game waits on
-    the prompt, CR 117.3b), so this is the display catching up with the rule;
-    the engine-side half is a parts list in the Legions C1 report.
+    enters the battlefield." At a table that holds for answers — every web
+    table — the engine now does exactly that: a permanent whose choice is owed
+    waits on its way, in no zone, with nothing recorded for a person
+    (``engine/entry_awaiting.py``), and is sent arriving by
+    ``_serialize_arriving``. So this finds nothing there. What it still
+    covers is a table that holds nothing (a bare headless game), where a seat
+    nobody asks may enter with a queued prompt and the provisional default
+    stamped (Shapeshifter's number): a scratch copy with each entering
+    permanent's ``chosen_*`` records taken away, and the board's statics
+    recomputed, is what may be shown until the answer.
     """
     entering = [
         perm.permanent_id for perm in game.all_permanents()
@@ -1503,6 +1503,31 @@ def entry_choice_view(game: Game) -> Game | None:
             twin.metadata.pop(key, None)
     view._recompute_continuous_effects()
     return view
+
+
+def _serialize_arriving(game: Game, seat: int) -> list[dict]:
+    """The permanents on their way onto *seat*'s battlefield while their "as
+    it enters" choice is made (CR 614.12a, ``engine/entry_awaiting.py``),
+    each marked ``entering: True``.
+
+    The engine has such a permanent in no zone until the answer — its spell
+    is still on the stack and nothing on the board sees it — but the table is
+    shown it arriving, which is what the client draws an ``entering``
+    permanent as (the printed card ghosted under an ENTERING ribbon, no
+    badges). Nothing can be done to it in that window: the game waits on the
+    prompt (CR 117.3b), and an id the client sends for it resolves to nothing
+    on the battlefield. No choice of its is shown, because none is recorded
+    for a person before they answer."""
+    from engine.entry_awaiting import awaited_entries
+
+    arriving = []
+    for record in awaited_entries(game):
+        if record.controller_index != seat:
+            continue
+        payload = _serialize_permanent(record.permanent, game)
+        payload["entering"] = True
+        arriving.append(payload)
+    return arriving
 
 
 def _serialize_battlefield_entry(perm: Permanent, game: Game, view: Game | None) -> dict:
@@ -1614,6 +1639,10 @@ def _serialize_player(
             ability_mana = _ability_mana_payload(game, perm, usable)
             if ability_mana is not None:
                 perm_dict["ability_mana"] = ability_mana
+    # …and, after them, the permanents on their way onto this seat's board
+    # (``_serialize_arriving``), after the board's own so no slot a client
+    # addresses an action by moves.
+    battlefield.extend(_serialize_arriving(game, seat))
 
     def _crowned(entries: list, cards) -> list:
         # CR 903.3: mark the designated commander card, wherever its zone

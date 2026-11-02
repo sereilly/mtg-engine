@@ -24,10 +24,14 @@ entering permanent's triggers and every observer's go on the stack together.
 
 from __future__ import annotations
 
+from typing import Callable
+
 from ..cast_permissions import end_while_exiled_grants
 from ..continuous import next_timestamp
 from ..control import set_base_controller
 from ..enter_effects import CAST_THIS_TURN_STAMP
+from ..entry_awaiting import (EntryInProgress, entry_in_progress,
+                              entry_is_awaited)
 from ..exiled_records import (forget_record, newest_record_for,
                               record_exiled_card)
 from ..events import emit
@@ -664,19 +668,73 @@ class ZoneFunnelsMixin:
         was_cast: bool = False,
         from_zone: str | None = None,
         played_as_land: bool = False,
+        then: "Callable[[], None] | None" = None,
     ) -> None:
         """One entry (:meth:`_enter_battlefield`), as one window for CR
         603.3b (``putting_triggers_on_stack``): the entering permanent's own
         "when this enters" and every observer's "whenever a creature
         enters" go on the stack together, and their controller orders them.
         Inside a resolution the resolution's window is the one that asks.
+
+        *then* is what the caller does to the permanent once it is there —
+        attach it, tap it and make it attack, put the counters it returns
+        with on it, write the log line. Run after the entry, outside its
+        window, exactly where the caller's next statement used to run; and
+        when the entry **waits for its "as it enters" choice** (CR 614.12a,
+        ``engine/entry_awaiting.py``) it is run with the rest of the entry, at
+        the last answer — a caller writing that work after this call would do
+        it to a permanent that is not on the battlefield yet.
+        ``tests/engine/test_kg3_entry_callers.py`` holds every caller to it.
         """
         with self.putting_triggers_on_stack():
-            self._enter_battlefield(
+            waits = self._enter_battlefield(
                 controller_index, permanent, target_player_index,
                 was_cast=was_cast, from_zone=from_zone,
-                played_as_land=played_as_land,
+                played_as_land=played_as_land, then=then,
             )
+        if not waits and then is not None:
+            then()
+
+    def entry_is_awaited(self, permanent: Permanent) -> bool:
+        """Whether *permanent*'s entry is waiting for its "as it enters"
+        choice (CR 614.12a) — on its way, on no battlefield yet."""
+        return entry_is_awaited(self, permanent)
+
+    def entry_choice_applies(self, permanent) -> bool:
+        """Whether an answer about *permanent*'s entry still has a permanent
+        to write to: on the battlefield, or on its way there.
+
+        The entry resolvers asked ``is_on_battlefield`` alone, which answered
+        "it left while the prompt was owed" for every permanent whose entry
+        waits for the answer (CR 614.12a) — the one permanent the answer is
+        for. A permanent that really has left is neither."""
+        return permanent is not None and (
+            self.is_on_battlefield(permanent)
+            or entry_in_progress(self, permanent) is not None
+        )
+
+    def _finish_answered_entries(self) -> bool:
+        """Complete every waiting entry whose last "as it enters" prompt has
+        been answered; True when one was.
+
+        Asked by the answer funnel (``PendingChoicesMixin._apply_choice_answer``
+        and ``_apply_choice_default``) once an answer is applied and before the
+        loop it suspended resumes — so the permanent is on the battlefield
+        before the next step of the resolution that put it there reads it —
+        and by the force-release backstop. Every record, not only the answered
+        prompt's permanent: an answer can take another entry's last prompt
+        away with it. In the order the entries began.
+        """
+        finished = False
+        for record in list(self.entries_in_progress):
+            if record.finish is None:
+                # Still performing its entry state, further up the call stack.
+                continue
+            if self.permanent_is_entering(record.permanent):
+                continue
+            record.finish()
+            finished = True
+        return finished
 
     def _enter_battlefield(
         self,
@@ -687,8 +745,12 @@ class ZoneFunnelsMixin:
         was_cast: bool = False,
         from_zone: str | None = None,
         played_as_land: bool = False,
-    ) -> None:
+        then: "Callable[[], None] | None" = None,
+    ) -> bool:
         """Put *permanent* onto the battlefield — the one entry path there is.
+        True when the entry is **waiting** for its "as it enters" choice
+        (CR 614.12a) and will be completed by the answer; then *then* runs
+        there too.
 
         *was_cast* is CR 701.5a's distinction and defaults to the common case:
         of the entry sites in the engine, exactly one is a resolving permanent
@@ -756,7 +818,7 @@ class ZoneFunnelsMixin:
                 # then never arrived; what it wrote on everything else is
                 # rebuilt from the board as it really is.
                 self._recompute_continuous_effects()
-            return
+            return False
         # "…if it **entered from your graveyard**" (Archfiend's Vessel). Stamped
         # on the permanent rather than kept on the game, because the question is
         # asked of one object and a permanent that leaves takes the answer with
@@ -793,6 +855,70 @@ class ZoneFunnelsMixin:
         # see the permanent on the battlefield under the stamp it was built
         # with.
         permanent.timestamp = next_timestamp()
+        # CR 613.1: the value layer 2 starts from. Recorded on entry and never
+        # written again, so an ending control effect reverts to the seat that
+        # put the permanent into play rather than to whichever seat held it
+        # most recently.
+        set_base_controller(permanent, controller_index)
+        # **The entry state, before the permanent is anywhere** (CR 614.12a:
+        # "that choice is made before the permanent enters the
+        # battlefield"). Performed with the permanent on its way — in no
+        # zone, its seat answered by the record (``controller_index_of``) —
+        # so a choice it makes, the defaults a seat nobody asks takes, the
+        # counters it enters with and the tolls it charges all happen before
+        # any static of its reaches the board and before anything sees it
+        # arrive. It used to be performed after the append, and a person's
+        # Ward Sliver sat on the battlefield with a provisional colour while
+        # its prompt was open, Soul Warden having already gained its life.
+        record = EntryInProgress(permanent, controller_index)
+        self.entries_in_progress.append(record)
+        try:
+            self._initialize_permanent_state(
+                permanent, controller_index, target_player_index
+            )
+        except BaseException:
+            self._forget_entry(record)
+            raise
+        if self.holds_for_answers() and self.permanent_is_entering(permanent):
+            # **A choice is still owed**, at a table that holds for answers
+            # (a person; the simulator's driver): the rest of the entry is the
+            # answer's to finish (``_finish_answered_entries``), with what the
+            # caller does to the permanent behind it. A bare headless table
+            # holds nothing — its prompts are drained by the caller once this
+            # returns — so there the permanent enters now, as it always has.
+            def finish() -> None:
+                self._forget_entry(record)
+                self._complete_entry(
+                    controller_index, permanent, target_player_index,
+                    was_cast=was_cast,
+                )
+                if then is not None:
+                    then()
+
+            record.finish = finish
+            return True
+        self._forget_entry(record)
+        self._complete_entry(
+            controller_index, permanent, target_player_index, was_cast=was_cast,
+        )
+        return False
+
+    def _forget_entry(self, record) -> None:
+        """Take *record* off ``entries_in_progress``, by identity."""
+        self.entries_in_progress = [
+            entry for entry in self.entries_in_progress if entry is not record
+        ]
+
+    def _complete_entry(
+        self,
+        controller_index: int,
+        permanent: Permanent,
+        target_player_index: int | None,
+        *,
+        was_cast: bool,
+    ) -> None:
+        """Everything from the battlefield append onward: the half of
+        :meth:`_enter_battlefield` that waits when a choice is owed."""
         self.players[controller_index].battlefield.append(permanent)
         # "…put a nontoken permanent onto the battlefield" (Arboria, CR 506.3):
         # the per-turn half of the last-own-turn record, folded per seat at the
@@ -803,12 +929,6 @@ class ZoneFunnelsMixin:
             self.nontoken_permanents_entered_this_turn[controller_index] = (
                 self.nontoken_permanents_entered_this_turn.get(controller_index, 0) + 1
             )
-        # CR 613.1: the value layer 2 starts from. Recorded on entry and never
-        # written again, so an ending control effect reverts to the seat that
-        # put the permanent into play rather than to whichever seat held it
-        # most recently.
-        set_base_controller(permanent, controller_index)
-        self._initialize_permanent_state(permanent, controller_index, target_player_index)
         # 611.3a/611.3c: static abilities apply as permanents enter. Recalculate
         # lord buffs so the new permanent immediately receives applicable bonuses,
         # and so any new lord immediately buffs existing matching permanents.
