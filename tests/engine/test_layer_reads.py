@@ -225,7 +225,8 @@ def test_no_acknowledgement_has_gone_stale():
 #   * the layer machinery itself has to start from the printed shape;
 #   * an effect that asks "is this *not* already a creature?" before animating
 #     it must not see the type it is about to add (engine/aura_grants.py);
-#   * the state-based sweep matches Aura / Equipment / Saga / Role shapes.
+#   * (the state-based sweep matched Aura / Saga / Role shapes on the printed
+#     line until round kg3; it asks the layers now.)
 #     Supertypes used to be listed here too and no longer are: "Legendary" and
 #     "World" are copiable values (CR 707.2), so the legend and world rules
 #     read ``printed_supertypes(perm.effective_card.type_line)`` and a Clone of
@@ -262,17 +263,14 @@ PRINTED_READ_BASELINE: dict[str, int] = {
     # asked — a self-reference, not a shortcut. Both sites say so in place.
     "aura_grants.py": 1,
     "mixins/board_statics.py": 1,  # the same self-reference, for global statics
-    # Card shapes this engine models on the printed line alone. The supertype
-    # sweeps that used to be covered by this entry read the effective card now.
+    # (``mixins/game_ending.py`` held five until round kg3 — three Aura reads,
+    # a Saga and a Role — on the reason "card shapes this engine models on the
+    # printed line alone". The Aura reads were the Licid class: a Gliding Licid
+    # "becomes an Aura enchantment" by a CR 613 layer-4 type change, which
+    # moves neither the printed line nor `effective_card`, so the CR 702.16c
+    # sweep never asked whether its host had protection from blue. Every one
+    # asks ``has_type`` now — tests/rules/test_kg3_types_aura_sweeps.py.)
     #
-    # **Not all of these are blessed.** The Aura reads are the Licid class: a
-    # Gliding Licid "becomes an Aura enchantment" by a CR 613 layer-4 type
-    # change, which moves neither the printed line nor `effective_card` (layer 1
-    # folds a copy, layer 3 a text change, and this is neither), so only
-    # `has_type("aura")` answers. They are counted rather than fixed because
-    # `_unattach_illegal_auras` and its callers are the CR 704.5m/n sweep and
-    # changing what it matches is a rules round, not a guard one.
-    "mixins/game_ending.py": 5,   # 3 Aura (Licid-class debt), Saga, Role
     # (The leave transition and the move to a graveyard held one Aura read
     # each — ``mixins/control_seam.py`` and ``mixins/deaths.py``. They ask
     # ``has_type("aura")`` since round kg: a Gliding Licid that left its host

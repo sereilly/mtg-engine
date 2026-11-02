@@ -12,13 +12,12 @@ from ..control import (
     end_control_change,
 )
 from ..aura_grants import aura_grants_control
-from ..aura_attachment import auras_attached_to
+from ..aura_attachment import auras_attached_to, unsatisfied_enchant_clause
 from ..equipment import is_equipment, unattach_illegal_equipment
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..pt import toughness_has_been_set
 from ..trigger_utils import matching_triggers
-from .stack import aura_enchant_noun, enchant_noun_seat, enchant_seat_satisfied
 from ..target_immunity import cannot_be_enchanted
 from ..tokens import is_token_card
 
@@ -946,28 +945,23 @@ class GameEndingMixin:
                 self.remove_all_from_battlefield(departing_immune)
 
             # CR 704.5m's other half: an Aura is also illegally attached when
-            # its host stops satisfying the enchant clause. Enforced for the
-            # clause's *seat* half ("Enchant creature **you control**", Cocoon;
-            # "Enchant artifact **an opponent controls**", Relic Bind)
-            # — an opponent gaining control of the creature makes the
-            # attachment illegal, and the Aura is put into its owner's
-            # graveyard. Read through the same `enchant_seat_satisfied` the
-            # cast gate and the picker read, so the three cannot drift.
+            # its host stops satisfying the enchant clause (CR 303.4c, "as
+            # defined by its enchant ability") — every quality of it: the type
+            # (a Mishra's Factory whose animation ended under "Enchant
+            # creature"), the keyword ("…without flying"), the colour, and the
+            # seat ("Enchant creature **you control**", Cocoon). Read through
+            # `unsatisfied_enchant_clause`, the predicate the cast gate and the
+            # pickers ask, so the three cannot drift; it enforced the seat half
+            # alone until round kg3. Whether this *is* an Aura is CR 613
+            # layer 4's answer, so a Licid that became one is held to the
+            # clause it was given and a permanent that lost the type is not.
             for player in self.players:
                 departing_own = []
                 for perm in list(self.controlled_by(player)):
-                    if "Aura" not in perm.card.type_line:
+                    if not perm.has_type("aura"):
                         continue
-                    attached_to = perm.metadata.get("attached_to")
-                    if attached_to is None or not self.is_on_battlefield(attached_to):
-                        continue
-                    noun = aura_enchant_noun(perm.effective_card)
-                    if noun is None or enchant_noun_seat(noun) is None:
-                        continue
-                    aura_seat = self.controller_index_of(perm)
-                    if enchant_seat_satisfied(
-                        self, aura_seat, self.controller_index_of(attached_to), noun
-                    ):
+                    noun = unsatisfied_enchant_clause(self, perm)
+                    if noun is None:
                         continue
                     self._permanent_to_graveyard(player, perm)
                     self.log.append(
@@ -987,7 +981,7 @@ class GameEndingMixin:
                 for perm in list(self.controlled_by(player)):
                     attached_to = perm.metadata.get("attached_to")
                     if (
-                        "Aura" in perm.card.type_line
+                        perm.has_type("aura")
                         and attached_to is not None
                         and self._cant_be_enchanted(attached_to)
                         and "can't be enchanted by other auras" not in perm.effective_card.oracle_text.lower()
@@ -1030,7 +1024,11 @@ class GameEndingMixin:
             for player in self.players:
                 for perm in list(self.controlled_by(player)):
                     attached_to = perm.metadata.get("attached_to")
-                    if "Aura" in perm.card.type_line and attached_to is not None:
+                    # Layer 4's answer (CR 613.1d), not the printed word: a
+                    # Gliding Licid that became an Aura is one, and stayed on
+                    # a host given protection from blue while this read the
+                    # printed type line.
+                    if perm.has_type("aura") and attached_to is not None:
                         text = perm.effective_card.oracle_text.lower()
                         if "remove all auras" in text:
                             continue
@@ -1113,7 +1111,7 @@ class GameEndingMixin:
 
             # 704.5s: Saga at or past final chapter → sacrifice
             def _saga_done(perm: Permanent) -> bool:
-                if "Saga" not in perm.card.type_line:
+                if not perm.has_type("saga"):
                     return False
                 final = perm.metadata.get("final_chapter", 0)
                 return final > 0 and perm.metadata.get("lore_counters", 0) >= final
@@ -1139,7 +1137,7 @@ class GameEndingMixin:
                 # "most recent" is still the last one collected.
                 roles_by_ctrl: dict[int, list[Permanent]] = {}
                 for ctrl_idx, role_perm in self.permanents_with_controller():
-                    if "Role" not in role_perm.card.type_line:
+                    if not role_perm.has_type("role"):
                         continue
                     if role_perm.metadata.get("attached_to") is not perm:
                         continue

@@ -331,6 +331,57 @@ def _enchant_clause_refusal(game, card, controller_seat, host, *, aura=None) -> 
     return None
 
 
+def unsatisfied_enchant_clause(game, aura) -> str | None:
+    """The enchant noun an **attached** Aura's host no longer answers, or None.
+
+    CR 704.5m bins an Aura "attached to an illegal object", and CR 303.4c says
+    what makes one illegal: "as defined by its enchant ability and other
+    applicable effects". This is the enchant-ability half of that, asked of the
+    host the Aura is on — every quality CR 702.5 can print, through
+    ``permanent_matches_enchant_noun``, the one reader the cast gate, the
+    pickers and :func:`enchant_card_refusal` ask: the type ("Enchant
+    creature" on a Mishra's Factory whose animation ended; "Enchant Wall" on a
+    Wall a Conspiracy made a Goblin, CR 205.1a), the keyword ("…without
+    flying" on a creature a Licid gave flying), the colour, and the seat
+    ("…you control" on a creature an opponent took). The sweep enforced the
+    seat half alone, so the other three were refused at every announcement and
+    never re-checked once something changed.
+
+    The clause is the Aura's own: a printed ``Enchant <noun>`` line off its
+    effective card (layers 1 and 3), or the one an effect gave a permanent that
+    *became* an Aura (:data:`BECAME_AURA_ENCHANT` — Gliding Licid, Necromancy).
+    Whether the permanent is an Aura at all is the caller's question, asked of
+    layer 4 (``has_type``). None when the Aura is attached to nothing or to
+    something gone (the sweep's other half), and when no battlefield clause is
+    readable (Animate Dead's "creature card in a graveyard") — nothing to hold
+    the host to, which is not the same as a host that fails it.
+
+    Protection (CR 702.16c) and "can't be enchanted" (CR 303.4's other
+    applicable effects) are their own sweeps beside this one, each with its own
+    exemption, and stay there.
+    """
+    from .mixins.stack import (aura_enchant_noun, enchant_seat_satisfied,
+                               permanent_matches_enchant_noun)
+
+    host = aura.metadata.get("attached_to")
+    if host is None or not game.is_on_battlefield(host):
+        return None
+    granted = aura.metadata.get(BECAME_AURA_ENCHANT)
+    noun = (
+        str(granted.get("noun") or "") if granted is not None
+        else aura_enchant_noun(aura.effective_card)
+    )
+    if not noun:
+        return None
+    if not permanent_matches_enchant_noun(host, noun):
+        return noun
+    if not enchant_seat_satisfied(
+        game, game.controller_index_of(aura), game.controller_index_of(host), noun
+    ):
+        return noun
+    return None
+
+
 def is_aura_card(card) -> bool:
     """Whether *card*, off the battlefield, is an Aura with an enchant ability —
     the test the Aura spell's own resolution asks before CR 303.4g bins it
