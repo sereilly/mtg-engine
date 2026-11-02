@@ -168,7 +168,7 @@ Anything that weakens these is a regression regardless of what it enables:
    `ai_policy` named eight cards and aimed four unnamed removal spells at its own
    board. Derive the reach (`engine/ai_valuation.py`) and keep the weight.
    **Test oracles are out of scope, with their reason measured.**
-   `ai_simulator._assert_expected` asserts a card did what the *printed* card
+   `simulation_checks._assert_expected` asserts a card did what the *printed* card
    says; deriving that from the compiled program makes it a tautology, and the
    only exemptions that stay are ones where the tautology has actually been
    demonstrated. An acknowledgement carries the measurement, not an opinion.
@@ -434,8 +434,9 @@ one card prints this") reads as a work item long after it stopped being true.
     graveyard* (`Game.departing`) — **drained on every windowed road** by
     Legions' W2G2: a trigger chooses as its unit of play's window closes,
     after the removal and the state-based check (`Game.unannounced_triggers`;
-    17 shipped cards had been offered a dying creature). A trigger fired
-    inside a resolution is SET_PLAYBOOK's Known gap; `Game.departing` is
+    17 shipped cards had been offered a dying creature), and a trigger fired
+    inside a resolution chooses after that resolution's own check
+    (`resolve_next_object`). `Game.departing` is
     still written and read, and whether it can go is unmeasured. As it was: the death sweep announces a dies-trigger
     while the dying permanent is still listed, so a non-interactive default
     can be the dying permanent itself ("Blazing Effigy: targets Blazing
@@ -848,12 +849,7 @@ one card prints this") reads as a work item long after it stopped being true.
     its `CardDefinition`, so two copies on the stack are one source. The
     colour Circles' spec carries `also_stack` and no `source_of_choice`, so
     the AI's `_choose_damage_source` does not see them (K2 left it because the
-    client was being changed around that spec the same wave). A text change
-    aimed at a spell (Sleight of Mind and its kin print "spell or permanent")
-    has a permanent spec, and a cast naming a stack object is accepted
-    anyway. Blind Seer's spell half cannot be aimed at a spell (J6).
-    Apocalypse gave the Laces a `spell_or_permanent` slot since, so re-probe
-    both. Harvest
+    client was being changed around that spec the same wave). Harvest
     Wurm's return is the handler's pick, with no prompt (J5).
   * *Combat.* A multi-block's second step on the **blockers'** side is
     replayed by slot (`combat_multiblock_damage`, CR 510.1d). An offered
@@ -1007,20 +1003,23 @@ one card prints this") reads as a work item long after it stopped being true.
     `next_permanent_id` / `next_timestamp` draws never reach a log line or
     a decision, which is unverified. And `_cast_onto_stack` enumerates
     targets twice, each candidate scanning the whole board.
-  * *The other priority windows* (windows). These are upkeep, draw,
-    beginning of combat, declare attackers, combat damage, end of combat,
+  * *The other priority windows* (windows). These are the opponent's
+    upkeep, draw, beginning of combat, combat damage, end of combat,
     postcombat main and the seat's own end step, each about 1,970
-    receptions and 820 payable over the seven runs. Each is one line in
-    `ai_simulator._instant_speed_window`. What has value there (tapping or
-    killing a would-be attacker) needs the rehearsal to fight a combat that
-    is not the active seat's precombat main (`_combat_ahead`,
-    `_fight_the_combat`).
+    receptions and 820 payable over the seven runs; the seat's own upkeep
+    is a window already, for its graveyard's abilities alone. Each is one
+    line in `ai_priority.instant_speed_window`. What has value there
+    (tapping or killing a would-be attacker) needs the rehearsal to fight a
+    combat that has not begun and is not the active seat's precombat main
+    (`_combat_ahead`; `_fight_the_combat` finishes one already under way).
   * *Abilities at instant speed, the rest.* A Prodigal Sorcerer is not held
     up, because `_play_activations` taps it in its own main phase first.
-    Rescue abilities (Quicksilver Wall's bounce) are skipped by the
-    chooser's `harms_its_own_source` filter. The chooser reads only the
-    first usable ability of each permanent. Foreign (CR 602.1b) and
-    from-hand (cycling) activations are not asked at instant speed.
+    Rescue abilities that remove their own source (Quicksilver Wall's
+    bounce) are skipped by the chooser's `harms_its_own_source` filter; a
+    hamper (a phase-out, a shroud, `hampers_its_own_source`) is rehearsed.
+    The chooser reads only the first usable ability of each permanent.
+    Foreign (CR 602.1b) and from-hand (cycling) activations are not asked
+    at instant speed; graveyard ones are (`ai_graveyard_activations`).
   * *Web `ai_vs_ai` sessions do not use the seam*: they give nobody
     priority. The parts are a session-level driver that is not a closure
     over the game, so it can be re-bound after `game_history`'s undo
@@ -1091,9 +1090,8 @@ one card prints this") reads as a work item long after it stopped being true.
     and Illicit Auction — a non-interactive seat always passes, and life is
     lost by direct subtraction (no life-loss seam); Sulfuric Vapors' "plus 1"
     against a multiplier has the cap's one-number problem;
-    Magical Hack and Sleight of Mind derive a `permanent` spec though they
-    print "spell or permanent"; `web/serialization._gloom_white_tax` reads a
-    card name outside the engine guard's scope; and outside the 701 block
+    `web/serialization._gloom_white_tax` reads a card name outside the
+    engine guard's scope; and outside the 701 block
     nothing checks a CR citation's *subject* (a keyword screen over the 508 and
     601 blocks flagged 56 of 1,505 and 23 were wrong).
 
@@ -1124,20 +1122,11 @@ one card prints this") reads as a work item long after it stopped being true.
     grants had outlived a later loss and 12 newer ones were wrongly taken).
     Re-driven on `main` 2026-10-18: Grizzly Bears with Jump, then Humility,
     does not fly; Humility, then Jump, flies.
-  * *Text changes aimed at a spell.* Sleight of Mind, Magical Hack and Crystal
-    Spray print "target spell or permanent" and offer permanents; a named
-    spell is refused at announcement now, where it was accepted and ignored.
-    Illusion and Blind Seer were the same sentence for a colour and are done.
-    Parts: a text channel on a stack object (an effective card beside the
-    printed `StackItem.card`); every stack reader, and the compile at
-    resolution, reading it; the graveyard still receiving the printed card;
-    the CR 400.7a carry through `text_changes`; a `spell_or_permanent` spec
-    and a stack branch in `mark_text_modified`; the vocabulary prompt for a
-    spell target. Beside it: Double Vision and `copy_this_spell` copy
-    `choices` whole, so a copy inherits the original's recolour (by reading;
-    `forget_spell_color_change` at both sites, and a copy's own colour kept
-    apart from an effect's - CR 707.9b); and the Laces are still an
-    undescribed kind row for the picker Illusion now describes.
+  * *The Laces are an undescribed kind row* for the `spell_or_permanent`
+    picker that Illusion and the text changers describe
+    (`SPELL_OR_OBJECT_TARGET`): they answer the same spec from
+    `recolor_target_from_text`'s row in `instruction_targets._KIND_TO_SPEC`,
+    and describing them moves five shipped programs for no change in play.
   * *What a seatless viewer is sent.* `GET /state` with no seat returns the
     `look_top_pick` prompt, cards included; the kind is `spectator_visible`,
     as are 54 others (`scry`, `search_library`, `reorder_library`, `discard`,
@@ -1155,12 +1144,7 @@ one card prints this") reads as a work item long after it stopped being true.
     bottom order. What is left is the gate: `web.prompts.blocking_prompt`
     still refuses each of two prompts of different kinds in favour of the
     other when they meet some other way. Parts: admitting an answer to any
-    prompt the seat owes, or a queue order. Beside it, measured at kg on three
-    shipped cards (SET_PLAYBOOK, Known gaps): a queued `ReplacementChoice` does
-    not suspend the enclosing
-    resolution ("draw, then discard" would run on) or hold its stack object,
-    and Breathstealer's Crypt loses its reveal-and-tax when its inner draw
-    suspends.
+    prompt the seat owes, or a queue order.
     Smaller, in the client: `hasBlockingPromptForAutoPass` omits four prompt
     kinds, so auto-pass sends a pass the server refuses; a several-target
     `trigger_target` names one target per click; a one-slot picker narrowed
@@ -1201,11 +1185,7 @@ one card prints this") reads as a work item long after it stopped being true.
     can't-be-regenerated's own narrower gates. And a rebound subject's "you
     control" is re-checked at resolution, where the rules would still pump an
     attacker that changed sides.
-  * *Small, each with a repro in its group's report.* (A provisional
-    entry-choice default shown while the prompt is open is drained for the
-    display by Legions' closer C1, `serialization.entry_choice_view`; the
-    engine half — the permanent on the battlefield before its choice — is a
-    SET_PLAYBOOK Known gap with parts.)
+  * *Small, each with a repro in its group's report.*
     `destroy_all_matching` logs what it aimed at, not what died (55 cards
     compile to the kind). "<Creature type> card" lowers with a creature
     `type_filter`, so a Kindred card would be missed (none in the manifest).
@@ -1409,11 +1389,9 @@ one card prints this") reads as a work item long after it stopped being true.
     a life total or a library, and its "cast for free" has no roles picker;
     the Raw State endpoint bakes current P/T into a permanent and a rebuilt
     Aura loses its behaviour. The castable highlight says no to a flashback
-    whose price needs a filter land (the residue above). Wording: "created
-    a Elephant Token token"; "Resolved supported pattern for X without
-    state mutation" after a spell that dealt damage; "Returned creature
-    from graveyard" naming no card; a replacement prompt's log lines after
-    "<spell> resolved"; the Auto-Tap prompt for an ability shows the raw
+    whose price needs a filter land (the residue above). Wording: a
+    replacement prompt's log lines after "<spell> resolved"; the Auto-Tap
+    prompt for an ability shows the raw
     cost string with its ability word; Force of Will's mana option reads
     the printed cost under a tax; a colour badge covers the card's name on
     the canvas. Not driven: Kirtar's Wrath, Rites of Initiation, an "unless
@@ -1467,10 +1445,9 @@ one card prints this") reads as a work item long after it stopped being true.
     a resolved state trigger is not re-armed while its state holds.
   * *Seen and not investigated*: in a human-vs-human browser game the client
     auto-passed a seat's priority with the opponent's Flaming Gambit on the
-    stack; the redirect prompt carries no amount; and two log lines are wrong
-    while the play is right - a flashback spell's `derived_static_rule` marker
-    logs "Resolved supported pattern ... without state mutation", and an
-    Aura's protection grant logs "gains protection from aura".
+    stack; the redirect prompt carries no amount; and a log line is wrong
+    while the play is right - an Aura's protection grant logs "gains
+    protection from aura".
   * *Seen at Phase 5, in the client, each measured and harmless so far*: the
     `.hidden`-out-ranked-by-a-later-rule CSS pattern that left a dead button
     on Mesmeric Fiend's pick also sits under `joinRejoinPanel`,
