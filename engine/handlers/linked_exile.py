@@ -928,6 +928,36 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
     # controller's, so asking that pile first keeps it exactly where it was, and
     # the wider scan is reached only by the card that needs it.
     seats = [context.caster] + [p for p in game.players if p is not context.caster]
+    if destination == "battlefield" and any(is_aura_card(card) for card in cards):
+        # "Exile target nontoken permanent, then return it to the battlefield
+        # under its owner's control." (Flicker) aimed at an **Aura**: put back
+        # by an effect that names no host, so its controller chooses one as it
+        # enters (CR 303.4f) and it stays in exile with none (CR 303.4g). The
+        # plan Worldgorger Dragon's pile takes, through the same readers and
+        # prompt (:func:`_return_pile_with_aura_hosts`), each card addressed by
+        # the exile that holds it. Returned bare, the Aura sat on the
+        # battlefield attached to nothing.
+        # By identity, the caster's exile first (the reason ``seats`` is).
+        caster_index = next(
+            index for index, player in enumerate(game.players) if player is caster
+        )
+        order = [caster_index] + [
+            index for index in range(len(game.players)) if index != caster_index
+        ]
+        entries = []
+        for card in cards:
+            holder = next(
+                (index for index in order
+                 if any(held is card for held in game.players[index].exile)),
+                None,
+            )
+            if holder is not None:
+                entries.append({"card": card, "owner_index": holder})
+        _return_pile_with_aura_hosts(
+            game, entries, context,
+            None if instruction.payload.get("control") == "owner" else caster_index,
+        )
+        return True, "resolved"
     # "…return those cards to the battlefield" (Planar Guide) is one event:
     # every card it returns enters together (CR 603.6a; its ruling, 2004-10-04:
     # "All 'enters' abilities trigger as normal").

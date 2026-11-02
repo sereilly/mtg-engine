@@ -1084,8 +1084,15 @@ class StackResolutionMixin:
             # target so initialization can copy the player-selected creature
             # rather than an arbitrary one — with the id the stack stamped
             # beside the slot, because the slot is a position the board may
-            # have renumbered since the cast (``_resolve_copy_target``).
-            if target_permanent_index is not None:
+            # have renumbered since the cast (``_resolve_copy_target``). **An
+            # id alone is a choice too**: a cast that named the creature by
+            # ``target_permanent_ids`` and no slot recorded nothing here, and
+            # a Clone aimed at a Brass Herald copied whatever creature came
+            # first on the board (a Soul Warden).
+            if (
+                target_permanent_index is not None
+                or first_target_id(target_permanent_id) is not None
+            ):
                 permanent.metadata["copy_target"] = (
                     target_player_index if target_player_index is not None else caster_index,
                     target_permanent_index,
