@@ -4106,16 +4106,26 @@ function refreshPromptSelection(state = currentState) {
   renderBoard(state);
 }
 
+// The `id` of the "can't untap more than N" candidate drawn at
+// `permanentIndex` (Winter Orb, Smoke, Static Orb, Damping Field): the server
+// sends `candidate_ids` beside `candidate_indices`, in the same order, and the
+// answer names the permanent by id (CR 400.7) — the slot is only where the
+// click found it. Null for a click on nothing offered.
+function untapCandidateId(untapInfo, permanentIndex) {
+  const indices = Array.isArray(untapInfo?.candidate_indices) ? untapInfo.candidate_indices : [];
+  const ids = Array.isArray(untapInfo?.candidate_ids) ? untapInfo.candidate_ids : [];
+  const at = indices.findIndex((idx) => Number(idx) === Number(permanentIndex));
+  return at >= 0 && Number.isInteger(ids[at]) ? ids[at] : null;
+}
+
 // The target of an upkeep trigger's answer: the clicked `valid_targets`
-// entry's `id`, which every entry carries (`web/turn_steps`). The seat and slot
-// are sent only for an entry without one, which the server still converts on
-// arrival — never both, so the request names one permanent one way.
+// entry's `id`, which every entry carries (`web/turn_steps`). The slot is only
+// how the click found it; the request names the permanent by id alone.
 function upkeepTriggerTargetFields(targets, targetSeat, permanentIndex) {
   const entry = (targets || []).find(
     (t) => Number(t.seat) === Number(targetSeat) && Number(t.index) === Number(permanentIndex),
   );
-  if (Number.isInteger(entry?.id)) return { target_permanent_id: entry.id };
-  return { target_seat: targetSeat, target_permanent_index: permanentIndex };
+  return { target_permanent_id: entry?.id ?? null };
 }
 
 // The board-targeting descriptor for the prompt currently on screen, or null.
@@ -4134,14 +4144,21 @@ function getPromptBoardTargeting(state = currentState) {
   // Old Man of the Sea: toggle which permanents stay tapped, then confirm.
   const optionalUntapInfo = getOptionalUntapInfo(state);
   if (optionalUntapInfo) {
+    // Drawn by slot, kept by id: the picks are the permanents' ids (CR 400.7),
+    // so a board that renumbers between two clicks moves no pick.
     const permanents = optionalUntapInfo.permanents || [];
+    const idAt = new Map(permanents.map((p) => [Number(p.index), p.id]));
     return promptTargeting({
       permanentKeys: permanents.map((p) => `${seat}-${Number(p.index)}`),
-      selectedKeys: optionalUntapKeepSelection.map((idx) => `${seat}-${idx}`),
+      selectedKeys: permanents
+        .filter((p) => optionalUntapKeepSelection.includes(p.id))
+        .map((p) => `${seat}-${Number(p.index)}`),
       onPermanent: (_targetSeat, idx) => {
-        const at = optionalUntapKeepSelection.indexOf(idx);
+        const id = idAt.get(Number(idx));
+        if (!Number.isInteger(id)) return;
+        const at = optionalUntapKeepSelection.indexOf(id);
         if (at >= 0) optionalUntapKeepSelection.splice(at, 1);
-        else optionalUntapKeepSelection.push(idx);
+        else optionalUntapKeepSelection.push(id);
         refreshPromptSelection(state);
       },
       invalidHint: "That permanent untaps normally — pick one of the highlighted ones.",
@@ -4153,9 +4170,14 @@ function getPromptBoardTargeting(state = currentState) {
   if (opponentDamageInfo) {
     const permanentKeys = [];
     const playerSeats = [];
+    // Each creature is drawn at `seat-index` and answered by its `id`.
+    const idAtKey = new Map();
     for (const t of opponentDamageInfo.valid_targets || []) {
       if (t.kind === "player") playerSeats.push(Number(t.seat));
-      else if (t.kind === "permanent") permanentKeys.push(`${t.seat}-${t.index}`);
+      else if (t.kind === "permanent") {
+        permanentKeys.push(`${t.seat}-${t.index}`);
+        idAtKey.set(`${t.seat}-${t.index}`, t.id);
+      }
     }
     return promptTargeting({
       permanentKeys,
@@ -4165,7 +4187,7 @@ function getPromptBoardTargeting(state = currentState) {
           seat,
           action: "opponent_damage_choose",
           target_seat: targetSeat,
-          target_permanent_index: idx,
+          target_permanent_id: idAtKey.get(`${targetSeat}-${idx}`),
         }),
       onPlayer: (targetSeat) =>
         submitPromptAction({ seat, action: "opponent_damage_choose", target_seat: targetSeat }),
@@ -4222,13 +4244,19 @@ function getPromptBoardTargeting(state = currentState) {
     const owner = Number(sacrificeSelectInfo.player_seat);
     const permanents = sacrificeSelectInfo.permanents || [];
     const need = Math.min(sacrificeSelectInfo.count || 0, permanents.length);
+    // Drawn by slot, picked by id (`permanents[].id`, CR 400.7).
+    const idAt = new Map(permanents.map((p) => [Number(p.index), p.id]));
     return promptTargeting({
       permanentKeys: permanents.map((p) => `${owner}-${p.index}`),
-      selectedKeys: sacrificeSelection.map((idx) => `${owner}-${idx}`),
+      selectedKeys: permanents
+        .filter((p) => sacrificeSelection.includes(p.id))
+        .map((p) => `${owner}-${p.index}`),
       onPermanent: (_targetSeat, idx) => {
-        const at = sacrificeSelection.indexOf(idx);
+        const id = idAt.get(Number(idx));
+        if (!Number.isInteger(id)) return;
+        const at = sacrificeSelection.indexOf(id);
         if (at >= 0) sacrificeSelection.splice(at, 1);
-        else if (sacrificeSelection.length < need) sacrificeSelection.push(idx);
+        else if (sacrificeSelection.length < need) sacrificeSelection.push(id);
         refreshPromptSelection(state);
       },
       invalidHint: "That permanent can't be sacrificed.",
@@ -5786,24 +5814,36 @@ function balanceBoardTargeting(state, info) {
     creatures: info.creatures_to_sacrifice || 0,
   };
   // Lands and creatures index into the same battlefield array, so one map
-  // resolves a clicked index to the section it belongs to.
+  // resolves a clicked index to the section it belongs to — and to the `id`
+  // the pick is kept and answered by (CR 400.7), not the slot.
   const kindByIndex = new Map();
+  const idByIndex = new Map();
   if (need.lands) {
-    for (const land of info.lands || []) kindByIndex.set(Number(land.index), "lands");
+    for (const land of info.lands || []) {
+      kindByIndex.set(Number(land.index), "lands");
+      idByIndex.set(Number(land.index), land.id);
+    }
   }
   if (need.creatures) {
-    for (const c of info.creatures || []) kindByIndex.set(Number(c.index), "creatures");
+    for (const c of info.creatures || []) {
+      kindByIndex.set(Number(c.index), "creatures");
+      idByIndex.set(Number(c.index), c.id);
+    }
   }
+  const picked = new Set([...balanceSelection.lands, ...balanceSelection.creatures]);
   return promptTargeting({
     permanentKeys: [...kindByIndex.keys()].map((idx) => `${owner}-${idx}`),
-    selectedKeys: [...balanceSelection.lands, ...balanceSelection.creatures].map((idx) => `${owner}-${idx}`),
+    selectedKeys: [...idByIndex.entries()]
+      .filter(([, id]) => picked.has(id))
+      .map(([idx]) => `${owner}-${idx}`),
     onPermanent: (_targetSeat, idx) => {
       const kind = kindByIndex.get(idx);
-      if (!kind) return;
-      const picked = balanceSelection[kind];
-      const at = picked.indexOf(idx);
-      if (at >= 0) picked.splice(at, 1);
-      else if (picked.length < need[kind]) picked.push(idx);
+      const id = idByIndex.get(idx);
+      if (!kind || !Number.isInteger(id)) return;
+      const picks = balanceSelection[kind];
+      const at = picks.indexOf(id);
+      if (at >= 0) picks.splice(at, 1);
+      else if (picks.length < need[kind]) picks.push(id);
       refreshPromptSelection(state);
     },
     invalidHint: "Balance only takes the highlighted lands and creatures.",
@@ -5898,13 +5938,17 @@ function applyBalanceSelectPrompt(info) {
   const confirmBtn = document.getElementById("balanceConfirmBtn");
   if (confirmBtn) {
     confirmBtn.addEventListener("click", async () => {
+      // The round's permanents by id (each offered entry's `id`) — only one
+      // round is answered at a time, so lands and creatures are never both
+      // owed — and the hand round's cards by slot in the hand.
       const payload = {
         seat,
         action: "balance_confirm",
-        land_indices: balanceSelection.lands.slice(),
-        creature_indices: balanceSelection.creatures.slice(),
         discard_indices: balanceSelection.hand.slice(),
       };
+      if (need.lands || need.creatures) {
+        payload.target_permanent_ids = [...balanceSelection.lands, ...balanceSelection.creatures];
+      }
       // Cleared before the request, so the next round's prompt (rendered by
       // the response) starts empty; put back if the answer is refused, with
       // the server's reason — a refusal used to vanish into an unhandled
@@ -5948,9 +5992,9 @@ function applySacrificeSelectPrompt(info) {
   const customOkBtn = q("promptCustomOkBtn");
 
   const permanents = info.permanents || [];
-  const validIndices = new Set(permanents.map((p) => p.index));
-  // Drop any stale picks that are no longer valid permanents.
-  sacrificeSelection = sacrificeSelection.filter((i) => validIndices.has(i));
+  const validIds = new Set(permanents.map((p) => p.id));
+  // Drop any stale picks (ids) that are no longer offered.
+  sacrificeSelection = sacrificeSelection.filter((id) => validIds.has(id));
   const need = Math.min(info.count || 0, permanents.length);
 
   panel.classList.remove("hidden");
@@ -5980,20 +6024,15 @@ function applySacrificeSelectPrompt(info) {
   const confirmBtn = document.getElementById("sacrificeConfirmBtn");
   if (confirmBtn) {
     confirmBtn.addEventListener("click", async () => {
+      // By id (`permanents[].id`), the picks as they were kept: an id names
+      // one object (CR 400.7) while a slot renumbers when anything leaves,
+      // and the server refuses a stale one rather than sacrificing whatever
+      // moved into its place.
       const payload = {
         seat,
         action: "sacrifice_confirm",
-        sacrifice_indices: sacrificeSelection.slice(),
+        sacrifice_permanent_ids: sacrificeSelection.slice(),
       };
-      // By id where the prompt gives one (`permanents[].id`): an id names one
-      // object (CR 400.7) while a slot renumbers when anything leaves, and the
-      // server takes `sacrifice_permanent_ids` over the slots and refuses a
-      // stale one rather than sacrificing whatever moved into its place.
-      const idBySlot = new Map(permanents.map((p) => [Number(p.index), p.id]));
-      const ids = sacrificeSelection.map((slot) => idBySlot.get(Number(slot)));
-      if (ids.length && ids.every((id) => Number.isInteger(id))) {
-        payload.sacrifice_permanent_ids = ids;
-      }
       sacrificeSelection = [];
       await sendAction(payload);
     });
@@ -6412,15 +6451,16 @@ function applyOptionalUntapPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  const validIndices = new Set((info.permanents || []).map((p) => Number(p.index)));
-  optionalUntapKeepSelection = optionalUntapKeepSelection.filter((i) => validIndices.has(i));
+  // The picks are ids (`permanents[].id`); one no longer offered is dropped.
+  const validIds = new Set((info.permanents || []).map((p) => p.id));
+  optionalUntapKeepSelection = optionalUntapKeepSelection.filter((id) => validIds.has(id));
 
   title.textContent = "Choose not to untap?";
   body.textContent = "These permanents may stay tapped this turn (e.g. Old Man of the Sea keeps control of its stolen creature while tapped).";
   // Toggled on the board: the eligible permanents are highlighted and the ones
   // picked to stay tapped read back here, so no card list is needed.
   const keeping = (info.permanents || []).filter((p) =>
-    optionalUntapKeepSelection.includes(Number(p.index)),
+    optionalUntapKeepSelection.includes(p.id),
   );
   const keepLine = keeping.length
     ? `Staying tapped: ${keeping.map((p) => p.name).join(", ")}`
@@ -6434,7 +6474,7 @@ function applyOptionalUntapPrompt(info) {
   steps.querySelector("[data-optional-untap-confirm]")?.addEventListener("click", async () => {
     const keep = [...optionalUntapKeepSelection];
     optionalUntapKeepSelection = [];
-    await sendAction({ seat, action: "optional_untap_confirm", creature_indices: keep });
+    await sendAction({ seat, action: "optional_untap_confirm", target_permanent_ids: keep });
   });
 }
 
@@ -20432,12 +20472,12 @@ function createCardElement(card, options = {}) {
           Number.isInteger(permanentIndex) &&
           targetSeat === seat
         ) {
-          const candidateIndices = Array.isArray(untapInfo.candidate_indices) ? untapInfo.candidate_indices : [];
-          if (!candidateIndices.includes(permanentIndex)) {
+          const permanentId = untapCandidateId(untapInfo, permanentIndex);
+          if (permanentId === null) {
             updateActionHint(`${cardName} is not a valid untap choice.`, true);
             return;
           }
-          await sendAction({ seat, action: "untap_select", permanent_index: permanentIndex });
+          await sendAction({ seat, action: "untap_select", permanent_id: permanentId });
           const nextInfo = getUntapLandSelectionInfo(currentState);
           const selectedCount = Number(nextInfo?.selected_count || 0);
           const maxCount = Number(nextInfo?.max_count || 0);
@@ -24733,12 +24773,12 @@ function initBattlefieldCanvas() {
       try {
         const untapInfo = getUntapLandSelectionInfo(currentState);
         if (untapInfo && cardSeat === seat) {
-          const candidates = Array.isArray(untapInfo.candidate_indices) ? untapInfo.candidate_indices : [];
-          if (!candidates.includes(permanentIndex)) {
+          const permanentId = untapCandidateId(untapInfo, permanentIndex);
+          if (permanentId === null) {
             updateActionHint(`${card.name} is not a valid untap choice.`, true);
             return;
           }
-          sendAction({ seat, action: "untap_select", permanent_index: permanentIndex })
+          sendAction({ seat, action: "untap_select", permanent_id: permanentId })
             .then(() => {
               const nextInfo = getUntapLandSelectionInfo(currentState);
               updateActionHint(`Untap selection: ${nextInfo?.selected_count ?? "?"}/${nextInfo?.max_count ?? "?"} land(s) selected.`);

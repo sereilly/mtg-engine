@@ -415,7 +415,10 @@ def test_every_constrained_untap_scope_reaches_the_client(constraint, tapped, sc
         json={"action": "untap_select", "seat": 0, "permanent_index": chosen},
     )
     assert response.status_code == 200, response.text
-    assert store.get(session_id).untap_selected_indices == [chosen]
+    # Kept by id since kg3 wire (a slot read once, on arrival).
+    chosen_id = store.get(session_id).game.permanent_at(0, chosen).permanent_id
+    assert store.get(session_id).untap_selected_ids == [chosen_id]
+    assert selection["candidate_ids"][0] == chosen_id
 
 
 def test_the_untap_candidate_filter_asks_the_engines_own_predicate():

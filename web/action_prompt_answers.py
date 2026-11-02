@@ -12,7 +12,7 @@ from engine.faces import choose_a_face_refusal, spell_named
 from engine.search_filters import SEARCHABLE_ZONES
 from engine.text_changes import LAND_TYPE_WORDS
 from .action_registry import action_handler
-from .action_helpers import _queue_spell_from_request
+from .action_helpers import _queue_spell_from_request, answered_permanent_id, balance_round_slots
 from .turn_steps import _begin_turn, _start_next_turn
 
 
@@ -1319,16 +1319,16 @@ def _action_graveyard_return_draw_confirm(session, req, seat_type):
 @action_handler("opponent_damage_choose")
 def _action_opponent_damage_choose(session, req, seat_type):
     # Cuombajj Witches: the opposing chooser picks any target for the second
-    # damage packet — a player face (target_permanent_index omitted) or a
-    # creature on target_seat's battlefield.
+    # damage packet — a player face (``target_seat`` alone) or a creature by
+    # its ``valid_targets`` entry's ``id`` (``answered_permanent_id``).
     pending = session.game.pending_opponent_damage
     if pending is None or pending.get("chooser_index") != req.seat:
         raise HTTPException(status_code=400, detail="no opponent damage choice is pending for you")
     if req.target_seat is None or not (0 <= req.target_seat < len(session.game.players)):
         raise HTTPException(status_code=400, detail="target_seat is required")
-    if not session.game.confirm_opponent_damage_choice(
-        req.seat, req.target_seat, req.target_permanent_index
-    ):
+    permanent_id = answered_permanent_id(session.game, req, id_field="target_permanent_id",
+                                         slot_field="target_permanent_index", seat=req.target_seat)
+    if not session.game.confirm_opponent_damage_choice(req.seat, req.target_seat, permanent_id=permanent_id):
         raise HTTPException(status_code=400, detail="failed to resolve the damage choice")
 
 @action_handler("enter_choice_confirm")
@@ -1737,10 +1737,12 @@ def _action_balance_confirm(session, req, seat_type):
     pending = session.game.pending_balance
     if pending is None or req.seat not in pending["plans"]:
         raise HTTPException(status_code=400, detail="no balance choice pending for you")
+    # The round's permanents by id, each offered entry's (or by slot).
+    land_indices, creature_indices = balance_round_slots(session.game, req)
     ok = session.game.confirm_balance(
         req.seat,
-        land_indices=req.land_indices or [],
-        creature_indices=req.creature_indices or [],
+        land_indices=land_indices,
+        creature_indices=creature_indices,
         hand_indices=req.discard_indices or [],
     )
     if not ok:

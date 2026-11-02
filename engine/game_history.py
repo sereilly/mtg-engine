@@ -13,8 +13,7 @@ class GameSnapshot:
     cleanup_required_discards: int
     cleanup_selected_indices: list[int]
     untap_required_lands: int
-    untap_candidate_indices: list[int]
-    untap_selected_indices: list[int]
+    untap_selected_ids: list[int]
     upkeep_pay_choices: list[dict]
     upkeep_resolved_choices: dict[str, bool]
     optional_trigger_choices: list[dict] = field(default_factory=list)
@@ -39,8 +38,7 @@ class GameHistory:
                 cleanup_required_discards=session.cleanup_required_discards,
                 cleanup_selected_indices=list(session.cleanup_selected_indices),
                 untap_required_lands=session.untap_required_lands,
-                untap_candidate_indices=list(session.untap_candidate_indices),
-                untap_selected_indices=list(session.untap_selected_indices),
+                untap_selected_ids=list(session.untap_selected_ids),
                 upkeep_pay_choices=list(session.upkeep_pay_choices),
                 upkeep_resolved_choices=dict(session.upkeep_resolved_choices),
                 optional_trigger_choices=list(session.optional_trigger_choices),

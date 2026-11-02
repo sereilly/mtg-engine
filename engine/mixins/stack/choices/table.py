@@ -1283,7 +1283,8 @@ register_choice(
 register_choice(
     "opponent_damage",
     resolve=lambda game, choice, r: game._resolve_opponent_damage_choice(
-        choice, r["target_seat"], r["target_permanent_index"]
+        choice, r["target_seat"], r["target_permanent_index"],
+        r.get("permanent_id"),
     ),
     default=lambda game, choice: game._default_opponent_damage_choice(choice),
     action="opponent_damage_choose",

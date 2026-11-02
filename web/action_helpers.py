@@ -341,3 +341,66 @@ def _find_controlled_permanent(
         if permanent.card.name == permanent_name:
             return idx, permanent
     return None
+
+
+# ---------------------------------------------------------------------------
+# A prompt's answer names permanents by id (CR 400.7)
+# ---------------------------------------------------------------------------
+
+
+def answered_permanent_id(game, req, *, id_field: str, slot_field: str, seat: int) -> int | None:
+    """The permanent a prompt's answer names, by ``permanent_id``.
+
+    *id_field* where the request carries it — the address every offered entry
+    gives, already resolved by ``web.actions._resolve_permanent_ids`` (which
+    404s a stale one). Else the slot in *slot_field* on *seat*'s battlefield,
+    turned into the id of what is in that slot **now**: the alternative a
+    client written against slots still sends, read once, on arrival, and
+    never stored or handed on. None where the request names neither; a slot
+    that names nothing is a 404, as a stale id is.
+    """
+    permanent_id = getattr(req, id_field)
+    if permanent_id is not None:
+        return permanent_id
+    slot = getattr(req, slot_field)
+    if slot is None:
+        return None
+    named = game.permanent_at(seat, slot)
+    if named is None:
+        raise HTTPException(status_code=404, detail="that permanent is no longer on the battlefield")
+    return named.permanent_id
+
+
+def own_slots_of(game, seat: int, permanent_ids) -> list[int]:
+    """*permanent_ids* (deduplicated, in order) as slots on *seat*'s own
+    battlefield, for an engine entry point that still counts by slot — read
+    on arrival, against the board that entry point is about to read. An id
+    naming a permanent the seat does not control is refused (400); a stale
+    one never gets here (the dispatch preamble's 404)."""
+    slots = []
+    for permanent_id in dict.fromkeys(permanent_ids):
+        permanent = game.permanent_by_id(permanent_id)
+        if permanent is None or not game.controls(seat, permanent):
+            raise HTTPException(status_code=400, detail="that permanent is not one you were offered")
+        slots.append(game.battlefield_index_of(permanent))
+    return slots
+
+
+def balance_round_slots(game, req) -> tuple[list[int], list[int]]:
+    """``(land slots, creature slots)`` of a ``balance_confirm`` answer.
+
+    By id (``target_permanent_ids``, each offered entry's ``id``): the lands in
+    Balance's lands round, the creatures in its creatures round — one round is
+    answered at a time — turned into the seat's slots on arrival, the board
+    the engine's check reads (``own_slots_of``). Absent, the slot fields a
+    client written against slots still sends."""
+    lands = list(req.land_indices or [])
+    creatures = list(req.creature_indices or [])
+    if req.target_permanent_ids is None:
+        return lands, creatures
+    choice = game.pending_choice_of("balance", req.seat)
+    stage = choice.data.get("stage") if choice is not None else None
+    if stage not in ("lands", "creatures"):
+        raise HTTPException(status_code=400, detail="this Balance round chooses no permanents")
+    slots = own_slots_of(game, req.seat, req.target_permanent_ids)
+    return (slots, creatures) if stage == "lands" else (lands, slots)

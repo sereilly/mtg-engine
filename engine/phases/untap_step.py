@@ -529,10 +529,12 @@ class UntapStepMixin:
         (Old Man of the Sea: "You may choose not to untap this creature during
         your untap step"). The web layer prompts a human with these; the
         keep-tapped choice is passed back via resolve_untap_step's
-        ``keep_tapped_indices``."""
+        ``keep_tapped_ids`` — each entry carries the permanent's ``id``, which
+        names it however the battlefield renumbers before the answer arrives;
+        ``index`` is its slot as offered."""
         player = self.players[player_index]
         return [
-            {"index": idx, "name": permanent.card.name}
+            {"index": idx, "id": permanent.permanent_id, "name": permanent.card.name}
             for idx, permanent in enumerate(player.battlefield)
             if permanent.tapped
             # Anchored per line through `self_untap_line`, not a substring over
@@ -553,13 +555,25 @@ class UntapStepMixin:
         selected_creature_indices: list[int] | None = None,
         keep_tapped_indices: list[int] | None = None,
         selected_indices_by_type: dict[str, list[int]] | None = None,
+        *,
+        selected_ids_by_type: dict[str, list[int]] | None = None,
+        keep_tapped_ids: list[int] | None = None,
     ) -> int:
         """*selected_indices_by_type* is the general form: one list of chosen
         battlefield positions per constrained card type. The two named
         parameters beside it are the shape it grew out of and are folded into
         it here — kept because a caller naming lands or creatures reads better
         than one building a dict, and because they are what the existing tests
-        say."""
+        say.
+
+        *selected_ids_by_type* and *keep_tapped_ids* are the same two answers
+        by ``permanent_id`` — what a person's answer arrives as. **They are
+        turned into slots here, after the phasing event**, which is the point
+        the slots are read at: CR 702.26a phases permanents out and in before
+        anything untaps, and a phased-out permanent leaves the battlefield
+        list, so a slot taken before this call could name the neighbour that
+        slid into it. An id naming nothing this player controls now (phased
+        out, gone) is no choice at all."""
         phase = "beginning"
         step = "untap"
         self._set_phase_and_step(phase, step)
@@ -618,7 +632,19 @@ class UntapStepMixin:
         # picks a land, Smoke a creature, Damping Field an artifact. Absent a
         # choice — AI or headless play — the loop below takes the first
         # eligible ones up to the cap.
+        def slots_of(permanent_ids) -> list[int]:
+            return [
+                self.battlefield_index_of(permanent)
+                for permanent_id in permanent_ids
+                if (permanent := self.permanent_by_id(permanent_id)) is not None
+                and self.controls(player_index, permanent)
+            ]
+
+        if keep_tapped_ids is not None:
+            keep_tapped_indices = slots_of(keep_tapped_ids)
         chosen: dict[str, list[int]] = dict(selected_indices_by_type or {})
+        for card_type, permanent_ids in (selected_ids_by_type or {}).items():
+            chosen.setdefault(card_type, slots_of(permanent_ids))
         if selected_land_indices is not None:
             chosen.setdefault("land", list(selected_land_indices))
         if selected_creature_indices is not None:
