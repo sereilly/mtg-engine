@@ -733,6 +733,53 @@ def announced_context(context: OracleExecutionContext) -> OracleExecutionContext
     )
 
 
+def announced_relation_seat(
+    game: Game, announced: OracleExecutionContext, payload: dict, entry: dict,
+) -> int | None:
+    """The seat the announcement named for the **player** role *entry*'s
+    relation points at ("…target nonblack creature **that player** controls",
+    the player being "target opponent" — Keeper of the Dead), **legal or not**;
+    None for a role related to no seat role.
+
+    CR 608.2b judges each target on its own: an opponent given shroud in
+    response is an illegal target and is not affected by the parts of the
+    effect for which they are illegal, but the creature is still a nonblack
+    creature controlled by the player that announcement chose, so it is still
+    legal and is still destroyed. Read off the announcement rather than through
+    ``resolve_role_player``, whose answer is the seat *as a target* and is None
+    once that seat is illegal — which left "that player" naming nobody and the
+    legal creature standing.
+    """
+    from ..targeting import spec_roles
+    from ..target_roles import (payload_role_slot, recorded_role_seats,
+                                role_dependency, role_is_seat)
+
+    _relation, depends_on = role_dependency(entry)
+    if depends_on is None:
+        return None
+    roles = spec_roles(payload.get("targets"))
+    earlier = next((role for role in roles if role.get("role") == depends_on), None)
+    if earlier is None or not role_is_seat(earlier):
+        return None
+    recorded = recorded_role_seats(announced)
+    if recorded is not None:
+        slot = payload_role_slot(payload, depends_on)
+        seat = recorded[slot] if slot is not None and slot < len(recorded) else None
+    elif [role for role in roles if role_is_seat(role)] == [earlier]:
+        # The one player role rides the scalar seat (``resolve_role_player``'s
+        # reading), by identity.
+        seat = next(
+            (index for index, player in enumerate(game.players)
+             if player is announced.target),
+            None,
+        )
+    else:
+        return None
+    if isinstance(seat, bool) or not isinstance(seat, int):
+        return None
+    return seat if 0 <= seat < len(game.players) else None
+
+
 def announced_role_seat(
     game: Game, context: OracleExecutionContext, instruction, role: str,
 ) -> "int | None":
