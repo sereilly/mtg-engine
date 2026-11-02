@@ -50,7 +50,7 @@ from engine.game import Game
 RUNS = (
     ("LGN", 7, 4, ("Crested Craghorn", "Goblin Grappler", "Deftblade Elite")),
     ("LGN", 11, 4, ("Crested Craghorn", "Warbreak Trumpeter", "Daru Mender")),
-    ("LEA", 7, 3, ()),
+    ("LGN", 13, 4, ("Crested Craghorn", "Goblin Grappler", "Deftblade Elite")),
     ("M21", 7, 3, ()),
 )
 

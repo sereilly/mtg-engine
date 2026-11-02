@@ -82,7 +82,7 @@ def test_a_cycled_card_has_resolved_before_the_pass_that_cycled_it_returns(catal
 _CYCLING_GAMES = {
     "USG": (1337, 1339, 1346, 1345, 1353),
     "ULG": (1347, 1338, 1341, 1344, 1345),
-    "UDS": (1339, 1341, 1356, 1357, 1355),
+    "UDS": (1339, 1358, 1356, 1357, 1355),
 }
 
 
