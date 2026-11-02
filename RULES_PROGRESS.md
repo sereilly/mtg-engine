@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**429 / 640 tracked rules covered (67%)** — 3285 tests, 0 unannotated.
+**429 / 640 tracked rules covered (67%)** — 3296 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -640,10 +640,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 510. Combat Damage Step
 
-- [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(86 tests, subrules abcde)*
+- [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(92 tests, subrules abcde)*
 - [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(8 tests)*
 - [x] **510.3** Third, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
-- [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(14 tests)*
+- [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(15 tests)*
 
 ### 511. End of Combat Step
 
@@ -877,7 +877,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 702. Keyword Abilities
 
 - [x] **702.1** Most abilities describe exactly what they do in the card’s rules text. Some, though, are very com... *(1 tests)*
-- [x] **702.2** Deathtouch *(5 tests, subrules bc)*
+- [x] **702.2** Deathtouch *(6 tests, subrules bc)*
 - [x] **702.3** Defender *(6 tests, subrules b)*
 - [x] **702.4** Double Strike *(3 tests, subrules b)*
 - [x] **702.5** Enchant *(11 tests, subrules a)*
@@ -893,9 +893,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.16** Protection *(61 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(11 tests, subrules a)*
-- [x] **702.19** Trample *(15 tests, subrules bdf)*
+- [x] **702.19** Trample *(26 tests, subrules bdf)*
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
-- [x] **702.22** Banding *(50 tests, subrules abcdefghjk)*
+- [x] **702.22** Banding *(52 tests, subrules abcdefghjk)*
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
 - [x] **702.24** Cumulative Upkeep *(33 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
