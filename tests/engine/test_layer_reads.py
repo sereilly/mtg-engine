@@ -332,8 +332,10 @@ PRINTED_COLOR_BASELINE: dict[str, int] = {
     # printed colours and layer 1 copies them as a copiable value (CR 707.2a).
     "printed_characteristics.py": 1,  # the layer-5 seed
     "copies.py": 1,             # the copiable values a copy starts from
-    # A weight over a card with no board in hand. AI tuning, not a rule.
-    "ai_valuation.py": 1,       # a valuation predicate with no game to ask
+    # (``ai_valuation.py`` held one until round kg3 —
+    # ``CounterProfile.can_counter``, "a valuation predicate with no game to
+    # ask". It takes ``game=``/``seat=`` and asks ``object_colors.card_colors``
+    # now.)
     # The two known gaps the 6ED w1g3 report named — `graveyard_card_matches`
     # and `_exile_search_matches`, which took neither a game nor the pile's
     # owner — were drained by round kg: both take `game=`/`owner=` and every
