@@ -974,6 +974,53 @@ def _required_zone_cost(card, game, caster_index, from_zone: str) -> str | None:
     return mana_cost_label(reduce_cost(symbols, CostReduction(generic=less)))
 
 
+def _cast_mana_combination(card, game: Game, caster_index: int) -> dict | None:
+    """The split a **spell** makes "in any combination of" (Burnt Offering:
+    "Add X mana in any combination of {B} and/or {R}, where X is the
+    sacrificed creature's mana value"), for the cast's chooser — the
+    activation's ``ability_mana`` entry's ``combination`` shape, so the
+    client asks it with the one chooser Goblin Clearcutter's ability uses,
+    and the cast takes the answer as ``mana_combination``.
+
+    A printed count is ``count``. A count the cast's own cost decides is
+    ``count_by_cost``: each permanent this seat controls, by id, with the
+    number that permanent would make X if it paid the cost — through the
+    evaluator the resolution counts with (``count_from_payload`` over
+    ``sacrificed_for_cost``), so the chooser offers exactly the splits the
+    resolution will accept. None for every other card.
+    """
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers._amounts import count_from_payload
+    from engine.mana_combination import _combination_steps, combination_of
+
+    program = compile_card_oracle(card)
+    shape = combination_of(program.instructions)
+    if shape is None:
+        return None
+    symbols, count = shape
+    entry: dict = {"symbols": [str(symbol) for symbol in symbols]}
+    if count != "x":
+        entry["count"] = int(count)
+        return entry
+    step = _combination_steps(program.instructions)[0]
+    spec = (step.payload or {}).get("x_from_count")
+    if not isinstance(spec, dict) or "cost_sacrifice_characteristic" not in spec:
+        return None
+    caster = game.players[caster_index]
+    entry["count_by_cost"] = {
+        str(permanent.permanent_id): count_from_payload(
+            game,
+            OracleExecutionContext(
+                caster=caster, target=caster, card=card,
+                choices={"sacrificed_for_cost": permanent},
+            ),
+            spec,
+        )
+        for permanent in game.controlled_by(caster_index)
+    }
+    return entry
+
+
 def _serialize_card(
     card,
     game: Game | None = None,
@@ -1049,6 +1096,11 @@ def _serialize_card(
         serialized["target_spec"] = game.cast_target_spec(
             caster_index, card, from_zone=from_zone, spell_hand_index=hand_index,
         )
+        # The split the spell's mana is made in, chosen with the cast
+        # (``_cast_mana_combination``) — absent for every card that makes none.
+        combination = _cast_mana_combination(card, game, caster_index)
+        if combination is not None:
+            serialized["mana_combination"] = combination
     faces = face_cards(card)
     if faces:
         # CR 709.3: the player chooses a half *before* anything else about the
