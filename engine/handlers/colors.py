@@ -454,7 +454,10 @@ def stack_target_still_described(game: Game, described: dict, item) -> bool:
     if card_types:
         from .stack import _spell_is_one_of
 
-        return _spell_is_one_of(spell_text_card(item), card_types)
+        return _spell_is_one_of(
+            spell_text_card(item), card_types,
+            game=game, seat=getattr(item, "caster_index", None),
+        )
     return True
 
 

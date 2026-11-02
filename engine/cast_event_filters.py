@@ -293,16 +293,21 @@ def _cast_narrowing_admits(
                 continue
             if cast_colors & game._effective_colors(candidate):
                 return False
-    # "…a **Dog** spell" (Rin and Seri). The printed subtype, read through the
-    # same reader the layer seed uses rather than as a substring of the type
-    # line — a substring match would let "Dog" answer for a "Dogpile", and would
-    # answer for a card *type* word too, which is the `cast_type` row's job.
+    # "…a **Dog** spell" (Rin and Seri). A subtype of the spell, read as a
+    # word of the subtype half rather than as a substring of the type line — a
+    # substring match would let "Dog" answer for a "Dogpile", and would answer
+    # for a card *type* word too, which is the `cast_type` row's job. Through
+    # ``object_creature_types.card_creature_types`` with the caster, the one
+    # reader of an off-battlefield object's subtypes: "the same is true for
+    # creature spells you control" (Conspiracy naming Dog) makes a Bear spell
+    # a Dog spell and not a Bear one (CR 205.1a, 613.1). This read the printed
+    # line, so Rin and Seri made nothing for a spell its caster's Conspiracy
+    # had made a Dog.
     cast_subtype = trig.condition.payload.get("cast_subtype")
     if cast_subtype:
-        from .printed_characteristics import printed_shape
+        from .object_creature_types import card_creature_types
 
-        _, subtypes = printed_shape(card)
-        if cast_subtype.lower() not in subtypes:
+        if cast_subtype.lower() not in card_creature_types(game, card, caster):
             return False
     return True
 

@@ -203,8 +203,12 @@ def _covers(
     # sorcery, which never co-occur with another type; the next one to name a
     # permanent type would have been silently narrowed. One reader for the
     # whole engine (``engine/search_filters.card_has_type``).
+    #
+    # Asked with the zone's seat, whose card it is (CR 108.3): a creature-type
+    # class is that seat's Conspiracy's to answer (``card_has_type``).
     if permission.card_types and not any(
-        card_has_type(spell, name) for name in permission.card_types
+        card_has_type(spell, name, game=game, owner=permission.zone_seat)
+        for name in permission.card_types
     ):
         return False
     if permission.position == "top":

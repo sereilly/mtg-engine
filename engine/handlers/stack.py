@@ -381,7 +381,7 @@ def counter_stack_ability(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
-def _spell_is_one_of(card, card_types) -> bool:
+def _spell_is_one_of(card, card_types, *, game=None, seat=None) -> bool:
     """Whether a spell on the stack is any of *card_types* (CR 205.2).
 
     Through the one reader of that question (``search_filters.card_has_type``):
@@ -389,10 +389,16 @@ def _spell_is_one_of(card, card_types) -> bool:
     of them by the order of a list. It picked "creature", so Goblin Artisans —
     whose whole ability is countering an artifact spell — refused every artifact
     creature in the set.
+
+    *game* and *seat* (the spell's controller) are for a creature-type word,
+    which its controller's Conspiracy answers ("creature spells you control",
+    CR 205.1a); a caller with neither gets the printed answer.
     """
     from ..search_filters import card_has_type
 
-    return any(card_has_type(card, wanted) for wanted in card_types)
+    return any(
+        card_has_type(card, wanted, game=game, owner=seat) for wanted in card_types
+    )
 
 
 def stack_item_cast_from_ok(item, wanted: "str | None") -> bool:
@@ -413,7 +419,7 @@ def stack_item_cast_from_ok(item, wanted: "str | None") -> bool:
     return getattr(item, "cast_from_zone", None) == wanted
 
 
-def _spell_is_one_of_classes(card, classes) -> bool:
+def _spell_is_one_of_classes(card, classes, *, game=None, seat=None) -> bool:
     """Whether a spell on the stack is any of *classes* — "instant **or Aura**
     spell" (Avoid Fate, Ring of Immortals).
 
@@ -424,13 +430,18 @@ def _spell_is_one_of_classes(card, classes) -> bool:
     happens to print the same word — the axis is free to carry, and a matcher
     that has to guess is a matcher that can guess wrong.
 
-    ``printed_shape`` rather than ``has_type``: a spell on the stack is not a
-    permanent, so CR 613 has nothing to say about it and the printed line is the
-    whole of what there is.
+    Not ``has_type``: a spell on the stack is not a permanent. Its card types
+    are the printed ones (nothing in the pool changes a spell's card type), and
+    its subtypes are ``object_creature_types.card_creature_types``' answer with
+    *seat*, the spell's controller — "the same is true for creature spells you
+    control" (Conspiracy) is CR 613.1 over a spell (CR 205.1a). A caller with
+    no seat gets the printed subtypes.
     """
+    from ..object_creature_types import card_creature_types
     from ..printed_characteristics import printed_shape
 
-    types, subtypes = printed_shape(card)
+    types = printed_shape(card)[0]
+    subtypes = card_creature_types(game, card, seat)
     for axis, name in classes:
         if axis == "card_type" and name in types:
             return True
@@ -714,7 +725,9 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # payload carries is tested against the chosen spell's primary type,
         # the same shape as the colour gate above.
         card_types = instruction.payload.get("card_types")
-        if card_types and not _spell_is_one_of(said, card_types):
+        if card_types and not _spell_is_one_of(
+            said, card_types, game=game, seat=target.caster_index,
+        ):
             game.log.append(
                 f"{card.name}: {target.card.name} is not "
                 f"{' or '.join(card_types)}, cannot counter"
@@ -727,7 +740,9 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # "noncreature" word inside `card_types` would have countered exactly
         # the spells the card refuses.
         excluded_types = instruction.payload.get("excluded_types")
-        if excluded_types and _spell_is_one_of(said, excluded_types):
+        if excluded_types and _spell_is_one_of(
+            said, excluded_types, game=game, seat=target.caster_index,
+        ):
             game.log.append(
                 f"{card.name}: {target.card.name} is "
                 f"{' or '.join(excluded_types)}, cannot counter"
@@ -739,7 +754,8 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # questions and a phrase produces exactly one of them.
         any_classes = instruction.payload.get("any_classes")
         if any_classes and not _spell_is_one_of_classes(
-            said, [tuple(entry) for entry in any_classes]
+            said, [tuple(entry) for entry in any_classes],
+            game=game, seat=target.caster_index,
         ):
             game.log.append(
                 f"{card.name}: {target.card.name} is not "

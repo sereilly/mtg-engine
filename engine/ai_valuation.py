@@ -102,8 +102,21 @@ class CounterProfile:
 
     color: str | None = None
 
-    def can_counter(self, card: CardDefinition) -> bool:
-        return self.color is None or self.color in (card.colors or ())
+    def can_counter(
+        self, card: CardDefinition, *, game=None, seat: int | None = None,
+    ) -> bool:
+        """Whether a spell of *card* is one this effect may be aimed at.
+
+        The spell's colour is CR 105's question of an object (CR 613.1e), so
+        it is asked through ``object_colors.card_colors`` with *seat*, the
+        spell's controller: under its controller's Celestial Dawn a red spell
+        is white, and Red Elemental Blast may not counter a blue one the Dawn
+        has made white. A caller with no game or no seat gets the printed
+        colours.
+        """
+        from .object_colors import card_colors
+
+        return self.color is None or self.color in card_colors(game, card, seat)
 
 
 def cards_drawn_by_target(card: CardDefinition, x_value: int | None = None) -> int | None:

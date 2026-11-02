@@ -809,9 +809,12 @@ def spell_is_in_class(
         return spell_class[len(COLOR_CLASS_PREFIX):] in source_colors(
             card, game=game, seat=seat
         )
+    # A subtype class ("Aura spells", a creature type) through the one reader
+    # of a card's types, with the spell's controller so a creature type its
+    # Conspiracy set is the answer (CR 205.1a, 613.1).
     from .search_filters import card_has_type
 
-    return card_has_type(card, spell_class)
+    return card_has_type(card, spell_class, game=game, owner=seat)
 
 
 def source_is_in_class(

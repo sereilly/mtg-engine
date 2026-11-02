@@ -377,7 +377,10 @@ class StackTargetsMixin:
             from .handlers.stack import _spell_is_one_of
 
             stack_card_types = spec.get("stack_card_types")
-            if stack_card_types and not _spell_is_one_of(item_card, stack_card_types):
+            if stack_card_types and not _spell_is_one_of(
+                item_card, stack_card_types,
+                game=self, seat=getattr(item, "caster_index", None),
+            ):
                 continue
             # Null Brooch: "target **noncreature** spell" — the complement,
             # asked through ``_spell_is_one_of`` rather than through
@@ -389,7 +392,10 @@ class StackTargetsMixin:
             # discarded for nothing. The union above asks the same reader now.
             stack_excluded_types = spec.get("stack_excluded_types")
             if stack_excluded_types:
-                if _spell_is_one_of(item_card, stack_excluded_types):
+                if _spell_is_one_of(
+                    item_card, stack_excluded_types,
+                    game=self, seat=getattr(item, "caster_index", None),
+                ):
                     continue
             # "…spell **with mana value 3 or less**" (Liquify). The spell's
             # mana value *as it is on the stack* (CR 202.3b: an X in its cost
@@ -412,7 +418,8 @@ class StackTargetsMixin:
                 from .handlers.stack import _spell_is_one_of_classes
 
                 if not _spell_is_one_of_classes(
-                    item_card, [tuple(entry) for entry in any_classes]
+                    item_card, [tuple(entry) for entry in any_classes],
+                    game=self, seat=getattr(item, "caster_index", None),
                 ):
                     continue
             # "…that targets a permanent you control" — asked of the recorded

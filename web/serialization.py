@@ -28,6 +28,7 @@ from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
 from engine.library_top import top_is_public, top_is_visible
 from engine.mana_payment import taps_for_payment
+from engine.object_colors import card_colors
 from engine.line_classification import LOYALTY_ANY_TIME_STATIC
 from engine.oracle import compile_card_oracle
 from engine.activation_prohibitions import activation_prohibition
@@ -1009,7 +1010,11 @@ def _serialize_card(
         "printed_mana_cost": card.mana_cost,
         "effective_mana_cost": effective_cost,
         "cost_increased": tax > 0,
-        "colors": list(card.colors),
+        # The card's colours as its seat's statics leave them (CR 613.1e):
+        # under its owner's Celestial Dawn a nonland card off the battlefield
+        # is white, and the hand drew it in its printed colours. A preview
+        # with no seat keeps the printed ones (``_card_preview``).
+        "colors": list(card_colors(game, card, caster_index)),
         "modes": _serialize_modes(card, game, caster_index),
         # "Choose one **or more** —" (Sublime Epiphany, CR 700.2d). Sent
         # alongside the modes because the mode list alone cannot say it: a
@@ -1281,6 +1286,10 @@ def _serialize_stack_item(item, game: Game) -> dict:
     spell_edits = changed_words(item)
     if spell_edits:
         serialized_card["text_changes"] = spell_edits
+    # The spell's colours as the engine reads them (``_stack_item_colors``):
+    # a Lace's recolour, else its controller's Celestial Dawn ("the same is
+    # true for spells you control"), else the printed ones.
+    serialized_card["colors"] = list(game._stack_item_colors(item))
     override = spell_color_change(item)
     recolored = None
     if override is not None:

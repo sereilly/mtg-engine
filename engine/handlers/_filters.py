@@ -7,8 +7,8 @@ computed characteristics, so :func:`permanent_matches_filter` reads its types,
 colours, P/T and keywords through the layer system; a card in a zone has no
 layer stack of its own, so :func:`_card_matches_filter` and
 :func:`graveyard_card_matches` read what is printed on it — except its
-**colour** (both matchers) and its creature types (the first), which a seat's
-static can set off the battlefield (Celestial Dawn, Conspiracy; CR 613.1).
+**colour** and its creature types (both matchers), which a seat's static can
+set off the battlefield (Celestial Dawn, Conspiracy; CR 613.1).
 Those are asked with the ``game=`` and ``owner=`` every caller hands over
 (``tests/engine/test_kg_colour_off_battlefield_reads.py``). The printed state words ("tapped", "attacking", "enchanted")
 are one table, :data:`_STATE_TESTS`, with its readers beside it, and the two
@@ -132,22 +132,21 @@ def recorded_card_owner(game, context, card):
     return holders[0] if holders else None
 
 
-def _zone_card_creature_types(
-    card, *, printed=(), game=None, owner=None
-) -> frozenset[str]:
-    """The creature types of a card in a zone, for the two subtype keys.
+def _zone_card_creature_types(card, *, game=None, owner=None) -> frozenset[str]:
+    """The subtypes of a card in a zone, for every subtype key of both pure
+    matchers: ``object_creature_types.card_creature_types``, the one reader
+    of an off-battlefield object's subtypes — the printed line (with a
+    CR 604.3 "every creature type") unless its owner's static retypes it
+    (Conspiracy's second sentence; CR 613.1, 108.3).
 
-    ``printed`` is what the caller already read off the type line, returned
-    unchanged whenever nothing is rewriting it -- so the common path costs one
-    board scan and the answer for every card in the pool but one is byte the
-    same as before this existed.
+    It was a second copy of that reader, asked by the hand matcher alone, so
+    the graveyard matcher one function down read the printed line and
+    "return target Griffin card" (Mtenda Griffin) did not reach a card its
+    owner's Conspiracy had made a Griffin.
     """
-    from ..object_creature_types import creature_type_override_for_seat
+    from ..object_creature_types import card_creature_types
 
-    if "creature" not in (getattr(card, "type_line", "") or "").lower():
-        return frozenset(printed)
-    override = creature_type_override_for_seat(game, owner)
-    return frozenset({override}) if override is not None else frozenset(printed)
+    return card_creature_types(game, card, owner)
 
 
 def _card_matches_filter(
@@ -192,7 +191,7 @@ def _card_matches_filter(
     # permanent matcher's test below, asked of a card in a zone (CR 702.37a).
     if filt.get("with_morph_ability") and _late.face_down.morph_cost(card) is None:
         return False
-    types, subtypes = printed_shape(card)
+    types = printed_shape(card)[0]
     wanted = filt.get("type_filter")
     if wanted == "artifact_or_enchantment":
         # "an **artifact or enchantment** card" (Charmed Griffin). The one
@@ -227,10 +226,10 @@ def _card_matches_filter(
     # function, and asked here rather than at the top because only the two
     # subtype tests want the computed answer -- a card's *card types* are not
     # something anything in the pool rewrites off the battlefield.
-    if wanted_subtypes or filt.get("subtype_filter_all"):
-        subtypes = _zone_card_creature_types(
-            card, printed=subtypes, game=game, owner=owner
-        )
+    subtypes = (
+        _zone_card_creature_types(card, game=game, owner=owner)
+        if wanted_subtypes or filt.get("subtype_filter_all") else frozenset()
+    )
     if wanted_subtypes and not any(s in subtypes for s in wanted_subtypes):
         return False
     # The conjunction spelling, AND'd — see `subtype_filter_all` in
@@ -326,9 +325,7 @@ def _card_matches_filter(
     if any_classes:
         # Idempotent over the read the two subtype keys above may already have
         # made, so the three subtype tests cannot disagree about a card.
-        class_subtypes = _zone_card_creature_types(
-            card, printed=subtypes, game=game, owner=owner
-        )
+        class_subtypes = _zone_card_creature_types(card, game=game, owner=owner)
 
         def _class_holds(entry) -> bool:
             axis, name = entry[0], entry[1]
@@ -396,12 +393,13 @@ def graveyard_card_matches(spec: dict, card, *, game=None, owner=None) -> bool:
     because the spec is derived from it.
 
     *game* and *owner* (the seat whose graveyard holds the card, an index or a
-    ``PlayerState``) are what its **colour** is asked with: a card in a
-    graveyard is an object (CR 109.1), CR 613.1 applies the layers to it, and
-    "the same is true for … nonland cards you own that aren't on the
-    battlefield" (Celestial Dawn) is a layer-5 effect over exactly that card.
-    A caller that names neither gets the printed colours, which every caller
-    got before this took them.
+    ``PlayerState``) are what its **colour** and its **creature types** are
+    asked with: a card in a graveyard is an object (CR 109.1), CR 613.1
+    applies the layers to it, and "the same is true for … nonland cards you
+    own that aren't on the battlefield" (Celestial Dawn) is a layer-5 effect
+    over exactly that card — "… creature cards you own that aren't on the
+    battlefield" (Conspiracy) the layer-4 one. A caller that names neither
+    gets the printed answer, which every caller got before this took them.
 
     ``permanent_matches_filter``'s sibling one zone over, and here for the same
     reason: **one predicate, three readers.** The picker that offers the card,
@@ -449,14 +447,17 @@ def graveyard_card_matches(spec: dict, card, *, game=None, owner=None) -> bool:
         held_colors = _zone_card_colors(card, game=game, owner=owner)
         if not any(color in held_colors for color in colors):
             return False
-    # "target **Griffin** card" (Mtenda Griffin). Off the printed type line,
-    # which for a card outside the battlefield is the whole of what there is
-    # (CR 613.1) -- the same reader ``card_matches_filter`` uses for the
-    # identical phrase in a hand. OR'd across alternatives, because "Djinn or
-    # Efreet" is one phrase wherever it is printed.
+    # "target **Griffin** card" (Mtenda Griffin). The card's subtypes through
+    # the reader ``_card_matches_filter`` asks for the identical phrase in a
+    # hand, with the pile's owner: under its owner's Conspiracy naming Griffin
+    # a Bear card in that graveyard is a Griffin and not a Bear (CR 205.1a,
+    # 613.1). This read the printed line, so Strongarm Thug's "return target
+    # Mercenary card" found nothing a Conspiracy had made one. OR'd across
+    # alternatives, because "Djinn or Efreet" is one phrase wherever it is
+    # printed.
     wanted_subtypes = tuple(spec.get("graveyard_subtypes") or ())
     if wanted_subtypes:
-        held = printed_shape(card)[1]
+        held = _zone_card_creature_types(card, game=game, owner=owner)
         if not any(word in held for word in wanted_subtypes):
             return False
     # "up to four target **basic** land cards from a player's graveyard"
