@@ -452,7 +452,7 @@ def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict 
     if isinstance(defender_index, int) and 0 <= defender_index < len(game.players):
         defender = game.players[defender_index]
         divide = [
-            {"index": i, **_serialize_permanent_summary(p, game),
+            {"index": i, "id": p.permanent_id, **_serialize_permanent_summary(p, game),
              "pile": game.combat_defender_piles.get(i)}
             for i, p in enumerate(defender.battlefield)
             if game._is_creature(p) and not game._has_keyword(p, "flying")
@@ -467,7 +467,8 @@ def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict 
     if viewer_seat == attacker_index and defender_done and not game.combat_left_right_attacker_locked:
         attacker = game.players[attacker_index]
         label = [
-            {"index": i, **_serialize_permanent_summary(attacker.battlefield[i], game),
+            {"index": i, "id": attacker.battlefield[i].permanent_id,
+             **_serialize_permanent_summary(attacker.battlefield[i], game),
              "pile": game.combat_attacker_piles.get(i)}
             for i in sorted(game.combat_attackers)
             if 0 <= i < len(attacker.battlefield)
@@ -499,7 +500,7 @@ def _build_camouflage_info(session: Session, viewer_seat: int | None) -> dict | 
         return None
     defender = game.players[defender_index]
     creatures = [
-        {"index": i, **_serialize_permanent_summary(p, game)}
+        {"index": i, "id": p.permanent_id, **_serialize_permanent_summary(p, game)}
         for i, p in enumerate(defender.battlefield)
         if p.is_creature and not p.tapped
     ]

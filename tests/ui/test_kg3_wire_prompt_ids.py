@@ -16,11 +16,12 @@ Three halves, none a hand list of the prompts:
   assignments (``web/action_combat.py``). Each handler is read (and every
   ``web`` helper it hands the request to) for the request fields it reads: a
   handler reading a battlefield **slot** field and no id field answers by
-  index. That set must be exactly the combat family in ``COMBAT_BY_SLOT`` —
-  the measured remainder, named with its reason.
-* **The client.** Every body ``web/static`` builds for a prompt answer outside
-  that family carries an id field wherever it carries a slot field
-  (``tests/ui/js_requests.py``'s census of request bodies).
+  index. That set must be exactly ``COMBAT_BY_SLOT`` — the measured
+  remainder, named with its reason, and empty since kg3/client2.
+* **The client.** Every body ``web/static`` builds for a prompt answer
+  carries an id field wherever it carries a slot field, and none carries a
+  slot field the dispatcher refuses (``tests/ui/js_requests.py``'s census of
+  request bodies).
 * **The game.** Each prompt this entry named is armed through the app: each
   offered entry carries ``id``, the answer by id lands on that permanent, and
   a stale id is refused with the prompt still owed.
@@ -28,6 +29,15 @@ Three halves, none a hand list of the prompts:
 Measured backwards on the base (``49f558ae``): the server half named
 ``balance_confirm``, ``opponent_damage_choose``, ``optional_untap_confirm`` and
 ``untap_select``; the client half named the same four bodies.
+
+The combat declarations and assignments were held out of all three as
+``COMBAT_BY_SLOT`` until kg3/client2 gave them an id form (``attacker_ids``,
+``blocker_pairs_by_id``, … — ``web.actions.COMBAT_ID_FIELDS``) and **refused**
+their slot fields from a client: a slot field a handler reads there is the
+dispatcher's own conversion of an id, never a client's. Measured backwards on
+``f6c44277``: the server half named the eight combat kinds, and the client
+half 21 combat bodies (17 sites, three of them the auto-passes' empty
+declarations).
 """
 
 from __future__ import annotations
@@ -45,6 +55,7 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
 from engine.pending_choices import CHOICE_SPECS
 from web import actions as web_actions
+from web.actions import COMBAT_ID_FIELDS
 from web.action_registry import ACTION_HANDLERS
 from web.app import app, store
 from web.debug_actions import _DEBUG_ANYTIME_ACTIONS
@@ -68,39 +79,33 @@ SLOT_FIELDS = {
     "land_indices": {"target_permanent_ids"},
     "creature_indices": {"target_permanent_ids"},
     "sacrifice_indices": {"sacrifice_permanent_ids"},
-    "attacker_indices": set(), "bands": set(), "blocker_pairs": set(),
-    "attacker_damage": set(), "blocker_damage": set(),
-    "blocker_damage_split": set(), "banding_damage": set(), "piles": set(),
-    "camouflage_piles": set(),
+    # The combat family, each with its ``_by_id`` twin (CR 508-510).
+    **{slot: {by_id} for by_id, slot in COMBAT_ID_FIELDS.items()},
 }
+#: The slot fields the dispatcher refuses from a client and writes itself from
+#: their id twins (``web.actions._resolve_combat_ids``): a handler reading one
+#: is reading an id, and a client body carrying one is a 400.
+REFUSED_FROM_A_CLIENT = frozenset(COMBAT_ID_FIELDS.values())
 #: Request fields that name a permanent by ``permanent_id``.
 ID_FIELDS = frozenset({
     "permanent_id", "target_permanent_id", "target_permanent_ids",
     "cost_permanent_id", "cost_permanent_ids", "source_permanent_id",
     "sacrifice_permanent_ids", "as_though_unblocked_ids", "prompt_permanent_id",
-    "divided_among_defenders",
+    "divided_among_defenders", *COMBAT_ID_FIELDS,
 })
 #: The priority actions a payment prompt admits beside its answer
 #: (``ChoiceSpec.also_answers``) — casting and activating, not answers.
 PRIORITY_ACTIONS = frozenset({"tap", "activate", "cast"})
 
-#: The measured remainder: the combat declarations and assignments, which
-#: answer by battlefield slot. The engine's combat maps are slot-keyed by
-#: design and follow their creatures as the board renumbers
-#: (``_renumber_combat_after_removal``); each is announced whole, in one
-#: request, read against the board of that request (no selection is kept
-#: across requests); and the combat damage step gives nobody priority between
-#: the poll and the post. An id form for the combat wire is its own round.
-COMBAT_BY_SLOT = {
-    "declare_attackers": "attacker_indices, bands",
-    "declare_blockers": "blocker_pairs",
-    "assign_combat_damage": "attacker_damage (and blocker_damage[_split])",
-    "assign_banding_damage": "banding_damage",
-    "assign_multiblock_damage": "blocker_damage_split",
-    "assign_defender_piles": "piles (Raging River)",
-    "assign_attacker_piles": "piles (Raging River)",
-    "assign_camouflage_piles": "camouflage_piles",
-}
+#: The measured remainder: none. It held the eight combat declarations and
+#: assignments (``declare_attackers``, ``declare_blockers``,
+#: ``assign_combat_damage``, ``assign_banding_damage``,
+#: ``assign_multiblock_damage``, ``assign_defender_piles`` /
+#: ``assign_attacker_piles``, ``assign_camouflage_piles``) until they took
+#: ids (``REFUSED_FROM_A_CLIENT``). The engine's combat maps stay slot-keyed
+#: and follow their creatures as the board renumbers
+#: (``_renumber_combat_after_removal``); the wire converts at its boundary.
+COMBAT_BY_SLOT: dict[str, str] = {}
 
 
 def test_the_field_tables_are_fields_of_the_request():
@@ -169,8 +174,19 @@ def _fields_read(func, param_index: int = 1, depth: int = 0) -> set:
 
 def slot_only(read) -> list:
     """The slot fields in *read* whose id alternative is not read beside
-    them — a permanent the answer can only name by slot."""
-    return sorted(f for f in read if f in SLOT_FIELDS and not read & SLOT_FIELDS[f])
+    them — a permanent the answer can only name by slot. A field the
+    dispatcher refuses from a client is not one: what a handler reads there
+    is the dispatcher's conversion of the id twin."""
+    return sorted(
+        f for f in read
+        if f in SLOT_FIELDS and not read & SLOT_FIELDS[f] and f not in REFUSED_FROM_A_CLIENT
+    )
+
+
+def sent_by_slot(keys) -> list:
+    """What a client body names by slot: a slot field without its id twin,
+    or one the dispatcher refuses outright."""
+    return sorted(set(slot_only(set(keys))) | (set(keys) & REFUSED_FROM_A_CLIENT))
 
 
 @lru_cache(maxsize=1)
@@ -223,7 +239,7 @@ def test_every_client_answer_outside_the_combat_family_names_its_permanent_by_id
         if not kinds or kinds <= COMBAT_BY_SLOT.keys():
             continue
         examined += 1
-        only = slot_only(set(body.keys))
+        only = sent_by_slot(body.keys)
         if only:
             missing.append(f"{body.where()} {sorted(kinds)}: {only}")
     assert examined >= 100, examined
@@ -457,8 +473,3 @@ def test_balance_refuses_an_id_it_did_not_offer():
     assert _state(sid)["balance_select"] is not None
 
 
-@pytest.mark.parametrize("kind", sorted(COMBAT_BY_SLOT))
-def test_the_combat_remainder_still_reads_slots(kind):
-    """The exemption is a measurement, not a wish: each still reads a slot
-    field (when one gains an id form, this names it so the table shrinks)."""
-    assert kind in by_slot()

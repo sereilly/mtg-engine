@@ -24,7 +24,7 @@ from fastapi.testclient import TestClient
 
 from engine.card_loader import load_catalog
 from engine.models import Permanent
-from tests.helpers import app_js_function_body
+from tests.helpers import app_js_function_body, combat_ids
 from web.app import app, store
 
 client = TestClient(app)
@@ -61,7 +61,10 @@ def _state(sid):
 
 
 def _act(sid, **body):
-    return client.post(f"/api/sessions/{sid}/action", json={"seat": 0, **body})
+    # The combat fields are written by slot and sent by id (the wire refuses
+    # a slot field from a client): tests.helpers.combat_ids.
+    return client.post(f"/api/sessions/{sid}/action",
+                       json=combat_ids(store.get(sid).game, {"seat": 0, **body}))
 
 
 # ---------------------------------------------------------------------------

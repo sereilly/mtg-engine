@@ -18,7 +18,8 @@ precombat main phase into combat.
 
 from __future__ import annotations
 
-from tests.helpers import client
+from tests.helpers import client, combat_ids
+from web.app import store
 
 LANDS = [{"name": name, "count": 8} for name in ("Plains", "Island", "Swamp", "Mountain", "Forest")]
 #: The phase rail as the browser sends it with a stop on the opponent's M2.
@@ -30,7 +31,10 @@ def _state(sid: str) -> dict:
 
 
 def _act(sid: str, **body):
-    response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, **RAIL, **body})
+    # The combat fields are written by slot and sent by id (the wire refuses
+    # a slot field from a client): tests.helpers.combat_ids.
+    sent = combat_ids(store.get(sid).game, {"seat": 0, **RAIL, **body})
+    response = client.post(f"/api/sessions/{sid}/action", json=sent)
     return response.status_code, response.json()
 
 

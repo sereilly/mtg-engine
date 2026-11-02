@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from engine import load_cards
 from engine.models import Permanent
 from web.app import app, store
-from tests.helpers import LEA_PATH
+from tests.helpers import combat_ids, LEA_PATH
 
 client = TestClient(app)
 
@@ -85,7 +85,7 @@ def test_normal_declare_blockers_rejected_while_camouflage_active():
 
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "declare_blockers", "blocker_pairs": {0: 0}},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_blockers", "blocker_pairs": {0: 0}}),
     )
     assert resp.status_code == 400
     assert "Camouflage" in resp.json()["detail"]
@@ -100,7 +100,7 @@ def test_defender_assigns_piles_via_action():
     # Both creatures into pile 0 (pile 1 empty): one random attacker gets both.
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "assign_camouflage_piles", "camouflage_piles": {0: 0, 1: 0}},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "assign_camouflage_piles", "camouflage_piles": {0: 0, 1: 0}}),
     )
     assert resp.status_code == 200
     assert game.combat_blockers_locked is True
@@ -121,7 +121,7 @@ def test_only_defender_may_assign_piles():
 
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "assign_camouflage_piles", "camouflage_piles": {}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "assign_camouflage_piles", "camouflage_piles": {}}),
     )
     assert resp.status_code == 400
 
@@ -133,7 +133,7 @@ def test_empty_pile_division_means_no_blocks():
 
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "assign_camouflage_piles", "camouflage_piles": {}},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "assign_camouflage_piles", "camouflage_piles": {}}),
     )
     assert resp.status_code == 200
     assert game.combat_blockers_locked is True
@@ -170,7 +170,7 @@ def test_human_vs_human_defender_prompted():
     random.seed(3)
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "assign_camouflage_piles", "camouflage_piles": {0: 0, 1: 1}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "assign_camouflage_piles", "camouflage_piles": {0: 0, 1: 1}}),
     )
     assert resp.status_code == 200
     assert game.combat_blockers_locked is True

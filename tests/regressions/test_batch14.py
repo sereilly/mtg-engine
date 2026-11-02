@@ -50,6 +50,7 @@ from engine.models import CardDefinition, Permanent
 from tests.helpers import _game, _nosick
 from tests.helpers import CARDS_BY_NAME as _C
 from web.app import app, store
+from tests.helpers import combat_ids
 
 client = TestClient(app)
 
@@ -695,8 +696,8 @@ class TestTwoHeadedGiantDamageDivision:
 
         resp = client.post(
             f"/api/sessions/{sid}/action",
-            json={"seat": 1, "action": "assign_multiblock_damage",
-                  "blocker_damage_split": {"0": {"0": 2, "1": 2}}},
+            json=combat_ids(store.get(sid).game, {"seat": 1, "action": "assign_multiblock_damage",
+                  "blocker_damage_split": {"0": {"0": 2, "1": 2}}}),
         )
         assert resp.status_code == 200, resp.text
         # The defender's division was the last announcement anybody owed, so

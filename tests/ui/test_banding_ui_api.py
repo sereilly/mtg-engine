@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from engine.models import CardDefinition, Permanent
 from web.app import app, store
+from tests.helpers import combat_ids
 
 
 client = TestClient(app)
@@ -74,13 +75,13 @@ def test_declare_attackers_accepts_a_band():
 
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={
+        json=combat_ids(store.get(sid).game, {
             "seat": 0,
             "action": "declare_attackers",
             "attacker_indices": [0, 1],
             "target_seat": 1,
             "bands": [[0, 1]],
-        },
+        }),
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["combat"]["bands"] == [[0, 1]]
@@ -102,13 +103,13 @@ def test_declare_attackers_rejects_an_illegal_band():
 
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={
+        json=combat_ids(store.get(sid).game, {
             "seat": 0,
             "action": "declare_attackers",
             "attacker_indices": [0, 1],
             "target_seat": 1,
             "bands": [[0, 1]],
-        },
+        }),
     )
     assert resp.status_code == 400
     assert "band" in resp.json()["detail"].lower()
@@ -174,7 +175,7 @@ def test_defender_assigns_banding_damage_and_combat_resolves():
     # Defender dumps all 3 onto their own banding Wolf, sparing the Chump.
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "assign_banding_damage", "banding_damage": {"0": {"0": 3, "1": 0}}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "assign_banding_damage", "banding_damage": {"0": {"0": 3, "1": 0}}}),
     )
     assert resp.status_code == 200, resp.text
 
@@ -199,7 +200,7 @@ def test_only_the_defender_may_assign_banding_damage():
 
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "assign_banding_damage", "banding_damage": {"0": {"0": 3}}},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "assign_banding_damage", "banding_damage": {"0": {"0": 3}}}),
     )
     assert resp.status_code == 400
 
@@ -246,13 +247,13 @@ def test_human_band_attack_blocked_by_ai_prompts_for_band_blocker_damage():
 
     declared = client.post(
         f"/api/sessions/{sid}/action",
-        json={
+        json=combat_ids(store.get(sid).game, {
             "seat": 0,
             "action": "declare_attackers",
             "attacker_indices": [0, 1],
             "target_seat": 1,
             "bands": [[0, 1]],
-        },
+        }),
     )
     assert declared.status_code == 200, declared.text
 
@@ -283,7 +284,7 @@ def test_human_band_attack_blocked_by_ai_prompts_for_band_blocker_damage():
     # so the Beater survives. The band's 1+3 still kills the Blocker.
     resolved = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "assign_combat_damage", "blocker_damage": {"0": 0}},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "assign_combat_damage", "blocker_damage": {"0": 0}}),
     )
     assert resolved.status_code == 200, resolved.text
     assert game.combat_damage_resolved

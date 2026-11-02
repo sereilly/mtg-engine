@@ -23,6 +23,7 @@ from engine.card_loader import load_catalog
 from engine.models import Permanent
 from tests.helpers import _mk_creature_card, run_app_js
 from web.app import app, store
+from tests.helpers import combat_ids
 
 client = TestClient(app)
 
@@ -78,14 +79,14 @@ def test_the_state_says_what_the_declaration_must_obey():
     assert sorted(r["blocker_index"] for r in entry["requirements"]) == [0, 1, 2]
     assert entry["most_obeyable"] == 2
     # The numbers are the gate's: one blocker is refused with them, two taken.
-    refused = client.post(f"/api/sessions/{sid}/action", json={
+    refused = client.post(f"/api/sessions/{sid}/action", json=combat_ids(store.get(sid).game, {
         "seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0},
-    })
+    }))
     assert refused.status_code == 400
     assert "obeys 1 of the 2" in refused.json()["detail"]
-    accepted = client.post(f"/api/sessions/{sid}/action", json={
+    accepted = client.post(f"/api/sessions/{sid}/action", json=combat_ids(store.get(sid).game, {
         "seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0, "1": 0},
-    })
+    }))
     assert accepted.status_code == 200, accepted.json()
     assert _combat(sid)["block_requirements"] == [], "a declared combat owes nothing more"
 

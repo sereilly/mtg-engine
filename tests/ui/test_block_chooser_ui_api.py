@@ -23,7 +23,7 @@ from engine import load_cards
 from engine.models import Permanent
 from web.app import app, store
 from web.game_flow import _advance_phase
-from tests.helpers import LEA_PATH
+from tests.helpers import combat_ids, LEA_PATH
 
 client = TestClient(app)
 
@@ -82,19 +82,19 @@ def test_the_chooser_declares_the_defenders_blocks_and_the_defender_may_not():
 
     refused = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {0: 0}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "declare_blockers", "blocker_pairs": {0: 0}}),
     )
     assert refused.status_code == 400
     assert "chooses which creatures block" in refused.json()["detail"]
 
     accepted = client.post(
         f"/api/sessions/{sid}/action",
-        json={
+        json=combat_ids(store.get(sid).game, {
             "seat": 0,
             "action": "declare_blockers",
             "target_seat": 1,
             "blocker_pairs": {0: 0},
-        },
+        }),
     )
     assert accepted.status_code == 200, accepted.json()
     # The defender's own entry, with the defender's own creature in it.

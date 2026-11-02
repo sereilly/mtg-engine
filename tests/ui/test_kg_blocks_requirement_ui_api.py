@@ -16,6 +16,7 @@ from engine.card_loader import load_catalog
 from engine.models import Permanent
 from tests.helpers import _mk_creature_card
 from web.app import app, store
+from tests.helpers import combat_ids
 
 client = TestClient(app)
 
@@ -59,7 +60,7 @@ def test_the_refusal_names_the_requirement_and_how_many_can_be_obeyed():
 
     refused = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}}),
     )
     assert refused.status_code == 400
     assert refused.json()["detail"] == (
@@ -70,16 +71,16 @@ def test_the_refusal_names_the_requirement_and_how_many_can_be_obeyed():
 
     over_cap = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "declare_blockers",
-              "blocker_pairs": {"0": 0, "1": 0, "2": 0}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "declare_blockers",
+              "blocker_pairs": {"0": 0, "1": 0, "2": 0}}),
     )
     assert over_cap.status_code == 400
     assert "no more than 2" in over_cap.json()["detail"]
 
     accepted = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "declare_blockers",
-              "blocker_pairs": {"0": 0, "2": 0}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "declare_blockers",
+              "blocker_pairs": {"0": 0, "2": 0}}),
     )
     assert accepted.status_code == 200, accepted.json()
     assert game.combat_blockers == {1: {0: [0], 2: [0]}}

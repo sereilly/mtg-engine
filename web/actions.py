@@ -171,7 +171,157 @@ def _resolve_permanent_ids(game, req: GameActionRequest) -> GameActionRequest:
             }))
         update["divided_targets"] = resolved
 
+    update.update(_resolve_combat_ids(game, req))
+
     return req.model_copy(update=update) if update else req
+
+
+#: The combat declarations and assignments **by permanent id** (CR 400.7):
+#: the field a client sends → the battlefield-slot field the engine's combat
+#: maps are keyed by, which :func:`_resolve_combat_ids` writes and nothing
+#: else may. The engine's maps stay slot-keyed by design — they follow their
+#: creatures as the board renumbers (``_renumber_combat_after_removal``) — so
+#: the wire turns ids into slots here, once, against the board of this
+#: request. A request that carries a slot field itself is refused: it was
+#: written against the board the client last polled, and a creature that has
+#: left since hands its slot to whichever creature slid into it.
+COMBAT_ID_FIELDS: dict[str, str] = {
+    "attacker_ids": "attacker_indices",
+    "band_ids": "bands",
+    "attacker_planeswalker_ids_by_id": "attacker_planeswalker_ids",
+    "blocker_pairs_by_id": "blocker_pairs",
+    "attacker_damage_by_id": "attacker_damage",
+    "blocker_damage_by_id": "blocker_damage",
+    "blocker_damage_split_by_id": "blocker_damage_split",
+    "banding_damage_by_id": "banding_damage",
+    "piles_by_id": "piles",
+    "camouflage_piles_by_id": "camouflage_piles",
+}
+
+
+def _resolve_combat_ids(game, req: GameActionRequest) -> dict:
+    """The fills :data:`COMBAT_ID_FIELDS` names, for :func:`_resolve_permanent_ids`.
+
+    Each id is turned into its slot **on the battlefield the engine reads
+    that position of the map on**, and an id that is not on it is a 400 —
+    the same slot on another player's battlefield is another creature:
+
+    * an attacker (a declaration, a band, a damage map's attacker, the
+      attacker a blocker blocks or damages) is the active player's;
+    * a blocker in a damage map is on the battlefield of the player its
+      attacker attacks (``Game._combat_seat_of_blocker``, the reading the
+      combat maps renumber by);
+    * a declaration's blockers sit on one battlefield, whose player the
+      declaration is made for (``target_seat``, checked again by the handler
+      once it knows whom it declares for);
+    * a pile (Raging River, Camouflage) holds the acting seat's own creatures.
+
+    An id that has left is a 404, as everywhere on the wire.
+    """
+    by_slot = sorted(slot for slot in COMBAT_ID_FIELDS.values() if getattr(req, slot) is not None)
+    if by_slot:
+        id_field = next(f for f, slot in COMBAT_ID_FIELDS.items() if slot == by_slot[0])
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{by_slot[0]} names creatures by battlefield slot, which moves "
+                f"as the board changes; send {id_field} (permanent ids)"
+            ),
+        )
+    update: dict = {}
+    active = game.active_player_index
+
+    def slot(permanent_id, seat):
+        found = game.find_permanent_by_id(permanent_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail="that creature is no longer on the battlefield")
+        controller, permanent = found
+        if seat is None or controller != seat:
+            expected = game.players[seat].name if isinstance(seat, int) else "the player it is read for"
+            raise HTTPException(
+                status_code=400,
+                detail=f"{permanent.card.name} is not on {expected}'s battlefield",
+            )
+        return game.battlefield_index_of(permanent)
+
+    def attacker(permanent_id):
+        return slot(permanent_id, active)
+
+    def blocking_seat(attacker_slots):
+        """Whose battlefield a blocker of these attackers is read on."""
+        seats = {game._combat_seat_of_blocker(a) for a in attacker_slots}
+        if not seats:
+            seats = {game.combat_defending_player_index}
+        if len(seats) != 1:
+            raise HTTPException(
+                status_code=400,
+                detail="one creature's damage goes to attackers attacking one player",
+            )
+        return seats.pop()
+
+    def listed(value):
+        return value if isinstance(value, list) else [value]
+
+    if req.attacker_ids is not None:
+        update["attacker_indices"] = [attacker(a) for a in req.attacker_ids]
+    if req.band_ids is not None:
+        update["bands"] = [[attacker(a) for a in band] for band in req.band_ids]
+    if req.attacker_planeswalker_ids_by_id is not None:
+        update["attacker_planeswalker_ids"] = {
+            attacker(a): walker for a, walker in req.attacker_planeswalker_ids_by_id.items()
+        }
+    if req.blocker_pairs_by_id is not None:
+        pairs: dict = {}
+        seats = set()
+        for blocker_id, attacked in req.blocker_pairs_by_id.items():
+            found = game.find_permanent_by_id(blocker_id)
+            if found is None:
+                raise HTTPException(status_code=404, detail="that creature is no longer on the battlefield")
+            seats.add(found[0])
+            pairs[slot(blocker_id, found[0])] = [attacker(a) for a in listed(attacked)]
+        if len(seats) > 1:
+            raise HTTPException(
+                status_code=400,
+                detail="a declaration of blockers is one player's creatures",
+            )
+        if seats:
+            (blockers_seat,) = seats
+            if req.target_seat is not None and req.target_seat != blockers_seat:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"those blockers are {game.players[blockers_seat].name}'s",
+                )
+            update["target_seat"] = blockers_seat
+        update["blocker_pairs"] = pairs
+    for by_id, field in (("attacker_damage_by_id", "attacker_damage"),
+                         ("banding_damage_by_id", "banding_damage")):
+        divisions = getattr(req, by_id)
+        if divisions is not None:
+            out: dict = {}
+            for attacker_id, split in divisions.items():
+                attacker_slot = attacker(attacker_id)
+                seat = blocking_seat([attacker_slot])
+                out[attacker_slot] = {slot(b, seat): amount for b, amount in split.items()}
+            update[field] = out
+    if req.blocker_damage_by_id is not None:
+        out = {}
+        for blocker_id, attacker_id in req.blocker_damage_by_id.items():
+            attacker_slot = attacker(attacker_id)
+            out[slot(blocker_id, blocking_seat([attacker_slot]))] = attacker_slot
+        update["blocker_damage"] = out
+    if req.blocker_damage_split_by_id is not None:
+        out = {}
+        for blocker_id, split in req.blocker_damage_split_by_id.items():
+            shares = {attacker(a): amount for a, amount in split.items()}
+            out[slot(blocker_id, blocking_seat(shares))] = shares
+        update["blocker_damage_split"] = out
+    if req.piles_by_id is not None:
+        update["piles"] = {slot(c, req.seat): side for c, side in req.piles_by_id.items()}
+    if req.camouflage_piles_by_id is not None:
+        update["camouflage_piles"] = {
+            slot(c, req.seat): piles for c, piles in req.camouflage_piles_by_id.items()
+        }
+    return update
 
 
 # ---------------------------------------------------------------------------

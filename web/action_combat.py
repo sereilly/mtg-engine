@@ -1,6 +1,11 @@
 """Handlers for combat declarations and damage assignment (CR 508-510),
 including banding's defender-assigned damage (CR 702.22j-k), multi-block
 divisions (CR 510.1d), and the Raging River / Camouflage pile assignments.
+
+A client names every creature here by permanent id; the slot-keyed fields
+these handlers read (``attacker_indices``, ``blocker_pairs``,
+``attacker_damage`` …) are written from those ids at the top of the dispatch
+(``web.actions._resolve_combat_ids``) and refused from a client.
 """
 
 from __future__ import annotations
@@ -75,6 +80,15 @@ def _action_declare_blockers(session, req, seat_type):
             raise HTTPException(status_code=400, detail="only a defending player may declare blockers")
     elif declaring_for == game.active_player_index or not (0 <= declaring_for < len(game.players)):
         raise HTTPException(status_code=400, detail="only a defending player may declare blockers")
+    # By id, the blockers say whose battlefield their slots were read on
+    # (``target_seat``, written by ``web.actions._resolve_combat_ids``); a
+    # declaration is made for that player or not at all, because the engine
+    # reads every slot below on the battlefield of the player declared for.
+    if req.blocker_pairs_by_id and req.target_seat != declaring_for:
+        raise HTTPException(
+            status_code=400,
+            detail="those creatures are not the defending player's to block with",
+        )
     # Declaring blockers is the defending player's turn-based action (CR 509.1),
     # not a priority action: no spells may be cast during the assignment, and the
     # defender declares even while no priority window is open. The engine grants

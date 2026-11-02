@@ -25,7 +25,7 @@ from engine.combat_assignment import DIVIDED_AMONG_DEFENDERS_LOG
 from engine.models import Permanent
 from web.app import app, store
 
-from tests.helpers import _mk_creature_card, run_app_js
+from tests.helpers import _mk_creature_card, combat_ids, run_app_js
 
 client = TestClient(app)
 APP_JS = Path(__file__).resolve().parents[2] / "web" / "static" / "app.js"
@@ -46,7 +46,9 @@ def _session() -> str:
 
 
 def _act(sid: str, **body):
-    return client.post(f"/api/sessions/{sid}/action", json=body)
+    # The combat fields are written by slot and sent by id (the wire refuses
+    # a slot field from a client): tests.helpers.combat_ids.
+    return client.post(f"/api/sessions/{sid}/action", json=combat_ids(store.get(sid).game, body))
 
 
 def _state(sid: str, seat: int) -> dict:

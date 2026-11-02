@@ -19,6 +19,7 @@ from engine.card_loader import load_catalog
 from engine.models import Permanent
 from tests.helpers import _mk_creature_card
 from web.app import app, store
+from tests.helpers import combat_ids
 
 client = TestClient(app)
 
@@ -55,10 +56,10 @@ def _combat(sid: str, seat: int = 0) -> dict:
 
 
 def _declare(sid, indices):
-    return client.post(f"/api/sessions/{sid}/action", json={
+    return client.post(f"/api/sessions/{sid}/action", json=combat_ids(store.get(sid).game, {
         "seat": 0, "action": "declare_attackers", "attacker_indices": indices,
         "target_seat": 1,
-    })
+    }))
 
 
 def test_the_state_says_what_the_attack_must_obey_and_the_gate_holds_it():

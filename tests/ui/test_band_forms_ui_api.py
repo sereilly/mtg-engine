@@ -33,6 +33,7 @@ from engine.card_loader import load_catalog
 from engine.models import Permanent
 from tests.helpers import app_js_function_body, resolve_stack, run_app_js
 from web.app import app, store
+from tests.helpers import combat_ids
 
 client = TestClient(app)
 _CARDS = {card.name: card for card in load_catalog()}
@@ -223,10 +224,10 @@ def test_a_band_the_client_now_offers_is_one_the_action_takes(census):
     reader never let a player make."""
     board = census["bands with other"]
 
-    response = client.post(f"/api/sessions/{board['sid']}/action", json={
+    response = client.post(f"/api/sessions/{board['sid']}/action", json=combat_ids(store.get(board['sid']).game, {
         "seat": 0, "action": "declare_attackers", "attacker_indices": [1, 2, 3],
         "bands": [[1, 2, 3]], "target_seat": 1,
-    })
+    }))
 
     assert response.status_code == 200, response.text
     game = board["game"]

@@ -33,6 +33,7 @@ from tests.sets.lea_helpers import (
     _start_session_with_p0_graveyard,
     _swamp,
 )
+from tests.helpers import combat_ids
 
 
 def test_choose_activation_action_prefers_prodigal_for_lethal(all_cards):
@@ -1105,7 +1106,7 @@ def test_next_phase_ai_defender_casts_instant_after_declaring_blockers():
 
     declared = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1}),
     )
     assert declared.status_code == 200
 

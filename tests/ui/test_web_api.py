@@ -7,7 +7,7 @@ import web.session_store as web_session_store
 
 from engine.models import CardDefinition, Permanent
 from web.app import app, store
-from tests.helpers import LEA_PATH, resolve_stack
+from tests.helpers import combat_ids, LEA_PATH, resolve_stack
 
 
 client = TestClient(app)
@@ -1099,14 +1099,14 @@ def test_next_phase_advances_through_combat_substeps_then_second_main():
         if expected == "declare_attackers":
             declare = client.post(
                 f"/api/sessions/{sid}/action",
-                json={"seat": 0, "action": "declare_attackers", "attacker_indices": []},
+                json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_attackers", "attacker_indices": []}),
             )
             assert declare.status_code == 200
         if expected == "declare_blockers":
             session.game.priority_player_index = 1
             declare = client.post(
                 f"/api/sessions/{sid}/action",
-                json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {}},
+                json=combat_ids(store.get(sid).game, {"seat": 1, "action": "declare_blockers", "blocker_pairs": {}}),
             )
             assert declare.status_code == 200
 
@@ -1148,7 +1148,7 @@ def test_next_phase_in_blockers_step_auto_advances_after_ai_declares_none():
 
     declare = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0]},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_attackers", "attacker_indices": [0]}),
     )
     assert declare.status_code == 200
 
@@ -1221,7 +1221,7 @@ def test_combat_actions_declare_attackers_and_blockers():
 
     declare_attack = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1}),
     )
     assert declare_attack.status_code == 200
     assert declare_attack.json()["combat"]["attackers"] == [
@@ -1232,7 +1232,7 @@ def test_combat_actions_declare_attackers_and_blockers():
     session.game.priority_player_index = 1
     declare_block = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}}),
     )
     assert declare_block.status_code == 200
     assert declare_block.json()["combat"]["blockers"] == [
@@ -1284,7 +1284,7 @@ def test_no_spells_during_declare_attackers_assignment_then_priority_after():
 
     declared = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1}),
     )
     assert declared.status_code == 200
     assert declared.json()["priority_player"] == 0
@@ -1335,7 +1335,7 @@ def test_no_spells_during_declare_blockers_assignment():
 
     client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1}),
     )
     # Advance into the declare blockers step (active player held priority, passes it).
     session.game.current_step = "declare_blockers"
@@ -1352,7 +1352,7 @@ def test_no_spells_during_declare_blockers_assignment():
     # After blockers are declared, the active player receives priority (CR 509.4).
     declared = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}}),
     )
     assert declared.status_code == 200
     assert declared.json()["priority_player"] == 0
@@ -1386,20 +1386,20 @@ def test_assign_combat_damage_endpoint_changes_life():
     session.game.current_step = "declare_attackers"
     client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1}),
     )
     session.game.current_step = "declare_blockers"
     session.game.priority_player_index = 1
     client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}}),
     )
 
     session.game.current_step = "combat_damage"
     session.game.priority_player_index = 0
     assign = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "assign_combat_damage", "attacker_damage": {"0": {"0": 2}}},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "assign_combat_damage", "attacker_damage": {"0": {"0": 2}}}),
     )
     assert assign.status_code == 200
     assert assign.json()["players"][1]["life"] == 17
@@ -1452,13 +1452,13 @@ def test_banding_declare_attack_with_band_and_route_blocker_damage():
 
     declare = client.post(
         f"/api/sessions/{sid}/action",
-        json={
+        json=combat_ids(store.get(sid).game, {
             "seat": 0,
             "action": "declare_attackers",
             "attacker_indices": [0, 1],
             "bands": [[0, 1]],
             "target_seat": 1,
-        },
+        }),
     )
     assert declare.status_code == 200, declare.text
     assert session.game.combat_bands == [[0, 1]]
@@ -1467,7 +1467,7 @@ def test_banding_declare_attack_with_band_and_route_blocker_damage():
     session.game.priority_player_index = 1
     block = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
+        json=combat_ids(store.get(sid).game, {"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}}),
     )
     assert block.status_code == 200, block.text
     # 702.22h: blocking the beater also blocks the bander.
@@ -1477,11 +1477,11 @@ def test_banding_declare_attack_with_band_and_route_blocker_damage():
     session.game.start_priority_window(0)
     damage = client.post(
         f"/api/sessions/{sid}/action",
-        json={
+        json=combat_ids(store.get(sid).game, {
             "seat": 0,
             "action": "assign_combat_damage",
             "blocker_damage": {"0": 1},  # route the blocker's damage onto the bander
-        },
+        }),
     )
     assert damage.status_code == 200, damage.text
 
@@ -1519,7 +1519,7 @@ def test_next_phase_ai_defender_auto_declares_blockers_and_advances_when_no_inst
 
     declared = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1}),
     )
     assert declared.status_code == 200
 
@@ -1571,7 +1571,7 @@ def test_next_phase_holds_post_block_priority_when_stop_flagged():
 
     declared = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1}),
     )
     assert declared.status_code == 200
 
@@ -1634,7 +1634,7 @@ def test_next_phase_holds_combat_damage_when_stop_flagged():
 
     declared = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1}),
     )
     assert declared.status_code == 200
 
@@ -1703,7 +1703,7 @@ def test_human_defender_can_declare_blockers_while_ai_attacker_holds_priority():
 
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
+        json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_blockers", "blocker_pairs": {"0": 0}}),
     )
     assert resp.status_code == 200, resp.text
     payload = resp.json()

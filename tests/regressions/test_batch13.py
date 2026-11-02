@@ -35,6 +35,7 @@ from engine.models import CardDefinition, Permanent
 from tests.helpers import _game, _nosick
 from tests.helpers import CARDS_BY_NAME as _C
 from web.app import app, store
+from tests.helpers import combat_ids
 
 client = TestClient(app)
 
@@ -439,8 +440,8 @@ class TestBandBlockerDamageSplit:
         game.priority_player_index = 0
         resp = client.post(
             f"/api/sessions/{sid}/action",
-            json={"seat": 0, "action": "assign_combat_damage",
-                  "blocker_damage_split": {"0": {"0": 3, "1": 1}}},
+            json=combat_ids(store.get(sid).game, {"seat": 0, "action": "assign_combat_damage",
+                  "blocker_damage_split": {"0": {"0": 3, "1": 1}}}),
         )
         assert resp.status_code == 200, resp.text
         assert game.combat_damage_resolved
