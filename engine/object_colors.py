@@ -130,6 +130,29 @@ def card_colors(game=None, card=None, seat=None) -> tuple[str, ...]:
     return override if override is not None else printed
 
 
+def spell_colors(game=None, card=None, seat=None) -> tuple[str, ...]:
+    """The colours of *card* **as the spell it is now**: where *card* is the
+    spell resolving (``Game.resolving_items``' last entry, not an ability),
+    the stack object's own colours (``Game._stack_item_colors`` — a Lace's
+    recolour on the object, then the controller's board), else
+    :func:`card_colors`.
+
+    A spell reaches protection and the damage paths as its printed card, which
+    records nothing an effect did to it on the stack: Purelace made a Lightning
+    Bolt white, and the Bolt — read through :func:`card_colors` — went on being
+    red, dealt its 3 to a Black Knight (protection from white, CR 702.16b/e)
+    and was stopped by protection from red. Only the resolving object is
+    asked: every copy of a card in a game is one ``CardDefinition``, so
+    identity names the spell only while it is the one resolving.
+    """
+    items = getattr(game, "resolving_items", None) if game is not None else None
+    if items:
+        item = items[-1]
+        if getattr(item, "card", None) is card and not getattr(item, "is_ability", True):
+            return tuple(game._stack_item_colors(item))
+    return card_colors(game, card, seat)
+
+
 def object_colors(game, obj, seat=None) -> tuple[str, ...]:
     """The effective colours of **any** object (CR 105 over CR 109.1).
 
