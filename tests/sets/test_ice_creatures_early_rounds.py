@@ -1171,7 +1171,7 @@ def test_norritt_marks_the_creature_it_names(set_pool):
     )
     resolve_stack(game)
 
-    assert giant.metadata.get("must_attack_until_eot") is True
+    assert giant.metadata.get("must_attack_until_eot") == 1
     assert bears.metadata.get("must_attack_until_eot") is None
 
 

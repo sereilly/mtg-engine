@@ -123,7 +123,7 @@ class TestBlazeOfGlory:
         result = game.cast_from_hand(0, "Blaze of Glory", target_player_index=1)
 
         assert result.supported
-        assert p2.battlefield[0].metadata.get("must_block_all_until_eot") is True
+        assert p2.battlefield[0].metadata.get("must_block_all_until_eot") == 1
 
 
 # ---------------------------------------------------------------------------

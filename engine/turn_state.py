@@ -449,6 +449,26 @@ def marked_for_this_turn(game, permanent, key: str) -> bool:
     return stamped_turn_is_now(game, permanent.metadata.get(key))
 
 
+def add_seat_turn_stamp(permanent, key: str, stamp: dict) -> None:
+    """Stamp *permanent* under *key* for one more effect over the turn
+    *stamp* names, beside any it already carries — a list of stamps, so two
+    effects are two (CR 508.1d counts each requirement) and a stamp for a
+    later turn does not erase one still owed. A lone dict, the shape the
+    record had, is kept as the list's first entry."""
+    held = permanent.metadata.get(key)
+    stamps = list(held) if isinstance(held, list) else ([held] if isinstance(held, dict) else [])
+    stamps.append(dict(stamp))
+    permanent.metadata[key] = stamps
+
+
+def stamps_for_this_turn(game, permanent, key: str) -> int:
+    """How many of *permanent*'s stamps under *key* name the turn being taken
+    (:func:`add_seat_turn_stamp`'s list, or the lone dict it replaced)."""
+    held = permanent.metadata.get(key)
+    stamps = held if isinstance(held, list) else [held]
+    return sum(1 for stamp in stamps if stamped_turn_is_now(game, stamp))
+
+
 #: The printed window "**during that player's next turn**" (Oracle en-Vec),
 #: spelled once for the three readers of it: the duration table that parses the
 #: words, the lowerings that put it in a payload, and the handlers that turn it

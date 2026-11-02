@@ -699,7 +699,7 @@ def test_kookus_only_bites_while_its_keeper_is_absent(set_pool):
     game, kookus, triggered = _upkeep(with_keeper=False)
     assert triggered
     assert game.players[0].life == 17
-    assert kookus.metadata.get("must_attack_until_eot") is True
+    assert kookus.metadata.get("must_attack_until_eot") == 1
 
     game, kookus, triggered = _upkeep(with_keeper=True)
     assert not triggered, "CR 603.4: a gated trigger whose condition is false does not trigger"

@@ -430,7 +430,7 @@ def test_blaze_of_glory_sets_forced_blocking_marker(all_cards):
     result = game.cast_from_hand(0, "Blaze of Glory", target_player_index=1)
 
     assert result.supported
-    assert p2.battlefield[0].metadata.get("must_block_all_until_eot") is True
+    assert p2.battlefield[0].metadata.get("must_block_all_until_eot") == 1
 
 
 def test_camouflage_resolves_supported(all_cards):

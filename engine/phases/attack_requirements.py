@@ -77,11 +77,12 @@ settles *whom* by a matching under those caps.
 from dataclasses import dataclass, field
 
 from ..aura_restrictions import auras_imposing
+from ..combat_permissions import MUST_ATTACK_UNTIL_EOT, turn_requirements
 from ..combat_restrictions import defender_attack_cap, participation_cap
 from ..models import Permanent
 from ..oracle import compile_card_oracle
 from ..subject_filters import subject_matches
-from ..turn_state import MUST_ATTACK_ON_SEAT_TURN_KEY, marked_for_this_turn
+from ..turn_state import MUST_ATTACK_ON_SEAT_TURN_KEY, stamps_for_this_turn
 
 
 #: How many nodes one search may visit before it answers with the best it has
@@ -187,15 +188,14 @@ class AttackRequirementsMixin:
         """
         count = 0
         # A resolved spell's or ability's mark for this turn (Boiling Blood,
-        # Siren's Call, Norritt, Kookus's upkeep).
-        if attacker.metadata.get("must_attack_until_eot"):
-            count += 1
+        # Siren's Call, Norritt, Kookus's upkeep) — one per effect: two Boiling
+        # Bloods are two requirements.
+        count += turn_requirements(attacker, MUST_ATTACK_UNTIL_EOT)
         # "**During that player's next turn**, the chosen creatures attack if
         # able" (Oracle en-Vec): the same requirement over a turn that had not
         # started when the ability resolved, so a seat-turn stamp rather than
-        # the cleanup-swept mark.
-        if marked_for_this_turn(self, attacker, MUST_ATTACK_ON_SEAT_TURN_KEY):
-            count += 1
+        # the cleanup-swept mark — one per effect, as above.
+        count += stamps_for_this_turn(self, attacker, MUST_ATTACK_ON_SEAT_TURN_KEY)
         # An Aura (Furor of the Bitten), asked of the Auras attached right now
         # so the requirement ends when the Aura does.
         count += len(auras_imposing(attacker, "must_attack_each_combat"))

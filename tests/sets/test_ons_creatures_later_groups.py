@@ -277,7 +277,7 @@ def test_w1g4_walking_desecration_compels_only_the_named_type(set_pool):
     assert game.confirm_creature_type_choice(0, "goblin")
     _w1g4_resolve_stack(game)
 
-    assert goblin.metadata.get("must_attack_until_eot") is True
+    assert goblin.metadata.get("must_attack_until_eot") == 1
     assert not zombie.metadata.get("must_attack_until_eot")
 
     game.active_player_index = 1

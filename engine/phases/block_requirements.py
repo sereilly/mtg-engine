@@ -61,7 +61,7 @@ from ..aura_restrictions import auras_imposing
 from ..combat_permissions import (MUST_BLOCK_ALL_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_THIS_COMBAT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
-                                  MUST_BLOCK_UNTIL_EOT)
+                                  MUST_BLOCK_UNTIL_EOT, turn_requirements)
 from ..combat_restrictions import participation_cap
 from ..models import Permanent
 from ..oracle import compile_card_oracle
@@ -205,16 +205,19 @@ class BlockRequirementsMixin:
                     ))
 
         # "It blocks each attacking creature this turn if able." (Blaze of
-        # Glory.) One requirement per attacker, on the one creature.
+        # Glory.) One requirement per attacker, on the one creature — per
+        # effect: two Blazes are two requirements for each attacker.
         for blocker_idx, blocker in blockers:
-            if not blocker.metadata.get(MUST_BLOCK_ALL_UNTIL_EOT):
-                continue
+            blazes = turn_requirements(blocker, MUST_BLOCK_ALL_UNTIL_EOT)
             for attacker_idx, attacker in own_attackers:
-                found.append(BlockRequirement(
-                    blocker_idx, attacker_idx,
-                    f"{blocker.card.name} must block {attacker.card.name} "
-                    "(Blaze of Glory)",
-                ))
+                found.extend(
+                    BlockRequirement(
+                        blocker_idx, attacker_idx,
+                        f"{blocker.card.name} must block {attacker.card.name} "
+                        "(Blaze of Glory)",
+                    )
+                    for _ in range(blazes)
+                )
 
         # "Target creature blocks **this creature** this turn if able."
         # (Trumpeting Armodon, Rampant Elephant, Crashing Boars, Magnetic Web.)
@@ -251,7 +254,7 @@ class BlockRequirementsMixin:
         # (Provoke), and a permanent printing it about a set (Invasion Plans).
         for blocker_idx, blocker in blockers:
             sources = (
-                (1 if blocker.metadata.get(MUST_BLOCK_UNTIL_EOT) else 0)
+                turn_requirements(blocker, MUST_BLOCK_UNTIL_EOT)
                 + sum(
                     1
                     for instr in compile_card_oracle(blocker.effective_card).instructions
