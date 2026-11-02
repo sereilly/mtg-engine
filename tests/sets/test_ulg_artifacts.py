@@ -144,11 +144,13 @@ def test_crawlspace_does_not_count_an_attack_on_a_planeswalker(set_pool):
     assert ok, msg
 
 
-def test_a_required_attacker_is_not_owed_where_every_seat_is_capped(set_pool):
-    """CR 508.1d obeys requirements *subject to* the restrictions. With a
-    Crawlspace on both defenders and two attackers aimed at each, a creature
-    that "attacks each combat if able" is under no obligation the declaration
-    could satisfy — enforcing it anyway would make every declaration illegal."""
+def test_a_required_attacker_takes_a_place_under_every_seats_cap(set_pool):
+    """CR 508.1d obeys requirements *subject to* the restrictions — and counts
+    them over every declaration. With a Crawlspace on both defenders, four
+    plain attackers fill both caps and obey nothing, while the Ox attacking in
+    place of one of them obeys its requirement: CR 508.1d's own example with
+    Dueling Grounds, one cap per seat. (This test once asserted the four were
+    legal; the step cleared every requirement once the caps were full.)"""
     game = _g4_three_seat_combat(set_pool, crawlspaces_on=(1, 2))
     compelled = Permanent(card=CardDefinition(
         name="Eager Ox", mana_cost="", cmc=0.0, type_line="Creature - Test",
@@ -161,6 +163,10 @@ def test_a_required_attacker_is_not_owed_where_every_seat_is_capped(set_pool):
 
     ok, msg = game.declare_attackers(
         0, [0, 1, 2, 3], attacker_targets={0: 1, 1: 1, 2: 2, 3: 2}
+    )
+    assert (ok, msg) == (False, "Eager Ox must attack if able")
+    ok, msg = game.declare_attackers(
+        0, [0, 1, 2, 4], attacker_targets={0: 1, 1: 1, 2: 2, 4: 2}
     )
     assert ok, msg
 

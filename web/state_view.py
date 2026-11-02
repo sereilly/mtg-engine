@@ -1253,11 +1253,30 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     # the engine so the UI offers exactly the assignments the engine would accept.
     combat_state = session.game.get_combat_state()
     game = session.game
+    # CR 508.1d: what the active player's declaration must obey, and the most
+    # of it one legal declaration can — the numbers the declaration gate
+    # refuses by (``engine/phases/attack_requirements.py``), shown before the
+    # player declares, as ``block_requirements`` below is for blocks. A
+    # Juggernaut and a Bear under Dueling Grounds: one requirement, obeyable.
+    combat_state["attack_requirements"] = []
     if game.current_turn_phase == "combat" and game.current_step == "declare_attackers":
         combat_state["legal_attacker_indices"] = game.legal_attacker_indices(game.active_player_index)
         # CR 702.22c: which sets of the active player's creatures may be
         # declared as one band. See ``_band_forms``.
         combat_state["band_forms"] = _band_forms(game)
+        if not game.combat_attackers_locked:
+            attacker_seat = game.active_player_index
+            requirements, most = game.attack_requirement_summary(attacker_seat)
+            if requirements:
+                combat_state["attack_requirements"].append({
+                    "attacking_player_index": attacker_seat,
+                    "requirements": [
+                        {"attacker_index": r.attacker, "reason": r.reason,
+                         "conditional": r.conditional}
+                        for r in requirements
+                    ],
+                    "most_obeyable": most,
+                })
     else:
         combat_state["legal_attacker_indices"] = []
         combat_state["band_forms"] = []

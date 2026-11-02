@@ -44,21 +44,21 @@ _LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 #                                   + declare_blockers (the charge)
 #   cant_block                      phases/block_legality
 #   creatures_cant_block            phases/block_legality
-#   must_attack_each_combat         phases/attack_legality._must_attack_if_able
-#   creatures_must_attack           phases/attack_legality._must_attack_if_able
+#   must_attack_each_combat         phases/attack_requirements._attack_requirement_count
+#   creatures_must_attack           phases/attack_requirements._attack_requirement_count
 #                                   (a board scan)
 #   creatures_must_attack_if_partner_attacks
-#                                   phases/attack_legality._must_attack_beside
+#                                   phases/attack_requirements._conditional_attack_requirements
 #                                   (a board scan over the declaration)
 #   creatures_must_attack_if_source_attacks
-#                                   phases/attack_legality._must_attack_beside
+#                                   phases/attack_requirements._conditional_attack_requirements
 #                                   (the same scan, asking identity)
 #   must_block_each_combat          phases/block_requirements.block_requirements
 #   creatures_must_block            phases/block_requirements._board_block_compulsions
 #                                   (a board scan)
 #   attacker_chooses_blocks         phases/combat_phase.block_chooser_index
 #                                   (the declaration, CR 509.1c)
-#   must_attack_if_partner_attacks  phases/declare_attackers_step.declare_attackers
+#   must_attack_if_partner_attacks  phases/attack_requirements._conditional_attack_requirements
 #                                   (the declaration, not the creature)
 #   attacks_as_though_hasty_unless_it_entered
 #                                   phases/attack_legality.can_attack
@@ -83,8 +83,8 @@ _LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 #   subject_can_block_only          phases/block_legality (a board scan)
 #   must_be_blocked                 phases/block_requirements.block_requirements
 #   must_be_blocked_by_all_able     phases/block_requirements.block_requirements
-#   max_attackers_each_combat       phases/declare_attackers_step.declare_attackers
-#   max_attackers_on_you_each_combat  phases/declare_attackers_step.declare_attackers
+#   max_attackers_each_combat       phases/attack_legality.attack_declaration_refusal
+#   max_attackers_on_you_each_combat  phases/attack_legality.attack_declaration_refusal
 #   max_blockers_each_combat        phases/block_legality.block_declaration_refusal
 #   cant_attack_unless_others_attack  phases/attack_legality.attack_declaration_refusal
 #   cant_block_unless_others_block  phases/block_legality.block_declaration_refusal

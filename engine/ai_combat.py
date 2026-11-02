@@ -34,7 +34,7 @@ call. Those are genuinely different loops over the same engine seam
 from dataclasses import dataclass, field
 
 from .combat_assignment import combat_damage_assigned_by
-from .ai_scoring import choose_attack_target
+from .ai_scoring import _permanent_value, choose_attack_target
 from .ai_declarations import choose_attackers, choose_combat_blockers, legal_attackers
 
 
@@ -550,16 +550,25 @@ def declare_ai_attackers(
     *attacker_indices* overrides the policy's choice (the web Debug Menu's
     "attack with everything"); None asks `choose_attackers`.
 
+    Every rung is declared as the engine's CR 508.1d maximisation hands it back
+    (`Game.obeying_attack_declaration`): unchanged when it already obeys the
+    most requirements it can, otherwise the nearest declaration that does —
+    which may aim a creature somewhere other than the chosen opponent (a
+    Juggernaut beside a Propaganda that can attack only the planeswalker
+    without paying), so the declaration carries each creature's aim.
+
     The fallback chain, and why each rung is there:
 
     1. The chosen set. If the engine takes it, done.
-    2. **Every legal attacker.** A superset fixes exactly one class of refusal —
-       a declaration that omitted a creature which must attack if able — because
-       it contains every forced creature, and a forced creature that cannot
-       legally attack is never required.
-    3. **Nobody.** A superset cannot satisfy a *restriction* — a cap, an
-       Errantry, an Orcish Conscripts — so for those, rung 2 is refused for the
-       same reason rung 1 was and the seat ends up attacking with nothing.
+    2. **Every legal attacker.** A superset of every compelled creature — the
+       rung that once fixed a declaration omitting one, kept for whatever the
+       chooser's prune and the maximisation together still miss.
+    3. **The cost-free maximum nearest to nobody.** "Nobody" was this rung,
+       and it is no longer always legal: under Dueling Grounds beside an
+       "attacks each combat if able" creature, declaring nobody obeys fewer
+       requirements than declaring that creature alone (CR 508.1d's own
+       example). The engine's answer from an empty preference is legal by
+       construction.
 
     Rung 3 is the silent one, and it is logged rather than swallowed. It is not
     hypothetical: it is what both attack caps did to every AI seat that met one,
@@ -570,9 +579,7 @@ def declare_ai_attackers(
     if attacker_indices is None:
         attacker_indices = choose_attackers(game, seat)
 
-    ok, why = game.declare_attackers(
-        seat, attacker_indices, defending_player_index=target
-    )
+    ok, why = _declare_obeying(game, seat, attacker_indices, target)
     if ok:
         return True, why
 
@@ -582,9 +589,7 @@ def declare_ai_attackers(
         f"AI attack declaration refused ({why}); falling back to every legal attacker"
     )
     fallback = legal_attackers(game, seat, against=target)
-    ok, why = game.declare_attackers(
-        seat, fallback, defending_player_index=target
-    )
+    ok, why = _declare_obeying(game, seat, fallback, target)
     if ok:
         return True, why
 
@@ -592,9 +597,23 @@ def declare_ai_attackers(
         outcome.silent_attacks.append((game.players[seat].name, why))
     game.log.append(
         f"AI fallback attack declaration also refused ({why}); "
-        "this seat attacks with nobody"
+        "this seat attacks with the fewest the requirements allow"
     )
-    return game.declare_attackers(seat, [], defending_player_index=target)
+    return _declare_obeying(game, seat, [], target)
+
+
+def _declare_obeying(game, seat: int, indices: list[int], target: int):
+    """Declare *indices* at *target*, as the CR 508.1d maximisation hands the
+    declaration back — each creature with the seat or planeswalker it aims
+    at."""
+    declaration = game.obeying_attack_declaration(
+        seat, list(indices), against=target, rank=_permanent_value,
+    )
+    return game.declare_attackers(
+        seat, declaration.attackers, defending_player_index=target,
+        attacker_targets=declaration.seats or None,
+        attacker_planeswalker_ids=declaration.walkers or None,
+    )
 
 
 def declare_ai_blockers(

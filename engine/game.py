@@ -81,6 +81,7 @@ from .phases import (
     BeginningOfCombatStepMixin,
     DeclareAttackersStepMixin,
     AttackLegalityMixin,
+    AttackRequirementsMixin,
     DeclareBlockersStepMixin,
     BlockLegalityMixin,
     BlockRequirementsMixin,
@@ -110,6 +111,7 @@ class Game(
     DeclareAttackersStepMixin,
     # Split out of the declare-step mixins and composed directly after them.
     AttackLegalityMixin,
+    AttackRequirementsMixin,
     DeclareBlockersStepMixin,
     BlockLegalityMixin,
     BlockRequirementsMixin,

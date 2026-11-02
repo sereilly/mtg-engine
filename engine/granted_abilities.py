@@ -108,7 +108,7 @@ def _probe_card(text: str, self_name: str | None):
 #: reader that was checked: ``block_legality`` reads ``cant_block`` and
 #: ``block_requirements`` ``must_be_blocked_by_all_able`` off the blocker's
 #: and the attacker's effective card at the declaration, and
-#: ``attack_legality._must_attack_if_able`` reads
+#: ``attack_requirements._attack_requirement_count`` reads
 #: ``must_attack_each_combat`` the same way. Adding a kind is a claim about its
 #: reader; ``tests/regressions/test_ody_w1g1_conditional_grants.py`` drives
 #: each one through a declaration.
