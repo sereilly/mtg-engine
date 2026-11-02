@@ -142,54 +142,58 @@ def put_exiled_this_way(game: Game, instruction: OracleInstruction, context: Ora
         seats = [game.players.index(context.caster)]
     described = dict(payload.get("filter") or {})
     returned = 0
-    for seat in seats:
-        player = game.players[seat]
-        for card in list(by_seat.get(seat) or ()):
-            if described and not _card_matches_filter(
-                card, described, game=game, owner=player
-            ):
-                continue
-            # Asked before the card leaves, because the answer is derived from
-            # the pile: a card exiled **face down** (CR 406.3) going back to a
-            # hidden zone was never shown to anybody, and a log line naming it
-            # is the one place the table would learn what Suppress hid.
-            hidden = any(
-                held is card for held in face_down_exiled_cards(game, seat)
-            )
-            if not game.take_card_from_exile(player, card):
-                game.log.append(
-                    f"{context.card.name}: "
-                    f"{'a face-down card' if hidden else card.name} "
-                    "is no longer exiled"
+    # "Then all players put all creatures they exiled onto the battlefield at
+    # the same time" (Living Death's ruling, 2018-03-16): one event across every
+    # seat, so every newcomer sees every other enter (CR 603.6a).
+    with game.entering_together():
+        for seat in seats:
+            player = game.players[seat]
+            for card in list(by_seat.get(seat) or ()):
+                if described and not _card_matches_filter(
+                    card, described, game=game, owner=player
+                ):
+                    continue
+                # Asked before the card leaves, because the answer is derived from
+                # the pile: a card exiled **face down** (CR 406.3) going back to a
+                # hidden zone was never shown to anybody, and a log line naming it
+                # is the one place the table would learn what Suppress hid.
+                hidden = any(
+                    held is card for held in face_down_exiled_cards(game, seat)
                 )
-                continue
-            if zone == "hand" and hidden:
-                game.put_card_into_hand(player, card)
+                if not game.take_card_from_exile(player, card):
+                    game.log.append(
+                        f"{context.card.name}: "
+                        f"{'a face-down card' if hidden else card.name} "
+                        "is no longer exiled"
+                    )
+                    continue
+                if zone == "hand" and hidden:
+                    game.put_card_into_hand(player, card)
+                    game.log.append(
+                        f"{player.name} returned a face-down card from exile to "
+                        "their hand"
+                    )
+                    returned += 1
+                    continue
+                if zone == "hand":
+                    # "…returns to **their** hand each card they exiled this way."
+                    # (Memory Jar.) The pile's own owner's hand, which is the seat
+                    # this loop is already on — a hand is somebody's zone
+                    # (CR 402.1) where a battlefield is nobody's, and the lowering
+                    # refused any third party's. Through ``put_card_into_hand``
+                    # rather than an append, because CR 903.9b has no single fire
+                    # site and this is one more of the places that would forget it.
+                    game.put_card_into_hand(player, card)
+                    game.log.append(
+                        f"{player.name} returned {card.name} from exile to their hand"
+                    )
+                    returned += 1
+                    continue
+                game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
                 game.log.append(
-                    f"{player.name} returned a face-down card from exile to "
-                    "their hand"
+                    f"{player.name} put {card.name} onto the battlefield from exile"
                 )
                 returned += 1
-                continue
-            if zone == "hand":
-                # "…returns to **their** hand each card they exiled this way."
-                # (Memory Jar.) The pile's own owner's hand, which is the seat
-                # this loop is already on — a hand is somebody's zone
-                # (CR 402.1) where a battlefield is nobody's, and the lowering
-                # refused any third party's. Through ``put_card_into_hand``
-                # rather than an append, because CR 903.9b has no single fire
-                # site and this is one more of the places that would forget it.
-                game.put_card_into_hand(player, card)
-                game.log.append(
-                    f"{player.name} returned {card.name} from exile to their hand"
-                )
-                returned += 1
-                continue
-            game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
-            game.log.append(
-                f"{player.name} put {card.name} onto the battlefield from exile"
-            )
-            returned += 1
     if not returned:
         game.log.append(f"{context.card.name}: no exiled cards to put back")
     return True, "resolved"
@@ -528,18 +532,20 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
         # takes the plain loop below, as it always has.
         _return_pile_with_aura_hosts(game, entries, context, controller_index)
         return True, "resolved"
-    for entry in entries:
-        owner = game.players[int(entry["owner_index"])]
-        if entry["card"] not in owner.exile:
-            # It has already left exile by some other route; a card put back
-            # from nowhere is a card this effect created.
-            continue
-        # The one placement, shared with the automatic return: a hand or a
-        # library goes through the CR 903.9b seam rather than being appended.
-        onto_battlefield |= game.leave_linked_exile(
-            entry, zone, controller_index=controller_index
-        ) is not None
-        moved.append(entry["card"].name)
+    # One event: the pile returns together (CR 603.6a).
+    with game.entering_together():
+        for entry in entries:
+            owner = game.players[int(entry["owner_index"])]
+            if entry["card"] not in owner.exile:
+                # It has already left exile by some other route; a card put back
+                # from nowhere is a card this effect created.
+                continue
+            # The one placement, shared with the automatic return: a hand or a
+            # library goes through the CR 903.9b seam rather than being appended.
+            onto_battlefield |= game.leave_linked_exile(
+                entry, zone, controller_index=controller_index
+            ) is not None
+            moved.append(entry["card"].name)
     if moved:
         # "…under **your** control" is not the owner's zone, so the line has to
         # say whose it is or the log describes a different effect.
@@ -654,42 +660,44 @@ def _put_linked_pile_onto_battlefield(
     exile (CR 303.4g).
     """
     moved: list[str] = []
-    for position, entry in enumerate(entries):
-        owner = game.players[int(entry["owner_index"])]
-        card = entry["card"]
-        if card not in owner.exile:
-            continue
-        seat = (
-            int(entry["owner_index"]) if controller_index is None
-            else int(controller_index)
-        )
-        host = None
-        if position in hosts:
-            host = hosts[position]
-            if host is None or not returning_aura_hosts(game, seat, card, [host]):
-                game.log.append(
-                    f"{card.name} has nothing it could enchant and stays in "
-                    f"{owner.name}'s exile"
-                )
+    # One event, every Aura with its host (CR 603.6a).
+    with game.entering_together():
+        for position, entry in enumerate(entries):
+            owner = game.players[int(entry["owner_index"])]
+            card = entry["card"]
+            if card not in owner.exile:
                 continue
-        # Attached as part of the same move, inside this resolution — the
-        # arrangement Replenish's return keeps, so the Aura is never an
-        # unattached one for CR 704.5m to find — once it is there (the entry's
-        # ``then``, at the answer when an "as it enters" choice keeps it on
-        # its way, CR 614.12a).
-        arrival = game.leave_linked_exile(
-            entry, "battlefield", controller_index=controller_index,
-            then=(
-                (lambda aura, host=host: attach_aura(aura, host))
-                if host is not None else None
-            ),
-        )
-        if arrival is None:
-            continue
-        if host is not None:
-            moved.append(f"{card.name} (enchanting {host.card.name})")
-        else:
-            moved.append(card.name)
+            seat = (
+                int(entry["owner_index"]) if controller_index is None
+                else int(controller_index)
+            )
+            host = None
+            if position in hosts:
+                host = hosts[position]
+                if host is None or not returning_aura_hosts(game, seat, card, [host]):
+                    game.log.append(
+                        f"{card.name} has nothing it could enchant and stays in "
+                        f"{owner.name}'s exile"
+                    )
+                    continue
+            # Attached as part of the same move, inside this resolution — the
+            # arrangement Replenish's return keeps, so the Aura is never an
+            # unattached one for CR 704.5m to find — once it is there (the entry's
+            # ``then``, at the answer when an "as it enters" choice keeps it on
+            # its way, CR 614.12a).
+            arrival = game.leave_linked_exile(
+                entry, "battlefield", controller_index=controller_index,
+                then=(
+                    (lambda aura, host=host: attach_aura(aura, host))
+                    if host is not None else None
+                ),
+            )
+            if arrival is None:
+                continue
+            if host is not None:
+                moved.append(f"{card.name} (enchanting {host.card.name})")
+            else:
+                moved.append(card.name)
     if moved:
         game.log.append(
             f"{', '.join(moved)} return to the battlefield ({card_name})"
@@ -920,52 +928,56 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
     # controller's, so asking that pile first keeps it exactly where it was, and
     # the wider scan is reached only by the card that needs it.
     seats = [context.caster] + [p for p in game.players if p is not context.caster]
-    for card in cards:
-        for owner in seats:
-            # Through the departure seam, which locates the copy by identity and
-            # retires the exile record with it — a stale record is inert until
-            # the *same* card is exiled again by something else, when it would
-            # come back to life still saying "face down" (CR 400.7, 406.7).
-            if not game.take_card_from_exile(owner, card):
-                continue
-            if destination == "battlefield":
-                # "Return that card to the battlefield under **its owner's**
-                # control." (Liberate.) CR 400.3 put the card in its owner's
-                # exile, so the seat holding it is the owner; "under your
-                # control" is the ability's controller instead, and the
-                # permanent then remembers whose it is, exactly as
-                # ``reanimate_bound_card`` records it. A new object either way
-                # (CR 400.7): no counters, no Auras, summoning-sick.
-                owner_seat = game.players.index(owner)
-                seat = (
-                    owner_seat
-                    if instruction.payload.get("control") == "owner"
-                    else game.players.index(caster)
-                )
-                permanent = Permanent(card=card)
-                if owner_seat != seat:
-                    permanent.metadata["owner_player_index"] = owner_seat
-                game._put_permanent_onto_battlefield(seat, permanent, None)
-                moved.append(card)
-                returned_to.setdefault(game.players[seat].name, []).append(card.name)
-                break
-            if destination == "graveyard":
-                # CR 400.3: its **owner's** graveyard, and the owner is the
-                # player whose exile held it — the card reached that pile out of
-                # that player's own library. Through the write seam like the
-                # hand branch below: the graveyard gained one at Mirage's third
-                # wave (Forbidden Crypt's "if a card would be put into your
-                # graveyard from anywhere"), and this line was written a merge
-                # earlier when there was none. The guard is what said so.
-                if game.put_card_into_graveyard(owner, card):
+    # "…return those cards to the battlefield" (Planar Guide) is one event:
+    # every card it returns enters together (CR 603.6a; its ruling, 2004-10-04:
+    # "All 'enters' abilities trigger as normal").
+    with game.entering_together():
+        for card in cards:
+            for owner in seats:
+                # Through the departure seam, which locates the copy by identity and
+                # retires the exile record with it — a stale record is inert until
+                # the *same* card is exiled again by something else, when it would
+                # come back to life still saying "face down" (CR 400.7, 406.7).
+                if not game.take_card_from_exile(owner, card):
+                    continue
+                if destination == "battlefield":
+                    # "Return that card to the battlefield under **its owner's**
+                    # control." (Liberate.) CR 400.3 put the card in its owner's
+                    # exile, so the seat holding it is the owner; "under your
+                    # control" is the ability's controller instead, and the
+                    # permanent then remembers whose it is, exactly as
+                    # ``reanimate_bound_card`` records it. A new object either way
+                    # (CR 400.7): no counters, no Auras, summoning-sick.
+                    owner_seat = game.players.index(owner)
+                    seat = (
+                        owner_seat
+                        if instruction.payload.get("control") == "owner"
+                        else game.players.index(caster)
+                    )
+                    permanent = Permanent(card=card)
+                    if owner_seat != seat:
+                        permanent.metadata["owner_player_index"] = owner_seat
+                    game._put_permanent_onto_battlefield(seat, permanent, None)
                     moved.append(card)
-            # Through the write seam, so CR 903.9b rides it. "…its **owner's**
-            # hand" (Psychic Theft) is the seat whose exile held it.
-            elif game.put_card_into_hand(
-                owner if instruction.payload.get("to_owner") else caster, card
-            ):
-                moved.append(card)
-            break
+                    returned_to.setdefault(game.players[seat].name, []).append(card.name)
+                    break
+                if destination == "graveyard":
+                    # CR 400.3: its **owner's** graveyard, and the owner is the
+                    # player whose exile held it — the card reached that pile out of
+                    # that player's own library. Through the write seam like the
+                    # hand branch below: the graveyard gained one at Mirage's third
+                    # wave (Forbidden Crypt's "if a card would be put into your
+                    # graveyard from anywhere"), and this line was written a merge
+                    # earlier when there was none. The guard is what said so.
+                    if game.put_card_into_graveyard(owner, card):
+                        moved.append(card)
+                # Through the write seam, so CR 903.9b rides it. "…its **owner's**
+                # hand" (Psychic Theft) is the seat whose exile held it.
+                elif game.put_card_into_hand(
+                    owner if instruction.payload.get("to_owner") else caster, card
+                ):
+                    moved.append(card)
+                break
     if moved and destination == "battlefield":
         # One sentence per seat, so a card is never said to be under a player
         # who does not control it; with one seat the line is what it was.

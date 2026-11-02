@@ -31,6 +31,20 @@ entry state starts until it is on the battlefield. What the record answers:
 * **that no copy may be made of the table** (``ai_rehearsal.held_for_an_answer``):
   ``finish`` is a closure over this game.
 
+**Permanents one event puts onto the battlefield enter together** (CR
+603.6a: "Each time an event puts one or more permanents onto the battlefield,
+all permanents on the battlefield (including the newcomers) are checked for
+any enters-the-battlefield triggers that match the event"). A caller that
+puts several opens one event around them
+(``ZoneFunnelsMixin.entering_together``): each newcomer's entry state is
+performed in turn as its call is made — none sees another, because none is on
+the battlefield yet (CR 614.12's "continuous effects that already exist") —
+and the rest of every entry is done once the event closes: all appended, one
+recompute, then each one's "enters" announcement with every newcomer
+present. Its records share ``together``, and an event whose members ask
+waits as one — finished at the last answer any of them owes, never one
+member at a time.
+
 Nothing here imports the engine's game: the records are data, the Game-side
 work is in ``engine/mixins/zone_funnels.py``.
 """
@@ -45,15 +59,28 @@ from typing import Callable
 class EntryInProgress:
     """One permanent between "would enter" and "is on the battlefield".
 
-    ``finish`` is None while the entry state is being performed and is set
-    when the entry waits for an answer; it removes the record and completes
-    the entry. Identity, not equality (``eq=False``): two look-alike
-    permanents entering together are two entries (CR 400.7).
+    ``finish`` is None while the entry state is being performed — and, for a
+    member of an event still putting others onto the battlefield, until that
+    event closes — and is set when the entry waits for an answer; it removes
+    the record (every record of its event) and completes the entry. Identity,
+    not equality (``eq=False``): two look-alike permanents entering together
+    are two entries (CR 400.7).
+
+    The rest is what completing the entry needs, kept on the record so an
+    event's members can be completed together, whenever that is:
+    *target_player_index* and *was_cast* as ``_enter_battlefield`` was handed
+    them, *then* the caller's continuation (run once the permanent is there),
+    and *together* every record of the event this one entered in (CR
+    603.6a), itself included — empty for an entry made alone.
     """
 
     permanent: object
     controller_index: int
     finish: "Callable[[], None] | None" = None
+    target_player_index: "int | None" = None
+    was_cast: bool = False
+    then: "Callable[[], None] | None" = None
+    together: tuple = ()
 
 
 def entry_in_progress(game, permanent) -> EntryInProgress | None:
@@ -72,6 +99,11 @@ def awaited_entries(game) -> tuple[EntryInProgress, ...]:
     )
 
 
+def entered_together(record: EntryInProgress) -> tuple[EntryInProgress, ...]:
+    """Every record of the event *record* entered in, itself included."""
+    return record.together or (record,)
+
+
 def entry_is_awaited(game, permanent) -> bool:
     """Whether *permanent*'s entry is waiting for its "as it enters" choice."""
     record = entry_in_progress(game, permanent)
@@ -81,6 +113,7 @@ def entry_is_awaited(game, permanent) -> bool:
 __all__ = [
     "EntryInProgress",
     "awaited_entries",
+    "entered_together",
     "entry_in_progress",
     "entry_is_awaited",
 ]

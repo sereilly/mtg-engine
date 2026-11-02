@@ -1179,8 +1179,12 @@ class ControlSeamMixin:
         for perm in removed:
             if perm.has_type("aura"):
                 self._remove_aura_effects(perm)
-        for perm in removed:
-            self.return_linked_exile(perm, "left the battlefield", LEAVES)
+        # CR 610.3d: the one-shot effects created by simultaneous leavings are
+        # simultaneous — every card they give back enters in one event (CR 603.6a),
+        # its example the two Banisher Priests a Day of Judgment destroys.
+        with self.entering_together():
+            for perm in removed:
+                self.return_linked_exile(perm, "left the battlefield", LEAVES)
         # "Target land becomes a Forest **until this creature leaves the
         # battlefield**." (Gaea's Liege, Graceful Antelope.) The window's
         # sweep, here for the reason the exile return above is: this is the

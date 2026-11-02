@@ -623,9 +623,12 @@ class LibrarySearchChoicesMixin:
             ordered = (
                 list(reversed(cards)) if slots[0][0] == "library_top" else cards
             )
-            for card in ordered:
-                destination, tapped = slots[0]
-                self._place_found_card(landing, card, destination, tapped, data)
+            # The finds land in one event: those sent to the battlefield enter
+            # together (CR 603.6a).
+            with self.entering_together():
+                for card in ordered:
+                    destination, tapped = slots[0]
+                    self._place_found_card(landing, card, destination, tapped, data)
             return
         self.arm_pending_choice(
             "search_destination", seat,
@@ -773,12 +776,15 @@ class LibrarySearchChoicesMixin:
         if len(set(assignments)) != len(assignments):
             return False
         landing = int(choice.data.get("landing_seat", choice.player_index))
-        for card, slot_index in zip(cards, assignments):
-            slot = slots[slot_index]
-            self._place_found_card(
-                landing, card, slot["destination"], bool(slot.get("tapped")),
-                choice.data,
-            )
+        # The finds land in one event: those sent to the battlefield enter
+        # together (CR 603.6a).
+        with self.entering_together():
+            for card, slot_index in zip(cards, assignments):
+                slot = slots[slot_index]
+                self._place_found_card(
+                    landing, card, slot["destination"], bool(slot.get("tapped")),
+                    choice.data,
+                )
         self.discard_pending_choice(choice)
         return True
 

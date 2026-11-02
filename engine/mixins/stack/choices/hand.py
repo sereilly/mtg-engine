@@ -84,11 +84,15 @@ class HandChoicesMixin:
             return False
         # Remove in descending order so earlier indices stay valid as we pop.
         took: list = []
-        for hand_index in sorted(chosen, reverse=True):
-            if not _resolve_one_discard(
-                self, choice.player_index, hand_index, to_library, took=took
-            ):
-                return False
+        # One event: a discard an opponent causes can put the card onto the
+        # battlefield instead (Dodecapod), and every such card enters together
+        # (CR 603.6a).
+        with self.entering_together():
+            for hand_index in sorted(chosen, reverse=True):
+                if not _resolve_one_discard(
+                    self, choice.player_index, hand_index, to_library, took=took
+                ):
+                    return False
         self.discard_pending_choice(choice)
         self._after_discard_answered(choice, len(chosen), took)
         return True
@@ -576,20 +580,24 @@ class HandChoicesMixin:
 
         discarded = 0
         took: list = []
-        for _ in range(int(choice.data["count"])):
-            # Hand order, except where the sentence behind tests which card
-            # went (Strongarm Tactics): the card sparing the penalty first.
-            eligible = order_discard(
-                self, choice.player_index, self.live_discard_candidates(choice),
-                choice.data.get("_source_card"),
-            )
-            if not eligible:
-                break
-            if not _resolve_one_discard(
-                self, choice.player_index, eligible[0], to_library=False,
-                took=took,
-            ):
-                break
+        # One event: a discard an opponent causes can put the card onto the
+        # battlefield instead (Dodecapod), and every such card enters together
+        # (CR 603.6a).
+        with self.entering_together():
+            for _ in range(int(choice.data["count"])):
+                # Hand order, except where the sentence behind tests which card
+                # went (Strongarm Tactics): the card sparing the penalty first.
+                eligible = order_discard(
+                    self, choice.player_index, self.live_discard_candidates(choice),
+                    choice.data.get("_source_card"),
+                )
+                if not eligible:
+                    break
+                if not _resolve_one_discard(
+                    self, choice.player_index, eligible[0], to_library=False,
+                    took=took,
+                ):
+                    break
             discarded += 1
         self.discard_pending_choice(choice)
         # The stated policy for "up to" is to take the whole offer, and the

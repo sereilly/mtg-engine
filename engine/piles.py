@@ -539,43 +539,46 @@ def _library_fates(game, session: PileSession, chosen_fate: str, other_fate) -> 
 
 
 def _graveyard_fates(game, session: PileSession, chosen_fate: str, other_fate) -> None:
-    for group in session.groups:
-        player = game.players[group.owner]
-        fate_of: dict[int, str] = {}
-        for index, pile in enumerate(group.piles):
-            fate = chosen_fate if index == group.chosen else other_fate
-            for position in pile:
-                fate_of[group.items[position]] = fate
-        exiled: list[str] = []
-        returned: list[str] = []
-        # Highest index first: taking a card out renumbers everything above
-        # it and nothing below, and a creature that arrives and puts something
-        # into this graveyard appends to the end.
-        for index in sorted(fate_of, reverse=True):
-            if not 0 <= index < len(player.graveyard):
-                continue
-            fate = fate_of[index]
-            card = player.graveyard[index]
-            if fate == "exile":
-                del player.graveyard[index]
-                player.exile.append(card)
-                exiled.append(card.name)
-            elif fate == "battlefield":
-                # "Return the other to the battlefield" — under its owner's
-                # control, which for a card in your own graveyard is you.
-                arrived = game._reanimate_creature_to_battlefield(
-                    player, target_permanent_index=index,
-                    card_type=_arriving_type(card),
+    # "Return the other to the battlefield": every card the pile sends there, in
+    # one event (CR 603.6a).
+    with game.entering_together():
+        for group in session.groups:
+            player = game.players[group.owner]
+            fate_of: dict[int, str] = {}
+            for index, pile in enumerate(group.piles):
+                fate = chosen_fate if index == group.chosen else other_fate
+                for position in pile:
+                    fate_of[group.items[position]] = fate
+            exiled: list[str] = []
+            returned: list[str] = []
+            # Highest index first: taking a card out renumbers everything above
+            # it and nothing below, and a creature that arrives and puts something
+            # into this graveyard appends to the end.
+            for index in sorted(fate_of, reverse=True):
+                if not 0 <= index < len(player.graveyard):
+                    continue
+                fate = fate_of[index]
+                card = player.graveyard[index]
+                if fate == "exile":
+                    del player.graveyard[index]
+                    player.exile.append(card)
+                    exiled.append(card.name)
+                elif fate == "battlefield":
+                    # "Return the other to the battlefield" — under its owner's
+                    # control, which for a card in your own graveyard is you.
+                    arrived = game._reanimate_creature_to_battlefield(
+                        player, target_permanent_index=index,
+                        card_type=_arriving_type(card),
+                    )
+                    if arrived is not None:
+                        returned.append(card.name)
+            if exiled:
+                game.log.append(f"{session.card_name} exiled " + ", ".join(exiled))
+            if returned:
+                game.log.append(
+                    f"{session.card_name} returned " + ", ".join(returned)
+                    + " to the battlefield"
                 )
-                if arrived is not None:
-                    returned.append(card.name)
-        if exiled:
-            game.log.append(f"{session.card_name} exiled " + ", ".join(exiled))
-        if returned:
-            game.log.append(
-                f"{session.card_name} returned " + ", ".join(returned)
-                + " to the battlefield"
-            )
 
 
 def _arriving_type(card) -> str:

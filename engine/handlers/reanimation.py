@@ -659,50 +659,52 @@ def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: Or
         return True, "resolved"
     controller_seat = game.players.index(context.caster)
     to_owner = instruction.payload.get("control") == "owner"
-    for card in cards:
-        for player in game.players:
-            found = next(
-                (i for i, held in enumerate(player.graveyard) if held is card), None
-            )
-            if found is None:
-                continue
-            owner_seat = game.players.index(player)
-            # CR 404.1 put the card in its *owner's* graveyard, so the seat
-            # holding it is the owner — which is what "under its owner's
-            # control" names, found here rather than passed in because it is
-            # the graveyard scan that discovers it.
-            seat = owner_seat if to_owner else controller_seat
-            player.graveyard.pop(found)
-            permanent = Permanent(card=card)
-            # CR 400.3: "under your control" moves control, never ownership, so
-            # the card goes to its **owner's** graveyard when it next leaves.
-            # Recorded on the permanent for the reason Animate Dead's
-            # reanimation records it: the base controller is the owner
-            # everywhere else in this pool, and here the two differ by
-            # construction.
-            if owner_seat != seat:
-                permanent.metadata["owner_player_index"] = owner_seat
-
-            # The entry's ``then`` (CR 614.12a: at the answer, when an "as it
-            # enters" choice keeps it on its way).
-            def arrived(permanent=permanent, seat=seat, card=card) -> None:
-                context.results["reanimated_bound_card"] = True
-                if instruction.payload.get("sacrifice_when_control_lost"):
-                    source = context.source_permanent
-                    if source is not None:
-                        link_sacrifice_to_source(permanent, source, seat)
-                game.log.append(
-                    f"{card.name} entered the battlefield under "
-                    f"{game.players[seat].name}'s control ({context.card.name})"
+    # Every card the sentence names, in one event (CR 603.6a).
+    with game.entering_together():
+        for card in cards:
+            for player in game.players:
+                found = next(
+                    (i for i, held in enumerate(player.graveyard) if held is card), None
                 )
+                if found is None:
+                    continue
+                owner_seat = game.players.index(player)
+                # CR 404.1 put the card in its *owner's* graveyard, so the seat
+                # holding it is the owner — which is what "under its owner's
+                # control" names, found here rather than passed in because it is
+                # the graveyard scan that discovers it.
+                seat = owner_seat if to_owner else controller_seat
+                player.graveyard.pop(found)
+                permanent = Permanent(card=card)
+                # CR 400.3: "under your control" moves control, never ownership, so
+                # the card goes to its **owner's** graveyard when it next leaves.
+                # Recorded on the permanent for the reason Animate Dead's
+                # reanimation records it: the base controller is the owner
+                # everywhere else in this pool, and here the two differ by
+                # construction.
+                if owner_seat != seat:
+                    permanent.metadata["owner_player_index"] = owner_seat
 
-            game._put_permanent_onto_battlefield(seat, permanent, None, then=arrived)
-            break
-        else:
-            # CR 603.6: the ability looks for the object in the zone it moves it
-            # out of. Exiled in response, or already reanimated by an earlier
-            # firing of this same ability.
-            game.log.append(f"{card.name} was no longer in a graveyard")
+                # The entry's ``then`` (CR 614.12a: at the answer, when an "as it
+                # enters" choice keeps it on its way).
+                def arrived(permanent=permanent, seat=seat, card=card) -> None:
+                    context.results["reanimated_bound_card"] = True
+                    if instruction.payload.get("sacrifice_when_control_lost"):
+                        source = context.source_permanent
+                        if source is not None:
+                            link_sacrifice_to_source(permanent, source, seat)
+                    game.log.append(
+                        f"{card.name} entered the battlefield under "
+                        f"{game.players[seat].name}'s control ({context.card.name})"
+                    )
+
+                game._put_permanent_onto_battlefield(seat, permanent, None, then=arrived)
+                break
+            else:
+                # CR 603.6: the ability looks for the object in the zone it moves it
+                # out of. Exiled in response, or already reanimated by an earlier
+                # firing of this same ability.
+                game.log.append(f"{card.name} was no longer in a graveyard")
     return True, "resolved"
 
 
@@ -1031,14 +1033,16 @@ def reanimate_graveyard_position(game: Game, instruction: OracleInstruction, con
     # stands, and removing a lower one renumbers every position above it.
     for index in sorted(taken, reverse=True):
         moved.append(victim.graveyard.pop(index))
-    for card in moved:
-        game._put_permanent_onto_battlefield(
-            caster_index, Permanent(card=card), None, from_zone="graveyard"
-        )
-        game.log.append(
-            f"{context.card.name} returned {card.name} from {victim.name}'s "
-            f"graveyard under {context.caster.name}'s control"
-        )
+    # One event (CR 603.6a).
+    with game.entering_together():
+        for card in moved:
+            game._put_permanent_onto_battlefield(
+                caster_index, Permanent(card=card), None, from_zone="graveyard"
+            )
+            game.log.append(
+                f"{context.card.name} returned {card.name} from {victim.name}'s "
+                f"graveyard under {context.caster.name}'s control"
+            )
     return True, "resolved"
 
 
@@ -1143,14 +1147,16 @@ def reanimate_announced_cards(game: Game, instruction: OracleInstruction, contex
             stamps, context.target_permanent_index,
         )
     picked = _resolve_graveyard_slots(caster, context, len(caster.graveyard), _eligible)
-    for card in picked:
-        permanent = Permanent(card=card)
-        if tapped:
-            permanent.tapped = True
-        game._put_permanent_onto_battlefield(seat, permanent, None)
-        game.log.append(
-            f"{caster.name} returned {card.name} to the battlefield from the graveyard"
-        )
+    # "…return the chosen cards": one event (CR 603.6a).
+    with game.entering_together():
+        for card in picked:
+            permanent = Permanent(card=card)
+            if tapped:
+                permanent.tapped = True
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            game.log.append(
+                f"{caster.name} returned {card.name} to the battlefield from the graveyard"
+            )
     if not picked:
         game.log.append(f"{context.card.name}: no announced card to return")
     return True, "resolved"
@@ -1370,65 +1376,69 @@ def _return_planned_cards(
     from ..aura_attachment import attach_aura, enchant_card_refusal
 
     returned = 0
-    for seat, entries in plans:
-        player = game.players[seat]
-        moving = []
-        for index, card in entries:
-            if (seat, index) in hosts:
-                host = hosts[(seat, index)]
-                if host is None or enchant_card_refusal(game, card, seat, host) is not None:
+    # The cards enter together (CR 603.6a): "all creature cards … are returned
+    # to the battlefield at the same time" (Patriarch's Bidding's ruling, 2021-
+    # 06-18), so every newcomer sees every other enter.
+    with game.entering_together():
+        for seat, entries in plans:
+            player = game.players[seat]
+            moving = []
+            for index, card in entries:
+                if (seat, index) in hosts:
+                    host = hosts[(seat, index)]
+                    if host is None or enchant_card_refusal(game, card, seat, host) is not None:
+                        game.log.append(
+                            f"{card.name} has nothing it could enchant and stays in "
+                            f"{player.name}'s graveyard"
+                        )
+                        continue
+                moving.append((index, card))
+            # Highest slot first, so a pop does not renumber the slots still to
+            # come — and each slot checked to still hold its card: a graveyard is a
+            # list of shared ``CardDefinition`` objects, so the slot is the
+            # identity, and a slot that no longer holds the card is a card that left.
+            for index, card in sorted(moving, key=lambda entry: entry[0], reverse=True):
+                if index < len(player.graveyard) and player.graveyard[index] is card:
+                    player.graveyard.pop(index)
+                else:
+                    moving.remove((index, card))
+            for index, card in moving:
+                if destination == "hand":
+                    # CR 903.9b's seam, never `player.hand.append` — a bounce, a
+                    # tuck and a regrowth are all "would be put into its owner's
+                    # hand", and this is one of the thirty fire sites that rule has
+                    # no single one of.
+                    game.put_card_into_hand(player, card)
                     game.log.append(
-                        f"{card.name} has nothing it could enchant and stays in "
-                        f"{player.name}'s graveyard"
+                        f"{player.name} returned {card.name} to their hand from the graveyard"
                     )
+                    returned += 1
                     continue
-            moving.append((index, card))
-        # Highest slot first, so a pop does not renumber the slots still to
-        # come — and each slot checked to still hold its card: a graveyard is a
-        # list of shared ``CardDefinition`` objects, so the slot is the
-        # identity, and a slot that no longer holds the card is a card that left.
-        for index, card in sorted(moving, key=lambda entry: entry[0], reverse=True):
-            if index < len(player.graveyard) and player.graveyard[index] is card:
-                player.graveyard.pop(index)
-            else:
-                moving.remove((index, card))
-        for index, card in moving:
-            if destination == "hand":
-                # CR 903.9b's seam, never `player.hand.append` — a bounce, a
-                # tuck and a regrowth are all "would be put into its owner's
-                # hand", and this is one of the thirty fire sites that rule has
-                # no single one of.
-                game.put_card_into_hand(player, card)
-                game.log.append(
-                    f"{player.name} returned {card.name} to their hand from the graveyard"
-                )
-                returned += 1
-                continue
-            permanent = Permanent(card=card)
-            if tapped:
-                permanent.tapped = True
-            host = hosts.get((seat, index))
+                permanent = Permanent(card=card)
+                if tapped:
+                    permanent.tapped = True
+                host = hosts.get((seat, index))
 
-            # Once it is there — the entry's ``then``, run at the answer when
-            # an "as it enters" choice keeps it on its way (CR 614.12a).
-            def arrived(permanent=permanent, host=host, player=player, card=card) -> None:
-                if host is not None:
-                    # Attached as part of the same move, inside this
-                    # resolution — the arrangement
-                    # ``reanimate_aura_onto_source`` keeps, so the Aura is
-                    # never an unattached one for CR 704.5m to find.
-                    attach_aura(permanent, host)
+                # Once it is there — the entry's ``then``, run at the answer when
+                # an "as it enters" choice keeps it on its way (CR 614.12a).
+                def arrived(permanent=permanent, host=host, player=player, card=card) -> None:
+                    if host is not None:
+                        # Attached as part of the same move, inside this
+                        # resolution — the arrangement
+                        # ``reanimate_aura_onto_source`` keeps, so the Aura is
+                        # never an unattached one for CR 704.5m to find.
+                        attach_aura(permanent, host)
+                        game.log.append(
+                            f"{player.name} returned {card.name} to the battlefield "
+                            f"from the graveyard attached to {host.card.name}"
+                        )
+                        return
                     game.log.append(
-                        f"{player.name} returned {card.name} to the battlefield "
-                        f"from the graveyard attached to {host.card.name}"
+                        f"{player.name} returned {card.name} to the battlefield from the graveyard"
                     )
-                    return
-                game.log.append(
-                    f"{player.name} returned {card.name} to the battlefield from the graveyard"
-                )
 
-            game._put_permanent_onto_battlefield(seat, permanent, None, then=arrived)
-            returned += 1
+                game._put_permanent_onto_battlefield(seat, permanent, None, then=arrived)
+                returned += 1
     if not returned:
         game.log.append(f"{card_name}: no cards to return")
 

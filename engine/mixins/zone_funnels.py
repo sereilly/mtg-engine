@@ -24,11 +24,14 @@ Its entry state is performed with the permanent in no zone (CR 614.12a), and
 an entry that leaves a choice owed at a table that holds for answers waits
 on its way until the last answer (``engine/entry_awaiting.py``,
 ``_finish_answered_entries``); a caller acts on the entered permanent through
-``then``.
+``then``. Permanents one event puts onto the battlefield enter together
+(CR 603.6a): the caller opens the event with ``entering_together`` and every
+newcomer is announced with all of them on the battlefield.
 """
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import Callable
 
 from ..aura_attachment import attach_aura
@@ -36,8 +39,8 @@ from ..cast_permissions import end_while_exiled_grants
 from ..continuous import next_timestamp
 from ..control import set_base_controller
 from ..enter_effects import CAST_THIS_TURN_STAMP
-from ..entry_awaiting import (EntryInProgress, entry_in_progress,
-                              entry_is_awaited)
+from ..entry_awaiting import (EntryInProgress, entered_together,
+                              entry_in_progress, entry_is_awaited)
 from ..exiled_records import (forget_record, newest_record_for,
                               record_exiled_card)
 from ..events import emit
@@ -642,42 +645,45 @@ class ZoneFunnelsMixin:
 
         entries = take_linked_entries(permanent, ending=ending)
         returned: Permanent | None = None
-        for entry in entries:
-            owner = self.players[int(entry["owner_index"])]
-            card = entry["card"]
-            # Back to the zone it was taken from. Kitesail Freebooter takes from
-            # a hand, Idol of Endurance from a graveyard and Tawnos's Coffin
-            # from the battlefield, and a card returned to the wrong one is a
-            # card the effect created out of nothing — so the origin rides the
-            # entry rather than being a constant here.
-            destination = str(entry.get("to", "hand"))
-            if card not in owner.exile:
-                continue
-            # "…**attached to that permanent**" — the Auras go back onto the
-            # creature the entry before them brought back, which is why they
-            # travel in one record and in printed order. Nothing to attach to
-            # means the Aura simply arrives, and CR 704.5n's sweep bins it.
-            # Attached once the Aura is there (the entry's ``then``).
-            host = returned if entry.get("attach_to_returned") else None
-            arrival = self.leave_linked_exile(
-                entry, destination,
-                then=(
-                    (lambda aura, host=host: attach_aura(aura, host))
-                    if host is not None else None
-                ),
-            )
-            if arrival is None:
+        # One event (CR 610.3d, 603.6a): everything the ending gives back enters
+        # together, each Aura attached to its host once all of them are there.
+        with self.entering_together():
+            for entry in entries:
+                owner = self.players[int(entry["owner_index"])]
+                card = entry["card"]
+                # Back to the zone it was taken from. Kitesail Freebooter takes from
+                # a hand, Idol of Endurance from a graveyard and Tawnos's Coffin
+                # from the battlefield, and a card returned to the wrong one is a
+                # card the effect created out of nothing — so the origin rides the
+                # entry rather than being a constant here.
+                destination = str(entry.get("to", "hand"))
+                if card not in owner.exile:
+                    continue
+                # "…**attached to that permanent**" — the Auras go back onto the
+                # creature the entry before them brought back, which is why they
+                # travel in one record and in printed order. Nothing to attach to
+                # means the Aura simply arrives, and CR 704.5n's sweep bins it.
+                # Attached once the Aura is there (the entry's ``then``).
+                host = returned if entry.get("attach_to_returned") else None
+                arrival = self.leave_linked_exile(
+                    entry, destination,
+                    then=(
+                        (lambda aura, host=host: attach_aura(aura, host))
+                        if host is not None else None
+                    ),
+                )
+                if arrival is None:
+                    self.log.append(
+                        f"{card.name} returns to {owner.name}'s {destination} "
+                        f"({permanent.card.name} {why})"
+                    )
+                    continue
+                if host is None:
+                    returned = arrival
                 self.log.append(
-                    f"{card.name} returns to {owner.name}'s {destination} "
+                    f"{card.name} returns to the battlefield "
                     f"({permanent.card.name} {why})"
                 )
-                continue
-            if host is None:
-                returned = arrival
-            self.log.append(
-                f"{card.name} returns to the battlefield "
-                f"({permanent.card.name} {why})"
-            )
         if entries:
             self._recompute_continuous_effects()
 
@@ -707,6 +713,10 @@ class ZoneFunnelsMixin:
         the last answer — a caller writing that work after this call would do
         it to a permanent that is not on the battlefield yet.
         ``tests/engine/test_kg3_entry_callers.py`` holds every caller to it.
+
+        Inside an open event (``entering_together``) only the entry state is
+        performed here; the rest — and *then* — is done with the event's other
+        newcomers when it closes.
         """
         with self.putting_triggers_on_stack():
             waits = self._enter_battlefield(
@@ -716,6 +726,66 @@ class ZoneFunnelsMixin:
             )
         if not waits and then is not None:
             then()
+
+    @contextmanager
+    def entering_together(self):
+        """One event putting several permanents onto the battlefield (CR
+        603.6a) — the block a caller wraps around the entries it makes
+        together: "each player … puts all cards they exiled this way onto the
+        battlefield" (Living Death), "return those cards to the battlefield"
+        (Planar Guide), the tokens one instruction creates, the cards CR
+        610.3d returns at once when a sweep takes away every permanent that
+        exiled them.
+
+        Each entry made inside the block performs its entry state as its call
+        is made, with the permanent in no zone (CR 614.12a) — so no newcomer's
+        entry replacement sees another: CR 614.12 asks only "continuous
+        effects that already exist", and CR 614.13a makes no object entering
+        at the same time a choosable one. When the block closes the entries
+        are completed together (``_finish_or_await``): every newcomer appended,
+        one recompute (CR 611.3c), each one's "…then" rider, and only then
+        each one's "enters" announcement and its own enter trigger, with
+        every newcomer on the battlefield to see them. Entered one at a time,
+        an observer among them saw only those behind it: a Goblin Assassin
+        returned by Planar Guide after a Goblin Clearcutter triggered once
+        instead of twice, and a Soul Warden put back by Living Death gained
+        life for the creatures after it and none for those before it (its
+        ruling, 2025-01-24: it triggers "for each of those other creatures").
+
+        At a table that holds for answers an event any of whose newcomers
+        still owes an "as it enters" choice waits as one, completed at the
+        last answer any of them owes (``_finish_answered_entries``), each
+        entry's ``then`` with it. So a caller writes nothing that reads an
+        entered permanent inside the block, or after it, except through
+        ``then`` — the rule ``tests/engine/test_kg3_entry_callers.py`` holds
+        every entry to; ``tests/engine/test_kg3_batch_roads.py`` holds every
+        entry made in a loop to this block.
+
+        Re-entrant: a block opened inside an open one is the same event. An
+        entry that a newcomer's own entry state makes is an event of its own
+        — the block is set aside while an entry state is performed.
+        """
+        if self.entry_batch is not None:
+            yield
+            return
+        batch: list = []
+        self.entry_batch = batch
+        try:
+            yield
+        except BaseException:
+            self.entry_batch = None
+            for record in batch:
+                self._forget_entry(record)
+            raise
+        self.entry_batch = None
+        if not batch:
+            return
+        with self.putting_triggers_on_stack():
+            waits = self._finish_or_await(batch)
+        if not waits:
+            for record in batch:
+                if record.then is not None:
+                    record.then()
 
     def entry_is_awaited(self, permanent: Permanent) -> bool:
         """Whether *permanent*'s entry is waiting for its "as it enters"
@@ -746,13 +816,24 @@ class ZoneFunnelsMixin:
         and by the force-release backstop. Every record, not only the answered
         prompt's permanent: an answer can take another entry's last prompt
         away with it. In the order the entries began.
+
+        **An event's newcomers finish together** (CR 603.6a,
+        ``entering_together``): a record is finished only once no record of
+        its event owes a choice, and finishing it completes every one of them.
         """
         finished = False
         for record in list(self.entries_in_progress):
             if record.finish is None:
-                # Still performing its entry state, further up the call stack.
+                # Still performing its entry state, further up the call stack
+                # — or one of an event still being handed its newcomers.
                 continue
-            if self.permanent_is_entering(record.permanent):
+            if not any(entry is record for entry in self.entries_in_progress):
+                # Completed with the rest of its event, earlier in this pass.
+                continue
+            if any(
+                self.permanent_is_entering(member.permanent)
+                for member in entered_together(record)
+            ):
                 continue
             record.finish()
             finished = True
@@ -892,8 +973,16 @@ class ZoneFunnelsMixin:
         # arrive. It used to be performed after the append, and a person's
         # Ward Sliver sat on the battlefield with a provisional colour while
         # its prompt was open, Soul Warden having already gained its life.
-        record = EntryInProgress(permanent, controller_index)
+        record = EntryInProgress(
+            permanent, controller_index,
+            target_player_index=target_player_index, was_cast=was_cast,
+            then=then,
+        )
         self.entries_in_progress.append(record)
+        # The entry state is this permanent's own: whatever it puts onto the
+        # battlefield is an event of its own, not one of this event's
+        # newcomers (``entering_together``).
+        batch, self.entry_batch = self.entry_batch, None
         try:
             self._initialize_permanent_state(
                 permanent, controller_index, target_player_index
@@ -901,28 +990,49 @@ class ZoneFunnelsMixin:
         except BaseException:
             self._forget_entry(record)
             raise
-        if self.holds_for_answers() and self.permanent_is_entering(permanent):
-            # **A choice is still owed**, at a table that holds for answers
-            # (a person; the simulator's driver): the rest of the entry is the
-            # answer's to finish (``_finish_answered_entries``), with what the
-            # caller does to the permanent behind it. A bare headless table
-            # holds nothing — its prompts are drained by the caller once this
-            # returns — so there the permanent enters now, as it always has.
-            def finish() -> None:
-                self._forget_entry(record)
-                self._complete_entry(
-                    controller_index, permanent, target_player_index,
-                    was_cast=was_cast,
-                )
-                if then is not None:
-                    then()
-
-            record.finish = finish
+        finally:
+            self.entry_batch = batch
+        if batch is not None:
+            # **One of several newcomers of one event** (CR 603.6a): the rest
+            # of its entry is done with theirs, as the event closes.
+            batch.append(record)
             return True
-        self._forget_entry(record)
-        self._complete_entry(
-            controller_index, permanent, target_player_index, was_cast=was_cast,
-        )
+        return self._finish_or_await([record])
+
+    def _finish_or_await(self, records) -> bool:
+        """Complete the entries one event made, *records* — or wait.
+
+        **A choice is still owed**, at a table that holds for answers (a
+        person; the simulator's driver): the rest of every entry is the
+        answer's to finish (``_finish_answered_entries``), with what each
+        caller does to its permanent behind it, and True is returned. One
+        ``finish`` for the whole event, run once no newcomer of it owes
+        anything (CR 603.6a: they enter together, so they wait together). A
+        bare headless table holds nothing — its prompts are drained by the
+        caller once this returns — so there the permanents enter now, as they
+        always have, and False is returned: the caller runs each ``then``.
+        """
+        if self.holds_for_answers() and any(
+            self.permanent_is_entering(record.permanent) for record in records
+        ):
+            together = tuple(records)
+
+            def finish() -> None:
+                for record in together:
+                    self._forget_entry(record)
+                self._complete_entries(together)
+                for record in together:
+                    if record.then is not None:
+                        record.then()
+
+            for record in together:
+                record.finish = finish
+                if len(together) > 1:
+                    record.together = together
+            return True
+        for record in records:
+            self._forget_entry(record)
+        self._complete_entries(records)
         return False
 
     def _forget_entry(self, record) -> None:
@@ -931,35 +1041,47 @@ class ZoneFunnelsMixin:
             entry for entry in self.entries_in_progress if entry is not record
         ]
 
-    def _complete_entry(
-        self,
-        controller_index: int,
-        permanent: Permanent,
-        target_player_index: int | None,
-        *,
-        was_cast: bool,
-    ) -> None:
-        """Everything from the battlefield append onward: the half of
-        :meth:`_enter_battlefield` that waits when a choice is owed."""
-        self.players[controller_index].battlefield.append(permanent)
-        # "…put a nontoken permanent onto the battlefield" (Arboria, CR 506.3):
-        # the per-turn half of the last-own-turn record, folded per seat at the
-        # turn boundary (mixins/turn_management.begin_turn_bookkeeping). Here
-        # because this is the one entry path there is — a fire site per caller
-        # is the pattern that forgot `become_tapped` 41 times.
-        if not permanent.metadata.get("is_token"):
-            self.nontoken_permanents_entered_this_turn[controller_index] = (
-                self.nontoken_permanents_entered_this_turn.get(controller_index, 0) + 1
-            )
+    def _complete_entries(self, records) -> None:
+        """Everything from the battlefield append onward, for every newcomer
+        of one event at once: the half of :meth:`_enter_battlefield` that
+        waits when a choice is owed, and that an event's newcomers do
+        together (CR 603.6a)."""
+        for record in records:
+            permanent, controller_index = record.permanent, record.controller_index
+            self.players[controller_index].battlefield.append(permanent)
+            # "…put a nontoken permanent onto the battlefield" (Arboria, CR
+            # 506.3): the per-turn half of the last-own-turn record, folded
+            # per seat at the turn boundary
+            # (mixins/turn_management.begin_turn_bookkeeping). Here because
+            # this is the one entry path there is — a fire site per caller is
+            # the pattern that forgot `become_tapped` 41 times.
+            if not permanent.metadata.get("is_token"):
+                self.nontoken_permanents_entered_this_turn[controller_index] = (
+                    self.nontoken_permanents_entered_this_turn.get(controller_index, 0) + 1
+                )
         # 611.3a/611.3c: static abilities apply as permanents enter. Recalculate
         # lord buffs so the new permanent immediately receives applicable bonuses,
-        # and so any new lord immediately buffs existing matching permanents.
+        # and so any new lord immediately buffs existing matching permanents —
+        # once, with every newcomer of the event there, so a lord entering
+        # beside a creature it pumps has pumped it before either is announced.
         self._recompute_continuous_effects()
         # The "…**then** X" half of an entry replacement (Land Equilibrium's
         # "puts that land onto the battlefield then sacrifices a land"). After
         # the append and after the recompute, because "then" means the new
         # permanent is on the battlefield and is itself a legal choice.
-        apply_entry_riders(self, permanent, controller_index)
+        for record in records:
+            apply_entry_riders(self, record.permanent, record.controller_index)
+        # **And then each newcomer is announced, with every one of them on
+        # the battlefield** (CR 603.6a: "all permanents on the battlefield
+        # (including the newcomers) are checked"), so an observer that entered
+        # beside it sees it whichever of them came first.
+        for record in records:
+            self._announce_entry(record)
+
+    def _announce_entry(self, record) -> None:
+        """One newcomer's "enters" announcement and its own enter trigger."""
+        permanent, controller_index = record.permanent, record.controller_index
+        target_player_index, was_cast = record.target_player_index, record.was_cast
         # "Whenever a creature you control with power 4 or greater enters"
         # (Garruk's Uprising). Every entry path in the engine — a resolving
         # spell, a token, a reanimation, a cleanup return — comes through this

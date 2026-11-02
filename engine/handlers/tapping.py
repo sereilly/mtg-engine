@@ -148,8 +148,11 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
             game, context,
             predicate=lambda p: permanent_matches_filter(p, instruction.payload),
         )
-        for perm in chosen:
-            game.become_untapped(perm)
+        # Untapped together: what the untaps give back (Tawnos's Coffin, CR 610.3)
+        # enters in one event (CR 610.3d, 603.6a).
+        with game.entering_together():
+            for perm in chosen:
+                game.become_untapped(perm)
         game.log.append(
             f"Untapped {len(chosen)} permanent(s)" if chosen
             else "No valid permanents to untap"
@@ -260,12 +263,15 @@ def untap_recorded_permanents(game: Game, instruction: OracleInstruction, contex
     """
     key = instruction.payload.get("permanents_from")
     untapped = 0
-    for permanent_id in recorded_permanent_ids(context, key):
-        perm = game.permanent_by_id(permanent_id)
-        if perm is None:
-            continue
-        game.become_untapped(perm)
-        untapped += 1
+    # Untapped together: what the untaps give back (Tawnos's Coffin, CR 610.3)
+    # enters in one event (CR 610.3d, 603.6a).
+    with game.entering_together():
+        for permanent_id in recorded_permanent_ids(context, key):
+            perm = game.permanent_by_id(permanent_id)
+            if perm is None:
+                continue
+            game.become_untapped(perm)
+            untapped += 1
     game.log.append(
         f"{context.card.name} untapped {untapped} permanent(s)"
     )
@@ -462,13 +468,16 @@ def _tap_or_untap_all_matching(
         )
     ]
     changed = []
-    for perm in matched:
-        if make_tapped:
-            if game.become_tapped(perm):
-                game._turn_face_up(perm)
+    # Untapped together: what the untaps give back (Tawnos's Coffin, CR 610.3)
+    # enters in one event (CR 610.3d, 603.6a).
+    with game.entering_together():
+        for perm in matched:
+            if make_tapped:
+                if game.become_tapped(perm):
+                    game._turn_face_up(perm)
+                    changed.append(perm)
+            elif game.become_untapped(perm):
                 changed.append(perm)
-        elif game.become_untapped(perm):
-            changed.append(perm)
     # "…where X is the number of Islands **tapped this way**" (Monsoon). How
     # many the sweep actually turned, which is the only place the sentence after
     # it can read the number from: by then the board says how many are tapped,
@@ -569,7 +578,10 @@ def untap_and_tap_matching(game: Game, instruction: OracleInstruction, context: 
 
     to_untap = _matching(untap_filter)
     to_tap = _matching(tap_filter)
-    untapped = [perm for perm in to_untap if game.become_untapped(perm)]
+    # Untapped together: what the untaps give back (Tawnos's Coffin, CR 610.3)
+    # enters in one event (CR 610.3d, 603.6a).
+    with game.entering_together():
+        untapped = [perm for perm in to_untap if game.become_untapped(perm)]
     tapped = []
     for perm in to_tap:
         if game.become_tapped(perm):

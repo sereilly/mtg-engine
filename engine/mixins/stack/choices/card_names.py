@@ -72,18 +72,20 @@ class CardNameChoicesMixin:
 
         spec = data["token"]
         made = taken_from.get(data["token_zone"], 0)
-        for _ in range(made):
-            token_card = make_token_card(
-                " ".join(w.title() for w in spec["subtypes"]) + " Token",
-                int(spec["power"]), int(spec["toughness"]),
-                "Creature — " + " ".join(w.title() for w in spec["subtypes"]),
-                colors=tuple(spec["colors"]),
-            )
-            self._put_permanent_onto_battlefield(
-                data["target_seat"],
-                Permanent(card=token_card, metadata={"is_token": True}),
-                None,
-            )
+        # One event (CR 603.6a): the tokens enter together.
+        with self.entering_together():
+            for _ in range(made):
+                token_card = make_token_card(
+                    " ".join(w.title() for w in spec["subtypes"]) + " Token",
+                    int(spec["power"]), int(spec["toughness"]),
+                    "Creature — " + " ".join(w.title() for w in spec["subtypes"]),
+                    colors=tuple(spec["colors"]),
+                )
+                self._put_permanent_onto_battlefield(
+                    data["target_seat"],
+                    Permanent(card=token_card, metadata={"is_token": True}),
+                    None,
+                )
         self.discard_pending_choice(choice)
         self.log.append(
             f"{target.name} lost {sum(taken_from.values())} copies of {named} "

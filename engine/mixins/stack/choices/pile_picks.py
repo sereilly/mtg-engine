@@ -66,24 +66,27 @@ class PileChoicesMixin:
         # so both halves move here — the pile is only nameable while this prompt
         # is holding it. Absent for every library printing, where CR 701.20b
         # leaves the rest where they were.
-        for shown in cards:
-            if shown is card:
-                target_zone = fate
-            elif other_fate:
-                target_zone = str(other_fate)
-            else:
-                continue
-            if not self._move_picked_pile_card(
-                revealer, shown, from_zone, target_zone
-            ):
-                self.log.append(f"{shown.name} has already moved")
-                continue
-            self.log.append(
-                f"{chooser} chose {card.name}; {shown.name} goes to the "
-                f"{target_zone}"
-                if shown is card
-                else f"{shown.name} goes to the {target_zone}"
-            )
+        # One event: whatever the pile sends to the battlefield enters together
+        # (CR 603.6a).
+        with self.entering_together():
+            for shown in cards:
+                if shown is card:
+                    target_zone = fate
+                elif other_fate:
+                    target_zone = str(other_fate)
+                else:
+                    continue
+                if not self._move_picked_pile_card(
+                    revealer, shown, from_zone, target_zone
+                ):
+                    self.log.append(f"{shown.name} has already moved")
+                    continue
+                self.log.append(
+                    f"{chooser} chose {card.name}; {shown.name} goes to the "
+                    f"{target_zone}"
+                    if shown is card
+                    else f"{shown.name} goes to the {target_zone}"
+                )
         self.discard_pending_choice(choice)
         return True
 

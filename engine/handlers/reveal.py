@@ -182,9 +182,11 @@ def reveal_top_opponent_chooses(game: Game, instruction: OracleInstruction, cont
             f"{context.card.name}: no revealed card can be chosen"
         )
         if other_fate:
-            for card in revealed:
-                if game._move_picked_pile_card(caster, card, from_zone, str(other_fate)):
-                    game.log.append(f"{card.name} goes to the {other_fate}")
+            # One event (CR 603.6a).
+            with game.entering_together():
+                for card in revealed:
+                    if game._move_picked_pile_card(caster, card, from_zone, str(other_fate)):
+                        game.log.append(f"{card.name} goes to the {other_fate}")
         return True, "resolved"
     game.arm_pending_choice(
         "opponent_picks_revealed", opponent_index,
@@ -355,34 +357,36 @@ def _place_sorted_reveal(game, caster, revealed, payload, matches) -> tuple[list
     match_zone = str(payload.get("match_zone", "hand"))
     rest_zone = str(payload.get("rest_zone", "graveyard"))
     matched, rest, bottomed = [], [], []
-    for card in revealed:
-        found = bool(matches(card))
-        (matched if found else rest).append(card)
-        zone = match_zone if found else rest_zone
-        if zone == "library_bottom":
-            bottomed.append(card)
-            continue
-        if zone == "hand":
-            game.put_card_into_hand(caster, card)
-        elif zone == "battlefield":
-            # "…puts all land cards revealed this way onto the battlefield
-            # **tapped**." (Clear the Land.) CR 110.2 gives a permanent nobody
-            # was told to control to its owner, which here is the player whose
-            # library it came out of — the same seat that revealed it, because
-            # the printed subject of both clauses is one player. ``tapped`` is
-            # CR 110.5b and only ever rides the match half, which is where the
-            # word is printed.
-            game._put_permanent_onto_battlefield(
-                game.players.index(caster),
-                Permanent(card=card, tapped=bool(payload.get("match_tapped"))),
-                None,
-            )
-        elif zone == "exile":
-            # CR 406.3: an exiled card goes to its owner's exile, which for a
-            # card off the top of a library is the seat whose library it was.
-            caster.exile.append(card)
-        else:
-            game.put_card_into_graveyard(caster, card, from_zone="library")
+    # One event (CR 603.6a): the finds enter together.
+    with game.entering_together():
+        for card in revealed:
+            found = bool(matches(card))
+            (matched if found else rest).append(card)
+            zone = match_zone if found else rest_zone
+            if zone == "library_bottom":
+                bottomed.append(card)
+                continue
+            if zone == "hand":
+                game.put_card_into_hand(caster, card)
+            elif zone == "battlefield":
+                # "…puts all land cards revealed this way onto the battlefield
+                # **tapped**." (Clear the Land.) CR 110.2 gives a permanent nobody
+                # was told to control to its owner, which here is the player whose
+                # library it came out of — the same seat that revealed it, because
+                # the printed subject of both clauses is one player. ``tapped`` is
+                # CR 110.5b and only ever rides the match half, which is where the
+                # word is printed.
+                game._put_permanent_onto_battlefield(
+                    game.players.index(caster),
+                    Permanent(card=card, tapped=bool(payload.get("match_tapped"))),
+                    None,
+                )
+            elif zone == "exile":
+                # CR 406.3: an exiled card goes to its owner's exile, which for a
+                # card off the top of a library is the seat whose library it was.
+                caster.exile.append(card)
+            else:
+                game.put_card_into_graveyard(caster, card, from_zone="library")
     if bottomed:
         caster.library.extend(bottomed)
         game.offer_library_bottom_order(caster, len(bottomed))
@@ -440,34 +444,38 @@ def reveal_top_sorting_by_filter(game: Game, instruction: OracleInstruction, con
         seats = [(active + offset) % table for offset in range(table)]
     else:
         seats = [game.players.index(context.caster)]
-    for seat in seats:
-        looked = game.players[seat]
-        revealed = looked.library[:max(int(count), 0)]
-        if not revealed:
-            game.log.append(f"{looked.name} has no cards to reveal")
-            continue
-        del looked.library[:len(revealed)]
-        game.record_reveal(seat, [card.name for card in revealed])
-        game.log.append(
-            f"{looked.name} revealed {', '.join(card.name for card in revealed)}"
-        )
-        matched, rest = _place_sorted_reveal(
-            game, looked, revealed, instruction.payload,
-            lambda card, _owner=looked: _card_matches_filter(
-                card, described, game=game, owner=_owner
-            ),
-        )
-        if instruction.payload.get("rest_zone") == "library_bottom":
-            kept = ", ".join(card.name for card in matched) or "no card"
-            where = (
-                "onto the battlefield"
-                if instruction.payload.get("match_zone") == "battlefield"
-                else "into their hand"
-            )
+    # Every seat's finds in one event (CR 603.6a): "each player … puts all land
+    # cards revealed this way onto the battlefield" is one sentence about all of
+    # them.
+    with game.entering_together():
+        for seat in seats:
+            looked = game.players[seat]
+            revealed = looked.library[:max(int(count), 0)]
+            if not revealed:
+                game.log.append(f"{looked.name} has no cards to reveal")
+                continue
+            del looked.library[:len(revealed)]
+            game.record_reveal(seat, [card.name for card in revealed])
             game.log.append(
-                f"{looked.name} put {kept} {where} and {len(rest)} card(s) "
-                f"on the bottom of their library"
+                f"{looked.name} revealed {', '.join(card.name for card in revealed)}"
             )
+            matched, rest = _place_sorted_reveal(
+                game, looked, revealed, instruction.payload,
+                lambda card, _owner=looked: _card_matches_filter(
+                    card, described, game=game, owner=_owner
+                ),
+            )
+            if instruction.payload.get("rest_zone") == "library_bottom":
+                kept = ", ".join(card.name for card in matched) or "no card"
+                where = (
+                    "onto the battlefield"
+                    if instruction.payload.get("match_zone") == "battlefield"
+                    else "into their hand"
+                )
+                game.log.append(
+                    f"{looked.name} put {kept} {where} and {len(rest)} card(s) "
+                    f"on the bottom of their library"
+                )
     return True, "resolved"
 
 
@@ -1225,23 +1233,25 @@ def put_revealed_top_cards_onto_battlefield(game: Game, instruction: OracleInstr
     # active player's is stamped first. It was seat order, which a Game
     # Preserve on seat 1 — whose upkeep is the only time this triggers — got
     # backwards every time.
-    for seat in game.apnap_seats(by_seat, include_lost=True):
-        card = by_seat[seat]
-        owner = game.players[seat]
-        for index, held in enumerate(owner.library):
-            if held is card:
-                owner.library.pop(index)
-                break
-        else:
-            # It left the library between the reveal and this step. CR 400.7
-            # makes whatever is on top now a different object, so nothing is
-            # put rather than the wrong card.
-            game.log.append(f"{card.name} was no longer on top of {owner.name}'s library")
-            continue
-        game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
-        game.log.append(
-            f"{owner.name} put {card.name} onto the battlefield ({context.card.name})"
-        )
+    # …and they enter together (CR 603.6a).
+    with game.entering_together():
+        for seat in game.apnap_seats(by_seat, include_lost=True):
+            card = by_seat[seat]
+            owner = game.players[seat]
+            for index, held in enumerate(owner.library):
+                if held is card:
+                    owner.library.pop(index)
+                    break
+            else:
+                # It left the library between the reveal and this step. CR 400.7
+                # makes whatever is on top now a different object, so nothing is
+                # put rather than the wrong card.
+                game.log.append(f"{card.name} was no longer on top of {owner.name}'s library")
+                continue
+            game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
+            game.log.append(
+                f"{owner.name} put {card.name} onto the battlefield ({context.card.name})"
+            )
     return True, "resolved"
 
 

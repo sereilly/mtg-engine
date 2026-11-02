@@ -356,16 +356,19 @@ class CleanupStepMixin:
         # 610.3: return all creatures exiled "until end of turn" to their owners' battlefields
         returned_from_exile = list(self.exile_until_eot)
         self.exile_until_eot.clear()
-        for owner_idx, card_def in returned_from_exile:
-            owner = self.players[owner_idx]
-            # Through the departure seam: it locates the copy by identity where
-            # ``card_def in owner.exile`` / ``.remove(card_def)`` compared by
-            # value and would have reached a look-alike printing, and it retires
-            # the exile register with the card (CR 400.7).
-            if self.take_card_from_exile(owner_idx, card_def):
-                new_perm = Permanent(card=card_def)
-                self._put_permanent_onto_battlefield(owner_idx, new_perm, None)
-                self.log.append(f"{card_def.name} returned from exile to {owner.name}'s battlefield")
+        # CR 514.2: every "until end of turn" effect ends at once, so what they
+        # exiled returns in one event (CR 610.3d, 603.6a).
+        with self.entering_together():
+            for owner_idx, card_def in returned_from_exile:
+                owner = self.players[owner_idx]
+                # Through the departure seam: it locates the copy by identity where
+                # ``card_def in owner.exile`` / ``.remove(card_def)`` compared by
+                # value and would have reached a look-alike printing, and it retires
+                # the exile register with the card (CR 400.7).
+                if self.take_card_from_exile(owner_idx, card_def):
+                    new_perm = Permanent(card=card_def)
+                    self._put_permanent_onto_battlefield(owner_idx, new_perm, None)
+                    self.log.append(f"{card_def.name} returned from exile to {owner.name}'s battlefield")
         self._reset_combat_state(clear_damage_marked=False)
         # CR 514.3a's first half: "the game checks to see if any state-based
         # actions would be performed" once 514.1's discard and 514.2's sweeps

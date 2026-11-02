@@ -270,14 +270,18 @@ def _ask_seat_to_discard(
         return
     if inline_default and seat not in game.interactive_seats:
         took: list = []
-        for _ in range(count):
-            card = player.hand[
-                order_discard(game, seat, range(len(player.hand)), source_card)[0]
-            ]
-            game.take_card_from_hand(player, card)
-            game._discard_card(player, card, cause_seat=cause_seat)
-            took.append(card)
-            game.log.append(f"{player.name} discarded {card.name}")
+        # One event: a discard an opponent causes can put the card onto the
+        # battlefield instead (Dodecapod), and every such card enters together
+        # (CR 603.6a).
+        with game.entering_together():
+            for _ in range(count):
+                card = player.hand[
+                    order_discard(game, seat, range(len(player.hand)), source_card)[0]
+                ]
+                game.take_card_from_hand(player, card)
+                game._discard_card(player, card, cause_seat=cause_seat)
+                took.append(card)
+                game.log.append(f"{player.name} discarded {card.name}")
         record_discards(results, seat, count, took)
         return
     game.arm_pending_choice(
@@ -503,17 +507,21 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
     # read the same to a rider, and writing it is what says this step answered.
     took = context.results.setdefault(DISCARDED_THIS_WAY, [])
     landed = context.results.setdefault(DISCARDED_INTO_GRAVEYARD, [])
-    for i in sorted(indices, reverse=True):
-        discarded = target.hand.pop(i)
-        pile, deck = len(target.graveyard), len(target.library)
-        game._discard_card(target, discarded)  # Library of Leng -> top of library
-        # CR 701.9c: a card discarded into a *hidden* zone unrevealed has
-        # undefined characteristics, so "a creature card" is not something it
-        # was. It still counts as a discard below.
-        if len(target.library) == deck:
-            took.append(discarded)
-        if len(target.graveyard) > pile and target.graveyard[-1] is discarded:
-            landed.append(discarded)
+    # One event: a discard an opponent causes can put the card onto the
+    # battlefield instead (Dodecapod), and every such card enters together
+    # (CR 603.6a).
+    with game.entering_together():
+        for i in sorted(indices, reverse=True):
+            discarded = target.hand.pop(i)
+            pile, deck = len(target.graveyard), len(target.library)
+            game._discard_card(target, discarded)  # Library of Leng -> top of library
+            # CR 701.9c: a card discarded into a *hidden* zone unrevealed has
+            # undefined characteristics, so "a creature card" is not something it
+            # was. It still counts as a discard below.
+            if len(target.library) == deck:
+                took.append(discarded)
+            if len(target.graveyard) > pile and target.graveyard[-1] is discarded:
+                landed.append(discarded)
     context.results["discarded_count"] = (
         int(context.results.get("discarded_count") or 0) + actual
     )
@@ -683,9 +691,13 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
             # "a nonland card".
             paired = cards_sharing_a_name(victim.hand)
             doomed = [index for index in doomed if index in paired]
-        for index in reversed(doomed):
-            discarded = victim.hand.pop(index)
-            game._discard_card(victim, discarded)
+        # One event: a discard an opponent causes can put the card onto the
+        # battlefield instead (Dodecapod), and every such card enters together
+        # (CR 603.6a).
+        with game.entering_together():
+            for index in reversed(doomed):
+                discarded = victim.hand.pop(index)
+                game._discard_card(victim, discarded)
         game.log.append(
             f"{victim.name} discarded {len(doomed)} card(s)"
             if doomed else f"{victim.name} had no cards to discard"
@@ -738,17 +750,21 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
         )
         by_seat = context.results.setdefault(DISCARDED_BY_SEAT, {})
         emptied = 0
-        for seat in seats:
-            player = game.players[seat]
-            gone = list(player.hand)
-            player.hand = []
-            for card in gone:
-                game._discard_card(player, card)
-            by_seat[seat] = len(gone)
-            emptied += len(gone)
-            game.log.append(
-                f"{player.name} discarded their hand ({len(gone)} card(s))"
-            )
+        # One event: a discard an opponent causes can put the card onto the
+        # battlefield instead (Dodecapod), and every such card enters together
+        # (CR 603.6a).
+        with game.entering_together():
+            for seat in seats:
+                player = game.players[seat]
+                gone = list(player.hand)
+                player.hand = []
+                for card in gone:
+                    game._discard_card(player, card)
+                by_seat[seat] = len(gone)
+                emptied += len(gone)
+                game.log.append(
+                    f"{player.name} discarded their hand ({len(gone)} card(s))"
+                )
         # The flat key too, for the sentence that asks about the whole
         # resolution rather than about one seat — written for the same reason
         # the single-seat branch below writes it, and as the total rather than
@@ -798,8 +814,12 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
         caster = target
     discarded = list(caster.hand)
     caster.hand = []
-    for card in discarded:
-        game._discard_card(caster, card)
+    # One event: a discard an opponent causes can put the card onto the
+    # battlefield instead (Dodecapod), and every such card enters together
+    # (CR 603.6a).
+    with game.entering_together():
+        for card in discarded:
+            game._discard_card(caster, card)
     # "…, then draws **that many** cards." (Shocker.) How many actually went,
     # under the key every other discard in this file already writes — a hand
     # that was empty discards nothing and draws nothing, which is CR 608.2's

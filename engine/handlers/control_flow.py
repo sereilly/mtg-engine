@@ -41,6 +41,7 @@ modules named after the question, each the handler twin of a lowering module:
 from __future__ import annotations
 
 import dataclasses
+from contextlib import nullcontext
 from typing import TYPE_CHECKING
 
 from .. import simultaneous_damage
@@ -1537,8 +1538,33 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
         }
         _run(game, steps, context)
 
-    run_resumable(game, matched + [_END_OF_ITERATION], run_one)
+    # "For each creature destroyed this way, its controller creates a 1/1
+    # … token" (March of Souls): what every repetition puts onto the
+    # battlefield is one event (CR 603.6a), each newcomer seeing the others —
+    # when the body is one instruction with nothing nested. A body of several
+    # steps may read, in a later step of the same repetition, the permanent an
+    # earlier one entered ("…create a token. It gains haste"), and a
+    # newcomer held for the end of the event is not there to read.
+    together = (
+        game.entering_together() if _a_single_leaf(steps) else nullcontext()
+    )
+    with together:
+        run_resumable(game, matched + [_END_OF_ITERATION], run_one)
     return True, "resolved"
+
+
+def _a_single_leaf(steps: tuple) -> bool:
+    """Whether *steps* is one instruction holding no instruction of its own."""
+    if len(steps) != 1:
+        return False
+    for value in (steps[0].payload or {}).values():
+        if hasattr(value, "kind"):
+            return False
+        if isinstance(value, (list, tuple)) and any(
+            hasattr(item, "kind") for item in value
+        ):
+            return False
+    return True
 
 
 def _scoped_to_role(game: Game, instruction: OracleInstruction, context, role: str):
