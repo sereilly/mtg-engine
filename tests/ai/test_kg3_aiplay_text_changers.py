@@ -125,11 +125,11 @@ def test_each_announced_text_change_is_cast_naming_words_that_pay(name):
         circle = _on(game, 1, "Circle of Protection: Red")
         text = current_text_card(circle).oracle_text.lower()
         assert " red source" not in text, text
-        assert any("changed R text" in line for line in game.log), game.log[-6:]
+        assert any("changed red text" in line for line in game.log), game.log[-6:]
     else:
         wraith = _on(game, 0, "Bog Wraith")
         assert "islandwalk" in current_text_card(wraith).oracle_text.lower()
-        assert any("changed swamp to island" in line for line in game.log), game.log[-6:]
+        assert any("changed Swamp to Island" in line for line in game.log), game.log[-6:]
 
 
 def test_a_word_aimed_at_nothing_is_not_rewritten():
@@ -166,7 +166,7 @@ def test_sleight_of_mind_rewrites_the_spell_that_would_kill_its_creature():
     resolve_stack(game)
     assert _on(game, 0, "Savannah Lions") is not None
     assert any("Terror" in card.name for card in game.players[1].graveyard)
-    assert any("changed B text to W on Terror" in line for line in game.log), game.log[-8:]
+    assert any("changed black text to white on Terror" in line for line in game.log), game.log[-8:]
 
 
 def test_a_lace_is_aimed_at_the_spell_when_that_does_more():
@@ -193,7 +193,7 @@ def test_a_lace_is_aimed_at_the_spell_when_that_does_more():
     assert action.target_stack_index == 0
     cast_chosen_instant(game, 0, action)
     resolve_stack(game)
-    assert "Lightning Bolt (on the stack) became W" in game.log
+    assert "Lightning Bolt (on the stack) became white" in game.log
     assert "Lightning Bolt dealt 3 damage to Grizzly Bears" in game.log
 
 

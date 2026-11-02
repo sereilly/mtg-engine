@@ -245,7 +245,7 @@ const SFX = (() => {
       }
 
       // ── Reanimated / returned from graveyard ─────────────────────────────────
-      if (s.includes('reanimated') || s.includes('returned creature from graveyard')) {
+      if (s.includes('from a graveyard to the battlefield') || s.includes('from graveyard to hand')) {
         _play('card_ux/Card_Leave_Graveyard.wav');
         continue;
       }
