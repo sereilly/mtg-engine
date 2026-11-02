@@ -305,6 +305,29 @@ def test_untap_select_by_slot_is_read_once_on_arrival():
     assert session.untap_selected_ids == [island.permanent_id]
 
 
+def test_the_pick_survives_the_phasing_event_before_anything_untaps():
+    """CR 702.26a: the untap step's phasing event phases permanents out
+    before anything untaps, and a phased-out permanent leaves the battlefield
+    list — so a slot chosen before the step resolved named the neighbour
+    after it (or nothing). The engine is handed the pick by id and turns it
+    into a slot after the event (``resolve_untap_step(selected_ids_by_type=)``)."""
+    sid, session, game = _session()
+    keeper = Permanent(card=_POOL["Breezekeeper"])
+    forest, island = (Permanent(card=_POOL[n], tapped=True) for n in ("Forest", "Island"))
+    game.players[0].battlefield = [Permanent(card=_POOL["Winter Orb"]), keeper, forest, island]
+    game.players[1].battlefield = []
+    game._sync_control()
+    game._set_phase_and_step("beginning", "untap")
+    session.untap_required_lands = 1
+
+    assert _act(sid, seat=0, action="untap_select", permanent_id=island.permanent_id).status_code == 200
+    confirmed = _act(sid, seat=0, action="untap_confirm")
+
+    assert confirmed.status_code == 200, confirmed.text
+    assert not game.is_on_battlefield(keeper), "it phased out"
+    assert (island.tapped, forest.tapped) == (False, True)
+
+
 def _old_man_board(sid, session, game):
     from web.turn_steps import _begin_turn
 
