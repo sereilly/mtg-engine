@@ -724,7 +724,7 @@ def test_uncle_istvan_still_takes_damage_from_a_spell(set_pool):
     """The class is read, not ignored: only *creatures* are shielded against,
     so a burn spell still kills him."""
     istvan = Permanent(card=set_pool("DRK")["Uncle Istvan"])
-    # A spell's damage source is the card as printed (CR 109.5), and this one
+    # A spell's damage source is the card as printed (CR 120.7), and this one
     # is an Artifact: not a creature, so the shield does not answer to it.
     spell = set_pool("DRK")["Barl's Cage"]
     game, _p1, _p2 = _duel(mine=[istvan], theirs=[])

@@ -1106,7 +1106,7 @@ def redirect_damage_from_target_spell_until_eot(
 
     The record hangs off the **stack item**, not off a recipient and not off the
     card, and that is the whole of what makes this card possible. A spell's
-    damage source is its printed ``CardDefinition`` (CR 109.5) — one object per
+    damage source is its printed ``CardDefinition`` (CR 120.7) — one object per
     card, handed out once per copy by the deck builder — so a record matching on
     the source would move a *second* copy's damage too. A ``StackItem`` is one
     object per cast, and ``Game.resolving_items`` is where the damage paths can

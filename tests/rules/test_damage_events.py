@@ -659,9 +659,9 @@ def test_an_undetermined_amount_is_zero():
     assert count_from_payload(game, context, spec) == 0
 
 
-@pytest.mark.cr("109.5", "400.7")
+@pytest.mark.cr("120.7", "400.7")
 def test_two_casts_of_one_card_are_two_rows():
-    """A spell's damage source is its printed card (CR 109.5), which is one
+    """A spell's damage source is its printed card (CR 120.7), which is one
     object shared by every copy — so the record keys a spell's damage on the
     stack object, one per cast. Without that, "one of those sorcery spells"
     could not tell two copies apart."""
@@ -805,7 +805,7 @@ def _closer_eye_game(seats: int, armed_seat: int):
 
 def _closer_spell_card():
     """A damage source with **no controller**: a spell's source is the card as
-    printed (CR 109.5), one object shared by every copy in every deck."""
+    printed (CR 120.7), one object shared by every copy in every deck."""
     return CardDefinition(
         name="Invented Bolt", mana_cost="{R}", cmc=1.0, type_line="Instant",
         oracle_text="Invented Bolt deals 3 damage to any target.",

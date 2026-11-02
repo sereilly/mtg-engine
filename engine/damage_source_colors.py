@@ -1,7 +1,7 @@
 """What colour a damage source is (CR 105, CR 609.7b).
 
 A damage event's ``source`` is a ``Permanent`` for a permanent and the printed
-``CardDefinition`` for a spell (CR 109.5), and three different questions in this
+``CardDefinition`` for a spell (CR 120.7), and three different questions in this
 engine ask what colour it is: a colour shield's recheck (CR 609.7b — "when the
 source *would deal damage*, the shield rechecks the source's properties"), a
 Circle of Protection's chosen colour, and protection's damage prevention
@@ -45,7 +45,7 @@ _COLOUR = "|".join(_COLOR_WORD_TO_SYMBOL)
 #: one colour prints neither.
 #:
 #: "permanents **and** spells" is the whole set of things that can be a source
-#: (CR 109.5 leaves an ability's source as the object that produced it, which is
+#: (CR 113.7 leaves an ability's source as the object that produced it, which is
 #: one or the other), so the phrase is required rather than payload: a card
 #: naming only one half would be a narrower rule this cannot express, and
 #: matching it here would apply the wider one.

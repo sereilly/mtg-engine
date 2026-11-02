@@ -41,7 +41,7 @@ words about the same object. Three consequences come free:
   every reader would then have to learn about a shield with no recipient.
 
 **Only a permanent can carry one.** A spell's source is its printed
-``CardDefinition`` (CR 109.5) — one object per *card*, shared by every copy in
+``CardDefinition`` (CR 120.7) — one object per *card*, shared by every copy in
 every deck in the process — so a marker written on one would be a marker on all
 of them, and the "next damage" of a Lightning Bolt would double for the other
 three in the deck. ``arm`` therefore takes only an object with ``metadata`` and

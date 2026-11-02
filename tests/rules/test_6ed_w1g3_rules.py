@@ -190,7 +190,7 @@ def test_702_16b_the_other_seat_s_spell_keeps_its_printed_colour():
 @pytest.mark.cr("702.16e", "613.1e")
 def test_702_16e_the_damage_half_reads_the_same_colour():
     """"Any damage that would be dealt by sources that have the stated quality
-    … is prevented." A spell is a source (CR 109.5), and the seat it is
+    … is prevented." A spell is a source (CR 120.7), and the seat it is
     controlled by rides on the damage event as ``source_seat`` — so a
     Lightning Bolt the Dawn has made white is stopped by protection from white
     and no longer by protection from red."""

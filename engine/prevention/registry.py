@@ -330,7 +330,7 @@ def source_has_type(game, source, card_type: str) -> bool:
     """Whether a damage source is of *card_type* ("artifact", "creature", …).
 
     A source is a Permanent or, for a spell, the CardDefinition itself
-    (CR 109.5), so both shapes are read. A permanent answers through the layer
+    (CR 120.7), so both shapes are read. A permanent answers through the layer
     system — an animated artifact land *is* an artifact source, and reading its
     printed line would say otherwise — and a card in no zone has only what is
     printed on it.

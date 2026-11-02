@@ -526,7 +526,7 @@ def _parse_have_source_deal_damage(stream: TokenStream) -> "ast.Statement | None
         return None
     # Through the spec reader rather than the predicate, so **which word was
     # printed** survives: a bare "it" is a pronoun and, under a trigger whose
-    # condition named an object, means that object (CR 109.5 names the source;
+    # condition named an object, means that object (CR 700.7 names the source;
     # the pronoun does not). "Its controller may have **it** deal damage equal
     # to its power" on an Aura (Farrel's Mantle) is the enchanted creature —
     # collapsed to "this", the Aura itself would have dealt the damage, and an

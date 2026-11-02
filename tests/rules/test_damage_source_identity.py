@@ -127,10 +127,10 @@ def test_the_damage_ledger_records_the_permanent_not_the_card(set_pool):
     assert {entry.source_permanent_id for entry in entries} == {spirit.permanent_id}
 
 
-@pytest.mark.cr("120.7", "109.5")
+@pytest.mark.cr("120.7")
 def test_a_sorcery_still_deals_as_its_printed_card(set_pool):
     """The other half of the same rule, and the reason the fix is a *fallback*
-    rather than a replacement: a **spell** is its own source (CR 109.5) and has
+    rather than a replacement: a **spell** is its own source (CR 120.7) and has
     no permanent, which is exactly what ``source_permanent is None`` says.
 
     Pyroclasm's ledger entry names the card and no permanent, before the change

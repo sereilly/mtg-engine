@@ -563,7 +563,7 @@ def _announce(game, event: dict, dealt: int) -> None:
     # and `handlers/destroy_sweeps.py` already read — one spelling, so a fire
     # site taught to freeze its subject reaches every reading of "that <noun>"
     # at once. Only for a *permanent* source: a spell's source is its printed
-    # `CardDefinition` (CR 109.5) with no id, which is exactly the object the
+    # `CardDefinition` (CR 120.7) with no id, which is exactly the object the
     # sentence cannot name.
     subject_id = getattr(source, "permanent_id", None)
     if subject_id is not None:
@@ -671,7 +671,7 @@ def _announce(game, event: dict, dealt: int) -> None:
         fire_delayed_triggers(
             game, "bound_permanent_dealt_damage",
             subject=recipient,
-            # A spell's source is the card as printed (CR 109.5), which is not
+            # A spell's source is the card as printed (CR 120.7), which is not
             # a permanent and cannot answer "an attacking creature". The
             # narrowing then refuses it, which is right: a Lightning Bolt is
             # not an attacking creature.

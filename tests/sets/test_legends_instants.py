@@ -1908,7 +1908,7 @@ def test_reverberation_sends_the_sorcerys_damage_to_its_controller(set_pool):
 
 def test_reverberation_does_not_move_a_second_copy_of_the_same_card(set_pool):
     """The reason this card waited: a spell's damage source is its printed
-    ``CardDefinition`` (CR 109.5), one object per *card*, so two copies in one
+    ``CardDefinition`` (CR 120.7), one object per *card*, so two copies in one
     deck are the same object and a record matching on the source would move
     both. The record hangs off the ``StackItem`` — one object per cast — and is
     reached through ``Game.resolving_items``."""

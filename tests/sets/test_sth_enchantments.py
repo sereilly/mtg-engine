@@ -617,7 +617,7 @@ def test_hidden_retreat_stops_the_spell_it_named_and_no_other(set_pool):
     The shield hangs off the **stack item**, not off a recipient and not off the
     printed card, so the assertions are the two things that distinguishes:
     the named spell's damage is gone, and a *second copy of the same card* —
-    which shares one ``CardDefinition`` (CR 109.5) — still deals its three.
+    which shares one ``CardDefinition`` (CR 120.7) — still deals its three.
     """
     game, p1, p2, _retreat = _w1g1_retreat_board(set_pool)
     bolt = _w1g1_bolt()

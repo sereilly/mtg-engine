@@ -295,7 +295,7 @@ def test_the_self_bouncers_return_their_own_source(set_pool):
     The lowering refused the printed noun as an unhonoured restriction. On a
     self-reference there is nothing to restrict: "this creature", "this
     enchantment" and "this permanent" all name the object the ability is
-    printed on (CR 109.5), which is why the engine's own collapser reads the
+    printed on (CR 700.7), which is why the engine's own collapser reads the
     three as one phrase.
     """
     pool = set_pool("ICE")

@@ -13,7 +13,7 @@ before this sentence ran, so nothing is matched and nothing is picked: the only
 question left is where that object is *now*, and the answer is a seat, a zone
 and a rider — never a filter. Which is why every narrowing check below is a
 **refusal** rather than a payload. The noun phrase restates the reference (CR
-109.5: "this creature" is the word the card happens to call itself by), and an
+700.7: "this creature" is the word the card happens to call itself by), and an
 adjective beyond the restatement is one no handler here reads. Not one branch
 in this file carries a filter to a handler; every branch in the other file
 does.
@@ -776,7 +776,7 @@ def lower_untargeted_return(
         assert isinstance(subject, ast.TargetSpec)
         # ``card_types`` is honoured because on a **self-reference** it is not a
         # restriction: "this creature", "this enchantment" and "this permanent"
-        # all name the object the ability is printed on (CR 109.5), and the noun
+        # all name the object the ability is printed on (CR 700.7), and the noun
         # is the word the card happens to call itself by. Nothing is being
         # selected, so there is no set for the type to narrow — which is why the
         # engine's own self-reference collapser treats the three as one phrase.

@@ -611,7 +611,7 @@ def _damage_dealt_filter(
             return False
     elif payload.get("damager_controller") == "you":
         # "A source you control" is a seat question, and deliberately not a
-        # permanent one: a spell is a source too (CR 109.5), and the seam
+        # permanent one: a spell is a source too (CR 120.7), and the seam
         # derives the seat for both.
         if event.payload.get("damager_seat") != observer:
             return False
@@ -626,7 +626,7 @@ def _damage_dealt_filter(
         # an empty string is falsy, so a truthiness test sent the one card that
         # prints no damager at all down to the `else` that refuses.
         #
-        # No narrowing on the damager at all: CR 109.5's "source" is a spell, an
+        # No narrowing on the damager at all: CR 120.7's "source" is a spell, an
         # ability or a permanent, and the card watches every one of them. The
         # *recipient* half below is what keeps this from firing on the whole
         # board — which is why this branch is a marker the table produces rather
@@ -640,7 +640,7 @@ def _damage_dealt_filter(
             return False
     elif "damager_filter" in payload:
         # A noun phrase describes *permanents*, and a damage source need not be
-        # one: for a spell it is the printed card (CR 109.5), which has no
+        # one: for a spell it is the printed card (CR 120.7), which has no
         # controller, no types the layers have computed and nothing the matcher
         # can ask. So a card is simply not in the set the phrase names — the
         # same answer the retired planeswalker fire site gave by refusing to

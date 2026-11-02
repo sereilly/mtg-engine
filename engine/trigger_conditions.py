@@ -222,7 +222,7 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # the position is what says it must not.
     #
     # The noun is read rather than fixed, like the battlefield row's: a card
-    # names itself by whatever permanent word it likes (CR 109.5), and "card"
+    # names itself by whatever permanent word it likes (CR 700.7), and "card"
     # is here too because a sentence about a move out of any zone is a sentence
     # about a card.
     ("self_put_into_graveyard_from_anywhere",
@@ -583,7 +583,7 @@ _PAIR_SUBJECT_FILTER_KEYS = ("blocked_filter", "blocker_filter")
 # What a ``<name>_includes_spells`` marker allows the accompanying noun phrase
 # to say. The union "a red creature or spell" describes one object under two
 # nouns, and only the words in front of the noun distribute over both — a spell
-# on the stack is the printed card (CR 109.5), which has no controller, no
+# on the stack is the printed card (CR 120.7), which has no controller, no
 # layer-computed types and no board position to be asked about. ``type_filter``
 # is the creature half's own noun (dropped for the spell half) and
 # ``color_filter`` is the shared adjective; anything else refuses the condition,
@@ -721,7 +721,7 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
         ):
             # "…a red creature **or spell**". The noun is the half that does not
             # distribute; every other word in the phrase does, and a spell is
-            # the printed card (CR 109.5) with no board, no controller and no
+            # the printed card (CR 120.7) with no board, no controller and no
             # layers — so a phrase saying anything a card cannot answer refuses
             # the condition rather than firing on the creature half alone. The
             # colour is required because it is the only thing left to test: a

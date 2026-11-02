@@ -244,7 +244,7 @@ def _source_shield_matches(
 def _spell_targets_recipient(game, source, recipient) -> bool:
     """Whether *source* is a spell on the stack that targets *recipient*.
 
-    A spell's damage source is the card itself (CR 109.5) -- the card as
+    A spell's damage source is the card itself (CR 120.7) -- the card as
     printed, which records neither who cast it nor what it was aimed at. So the
     targets come from ``Game.resolving_targets``, the seam
     ``_execute_oracle_instruction`` pushes around every instruction, exactly as
@@ -1187,7 +1187,7 @@ def _spell_class_blanket(game, event: dict) -> dict | None:
     source = event.get("source")
     if source is None or hasattr(source, "metadata"):
         # A permanent is not a spell however it is dealing the damage
-        # (CR 110.1). A spell's source is the card as printed (CR 109.5), which
+        # (CR 110.1). A spell's source is the card as printed (CR 120.7), which
         # is the shape with no ``metadata``.
         return None
     for permanent in game.all_permanents():
@@ -1568,7 +1568,7 @@ def _shared_color_blanket_for(game, event: dict) -> str | None:
       now (CR 613 layer 4: an animated land is one, a player never is);
     - "**by another creature**" — the source is a *permanent* that is a
       creature, and a different object from the recipient. A spell's source is
-      the card as printed (CR 109.5), which is not a creature however red it
+      the card as printed (CR 120.7), which is not a creature however red it
       is, so a Lightning Bolt is never covered;
     - "**if they share a color**" — ``object_colors.share_a_color`` over the
       two objects' own layer-5 colours. The objects', deliberately, and not

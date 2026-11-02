@@ -219,7 +219,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # library row above it is.
         #
         # The noun is read rather than fixed: a card names itself by whatever
-        # word it likes (CR 109.5), and "card" belongs beside the permanent
+        # word it likes (CR 700.7), and "card" belongs beside the permanent
         # nouns because a sentence about a move out of any zone is a sentence
         # about a card.
         for noun in (*_DAMAGER_NOUNS, "card"):
