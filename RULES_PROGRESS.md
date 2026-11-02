@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**429 / 640 tracked rules covered (67%)** — 3284 tests, 0 unannotated.
+**429 / 640 tracked rules covered (67%)** — 3285 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -120,7 +120,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **101.1** Whenever a card’s text directly contradicts these rules, the card takes precedence. The card over... *(1 tests)*
 - [x] **101.2** When a rule or effect allows or directs something to happen, and another effect states that it ca... *(2 tests)*
 - [x] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ... *(2 tests)*
-- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(23 tests, subrules b)*
+- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(24 tests, subrules b)*
 
 ### 102. Players
 
@@ -641,7 +641,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 510. Combat Damage Step
 
 - [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(86 tests, subrules abcde)*
-- [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(7 tests)*
+- [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(8 tests)*
 - [x] **510.3** Third, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(14 tests)*
 
@@ -830,7 +830,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(58 tests, subrules efg)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(59 tests, subrules efg)*
 - [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General
