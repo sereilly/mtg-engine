@@ -365,8 +365,8 @@ def test_w1g4_harsh_mercy_defaults_spare_each_seats_own_and_see_earlier_answers(
     }
     chose = [line for line in game.log if line.startswith("Harsh Mercy: P")]
     assert chose == [
-        "Harsh Mercy: P1 chooses a creature type", "Harsh Mercy: P1 chose elf",
-        "Harsh Mercy: P2 chooses a creature type", "Harsh Mercy: P2 chose zombie",
+        "Harsh Mercy: P1 chooses a creature type", "Harsh Mercy: P1 chose Elf",
+        "Harsh Mercy: P2 chooses a creature type", "Harsh Mercy: P2 chose Zombie",
     ]
 
 
@@ -1351,7 +1351,7 @@ def test_w2g1_aphetto_dredging_returns_the_named_cards_of_that_type(set_pool):
     assert _w2g1_names(alice.graveyard) == [
         "Aphetto Dredging", "Goblin A", "Goblin B", "Goblin C", "Swamp",
     ]
-    assert "A chose elf to cast Aphetto Dredging" in game.log
+    assert "A chose Elf to cast Aphetto Dredging" in game.log
 
 
 def test_w2g1_aphetto_dredging_refuses_a_card_of_another_type(set_pool):

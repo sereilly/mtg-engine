@@ -336,7 +336,7 @@ def _reanimate_onto_chosen_host(
             source_player, card = caster, caster.graveyard[slot]
     name = getattr(context.card, "name", "") or "Effect"
     if card is None:
-        game.log.append(f"No {card_type} to reanimate")
+        game.log.append(f"{name}: no {card_type} card to return from a graveyard")
         context.results[REANIMATED_PERMANENTS] = ()
         context.results["its_mana_value"] = 0
         return True, "resolved"
@@ -459,9 +459,13 @@ def _complete_reanimation(
         if reanimated is not None and gains:
             for keyword in gains:
                 grant_keyword(reanimated, keyword)
+        # Which card came back, and what brought it: "Reanimated creature to
+        # battlefield" named neither.
+        source_name = getattr(context.card, "name", "") or "An effect"
         game.log.append(
-            f"Reanimated {card_type} to battlefield" if reanimated is not None
-            else f"No {card_type} to reanimate"
+            f"{source_name} returned {reanimated.card.name} from a graveyard "
+            "to the battlefield" if reanimated is not None
+            else f"{source_name}: no {card_type} card to return from a graveyard"
         )
 
     reanimated = game._reanimate_creature_to_battlefield(

@@ -422,7 +422,7 @@ def test_a_refused_attempt_leaves_the_log_as_it_found_it(catalog):
 @pytest.mark.parametrize("name, attempt, announcement", [
     # CR 601.2b's chosen creature type, announced before the mana was found
     # missing.
-    ("Caller of the Hunt", "cast", "chose human to cast Caller of the Hunt"),
+    ("Caller of the Hunt", "cast", "chose Human to cast Caller of the Hunt"),
     # CR 601.2f's reduction, its own line, before the payment refused.
     ("Avatar of Will", "cast", "Avatar of Will costs less to cast"),
     # CR 601.2b through 602.2b: the keyword a "choose flying, …" cost names.

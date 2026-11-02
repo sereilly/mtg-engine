@@ -37,6 +37,7 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.entry_choices import (ENTRY_CHOICES, LIFE_PAID_AS_ENTERED,
                                   chosen_as_entered, entry_choices_of)
 from engine.faces import compilation_units
+from engine.grammar.vocabulary import display_type_word
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import resolve_stack
@@ -214,7 +215,10 @@ def test_w2g3_the_choice_is_shown_in_a_players_words():
     game, terrain = _w2g3_entered("Illusionary Terrain")
     (entry,) = chosen_as_entered(game, terrain)
     assert entry["label"] == "Chosen land types (first, second)"
-    assert entry["value"] == ", ".join(terrain.metadata["chosen_land_types"])
+    # Each type as a type line prints it ("Forest, Island"), not as recorded.
+    assert entry["value"] == ", ".join(
+        display_type_word(word) for word in terrain.metadata["chosen_land_types"]
+    )
 
 
 def test_w2g3_a_permanent_that_chose_nothing_carries_an_empty_list():

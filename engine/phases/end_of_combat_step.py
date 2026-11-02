@@ -287,7 +287,7 @@ class EndOfCombatStepMixin:
 
         any_died = False
         for player in self.players:
-            def _on_destroy(permanent: Permanent, player=player) -> None:
+            def _on_destroy(permanent: Permanent, _died: bool, player=player) -> None:
                 # "…**if that creature was destroyed this way**" (Infinite
                 # Authority) is asked at the next end step, by which time the
                 # creature is a card in a graveyard. Recorded here, where the

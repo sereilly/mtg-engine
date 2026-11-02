@@ -43,7 +43,7 @@ from ._amounts import per_recipient_amount, resolve_amount
 from ._common import apply_damage_to_creature, damage_dealer, flip_coin
 from ._filters import (permanent_matches_filter, seats_controlling,
                        seats_matching_deed)
-from ._targets import (damaged_end_seat, divided_target_permanent, recorded_permanent_ids,
+from ._targets import (departed_object_said, damaged_end_seat, divided_target_permanent, recorded_permanent_ids,
                        attached_host, frozen_that_player_seat,
                        resolve_target_permanent, resolve_target_permanents)
 from .registry import effect_handler
@@ -986,8 +986,10 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         )
         if target_perm is None:
             # CR 608.2b: a creature was targeted but is no longer on the
-            # battlefield — the spell does nothing rather than hitting the player.
-            game.log.append(f"{card.name}: target creature is gone, no effect (CR 608.2b)")
+            # battlefield — the spell does nothing rather than hitting the
+            # player. Or it was never targeted: "…deals 1 damage to that
+            # creature" names the object its trigger is about.
+            game.log.append(f"{card.name}: {departed_object_said(context)}")
             return True, "resolved"
         # 115.4: "any target" is limited to creatures, players, planeswalkers, and battles.
         # Noncreature artifacts (and other noncreature non-planeswalker permanents) are not
@@ -1055,10 +1057,10 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     else:
         def _report(damage: int) -> None:
             context.results["damage_dealt"] = damage
-            if source_permanent is not None:
-                game.log.append(f"{card.name} dealt {damage} damage")
-            else:
-                game.log.append(f"{target.name} took {damage} damage")
+            # Both ends, as the creature branches above say them: "Goblin
+            # Dynamo dealt 1 damage" named no recipient, and a spell's
+            # "AI-B took 3 damage" named no source.
+            game.log.append(f"{card.name} dealt {damage} damage to {target.name}")
 
         _record_damage_recipient(context, None, target)
         game._deal_damage_to_player(

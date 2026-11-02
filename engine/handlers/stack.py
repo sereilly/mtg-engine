@@ -706,7 +706,12 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             game.log.append(f"{card.name}: {uncounterable}")
             return True, "resolved"
         if color_filter and color_filter not in game._stack_item_colors(target):
-            game.log.append(f"{card.name}: {target.card.name} is not color {color_filter}, cannot counter")
+            from ..grammar.vocabulary import display_color_word
+
+            game.log.append(
+                f"{card.name}: {target.card.name} is not "
+                f"{display_color_word(color_filter)}, cannot counter"
+            )
             return True, "resolved"
         # "counter target **red or green** spell" (Tidal Control). The colour
         # union, asked through the same reader the single colour is — a spell is

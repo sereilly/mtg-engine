@@ -485,9 +485,13 @@ def _produce_one_color(
         bucket = _mana_bucket(caster, spend_only)
         bucket[symbol] = bucket.get(symbol, 0) + amount
         note_mana_added(game, context.source_permanent, record)
+    # In mana symbols, as every other mana line is ("Mox Sapphire produced
+    # {U}"): the colour an "any color" source was asked for is a choice, and
+    # "produced 1 R mana" printed its record rather than the mana.
+    produced = "{" + str(symbol) + "}"
     game.log.append(
-        f"{card.name} produced {amount} {symbol} mana{note}"
-        f"{_restriction_suffix(spend_only)}"
+        f"{card.name} produced {produced * amount if amount > 0 else 'no mana'}"
+        f"{note}{_restriction_suffix(spend_only)}"
     )
     return True, "resolved"
 

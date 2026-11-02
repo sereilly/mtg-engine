@@ -410,7 +410,10 @@ class SpellChoicesMixin:
         # some other way is not turned up by that.
         perm.metadata[MASK_FACE_DOWN] = True
         self._put_permanent_onto_battlefield(player_index, perm, None)
-        self.log.append("Illusionary Mask cast a creature card face down as a 2/2")
+        self.log.append(
+            f"{choice.data.get('card_name') or 'An effect'} put a creature card "
+            "onto the battlefield face down as a 2/2"
+        )
         self.discard_pending_choice(choice)
         return True
 

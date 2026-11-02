@@ -207,7 +207,9 @@ def test_w1g1_sonic_seizure_s_random_discard_is_a_madness_discard(set_pool):
     assert game.cast_from_hand(0, "Sonic Seizure", target_player_index=1).supported
     log = game.log
     drew = next(i for i, line in enumerate(log) if "Obsessive Search drew 1 card" in line)
-    seizure = next(i for i, line in enumerate(log) if "P1 took 3 damage" in line)
+    seizure = next(
+        i for i, line in enumerate(log) if "Sonic Seizure dealt 3 damage to P1" in line
+    )
     assert drew < seizure
     assert game.players[1].life == 17
     assert [c.name for c in game.players[0].hand] == ["Forest"]

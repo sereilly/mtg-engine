@@ -122,7 +122,10 @@ def untap_target_land(game: Game, instruction: OracleInstruction, context: Oracl
     )
     if perm is not None:
         game.become_untapped(perm)
-    game.log.append("Untapped target land" if perm is not None else "No land to untap")
+    game.log.append(
+        f"Untapped {perm.card.name}" if perm is not None
+        else f"{_source_name(context)}: no land to untap"
+    )
     return True, "resolved"
 
 
@@ -154,8 +157,8 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
             for perm in chosen:
                 game.become_untapped(perm)
         game.log.append(
-            f"Untapped {len(chosen)} permanent(s)" if chosen
-            else "No valid permanents to untap"
+            "Untapped " + ", ".join(perm.card.name for perm in chosen) if chosen
+            else f"{_source_name(context)}: no valid permanents to untap"
         )
         # What it records is what a later sentence means by "it"/"that
         # creature" — every permanent this instruction affected, already
@@ -235,7 +238,8 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
         make_tapped=False,
     )
     game.log.append(
-        "Untapped target permanent" if untapped is not None else "No valid permanent to untap"
+        f"Untapped {untapped.card.name}" if untapped is not None
+        else f"{_source_name(context)}: no valid permanent to untap"
     )
     # The same record the filtered branch above keeps, for the same reason: a
     # producer `_PRODUCES` names has to write on every path it takes, or the
@@ -670,7 +674,7 @@ def tap_target_permanent(game: Game, instruction: OracleInstruction, context: Or
             game._turn_face_up(perm)
             game.log.append(f"Tapped {perm.card.name}")
         else:
-            game.log.append("No valid permanent to tap")
+            game.log.append(f"{_source_name(context)}: no valid permanent to tap")
         _record_tapped(context, [perm] if perm is not None else [])
         return True, "resolved"
     # The unnarrowed "tap target permanent" (Twiddle's first mode), resolved by
@@ -683,7 +687,8 @@ def tap_target_permanent(game: Game, instruction: OracleInstruction, context: Or
         make_tapped=True,
     )
     game.log.append(
-        "Tapped target permanent" if tapped is not None else "No valid permanent to tap"
+        f"Tapped {tapped.card.name}" if tapped is not None
+        else f"{_source_name(context)}: no valid permanent to tap"
     )
     _record_tapped(context, [tapped])
     return True, "resolved"
@@ -746,6 +751,12 @@ def tap_creatures_blocking_target(game: Game, instruction: OracleInstruction, co
     # rather than by object or slot (CR 400.7).
     context.results["blocked_target"] = attacker.permanent_id
     return True, "resolved"
+
+
+def _source_name(context: OracleExecutionContext) -> str:
+    """The card a resolving tap or untap is printed on, for the line that
+    finds nothing to do — "No land to untap" named neither."""
+    return getattr(context.card, "name", "") or "An effect"
 
 
 def _record_tapped(context: OracleExecutionContext, chosen) -> None:
@@ -1118,7 +1129,7 @@ def tap_or_untap_target(game: Game, instruction: OracleInstruction, context: Ora
         fallback_on_invalid_choice=not described,
     )
     if perm is None:
-        game.log.append("No valid permanent to tap or untap")
+        game.log.append(f"{_source_name(context)}: no valid permanent to tap or untap")
         return True, "resolved"
     # Through the two seams every other tap and untap goes through (CR
     # 701.26a/b), never a write to ``perm.tapped``: "becomes tapped" and

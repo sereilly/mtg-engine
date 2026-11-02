@@ -21,7 +21,7 @@ from ..oracle_types import (EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
                             LAST_TARGET_OWNER)
 from ..tokens import (CHOSEN_TOKEN_RECORDS, CREATED_TOKEN_RESULT_KEY,
                       CREATED_TOKENS_RESULT_KEY, CREATED_WITH_PERMANENT_ID,
-                      default_token_name, make_token_card)
+                      default_token_name, make_token_card, tokens_said)
 from ._amounts import evaluate_count, per_recipient_amount, resolve_amount
 from ._chosen import count_spec_in_resolution
 from ._targets import one_recorded_permanent_id, resolve_target_permanent
@@ -527,8 +527,8 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
               # and nothing at all when the last seat made none. Said per seat.
               if count > 0:
                   game.log.append(
-                      f"{card.name}: {game.players[seat].name} created {count} "
-                      f"{token_card.name} token(s)"
+                      f"{card.name}: {game.players[seat].name} created "
+                      f"{tokens_said(token_card.name, count)}"
                   )
           elif isinstance(raw_count, dict) and "per_each" in raw_count:
               owner = game.players[seat] if raw_count.get("per_recipient") else caster
@@ -559,8 +559,6 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     if isinstance(raw_count, dict) and "seat_record" in raw_count:
         # Already said per seat, inside the loop.
         return True, "resolved"
-    if count == 1:
-        game.log.append(f"{card.name} created a {token_card.name} token")
-    elif count > 1:
-        game.log.append(f"{card.name} created {count} {token_card.name} tokens")
+    if count > 0:
+        game.log.append(f"{card.name} created {tokens_said(token_card.name, count)}")
     return True, "resolved"

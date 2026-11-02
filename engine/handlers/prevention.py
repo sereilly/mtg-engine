@@ -1077,10 +1077,16 @@ def grant_forcefield_shield(game: Game, instruction: OracleInstruction, context:
     chosen = resolve_target_permanent(game, context, fallback_players=())
     if chosen is not None:
         add_shield(caster, make_capped_source(chosen))
-        game.log.append(f"Forcefield will prevent all but 1 combat damage from {chosen.card.name}")
+        game.log.append(
+            f"{getattr(context.card, 'name', '') or 'An effect'} will prevent all "
+            f"but 1 combat damage from {chosen.card.name}"
+        )
     else:
         add_shield(caster, make_capped_charge())
-        game.log.append("Forcefield shield granted")
+        game.log.append(
+            f"{getattr(context.card, 'name', '') or 'An effect'} will prevent all "
+            "but 1 combat damage from the next unblocked creature"
+        )
     return True, "resolved"
 
 

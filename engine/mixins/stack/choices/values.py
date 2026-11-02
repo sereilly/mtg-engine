@@ -12,6 +12,7 @@ color]"), which is ``enter_choice`` — the prompt ``engine/enter_effects.py``'s
 from __future__ import annotations
 
 from ....grammar.phrases import BASIC_LAND_WORDS
+from ....grammar.vocabulary import display_color_word, display_type_word
 from ....color_changes import change_color
 from ....continuous import next_timestamp
 from ....land_types import CHOSEN_LAND_TYPES, change_land_type
@@ -199,8 +200,8 @@ class ValueChoicesMixin:
             change_land_type(land, second, source=source, label=choice.data["card_name"])
             swapped.append(land)
         self.log.append(
-            f"{choice.data['card_name']}: {len(swapped)} {first}(s) became "
-            f"{second}s until end of turn"
+            f"{choice.data['card_name']}: {len(swapped)} {display_type_word(first)}(s) "
+            f"became {display_type_word(second)}s until end of turn"
         )
         self._recompute_continuous_effects()
         self.discard_pending_choice(choice)
@@ -361,9 +362,11 @@ class ValueChoicesMixin:
                 record[slot] = word
             self.log.append(
                 f"{choice.data.get('card_name', '')}: "
-                f"{self.players[choice.player_index].name} chose {word}"
+                f"{self.players[choice.player_index].name} chose "
+                f"{display_type_word(word)}"
                 if slot is not None
-                else f"{choice.data.get('card_name', '')}: chose {word}"
+                else f"{choice.data.get('card_name', '')}: chose "
+                f"{display_type_word(word)}"
             )
         self.discard_pending_choice(choice)
         return True
@@ -447,7 +450,10 @@ class ValueChoicesMixin:
             result_key = choice.data.get("result_key")
             if context is not None and result_key is not None:
                 context.results[str(result_key)] = symbol
-            self.log.append(f"{choice.data.get('card_name', '')}: chose {symbol}")
+            self.log.append(
+                f"{choice.data.get('card_name', '')}: chose "
+                f"{display_color_word(symbol)}"
+            )
             # A chosen colour can condition a static (Jihad's anthem), and the
             # board was last computed against the default — the same recompute
             # ``_resolve_enter_choice`` makes for its own colour branch.
@@ -560,7 +566,8 @@ class ValueChoicesMixin:
                 if self.entry_choice_applies(permanent):
                     permanent.metadata["chosen_land_type"] = word
                     self.log.append(
-                        f"{choice.data['card_name']}: chose {word}"
+                        f"{choice.data['card_name']}: chose "
+                        f"{display_type_word(word)}"
                     )
                     self._recalculate_lord_buffs()
             self.discard_pending_choice(choice)
@@ -591,10 +598,10 @@ class ValueChoicesMixin:
                 chose: list[str] = []
                 if word is not None:
                     permanent.metadata["chosen_creature_type"] = word
-                    chose.append(word)
+                    chose.append(display_type_word(word))
                 if color is not None:
                     permanent.metadata["chosen_color"] = color
-                    chose.append(color)
+                    chose.append(display_color_word(color))
                 if chose:
                     self.log.append(
                         f"{choice.data['card_name']}: chose {' and '.join(chose)}"
@@ -636,7 +643,9 @@ class ValueChoicesMixin:
                 if self.entry_choice_applies(permanent):
                     permanent.metadata[CHOSEN_LAND_TYPES] = pair
                     self.log.append(
-                        f"{choice.data['card_name']}: chose {pair[0]} and {pair[1]}"
+                        f"{choice.data['card_name']}: chose "
+                        f"{display_type_word(pair[0])} and "
+                        f"{display_type_word(pair[1])}"
                     )
                     self._refresh_dynamic_creatures()
             self.discard_pending_choice(choice)
@@ -734,7 +743,9 @@ class ValueChoicesMixin:
                 return False
             if color is not None and self.entry_choice_applies(permanent):
                 permanent.metadata["chosen_color"] = color
-                self.log.append(f"{choice.data['card_name']}: chose {color}")
+                self.log.append(
+                    f"{choice.data['card_name']}: chose {display_color_word(color)}"
+                )
                 self._recalculate_lord_buffs()
             self.discard_pending_choice(choice)
             self.check_state_based_actions()
@@ -781,7 +792,7 @@ class ValueChoicesMixin:
             chose = f"{self.players[player_index].name} chose {self.players[opponent_index].name}"
             if color is not None:
                 permanent.metadata["chosen_color"] = color
-                chose += f" and {color}"
+                chose += f" and {display_color_word(color)}"
             if choice.data.get("needs_card_name") and card_name:
                 permanent.metadata["chosen_card_name"] = card_name
                 chose += f" and {card_name}"
@@ -909,8 +920,8 @@ class ValueChoicesMixin:
                 duration=duration,
             ):
                 self.log.append(
-                    f"{card_name} changed {old_symbol} text to {new_symbol} on "
-                    f"{subject_name}"
+                    f"{card_name} changed {display_color_word(old_symbol)} text "
+                    f"to {display_color_word(new_symbol)} on {subject_name}"
                 )
             return
         old_type = LAND_TYPE_WORDS.get((old_symbol or "").upper())
@@ -919,7 +930,8 @@ class ValueChoicesMixin:
             permanent, old_type, new_type, label=card_name, duration=duration,
         ):
             self.log.append(
-                f"{card_name} changed {old_type} to {new_type} in "
+                f"{card_name} changed {display_type_word(old_type)} to "
+                f"{display_type_word(new_type)} in "
                 f"{permanent.card.name}'s text" + (" (on the stack)" if on_stack else "")
             )
             # A land word inside a lord's grant line ("Other Goblins have
@@ -1098,9 +1110,13 @@ class ValueChoicesMixin:
             )
         note = str(choice.data.get("note") or "")
         restricted = f" (spendable only on {spend_only})" if spend_only else ""
+        # In mana symbols, as the producer's own line is: the colour asked for
+        # is the choice this answers, and "produced 1 R mana" printed its
+        # record rather than the mana.
+        produced = "{" + str(symbol) + "}"
         self.log.append(
             f"{choice.data.get('card_name', 'An ability')} produced "
-            f"{amount} {symbol} mana{note}{restricted}"
+            f"{produced * amount if amount > 0 else 'no mana'}{note}{restricted}"
         )
 
     def confirm_color_set_choice(self, player_index: int, colors) -> bool:
@@ -1146,7 +1162,8 @@ class ValueChoicesMixin:
         )
         self._recalculate_lord_buffs()
         self.log.append(
-            f"{permanent.card.name} became {'/'.join(symbols)} "
+            f"{permanent.card.name} became "
+            f"{' and '.join(display_color_word(s) for s in symbols)} "
             f"({data.get('card_name', '')})"
         )
         return True

@@ -630,7 +630,7 @@ def test_vodalian_mystic_asks_for_the_color_as_it_resolves(set_pool, catalog_by_
     assert game.resolve_pending_choice("color_choice", 0, mana_color="U") is True
 
     assert game._stack_item_colors(bolt) == ("U",)
-    assert "Lightning Bolt (on the stack) became U (Vodalian Mystic)" in game.log
+    assert "Lightning Bolt (on the stack) became blue (Vodalian Mystic)" in game.log
     # Only the colour changed: the Bolt still resolves as printed.
     _w1g7_resolve_stack(game)
     assert p0.life == 17

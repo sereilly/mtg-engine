@@ -213,26 +213,26 @@ _SENT = {
     ),
     "Conspiracy": (
         {"creature_type": "goblin"},
-        [{"label": "Chosen creature type", "value": "goblin"}],
+        [{"label": "Chosen creature type", "value": "Goblin"}],
     ),
     "Volrath's Laboratory": (
         {"creature_type": "goblin", "mana_color": "U"},
         [
             {"label": "Chosen color", "value": "blue"},
-            {"label": "Chosen creature type", "value": "goblin"},
+            {"label": "Chosen creature type", "value": "Goblin"},
         ],
     ),
     "Shimmer": (
         {"chosen_land_type": "desert"},
-        [{"label": "Chosen land type", "value": "desert"}],
+        [{"label": "Chosen land type", "value": "Desert"}],
     ),
     "Roots of Life": (
         {"chosen_land_type": "swamp"},
-        [{"label": "Chosen land type", "value": "swamp"}],
+        [{"label": "Chosen land type", "value": "Swamp"}],
     ),
     "Illusionary Terrain": (
         {"old_color": "G", "mana_color": "U"},
-        [{"label": "Chosen land types (first, second)", "value": "forest, island"}],
+        [{"label": "Chosen land types (first, second)", "value": "Forest, Island"}],
     ),
     "Booby Trap": (
         {"target_seat": 1, "card_name": "Mountain Goat"},

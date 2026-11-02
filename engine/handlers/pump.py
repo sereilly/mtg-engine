@@ -50,7 +50,10 @@ def berserk_pump(game: Game, instruction: OracleInstruction, context: OracleExec
         # "At the beginning of the next end step, destroy that creature if it
         # attacked this turn." Mark it; the end step checks attacked_this_turn.
         mark_delayed_destruction(game, target_perm, "destroy_if_attacked_eot")
-        game.log.append(f"{card.name} pumped {target_perm.card.name} by +{boost}/+0 and granted trample")
+        game.log.append(
+            f"{card.name} gives {target_perm.card.name} {boost:+d}/+0 and "
+            "trample until end of turn"
+        )
     else:
         game.log.append(f"{card.name}: no valid creature target")
     return True, "resolved"
@@ -483,7 +486,13 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
         return True, "resolved"
     for perm in affected:
         apply_temp_pt_boost(perm, power_delta, toughness_delta)
-    game.log.append(f"{card.name} buffed matching creatures")
+    # What it did, signed, as its while-tapped twin says it: "buffed matching
+    # creatures" called Bane of the Living's -X/-X and Hell Swarm's -1/-0 a
+    # buff, and said neither how much nor to how many.
+    game.log.append(
+        f"{card.name} gives {len(affected)} creature(s) "
+        f"{power_delta:+d}/{toughness_delta:+d} until end of turn"
+    )
     return True, "resolved"
 
 

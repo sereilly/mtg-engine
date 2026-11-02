@@ -689,7 +689,7 @@ def test_w1g4_defensive_maneuvers_asks_on_resolution_and_toughens_only_that_type
     assert _w1g4_pt(their_goblin) == (2, 6)
     assert _w1g4_pt(elf) == (2, 2)
     assert _w1g4_pt(zombie) == (2, 2)
-    assert any("Defensive Maneuvers: chose goblin" in line for line in game.log)
+    assert any("Defensive Maneuvers: chose Goblin" in line for line in game.log)
 
 
 def test_w1g4_defensive_maneuvers_default_names_the_casters_own_type(set_pool):
@@ -707,7 +707,7 @@ def test_w1g4_defensive_maneuvers_default_names_the_casters_own_type(set_pool):
     assert [_w1g4_pt(perm) for perm in elves] == [(2, 6), (2, 6)]
     assert _w1g4_pt(my_goblin) == (2, 2)
     assert all(_w1g4_pt(perm) == (2, 2) for perm in theirs)
-    assert any("Defensive Maneuvers: chose elf" in line for line in game.log)
+    assert any("Defensive Maneuvers: chose Elf" in line for line in game.log)
 
 
 def test_w1g4_tribal_unity_pumps_the_named_type_by_x_through_the_layers(set_pool):

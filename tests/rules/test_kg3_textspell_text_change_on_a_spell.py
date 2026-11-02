@@ -83,7 +83,7 @@ def test_sleight_of_mind_on_terror_makes_its_chosen_target_illegal(catalog_by_na
         game, 0, catalog_by_name["Sleight of Mind"], old_color="B", new_color="W",
     )
     assert game.resolve_top_of_stack()
-    assert "Sleight of Mind changed B text to W on Terror (on the stack)" in game.log
+    assert "Sleight of Mind changed black text to white on Terror (on the stack)" in game.log
     assert "nonwhite" in spell_text_card(terror).oracle_text
     assert terror.card is terror_card, "the stack object's card stays the printed one"
 
@@ -110,7 +110,7 @@ def test_magical_hack_on_tsunami_destroys_the_other_land_type(catalog_by_name):
     )
     resolve_stack(game)
 
-    assert "Magical Hack changed island to swamp in Tsunami's text (on the stack)" in game.log
+    assert "Magical Hack changed Island to Swamp in Tsunami's text (on the stack)" in game.log
     assert game.is_on_battlefield(island)
     assert not game.is_on_battlefield(swamp)
     assert [card.name for card in game.players[0].graveyard] == ["Tsunami"]
@@ -162,7 +162,7 @@ def test_artificial_evolution_on_a_spell_for_a_seat_nobody_asks(catalog_by_name,
     _cast_at_the_spell(game, 0, set_pool("ONS")["Artificial Evolution"])
     assert game.resolve_top_of_stack()
 
-    assert "Artificial Evolution: chose goblin" in game.log
+    assert "Artificial Evolution: chose Goblin" in game.log
     (change,) = crusade.text_change_effects
     assert change["from"] == "goblin" and change["to"] != "goblin"
     assert "Goblins" not in spell_text_card(crusade).oracle_text
@@ -297,7 +297,7 @@ def test_crystal_spray_asks_which_vocabulary_of_an_interactive_seat_for_a_spell(
     resolve_stack(game)
 
     assert (
-        "Crystal Spray changed swamp to island in Sol'kanar the Swamp King's text "
+        "Crystal Spray changed Swamp to Island in Sol'kanar the Swamp King's text "
         "(on the stack)" in game.log
     )
     (solkanar,) = game.players[0].battlefield

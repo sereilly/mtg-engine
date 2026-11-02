@@ -339,8 +339,10 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
             permanent.metadata["chosen_color"] = named
             context.results[CHOSEN_COLOR_THIS_WAY] = named
             game.log.append(
-                f"{card_name}: {game.players[seat].name} chose {named}"
-                if seat is not None else f"{card_name}: {named} chosen"
+                f"{card_name}: {game.players[seat].name} chose "
+                f"{_colour_said(named)}"
+                if seat is not None
+                else f"{card_name}: {_colour_said(named)} chosen"
             )
             return True, "resolved"
     if chooser == "event_subject_player":
@@ -412,7 +414,8 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
                 records_on.metadata["chosen_color"] = offered[0]
             context.results[CHOSEN_COLOR_THIS_WAY] = offered[0]
             game.log.append(
-                f"{card_name}: {game.players[seat].name} chose {offered[0]}"
+                f"{card_name}: {game.players[seat].name} chose "
+                f"{_colour_said(offered[0])}"
             )
             return True, "resolved"
     from ..ai_prompt_readers import (color_most_worth_sweeping,
@@ -458,6 +461,23 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
     )
     game.log.append(f"{card_name}: {game.players[seat].name} chooses a color")
     return True, "resolved"
+
+
+def _colour_said(symbol) -> str:
+    """A chosen colour as the log says it ("blue", not "U"), through the
+    grammar's one spelling — imported here, not at the top, because the
+    grammar package imports the handlers' registry."""
+    from ..grammar.vocabulary import display_color_word
+
+    return display_color_word(symbol)
+
+
+def _type_said(word) -> str:
+    """A chosen type as a type line prints it ("Goblin", not "goblin") —
+    :func:`_colour_said`'s twin, imported where it is for its reason."""
+    from ..grammar.vocabulary import display_type_word
+
+    return display_type_word(str(word))
 
 
 @effect_handler("recall_chosen_color")
@@ -674,7 +694,10 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
     )
     game.log.append(
         f"{card_name}: {game.players[seat].name} chooses a creature type"
-        + (f" other than {', '.join(word.title() for word in excluded)}" if excluded else "")
+        + (
+            f" other than {', '.join(_type_said(word) for word in excluded)}"
+            if excluded else ""
+        )
     )
     # CR 608.2d: the choice is *announced* while the effect is applied. An
     # interactive seat's answer is logged by the resolver; a seat nobody asks
@@ -684,7 +707,10 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
         owed.kind == "creature_type_choice" and owed.data.get("_context") is context
         for owed in game.pending_choices
     ):
-        game.log.append(f"{card_name}: chose {default or 'no creature type'}")
+        game.log.append(
+            f"{card_name}: chose "
+            f"{_type_said(default) if default else 'no creature type'}"
+        )
     return True, "resolved"
 
 
@@ -936,11 +962,11 @@ def each_player_chooses_creature_type(game: Game, instruction: OracleInstruction
         ):
             game.log.append(
                 f"{card_name}: {game.players[seat].name} chose "
-                f"{default or 'no creature type'}"
+                f"{_type_said(default) if default else 'no creature type'}"
             )
 
     def done() -> None:
-        named = [word for word in chosen if word]
+        named = [_type_said(word) for word in chosen if word]
         game.log.append(
             f"{card_name}: creature types chosen this way: "
             + (", ".join(named) if named else "none")

@@ -155,7 +155,8 @@ def prepare_then_interact(game, instruction, context):
         toughness = resolve_amount(prepare.get("toughness", 0), context.x_value)
         apply_temp_pt_boost(first, power, toughness)
         game.log.append(
-            f"{card.name} gives {first.card.name} +{power}/+{toughness} until end of turn"
+            f"{card.name} gives {first.card.name} {power:+d}/{toughness:+d} "
+            "until end of turn"
         )
     elif prepare.get("kind") == "counter":
         game.place_plus1_counters(first)

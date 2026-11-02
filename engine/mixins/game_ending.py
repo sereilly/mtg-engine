@@ -738,8 +738,12 @@ class GameEndingMixin:
                 return perm.is_creature and not has_dynamic_toughness and perm.effective_toughness <= 0
 
             for player in self.players:
-                def _on_destroy_5f(perm: Permanent, player=player) -> None:
-                    self.log.append(f"{perm.card.name} died (704.5f: toughness {perm.effective_toughness})")
+                def _on_destroy_5f(perm: Permanent, died: bool, player=player) -> None:
+                    self.log.append(
+                        f"{perm.card.name} "
+                        + ("died" if died else "left the battlefield")
+                        + f" (704.5f: toughness {perm.effective_toughness})"
+                    )
 
                 if self._destroy_swept_permanents(
                     player, _zero_toughness,
@@ -791,8 +795,12 @@ class GameEndingMixin:
                 perm.metadata.pop("received_deathtouch", None)
 
             for player in self.players:
-                def _on_destroy_5g(perm: Permanent, player=player) -> None:
-                    self.log.append(f"{perm.card.name} died (704.5g: lethal damage)")
+                def _on_destroy_5g(perm: Permanent, died: bool, player=player) -> None:
+                    self.log.append(
+                        f"{perm.card.name} "
+                        + ("died" if died else "was destroyed")
+                        + " (704.5g: lethal damage)"
+                    )
 
                 if self._destroy_swept_permanents(
                     player, _lethally_damaged,
@@ -829,8 +837,10 @@ class GameEndingMixin:
                 if self._destroy_swept_permanents(
                     player, _zero_loyalty,
                     allow_regeneration=False, respect_indestructible=False,
-                    on_destroy=lambda perm: self.log.append(
-                        f"{perm.card.name} went to graveyard (704.5i: 0 loyalty)"
+                    on_destroy=lambda perm, died: self.log.append(
+                        f"{perm.card.name} "
+                        + ("went to graveyard" if died else "left the battlefield")
+                        + " (704.5i: 0 loyalty)"
                     ),
                     cause=NOT_A_DESTRUCTION,
                 ):
@@ -902,13 +912,17 @@ class GameEndingMixin:
                     return True
                 return not self.is_on_battlefield(attached_to)
 
-            def _on_destroy_5m(perm: Permanent) -> None:
+            def _on_destroy_5m(perm: Permanent, died: bool) -> None:
                 reason = (
                     "unattached aura"
                     if perm.metadata.get("attached_to") is None
                     else "enchanted object left battlefield"
                 )
-                self.log.append(f"{perm.card.name} put into graveyard (704.5m: {reason})")
+                self.log.append(
+                    f"{perm.card.name} "
+                    + ("put into graveyard" if died else "left the battlefield")
+                    + f" (704.5m: {reason})"
+                )
 
             for player in self.players:
                 if self._destroy_swept_permanents(
@@ -1120,7 +1134,7 @@ class GameEndingMixin:
                 if self._destroy_swept_permanents(
                     player, _saga_done,
                     allow_regeneration=False, respect_indestructible=False,
-                    on_destroy=lambda perm: self.log.append(
+                    on_destroy=lambda perm, _died: self.log.append(
                         f"{perm.card.name} sacrificed (704.5s: Saga reached final chapter)"
                     ),
                     # A sacrifice (CR 701.21a: "doesn't destroy it").

@@ -251,7 +251,7 @@ def test_skulking_ghost_survives_blocking_an_aisling_leprechaun(set_pool):
     resolve_stack(game)
 
     assert game.is_on_battlefield(ghost), game.log
-    assert "Skulking Ghost became G (Aisling Leprechaun)" in game.log, game.log
+    assert "Skulking Ghost became green (Aisling Leprechaun)" in game.log, game.log
     assert not any("sacrificed" in line for line in game.log)
 
 

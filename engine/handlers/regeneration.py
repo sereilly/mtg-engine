@@ -33,11 +33,12 @@ def grant_regeneration_to_target_creature(game: Game, instruction: OracleInstruc
     chosen = resolve_target_permanent(
         game, context, predicate=eligible, fallback_on_invalid_choice=False
     )
+    source_name = getattr(context.card, "name", "") or "An effect"
     if chosen is None:
-        game.log.append("No valid creature to regenerate")
+        game.log.append(f"{source_name}: no valid creature to regenerate")
         return True, "resolved"
     chosen.regeneration_shield += 1
-    game.log.append("Regeneration shield granted")
+    game.log.append(f"{source_name} gave {chosen.card.name} a regeneration shield")
     return True, "resolved"
 
 

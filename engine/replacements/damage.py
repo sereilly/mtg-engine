@@ -802,10 +802,20 @@ def _damage_multiplier(game, payload: dict) -> int:
     beside a Fiery Emancipation is 6, in either order (CR 616.1 leaves the order
     to the affected player and multiplication does not care).
     """
+    product = 1
+    for factor, _perm in _damage_multipliers(game, payload):
+        product *= factor
+    return product
+
+
+def _damage_multipliers(game, payload: dict) -> list:
+    """``(factor, permanent)`` for each printed multiplier this event answers
+    to — :func:`_damage_multiplier`'s terms, kept apart so the log line can
+    say whose they are, as Equal Treatment's line says its own."""
     seat = payload.get("source_seat")
     if payload["amount"] <= 0:
-        return 1
-    product = 1
+        return []
+    found = []
     for source_seat, perm in game.permanents_with_controller():
         for line in (perm.effective_card.oracle_text or "").splitlines():
             read = _read_damage_multiplier(line)
@@ -816,8 +826,8 @@ def _damage_multiplier(game, payload: dict) -> int:
                 continue
             if not _multiplier_source_answers(payload.get("source"), source_class):
                 continue
-            product *= factor
-    return product
+            found.append((factor, perm))
+    return found
 
 
 def _applies_damage_multiplier(game, payload: dict) -> bool:
@@ -846,7 +856,10 @@ def _multiply_damage_dealt(game, payload: dict) -> ReplacementOutcome | None:
     """
     multiplier = _damage_multiplier(game, payload)
     amount = payload["amount"]
-    game.log.append(f"{amount} damage becomes {amount * multiplier}")
+    # Whose multiplier, as the Equal Treatment line beside it says: "2 damage
+    # becomes 4" named nothing that did it.
+    names = ", ".join(perm.card.name for _factor, perm in _damage_multipliers(game, payload))
+    game.log.append(f"{amount} damage becomes {amount * multiplier} ({names})")
     return ReplacementOutcome(new_amount=amount * multiplier)
 
 

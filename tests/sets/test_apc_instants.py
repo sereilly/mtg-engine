@@ -1791,7 +1791,7 @@ def test_illusion_offers_a_spell_or_a_permanent_and_takes_one_of_them(
 
     assert game._stack_item_colors(bolt) == ("U",)
     assert game._effective_colors(bears) == {"G"}
-    assert "Lightning Bolt (on the stack) became U until end of turn (Illusion)" in game.log
+    assert "Lightning Bolt (on the stack) became blue until end of turn (Illusion)" in game.log
     assert [card.name for card in p0.graveyard] == ["Illusion // Reality"]
     assert [item.card.name for item in game.stack] == ["Lightning Bolt"]
 
@@ -1835,7 +1835,7 @@ def test_illusion_recolours_a_permanent_until_end_of_turn(set_pool, catalog_by_n
     game.resolve_pending_choice("color_choice", 0, mana_color="B")
 
     assert game._effective_colors(bears) == {"B"}
-    assert "Grizzly Bears became B until end of turn (Illusion)" in game.log
+    assert "Grizzly Bears became black until end of turn (Illusion)" in game.log
     game.resolve_cleanup_step(0)
     assert game._effective_colors(bears) == {"G"}
 

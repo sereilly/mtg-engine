@@ -29,7 +29,7 @@ from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             named_no_target)
 from ..resumption import run_resumable
 from ._filters import permanent_matches_filter
-from ._targets import (one_recorded_permanent_id, attached_host,
+from ._targets import (departed_object_said, one_recorded_permanent_id, attached_host,
                        block_pair_permanents, frozen_that_player_seat,
                        resolve_role_permanent, resolve_target_permanent,
                        resolve_target_permanents)
@@ -333,7 +333,7 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
             predicate=lambda p: True, fallback_players=(),
         )
         if victim is None:
-            game.log.append(f"{card.name}: its target is gone (608.2b)")
+            game.log.append(f"{card.name}: {departed_object_said(context)}")
             return True, "resolved"
         chosen_index = game.battlefield_index_of(victim)
         seat = game.controller_index_of(victim)
@@ -426,13 +426,13 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         {destroyed.permanent_id: singular_seat}
         if destroyed is not None and singular_seat is not None else {},
     )
+    # The spell's name as well as an ability's: "Destroyed Toymaker" said
+    # what went and not what took it, and "No valid target permanent found"
+    # said neither.
     if destroyed is not None:
-        if source_permanent is not None:
-            game.log.append(f"{card.name} destroyed {destroyed.card.name}")
-        else:
-            game.log.append(f"Destroyed {destroyed.card.name}")
+        game.log.append(f"{card.name} destroyed {destroyed.card.name}")
     else:
-        game.log.append("No valid target permanent found")
+        game.log.append(f"{card.name}: no valid permanent to destroy")
     return True, "resolved"
 
 
@@ -460,11 +460,13 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
         if game._destroy_swept_permanents(
             victim_player, lambda perm, victim=victim_perm: perm is victim
         ):
-            game.log.append(f"Chaos Orb flip destroyed {victim_perm.card.name}")
+            game.log.append(
+                f"{context.card.name}'s flip destroyed {victim_perm.card.name}"
+            )
         else:
             game.log.append(
-                f"Chaos Orb flip touched {victim_perm.card.name}, which was "
-                "not destroyed"
+                f"{context.card.name}'s flip touched {victim_perm.card.name}, "
+                "which was not destroyed"
             )
     # "Then destroy this artifact."
     if source_permanent is not None:
@@ -472,7 +474,7 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
         if holder is not None and game._destroy_swept_permanents(
             game.players[holder], lambda perm: perm is source_permanent
         ):
-            game.log.append("Chaos Orb was destroyed after flip")
+            game.log.append(f"{source_permanent.card.name} was destroyed after its flip")
     return True, "resolved"
 
 

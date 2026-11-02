@@ -763,7 +763,7 @@ class SpellCastingMixin:
         if any(
             cost.choose_creature_type for cost in cast_costs
         ) or self._cast_type_narrows_graveyard_targets(card):
-            from ...grammar.vocabulary import CREATURE_TYPES
+            from ...grammar.vocabulary import CREATURE_TYPES, display_type_word
 
             if chosen_creature_type is not None:
                 chosen_type_word = str(chosen_creature_type).strip().lower()
@@ -780,7 +780,9 @@ class SpellCastingMixin:
                     caster_index, card
                 )
             self.log.append(
-                f"{caster.name} chose {chosen_type_word} to cast {card.name}"
+                f"{caster.name} chose "
+                f"{display_type_word(chosen_type_word) if chosen_type_word else 'no creature type'} "
+                f"to cast {card.name}"
             )
 
         # "Buyback costs cost {2} less." (Memory Crystal.) CR 601.2f applied to

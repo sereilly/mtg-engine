@@ -713,12 +713,14 @@ class SacrificeChoicesMixin:
             return len(self.players[seat].hand)
         return len(self.balance_candidates(seat, stage))
 
-    def begin_balance(self) -> bool:
+    def begin_balance(self, card_name: str = "Balance") -> bool:
         """Open Balance's first round that owes anything (lands, then cards
-        in hand, then creatures). False when no round does."""
-        return self._open_balance_round(0)
+        in hand, then creatures). False when no round does. *card_name* is
+        the resolving card, which every line of the rounds names — the card
+        that prints the sentence rather than the one it was written for."""
+        return self._open_balance_round(0, card_name)
 
-    def _open_balance_round(self, start: int) -> bool:
+    def _open_balance_round(self, start: int, card_name: str = "Balance") -> bool:
         """Count each round from *start* on and arm the first that owes."""
         seats = self.apnap_seats()
         for stage in BALANCE_ROUNDS[start:]:
@@ -738,8 +740,11 @@ class SacrificeChoicesMixin:
                 # them." So one seat is asked at a time, and the next only once
                 # the one before has chosen.
                 "waiting": [(seat, owed[seat]) for seat in seats if seat in owed],
+                "card_name": card_name,
             }
-            self.log.append(f"Balance: each player chooses {_BALANCE_ROUND_WORDS[stage]}")
+            self.log.append(
+                f"{card_name}: each player chooses {_BALANCE_ROUND_WORDS[stage]}"
+            )
             self._ask_next_balance_seat(batch)
             batch["armed"] = True
             self._finish_balance_round(batch)
@@ -796,7 +801,10 @@ class SacrificeChoicesMixin:
                         self._discard_card(
                             player, card, cause_seat=choice.data.get("_cause_seat"),
                         )
-                    self.log.append(f"{player.name} discarded {len(chosen)} card(s) (Balance)")
+                    self.log.append(
+                        f"{player.name} discarded {len(chosen)} card(s) "
+                        f"({batch.get('card_name', 'Balance')})"
+                    )
         else:
             # Every seat's unchosen permanents in one event (CR 701.21a), the
             # ruling's "sacrificed simultaneously".
@@ -806,9 +814,11 @@ class SacrificeChoicesMixin:
                 self.log.append(
                     f"{self.players[choice.player_index].name} sacrificed "
                     + (", ".join(perm.card.name for perm in chosen) or "nothing")
-                    + " (Balance)"
+                    + f" ({batch.get('card_name', 'Balance')})"
                 )
-        self._open_balance_round(BALANCE_ROUNDS.index(stage) + 1)
+        self._open_balance_round(
+            BALANCE_ROUNDS.index(stage) + 1, batch.get("card_name", "Balance")
+        )
 
     def _resolve_balance(self, choice: PendingChoice, land_indices, creature_indices, hand_indices) -> bool:
         """One seat's answer to one round, validated whole and then *held*
@@ -848,7 +858,7 @@ class SacrificeChoicesMixin:
         # seat has chosen (the ruling: "no cards are revealed until all
         # players have chosen what to discard").
         batch["answers"].append((choice, chosen))
-        self.log.append(said + " (Balance)")
+        self.log.append(said + f" ({batch.get('card_name', 'Balance')})")
         self._ask_next_balance_seat(batch)
         self._finish_balance_round(batch)
         return True

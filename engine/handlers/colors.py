@@ -196,19 +196,22 @@ def _change_text(
             if old_type not in written:
                 game.log.append(
                     f"{card.name} had no effect: {subject_name} has no"
-                    f" {old_type.title()} land type in its text"
+                    f" {_type_said(old_type)} land type in its text"
                 )
             elif change_land_word(
                 subject, old_type, new_type, label=card.name, duration=duration,
             ):
                 where = _whose_text(subject, subject_name, on_stack)
-                game.log.append(f"{card.name} changed {old_type} to {new_type} in {where}")
+                game.log.append(
+                    f"{card.name} changed {_type_said(old_type)} to "
+                    f"{_type_said(new_type)} in {where}"
+                )
                 if not on_stack:
                     game._recalculate_lord_buffs()
             else:
                 # The card's ruling: "It can't change a word to the same word."
                 game.log.append(
-                    f"{card.name} had no effect: it can't change {old_type} to"
+                    f"{card.name} had no effect: it can't change {_type_said(old_type)} to"
                     " the same word"
                 )
         return
@@ -233,7 +236,10 @@ def _change_text(
             subject, old_symbol, new_symbol, label=card.name,
             duration=duration,
         ):
-            game.log.append(f"{card.name} changed {old_symbol} text to {new_symbol} on {subject_name}")
+            game.log.append(
+                f"{card.name} changed {_colour_said(old_symbol)} text to "
+                f"{_colour_said(new_symbol)} on {subject_name}"
+            )
         return
 
     game.log.append(f"{card.name} applied a text change effect")
@@ -309,7 +315,10 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
             game.log.append(f"{context.card.name}: no valid spell to recolour")
             return True, "resolved"
         recolor_spell(context.stack_target, symbol)
-        game.log.append(f"{context.stack_target.card.name} (on the stack) became {symbol}")
+        game.log.append(
+            f"{context.stack_target.card.name} (on the stack) became "
+            f"{_colour_said(symbol)}"
+        )
         return True, "resolved"
     # "…that creature becomes green" on a block trigger (Aisling Leprechaun):
     # nobody targeted it, the firing bound it, and which half fired decides how
@@ -323,7 +332,10 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
         recoloured = block_pair_permanents(game, context) if symbol else []
         for perm in recoloured:
             change_color(perm, symbol)
-            game.log.append(f"{perm.card.name} became {symbol} ({context.card.name})")
+            game.log.append(
+                f"{perm.card.name} became {_colour_said(symbol)} "
+                f"({context.card.name})"
+            )
         if not recoloured:
             game.log.append(f"{context.card.name}: no creature to recolour")
         return True, "resolved"
@@ -331,13 +343,18 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
     # the predicate is every permanent rather than the resolver's creature
     # default. The index it used to pass named a slot, and a slot is not a
     # target once anything has left the battlefield (CR 400.7).
-    changed = game._apply_color_override(
-        resolve_target_permanent(
-            game, context, player=context.target, predicate=lambda p: True,
-        ),
-        symbol,
-    ) if symbol else False
-    game.log.append("Changed target color" if changed else "No valid permanent to recolor")
+    recoloured = resolve_target_permanent(
+        game, context, player=context.target, predicate=lambda p: True,
+    ) if symbol else None
+    changed = game._apply_color_override(recoloured, symbol) if symbol else False
+    # Who did it and to what, as the Lace's spell-side line above says it:
+    # "Changed target color" named neither the card nor the permanent.
+    game.log.append(
+        f"{recoloured.card.name} became {_colour_said(symbol)} "
+        f"({context.card.name})"
+        if changed and recoloured is not None
+        else f"{context.card.name}: no valid permanent to recolor"
+    )
     return True, "resolved"
 
 
@@ -428,7 +445,7 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
     # rather than inferred from the card.
     change_color(target, symbol, until_eot=bool(instruction.payload.get("until_eot")))
     game.log.append(
-        f"{target.card.name} became {symbol}"
+        f"{target.card.name} became {_colour_said(symbol)}"
         + (" until end of turn" if instruction.payload.get("until_eot") else "")
         + f" ({context.card.name})"
     )
@@ -495,7 +512,7 @@ def _recolor_stack_target_chosen_color(
     until_eot = bool(instruction.payload.get("until_eot"))
     recolor_spell(item, symbol, until_eot=until_eot)
     game.log.append(
-        f"{item.card.name} (on the stack) became {symbol}"
+        f"{item.card.name} (on the stack) became {_colour_said(symbol)}"
         + (" until end of turn" if until_eot else "")
         + f" ({name})"
     )
@@ -681,9 +698,26 @@ def _colour_override_value(printed):
     return symbol or None
 
 
+def _colour_said(symbol) -> str:
+    """A recorded colour symbol as the log says it ("blue", not "U") — the
+    grammar's one spelling, imported here because the grammar package
+    imports the handlers' registry and a module-level import closes a cycle."""
+    from ..grammar.vocabulary import display_color_word
+
+    return display_color_word(symbol)
+
+
+def _type_said(word) -> str:
+    """A land type as a type line prints it ("Island", not "island"), for
+    :func:`_colour_said`'s reason and through the grammar's one spelling."""
+    from ..grammar.vocabulary import display_type_word
+
+    return display_type_word(str(word))
+
+
 def _colour_override_word(written) -> str:
     """The channel value as the log should print it."""
-    return "colorless" if written == () else str(written)
+    return "colorless" if written == () else _colour_said(written)
 
 
 def _colour_to_write(game, instruction, context):
