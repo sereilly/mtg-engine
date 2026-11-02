@@ -297,10 +297,18 @@ LATER_SEAT_ROLE = "later_seat_role"
 #: they control — starting with the active player's; so the announcement's
 #: canonical order *is* that order (:func:`turn_order_key`), the roles walk
 #: offers each set of targets once rather than once per ordering, and a loop
-#: over the roles in slot order is the ruling's order. Within one player's
-#: group the order is fixed — the player, then their planeswalkers by
-#: permanent id — where the ruling lets the caster choose it.
+#: over the roles in slot order is the ruling's order **between** groups.
+#: Within one player's group the ruling lets the caster choose: the
+#: :data:`TARGET_GROUP_ORDER` prompt (``handlers/_role_order.py``), whose
+#: default — a seat nobody asks — is the slot order, the player and then their
+#: planeswalkers by permanent id.
 LATER_IN_TURN_ORDER_ROLE = "later_in_turn_order_role"
+
+#: The prompt kind a loop over turn-order roles arms when one player's group
+#: holds two or more of its targets (Kaboom!'s 2022-09-09 ruling: "You choose
+#: the relative order of targets within that group"), and the resolution record
+#: its answer is written to — the role names in the order they are handled.
+TARGET_GROUP_ORDER = "target_group_order"
 
 
 def turn_order_key(obj, game) -> "tuple[int, int, int] | None":

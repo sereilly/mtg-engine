@@ -1670,6 +1670,32 @@ def _a_commander_dies():
     return game
 
 
+# kg3/ai: Kaboom! names P1 and P1's planeswalker, one player's group, and the
+# caster orders them (the 2022-09-09 ruling). The walker is handled first, so
+# the first card revealed (Hill Giant, mana value 4) is its damage and the
+# second (Shock, 1) is P1's.
+@scenario(
+    "target_group_order", "Kaboom!",
+    answer=lambda g, c: {"order": [1, 0]},
+    wire=lambda g, c: {"target_order": [1, 0]},
+    then=lambda g: _resolved_then(g, lambda: _assert(g.players[1].life == 19)),
+)
+def _kaboom_orders_one_players_group():
+    from engine.named_counters import add_counters
+
+    walker = perm("Chandra, Heart of Fire")
+    add_counters(walker, "loyalty", 5)
+    game = duel(
+        hands=(("Kaboom!",), ()),
+        boards=((), (walker,)),
+        libraries=(("Hill Giant", "Shock", "Island"), ("Island",) * 3),
+    )
+    game.cast_from_hand(0, "Kaboom!", target_role_refs=[
+        {"seat": 1}, {"permanent_id": walker.permanent_id},
+    ])
+    return game
+
+
 # ---------------------------------------------------------------------------
 # Helpers the table reads
 # ---------------------------------------------------------------------------

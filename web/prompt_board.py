@@ -182,6 +182,37 @@ def _order_triggers(ctx: PromptContext, choices: list) -> dict:
     return {"player_seat": choice.player_index, "triggers": triggers}
 
 
+@prompt_renderer("target_group_order")
+def _target_group_order(ctx: PromptContext, choices: list) -> dict:
+    """Kaboom!'s ruling: the spell's targets, each player's group in turn
+    order, for the caster to order **within** each group ("You choose the
+    relative order of targets within that group").
+
+    Each entry keeps its ``index`` into the offered list, which is what the
+    answer (``target_group_order_confirm``'s ``target_order``) is written in,
+    and its ``group`` (0 is the active player's): an order that moves a
+    target out of its group is refused. ``id`` is a planeswalker's permanent,
+    for the board to point at; a player has none and carries its ``seat``.
+    The order_triggers prompt's widget answers the same shape — a list to put
+    in order — within each group.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "targets": [
+            {
+                "index": index,
+                "name": entry.get("name", ""),
+                "seat": entry.get("seat"),
+                "id": entry.get("permanent_id"),
+                "group": entry.get("group"),
+            }
+            for index, entry in enumerate(choice.data.get("targets") or ())
+        ],
+    }
+
+
 @prompt_renderer("reflexive_target")
 def _reflexive_target(ctx: PromptContext, choices: list) -> dict:
     """"When you do, you may tap or untap target creature." (Tolarian Kraken.)
