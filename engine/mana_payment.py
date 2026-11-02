@@ -315,6 +315,7 @@ def _plan_under_permissions(
     produced: "Sequence[frozenset[str]]",
     payer,
     wants=None,
+    prices=None,
 ) -> ManaPayment | None:
     """:func:`plan_payment` for a seat holding a CR 106.6 spending permission.
 
@@ -385,6 +386,7 @@ def _plan_under_permissions(
         list(matched.values()), max(0, generic), tapped,
         [sources[index][1] for index in range(floating) if index not in spent_floating],
         _wants_in_force(wants),
+        prices=_land_prices(lands, _prices_in_force(prices)),
     )
     if chosen is not None:
         tapped, matched = chosen
@@ -406,6 +408,7 @@ def plan_payment(
     wants=None,
     spent_first: int = 0,
     owners=None,
+    prices=None,
 ) -> ManaPayment | None:
     """How *required* can be paid from *pool* plus tapping *lands*, or None.
 
@@ -452,6 +455,12 @@ def plan_payment(
     are on. Without it an effect-priced coloured cost could not be paid under
     Celestial Dawn at all, where every land is a Plains and no land "produces"
     the pip.
+
+    *prices* is what each land charges beyond the tap — a function from a
+    land to its :data:`FREE_TAP`-shaped profile (``mana_drawbacks``) —
+    consulted by the sparing choice after the wants; left out, whatever
+    ``payment_prices_in_force`` names (``Game._pay_planned_cost`` names the
+    board's). It never changes whether the cost can be paid.
     """
     want = _normalized(required)
     if payer is not None and getattr(payer, "mana_spending_permissions", ()):
@@ -463,6 +472,7 @@ def plan_payment(
             ],
             payer,
             wants,
+            prices,
         )
     from_pool: dict[str, int] = {}
     left = dict(pool)
@@ -538,6 +548,7 @@ def plan_payment(
         ],
         _wants_in_force(wants),
         owners,
+        prices=_land_prices(lands, _prices_in_force(prices)),
     )
     if chosen is not None:
         chosen_tapped, chosen_matched = chosen
@@ -586,12 +597,50 @@ def _wants_in_force(wants):
     return _WANTS_IN_FORCE.get() if wants is None else wants
 
 
+#: What each land an effect-collected cost may tap charges beyond the tap,
+#: when the plan's caller names none: a function from a land to its
+#: :data:`FREE_TAP`-shaped profile. ``Game._pay_planned_cost`` sets it, for
+#: ``payment_wants_in_force``'s reason — it is the one writer that knows a
+#: payment is being made.
+_PRICES_IN_FORCE: ContextVar = ContextVar("payment_prices_in_force", default=None)
+
+
+@contextmanager
+def payment_prices_in_force(prices):
+    """Run a block in which every :func:`plan_payment` that names no *prices*
+    prices its lands with these."""
+    token = _PRICES_IN_FORCE.set(prices)
+    try:
+        yield
+    finally:
+        _PRICES_IN_FORCE.reset(token)
+
+
+def _prices_in_force(prices):
+    return _PRICES_IN_FORCE.get() if prices is None else prices
+
+
+def _land_prices(lands, prices):
+    """*prices* (a function of a land) as the sparing choice reads it: a
+    function of a land's index, memoised for the one plan."""
+    if prices is None:
+        return None
+    memo: dict = {}
+
+    def of(index):
+        if index not in memo:
+            memo[index] = prices(lands[index]) or FREE_TAP
+        return memo[index]
+
+    return of
+
+
 #: The most ways of choosing which sources pay that are weighed one by one.
 #: Past it the order the sources were handed in decides, as it always did.
 _MAX_SPARING_CHOICES = 512
 
 
-def _sparing_choice(candidates, pips, generic, base, left, wants, owners=None):
+def _sparing_choice(candidates, pips, generic, base, left, wants, owners=None, prices=None):
     """``(tapped, matched)`` — the sources to tap instead of *base* and the pip
     each pays — or None to tap *base*.
 
@@ -618,24 +667,47 @@ def _sparing_choice(candidates, pips, generic, base, left, wants, owners=None):
     want (they float only until the step ends, CR 106.4), and of two equally
     good choices the one tapping fewer sources is taken.
 
+    **And what each source charges beyond the tap** (*prices*, a mapping or
+    function from an index to its :data:`TapPrice` profile —
+    ``mana_drawbacks``: a painland's damage, a depletion counter, a land
+    that will not untap, a City of Brass's trigger), consulted **after** the
+    wants: of the choices that keep as much of the payer's turn payable, the
+    one costing least — so a Swamp pays a {1} rather than a City of Brass, and
+    a painland still pays where it keeps a card in hand castable. The price
+    of a choice is each source it touches charged once at its generic price,
+    plus what asking its units for the pips they pay adds
+    (:func:`_cheapest_assignment`); and the pips are matched to the chosen
+    units the cheapest way, so a Mountain pays the {R} and the Karplusan
+    Forest beside it the {1} with its painless {C}. With a price anywhere
+    among the candidates the choice is made even where nothing is wanted or
+    every candidate is needed — the pips' assignment is still a choice.
+
     Exact over **kinds** of unit: two Mountains are interchangeable, so a
     choice is how many of each kind it spends — the first that many of the
     kind, in the caller's order. Each choice is scored by what the rest still
     pays (`_wants_left`: the most wants together, the most of them cards, then
-    the most one at a time; a want repeated in hand counts each time); *base*
-    — the caller's own choice — is kept unless another scores higher, so a board
-    with no competing want pays exactly as it did, and ties go to the choice
-    tapping the fewest sources, then to the one whose units come first in the
-    caller's order. Nothing is asked of the wants where there is nothing to
-    choose: one kind of unit, or every candidate needed.
+    the most one at a time; a want repeated in hand counts each time), then
+    by its price; *base* — the caller's own choice — is kept unless another
+    scores higher, so a board with no competing want and no price pays
+    exactly as it did, and ties go to the choice tapping the fewest sources,
+    then to the one whose units come first in the caller's order. Nothing is
+    asked of the wants where there is nothing to choose: one kind of unit, or
+    every candidate needed.
     """
     owed = len(pips) + generic
-    if not owed or owed >= len(candidates) or not wants:
+    if not owed:
         return None
-    kinds: dict[frozenset, list[int]] = {}
+    profile_of = (
+        {index: _price_profile(prices, index) for index, _pays in candidates}
+        if prices is not None else {}
+    )
+    priced = any(profile != FREE_TAP for profile in profile_of.values())
+    if not priced and (owed >= len(candidates) or not wants):
+        return None
+    kinds: dict[tuple, list[int]] = {}
     for index, pays in candidates:
-        kinds.setdefault(frozenset(pays), []).append(index)
-    if len(kinds) < 2:
+        kinds.setdefault((frozenset(pays), profile_of.get(index, FREE_TAP)), []).append(index)
+    if len(kinds) < 2 and not priced:
         return None
     named: dict = {}
     owner_of = tuple(
@@ -649,37 +721,113 @@ def _sparing_choice(candidates, pips, generic, base, left, wants, owners=None):
     if callable(wants):
         wants = wants()
     counted = _counted_wants(wants, generic_too=len(named) < len(candidates))
-    if not counted:
+    if not counted and not priced:
         return None
     order = tuple(kinds)
     position_of = {index: position for position, (index, _pays) in enumerate(candidates)}
     # The candidates by kind, as positions in the caller's order, and whose
     # unit each is: the board as the scoring sees it, with no index in it.
     of_kind = tuple(tuple(position_of[index] for index in kinds[kind]) for kind in order)
+    pays_of = dict(candidates)
     scores = _choice_scores(
-        order, of_kind, owner_of, tuple(sorted(pips)), generic,
+        tuple(kind[0] for kind in order), of_kind, owner_of, tuple(sorted(pips)), generic,
         tuple(sorted(left, key=sorted)), counted,
+        tuple(kind[1] for kind in order) if priced else None,
     )
     if not scores:
-        return None
+        return _matched_cheapest(base, pips, pays_of, profile_of) if priced else None
     kind_of = {index: position for position, kind in enumerate(order) for index in kinds[kind]}
     taken = [0] * len(order)
     for index in base:
         if index in kind_of:
             taken[kind_of[index]] += 1
-    best = max(score for score, _sources in scores.values())
-    if tuple(taken) in scores and scores[tuple(taken)][0] >= best:
-        return None
-    _sources, positions = min(
-        (sources, _realized(of_kind, choice))
-        for choice, (score, sources) in scores.items() if score == best
+    best = max(score for score, _price, _sources in scores.values())
+    cheapest = min(price for score, price, _sources in scores.values() if score == best)
+    kept = scores.get(tuple(taken))
+    if kept is not None and kept[0] >= best and kept[1] <= cheapest:
+        return _matched_cheapest(base, pips, pays_of, profile_of) if priced else None
+    _price, _sources, positions = min(
+        (price, sources, _realized(of_kind, choice))
+        for choice, (score, price, sources) in scores.items()
+        if score == best and price == cheapest
     )
     chosen = [candidates[position][0] for position in positions]
-    pays_of = dict(candidates)
+    if priced:
+        return _matched_cheapest(chosen, pips, pays_of, profile_of)
     matched = _match_colored(list(pips), [(index, pays_of[index]) for index in chosen]) if pips else {}
     if matched is None:
         return None
     return chosen, matched
+
+
+#: A source's price beyond the tap, as the planners hand it to
+#: :func:`plan_payment` (``mana_drawbacks``): ``(generic, ((pip, extra), …))``
+#: — what tapping it costs when it pays generic mana (asked for its default
+#: symbol), and what asking it for each pip adds to that (a painland's colour
+#: hurts where its {C} does not). Charged once per source tapped, whatever
+#: number of units it makes. A source no drawback reaches is this.
+FREE_TAP: tuple = (0, ())
+
+
+def _price_profile(prices, index) -> tuple:
+    if prices is None:
+        return FREE_TAP
+    found = prices(index) if callable(prices) else prices.get(index)
+    return found if found else FREE_TAP
+
+
+def _cheapest_assignment(pips, units) -> "tuple[int, list] | None":
+    """``(extra price, pip per unit or None)`` — the cheapest way to match
+    *pips* to *units* (``(pays, {pip: extra})`` each), or None where they
+    cannot all be matched. Exact: a walk over the units with the pips still
+    owed as its state (a handful of symbols, so a handful of states); ties
+    keep the earlier unit unmatched, as :func:`_match_colored`'s order would."""
+    need = tuple(sum(1 for pip in pips if pip == symbol) for symbol in COLOR_SYMBOLS)
+    layers: list[dict] = [{need: (0, None, None)}]
+    for pays, extra in units:
+        current = layers[-1]
+        following: dict = {}
+        for state, (cost, _before, _pip) in current.items():
+            if state not in following or cost < following[state][0]:
+                following[state] = (cost, state, None)
+            for position, symbol in enumerate(COLOR_SYMBOLS):
+                if not state[position] or symbol not in pays:
+                    continue
+                after = state[:position] + (state[position] - 1,) + state[position + 1:]
+                total = cost + int(extra.get(symbol, 0))
+                if after not in following or total < following[after][0]:
+                    following[after] = (total, state, symbol)
+        layers.append(following)
+    done = (0,) * len(COLOR_SYMBOLS)
+    if done not in layers[-1]:
+        return None
+    taken: list = [None] * len(units)
+    state = done
+    for step in range(len(units), 0, -1):
+        _cost, before, symbol = layers[step][state]
+        taken[step - 1] = symbol
+        state = before
+    return layers[-1][done][0], taken
+
+
+def _matched_cheapest(chosen, pips, pays_of, profile_of):
+    """``(chosen, matched)`` with *pips* matched to the *chosen* units the
+    cheapest way — :func:`_match_colored`'s own matching wherever no chosen
+    unit's price depends on the pip it pays, so such a payment is matched
+    exactly as it always was."""
+    chosen = list(chosen)
+    extras = [dict(profile_of.get(index, FREE_TAP)[1]) for index in chosen]
+    if not pips:
+        return chosen, {}
+    if not any(extras):
+        matched = _match_colored(list(pips), [(index, pays_of[index]) for index in chosen])
+        return None if matched is None else (chosen, matched)
+    found = _cheapest_assignment(list(pips), [
+        (frozenset(pays_of[index]), extra) for index, extra in zip(chosen, extras)
+    ])
+    if found is None:
+        return None
+    return chosen, {index: pip for index, pip in zip(chosen, found[1]) if pip is not None}
 
 
 # -- Which floating mana pays generic -----------------------------------------
@@ -809,13 +957,15 @@ def _counted_wants(wants, *, generic_too: bool) -> "tuple[tuple[tuple[tuple[str,
 
 
 @lru_cache(maxsize=8192)
-def _choice_scores(order, of_kind, owner_of, pips, generic, left, wants):
-    """``{choice: (score, sources tapped)}`` for every way of spending
+def _choice_scores(order, of_kind, owner_of, pips, generic, left, wants, profiles=None):
+    """``{choice: (score, price, sources tapped)}`` for every way of spending
     ``len(pips) + generic`` units of the kinds *order* that pays *pips* — a
     choice is a count per kind (``of_kind[k]`` lists kind *k*'s candidate
     positions, ``owner_of[p]`` the source position *p* is a unit of), its
     score what the untouched sources and *left* still pay of *wants*
-    (`_wants_left`).
+    (`_wants_left`), its price what the sources it touches charge beyond the
+    tap (*profiles*, one :data:`FREE_TAP`-shaped profile per kind; 0 for
+    every choice without them).
     Empty past ``_MAX_SPARING_CHOICES``.
 
     A pure function of what a board holds and what is asked of it, so a board
@@ -843,25 +993,53 @@ def _choice_scores(order, of_kind, owner_of, pips, generic, left, wants):
     scores: dict[tuple[int, ...], tuple] = {}
     for choice in choices:
         spending = [order[kind] for kind, count in enumerate(choice) for _ in range(count)]
-        if pips and _match_colored(list(pips), list(enumerate(spending))) is None:
+        price = 0
+        if profiles is not None:
+            kinds_spent = [kind for kind, count in enumerate(choice) for _ in range(count)]
+            found = _cheapest_assignment(list(pips), [
+                (order[kind], dict(profiles[kind][1])) for kind in kinds_spent
+            ])
+            if found is None:
+                continue
+            price = found[0]
+        elif pips and _match_colored(list(pips), list(enumerate(spending))) is None:
             continue
         spent = _realized(of_kind, choice)
         touched = {owner_of[position] for position in spent}
+        if profiles is not None:
+            # Each source touched is charged its generic price once, whatever
+            # number of its units the choice spends (Ancient Tomb's two).
+            charged: dict = {}
+            for position in spent:
+                charged[owner_of[position]] = profiles[kind_at[position]][0]
+            price += sum(charged.values())
         rest = [
             *left,
             *(order[kind_at[position]] for position in range(len(owner_of))
               if owner_of[position] not in touched),
         ]
-        scores[choice] = (_wants_left(rest, asked), len(touched))
+        scores[choice] = (_wants_left(rest, asked), price, len(touched))
     return scores
 
 
 def _wants_left(rest: "list[frozenset[str]]", wants) -> tuple:
     """How well *rest* serves *wants* (``(want, times, tier)``, cards before
     abilities), as a key that sorts better-is-larger: how many it pays
-    **together** — taken in the order listed, each kept if it still fits
-    beside those before it — then how many of those are the cards' tier
-    (`PaymentWants`), then how many it pays one at a time.
+    **together** — taken smallest first (then cards before abilities, then
+    in the order listed), each kept if it still fits beside those before it
+    — then how many of those are the cards' tier (`PaymentWants`), then how
+    many it pays one at a time.
+
+    **Smallest first, because taken in the order listed the count was not
+    monotone**: a richer *rest* could score lower. Turning Liege of the Axe
+    up for {1}{W} from {W:3, G:4, C:7} beside a Savannah, with Akroma, Angel
+    of Wrath ({5}{W}{W}{W}) listed before three cheaper cards, the {C} spend
+    kept Akroma payable — and Akroma, packed first, crowded out the three —
+    while the {W} spend made Akroma unpayable and fitted the three: so the
+    {W}{W} spend scored higher although every cost it leaves payable the
+    {W}{C} spend leaves payable too (round kg3's reproduction of Legions'
+    browser observation). A large want taken last cannot crowd out small
+    ones.
 
     Together first, because a turn is several payments. Scored one at a
     time, the seeded M21 game paid Walking Corpse with both Swamps off
@@ -876,7 +1054,10 @@ def _wants_left(rest: "list[frozenset[str]]", wants) -> tuple:
     """
     together: dict[str, int] = {}
     packed = cards = 0
-    for want, times, tier in wants:
+    ordered = sorted(
+        enumerate(wants), key=lambda item: (sum(item[1][0].values()), item[1][2], item[0]),
+    )
+    for _position, (want, times, tier) in ordered:
         for _ in range(times):
             trial = dict(together)
             for symbol, amount in want.items():
@@ -1557,7 +1738,7 @@ __all__ = [
     "fungible_colors_headroom",
     "fungible_types_headroom", "generic_cost", "land_text_is_run",
     "mana_cost_from_symbols",
-    "mana_cost_label", "plan_payment",
+    "mana_cost_label", "payment_prices_in_force", "plan_payment",
     "taps_for_payment", "total_pips",
     "untapped_mana_lands",
 ]

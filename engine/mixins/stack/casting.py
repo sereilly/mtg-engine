@@ -62,6 +62,7 @@ from .cast_additional_costs import (_optional_cost_announcement,
                                     _optional_cost_totals, _taken_offers,
                                     optional_cost_taken)
 from .cast_announcement import _mode_announcements
+from ...mana_payment import mana_cost_label
 from ...refusals import refuse, take_back_refused_attempt
 
 
@@ -468,6 +469,12 @@ class SpellCastingMixin:
         # anything and a coloured one is not (CR 202.1), so the two cannot
         # share a number without the tax becoming cheaper than the card.
         extra_pip_tax: dict[str, int] = {}
+        # What moved this cast's price, for the payment's refusal to say: the
+        # log lines below announce each change as the cast is priced (CR
+        # 601.2f), and a refused cast takes them back with the rest of the
+        # attempt (CR 733.1, ``refusals.take_back_refused_attempt``), so the
+        # actor's "insufficient mana" carries them instead (``refusals.noting``).
+        price_notes: list[str] = []
 
         if self.enforce_mana_costs and card.primary_type == "land":
             refusal = self._land_play_refusal(caster_index)
@@ -609,6 +616,7 @@ class SpellCastingMixin:
         if spell_tax:
             extra_generic_tax += spell_tax
             self.log.append(f"{card.name} is taxed by {', '.join(taxing_names)}")
+            price_notes.append(f"costs {{{spell_tax}}} more: {', '.join(taxing_names)}")
 
         # "Black spells you cast cost {B} more to cast." (Derelor.) Charged
         # beside the generic tax and at the same moment (CR 601.2f), into the
@@ -622,6 +630,10 @@ class SpellCastingMixin:
                 extra_pip_tax[symbol] = extra_pip_tax.get(symbol, 0) + count
             self.log.append(
                 f"{card.name} is taxed by {', '.join(pip_taxing_names)}"
+            )
+            price_notes.append(
+                f"costs {mana_cost_label(pip_tax)} more: "
+                f"{', '.join(pip_taxing_names)}"
             )
 
         # CR 903.8: the commander tax, {2} per previous cast of this commander
@@ -637,6 +649,7 @@ class SpellCastingMixin:
                     f"{card.name} costs an additional {{{commander_tax}}} "
                     f"(CR 903.8: commander tax)"
                 )
+                price_notes.append(f"costs {{{commander_tax}}} more: commander tax")
 
         # "…that target this creature cost an additional 3 life to cast."
         # (Terror of the Peaks.) A tax in life rather than mana, scoped to what
@@ -667,6 +680,10 @@ class SpellCastingMixin:
         cost_reduction, reducing_names = cost_reduction_for_cast(self, caster_index, card)
         if cost_reduction:
             self.log.append(f"{card.name} costs less to cast ({', '.join(reducing_names)})")
+            price_notes.append(
+                f"costs {mana_cost_label({'generic': cost_reduction.generic, **dict(cost_reduction.colored)})}"
+                f" less: {', '.join(reducing_names)}"
+            )
 
         # Accept cards with supported triggered abilities (match classifier logic)
         if not classification.supported:
@@ -1104,6 +1121,11 @@ class SpellCastingMixin:
                     )
             else:
                 extra_generic_tax += owed
+                if owed:
+                    price_notes.append(
+                        f"costs {{{owed}}} more: {card.name} for "
+                        f"{num_targets} target(s)"
+                    )
 
         # CR 107.3, 601.2b: the X this cast is for.
         x_settled = self._resolved_cast_x(
@@ -1163,7 +1185,7 @@ class SpellCastingMixin:
             offer_x_colorings=offer_x_colorings, permission=permission,
             resolved_x_value=resolved_x_value,
             use_free_permission=use_free_permission, x_colors=x_colors,
-            x_mana_spent=x_mana_spent,
+            x_mana_spent=x_mana_spent, price_notes=price_notes,
         )
         if isinstance(mana_paid, SimulationResult):
             return mana_paid

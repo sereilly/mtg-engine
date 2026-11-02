@@ -46,7 +46,7 @@ from ...handlers._chosen import CHOSEN_ABILITY
 from ...handlers._targets import attached_host
 from ...oracle import OracleInstruction
 from .activation_payment import activation_mana_per_counter
-from ...refusals import refuse, take_back_refused_attempt
+from ...refusals import noting, refuse, take_back_refused_attempt
 
 
 class AbilityActivationMixin:
@@ -769,9 +769,15 @@ class AbilityActivationMixin:
         extra_ability_tax, taxing_names = ability_cost_tax(
             self, controller_index, permanent, ability
         )
+        # What moves the price, for the payment's refusal to say (the log
+        # lines are taken back with a refused attempt, CR 733.1).
+        price_notes: list[str] = []
         if extra_ability_tax:
             required_cost["generic"] = required_cost.get("generic", 0) + extra_ability_tax
             self.log.append(f"{permanent.card.name}'s ability is taxed by {', '.join(taxing_names)}")
+            price_notes.append(
+                f"costs {{{extra_ability_tax}}} more: {', '.join(taxing_names)}"
+            )
         # "This ability costs {1} less to activate for each Shrine you control."
         # (Sanctum of Tranquil Light.) After the tax, because CR 601.2f applies
         # increases before reductions, and clamped at zero because a cost cannot
@@ -784,6 +790,7 @@ class AbilityActivationMixin:
                 f"{permanent.card.name}'s ability costs "
                 f"{{{before - required_cost['generic']}}} less to activate"
             )
+            price_notes.append(f"costs {{{before - required_cost['generic']}}} less")
         # "Enchanted artifact's activated abilities cost {2} less to activate.
         # **This effect can't reduce the mana in that cost to less than one
         # mana.**" (Power Artifact.) The reduction is on the *Aura*, not on the
@@ -829,6 +836,10 @@ class AbilityActivationMixin:
                     f"{permanent.card.name}'s ability costs "
                     f"{{{before_total - reduced_generic - coloured}}} less to activate"
                 )
+                price_notes.append(
+                    f"costs {{{before_total - reduced_generic - coloured}}} less"
+                    + (f": {', '.join(reducing_names)}" if reducing_names else "")
+                )
         # "Note the type of mana spent to pay this activation cost." (Jeweled
         # Amulet, Ice Cauldron.) CR 107.4b's symbols, measured as the difference
         # the payment made to the pool rather than predicted from the cost: a
@@ -842,7 +853,10 @@ class AbilityActivationMixin:
                 controller, required_cost,
                 purpose=PaymentPurpose(ACTIVATE, source=permanent),
             ):
-                details = f"insufficient mana to activate {permanent.card.name}"
+                details = noting(
+                    f"insufficient mana to activate {permanent.card.name}",
+                    price_notes,
+                )
                 return refuse(permanent.card.name, "unsupported", details)
         mana_spent_for_cost = {
             symbol: spent

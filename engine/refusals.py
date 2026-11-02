@@ -73,6 +73,25 @@ def refuse(card_name: str, effect_kind: "str | None", details: str) -> Refusal:
     return Refusal(card_name, False, effect_kind, details)
 
 
+def noting(details: str, notes: "list[str] | tuple[str, ...]") -> str:
+    """*details* with *notes* folded into its parenthesis — a reason that
+    must carry what the attempt announced before it was refused.
+
+    A cast's tax ("Memory Lapse is taxed by Kaervek's Torch") is a line the
+    attempt writes as it prices itself (CR 601.2f), and
+    :func:`take_back_refused_attempt` takes it back with the rest of the
+    reversed action — so "insufficient mana" alone no longer said why the
+    price was what it was. The note is the actor's: "insufficient mana for
+    Memory Lapse (costs {2} more: Kaervek's Torch)". A reason that already
+    ends in a parenthesis ("… (CR 118.9d)") gets the notes inside it."""
+    if not notes:
+        return details
+    joined = "; ".join(notes)
+    if details.endswith(")"):
+        return f"{details[:-1]}; {joined})"
+    return f"{details} ({joined})"
+
+
 def take_back_refused_attempt(
     game: "Game", log_mark: int, result: SimulationResult,
 ) -> SimulationResult:

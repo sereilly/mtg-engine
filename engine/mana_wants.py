@@ -10,20 +10,27 @@ Phase 5). ``mana_payment._sparing_choice`` is the preference every planner
 shares; this is what it is a preference *for*.
 
 The wants are symbol dicts, read off what the seat itself can see (CR 400.2:
-its own hand; CR 708.5: its own face-down permanents) and nothing else — so
-the AI's rehearsal copy, which conceals another seat's hand
-(``ai_rehearsal.conceal_from``), reads the same wants of the seat it plans
-for, and the web's auto-tap reads a person's own hand on their behalf:
+its own hand; CR 708.5: its own face-down permanents; the public graveyards
+and exile) and nothing else — so the AI's rehearsal copy, which conceals
+another seat's hand (``ai_rehearsal.conceal_from``), reads the same wants of
+the seat it plans for, and the web's auto-tap reads a person's own hand on
+their behalf:
 
 * each spell in the hand — each half of a split card (CR 709.3) — at its
   printed mana cost, {X} as 0 (CR 107.3g);
 * each ability that works from the hand (cycling, CR 702.29a) at its mana;
 * each face-down permanent's morph cost, the price of turning it face up
   (CR 702.37e);
+* each card the seat may cast from **outside its hand** under a permission
+  (CR 601.3: a flashback card in its graveyard, CR 702.34a; a card an effect
+  lets it play from exile or the top of its library), at the permission's
+  price — its required alternative cost (CR 118.9b), nothing for a waiver,
+  else the mana cost (``ai_weighed_cast.permitted_casts``, the list an AI seat
+  is offered and a person's zone badges are built from);
 * each activated ability of a permanent the seat controls that is not a mana
   ability (CR 605.1a), at its mana — one whose {T} is already spent excepted.
 
-The first three are a card's own price — a card held back that does nothing
+The first four are a card's own price — a card held back that does nothing
 until it is paid for — and the last is an ability that can wait, so they are
 handed over as two tiers (``mana_payment.PaymentWants``): where two choices
 keep as many wants payable together, the one keeping more cards wins.
@@ -47,6 +54,25 @@ wanted its printed {4}{W}{W}; read as itself, it was left out and wanted
 nothing — and on four Plains and three Mountains both readings tapped three
 Plains for the {3} (Onslaught's Phase 5, which round kg2's census never
 asked: its want was always a *second* card).
+
+**And what a face-up card leaves behind** (:func:`wants_left_behind`), which
+only the payment's caller can say — whether the payment is a cast:
+
+* a **permanent spell** brings its own activated abilities once it resolves
+  (the abilities' tier): the {R} of a Shivan Dragon's firebreathing is the
+  next thing its caster pays for, and a payment blind to it spent the
+  Mountains on the Dragon's generic. A {T} ability of a creature without
+  haste is left out — it cannot be activated this turn (CR 302.6);
+* an **instant or sorcery with flashback** that leaves the hand brings its
+  flashback cost (the cards' tier): cast (CR 608.2n), cycled or discarded to
+  pay for its own ability, it lands in the graveyard, where its flashback is
+  the next price it asks (CR 702.34a).
+
+A **face-down permanent being turned face up** (CR 702.37e) is the payment's
+own card (*paying_for*, ``Game._pay_planned_cost``): its turn-up is what the
+payment buys, so it is no want beside it — it was, a redundant first-tier
+want that outranked the rest of the hand — and its face-up abilities join the
+abilities' tier as a cast permanent's do.
 """
 
 from __future__ import annotations
@@ -57,6 +83,7 @@ from .activation_zones import HAND
 from .face_down import face_up_morph_cost, hidden_card, is_face_down, morph_cost
 from .faces import castable_faces
 from .mana_payment import PaymentWants, is_mana_ability, mana_cost_x_as_zero
+from .models import Permanent
 from .oracle import compile_card_oracle
 from .targeting import usable_activated_abilities
 
@@ -64,20 +91,25 @@ if TYPE_CHECKING:
     from .game import Game
 
 
-def mana_wants(game: "Game", seat: int, *, paying_for=None) -> PaymentWants:
+def mana_wants(
+    game: "Game", seat: int, *, paying_for=None, cast: bool = False,
+) -> PaymentWants:
     """Every cost *seat* may still want to pay mana for, as symbol dicts in
     two tiers — see the module's note. *paying_for* is a card (or a face of
-    one) the payment being planned is for, left out of the hand once."""
+    one) the payment being planned is for, left out of the hand once — or the
+    face-down permanent a turn-up pays for. *cast* says the payment is
+    *paying_for*'s cast (:func:`wants_left_behind`)."""
     player = game.players[seat]
     wants: list[dict[str, int]] = list(wants_brought_by(paying_for))
     abilities: list[dict[str, int]] = []
     skipped = paying_for is None
+    left_the_hand = False
     whole = (
         hidden_card(paying_for) or getattr(paying_for, "face_of", None) or paying_for
     )
     for card in player.hand:
         if not skipped and (card is paying_for or card is whole):
-            skipped = True
+            skipped = left_the_hand = True
             continue
         for face in castable_faces(card):
             if face.primary_type == "land":
@@ -87,8 +119,26 @@ def mana_wants(game: "Game", seat: int, *, paying_for=None) -> PaymentWants:
                 wants.append(cost)
         for ability in usable_activated_abilities(compile_card_oracle(card), zone=HAND):
             _add_ability_cost(wants, ability)
+    if paying_for is not None and hidden_card(paying_for) is None and not isinstance(
+        paying_for, Permanent,
+    ):
+        cards, brought = wants_left_behind(
+            paying_for, cast=cast, from_hand=left_the_hand,
+        )
+        wants.extend(cards)
+        abilities.extend(brought)
+    wants.extend(_permitted_cast_wants(game, seat, paying_for))
     for permanent in game.controlled_by(seat):
         if is_face_down(permanent):
+            if permanent is paying_for:
+                # A turn-up being paid for (CR 702.37e): its morph cost is
+                # this payment, and what it brings is its face-up abilities.
+                real = hidden_card(permanent.card)
+                if real is not None:
+                    abilities.extend(_abilities_brought(
+                        real, sick=game._is_summoning_sick(permanent),
+                    ))
+                continue
             cost = mana_cost_x_as_zero(face_up_morph_cost(permanent) or "")
             if cost:
                 wants.append(cost)
@@ -106,15 +156,95 @@ def wants_brought_by(paying_for) -> "tuple[dict[str, int], ...]":
 
     A face-down spell (CR 702.37c) brings its turn-up: the morph cost of the
     card it hides (CR 702.37e), {X} as 0 (CR 107.3d lets the player choose
-    it). Nothing else is one today: every other cost a cast carries is paid
-    as it is cast (CR 601.2f-h), and an echo or a cumulative upkeep is paid
-    after the next untap step. A permanent (an ability being paid for) or a
-    face-up card brings nothing."""
+    it). What a face-up card leaves behind is :func:`wants_left_behind`'s,
+    which is told what the payment is. A permanent (an ability being paid
+    for) brings nothing."""
     hidden = hidden_card(paying_for)
     if hidden is None:
         return ()
     turn_up = mana_cost_x_as_zero(morph_cost(hidden) or "")
     return (turn_up,) if turn_up else ()
+
+
+def wants_left_behind(
+    card, *, cast: bool, from_hand: bool,
+) -> "tuple[tuple[dict[str, int], ...], tuple[dict[str, int], ...]]":
+    """``(cards' tier, abilities' tier)`` — what *card* (the face-up card, or
+    face, a payment is for) still wants paid once it has left the hand, by
+    where it went. See the module's note.
+
+    * *cast* of a **permanent** spell: its battlefield activated abilities
+      that are not mana abilities, at their mana — a {T} ability of a creature
+      without haste excepted (CR 302.6);
+    * *from_hand*, an **instant or sorcery** printing a flashback cost: that
+      cost, {X} as 0, because the card lands in the graveyard whether it is
+      cast (CR 608.2n) or paid away for its own ability (cycling, CR 702.29a).
+      A flashback cast is not from the hand — the card is exiled as it leaves
+      the stack (CR 702.34a) — and brings nothing.
+    """
+    from .flashback import printed_flashback_cost
+    from .search_filters import card_has_type
+
+    cards: list[dict[str, int]] = []
+    abilities: list[dict[str, int]] = []
+    instant_or_sorcery = card_has_type(card, "instant") or card_has_type(card, "sorcery")
+    if from_hand and instant_or_sorcery:
+        flashback = printed_flashback_cost(card)
+        cost = mana_cost_x_as_zero(getattr(flashback, "mana", None) or "") if flashback else None
+        if cost:
+            cards.append(cost)
+    if cast and not instant_or_sorcery and card.primary_type != "land":
+        abilities.extend(_abilities_brought(card, sick=card_has_type(card, "creature")))
+    return tuple(cards), tuple(abilities)
+
+
+def _abilities_brought(card, *, sick: bool) -> "list[dict[str, int]]":
+    """The mana of *card*'s battlefield activated abilities that are not mana
+    abilities — a {T} ability left out while *sick* and the card prints no
+    haste (CR 302.6)."""
+    hasty = any(str(keyword).lower() == "haste" for keyword in getattr(card, "keywords", ()) or ())
+    found: list[dict[str, int]] = []
+    for ability in usable_activated_abilities(compile_card_oracle(card)):
+        cost = getattr(ability, "cost", None)
+        if cost is not None and cost.requires_tap and sick and not hasty:
+            continue
+        _add_ability_cost(found, ability)
+    return found
+
+
+def _permitted_cast_wants(game: "Game", seat: int, paying_for) -> "list[dict[str, int]]":
+    """Each card *seat* may cast from outside its hand under a permission
+    (``ai_weighed_cast.permitted_casts``), at the price the permission
+    charges: its required alternative cost's mana (a flashback cost), nothing
+    for a waiver, else the card's mana cost; {X} as 0. One want per card —
+    the first price the list names for it — and none for a land (CR 305.1).
+    The card the payment is for (a flashback cast) is left out once."""
+    from .ai_weighed_cast import permitted_casts
+
+    found: list[dict[str, int]] = []
+    seen: set[tuple[str, int, int]] = set()
+    skipped = paying_for is None
+    whole = getattr(paying_for, "face_of", None) or paying_for
+    for entry in permitted_casts(game, seat):
+        key = (entry.zone, entry.owner_seat, entry.index)
+        if key in seen:
+            continue
+        seen.add(key)
+        if entry.held.primary_type == "land" or entry.spell.primary_type == "land":
+            continue
+        if not skipped and (entry.held is whole or entry.spell is paying_for):
+            skipped = True
+            continue
+        if entry.cost is not None:
+            printed = entry.cost.mana or ""
+        elif entry.waives_mana_cost:
+            continue
+        else:
+            printed = entry.spell.mana_cost or ""
+        cost = mana_cost_x_as_zero(printed)
+        if cost:
+            found.append(cost)
+    return found
 
 
 def _add_ability_cost(wants: list, ability) -> None:
@@ -126,4 +256,4 @@ def _add_ability_cost(wants: list, ability) -> None:
         wants.append(mana)
 
 
-__all__ = ["mana_wants", "wants_brought_by"]
+__all__ = ["mana_wants", "wants_brought_by", "wants_left_behind"]

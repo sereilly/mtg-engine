@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from .... import land_mana_swaps
 from ....pending_choices import PendingChoice
-from ....mana_payment import (generic_cost, mana_cost_label, payment_wants_in_force,
-                              plan_payment, untapped_mana_lands)
+from ....mana_payment import (generic_cost, mana_cost_label, payment_prices_in_force,
+                              payment_wants_in_force, plan_payment, untapped_mana_lands)
 
 
 class PaymentChoicesMixin:
@@ -392,7 +392,7 @@ class PaymentChoicesMixin:
             and not _land_mana_is_unplannable(self, land)
         ]
 
-    def _pay_planned_cost(self, player, planner, *, spend=None) -> bool:
+    def _pay_planned_cost(self, player, planner, *, spend=None, paying_for=None) -> bool:
         """Pay a cost an effect collects, and say whether it was paid.
 
         *planner* answers ``mana_payment.plan_payment`` for the cost **against
@@ -432,6 +432,11 @@ class PaymentChoicesMixin:
         which case the lands already tapped stay tapped and what they made
         stays in the pool, exactly as for a player who tapped and then could
         not pay. Callers treat it as the cost not having been paid.
+
+        *paying_for* is the permanent the payment is for where its caller
+        knows — a face-down permanent being turned up (CR 702.37e), whose
+        turn-up is this payment rather than a want beside it
+        (``mana_wants.mana_wants``).
         """
         seat = next(
             (index for index, found in enumerate(self.players) if found is player),
@@ -446,16 +451,22 @@ class PaymentChoicesMixin:
         # has a choice of lands to make. The callers' thunks are also asked
         # "can this be paid?", whose answer this never changes, so the wants
         # are named here — the one writer — rather than by each of them.
+        from ....mana_drawbacks import land_price_profile
         from ....mana_wants import mana_wants
 
         read: list = []
 
         def wants():
             if not read:
-                read.append(mana_wants(self, seat))
+                read.append(mana_wants(self, seat, paying_for=paying_for))
             return read[0]
 
-        with payment_wants_in_force(wants):
+        # …and with what each land charges beyond the tap
+        # (``mana_drawbacks``), weighed after the wants: a Swamp pays a {1}
+        # rather than a City of Brass, a Mountain the {R} beside a painland.
+        with payment_wants_in_force(wants), payment_prices_in_force(
+            lambda land: land_price_profile(self, land)
+        ):
             return self._pay_planned_cost_with(player, seat, planner, spend)
 
     def _pay_planned_cost_with(self, player, seat: int, planner, spend) -> bool:
