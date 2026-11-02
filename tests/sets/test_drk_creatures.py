@@ -656,6 +656,7 @@ def test_nameless_race_is_the_life_its_controller_paid_as_it_entered(set_pool):
     )
     game = Game(players=[p1, p2])
     game.enforce_mana_costs = False
+    game.interactive_seats = {0}  # a person, asked while it is on its way
     game.start_turn(0)
     life = p1.life
 
@@ -671,6 +672,7 @@ def test_nameless_race_is_the_life_its_controller_paid_as_it_entered(set_pool):
     assert cap >= 2, (cap, game.log)
 
     assert game.confirm_number_choice(0, 2), game.log
+    resolve_stack(game)
     race = [perm for perm in p1.battlefield if perm.card.name == "Nameless Race"][0]
     assert (race.effective_power, race.effective_toughness) == (2, 2), game.log
     assert p1.life == life - 2, "the life is paid, not merely chosen"
