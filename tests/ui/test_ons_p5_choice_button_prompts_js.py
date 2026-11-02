@@ -23,6 +23,7 @@ from tests.helpers import run_app_js
 
 _PRELUDE = r"""
 var seat = 0;
+var currentState = null;
 const SENT = [];
 function makeEl(id) {
   return {
@@ -100,7 +101,8 @@ _CASES = [
 #: (``tests/ui/test_lgn_p5_retarget_option_names_ui_api.py``).
 _HELPERS = {
     "applyRetargetChoicePrompt": (
-        "retargetOptionLabel", "candidatePermanentName", "candidateOwnerLabel",
+        "retargetOptionLabel", "retargetOptionLabels", "candidatePermanentName",
+        "candidateOwnerLabel",
     ),
 }
 

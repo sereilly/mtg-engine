@@ -23,7 +23,9 @@ Three readers:
   planner already shares), the rest the seat's chosen colour when listed, else
   the first printed symbol. With nothing wanted it is the old default exactly.
 * :func:`combination_of` — which symbols and how many one ability or spell
-  makes, for the wire (``web/serialization``'s ``ability_mana``).
+  makes, for the wire (``web/serialization``'s ``ability_mana``), and
+  :func:`cast_split_offer` the same for a **spell** a seat may cast, with the
+  count its cost decides.
 """
 
 from __future__ import annotations
@@ -73,6 +75,52 @@ def combination_of(instruction) -> "tuple[tuple[str, ...], int | str] | None":
     if not isinstance(count, int) or isinstance(count, bool):
         count = "x"
     return tuple(str(symbol) for symbol in payload["combination"]), count
+
+
+def cast_split_offer(game: "Game", seat: int, card) -> "dict | None":
+    """The split a **spell** makes "in any combination of", for the cast's
+    chooser (Burnt Offering: "Add X mana in any combination of {B} and/or
+    {R}, where X is the sacrificed creature's mana value") — the shape of an
+    activation's ``ability_mana`` ``combination`` entry, so the client asks it
+    with the chooser Goblin Clearcutter's ability uses, and the cast takes the
+    answer as ``mana_combination``. None for every other card.
+
+    A printed count is ``count``. A count the cast's own cost decides is
+    ``count_by_cost``: each permanent *seat* controls, by id, with the X that
+    permanent would make paying the cost — through the evaluator the
+    resolution counts with (``count_from_payload`` over
+    ``sacrificed_for_cost``), so the chooser offers exactly the splits the
+    resolution accepts.
+    """
+    from .game_types import OracleExecutionContext
+    from .handlers._amounts import count_from_payload
+    from .oracle import compile_card_oracle
+
+    instructions = compile_card_oracle(card).instructions
+    shape = combination_of(instructions)
+    if shape is None:
+        return None
+    symbols, count = shape
+    offer: dict = {"symbols": [str(symbol) for symbol in symbols]}
+    if count != "x":
+        offer["count"] = int(count)
+        return offer
+    spec = (_combination_steps(instructions)[0].payload or {}).get("x_from_count")
+    if not isinstance(spec, dict) or "cost_sacrifice_characteristic" not in spec:
+        return None
+    caster = game.players[seat]
+    offer["count_by_cost"] = {
+        str(permanent.permanent_id): count_from_payload(
+            game,
+            OracleExecutionContext(
+                caster=caster, target=caster, card=card,
+                choices={"sacrificed_for_cost": permanent},
+            ),
+            spec,
+        )
+        for permanent in game.controlled_by(seat)
+    }
+    return offer
 
 
 def split_refusal(instruction, split) -> str | None:
