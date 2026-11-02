@@ -71,7 +71,7 @@ def _share(family: str) -> int:
 #: (unscreened: an observer fires only for the entrant it describes), dies
 #: 18 / 18, attacks 11 / 12 — every one asked and reversed. Two under each,
 #: and never below the floor the seeded draw had. The full pass's share
-#: (``FULL_FACTOR``) counted 236, 265, 123, 257 and 192.
+#: (``FULL_FACTOR``) counted 236, 265, 123, 257 and 349, none unasked.
 FLOORS = {"upkeep": 17, "end": 10, "entry": 10, "dies": 16, "attacks": 9}
 
 
