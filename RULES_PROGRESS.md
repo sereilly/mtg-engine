@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**430 / 640 tracked rules covered (67%)** — 3325 tests, 0 unannotated.
+**430 / 640 tracked rules covered (67%)** — 3328 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -437,7 +437,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **303.1** A player who has priority may cast an enchantment card from their hand during a main phase of the... *(2 tests)*
 - [x] **303.2** When an enchantment spell resolves, its controller puts it onto the battlefield under their control. *(4 tests)*
 - [x] **303.3** Enchantment subtypes are always a single word and are listed after a long dash: “Enchantment — Sh... *(3 tests)*
-- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(53 tests, subrules abcdefghijm)*
+- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(54 tests, subrules abcdefghijm)*
 - [x] **303.5** Some enchantments have the subtype “Saga.” See rule 714 for more information about Saga cards. *(2 tests)*
 - [x] **303.6** Some enchantments have the subtype “Class.” See rule 716 for more information about Class cards. *(2 tests)*
 - [x] **303.7** Some Aura enchantments also have the subtype “Role.” *(3 tests, subrules a)*
@@ -689,10 +689,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(44 tests, subrules bcd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(120 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(122 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
-- [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(20 tests, subrules acd)*
+- [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(23 tests, subrules acd)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(44 tests, subrules abcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(14 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
@@ -805,7 +805,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(15 tests)*
 - [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(6 tests, subrules a)*
 - [x] **614.11** Some effects replace card draws. These effects are applied even if no cards could be drawn becaus... *(4 tests)*
-- [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(32 tests, subrules a)*
+- [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(35 tests, subrules a)*
 - [x] **614.13** An effect that modifies how a permanent enters the battlefield may cause other objects to change ... *(2 tests, subrules a)*
 - [ ] **614.14** An object may have one ability printed on it that generates a replacement effect which causes one...
 - [x] **614.15** Some replacement effects are not continuous effects. Rather, they are an effect of a resolving sp... *(3 tests)*
