@@ -33,21 +33,16 @@ def _client_reads(js: str, key: str) -> bool:
 #: each with what the client must do. Not a waiver: the test beside each one
 #: fails the moment the client reads the key, so the entry is deleted with the
 #: client change rather than left behind as a blanket.
-#: Empty since Onslaught's wave 2: ``face_down_look`` (W1G2, Aven Soulgazer
-#: and Spy Network) was the one entry, and its client is
-#: ``renderFaceDownLookModal`` in ``app.js``. Before it, Judgment's
+#: Empty since kg3/client2: kg3/ai's ``target_group_order`` (Kaboom!'s
+#: within-group target order) was the one entry, and its client is
+#: ``applyTargetGroupOrderPrompt`` in ``app.js`` (the ``order_triggers``
+#: widget, ``applyOrderListPrompt``, with moves kept inside one group).
+#: Before it, Onslaught's wave 2 ``face_down_look`` (W1G2, Aven Soulgazer and
+#: Spy Network), whose client is ``renderFaceDownLookModal``; Judgment's
 #: ``outside_game_pick`` (W1G6, the Wishes), whose client is
 #: ``renderOutsideGamePickModal``, and Torment's ``madness_cast`` (W1G1),
 #: whose client is ``applyMadnessCastPrompt``.
-_AWAITING_CLIENT: dict[str, str] = {
-    # kg3/ai: Kaboom!'s within-group target order. The client: a getter for
-    # ``state.target_group_order`` ({player_seat, card_name, targets: [{index,
-    # name, seat, id, group}]}), and the ``order_triggers`` draft widget
-    # (``applyOrderTriggersPrompt``) over the targets, moves kept inside one
-    # ``group``, sending ``target_order`` (every index once) with
-    # ``target_group_order_confirm``.
-    "target_group_order": "target_group_order_confirm",
-}
+_AWAITING_CLIENT: dict[str, str] = {}
 
 
 def test_every_prompt_has_a_client_renderer():

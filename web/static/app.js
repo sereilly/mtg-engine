@@ -3912,6 +3912,18 @@ function getOrderTriggersInfo(state = currentState) {
   return info;
 }
 
+// Kaboom!'s ruling ("You choose the relative order of targets within that
+// group"): the spell's targets, each player's group in turn order, for the
+// caster to order within each group — `{player_seat, card_name, targets:
+// [{index, name, seat, id, group}]}`. Armed only where a group holds two.
+function getTargetGroupOrderInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.target_group_order;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.targets) || info.targets.length < 2) return null;
+  return info;
+}
+
 // Tolarian Kraken: the reflexive trigger ("When you do, …") choosing its target.
 function getReflexiveTargetInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -4896,7 +4908,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state) || getTargetGroupOrderInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -8403,16 +8415,111 @@ function applyTriggerGraveyardCardsPrompt(info) {
 // It had no panel at all, so the glow was the only sign a decision was owed —
 // which works only while every candidate is on the board, and nothing glowed
 // for a spell.
-// The order being drafted for the open `order_triggers` prompt: `key` names the
-// prompt it belongs to (a new prompt starts from the order the server offered),
-// `order` is the offered indices, the first to resolve first.
-let orderTriggersDraft = null;
+// The order being drafted for the open ordering prompt (`order_triggers`,
+// `target_group_order`): `key` names the prompt it belongs to (a new prompt
+// starts from the order the server offered), `order` is the offered indices,
+// the first first.
+let orderListDraft = null;
 
 function orderTriggersKey(info) {
   return JSON.stringify([
+    "order_triggers",
     info.player_seat,
     (info.triggers || []).map((t) => [t.index, t.card_name, t.text, t.source_id]),
   ]);
+}
+
+// The order after the row at *from* trades places with its neighbour at *to*,
+// or null when that would carry it out of its group (`groupOf(index)`; an
+// index with no group moves anywhere) or off the list.
+function orderListMove(order, groupOf, from, to) {
+  if (from < 0 || to < 0 || from >= order.length || to >= order.length || Math.abs(from - to) !== 1) {
+    return null;
+  }
+  if (groupOf(order[from]) !== groupOf(order[to])) return null;
+  const next = [...order];
+  [next[from], next[to]] = [next[to], next[from]];
+  return next;
+}
+
+// The widget both ordering prompts share: one list, a move-up and a move-down
+// per row, and the panel's OK sending the whole order. An item with a `group`
+// moves only past a neighbour of the same group, and a group's first row
+// carries its `groupLabel` (an item with none moves anywhere). Nothing
+// resolves until the order is sent: the server holds it, and
+// `waiting_on_prompt` keeps the auto-pass off.
+function applyOrderListPrompt(config) {
+  const { key, items, title, body, okText, send } = config;
+  const panel = q("activationPanel");
+  const steps = q("promptSteps");
+  const okBtn = q("promptOkBtn");
+  panel.classList.remove("hidden");
+  q("promptCustomRow").classList.add("hidden");
+  q("promptCancelBtn").classList.add("hidden");
+  q("promptCancelBtn").disabled = true;
+  q("promptCustomOkBtn").disabled = true;
+  if (!orderListDraft || orderListDraft.key !== key) {
+    orderListDraft = { key, order: items.map((item) => Number(item.index)) };
+  }
+  const byIndex = new Map(items.map((item) => [Number(item.index), item]));
+  const order = orderListDraft.order;
+  const groupOf = (index) => byIndex.get(index)?.group;
+  const groupAt = (pos) => groupOf(order[pos]);
+  const canSwap = (from, to) => orderListMove(order, groupOf, from, to) !== null;
+  q("promptTitle").textContent = title;
+  q("promptBody").textContent = body;
+  const rows = order
+    .map((index, pos) => {
+      const item = byIndex.get(index) || {};
+      const header =
+        item.groupLabel && (pos === 0 || groupAt(pos - 1) !== item.group)
+          ? `<div class="order-group-label" style="font-weight:600;margin-top:${pos === 0 ? 0 : 4}px">` +
+            `${escapeHtml(item.groupLabel)}</div>`
+          : "";
+      // Inline layout on purpose: `.prompt-choice-column` stretches every
+      // button in it to the panel's width, which is right for a list of
+      // answers and wrong for two arrows beside a line of text.
+      return (
+        header +
+        `<div class="prompt-choice-row" data-order-row="${pos}" ` +
+        `style="flex-wrap:nowrap;align-items:flex-start;gap:6px">` +
+        `<span style="flex:0 0 auto;min-width:1.5em;padding-top:4px">${pos + 1}.</span>` +
+        `<button type="button" class="prompt-choice-btn" data-order-up="${pos}" style="flex:0 0 auto"` +
+        `${canSwap(pos, pos - 1) ? "" : " disabled"} title="Move up (earlier)">&#9650;</button>` +
+        `<button type="button" class="prompt-choice-btn" data-order-down="${pos}" style="flex:0 0 auto"` +
+        `${canSwap(pos, pos + 1) ? "" : " disabled"} title="Move down (later)">&#9660;</button>` +
+        `<span class="order-trigger-label" style="flex:1 1 auto;line-height:1.35">${escapeHtml(item.label || "")}</span>` +
+        `</div>`
+      );
+    })
+    .join("");
+  steps.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">${rows}</div>`;
+  const move = (from, to) => {
+    const next = orderListMove(orderListDraft.order, groupOf, from, to);
+    if (!next) return;
+    orderListDraft = { key, order: next };
+    applyOrderListPrompt(config);
+  };
+  steps.querySelectorAll("[data-order-up]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const pos = Number(btn.dataset.orderUp);
+      move(pos, pos - 1);
+    });
+  });
+  steps.querySelectorAll("[data-order-down]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const pos = Number(btn.dataset.orderDown);
+      move(pos, pos + 1);
+    });
+  });
+  okBtn.classList.remove("hidden");
+  okBtn.disabled = false;
+  okBtn.textContent = okText;
+  okBtn.onclick = async () => {
+    const chosen = [...orderListDraft.order];
+    orderListDraft = null;
+    await send(chosen);
+  };
 }
 
 // CR 603.3b: "each player … puts each triggered ability they control … on the
@@ -8422,72 +8529,56 @@ function orderTriggersKey(info) {
 // the server holds the abilities, and `waiting_on_prompt` keeps the auto-pass
 // off.
 function applyOrderTriggersPrompt(info) {
-  const panel = q("activationPanel");
-  const steps = q("promptSteps");
-  const okBtn = q("promptOkBtn");
-  panel.classList.remove("hidden");
-  q("promptCustomRow").classList.add("hidden");
-  q("promptCancelBtn").classList.add("hidden");
-  q("promptCancelBtn").disabled = true;
-  q("promptCustomOkBtn").disabled = true;
   const triggers = info.triggers || [];
-  const key = orderTriggersKey(info);
-  if (!orderTriggersDraft || orderTriggersDraft.key !== key) {
-    orderTriggersDraft = { key, order: triggers.map((t) => Number(t.index)) };
-  }
-  const byIndex = new Map(triggers.map((t) => [Number(t.index), t]));
-  const order = orderTriggersDraft.order;
-  q("promptTitle").textContent = "Order your triggered abilities";
-  q("promptBody").textContent =
-    "These abilities triggered together, and you choose the order they go on the stack. " +
-    "The first in the list resolves first.";
-  const rows = order
-    .map((index, pos) => {
-      const t = byIndex.get(index) || {};
-      const label = `${t.card_name || "Ability"}: ${t.text || ""}`;
-      // Inline layout on purpose: `.prompt-choice-column` stretches every
-      // button in it to the panel's width, which is right for a list of
-      // answers and wrong for two arrows beside a line of text.
-      return (
-        `<div class="prompt-choice-row" data-order-row="${pos}" ` +
-        `style="flex-wrap:nowrap;align-items:flex-start;gap:6px">` +
-        `<span style="flex:0 0 auto;min-width:1.5em;padding-top:4px">${pos + 1}.</span>` +
-        `<button type="button" class="prompt-choice-btn" data-order-up="${pos}" style="flex:0 0 auto"` +
-        `${pos === 0 ? " disabled" : ""} title="Move up (resolve earlier)">&#9650;</button>` +
-        `<button type="button" class="prompt-choice-btn" data-order-down="${pos}" style="flex:0 0 auto"` +
-        `${pos === order.length - 1 ? " disabled" : ""} title="Move down (resolve later)">&#9660;</button>` +
-        `<span class="order-trigger-label" style="flex:1 1 auto;line-height:1.35">${escapeHtml(label)}</span>` +
-        `</div>`
-      );
-    })
-    .join("");
-  steps.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">${rows}</div>`;
-  const move = (from, to) => {
-    const next = [...orderTriggersDraft.order];
-    [next[from], next[to]] = [next[to], next[from]];
-    orderTriggersDraft = { key, order: next };
-    applyOrderTriggersPrompt(info);
-  };
-  steps.querySelectorAll("[data-order-up]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const pos = Number(btn.dataset.orderUp);
-      if (pos > 0) move(pos, pos - 1);
-    });
+  applyOrderListPrompt({
+    key: orderTriggersKey(info),
+    items: triggers.map((t) => ({
+      index: Number(t.index),
+      label: `${t.card_name || "Ability"}: ${t.text || ""}`,
+    })),
+    title: "Order your triggered abilities",
+    body:
+      "These abilities triggered together, and you choose the order they go on the stack. " +
+      "The first in the list resolves first.",
+    okText: "Put on the stack",
+    send: (chosen) => sendAction({ seat, action: "order_triggers_confirm", trigger_order: chosen }),
   });
-  steps.querySelectorAll("[data-order-down]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const pos = Number(btn.dataset.orderDown);
-      if (pos < orderTriggersDraft.order.length - 1) move(pos, pos + 1);
-    });
-  });
-  okBtn.classList.remove("hidden");
-  okBtn.disabled = false;
-  okBtn.textContent = "Put on the stack";
-  okBtn.onclick = async () => {
-    const chosen = [...orderTriggersDraft.order];
-    orderTriggersDraft = null;
-    await sendAction({ seat, action: "order_triggers_confirm", trigger_order: chosen });
+}
+
+// Kaboom!'s ruling (2022-09-09): "those targets will be handled one at a time
+// in turn order. Start with targets that are either the player whose turn it
+// is … or permanents that player controls. You choose the relative order of
+// targets within that group." The same list as the triggers' order, each
+// player's group under its player's name and its moves kept inside it; OK
+// sends every index once (`target_order`), the first handled first.
+function applyTargetGroupOrderPrompt(info) {
+  const targets = info.targets || [];
+  const cardName = info.card_name || "The spell";
+  const groupLabelOf = (target) => {
+    const owner = currentState?.players?.[Number(target.seat)];
+    if (Number(target.seat) === seat) return "Your targets";
+    return owner?.name ? `${owner.name}'s targets` : `Group ${Number(target.group) + 1}`;
   };
+  applyOrderListPrompt({
+    key: JSON.stringify([
+      "target_group_order",
+      info.player_seat,
+      cardName,
+      targets.map((t) => [t.index, t.name, t.seat, t.id, t.group]),
+    ]),
+    items: targets.map((t) => ({
+      index: Number(t.index),
+      label: t.id == null ? `${t.name || "Player"} (player)` : `${t.name || "Planeswalker"} (planeswalker)`,
+      group: Number(t.group),
+      groupLabel: groupLabelOf(t),
+    })),
+    title: `Order ${cardName}'s targets`,
+    body:
+      `${cardName} handles its targets one player's group at a time, in turn order. ` +
+      "You choose the order within each group: the first in a group is handled first.",
+    okText: "Confirm order",
+    send: (chosen) => sendAction({ seat, action: "target_group_order_confirm", target_order: chosen }),
+  });
 }
 
 // A trigger another player controls whose target this seat chooses ("that
@@ -13352,6 +13443,14 @@ function renderActivationPrompt() {
   const orderTriggersInfo = getOrderTriggersInfo();
   if (orderTriggersInfo) {
     applyOrderTriggersPrompt(orderTriggersInfo);
+    return;
+  }
+
+  // A resolving spell's target order (Kaboom!): asked mid-resolution, the
+  // spell held on the stack until it is answered.
+  const targetGroupOrderInfo = getTargetGroupOrderInfo();
+  if (targetGroupOrderInfo) {
+    applyTargetGroupOrderPrompt(targetGroupOrderInfo);
     return;
   }
 
