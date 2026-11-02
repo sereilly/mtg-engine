@@ -31,6 +31,7 @@ import engine.mixins.stack.pool_payment as pool_payment
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.cost_modifiers import spell_cost_tax, spell_symbol_tax
+from engine.faces import compilation_units
 from engine.mana_payment import mana_cost_from_symbols
 from engine.models import Permanent
 
@@ -71,7 +72,7 @@ def _board(taxer, probe, side: int, active: int) -> Game:
 def _taxers() -> list:
     return sorted(
         (
-            card for card in _CARDS.values()
+            card for card in compilation_units(_CARDS.values())
             if card.primary_type not in ("instant", "sorcery")
             and "more to cast" in (card.oracle_text or "").lower()
         ),

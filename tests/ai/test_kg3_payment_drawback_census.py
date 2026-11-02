@@ -52,6 +52,7 @@ from engine.ai_mana_sources import _nonland_mana_source
 from engine.ai_payment import _PaymentPlanner, _paying_for, tap_planned_lands
 from engine.board_payment import land_tap_yields
 from engine.card_loader import load_catalog
+from engine.faces import compilation_units
 from engine.mana_drawbacks import SOURCE_LOST, tap_prices
 from engine.mana_payment import mana_cost_from_symbols, plan_payment
 from engine.models import Permanent
@@ -197,7 +198,7 @@ def _price_rows():
         ):
             yield name, [card], [], 0, 0
     watchers = [
-        card for card in _CARDS.values()
+        card for card in compilation_units(_CARDS.values())
         if any(
             trig.condition is not None and trig.condition.kind in (
                 "permanent_becomes_tapped", "permanent_tapped_or_ability_activated",
