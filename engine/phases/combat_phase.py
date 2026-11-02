@@ -412,7 +412,9 @@ class CombatPhaseMixin:
             self.combat_blockers_locked = True
             self._prune_combat_state()
             attacker_name = self.players[self.active_player_index].name
-            self.log.append(f"{attacker_name} has no valid attackers; declare attackers step skipped")
+            # Not "declare attackers step skipped": nothing skips the step
+            # (CR 508.8 skips the two after it), and its window still runs.
+            self.log.append(f"{attacker_name} has no valid attackers")
         # Camouflage replaces the declare-blockers step: the defending player
         # divides their creatures into piles (assign_camouflage_piles), which are
         # then matched to attackers at random. Wait for that choice like a normal
@@ -449,14 +451,14 @@ class CombatPhaseMixin:
                 self.combat_blockers_declared_by.add(pending)
                 self._prune_combat_state()
                 defender_name = self.players[pending].name
-                self.log.append(f"{defender_name} has no valid blockers; declare blockers step skipped")
+                # The step goes on (CR 509.1: this defender declares no
+                # blockers), so nothing here says it was skipped.
+                self.log.append(f"{defender_name} has no valid blockers")
         if self.current_step == "declare_blockers" and self.combat_blockers_locked and not self.combat_attackers:
-            defender_index = self.combat_defending_player_index
-            if isinstance(defender_index, int) and 0 <= defender_index < len(self.players):
-                defender_name = self.players[defender_index].name
-                self.log.append(f"{defender_name} has no valid blockers; declare blockers step skipped")
-            else:
-                self.log.append("No attackers; declare blockers step skipped")
+            # CR 508.8's reason, which is the attack's and not a defender's:
+            # "has no valid blockers" named the defender for a step that no
+            # creature attacked into.
+            self.log.append("No attackers; declare blockers step skipped (508.8)")
         if self.current_step == "combat_damage" and not self.combat_damage_resolved:
             # Awaiting a damage assignment — with one exception, which is the
             # second combat damage step (CR 510.4) when it has nothing in it
@@ -482,15 +484,7 @@ class CombatPhaseMixin:
                 self.resolve_combat_damage(self.active_player_index)
             return
 
-        if self.current_step == "declare_attackers":
-            self.log.append(
-                f"Declare attackers step complete: {len(self.combat_attackers)} attacker(s) declared"
-            )
         if self.current_step == "declare_blockers":
-            total_blockers = sum(len(m) for m in self.combat_blockers.values())
-            self.log.append(
-                f"Declare blockers step complete: {total_blockers} blocker(s) declared"
-            )
             # CR 509.1h: an attacking creature becomes unblocked as blocks are
             # declared, and "whenever this creature attacks and isn't blocked"
             # triggers then — **in this step**, so the ability resolves in the
@@ -517,6 +511,32 @@ class CombatPhaseMixin:
 
         self._leave_combat_step(combat_steps, idx, allow_damage_skip)
 
+    def _log_declaration_step_complete(self) -> None:
+        """Say a declaration step is over — written as it ends, once its
+        window has drained (CR 500.2), on the leaving pass a held step
+        resumes at as well as the one that never stopped.
+
+        It was written as the declaration locked, before the window: every
+        attack trigger, provoke and combat trick of the step was logged
+        *after* "Declare attackers step complete", in every game. And it says
+        what is in combat as the step ends rather than what was declared —
+        the declaration has its own line ("… declared N attacker(s)"), and a
+        creature removed from combat in the window is no longer attacking.
+
+        A declare blockers step CR 508.8 skipped (nothing attacked) says so
+        as it is entered, and is not then said to have completed.
+        """
+        if self.current_step == "declare_attackers":
+            self.log.append(
+                "Declare attackers step complete: "
+                f"{len(self.combat_attackers)} creature(s) attacking"
+            )
+        elif self.current_step == "declare_blockers" and self.combat_attackers:
+            blocking = sum(len(m) for m in self.combat_blockers.values())
+            self.log.append(
+                f"Declare blockers step complete: {blocking} creature(s) blocking"
+            )
+
     def _leave_combat_step(
         self, combat_steps: list[str], idx: int, allow_damage_skip: bool
     ) -> None:
@@ -534,6 +554,7 @@ class CombatPhaseMixin:
             if self.window_left_unfinished():
                 self.hold_step_open()
                 return
+        self._log_declaration_step_complete()
         self._on_step_or_phase_end("combat", self.current_step)
         next_idx = idx + 1
         if next_idx >= len(combat_steps):

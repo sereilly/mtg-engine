@@ -271,3 +271,46 @@ def test_a_creature_exiled_instead_of_dying_is_not_said_to_have_died():
     assert "Birds of Paradise was exiled instead of dying" in game.log, game.log[-6:]
     assert "Birds of Paradise was destroyed (704.5g: lethal damage)" in game.log, game.log[-6:]
     assert not any(line.startswith("Birds of Paradise died") for line in game.log)
+
+
+# -- a step is complete when its window has drained (CR 500.2) ---------------
+
+
+def test_declare_attackers_step_complete_follows_its_attack_trigger():
+    """Vicious Kavu's attack trigger goes on the stack in the declare
+    attackers step and resolves in its window; the step is complete only once
+    that window has drained (CR 500.2), so its line comes after the trigger's
+    resolution — it was written as the declaration locked, in every game."""
+    game = _table(mine=["Vicious Kavu"])
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    kavu = _on(game, 0, "Vicious Kavu")
+    ok, why = game.declare_attackers(
+        0, [game.battlefield_index_of(kavu)], defending_player_index=1,
+    )
+    assert ok, why
+    game.advance_combat_phase()
+
+    assert game.current_step != "declare_attackers", game.log[-6:]
+    gets = next(
+        i for i, line in enumerate(game.log) if line.startswith("Vicious Kavu gets +2/+0")
+    )
+    complete = game.log.index("Declare attackers step complete: 1 creature(s) attacking")
+    assert gets < complete, game.log[-8:]
+
+
+def test_a_step_cr_508_8_skips_is_not_said_to_have_completed():
+    """No creature attacked: CR 508.8 skips the declare blockers step, which
+    is said once, with the attack's reason, and not then called complete."""
+    game = _table(mine=["Plains"], theirs=["Grizzly Bears"])
+    game._close_current_priority_step()
+    for _ in range(4):
+        if game.current_turn_phase == "combat" and game.current_step == "end_of_combat":
+            break
+        game.advance_combat_phase()
+
+    assert "P1 has no valid attackers" in game.log, game.log[-6:]
+    assert "No attackers; declare blockers step skipped (508.8)" in game.log, game.log[-6:]
+    assert "Declare attackers step complete: 0 creature(s) attacking" in game.log
+    assert not any(line.startswith("Declare blockers step complete") for line in game.log)
+    assert not any("has no valid blockers" in line for line in game.log)

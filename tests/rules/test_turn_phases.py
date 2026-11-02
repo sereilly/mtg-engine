@@ -491,8 +491,12 @@ def test_declare_attackers_auto_skips_when_no_legal_attackers_exist():
     game.advance_combat_phase()
     assert game.current_step == "end_of_combat"
     assert game.combat_attackers_locked is True
-    assert any("has no valid attackers; declare attackers step skipped" in entry for entry in game.log)
-    assert any("has no valid blockers; declare blockers step skipped" in entry for entry in game.log)
+    # CR 508.8: no attackers skips the declare blockers step — and only it and
+    # the damage step; the declare attackers step itself still happened.
+    assert "P1 has no valid attackers" in game.log
+    assert "No attackers; declare blockers step skipped (508.8)" in game.log
+    assert not any("declare attackers step skipped" in entry for entry in game.log)
+    assert not any(entry.startswith("Declare blockers step complete") for entry in game.log)
 
 
 @pytest.mark.cr("509.1")
@@ -542,7 +546,9 @@ def test_declare_blockers_auto_advances_when_no_legal_blocks_exist():
     game.advance_combat_phase()
     assert game.current_step == "end_of_combat"
     assert game.combat_blockers_locked is True
-    assert any("has no valid blockers; declare blockers step skipped" in entry for entry in game.log)
+    # The step happened (CR 509.1); this defender declared no blockers in it.
+    assert "P2 has no valid blockers" in game.log
+    assert "Declare blockers step complete: 0 creature(s) blocking" in game.log
 
 
 @pytest.mark.cr("508.1", "509.1")
@@ -561,12 +567,12 @@ def test_combat_step_advancement_logs_attacker_and_blocker_counts():
     ok, _ = game.declare_attackers(0, [0])
     assert ok
     game.advance_combat_phase()
-    assert any("Declare attackers step complete: 1 attacker(s) declared" in entry for entry in game.log)
+    assert "Declare attackers step complete: 1 creature(s) attacking" in game.log
 
     ok, _ = game.declare_blockers(1, {0: 0})
     assert ok
     game.advance_combat_phase()
-    assert any("Declare blockers step complete: 1 blocker(s) declared" in entry for entry in game.log)
+    assert "Declare blockers step complete: 1 creature(s) blocking" in game.log
 
 
 # --- CR 724.1: ending the turn (round 110) ----------------------------------

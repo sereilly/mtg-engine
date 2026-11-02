@@ -88,9 +88,17 @@ class OracleInstructionsMixin:
             instruction = dataclasses.replace(instruction, payload=substituted)
         handler = EFFECT_HANDLERS.get(instruction.kind)
         if handler is None:
-            self.log.append(
-                f"Resolved supported pattern for {context.card.name} without state mutation"
-            )
+            # A rule the card states that a derivation table reads elsewhere —
+            # Fireball's cost line, Ghitu Fire's flash, Kaervek's Torch's
+            # stack tax (``oracle._derived_static_claims``) — rides an
+            # instant's program and does nothing as it resolves, which is not
+            # news: "Resolved supported pattern for Fireball without state
+            # mutation" was written after Fireball had dealt its damage.
+            if instruction.kind != "derived_static_rule":
+                self.log.append(
+                    f"Resolved supported pattern for {context.card.name} "
+                    "without state mutation"
+                )
             return True, "resolved"
         # CR 109.5: while this instruction runs, the object doing things is
         # controlled by the caster. That is knowable *here* and nowhere
