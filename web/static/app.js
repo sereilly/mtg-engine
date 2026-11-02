@@ -453,11 +453,41 @@ function getCombatDamagePassKey(state = currentState) {
   return `${getCombatDraftStepKey(state)}:${pass}`;
 }
 
+// Which permanent sits in which battlefield slot, by id. The combat drafts are
+// kept by slot (see `combatIdAt`), so a board that renumbers under them — a
+// permanent entering or leaving mid-step — would leave every draft naming the
+// creature that slid into its slot, and the request would send THAT one's id.
+let combatDraftBoardKey = "";
+
+function combatBoardKey(state) {
+  return JSON.stringify(
+    (state?.players || []).map((player) =>
+      (player?.battlefield || []).map((card) => (card && typeof card === "object" ? card.id ?? null : null)),
+    ),
+  );
+}
+
 function syncCombatDrafts(state = currentState) {
   if (!state) return;
   const nextKey = getCombatDraftStepKey(state);
-  if (nextKey === combatDraftStepKey) return;
+  const boardKey = combatBoardKey(state);
+  if (nextKey === combatDraftStepKey && boardKey === combatDraftBoardKey) return;
+  // The same step over a renumbered board: every draft is started again from
+  // what the server says, exactly as at a step's start, and an open damage
+  // dialog is closed so it reopens over the creatures where they are now.
+  const renumbered = nextKey === combatDraftStepKey;
+  const hadDeclarationDraft = combatAttackerDraft.length > 0 || Object.keys(combatBlockerDraft).length > 0;
   combatDraftStepKey = nextKey;
+  combatDraftBoardKey = boardKey;
+  if (renumbered) {
+    combatDamageDraft = {};
+    combatDamageOfferDraft = {};
+    combatBandBlockerDraft = {};
+    combatMultiblockDraft = {};
+    combatDividedDraft = { key: "", byAttacker: {} };
+    combatDamageDialogKey = "";
+    closeCombatDamageDialog();
+  }
 
   const combat = getCombatState(state);
   if (isCombatStep(state, "declare_attackers") && seat === state.current_turn) {
@@ -475,6 +505,12 @@ function syncCombatDrafts(state = currentState) {
     }
   } else {
     combatBlockerDraft = {};
+  }
+  const undeclared = isCombatStep(state, "declare_attackers")
+    ? !combat?.attackers_locked
+    : isCombatStep(state, "declare_blockers") && !combat?.blockers_locked;
+  if (renumbered && hadDeclarationDraft && undeclared) {
+    updateActionHint("The battlefield changed; choose again.", true);
   }
 }
 
@@ -10465,7 +10501,9 @@ function buildRagingRiverCanvasData(state) {
     const isDefender = Array.isArray(info.divide_creatures);
     const items = isDefender ? info.divide_creatures : info.label_attackers;
     const promptSeat = isDefender ? defenderSeat : attackerSeat;
-    const sig = `${promptSeat}:${items.map((it) => it.index).join(",")}`;
+    // By slot and id: a selection kept by slot is a selection of the
+    // creatures in those slots, and a renumbered board starts it again.
+    const sig = `${promptSeat}:${items.map((it) => `${it.index}#${it.id}`).join(",")}`;
     // Start fresh (every creature unset) whenever the prompt changes, so the
     // player explicitly assigns each creature rather than accepting a default.
     if (ragingRiverPromptSig !== sig) {
@@ -10533,7 +10571,7 @@ function buildCamouflageCanvasData(state) {
     return null;
   }
   const items = info.divide_creatures;
-  const sig = `${info.defender_seat}:${info.pile_count}:${items.map((it) => it.index).join(",")}`;
+  const sig = `${info.defender_seat}:${info.pile_count}:${items.map((it) => `${it.index}#${it.id}`).join(",")}`;
   // Start fresh (every creature unset) whenever the prompt changes, so the
   // player explicitly assigns each creature rather than accepting a default.
   if (camouflagePromptSig !== sig) {

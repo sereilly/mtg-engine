@@ -379,3 +379,56 @@ def test_a_parked_declaration_is_read_again_by_id():
     )
 
     assert slots == [game.battlefield_index_of(giant)]
+
+
+_DRAFT_PRELUDE = """
+let seat = 0; let currentState = null;
+let combatDraftStepKey = ""; let combatAttackerDraft = []; let combatBandDraft = false;
+let combatBlockerDraft = {}; let combatDamageDraft = {}; let combatDamageOfferDraft = {};
+let combatBandBlockerDraft = {}; let combatMultiblockDraft = {};
+let combatDividedDraft = { key: "", byAttacker: {} }; let combatDamageDialogKey = "";
+const hints = []; let closed = 0;
+function updateActionHint(message, isError) { hints.push([message, !!isError]); }
+function closeCombatDamageDialog() { closed += 1; }
+"""
+
+_DRAFT_FUNCTIONS = [
+    "syncCombatDrafts", "combatBoardKey", "getCombatDraftStepKey", "getCombatState",
+    "isCombatStep", "iDeclareBlocks", "blockDeclarationDefender",
+]
+
+
+@needs_node
+def test_a_draft_drawn_on_a_board_that_renumbers_is_started_again():
+    """The drafts are kept by slot: a permanent leaving mid-declaration would
+    leave the Bear's selected slot naming the Giant, and the request would
+    send the Giant's id. The client starts the draft again, says so, and
+    closes any open damage dialog; a poll of the same board keeps it."""
+    plains, bear, giant = _land(), _creature("Bear"), _creature("Giant", 3, 3)
+    sid, game = _table([plains, bear, giant], [])
+    before = _state(sid, 0)
+    game.remove_from_battlefield(plains)
+    after = _state(sid, 0)
+
+    seen = run_app_js(
+        _DRAFT_FUNCTIONS,
+        """
+        syncCombatDrafts(INPUT.before);
+        combatAttackerDraft = [1];               // the Bear, on the polled board
+        combatDamageDraft = { 1: { 0: 2 } };
+        syncCombatDrafts(INPUT.before);          // the same board polled again
+        const kept = [...combatAttackerDraft];
+        syncCombatDrafts(INPUT.after);           // the Plains has left
+        return { kept, after: combatAttackerDraft, damage: combatDamageDraft, hints, closed };
+        """,
+        {"before": before, "after": after},
+        prelude=_DRAFT_PRELUDE,
+    )
+
+    assert seen == {
+        "kept": [1],
+        "after": [],
+        "damage": {},
+        "hints": [["The battlefield changed; choose again.", True]],
+        "closed": 1,
+    }
