@@ -20,8 +20,10 @@ three roads; this drives the **class** â€” every shipped permanent printing
 lines, derived from the pool, never named â€” down every road a card of its type
 takes: cast; put from a hand by an ability; a token copy; a copy-as-enters; a
 reanimation; one event putting several onto the battlefield; exiled and returned
-at the next end step. An Aura's roads are its own: cast onto a creature, put from
-a hand attached, put from a graveyard attached, and one event (Replenish).
+at the next end step; exiled and returned at once (Flicker). An Aura's roads are
+its own: cast onto a creature, put from a hand attached, put from a graveyard
+attached, one event (Replenish), and Flicker — after which it enchants a host
+its owner chose as it returned (CR 303.4f).
 
 Each row holds, at both tables:
 
@@ -36,14 +38,17 @@ unseen by Soul Warden â€” and the record afterwards is the person's answer 
 that is not the prompt's default, so a default standing in for it shows).
 
 Validated backwards (``scratch/kg3/entryfix``): with the answer's completion of
-the entry made to run the trigger inline, all 11 person rows fail; with every
-entry announcing its trigger inline, all 22; with entries never waiting (the
-tree before ``kg3/entry``), all 11 person rows fail on the wait. And the copy
-road found a defect of its own: a Clone cast naming the creature to copy by
-``target_permanent_ids`` alone, with no slot, recorded no copy choice
-(``_resolve_card``) and copied the first creature on the board — the Soul
-Warden, not the Brass Herald it named. On that tree the copy row fails at both
-tables.
+the entry made to run the trigger inline, all 13 person rows fail; with every
+entry announcing its trigger inline, all 26; with entries never waiting (the
+tree before ``kg3/entry``), all 13 person rows fail on the wait. And two roads
+found defects of their own, each fixed beside its own test. The copy road: a
+Clone cast naming the creature to copy by ``target_permanent_ids`` alone, with
+no slot, recorded no copy choice (``_resolve_card``) and copied the first
+creature on the board — the Soul Warden, not the Brass Herald it named
+(``test_kg3_entryfix_copy_choice_by_id.py``). The Flicker road: "then return it"
+read "it" as Flicker itself, so nothing came back, and an Aura put back that way
+chose no host (``test_kg3_entryfix_flicker_returns_it.py``). On those trees the
+rows fail at both tables.
 """
 
 from __future__ import annotations
@@ -210,6 +215,26 @@ def _exiled_and_returned(game, card):
     ), True
 
 
+def _flickered(game, card):
+    """Flicker: "Exile target nontoken permanent, then return it to the
+    battlefield under its owner's control." — an Aura comes back attached to a
+    host its owner chooses as it enters (CR 303.4f)."""
+    if "Aura" in card.type_line:
+        bears = _place(game, 0, "Grizzly Bears")
+        game.players[0].hand = [card]
+        assert game.queue_from_hand(
+            0, card.name, target_permanent_ids=[bears.permanent_id]
+        ).supported
+        _settle_defaults(game)
+        permanent = next(p for p in game.controlled_by(0) if p.card is card)
+    else:
+        permanent = _place(game, 0, card)
+    game.players[0].hand = [_C["Flicker"]]
+    return lambda: game.queue_from_hand(
+        0, "Flicker", target_permanent_ids=[permanent.permanent_id]
+    ), False
+
+
 def _put_from_hand_attached(game, card):
     """Academy Researchers: "you may put an Aura card from your hand onto the
     battlefield attached to this creature." """
@@ -233,12 +258,14 @@ CREATURE_ROADS = {
     "reanimation": _reanimation,
     "one_event": _one_event,
     "exiled_and_returned": _exiled_and_returned,
+    "flickered": _flickered,
 }
 AURA_ROADS = {
     "cast": _cast,
     "put_from_hand_attached": _put_from_hand_attached,
     "put_from_a_graveyard_attached": _put_from_a_graveyard_attached,
     "one_event": _one_event,
+    "flickered": _flickered,
 }
 
 
@@ -383,6 +410,10 @@ def _drive(card, road, person: bool) -> list[str]:
         wrong.append(f"{where}: recorded {subject.metadata.get(key)!r}, the person chose {value!r}")
     if not any(name.startswith("chosen") for name in subject.metadata):
         wrong.append(f"{where}: no choice recorded")
+    if "Aura" in card.type_line:
+        host = subject.metadata.get("attached_to")
+        if host is None or not game.is_on_battlefield(host):
+            wrong.append(f"{where}: the Aura enchants nothing (CR 303.4f)")
     runs = [(inside, resolving) for inside, source, resolving in watch.runs if source is subject]
     if len(runs) != len(kinds):
         wrong.append(f"{where}: its entry trigger ran {len(runs)} time(s)")
@@ -414,11 +445,11 @@ def _census(person: bool) -> tuple[int, list[str]]:
 def test_a_persons_choice_comes_first_and_the_trigger_after_it_on_every_road():
     rows, wrong = _census(person=True)
     assert not wrong, "\n".join(wrong)
-    # Brass Herald's seven roads and Traveler's Cloak's four.
-    assert rows >= 11, rows
+    # Brass Herald's eight roads and Traveler's Cloak's five.
+    assert rows >= 13, rows
 
 
 def test_a_seat_nobody_asks_enters_at_once_and_triggers_on_every_road():
     rows, wrong = _census(person=False)
     assert not wrong, "\n".join(wrong)
-    assert rows >= 11, rows
+    assert rows >= 13, rows

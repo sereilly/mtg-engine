@@ -335,10 +335,29 @@ def lower_untargeted_return(
     # Guide.) The plural of the same back-reference, over the cards a sweep
     # exiled — the handler already walks a list, each card returning under the
     # seat whose exile holds it.
+    #
+    # "Exile target nontoken permanent, **then return it** to the battlefield
+    # under its owner's control." (Flicker.) The same back-reference as a
+    # pronoun. ``parse_recipient`` reads a bare "it" as the ability's source,
+    # and the self-return further down took it so: Flicker returned *itself*
+    # from a graveyard it was not yet in ("Flicker was no longer in a
+    # graveyard") and left the permanent it exiled in exile for good. Behind a
+    # step that exiled something other than the source, "it" names that card
+    # (its rulings, 2004-10-04: "It will trigger 'enters' abilities"). A step
+    # that exiled the source itself keeps the self-return's reading (Anurid
+    # Brushhopper's "Exile this creature. Return it …").
+    exiled_pronoun = (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and subject.filter.is_source
+        and "exiled_self" not in produced
+    )
     if (
         isinstance(subject, ast.TargetSpec)
-        and subject.quantifier in ("that", "those")
-        and subject.filter.is_card
+        and (
+            (subject.quantifier in ("that", "those") and subject.filter.is_card)
+            or exiled_pronoun
+        )
         and "exiled_cards" in produced
         and node.from_zone is None
         and node.to.name == "battlefield"
@@ -366,7 +385,10 @@ def lower_untargeted_return(
             raise LoweringError(
                 "the exiled card's return honours no further rider", node=node
             )
-        if _restrictions_beyond(subject.filter, frozenset({"is_card", "zone"})):
+        if _restrictions_beyond(
+            subject.filter,
+            frozenset({"is_card", "zone"} | ({"is_source"} if exiled_pronoun else set())),
+        ):
             raise LoweringError(
                 "the exiled card's return honours no further narrowing",
                 node=node,
