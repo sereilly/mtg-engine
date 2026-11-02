@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**429 / 640 tracked rules covered (67%)** — 3251 tests, 0 unannotated.
+**429 / 640 tracked rules covered (67%)** — 3261 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -297,7 +297,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.2** If a cost includes a mana payment, the player paying the cost has a chance to activate mana abili... *(1 tests)*
 - [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(28 tests, subrules abc)*
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
-- [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(3 tests, subrules a)*
+- [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(4 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
 - [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(7 tests, subrules abc)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(5 tests)*
@@ -622,7 +622,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 508. Declare Attackers Step
 
-- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(47 tests, subrules abcdfhjk)*
+- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(62 tests, subrules abcdfhjk)*
 - [x] **508.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(2 tests)*
 - [ ] **508.3** Triggered abilities that trigger on attackers being declared may have different trigger conditions.
 - [ ] **508.4** If a creature is put onto the battlefield attacking, its controller chooses which defending playe...
