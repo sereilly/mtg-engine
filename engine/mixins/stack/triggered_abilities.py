@@ -48,6 +48,10 @@ class TriggeredAbilitiesMixin:
         # ``StackItem.about_permanent_id``, and ``trigger_utils.
         # bound_event_object`` for when a fire site records one.
         about_permanent_id: int | None = None,
+        # …and the seat it named for "that player" (whose upkeep, who caused
+        # the discard, the delayed ability's bound player) — see
+        # ``StackItem.about_player_index``. Never a target.
+        about_player_index: int | None = None,
         trigger_context: dict | None = None,
         # CR 603.7d's frozen scratchpad -- see ``StackItem.captured_results``.
         captured_results: dict | None = None,
@@ -102,6 +106,7 @@ class TriggeredAbilitiesMixin:
                 target_permanent_index=target_permanent_index,
                 target_permanent_id=target_permanent_id,
                 about_permanent_id=about_permanent_id,
+                about_player_index=about_player_index,
                 trigger_context=trigger_context,
                 captured_results=captured_results,
                 hook_key=hook_key,
@@ -137,9 +142,9 @@ class TriggeredAbilitiesMixin:
         # default where it cannot, removed where nothing is legal.
         #
         # Only an announcement is dropped. What a **fire site** bound
-        # (``about_permanent_id``, the seat beside a frozen event) is what the
-        # event was about ("destroy that Wall"), and the event is the same
-        # event however many times the ability triggers.
+        # (``about_permanent_id``, ``about_player_index``) is what the event
+        # was about ("destroy that Wall"), and the event is the same event
+        # however many times the ability triggers.
         for instance in range(1 + additional_triggers(
             self, source_permanent, controller_index, delayed=delayed,
         )):
@@ -165,6 +170,7 @@ class TriggeredAbilitiesMixin:
                     hook_event=hook_event,
                     targets_chosen=targets_chosen,
                     about_permanent_id=about_permanent_id,
+                    about_player_index=about_player_index,
                 ),
                 announced_at_cast=from_the_cast,
             )

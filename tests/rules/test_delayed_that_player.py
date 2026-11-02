@@ -195,7 +195,7 @@ def _seat_named(card, step, target: int, catalog_by_name):
     if not game.delayed_triggers:
         return None
     entry = game.delayed_triggers[-1]
-    named = entry.trigger_event()["target_player_index"]
+    named = entry.trigger_event()["about_player_index"]
     return game._default_opposing_seat(entry.controller_index) if named is None else named
 
 

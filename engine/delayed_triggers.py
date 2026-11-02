@@ -649,7 +649,7 @@ class DelayedTrigger:
         *game* is unused and kept for the callers' signature: the bound
         permanent's controller is read as the ability resolves, off the id.
         """
-        target_player_index = self.bound_player_index
+        about_player_index = self.bound_player_index
         about_permanent_id = (
             self.bound_permanent_id if self.bound_as_target else None
         )
@@ -672,10 +672,11 @@ class DelayedTrigger:
             "delayed": True,
             "ability_text": self.source_name,
             # CR 603.7c for a chosen *player*: the ability is about the seat the
-            # creating ability targeted, handed over on the field every "that
-            # player" in this engine already reads. None on every other entry,
-            # which leaves the stack item exactly as it was.
-            "target_player_index": target_player_index,
+            # creating ability targeted — the seat it is **about**
+            # (``StackItem.about_player_index``), never one it targets: the
+            # delayed ability chose nothing. None on every other entry, which
+            # leaves the stack item exactly as it was.
+            "about_player_index": about_player_index,
             "about_permanent_id": about_permanent_id,
             "trigger_context": context,
             # CR 603.7d again, on the channel the *effect*-scoped readers

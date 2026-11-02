@@ -327,10 +327,12 @@ class TriggerTargetsMixin:
         Three ways out, all of them the safe direction:
 
         * the ability names no target — nothing to choose;
-        * a choice is already recorded (``target_permanent_id``), the event
-          named the object the effect acts on (``about_permanent_id``), or a
-          fire site bound the seat (``target_player_index``) — CR 603.3d has
-          none left to make;
+        * a choice is already recorded (``target_permanent_id``, or a seat in
+          ``target_player_index`` — the upkeep prompt's pick), or the event
+          named the object the effect acts on (``about_permanent_id``) — CR
+          603.3d has none left to make. The seat an event named
+          (``about_player_index``) is no such choice: a line printing "target
+          player" beside one still chooses;
         * no legal target exists — CR 603.3d removes the ability from the
           stack rather than resolving it into a no-op, which is the same rule
           :meth:`_choose_trigger_mode` applies to a mode that cannot be chosen.
@@ -614,10 +616,13 @@ class TriggerTargetsMixin:
             # offering a seat the card excludes.
             if not announces_a_target(instruction):
                 return
-            # ...and the fire site must not have bound the seat already, which
-            # is the player half of the ``target_permanent_id`` early-out above:
-            # a fire site that stamps the seat its event was about has made the
-            # choice, and asking again would replace it with one nobody made.
+            # ...and no seat may be chosen already, which is the player half
+            # of the ``target_permanent_id`` early-out above: the upkeep step's
+            # target prompt answers ahead of the push, and asking again would
+            # replace that answer. **Only a choice stops it.** The seat an
+            # event named rides ``about_player_index`` and is not one — it used
+            # to be stamped here, where it would have read as the choice made
+            # for any line printing "target player" beside it.
             if not announced and item.target_player_index is not None:
                 return
         # **Only pick what the enumerator can narrow.** A printed noun phrase's

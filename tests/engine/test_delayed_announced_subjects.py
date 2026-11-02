@@ -101,7 +101,8 @@ def _fired(game: Game, card, delay: OracleInstruction, about: Permanent) -> Stac
     event = entry.trigger_event(game=game)
     return StackItem(
         card=card, caster_index=0,
-        target_player_index=event["target_player_index"],
+        target_player_index=None,
+        about_player_index=event["about_player_index"],
         target_permanent_index=None,
         about_permanent_id=event["about_permanent_id"],
         x_value=None,
