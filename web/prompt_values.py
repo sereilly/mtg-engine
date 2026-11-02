@@ -471,7 +471,7 @@ def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
     of the same reader the resolver uses — an offer the engine would refuse is
     not an offer.
     """
-    from engine.mana_payment import generic_cost, plan_payment
+    from engine.mana_payment import generic_cost
 
     choice = choices[0]
     seat = choice.player_index
@@ -481,12 +481,11 @@ def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
     # Walk up rather than compute: `plan_payment` is the one answer to "can
     # this be paid", and a second arithmetic here is a second answer. The
     # ceiling is bounded by the pool plus the lands, so the loop is short.
-    limit = sum(max(0, int(v)) for v in player.mana_pool.values()) + len(lands)
+    # A land may add more than one mana a tap (Ancient Tomb's {C}{C}), which
+    # the plan counts (``Game.effect_payment_plan``): two a land bounds it.
+    limit = sum(max(0, int(v)) for v in player.mana_pool.values()) + 2 * len(lands)
     for amount in range(1, limit + 1):
-        if plan_payment(
-            player.mana_pool, lands, generic_cost(amount),
-            produces=ctx.game._land_payment_colors,
-        ) is None:
+        if ctx.game.effect_payment_plan(seat, generic_cost(amount), lands=lands) is None:
             break
         affordable = amount
     return {

@@ -13,7 +13,7 @@ from __future__ import annotations
 from ....entry_choices import LIFE_PAID_AS_ENTERED
 from ....oracle_types import BIDDING_WINNER, DREW_BY_SEAT, MANA_PAID_BY_SEAT
 from ....pending_choices import PendingChoice
-from ....mana_payment import generic_cost, plan_payment
+from ....mana_payment import generic_cost
 from ....resumption import run_resumable
 
 
@@ -130,25 +130,11 @@ class NumberChoicesMixin:
             return False
         seat = choice.player_index
         player = self.players[seat]
-        plan = (
-            plan_payment(
-                player.mana_pool,
-                self.payment_lands(seat),
-                generic_cost(value),
-                produces=self._land_payment_colors, payer=player,
-            )
-            if value else None
-        )
+        plan = self.effect_payment_plan(player, generic_cost(value)) if value else None
         if value and plan is None:
             return False
         if plan is not None and not self._pay_planned_cost(
-            player,
-            lambda: plan_payment(
-                player.mana_pool,
-                self.payment_lands(seat),
-                generic_cost(value),
-                produces=self._land_payment_colors, payer=player,
-            ),
+            player, lambda: self.effect_payment_plan(player, generic_cost(value)),
         ):
             return False
         self.log.append(

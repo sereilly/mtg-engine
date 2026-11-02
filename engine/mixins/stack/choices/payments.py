@@ -79,10 +79,38 @@ class PaymentChoicesMixin:
         only floating mana, so an AI holding untapped lands declined a cost it
         could afford and lost the spell.
         """
-        return plan_payment(
-            player.mana_pool, self.payment_lands(player), cost,
-            produces=self._land_payment_colors, payer=player,
-        )
+        return self.effect_payment_plan(player, cost)
+
+    def effect_payment_plan(self, player, cost: dict[str, int], *, pool=None, lands=None):
+        """How *player* (a seat or its ``PlayerState``) would pay *cost* an
+        effect collects, now — the pool, then the untapped lands — or None.
+
+        **The one reading of "can this be paid?"** for every cost with no
+        priority window behind it: a counterspell's "unless … pays", an upkeep
+        price, an attack or block toll, a "you may pay", a pay-any-amount
+        ceiling, a special action's price. Planned as ``_pay_planned_cost``
+        pays: each land credited what one tap of it adds
+        (``board_payment.plan_over_land_units``, CR 106.4), what the tap seam
+        would really make (``_land_payment_colors``), and the payer's CR
+        609.4b permissions. These reads planned over ``payment_lands`` one
+        mana per land while the payment planned the units, so a cost only an
+        Ancient Tomb's second {C} covers read unpayable and was declined —
+        Mana Leak's {3} off a Tomb and a Plains countered the spell, and
+        Mystic Remora's {2} off a Tomb was sacrificed.
+
+        *pool* replaces the open pool (the upkeep's restricted bucket) and
+        *lands* the board's payment lands (a toll paid without the creatures
+        it taps, or over the lands a plan already named)."""
+        from ....board_payment import plan_over_land_units
+
+        if isinstance(player, int):
+            player = self.players[player]
+        with payment_units_in_force(plan_over_land_units(self)):
+            return plan_payment(
+                player.mana_pool if pool is None else pool,
+                self.payment_lands(player) if lands is None else lands,
+                cost, produces=self._land_payment_colors, payer=player,
+            )
 
     def narrowed_land_mana_colors(self, land) -> "tuple[str, ...] | None":
         """What *land*'s tap makes **here**, where the rest of the battlefield

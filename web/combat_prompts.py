@@ -152,7 +152,9 @@ def _build_banding_assignment_info(session: Session, viewer_seat: int | None) ->
             "attacker_index": attacker_idx,
             "attacker_id": attacker.permanent_id,
             "damage": combat_damage_assigned_by(attacker),
-            "blocker_indices": sorted(game._combat_blockers_for_attacker(attacker_idx)),
+            # Every creature blocking it, its band's spread blocks included
+            # (CR 702.22h): what the division is among.
+            "blocker_indices": game._attacker_all_blockers(attacker_idx),
             "offer": (
                 {"recipient": _unblocked_recipient(game, attacker_idx)}
                 if offered else None

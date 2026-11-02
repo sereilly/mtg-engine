@@ -496,12 +496,11 @@ def test_w1g3_minion_of_the_wastes_pays_any_life_up_to_its_controllers_total(set
              PlayerState(name="B")]
     game = Game(players=seats)
     game.enforce_mana_costs = False
+    game.interactive_seats = {0}  # a person, asked while it is on its way
     game.cast_from_hand(0, "Minion of the Wastes")
-    while game.stack:
-        game.resolve_top_of_stack()
     assert game.pending_choices[0].data["maximum"] == 20
     assert game.confirm_number_choice(0, 7)
-    game._recompute_continuous_effects()
+    resolve_stack(game)
     minion = seats[0].battlefield[-1]
     assert seats[0].life == 13
     assert (minion.effective_power, minion.effective_toughness) == (7, 7)
@@ -513,9 +512,8 @@ def test_w1g3_the_pay_life_ceiling_is_the_payers_life_total(set_pool):
              PlayerState(name="B")]
     game = Game(players=seats)
     game.enforce_mana_costs = False
+    game.interactive_seats = {0}  # a person, asked while it is on its way
     game.cast_from_hand(0, "Minion of the Wastes")
-    while game.stack:
-        game.resolve_top_of_stack()
     assert game.pending_choices[0].data["maximum"] == 3
     assert not game.confirm_number_choice(0, 5)
 

@@ -97,9 +97,11 @@ def source_colors(source, *, game=None, seat: int | None = None) -> tuple[str, .
     card = getattr(source, "card", source)
     if game is None:
         return tuple(getattr(card, "colors", ()) or ())
-    from .object_colors import card_colors
+    # The spell as it is on the stack: a Lace's recolour (CR 105.3) lives on
+    # the object (``object_colors.spell_colors``).
+    from .object_colors import spell_colors
 
-    return card_colors(game, card, seat)
+    return spell_colors(game, card, seat)
 
 
 @lru_cache(maxsize=None)

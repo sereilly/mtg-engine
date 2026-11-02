@@ -25,7 +25,8 @@ from __future__ import annotations
 from ....destruction_events import destruction_finished
 from ....entry_awaiting import awaited_entries
 from ....pending_choices import CHOICE_SPECS, PendingChoice, spec_for
-from ....replacement_choices import pending_choices_for, stamp_draw_of
+from ....replacement_choices import (CAUSE_SEAT, RESOLVING_TARGETS, pending_choices_for,
+                                     stamp_draw_of, stamp_resolving)
 from ....resumption import resume_after_answer
 
 
@@ -55,7 +56,9 @@ class PendingChoicesMixin:
         # Contest has a step behind it, and "if you win the bidding" ran after
         # the first raise, before anybody had won.
         choice.data.pop("_answered", None)
-        if spec.default_at_arm and player_index not in self.interactive_seats:
+        if player_index not in self.interactive_seats and (
+            spec.default_at_arm or self._an_entry_nobody_waits_for()
+        ):
             spec.default(self, choice)
             return None
         # Which stack object is still resolving because of this prompt. Stamped
@@ -81,8 +84,11 @@ class PendingChoicesMixin:
         # Psychic Purge is the card that notices: "when a spell or ability an
         # opponent controls causes you to discard this card" is a question about
         # the seat that armed the discard, asked from inside the answer.
-        if self.resolving_seats and "_cause_seat" not in choice.data:
-            choice.data["_cause_seat"] = self.resolving_seats[-1]
+        #
+        # What the resolving object targets is stamped beside it, for the same
+        # reason: Bronze Horse's "spells that target it" is asked inside the
+        # answer too (``replacement_choices.stamp_resolving``).
+        stamp_resolving(self, choice)
         # A queued choice of a ``suspends`` kind is itself the suspension: the
         # steps behind it in this resolution have not run, and running them now
         # would let them see a board the answer has not shaped yet (Opt drawing
@@ -290,6 +296,27 @@ class PendingChoicesMixin:
         against (``_settle``)."""
         return bool(self.interactive_seats) or self.prompt_driver is not None
 
+    def _an_entry_nobody_waits_for(self) -> bool:
+        """Whether a prompt armed now is an "as it enters" choice (CR 614.1c)
+        at a table that holds nothing (:meth:`holds_for_answers`) — which
+        takes its default as it is armed, whatever its kind.
+
+        CR 614.12a: "that choice is made before the permanent enters the
+        battlefield." At a table that holds for answers the entry waits on its
+        way until the last one (``engine/entry_awaiting.py``); here nothing
+        waits, and the permanent enters the moment its entry state is done.
+        Every entry prompt kind of its own is ``default_at_arm`` already
+        (``enter_choice``, ``body_choice``, ``entry_exile``, ``entry_reveal``);
+        a kind shared with a resolution (``number_choice``: Shapeshifter's
+        number and the life Phyrexian Processor and Minion of the Wastes pay,
+        beside Tetravus's counters) stayed queued, so the permanent entered
+        with the stamped default and a prompt still owed about it — answered
+        afterwards, it changed the permanent after it had entered.
+
+        ``entries_in_progress`` holds a record only while an entry state is
+        being performed, at a table like this one (``_enter_battlefield``)."""
+        return bool(self.entries_in_progress) and not self.holds_for_answers()
+
     def resolution_waiting(self) -> bool:
         """Whether some object on the stack is part-way through resolving and
         waiting on an answer (CR 608.2) — in which case nothing else resolves,
@@ -394,10 +421,18 @@ class PendingChoicesMixin:
         # controller, a spell's lifelink gained nobody, and "a source an
         # opponent controls" answered no. The seat the arming stamped
         # (``_cause_seat``), pushed for the answer and popped after it.
-        cause_seat = choice.data.get("_cause_seat")
+        cause_seat = choice.data.get(CAUSE_SEAT)
         pushed = isinstance(cause_seat, int) and not isinstance(cause_seat, bool)
         if pushed:
             self.resolving_seats.append(cause_seat)
+        # And what that object targets (CR 115.1), for the same reason: "by
+        # spells that target it" (Bronze Horse) is asked of the re-run event,
+        # and with nothing pushed a Horse whose own static its controller had
+        # just chosen to apply first was dealt the Bolt's damage.
+        targets = choice.data.get(RESOLVING_TARGETS)
+        pushed_targets = isinstance(targets, tuple)
+        if pushed_targets:
+            self.resolving_targets.append(targets)
         try:
             # A prompt a draw armed is answered inside that draw (CR 121.2):
             # the draws parked behind it are released here, with the object
@@ -408,6 +443,8 @@ class PendingChoicesMixin:
         finally:
             if pushed:
                 self.resolving_seats.pop()
+            if pushed_targets:
+                self.resolving_targets.pop()
             self.resolving_stack_item = previous
         # An answer is a step of a resolution (CR 608.2), so the resolution
         # seam's recompute (``resolve_top_of_stack``) is owed here too: the

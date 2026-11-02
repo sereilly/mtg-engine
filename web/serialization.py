@@ -19,7 +19,7 @@ from engine.board_payment import tap_alone_symbols
 from engine.color_changes import spell_color_change
 from engine.cost_modifiers import spell_cost_tax
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
-from engine.entry_choices import ENTRY_CHOICES, chosen_as_entered
+from engine.entry_choices import chosen_as_entered
 from engine.face_down import face_up_morph_cost, hidden_card_of, is_face_down
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
 from engine.game_types import target_ids
@@ -1492,43 +1492,6 @@ def _exile_payload(
     return payload
 
 
-def entry_choice_view(game: Game) -> Game | None:
-    """The board as it stands **before** any entering permanent's choice, or
-    None while no permanent is entering (almost always).
-
-    CR 614.12a: "If a replacement effect that modifies how a permanent enters
-    the battlefield requires a choice, that choice is made before the permanent
-    enters the battlefield." At a table that holds for answers — every web
-    table — the engine now does exactly that: a permanent whose choice is owed
-    waits on its way, in no zone, with nothing recorded for a person
-    (``engine/entry_awaiting.py``), and is sent arriving by
-    ``_serialize_arriving``. So this finds nothing there. What it still
-    covers is a table that holds nothing (a bare headless game), where a seat
-    nobody asks may enter with a queued prompt and the provisional default
-    stamped (Shapeshifter's number): a scratch copy with each entering
-    permanent's ``chosen_*`` records taken away, and the board's statics
-    recomputed, is what may be shown until the answer.
-    """
-    entering = [
-        perm.permanent_id for perm in game.all_permanents()
-        if game.permanent_is_entering(perm)
-    ]
-    if not entering:
-        return None
-    from engine.ai_rehearsal import scratch_copy
-
-    view = scratch_copy(game)
-    records = {row.key for row in ENTRY_CHOICES}
-    for permanent_id in entering:
-        twin = view.permanent_by_id(permanent_id)
-        if twin is None:
-            continue
-        for key in records:
-            twin.metadata.pop(key, None)
-    view._recompute_continuous_effects()
-    return view
-
-
 def _serialize_arriving(game: Game, seat: int) -> list[dict]:
     """The permanents on their way onto *seat*'s battlefield while their "as
     it enters" choice is made (CR 614.12a, ``engine/entry_awaiting.py``),
@@ -1554,23 +1517,6 @@ def _serialize_arriving(game: Game, seat: int) -> list[dict]:
     return arriving
 
 
-def _serialize_battlefield_entry(perm: Permanent, game: Game, view: Game | None) -> dict:
-    """One permanent's payload, read off *view* (``entry_choice_view``) when
-    a permanent is entering. The entering permanent itself carries
-    ``entering: True`` — absent on every other payload — so the client can
-    show it as arriving rather than as a permanent that has made its choice."""
-    if view is None:
-        return _serialize_permanent(perm, game)
-    twin = view.permanent_by_id(perm.permanent_id)
-    payload = (
-        _serialize_permanent(twin, view) if twin is not None
-        else _serialize_permanent(perm, game)
-    )
-    if game.permanent_is_entering(perm):
-        payload["entering"] = True
-    return payload
-
-
 def _serialize_player(
     player: PlayerState,
     viewer_seat: int | None,
@@ -1579,7 +1525,6 @@ def _serialize_player(
     playable_hand_indices: list[int] | None = None,
     playable_command_indices: list[int] | None = None,
     castable_hand_faces: dict[int, list[str]] | None = None,
-    battlefield_view: Game | None = None,
 ) -> dict:
     if viewer_seat == seat:
         hand = [
@@ -1613,7 +1558,7 @@ def _serialize_player(
     top_public = bool(player.library) and top_is_public(game, seat)
     permanents = list(game.controlled_by(seat))
     battlefield = [
-        _serialize_battlefield_entry(perm, game, battlefield_view) for perm in permanents
+        _serialize_permanent(perm, game) for perm in permanents
     ]
     # The viewer's own permanents carry the target spec for their activated ability
     # (kind + legal targets) so the UI can drive activation targeting from backend

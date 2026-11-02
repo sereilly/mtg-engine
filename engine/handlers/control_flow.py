@@ -45,6 +45,8 @@ from contextlib import nullcontext
 from typing import TYPE_CHECKING
 
 from .. import simultaneous_damage
+from ..effect_ordering import in_apnap_order
+from ..game_types import first_target_id
 from ..oracle_types import (COIN_FLIPS_MADE, COIN_FLIPS_WON, ONE_DEALING,
                             PER_OBJECT_SEAT_RECORDS, OracleInstruction,
                             STACK_TARGET_CONTROLLER)
@@ -475,9 +477,53 @@ def sequence(game: Game, instruction: OracleInstruction, context: OracleExecutio
         game, combat=False, source=damage_dealer(context),
     )
     return _run(
-        game, steps, context,
+        game, _in_apnap_order(game, steps, context), context,
         then=lambda: simultaneous_damage.finish(game, dealing),
     )
+
+
+def _in_apnap_order(game: Game, steps: tuple, context: OracleExecutionContext) -> tuple:
+    """A one-dealing sentence's steps in the order their CR 616.1 choices are
+    made — APNAP order of the player each step affects (CR 616.1's last
+    sentence), the printed order within one seat (CR 101.4c).
+
+    The steps are one event, so dealing them in another order changes nothing
+    but who is asked first: each step's damage event asks as it is dealt
+    (``effect_ordering.in_apnap_order``'s reason). Orcish Artillery activated
+    on its controller's turn asked the target's controller before the active
+    player, its "…and 3 damage to you" being printed second.
+
+    Only where every step names the one recipient it can say before it runs
+    (:func:`_one_recipient`); a step that deals to several — a sweep, "each
+    player" — or to an object only an earlier step finds keeps the printed
+    order for the whole sentence."""
+    recipients = [_one_recipient(game, step, context) for step in steps]
+    if any(recipient is None for recipient in recipients):
+        return steps
+    by_step = dict(zip(map(id, steps), recipients))
+    return tuple(in_apnap_order(game, list(steps), affected=lambda step: by_step[id(step)]))
+
+
+def _one_recipient(game: Game, step: OracleInstruction, context: OracleExecutionContext):
+    """The one player or permanent a ``deal_damage`` step of a split damage
+    sentence is dealt to, read as its handler reads it — or None where the
+    step is not one, or names nobody this can see before it runs."""
+    if step.kind != "deal_damage":
+        return None
+    recipient = step.payload.get("recipient")
+    if recipient == "caster":
+        return context.caster
+    if recipient == "source":
+        return context.source_permanent
+    scoped = _role_scoped(game, step, context)
+    if scoped is None:
+        return None
+    if recipient == "target_player":
+        return scoped.target
+    if recipient is not None:
+        return None
+    chosen = game.permanent_by_id(first_target_id(scoped.target_permanent_id))
+    return chosen if chosen is not None else scoped.target
 
 
 def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dict) -> bool:

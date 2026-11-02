@@ -434,7 +434,9 @@ def test_it_chooses_a_number_as_it_enters(set_pool):
     perm = p1.battlefield[0]
     assert perm.metadata["chosen_number"] == 3, "the middle of the printed range"
     assert (perm.effective_power, perm.effective_toughness) == (3, 4)
-    assert [choice.kind for choice in game.pending_choices] == ["number_choice"]
+    # Nobody is asked at this table, so the default is the answer, taken as
+    # the prompt is armed (CR 614.12a: nothing is owed once it has entered).
+    assert game.pending_choices == []
 
 
 def test_the_controller_can_answer_the_prompt(set_pool):
@@ -442,11 +444,14 @@ def test_the_controller_can_answer_the_prompt(set_pool):
     p1 = PlayerState(name="P1", hand=[pool["Shapeshifter"]])
     game = Game(players=[p1, PlayerState(name="P2")])
     game.enforce_mana_costs = False
+    game.interactive_seats = {0}  # a person, asked while it is on its way
     game.cast_from_hand(0, "Shapeshifter")
-    perm = p1.battlefield[0]
 
-    assert game.confirm_number_choice(0, 7)
-    assert (perm.effective_power, perm.effective_toughness) == (7, 0)
+    # 6, not 7: a 7/0 enters and the state-based check made as it does takes
+    # it (CR 704.5f) — it used to be read on the battlefield before that check.
+    assert game.confirm_number_choice(0, 6)
+    perm = p1.battlefield[0]
+    assert (perm.effective_power, perm.effective_toughness) == (6, 1)
 
 
 def test_a_number_outside_the_printed_range_is_refused(set_pool):
@@ -457,11 +462,11 @@ def test_a_number_outside_the_printed_range_is_refused(set_pool):
     p1 = PlayerState(name="P1", hand=[pool["Shapeshifter"]])
     game = Game(players=[p1, PlayerState(name="P2")])
     game.enforce_mana_costs = False
+    game.interactive_seats = {0}  # a person, asked while it is on its way
     game.cast_from_hand(0, "Shapeshifter")
-    perm = p1.battlefield[0]
 
     assert not game.confirm_number_choice(0, 8)
-    assert perm.metadata["chosen_number"] == 3
+    assert not p1.battlefield, "still on its way: nothing was chosen"
     assert [choice.kind for choice in game.pending_choices] == ["number_choice"]
 
 

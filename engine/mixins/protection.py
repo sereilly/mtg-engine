@@ -417,22 +417,24 @@ class ProtectionMixin:
         which is what every caller gave before the argument existed.
         """
         kind, value = quality
+        # The spell as it is on the stack (``object_colors.spell_colors``): a
+        # Lace's recolour is on the object, not the card.
         if kind == "color":
             if as_damage_source:
                 from ..damage_source_colors import damage_source_colors
 
                 return value in damage_source_colors(self, card, seat=seat)
-            from ..object_colors import card_colors
+            from ..object_colors import spell_colors
 
-            return value in card_colors(self, card, seat)
+            return value in spell_colors(self, card, seat)
         if kind == "multicolored":
             # Not rewritten by a damage-source static, mirroring
             # :meth:`_permanent_has_quality` exactly -- see the reason written
             # out there. It *is* read through the layers, because that is a
             # different question and the one this method was getting wrong.
-            from ..object_colors import card_colors
+            from ..object_colors import spell_colors
 
-            return len(set(card_colors(self, card, seat))) >= 2
+            return len(set(spell_colors(self, card, seat))) >= 2
         if kind == "spell_type":
             # "protection from **instant spells**" (Devoted Caretaker): the
             # card type of a **spell**. Every caller hands this method a card

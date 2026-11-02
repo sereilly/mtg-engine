@@ -379,12 +379,18 @@ class CombatDamageAssignmentMixin:
             attacker = self.permanent_at(self.active_player_index, attacker_idx)
             if attacker is None or combat_damage_assigned_by(attacker) <= 0:
                 continue
-            declared = self._combat_blockers_for_attacker(attacker_idx)
+            # Every creature blocking it, the ones its band spread onto it
+            # included (CR 702.22h) — what the division is among
+            # (:meth:`_attacker_division_refusal`). Counting the declared
+            # pairs alone, a band member with one declared blocker and one
+            # spread onto it owed this seat nothing, and the default divided
+            # it.
+            blocking = self._attacker_all_blockers(attacker_idx)
             offered = self.unblocked_assignment_chooser(attacker_idx) == seat or (
                 seat in self.interactive_seats
                 and self._has_trample_choice(attacker_idx)
             )
-            if len(declared) < (1 if offered else 2):
+            if len(blocking) < (1 if offered else 2):
                 continue
             if self._defender_assignment_recorded(attacker_idx):
                 continue
@@ -852,11 +858,19 @@ class CombatDamageAssignmentMixin:
         return False
 
     def _manual_assignment_has_declared_multiblock(self) -> bool:
-        """True when some attacker is blocked by 2+ *declared* blockers — the case
-        the combat-damage dialog can surface to the active player. Band-propagated
-        blocks (a single shared blocker spread across a band, CR 702.22h) are not
-        included: the dialog has no way to present them, so when that is the only
-        pending assignment the web layer auto-resolves rather than deadlocking.
+        """True when some attacker is blocked by two or more creatures — the
+        case the combat-damage dialog can surface to the active player.
+
+        **Counting the creatures its band spread onto it** (CR 702.22h): the
+        dialog groups an attacker's blockers from ``combat.band_blocks`` as well
+        as the declared pairs, and the division is among all of them
+        (:meth:`_attacker_division_refusal`). This counted the declared pairs
+        alone, saying the dialog had no way to present the rest, so a Hill
+        Giant banded with a Benalish Hero and blocked by two walls with no
+        power — one declared on each member, no CR 702.22k choice to hold the
+        step — was dealt the default division when the attacking player moved
+        on, never asked. A band whose one shared blocker spread across it still
+        leaves each member a single blocker, and nothing to divide.
 
         **Also True for an attacker the dialog asks about for another reason**:
         "as though it weren't blocked", owed by an interactive active player
@@ -889,7 +903,7 @@ class CombatDamageAssignmentMixin:
         ):
             return True
         for attacker_idx in self.combat_attackers:
-            if len(self._combat_blockers_for_attacker(attacker_idx)) < 2:
+            if len(self._attacker_all_blockers(attacker_idx)) < 2:
                 continue
             if self.assigns_past_its_blockers(attacker_idx):
                 continue  # no dialog has anything to ask about it

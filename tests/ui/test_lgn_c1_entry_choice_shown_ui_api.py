@@ -13,7 +13,8 @@ prompt. Measured over every entry chooser in the pool cast from a person's
 hand: of 40 that open a prompt, all 40 were on the battlefield with their spell
 still on the stack, 37 had a provisional record written, and the 11 creatures
 among them fired "whenever another creature enters" (Soul Warden) before the
-choice. C1 built the wire partial (``web.serialization.entry_choice_view``);
+choice. C1 built the wire partial (a view of the board without the entering
+permanent's records, deleted at kg3 once nothing could enter owing a choice);
 kg3's ``entry`` group built the engine half (``engine/entry_awaiting.py``): the
 permanent now waits on its way, in no zone and with nothing recorded, until
 the answer, and is sent beside its controller's board marked ``entering``
@@ -30,7 +31,7 @@ from engine.card_loader import load_catalog
 from engine.faces import compilation_units, whole_card
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from web.serialization import _serialize_player, entry_choice_view
+from web.serialization import _serialize_player
 
 _CATALOG = {card.name: card for card in load_catalog()}
 _ENTRY_CHOICE_LINE = re.compile(r"^as .*\benters\b.*\bchoose\b", re.I)
@@ -79,10 +80,7 @@ def _cast_and_open_the_prompt(name: str, *, beside=(), hand_extra=()):
 
 
 def _board(game: Game, seat: int, *, viewer: int = 0) -> list[dict]:
-    payload = _serialize_player(
-        game.players[seat], viewer, seat, game,
-        battlefield_view=entry_choice_view(game),
-    )
+    payload = _serialize_player(game.players[seat], viewer, seat, game)
     return payload["battlefield"]
 
 

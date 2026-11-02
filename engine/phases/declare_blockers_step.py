@@ -19,7 +19,7 @@ import random
 
 from ..aura_restrictions import attached_combat_restrictions
 from ..combat_restrictions import declaration_tap_costs, toll_mana
-from ..mana_payment import mana_cost_label, plan_payment
+from ..mana_payment import mana_cost_label
 from ..subject_filters import subject_matches
 from ..models import Permanent
 from ..oracle import compile_card_oracle
@@ -725,11 +725,7 @@ class DeclareBlockersStepMixin:
         if not total:
             return {}, None
         defender = self.players[controller_index]
-        return total, plan_payment(
-            defender.mana_pool,
-            self.payment_lands(controller_index),
-            total, payer=defender,
-        )
+        return total, self.effect_payment_plan(defender, total)
 
     def _pay_block_declaration_mana(
         self, controller_index: int, total: dict[str, int], plan
@@ -751,13 +747,12 @@ class DeclareBlockersStepMixin:
         planned = list(plan.tapped)
         paid = self._pay_planned_cost(
             defender,
-            lambda: plan_payment(
-                defender.mana_pool,
-                [
+            lambda: self.effect_payment_plan(
+                defender, total,
+                lands=[
                     land for land in self.payment_lands(controller_index)
                     if any(land is named for named in planned)
                 ],
-                total, payer=defender,
             ),
         )
         # Said as it happened, for the attack side's reason.
