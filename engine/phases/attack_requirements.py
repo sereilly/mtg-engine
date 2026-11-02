@@ -92,9 +92,14 @@ from ..turn_state import MUST_ATTACK_ON_SEAT_TURN_KEY, marked_for_this_turn
 #: does obey more.
 _NODE_BUDGET = 200_000
 
-#: What a creature attacks: the defending seat, and the planeswalker's
-#: ``permanent_id`` when it attacks one (CR 508.1b) — None for the player.
-AttackTarget = "tuple[int, int | None]"
+#: The kinds a permanent prints about a set of creatures: "Creatures you
+#: control attack each combat if able" (the Pirate token, Grand Melee), and the
+#: two conditional ones (Magnetic Web, Viashino Bey).
+_BOARD_COMPULSION_KINDS = frozenset({
+    "creatures_must_attack",
+    "creatures_must_attack_if_partner_attacks",
+    "creatures_must_attack_if_source_attacks",
+})
 
 
 @dataclass(frozen=True)
@@ -156,8 +161,24 @@ class AttackRequirementsMixin:
     # What is required
     # ------------------------------------------------------------------
 
-    def _attack_requirement_count(self, attacker: Permanent) -> int:
+    def _board_attack_compulsions(self) -> "list[tuple[str, int, Permanent, dict]]":
+        """Every requirement printed on a permanent about a *set* of creatures
+        — ``(kind, carrier's seat, carrier, payload)`` — scanned once for a
+        whole declaration rather than once per creature asked about."""
+        return [
+            (instruction.kind, source_seat, source_perm, instruction.payload)
+            for source_seat, source_perm in self.permanents_with_controller()
+            for instruction in compile_card_oracle(source_perm.effective_card).instructions
+            if instruction.kind in _BOARD_COMPULSION_KINDS
+        ]
+
+    def _attack_requirement_count(
+        self, attacker: Permanent, board: "list | None" = None,
+    ) -> int:
         """How many **unconditional** CR 508.1d requirements are on *attacker*.
+
+        *board* is :meth:`_board_attack_compulsions`' answer, for a caller
+        asking about several creatures at once.
 
         Each source is one requirement, because CR 508.1d counts them: a
         Juggernaut under Grand Melee is affected by two, and under Dueling
@@ -188,15 +209,16 @@ class AttackRequirementsMixin:
         # token Pursued Whale gives away; Grand Melee's "All creatures".) Printed
         # on one permanent about a set, so found by a board scan, with the
         # carrier's seat as CR 109.5's "you".
-        for source_seat, source_perm in self.permanents_with_controller():
-            for instruction in compile_card_oracle(source_perm.effective_card).instructions:
-                if instruction.kind != "creatures_must_attack":
-                    continue
-                if subject_matches(
-                    self, attacker, dict(instruction.payload.get("subject") or {}),
-                    observer=source_seat, source=source_perm,
-                ):
-                    count += 1
+        if board is None:
+            board = self._board_attack_compulsions()
+        for kind, source_seat, source_perm, payload in board:
+            if kind != "creatures_must_attack":
+                continue
+            if subject_matches(
+                self, attacker, dict(payload.get("subject") or {}),
+                observer=source_seat, source=source_perm,
+            ):
+                count += 1
         return count
 
     def _must_attack_if_able(self, attacker: Permanent) -> bool:
@@ -206,7 +228,10 @@ class AttackRequirementsMixin:
         return self._attack_requirement_count(attacker) > 0
 
     def _conditional_attack_requirements(
-        self, attacker: Permanent, candidates: "list[Permanent]"
+        self,
+        attacker: Permanent,
+        candidates: "list[Permanent]",
+        board: "list | None" = None,
     ) -> "list[list[Permanent]]":
         """Each conditional CR 508.1d requirement on *attacker*, as the list of
         *candidates* whose attacking meets its condition.
@@ -243,32 +268,30 @@ class AttackRequirementsMixin:
                 if other is not attacker
                 and subject_matches(self, other, described, observer=seat, source=attacker)
             ])
-        for source_seat, source_perm in self.permanents_with_controller():
-            for instruction in compile_card_oracle(source_perm.effective_card).instructions:
-                if instruction.kind not in (
-                    "creatures_must_attack_if_partner_attacks",
-                    "creatures_must_attack_if_source_attacks",
-                ):
-                    continue
-                if not subject_matches(
-                    self, attacker, dict(instruction.payload.get("subject") or {}),
-                    observer=source_seat, source=source_perm,
-                ):
-                    continue
-                if instruction.kind == "creatures_must_attack_if_source_attacks":
-                    found.append([
-                        other for other in candidates
-                        if other is source_perm and other is not attacker
-                    ])
-                    continue
-                condition = dict(instruction.payload.get("condition_subject") or {})
+        if board is None:
+            board = self._board_attack_compulsions()
+        for kind, source_seat, source_perm, payload in board:
+            if kind == "creatures_must_attack":
+                continue
+            if not subject_matches(
+                self, attacker, dict(payload.get("subject") or {}),
+                observer=source_seat, source=source_perm,
+            ):
+                continue
+            if kind == "creatures_must_attack_if_source_attacks":
                 found.append([
                     other for other in candidates
-                    if other is not attacker
-                    and subject_matches(
-                        self, other, condition, observer=source_seat, source=source_perm,
-                    )
+                    if other is source_perm and other is not attacker
                 ])
+                continue
+            condition = dict(payload.get("condition_subject") or {})
+            found.append([
+                other for other in candidates
+                if other is not attacker
+                and subject_matches(
+                    self, other, condition, observer=source_seat, source=source_perm,
+                )
+            ])
         return [triggers for triggers in found if triggers]
 
     def _must_attack_beside(
@@ -337,15 +360,16 @@ class AttackRequirementsMixin:
         mine = list(self.controlled_by(controller_index))
         creatures = [perm for perm in mine if perm.is_creature]
         slot_of = {id(perm): slot for slot, perm in enumerate(mine)}
+        board = self._board_attack_compulsions()
         found: list[AttackRequirement] = []
         for slot, perm in enumerate(mine):
             if not perm.is_creature or perm.tapped:
                 continue
             found.extend(
                 AttackRequirement(slot, perm.card.name)
-                for _ in range(self._attack_requirement_count(perm))
+                for _ in range(self._attack_requirement_count(perm, board))
             )
-            for triggers in self._conditional_attack_requirements(perm, creatures):
+            for triggers in self._conditional_attack_requirements(perm, creatures, board):
                 found.append(AttackRequirement(
                     slot, perm.card.name,
                     frozenset(slot_of[id(other)] for other in triggers),
@@ -574,6 +598,17 @@ class AttackRequirementsMixin:
             for seat in {target[0] for targets in able.values() for target in targets}
         }
         capped = any(limit is not None for limit in seat_caps.values())
+        # How many may attack at all: the global cap, and — when everything any
+        # creature here may attack is a capped player — the caps' sum, which
+        # is what keeps sixteen compelled creatures against three Crawlspaces
+        # from exploring every way of choosing the six that fit.
+        room = cap
+        if capped and not any(
+            target[1] is not None or seat_caps.get(target[0]) is None
+            for targets in able.values() for target in targets
+        ):
+            total = sum(limit for limit in seat_caps.values() if limit is not None)
+            room = total if room is None else min(room, total)
         lone = {slot for slot in order if self._can_only_attack_alone(mine[slot])}
 
         def assignment(slots: "list[int]") -> "dict[int, tuple] | None":
@@ -620,8 +655,8 @@ class AttackRequirementsMixin:
                 (unconditional[slot] for slot in order[position:] if slot in unconditional),
                 reverse=True,
             )
-            if cap is not None:
-                open_gains = open_gains[: max(0, cap - len(attacking))]
+            if room is not None:
+                open_gains = open_gains[: max(0, room - len(attacking))]
             conditional = 0
             for requirement in conditionals:
                 if requirement.attacker in attacking:
