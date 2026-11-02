@@ -632,17 +632,30 @@ class PermanentChoicesMixin:
         floor = int(choice.data.get("at_least", 0) or 0)
         live = self.live_permanent_set_choices(choice)
         own = [perm for perm in live if self.controls(choice.player_index, perm)]
-        if (choice.data.get("_payload") or {}).get("default_none"):
-            # "Choose any number of creatures target player controls … Those
-            # players exchange control of those creatures." (Cultural
+        payload = choice.data.get("_payload") or {}
+        if payload.get("default_none") or payload.get("same_number_as") is not None:
+            # "Choose any number of creatures target player controls. Choose
+            # the same number of creatures another target player controls.
+            # Those players exchange control of those creatures." (Cultural
             # Exchange.) The own-first rule above is written for a pick that
-            # *keeps* what it names; this one gives it away, so taking the
-            # ceiling in board order would hand a seat's creatures across for
-            # whatever stood first on the other side. The neutral answer to
-            # "any number" is none, and the lowering says which picks are
-            # this kind — a flag on the payload, never a card. A floor still
-            # binds: under one the list below is filled exactly as it was.
-            own = []
+            # *keeps* what it names; these give away one side for the other,
+            # so board order would hand a seat's creatures across for
+            # whatever stood first opposite. The pick is the exchange that
+            # favours the seat (``ai_prompts.exchange_picks``: its cheapest
+            # given for the dearest taken, while each pair gains), and none
+            # where nothing gains — the lowering says which picks are this
+            # kind (``default_none``, ``same_number_as``), never a card.
+            from ....ai_prompts import exchange_picks
+
+            picks = exchange_picks(
+                self, choice.player_index, live, payload, choice.data.get("_context"),
+            )
+            chosen = [pid for pid in (self.permanent_id_of(perm) for perm in picks)
+                      if pid is not None]
+            if not self._resolve_permanent_set_choice(choice, chosen):
+                if not self._resolve_permanent_set_choice(choice, []):
+                    self.discard_pending_choice(choice)
+            return
         # **The one place board order is not the answer: the permanent that is
         # asking is itself on the list.** "When this creature enters, return a
         # red or green creature you control to its owner's hand" (Planeshift's

@@ -995,6 +995,60 @@ def _hand_could_use_mana(game: Game, player_index: int) -> bool:
     return False
 
 
+def exchange_picks(game: Game, player_index: int, candidates, payload: dict, context) -> list:
+    """What a seat nobody asks names for one side of an **exchange of
+    control** — "Choose any number of creatures target player controls.
+    Choose the same number of creatures another target player controls.
+    Those players exchange control of those creatures." (Cultural Exchange,
+    CR 701.12) — out of *candidates* (the permanents that side may name).
+
+    Read off the program, as ``order_discard`` reads Strongarm Tactics': the
+    first pick carries the next one as ``matched_by`` and the second carries
+    ``same_number_as``. A side the seat controls is given away **cheapest
+    first**, a side another seat controls is taken **dearest first**
+    (``ai_rehearsal.permanent_worth``, the board as it will be once the turn
+    is over). The first pick's count is how many pairs gain the seat — its
+    dearest take against its cheapest gift, then the next pair, while each
+    gains; none where it is a party to neither side, or nothing gains. The
+    second pick's count is the first's, which the step itself fixes.
+
+    The prompt's standing answer to "any number" here was none, so a seat
+    nobody asks resolved a cast that exchanged nothing — and the rehearsal,
+    reading that, never proposed one (kg3).
+    """
+    from .ai_rehearsal import permanent_worth
+
+    def worth(permanent) -> float:
+        return permanent_worth(permanent, now=False)
+
+    def ordered(side) -> list:
+        side = list(side)
+        mine = bool(side) and all(game.controls(player_index, perm) for perm in side)
+        return sorted(side, key=worth) if mine else sorted(side, key=lambda perm: -worth(perm))
+
+    if payload.get("same_number_as") is not None:
+        wanted = len((getattr(context, "results", None) or {}).get(str(payload["same_number_as"])) or ())
+        return ordered(candidates)[:wanted]
+    matched = payload.get("matched_by")
+    if not isinstance(matched, dict):
+        return []
+    from .handlers.permanent_choices import _matched_candidates
+
+    first = list(candidates)
+    second = list(_matched_candidates(game, matched, context))
+    own_first = bool(first) and all(game.controls(player_index, perm) for perm in first)
+    own_second = bool(second) and all(game.controls(player_index, perm) for perm in second)
+    if own_first == own_second:
+        return []
+    gifts, takes = (ordered(first), ordered(second)) if own_first else (ordered(second), ordered(first))
+    count = 0
+    for gift, take in zip(gifts, takes):
+        if worth(take) <= worth(gift):
+            break
+        count += 1
+    return ordered(first)[:count]
+
+
 def order_discard(game: Game, player_index: int, slots, source_card) -> list[int]:
     """*slots* (hand positions) in the order a seat nobody asks discards them.
 
