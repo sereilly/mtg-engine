@@ -837,10 +837,13 @@ def _offered_seats(
             key=lambda i: ((i - active) % count, i),
         )
     if actor == "each_opponent":
-        return [
-            i for i in game.opponents_of(game.players.index(context.caster))
-            if not game.players[i].lost
-        ]
+        # In APNAP order (CR 101.4), as "each player" is above: seat order is
+        # the same thing only while seat 0 is the active player, and with a
+        # toll put to every opponent (Rishadan Brigand) a later seat answers
+        # knowing what the earlier ones did (CR 101.4b).
+        return game.apnap_seats(
+            game.opponents_of(game.players.index(context.caster))
+        )
     if actor == "controller":
         # "… unless **its controller** pays life equal to its toughness."
         # (Essence Vortex.) The seat is read off the permanent the sentence

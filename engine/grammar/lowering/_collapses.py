@@ -334,6 +334,59 @@ def offered_seat_performs(node: ast.May) -> ast.May:
     )
 
 
+def each_seat_pays_its_own_toll(node: ast.May) -> ast.May:
+    """"When this creature enters, **each opponent** sacrifices a permanent of
+    their choice **unless they pay {3}**." (Rishadan Brigand, Cutpurse,
+    Footpad.) *node* with the toll put to every seat of the set, each paying
+    for itself.
+
+    The trailing toll reads "they" as the pronoun every "unless they pay"
+    starts as (``that_player``), and the sentence it trails names a **set of
+    seats** — so the pronoun is each of them in turn (CR 118.12a: "[do
+    something] unless [a player does something else]" is "[that player] may
+    [do something else]; if they don't, [do something]", once per player the
+    sentence is about). Left as ``that_player`` the offer went to whichever
+    seat the resolution's target channel held, and that one seat's decline
+    made **every** opponent sacrifice: at three seats the second opponent was
+    never asked.
+
+    So the actor becomes the set and the penalty's performer becomes the
+    offered seat — spelled ``you``, because ``handlers/control_flow.
+    _offer_to_seat`` moves ``caster`` onto each seat of a set while its copy
+    of the offer resolves, which is what :func:`offered_seat_performs`'
+    graveyard rewrite relies on too. A sacrifice alone: it is the one penalty
+    a set of seats pays this way in the pool, and any other body naming a set
+    under the pronoun refuses rather than charging one seat's decline to all
+    of them.
+    """
+    if not (
+        isinstance(node.actor, ast.PlayerRef)
+        and node.actor.kind == "that_player"
+        and node.action is None
+        and node.then is None
+        and node.reflexive is None
+    ):
+        return node
+    body = node.otherwise
+    performer = getattr(body, "player", None)
+    if not (
+        isinstance(performer, ast.PlayerRef)
+        and performer.kind in _SELF_PERFORMING_SEAT_SETS
+    ):
+        return node
+    if not isinstance(body, ast.Sacrifice):
+        raise LoweringError(
+            "\"unless they pay\" behind a set of seats is offered per seat, "
+            "and only a sacrifice is performed by the seat that declined",
+            node=node,
+        )
+    return dataclasses.replace(
+        node,
+        actor=performer,
+        otherwise=dataclasses.replace(body, player=ast.PlayerRef("you")),
+    )
+
+
 #: The actors the firing event named whose offer the handler makes **performed
 #: by** the seat it is put to — ``handlers/control_flow._EVENT_ACTORS``, which
 #: rebinds ``caster`` for them whenever the offer carries an action (Pillar
