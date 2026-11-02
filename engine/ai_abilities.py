@@ -1309,7 +1309,7 @@ def _plain_activation_cost(cost) -> bool:
     """
     from dataclasses import replace
 
-    from .oracle_types import ActivatedAbilityCost
+    from .activated_ability_cost import ActivatedAbilityCost
 
     try:
         return replace(cost, pay_life=0) == ActivatedAbilityCost(mana=dict(cost.mana))

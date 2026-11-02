@@ -1,6 +1,6 @@
 """What layer 6 is seeded with is what the card *states*, not what it mentions.
 
-``layer_bridge._printed_abilities`` is the seed CR 613 layer 6 starts from: an
+``printed_characteristics._printed_abilities`` is the seed CR 613 layer 6 starts from: an
 object's own keyword abilities, before any grant or removal. It is built from
 the ingested ``keywords`` field and from the compiled program, and until
 Invasion's second wave the second half read ``static_line`` instructions with a
@@ -36,7 +36,7 @@ import re
 
 from engine import Game, PlayerState, faces
 from engine.card_loader import load_cards, manifest_set_paths
-from engine.layer_bridge import _printed_abilities, _text_keywords_in
+from engine.printed_characteristics import _printed_abilities, _text_keywords_in
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import _mk_card

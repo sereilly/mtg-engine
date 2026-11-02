@@ -175,7 +175,7 @@ ALL_ABILITIES_REMOVED = "all_abilities_removed"
 #:
 #: **Granting the line gives the word back, which flanking is the first keyword
 #: to need.** Layer 6's ability set is seeded from the compiled *keyword lines*
-#: as well as from the ingested field (`layer_bridge._TEXT_KEYWORDS`), so a
+#: as well as from the ingested field (`printed_characteristics._TEXT_KEYWORDS`), so a
 #: granted "Flanking" line is folded into the effective card, compiles to a
 #: keyword line, and lands back in the word set — which is what lets Agility's
 #: enchanted creature both trigger and count as "with flanking" for the next

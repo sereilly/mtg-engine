@@ -36,10 +36,11 @@ from ..land_types import (STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND,
                           resolve_static_land_type_change,
                           static_land_type_change_applies,
                           static_supertype_removal_applies)
-from ..layer_bridge import (attached_animation_type_effect,
-                            global_static_type_effect,
-                            land_animation_type_effect, land_type_effect,
-                            lost_supertype_effect, seed_characteristics)
+from ..printed_characteristics import seed_characteristics
+from ..type_layer import (attached_animation_type_effect,
+                          global_static_type_effect,
+                          land_animation_type_effect, land_type_effect,
+                          lost_supertype_effect)
 from ..type_changes import (LAND_ANIMATION_ORDER, add_derived_lost_supertype,
                             clear_derived_type_changes, set_animates_host,
                             set_static_type_order)

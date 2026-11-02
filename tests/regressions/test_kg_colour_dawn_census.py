@@ -80,7 +80,7 @@ _READER_MODULES = {
 }
 #: Reads of the printed colours that mean the printed colours: the layer-5
 #: seed and layer 1's copiable values (CR 707.2a), and dataclass plumbing.
-_BLESSED_MODULES = {"engine.layer_bridge", "engine.copies"}
+_BLESSED_MODULES = {"engine.printed_characteristics", "engine.copies"}
 _PLUMBING = {"__eq__", "__repr__", "__hash__", "replace", "fields", "__init__",
              "_asdict_inner", "astuple", "asdict"}
 

@@ -42,8 +42,8 @@ Two recorded lists and the derived half
 
 Land types are ``engine/land_types.py``'s (CR 305.7 makes them a replacement
 with rules of its own), a card-type *set* is one stamped slot with one writer
-(``layer_bridge.SET_CARD_TYPES``), and an animation's record is
-``handlers/animation._animation_record``'s. ``layer_bridge.collect_type_effects``
+(``type_layer.SET_CARD_TYPES``), and an animation's record is
+``handlers/animation._animation_record``'s. ``type_layer.collect_type_effects``
 reads all of them and is the only reader of what is recorded here.
 """
 
@@ -100,7 +100,7 @@ LAND_ANIMATION_ORDER = "land_animation"
 #: This module's channels that layer 4 reads off a permanent's **own**
 #: record when it collects: what an effect added, what one took away, and
 #: what a static is taking. Named here, by the module that owns the keys,
-#: for ``layer_bridge.TYPE_EFFECT_CHANNELS`` — which asks only whether any
+#: for ``type_layer.TYPE_EFFECT_CHANNELS`` — which asks only whether any
 #: of them holds anything (``engine/fast_paths.py``), and so is a reader of
 #: nothing and a writer of nothing.
 LAYER_4_CHANNELS: tuple[str, ...] = (

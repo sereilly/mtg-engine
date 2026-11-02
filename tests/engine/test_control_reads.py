@@ -81,7 +81,7 @@ ACKNOWLEDGED: dict[str, str] = {
         "controller's battlefield, and this is the function that honours that "
         "index; it takes a PlayerState and no Game, so there is no seam to ask."
     ),
-    "engine/ai_simulator.py::_assert_expected": (
+    "engine/simulation_checks.py::_assert_expected": (
         "Reads detached PlayerState clones taken before and after a spell, not "
         "the live board. A clone belongs to no Game, and comparing snapshots is "
         "the whole point of the check."
@@ -369,7 +369,11 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # them changed: "whenever this creature attacks and isn't blocked" fires
     # when blocks lock (CR 509.1h) rather than inside `resolve_combat_damage`,
     # so its `controller.battlefield[idx]` went with it.
-    "engine/phases/combat_damage_step.py": 14,
+    # 14 until round kg3 split CR 510.1's assignment out of the step: six of
+    # them (the division gate, the default division, the blocker-split check,
+    # the recorded assignment) went to `combat_damage_assignment.py`.
+    "engine/phases/combat_damage_step.py": 8,
+    "engine/phases/combat_damage_assignment.py": 6,
     "engine/phases/combat_phase.py": 11,
     "engine/phases/declare_attackers_step.py": 4,
     # 15 until the 2,000-line split: three of them are the block triggers'

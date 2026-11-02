@@ -758,7 +758,8 @@ def _creature_type_census(
     whose own type is being chosen (side ``"join"``).
     """
     from ..grammar.vocabulary import CREATURE_TYPES
-    from ..layer_bridge import computed_types, printed_shape
+    from ..layer_bridge import computed_types
+    from ..printed_characteristics import printed_shape
     from ..object_creature_types import object_creature_types
 
     found: list[tuple[int, frozenset[str]]] = []

@@ -42,8 +42,8 @@ STORAGE_OWNERS = {
 # Who may consume the recorded contributions: one reader per channel, the one
 # that applies the layer. Everything else asks the accessor on Permanent.
 ACCESSOR_READERS = {
-    # layer 4 — engine/layer_bridge.py builds the CR 305.7 subtype replacement.
-    "land_type_changes": {"land_types.py", "layer_bridge.py"},
+    # layer 4 — engine/type_layer.py builds the CR 305.7 subtype replacement.
+    "land_type_changes": {"land_types.py", "type_layer.py"},
     # layer 3 — Permanent.effective_card folds the text changes, once.
     "apply_text_changes": {"text_changes.py", "models.py"},
 }
@@ -332,7 +332,7 @@ _PRINTED_COLOR_READS = re.compile(r"\b\w*card\.colors\b")
 PRINTED_COLOR_BASELINE: dict[str, int] = {
     # The layer system's own input, both of them: layer 5 is seeded from the
     # printed colours and layer 1 copies them as a copiable value (CR 707.2a).
-    "layer_bridge.py": 1,       # the layer-5 seed
+    "printed_characteristics.py": 1,  # the layer-5 seed
     "copies.py": 1,             # the copiable values a copy starts from
     # A weight over a card with no board in hand. AI tuning, not a rule.
     "ai_valuation.py": 1,       # a valuation predicate with no game to ask

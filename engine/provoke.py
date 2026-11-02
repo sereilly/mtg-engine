@@ -39,7 +39,7 @@ recorded.
 Hunter Sliver grants it: a grant of the word grants the printed line, the line
 is folded into ``Permanent.effective_card``, and the compiler builds this
 trigger out of it — the channel Agility's flanking already travels. The word
-comes back through ``layer_bridge._TEXT_KEYWORDS``.
+comes back through ``printed_characteristics._TEXT_KEYWORDS``.
 
 CR 702.39b — several instances of provoke each trigger separately — is why
 :func:`provoke_instances` counts rather than answering yes or no. Two Hunter

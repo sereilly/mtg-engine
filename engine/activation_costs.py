@@ -24,7 +24,8 @@ from __future__ import annotations
 
 import re
 
-from .oracle_types import ActivatedAbilityCost, _MANA_TOKEN_RE, _NUMBER_WORDS
+from .activated_ability_cost import ActivatedAbilityCost
+from .oracle_types import _MANA_TOKEN_RE, _NUMBER_WORDS
 from .cast_cost_clauses import read_discard_clause
 from .grammar.readers import _SELF_NOUNS
 from .self_reference import _collapse_self_references

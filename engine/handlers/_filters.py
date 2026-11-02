@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from ..announced_creature_type import narrows_by_announced_type
-from ..layer_bridge import printed_shape, printed_supertypes
+from ..printed_characteristics import printed_shape, printed_supertypes
 from ..oracle_types import DISCARDED_CARDS_BY_SEAT, SACRIFICED_CARDS_BY_SEAT
 from ..models import Permanent
 from ..object_colors import is_multicolored

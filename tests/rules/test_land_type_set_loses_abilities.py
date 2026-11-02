@@ -67,8 +67,8 @@ from engine.ai_combat import declare_ai_attackers
 from engine.auras import aura_land_type_change
 from engine.faces import compilation_units
 from engine.handlers import EFFECT_HANDLERS
-from engine.layer_bridge import (computed_abilities, computed_types,
-                                 printed_shape, printed_supertypes)
+from engine.layer_bridge import computed_abilities, computed_types
+from engine.printed_characteristics import printed_shape, printed_supertypes
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities

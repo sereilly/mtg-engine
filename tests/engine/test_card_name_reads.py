@@ -49,7 +49,7 @@ HOOKS = "engine/card_hooks.py"
 BASIC_LANDS = frozenset({"Plains", "Island", "Swamp", "Mountain", "Forest"})
 
 ACKNOWLEDGED: dict[str, str] = {
-    "engine/ai_simulator.py::_assert_expected": (
+    "engine/simulation_checks.py::_assert_expected": (
         "A test oracle, not a heuristic and not dispatch: it asserts that the "
         "card the simulator just cast did what the *printed* card says. "
         "Deriving the expectation from the compiled program makes it a "

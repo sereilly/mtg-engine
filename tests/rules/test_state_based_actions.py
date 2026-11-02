@@ -4,7 +4,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.copies import become_copy
-from engine.layer_bridge import printed_supertypes
+from engine.printed_characteristics import printed_supertypes
 from engine.models import CardDefinition, Permanent
 
 

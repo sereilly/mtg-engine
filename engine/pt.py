@@ -121,7 +121,7 @@ def set_base_pt(
     ability creates, which is every caller but one. The one is the body an
     "as this enters" choice gives (Primal Clay): CR 613.2a makes that a
     copiable value, where every later layer starts, so it passes
-    ``layer_bridge.COPIABLE_VALUE`` and loses to a Humility however old.
+    ``printed_characteristics.COPIABLE_VALUE`` and loses to a Humility however old.
     A characteristic-defining ability is not written here at all
     (:func:`set_cda_pt`).
 

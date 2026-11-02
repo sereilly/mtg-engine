@@ -507,7 +507,7 @@ def test_the_subtype_is_read_off_the_printed_subtype_not_the_type_line(set_pool)
     word, and would let a card *type* answer a tribe — which is the type
     narrowing's job, one row above. The filter asks the same printed-subtype
     reader the layer seed uses."""
-    from engine.layer_bridge import printed_shape
+    from engine.printed_characteristics import printed_shape
 
     pool = set_pool("M21")
     _, dog = printed_shape(pool["Alpine Watchdog"])

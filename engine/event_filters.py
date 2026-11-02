@@ -368,7 +368,7 @@ def _self_becomes_target_filter(
         # answer and the printed face is the whole of what is testable.
         if event.payload.get("targeted_by") != "a spell":
             return False
-        from .layer_bridge import printed_shape
+        from .printed_characteristics import printed_shape
 
         card = event.payload.get("targeted_by_card")
         if card is None:
@@ -861,7 +861,7 @@ def _land_played_filter(
     # the seat check above takes.
     wanted_supertype = trig.condition.payload.get("played_land_supertype")
     if wanted_supertype:
-        from .layer_bridge import printed_supertypes
+        from .printed_characteristics import printed_supertypes
 
         played_card = event.subject
         if played_card is None or not hasattr(played_card, "type_line"):

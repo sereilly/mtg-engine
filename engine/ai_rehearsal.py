@@ -719,7 +719,7 @@ def position_digest(game) -> dict:
                 # The sideboard by name, as a graveyard is — a Wish's pick
                 # leaving it is a change — rather than as the repr of every
                 # card a simulated seat holds there, which is the rest of
-                # its set (`ai_simulator.limited_sideboard`).
+                # its set (`limited_deck.limited_sideboard`).
                 key: (
                     repr(sorted(card.name for card in value))
                     if key == "sideboard" else repr(value)

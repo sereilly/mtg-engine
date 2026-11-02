@@ -24,7 +24,7 @@ system has a second ordering rule for:
     613.8c  After each effect is applied, the order of remaining effects is
             reevaluated …
 
-The engine's collectors are per-object (``layer_bridge.collect_type_effects``
+The engine's collectors are per-object (``type_layer.collect_type_effects``
 takes one permanent and cannot see the board), so a board-wide static has
 always been *folded* onto each permanent by a refresh — and three refreshes did
 it three ways, none of them this rule. The land-type statics were chained in
@@ -80,7 +80,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Sequence
 
 from .continuous import Characteristics, ContinuousEffect
-from .layer_bridge import collect_own_type_effects, seed_characteristics
+from .printed_characteristics import seed_characteristics
+from .type_layer import collect_own_type_effects
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .models import Permanent

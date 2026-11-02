@@ -2,7 +2,7 @@
 
 Ten shipped creatures carried an ability they do not print, because the seed of
 CR 613 layer 6 searched every static line for keyword words
-(``layer_bridge._printed_abilities``). The sweep that holds the pool is
+(``printed_characteristics._printed_abilities``). The sweep that holds the pool is
 ``tests/engine/test_printed_keyword_seed.py``; this file is the same ten cards
 in a game, because a seed is only wrong where something reads it:
 

@@ -10,7 +10,7 @@ for every card in the pool but two.
 "Mistform Ultimus is every creature type (even if this card isn't on the
 battlefield)." A characteristic-defining ability (CR 604.3) is part of what the
 card *is* in every zone, so it is not an override here but part of the one type
-parse every zone shares (``layer_bridge._printed_shape``, through
+parse every zone shares (``printed_characteristics._printed_shape``, through
 :func:`every_creature_type_subtypes` below) — the printed read every reader
 here already makes. In the layer seed it applies before every layer-4 effect
 (CR 613.3), so a type-setting effect — Conspiracy's first sentence included —
@@ -224,7 +224,7 @@ def card_creature_types(game=None, card=None, seat=None) -> frozenset[str]:
     A **noncreature card is never retyped**: the sentence says "creature cards",
     and CR 205.3d would forbid it in any case.
     """
-    from .layer_bridge import printed_shape
+    from .printed_characteristics import printed_shape
 
     if card is None:
         return frozenset()
@@ -247,7 +247,7 @@ def object_creature_types(game, obj, seat=None) -> frozenset[str]:
     """The effective creature types of **any** object (CR 205.3 over CR 109.1).
 
     A permanent's answer comes out of the layer system, where Conspiracy's first
-    sentence already put it (``layer_bridge.collect_type_effects``); every other
+    sentence already put it (``type_layer.collect_type_effects``); every other
     object's comes out of :func:`card_creature_types` above. Two derivations
     because the two kinds of object have nothing in common — one reads a
     per-object layer stack, the other scans a seat's board — but **one place

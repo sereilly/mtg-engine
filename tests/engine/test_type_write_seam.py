@@ -202,8 +202,10 @@ def test_the_writers_are_the_ones_counted():
 
 
 def test_the_collector_is_the_only_reader_of_the_recorded_changes():
-    """One consumer: ``layer_bridge`` applies the layer. A second caller of
-    ``gained_types()`` is a second opinion about what the effects add up to —
+    """One consumer: the layer system applies them — layer 4's collector
+    (``type_layer``) every reader, and layer 7b's (``layer_bridge``) the P/T
+    half of a gained-types record. A second caller of ``gained_types()`` is a
+    second opinion about what the effects add up to —
     ``Permanent.has_type`` / ``has_supertype`` are the answer."""
     callers: dict[str, set[str]] = {}
     for name, path in _modules():
@@ -217,7 +219,9 @@ def test_the_collector_is_the_only_reader_of_the_recorded_changes():
             word = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
             if word in _READERS:
                 callers.setdefault(word, set()).add(name)
-    assert callers == {word: {"engine/layer_bridge.py"} for word in _READERS}, callers
+    expected = {word: {"engine/type_layer.py"} for word in _READERS}
+    expected["gained_types"] = {"engine/type_layer.py", "engine/layer_bridge.py"}
+    assert callers == expected, callers
 
 
 def _type_writing_instructions():

@@ -41,7 +41,7 @@ class EntryChoicesMixin:
         the timestamp order.** CR 613.2a: "'As … enters' … abilities generate
         copiable effects if they set power and toughness" — layer 1, where
         every later layer starts (CR 613.2c). So it is written at
-        ``layer_bridge.COPIABLE_VALUE``, ahead of every effect the clock has
+        ``printed_characteristics.COPIABLE_VALUE``, ahead of every effect the clock has
         stamped: a Primal Clay that chose 3/3 is 1/1 under a Humility that was
         there first, where a write stamped "now" would have beaten it.
 
@@ -56,7 +56,7 @@ class EntryChoicesMixin:
         for option in permanent.metadata.get("body_options") or ():
             if option.get("keyword"):
                 remove_keyword(permanent, option["keyword"])
-        from ..layer_bridge import COPIABLE_VALUE
+        from ..printed_characteristics import COPIABLE_VALUE
 
         set_base_pt(
             permanent, int(body["power"]), int(body["toughness"]),
@@ -506,7 +506,8 @@ class EntryChoicesMixin:
         ``card_creature_types``, the board through ``computed_types``: the two
         readers ``object_creature_types`` names for the two kinds of object.
         """
-        from ..layer_bridge import computed_types, printed_shape
+        from ..layer_bridge import computed_types
+        from ..printed_characteristics import printed_shape
         from ..object_creature_types import card_creature_types
 
         counts: dict[str, int] = {}
@@ -606,7 +607,7 @@ class EntryChoicesMixin:
         nothing outside the battlefield is retyped), which is the most the
         spell could return; an empty pile falls back to the reading above.
         """
-        from ..layer_bridge import printed_shape
+        from ..printed_characteristics import printed_shape
 
         if card is not None and self._cast_type_narrows_graveyard_targets(card):
             pile: dict[str, int] = {}

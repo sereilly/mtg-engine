@@ -299,7 +299,7 @@ def _cast_narrowing_admits(
     # answer for a card *type* word too, which is the `cast_type` row's job.
     cast_subtype = trig.condition.payload.get("cast_subtype")
     if cast_subtype:
-        from .layer_bridge import printed_shape
+        from .printed_characteristics import printed_shape
 
         _, subtypes = printed_shape(card)
         if cast_subtype.lower() not in subtypes:

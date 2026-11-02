@@ -196,7 +196,7 @@ def test_an_untapped_only_buff_is_evaluated_when_pt_is_read():
 def test_a_variable_printed_stat_is_not_read_as_zero():
     """"*" power is supplied by a characteristic-defining ability in 7a. The
     seed must leave it unset rather than defaulting to 0."""
-    from engine.layer_bridge import seed_characteristics
+    from engine.printed_characteristics import seed_characteristics
 
     perm = Permanent(card=_creature("*", "*"))
     seeded = seed_characteristics(perm)

@@ -906,7 +906,7 @@ class Permanent:
 
         Every reader of "is this snow / legendary / basic?" that holds a
         ``Permanent`` must come here rather than to
-        ``layer_bridge.printed_supertypes``, for the reason ``has_type`` exists
+        ``printed_characteristics.printed_supertypes``, for the reason ``has_type`` exists
         one layer down: the printed line is the seed, not the answer.
         ``printed_supertypes`` stays for the callers that hold a *card* — a
         thing in a hand or a graveyard, where CR 613 does not apply at all.

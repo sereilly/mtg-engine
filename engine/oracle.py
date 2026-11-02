@@ -53,7 +53,8 @@ from functools import lru_cache
 from .models import CardDefinition
 from .faces import CAST_FACE_LAYOUTS, face_cards, is_multi_face
 from .program_store import seedable
-from .oracle_types import (ActivatedAbilityCost, ModalOption,
+from .activated_ability_cost import ActivatedAbilityCost
+from .oracle_types import (ModalOption,
                            OracleInstruction, OracleProgram, OracleToken,
                            ParsedActivatedAbility, ParsedTriggeredAbility,
                            TriggerCondition, compilation_cache)
