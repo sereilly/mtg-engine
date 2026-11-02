@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from .models import CardDefinition
 from .oracle import compile_card_oracle
+from .text_changes import spell_text_card
 from .targeting import (
     derive_cast_spec,
     role_is_stack,
@@ -350,7 +351,10 @@ class StackTargetsMixin:
             # stack (which carry an ability_instruction) can't be countered/copied.
             if getattr(item, "ability_instruction", None) is not None:
                 continue
-            item_card = getattr(item, "card", None)
+            # What the candidate spell is, as any text change made it
+            # (CR 612): an Elf spell an Artificial Evolution made a Goblin is
+            # offered to "target Goblin spell" and not to "target Elf spell".
+            item_card = spell_text_card(item)
             if item_card is None:
                 continue
             if instant_sorcery_only and item_card.primary_type not in ("instant", "sorcery"):

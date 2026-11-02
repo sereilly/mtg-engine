@@ -27,6 +27,7 @@ from __future__ import annotations
 from .models import CardDefinition, Permanent, PlayerState
 from .targeting import role_is_stack, spec_roles
 from .target_roles import role_announcement, role_relation_holds, roles_may_end_at
+from .text_changes import spell_text_card
 
 
 def _role_object_key(obj) -> tuple:
@@ -510,7 +511,8 @@ class RoleTargetsMixin:
                 legality.append(False)
                 continue
             options = self.role_target_options(
-                item.caster_index, item.card, spec, tuple(objects[:position]),
+                item.caster_index, spell_text_card(item), spec,
+                tuple(objects[:position]),
                 for_cast=True,
             )
             wanted = _role_object_key(chosen)
@@ -559,7 +561,7 @@ class RoleTargetsMixin:
             offered = {
                 entry.get("seat")
                 for entry in self._enumerate_targets(
-                    item.caster_index, item.card, dict(roles[position]),
+                    item.caster_index, spell_text_card(item), dict(roles[position]),
                     for_cast=False,
                 )
                 if entry.get("kind") == "player"

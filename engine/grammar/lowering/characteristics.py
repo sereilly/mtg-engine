@@ -61,6 +61,7 @@ from ._common import (
     _restrictions_beyond,
     _signed,
     _targets_only,
+    spell_or_permanent_description,
     testable_filter_payload,
 )
 
@@ -861,10 +862,14 @@ def _lower_switch_pt(node: ast.SwitchPT) -> tuple[OracleInstruction, ...]:
 def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:
     """``Change the text of target spell or permanent …`` (CR 612).
 
-    For the Lace cycle's own wording no ``targets`` description is emitted: the
-    vocabulary has no way to say "a spell on the stack *or* a permanent", so
-    describing it at all would drop one of the two zones from the picker, and
-    ``engine/legality_enumeration.py`` keeps answering ``spell_or_permanent``.
+    "Target **spell or permanent**" (Sleight of Mind, Magical Hack, Crystal
+    Spray, Alter Reality, Artificial Evolution) is described as the union
+    (``SPELL_OR_OBJECT_TARGET``), which ``target_descriptions`` turns into the
+    ``spell_or_permanent`` picker Illusion and the Laces answer with: a
+    permanent or a spell on the stack, and the handler asks which half the
+    announcement named. A spell's change is recorded on its stack object and
+    read through ``text_changes.spell_text_card``; "target permanent" (Mind
+    Bend, Whim of Volrath) keeps the kind's ``permanent`` row.
 
     A **narrowed** subject is the opposite case. "Change the text of target
     white enchantment you control that doesn't have cumulative upkeep"
@@ -893,19 +898,17 @@ def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:
         payload["duration"] = "until_end_of_turn"
     assert isinstance(node.subject, ast.TargetSpec)
     # "…target **spell or permanent**" (Sleight of Mind, Magical Hack, Crystal
-    # Spray). The noun records the union now (``ObjectFilter.also_spell``), and
-    # this lowering carries it **without acting on the spell half** — stated
-    # here rather than left to the kind's fixed ``permanent`` row, because a
-    # union a lowering consumes in silence is how the half went unnoticed.
-    # What it would take is a text channel on a stack object: a spell's text
-    # is its ``StackItem.card``, every stack reader reads that field, and the
-    # card it holds is also the card that goes to the graveyard — so a changed
-    # spell needs an effective card beside its printed one (and CR 400.7a's
-    # carry to the permanent it becomes, as ``color_changes`` does for a
-    # colour). Until then the three offer a permanent and change a permanent,
-    # exactly as before the field existed; no compiled program moves.
+    # Spray, Alter Reality, Artificial Evolution). The noun records the union
+    # (``ObjectFilter.also_spell``) and the description says it, so the picker
+    # offers the stack too and the handler records a spell's change on its
+    # stack object (``StackItem.text_change_effects``). The bare union only:
+    # a narrowing beside it would have to be asked of both halves.
     union = frozenset({"also_spell"})
-    if _filter_payload(node.subject.filter, carried_separately=union):
+    if node.subject.filter.also_spell:
+        payload["targets"] = spell_or_permanent_description(
+            node.subject, node, effect="a text change",
+        )
+    elif _filter_payload(node.subject.filter, carried_separately=union):
         _describe_targets(payload, node.subject, carried_separately=union)
     if node.mode == "creature_type":
         return _lower_creature_type_text_change(node, payload)

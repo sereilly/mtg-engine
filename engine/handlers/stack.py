@@ -34,6 +34,7 @@ from ..oracle_types import (COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER
 from ._amounts import count_from_payload, resolve_amount
 from ._filters import _card_matches_filter
 from ._targets import triggering_spell
+from ..text_changes import spell_text_card
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -686,7 +687,10 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # same question asked of the battlefield instead of the spell — one
         # predicate with both halves behind it, so no counter path can come to
         # ask only one of them.
-        uncounterable = cant_be_countered(game, target.card, target)
+        # Every question below is about what the targeted spell *is* — as
+        # any text change made it (CR 612, ``spell_text_card``).
+        said = spell_text_card(target)
+        uncounterable = cant_be_countered(game, said, target)
         if uncounterable is not None:
             game.log.append(f"{card.name}: {uncounterable}")
             return True, "resolved"
@@ -710,7 +714,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # payload carries is tested against the chosen spell's primary type,
         # the same shape as the colour gate above.
         card_types = instruction.payload.get("card_types")
-        if card_types and not _spell_is_one_of(target.card, card_types):
+        if card_types and not _spell_is_one_of(said, card_types):
             game.log.append(
                 f"{card.name}: {target.card.name} is not "
                 f"{' or '.join(card_types)}, cannot counter"
@@ -723,7 +727,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # "noncreature" word inside `card_types` would have countered exactly
         # the spells the card refuses.
         excluded_types = instruction.payload.get("excluded_types")
-        if excluded_types and _spell_is_one_of(target.card, excluded_types):
+        if excluded_types and _spell_is_one_of(said, excluded_types):
             game.log.append(
                 f"{card.name}: {target.card.name} is "
                 f"{' or '.join(excluded_types)}, cannot counter"
@@ -735,7 +739,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # questions and a phrase produces exactly one of them.
         any_classes = instruction.payload.get("any_classes")
         if any_classes and not _spell_is_one_of_classes(
-            target.card, [tuple(entry) for entry in any_classes]
+            said, [tuple(entry) for entry in any_classes]
         ):
             game.log.append(
                 f"{card.name}: {target.card.name} is not "
@@ -1010,7 +1014,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         described = instruction.payload.get("countered_filter")
         if destination is not None and described:
             if not _card_matches_filter(
-                countered.card, described,
+                spell_text_card(countered), described,
                 game=game, owner=countered.caster_index,
             ):
                 destination = None

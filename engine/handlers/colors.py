@@ -8,9 +8,9 @@ the stack, the source, an Aura's host. Every colour is written through
 the CR 613.7 timestamp inside the write.
 
 ``mark_text_modified`` sits beside them because the two are told apart by one
-sentence each: Sleight of Mind rewrites a colour *word* in a permanent's text
-and does not recolour it, Magical Hack rewrites a basic land type word, and
-Mind Bend offers both (``engine/text_changes.py``).
+sentence each: Sleight of Mind rewrites a colour *word* in a spell's or a
+permanent's text and does not recolour it, Magical Hack rewrites a basic land
+type word, and Mind Bend offers both (``engine/text_changes.py``).
 
 The handler twin of ``engine/grammar/lowering/colors.py``. Split out of
 ``board_misc.py`` at the 2,000-line cap's split round.
@@ -24,7 +24,8 @@ from ..color_changes import change_color, recolor_spell
 from ..oracle_types import (BLOCK_PAIR_SUBJECT, CHOSEN_COLOR_THIS_WAY,
                             SPELL_OR_OBJECT_TARGET, SUBJECT_FROM_TRIGGER)
 from ..text_changes import (LAND_TYPE_WORDS, change_color_word,
-                            change_creature_word, change_land_word)
+                            change_creature_word, change_land_word,
+                            current_text_card, spell_text_card)
 from ._targets import (attached_host, block_pair_permanents,
                        resolve_target_permanent, resolve_target_permanents,
                        described_target_predicate)
@@ -46,6 +47,30 @@ _SYMBOL_TO_LAND_TYPE = LAND_TYPE_WORDS
 def mark_text_modified(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
     card = context.card
+    targets = instruction.payload.get("targets") or {}
+    # "Change the text of target **spell** or permanent" (Sleight of Mind,
+    # Magical Hack, Crystal Spray, Alter Reality, Artificial Evolution). One
+    # target in one of two zones, and which one is what the announcement named:
+    # a stack object in the context is the answer "a spell", and the whole
+    # answer — a spell that has since left is CR 608.2b's illegal target, never
+    # a reason to look on the battlefield (the recolour handler below draws the
+    # same line for Illusion). The change is recorded on the stack object
+    # (``StackItem.text_change_effects``) by the same writers a permanent's
+    # goes through, and every reader of what that spell says folds it
+    # (``text_changes.spell_text_card``): its program as it resolves, the spec
+    # CR 608.2b re-asks its targets by — the cards' own ruling: "The text
+    # change will (probably) cause it to be countered since the targets will be
+    # illegal" — and, through CR 400.7a, the permanent it becomes.
+    if targets.get("kind") == SPELL_OR_OBJECT_TARGET and context.stack_target is not None:
+        item = context.stack_target
+        if not stack_target_still_described(game, targets, item):
+            game.log.append(f"{card.name}: no valid spell to change the text of")
+            return True, "resolved"
+        _change_text(
+            game, instruction, context, item, f"{item.card.name} (on the stack)",
+            on_stack=True,
+        )
+        return True, "resolved"
     # The permanent the announcement named, **by id** (CR 400.7), through the
     # resolver every other targeted handler uses — "target permanent", so the
     # predicate is every permanent rather than its creature default. This read
@@ -68,7 +93,7 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     # declines to affect.
     from ..subject_filters import subject_matches
 
-    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    described = targets.get("filter") or {}
     if described and not subject_matches(
         game, target_perm, described,
         # CR 109.5: "you control" is the seat whose ability this is, and
@@ -78,6 +103,38 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     ):
         game.log.append(f"{card.name}: no legal permanent to change the text of")
         return True, "resolved"
+    _change_text(
+        game, instruction, context, target_perm,
+        target_perm.card.name if target_perm is not None else "",
+        on_stack=False,
+    )
+    return True, "resolved"
+
+
+def _whose_text(subject, subject_name: str, on_stack: bool) -> str:
+    """"Grizzly Bears's text", or "Lightning Bolt's text (on the stack)" —
+    the log's words for where a change was written."""
+    if on_stack and subject is not None:
+        return f"{subject.card.name}'s text (on the stack)"
+    return f"{subject_name}'s text"
+
+
+def _change_text(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
+    subject, subject_name: str, *, on_stack: bool,
+) -> None:
+    """Record the text change *instruction* describes on *subject* — the
+    permanent the announcement named, or the spell (``on_stack``) — or log why
+    nothing changed. *subject* is None for a permanent that is gone.
+
+    One body for both halves of "spell or permanent": the words, the
+    restrictions on them and the records are the same; what differs is only
+    where the record goes (the writers in ``engine/text_changes.py`` take
+    either object) and what a permanent's board has to re-derive afterwards —
+    a spell's change is read where its text is (``spell_text_card``), and the
+    board does not cache anything about a spell.
+    """
+    card = context.card
     mode = instruction.payload.get("mode")
 
     new_symbol = (context.choices.get("new_color") or "").upper()
@@ -103,51 +160,58 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     # guessed here. The words themselves were already named at the cast, and
     # both readings of a mana symbol are legal: "R" is red *and* Mountain.
     if mode == "color_word_or_land_type":
-        if target_perm is None:
+        if subject is None:
             game.log.append(f"{card.name}: no permanent to change the text of")
-            return True, "resolved"
+            return
         game.arm_text_change_vocabulary(
-            game.seat_index(context.caster), target_perm,
+            game.seat_index(context.caster), subject,
             old_symbol, new_symbol, card.name, duration=duration,
         )
-        return True, "resolved"
+        return
 
     if mode == "land_type":
         new_type = _SYMBOL_TO_LAND_TYPE.get(new_symbol)
         old_type = _SYMBOL_TO_LAND_TYPE.get(old_symbol)
-        if old_type is None and target_perm is not None:
+        if old_type is None and subject is not None and not on_stack:
             # A cast that named only the replacement (a headless or AI cast, and
             # every call site before the "from" word existed): on a land the
-            # word being replaced can only be the type it currently has.
-            current = target_perm.basic_land_types
+            # word being replaced can only be the type it currently has. A
+            # spell is never a land (CR 305.9's land is played, not cast), so
+            # it has no such default.
+            current = subject.basic_land_types
             old_type = current[0] if len(current) == 1 else None
-        if target_perm is not None and new_type and old_type:
+        if subject is not None and new_type and old_type:
             # Magical Hack rewrites existing words: the old land type must
             # actually be written somewhere on the permanent. That covers a
             # printed type line ("Basic Land — Mountain"), a printed landwalk
             # (Bog Wraith's "Swampwalk") and a land word inside a granted
             # ability (Goblin King's "Other Goblins … have mountainwalk") — but
             # never grants islandwalk from nothing (White Knight). The
-            # *effective* text, so a second Hack rewrites what the first wrote.
-            effective = target_perm.effective_card
+            # *effective* text, so a second Hack rewrites what the first wrote
+            # — and a spell's, its text as changed so far.
+            effective = current_text_card(subject)
             written = " ".join(
                 (effective.type_line, effective.oracle_text, *effective.keywords)
             ).lower()
-            if old_type in written:
-                change_land_word(
-                    target_perm, old_type, new_type, label=card.name,
-                    duration=duration,
-                )
+            if old_type not in written:
                 game.log.append(
-                    f"{card.name} changed {old_type} to {new_type} in {target_perm.card.name}'s text"
-                )
-                game._recalculate_lord_buffs()
-            else:
-                game.log.append(
-                    f"{card.name} had no effect: {target_perm.card.name} has no"
+                    f"{card.name} had no effect: {subject_name} has no"
                     f" {old_type.title()} land type in its text"
                 )
-        return True, "resolved"
+            elif change_land_word(
+                subject, old_type, new_type, label=card.name, duration=duration,
+            ):
+                where = _whose_text(subject, subject_name, on_stack)
+                game.log.append(f"{card.name} changed {old_type} to {new_type} in {where}")
+                if not on_stack:
+                    game._recalculate_lord_buffs()
+            else:
+                # The card's ruling: "It can't change a word to the same word."
+                game.log.append(
+                    f"{card.name} had no effect: it can't change {old_type} to"
+                    " the same word"
+                )
+        return
 
     # Artificial Evolution: "…replacing all instances of one creature type with
     # another. The new creature type can't be Wall." The words were chosen as
@@ -155,36 +219,39 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     # choose the words to change on resolution"), and both restrictions on the
     # answer are asked again here rather than trusted to the prompt.
     if mode == "creature_type":
-        _change_creature_type_word(game, instruction, context, target_perm)
-        return True, "resolved"
+        _change_creature_type_word(
+            game, instruction, context, subject, subject_name, on_stack=on_stack,
+        )
+        return
 
     # Sleight of Mind: replace one color word with another in the target's text.
     # Recorded as an ordered layer-3 contribution and applied once, by
-    # Permanent.effective_card. It does NOT recolor the permanent.
+    # Permanent.effective_card (a spell's, by ``spell_text_card``). It does NOT
+    # recolor the object.
     if mode == "color_word":
-        if target_perm is not None and change_color_word(
-            target_perm, old_symbol, new_symbol, label=card.name,
+        if subject is not None and change_color_word(
+            subject, old_symbol, new_symbol, label=card.name,
             duration=duration,
         ):
-            game.log.append(f"{card.name} changed {old_symbol} text to {new_symbol} on {target_perm.card.name}")
-        return True, "resolved"
+            game.log.append(f"{card.name} changed {old_symbol} text to {new_symbol} on {subject_name}")
+        return
 
     game.log.append(f"{card.name} applied a text change effect")
-    return True, "resolved"
 
 
 def _change_creature_type_word(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
-    target_perm,
+    subject, subject_name: str, *, on_stack: bool,
 ) -> None:
-    """Record Artificial Evolution's word swap on *target_perm* (CR 612, layer
-    3), from the two words the resolution recorded.
+    """Record Artificial Evolution's word swap on *subject* (CR 612, layer
+    3) — a permanent, or a spell on the stack (``on_stack``) — from the two
+    words the resolution recorded.
 
-    Nothing is recorded — and the log says so — when there is no permanent,
+    Nothing is recorded — and the log says so — when there is no object,
     when either word is missing or no creature type, when they are the same
     word ("It can't change a word to the same word"), or when the new word is
     one the card forbids ("The new creature type can't be Wall"). A word that is
-    nowhere on the permanent is legal (another ruling: it "can target a card
+    nowhere on the object is legal (another ruling: it "can target a card
     with no appropriate words on it") and simply changes nothing.
 
     A creature type an *effect* set (a Mistform's own ability, Unnatural
@@ -194,24 +261,27 @@ def _change_creature_type_word(
     """
     card = context.card
     payload = instruction.payload
-    if target_perm is None:
+    if subject is None:
         game.log.append(f"{card.name}: no permanent to change the text of")
         return
+    where = _whose_text(subject, subject_name, on_stack)
     old = str(context.results.get(str(payload.get("old_type_from") or "")) or "").lower()
     new = str(context.results.get(str(payload.get("new_type_from") or "")) or "").lower()
     excluded = {str(word).lower() for word in (payload.get("excluded_new") or ())}
     if new in excluded or not change_creature_word(
-        target_perm, old, new, label=card.name,
+        subject, old, new, label=card.name,
         duration=payload.get("duration"),
     ):
         game.log.append(
             f"{card.name}: no two different creature types were chosen, so "
-            f"{target_perm.card.name}'s text is unchanged"
+            f"{where} is unchanged"
         )
         return
-    game.log.append(
-        f"{card.name} changed {old} to {new} in {target_perm.card.name}'s text"
-    )
+    game.log.append(f"{card.name} changed {old} to {new} in {where}")
+    if on_stack:
+        # Nothing on the battlefield reads a spell's words: the spell's own
+        # readers fold them where they ask (``spell_text_card``).
+        return
     # A lord's rewritten "Other Elf creatures" reaches a different set, and a
     # rewritten type line is a different creature to every type-scoped static
     # (CR 613.8a): both re-derived for the whole board.
@@ -384,7 +454,7 @@ def stack_target_still_described(game: Game, described: dict, item) -> bool:
     if card_types:
         from .stack import _spell_is_one_of
 
-        return _spell_is_one_of(item.card, card_types)
+        return _spell_is_one_of(spell_text_card(item), card_types)
     return True
 
 

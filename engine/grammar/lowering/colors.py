@@ -25,13 +25,13 @@ everything either uses is in ``_common``, ``_events`` and ``_filters``.
 """
 
 from ...oracle_types import (BLOCK_PAIR_SUBJECT, CHOSEN_COLOR_THIS_WAY,
-                             SPELL_OR_OBJECT_TARGET, SUBJECT_FROM_TRIGGER,
-                             OracleInstruction)
+                             SUBJECT_FROM_TRIGGER, OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
 from ._common import (_describe_several_targets, _describe_targets,
                       _is_enchanted, _is_source, _names_several_targets,
-                      _restrictions_beyond, testable_filter_payload)
+                      _restrictions_beyond, spell_or_permanent_description,
+                      testable_filter_payload)
 from ._events import binds_block_pair
 
 #: What a recolour can be told about the **spell** it targets, and the whole of
@@ -65,33 +65,6 @@ def _spell_target_description(subject: ast.TargetSpec, node) -> dict[str, object
     if filt.card_types:
         described["card_types"] = list(filt.card_types)
     return described
-
-
-def _spell_or_permanent_description(
-    subject: ast.TargetSpec, node
-) -> dict[str, object]:
-    """The ``targets`` description of "target **spell or permanent**".
-
-    One chosen object in one of two zones (CR 115.1: a target is an object, a
-    player or a zone, and the phrase names two kinds of object). The kind says
-    so in the description's own words — ``spell`` for the stack, ``object`` for
-    the battlefield — and ``target_descriptions._from_targets_payload`` turns it into the
-    ``spell_or_permanent`` picker the Lace cycle's kind row has always answered
-    with, so the union has one spec whichever way a card reaches it.
-
-    The bare union only. A narrowing beside it ("target **red** spell or
-    permanent") would have to be asked of both halves, and nothing here tests
-    one of a spell; "up to one" and a plural count are announcements the
-    one-object handler does not read.
-    """
-    beyond = _restrictions_beyond(subject.filter, frozenset({"also_spell"}))
-    if beyond or subject.quantifier != "target" or _names_several_targets(subject):
-        raise LoweringError(
-            "a recolour names one spell or permanent and narrows neither"
-            + (": " + ", ".join(beyond) if beyond else ""),
-            node=node,
-        )
-    return {"quantifier": "target", "kind": SPELL_OR_OBJECT_TARGET}
 
 
 def _lower_become_color(
@@ -252,7 +225,9 @@ def _lower_become_color(
                     "one spell or permanent takes one chosen colour", node=node
                 )
             union: dict[str, object] = {
-                "targets": _spell_or_permanent_description(node.subject, node)
+                "targets": spell_or_permanent_description(
+                    node.subject, node, effect="a recolour",
+                )
             }
             if until_eot:
                 union["until_eot"] = True
@@ -450,5 +425,5 @@ def _lower_become_color(
                 "an indefinite recolour is aimed at a spell, or at a spell or "
                 "permanent; this phrase names neither", node=node,
             )
-        _spell_or_permanent_description(node.subject, node)
+        spell_or_permanent_description(node.subject, node, effect="a recolour")
     return (OracleInstruction("recolor_target_from_text", "", payload),)

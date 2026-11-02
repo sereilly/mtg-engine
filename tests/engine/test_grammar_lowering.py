@@ -4044,17 +4044,29 @@ def test_a_text_change_the_engine_cannot_perform_is_not_claimed():
     assert creature.instructions[-1].payload["mode"] == "creature_type"
 
 
-def test_text_change_describes_no_target():
-    """The Lace cycle's rule: the ``targets`` vocabulary cannot say "a spell on
-    the stack *or* a permanent", so describing it at all would drop one of the
-    two zones from the picker. ``engine/legality.py`` keeps answering."""
+def test_text_change_describes_the_spell_or_permanent_union():
+    """"Target **spell or permanent**" is described as the union
+    (``SPELL_OR_OBJECT_TARGET``), the description Illusion's recolour carries
+    and ``target_descriptions`` turns into the ``spell_or_permanent`` picker —
+    so the stack is offered beside the battlefield and the handler records a
+    named spell's change on its stack object (kg3). "Target permanent" (Mind
+    Bend) is left to the kind's ``permanent`` row, undescribed."""
     result = compile_line(
         "Change the text of target spell or permanent by replacing all "
         "instances of one color word with another.",
         card_name="Sleight of Mind",
     )
 
-    assert result.instructions[0].payload == {"mode": "color_word"}
+    assert result.instructions[0].payload == {
+        "mode": "color_word",
+        "targets": {"quantifier": "target", "kind": "spell_or_object"},
+    }
+    permanent_only = compile_line(
+        "Change the text of target permanent by replacing all instances of one "
+        "color word with another or one basic land type with another.",
+        card_name="Mind Bend",
+    )
+    assert permanent_only.instructions[0].payload == {"mode": "color_word_or_land_type"}
 
 
 def test_linked_control_matches_the_rule_it_replaces():

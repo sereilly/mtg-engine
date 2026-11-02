@@ -241,9 +241,13 @@ def stack_static_cost_sources(stack) -> list[tuple]:
     that target **it**" is a fact about which *object* a spell chose, and two
     copies of one card on the stack are two objects (CR 109.1 / CR 601.2c).
     """
+    from .text_changes import spell_text_card
+
     found = []
     for item in stack or ():
-        card = getattr(item, "card", None)
+        # What the object says (CR 612): a text change made to a spell on the
+        # stack rewrites the static it prints there too.
+        card = spell_text_card(item)
         if card is None:
             continue
         modifiers = stack_static_cost_modifiers(
@@ -256,9 +260,11 @@ def stack_static_cost_sources(stack) -> list[tuple]:
 
 def stack_static_grant_sources(stack) -> list[tuple]:
     """Each object on *stack* granting a board-wide static, paired with it."""
+    from .text_changes import spell_text_card
+
     found = []
     for item in stack or ():
-        card = getattr(item, "card", None)
+        card = spell_text_card(item)
         if card is None:
             continue
         for static in stack_static_grants(

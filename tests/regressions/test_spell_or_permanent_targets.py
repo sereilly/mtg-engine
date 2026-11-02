@@ -16,11 +16,13 @@ The five Laces were never affected — their instruction kind carries a fixed
 that worked. ``ObjectFilter.also_spell`` records the union now and each
 lowering that meets it says what it does with the spell half.
 
-Three shipped cards print the phrase for a **text** change (Sleight of Mind,
-Magical Hack, Crystal Spray) and their spell half is still not built — a text
-change needs a text channel on a stack object. They are held here to exactly
-what they did before: a permanent picker, and a named spell refused at
-announcement rather than accepted and dropped.
+Five shipped cards print the phrase for a **text** change (Sleight of Mind,
+Magical Hack, Crystal Spray, Alter Reality, Artificial Evolution). Their spell
+half waited for a text channel on a stack object, which kg3 built
+(``StackItem.text_change_effects``, read through
+``text_changes.spell_text_card``): they derive the same picker now, and a
+named spell is changed. What the change then does is
+``tests/rules/test_kg3_textspell_text_change_on_a_spell.py``.
 """
 
 from __future__ import annotations
@@ -159,54 +161,70 @@ def test_blind_seers_spell_that_has_left_is_not_swapped_for_a_permanent(catalog_
     assert not any("became" in line for line in game.log)
 
 
-# --- The three text-changers: measured, and held where they were -----------
+# --- The text-changers: the union, both halves --------------------------------
 
 
 @pytest.mark.parametrize(
-    "name", ["Crystal Spray", "Magical Hack", "Sleight of Mind"],
+    "name", ["Crystal Spray", "Magical Hack", "Sleight of Mind", "Alter Reality"],
 )
-def test_a_text_change_still_offers_permanents_alone(catalog_by_name, name):
-    """"Change the text of target spell or permanent…" The union is recorded
-    and this lowering carries it without acting on the spell half, so the spec
-    is the ``permanent`` one it always was — the spell half is declined, by
-    name, in ``lowering/characteristics._lower_change_text``."""
+def test_a_text_change_offers_a_spell_or_a_permanent(catalog_by_name, name):
+    """"Change the text of target spell or permanent…" derives the union's
+    picker, the one Illusion and the Laces answer with: the Bears and the Bolt
+    on the stack."""
     card = catalog_by_name[name]
     program = compile_card_oracle(card)
 
     assert program.supported
-    assert derive_cast_spec(card, program) == {"kind": "permanent"}
+    assert derive_cast_spec(card, program) == {"kind": "spell_or_permanent"}
 
     game = _duel()
     _put(game, 1, catalog_by_name["Grizzly Bears"])
     _bolt(game, catalog_by_name)
     offered = game.cast_target_spec(0, card)
-    assert [(entry["kind"], entry["name"]) for entry in offered["valid_targets"]] == [
-        ("permanent", "Grizzly Bears"),
+    assert sorted((entry["kind"], entry["name"]) for entry in offered["valid_targets"]) == [
+        ("permanent", "Grizzly Bears"), ("stack", "Lightning Bolt"),
     ]
 
 
 @pytest.mark.parametrize(
-    "name", ["Crystal Spray", "Magical Hack", "Sleight of Mind"],
+    "name", ["Crystal Spray", "Magical Hack", "Sleight of Mind", "Alter Reality"],
 )
-def test_a_text_change_aimed_at_a_spell_is_refused_not_spent(catalog_by_name, name):
-    """What the declined half looks like to a caller that names a spell
-    anyway: the announcement is refused with the card in hand. It used to be
-    accepted, the stack object recorded and ignored, and the card spent on a
-    text change of nothing."""
+def test_a_text_change_aimed_at_a_spell_is_accepted_and_changes_the_spell(
+    catalog_by_name, name,
+):
+    """A caller that names the spell is accepted, the text-changer spent, and
+    the change recorded on the Bolt's stack object — never on the Bears beside
+    it. A colour word is recorded whether or not the Bolt prints it (the
+    rulings: it "can target a card with no appropriate words on it"); Magical
+    Hack asks that its land word be written, and Crystal Spray offers only the
+    vocabularies that are, so the Bolt — printing neither — keeps no record of
+    theirs and the log says why."""
     card = catalog_by_name[name]
     game = _duel()
-    _put(game, 1, catalog_by_name["Grizzly Bears"])
-    _bolt(game, catalog_by_name)
+    bears = _put(game, 1, catalog_by_name["Grizzly Bears"])
+    bolt = _bolt(game, catalog_by_name)
     game.players[0].hand = [card]
 
-    refused = game.queue_from_hand(
+    accepted = game.queue_from_hand(
         0, name, target_stack_index=0, new_color="U", old_color="R",
     )
 
-    assert not refused.supported
-    assert "targets nothing on the stack" in refused.details
-    assert game.players[0].hand == [card]
-    assert [item.card.name for item in game.stack] == ["Lightning Bolt"]
+    assert accepted.supported, accepted.details
+    assert game.players[0].hand == []
+    assert game.stack[-1].target_stack_item is bolt
+    assert game.resolve_top_of_stack()
+    assert not bears.metadata.get("text_change_effects")
+    if name == "Magical Hack":
+        assert bolt.text_change_effects == []
+        assert any("has no Mountain land type in its text" in line for line in game.log)
+    elif name == "Crystal Spray":
+        assert bolt.text_change_effects == []
+        assert (
+            "Crystal Spray had no effect: Lightning Bolt (on the stack) has no such "
+            "word in its text" in game.log
+        )
+    else:
+        assert [(c["from"], c["to"]) for c in bolt.text_change_effects] == [("red", "blue")]
 
 
 def test_unsubstantiate_keeps_its_own_union(catalog_by_name):

@@ -37,6 +37,8 @@ from ...prevention.shields import carry_spell_shields_onto_permanent
 from ...resumption import run_resumable
 from ...state_triggers import release_latch
 from ...target_descriptions import ANNOUNCED_SEAT
+from ...text_changes import (carry_spell_text_changes, spell_text_card,
+                             spell_text_of)
 from ...targeting import graveyard_target_spec
 
 
@@ -793,9 +795,8 @@ class StackResolutionMixin:
         CR 608.2b to re-check."""
         if item.ability_instruction is not None:
             return False
-        # The spell's own card: an instant or sorcery on the stack *is* the
-        # card (no permanent's layers to read through).
-        spell = item.card
+        # The spell's own card, as any text change made it (CR 612).
+        spell = spell_text_card(item)
         spec = graveyard_target_spec(spell, compile_card_oracle(spell)) or {}
         return bool(spec.get(ANNOUNCED_SEAT) and spec.get("own_graveyard_only"))
 
@@ -951,6 +952,8 @@ class StackResolutionMixin:
                 caster,
                 target,
                 item.card,
+                # CR 707.2: a copy carries no text change, so its printed text.
+                text_card=spell_text_card(item),
                 target_permanent_index=item.target_permanent_index,
                 target_permanent_id=item.target_permanent_id,
                 x_value=item.x_value,
@@ -973,7 +976,7 @@ class StackResolutionMixin:
             self.log.append(f"{item.card.name} (copy) resolved")
             return
 
-        classification = classify_card(item.card)
+        classification = classify_card(spell_text_card(item))
         # "Counter target spell. **Its controller** loses 3 life." (Undermine.)
         # An instant or sorcery whose every target is a spell on the stack is
         # about that spell's controller — the seat the announcement already
@@ -1006,6 +1009,9 @@ class StackResolutionMixin:
             owner_index=item.owner_index,
             leaves_to_exile=leaves_stack_to_exile(item),
             target_graveyard_card=item.target_graveyard_card,
+            # CR 612: read as it resolves, carried onto the permanent it
+            # becomes (CR 400.7a); ``card`` stays the printed card.
+            text_change_effects=item.text_change_effects,
         )
         return
     def _resolve_card(
@@ -1059,8 +1065,13 @@ class StackResolutionMixin:
         # channel an ability's context already carries, which the role scope
         # reads its card from (``handlers/_targets.resolve_role_graveyard_card``).
         target_graveyard_card=None,
+        # ``StackItem.text_change_effects`` (CR 612): *card* is the printed
+        # card that moves; what the spell says is *card* with these applied,
+        # folded once below (``text_card``) for every text read here.
+        text_change_effects=(),
     ) -> None:
         caster = self.players[caster_index]
+        text_card = spell_text_of(card, text_change_effects)
         owner_seat = caster_index if owner_index is None else owner_index
         owner = self.players[owner_seat]
         primary_type = card.primary_type
@@ -1100,6 +1111,9 @@ class StackResolutionMixin:
             # reads the colour it arrives with — and with the effect's own
             # duration and timestamp (``color_changes``).
             carry_spell_color_change(choices, permanent)
+            # …and its text twin (the rulings: "the permanent will retain the
+            # text change until the effect wears off"), before the entry.
+            carry_spell_text_changes(text_change_effects, permanent)
             # CR 400.7c, its prevention twin: "Prevention effects that apply to
             # damage from a permanent spell on the stack continue to apply to
             # damage from the permanent that spell becomes" — a shield hung on
@@ -1208,7 +1222,7 @@ class StackResolutionMixin:
             self._apply_global_buff(caster, card)
             is_aura = "Aura" in card.type_line
             if not is_aura and copy_on_enter_type(
-                compile_card_oracle(card).normalized_text or ""
+                compile_card_oracle(text_card).normalized_text or ""
             ) is not None:
                 # **The cast's target was the object to copy.** A permanent
                 # that offers a copy choice as it enters (Clone, Vesuvan
@@ -1280,7 +1294,7 @@ class StackResolutionMixin:
             # remaining on the battlefield unattached (MTG Rule 303.4g)
             if (
                 "Aura" in card.type_line
-                and aura_enchant_clause(card.oracle_text) is not None
+                and aura_enchant_clause(text_card.oracle_text) is not None
                 and permanent.metadata.get("attached_to") is None
             ):
                 holder = self.controller_index_of(permanent)
@@ -1396,6 +1410,7 @@ class StackResolutionMixin:
                         caster,
                         self.players[seat],
                         card,
+                        text_card=text_card,
                         target_permanent_index=mode.target_permanent_index,
                         target_permanent_id=mode.target_permanent_id,
                         x_value=x_value,
@@ -1413,6 +1428,7 @@ class StackResolutionMixin:
                 caster,
                 target,
                 card,
+                text_card=text_card,
                 target_permanent_index=target_permanent_index,
                 target_permanent_id=target_permanent_id,
                 x_value=x_value,

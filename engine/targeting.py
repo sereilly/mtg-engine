@@ -67,6 +67,7 @@ from .target_roles import spec_roles
 from .target_descriptions import GRAVEYARD_TARGET_KIND, _TYPE_FILTER_TO_KIND
 from .cost_pickers import _cost_picker_spec
 from .payload_target_specs import _X_FROM_COUNT
+from .text_changes import spell_text_card
 from .instruction_targets import (_first_described_slot, _from_instructions,
                                   _nested_steps)
 from .cast_targets import (_as_kicked, _cast_cost_picker, _cast_target_spec,
@@ -735,7 +736,7 @@ def spell_targets(game, item) -> tuple[tuple[int, ...], tuple[int, ...]]:
     from .oracle import compile_card_oracle
     from .stack_targets import permanent_spell_targets_nothing
 
-    card = getattr(item, "card", None)
+    card = spell_text_card(item)
     if card is None or getattr(item, "ability_instruction", None) is not None:
         return (), ()
     if permanent_spell_targets_nothing(item):
@@ -812,7 +813,7 @@ def stack_object_target_spec(item) -> dict | None:
         if instruction is None:
             return None
         return _from_instructions((instruction,))
-    card = getattr(item, "card", None)
+    card = spell_text_card(item)
     if card is None:
         return None
     from .oracle import compile_card_oracle
@@ -876,7 +877,7 @@ def single_spell_target(game, item) -> dict | None:
     # ``stack_object_target_spec`` is the one place that decides.
     from .stack_targets import permanent_spell_targets_nothing
 
-    card = getattr(item, "card", None)
+    card = spell_text_card(item)
     if card is None:
         return None
     if permanent_spell_targets_nothing(item):

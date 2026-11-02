@@ -98,9 +98,12 @@ class GameHelpersMixin:
         if recolored is not None:
             return recolored
         from ..object_colors import card_colors
+        from ..text_changes import spell_text_card
 
+        # The spell as it reads now (CR 612): a characteristic-defining colour
+        # in its text is rewritten by a text change like any other word.
         return tuple(card_colors(
-            self, item.card, getattr(item, "caster_index", None)
+            self, spell_text_card(item), getattr(item, "caster_index", None)
         ))
 
     def _is_creature(self, permanent: Permanent) -> bool:

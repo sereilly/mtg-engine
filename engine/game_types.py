@@ -594,6 +594,17 @@ class StackItem(_TargetIdsGuard):
     # ``handlers/_targets.resolve_own_combatant``. None for a spell, an
     # activated ability and every trigger whose event named no such object.
     about_permanent_id: int | None = None
+    # CR 612 on a **spell**: the text-changing effects that rewrote this object
+    # while it was on the stack ("Change the text of target spell or
+    # permanent", Sleight of Mind, Magical Hack, Artificial Evolution) — the
+    # same records a permanent keeps under ``text_changes.TEXT_CHANGE_EFFECTS``,
+    # written by the same writers and folded by ``text_changes.spell_text_card``,
+    # which is what every reader of what a spell *says* asks. Never folded into
+    # ``card`` itself, which is also the physical card that goes to a graveyard.
+    # Carried onto the permanent the spell becomes (CR 400.7a,
+    # ``text_changes.carry_spell_text_changes``); never onto a copy (CR 707.2),
+    # which every copy builder constructs fresh, so it starts empty.
+    text_change_effects: list = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.owner_index is None:
