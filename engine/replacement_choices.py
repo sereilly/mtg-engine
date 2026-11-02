@@ -124,8 +124,10 @@ def stamp_resolving(game, choice) -> None:
     seats = getattr(game, "resolving_seats", None)
     if seats and CAUSE_SEAT not in choice.data:
         choice.data[CAUSE_SEAT] = seats[-1]
+    # Only a resolution that chose something: an empty entry pushed back is
+    # the same answer as none, and the prompt's data stays what it was.
     targets = getattr(game, "resolving_targets", None)
-    if targets and RESOLVING_TARGETS not in choice.data:
+    if targets and targets[-1] and RESOLVING_TARGETS not in choice.data:
         choice.data[RESOLVING_TARGETS] = targets[-1]
 
 
