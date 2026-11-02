@@ -17,6 +17,7 @@ Split out of ``damage.py`` at the 2,000-line cap's split round.
 
 from __future__ import annotations
 
+from ..effect_ordering import in_apnap_order
 from ..game_types import target_ids
 from ..resumption import run_resumable
 from ._amounts import resolve_amount
@@ -100,10 +101,12 @@ def _exchange_fight_damage(game, fighter, opponent) -> None:
             asks=True,
         )
 
-    run_resumable(game, [
+    # The two halves are one event's damage, dealt at once, so they are asked in
+    # APNAP order of the creature each is dealt to (CR 616.1's last sentence).
+    run_resumable(game, in_apnap_order(game, [
         (fighter, opponent, fighter_power),
         (opponent, fighter, opponent_power),
-    ], half)
+    ], affected=lambda entry: entry[1]), half)
 
 
 @effect_handler("prepare_then_interact")

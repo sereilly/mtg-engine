@@ -89,9 +89,10 @@ def _counters(permanent) -> int:
 
 
 def _table(kind: str, *, interactive: bool):
-    """Seat 0 holds the Phantom and the extra shield; seat 1 sweeps and holds a
-    Phantom of its own (one applicable effect, nothing to ask) that comes after
-    seat 0's in every sweep's order."""
+    """Seat 0 holds the Phantom and the extra shield; seat 1 — the active
+    player — sweeps and holds a Phantom of its own (one applicable effect,
+    nothing to ask), which every sweep reaches first (APNAP, CR 616.1's last
+    sentence)."""
     game = Game(players=[
         PlayerState("Defender", library=[_POOL["Island"]] * 5),
         PlayerState("Sweeper", library=[_POOL["Island"]] * 5),
@@ -235,7 +236,11 @@ def test_phantom_centaur_under_pestilence_is_asked_and_the_answer_is_honoured():
         assert choice is not None and choice.player_index == 0
         labels = [str(option) for option in choice.data["options"]]
         assert len(labels) == 2
-        assert bears.damage_marked == 0, "nothing behind the question has happened"
+        # CR 616.1's last sentence: Bob is the active player, so his face and
+        # his creature are dealt to (and asked about) first, then Alice's face;
+        # the Centaur, last in APNAP order, is the one asking.
+        assert bears.damage_marked == 1
+        assert [p.life for p in game.players] == [19, 19]
 
         index = next(i for i, label in enumerate(labels) if pick in label.lower())
         assert game.resolve_pending_choice("effect_order", 0, option_index=index)

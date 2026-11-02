@@ -929,7 +929,7 @@ class SacrificeChoicesMixin:
             )
         elif on_short.get("kind") == "damage":
             self._deal_damage_to_player(
-                player, int(on_short.get("amount", 0)),
+                player, int(on_short.get("amount", 0)), asks=True,
                 then=lambda dealt: self.log.append(
                     f"{reason} dealt {dealt} damage to {player.name}"
                 ),

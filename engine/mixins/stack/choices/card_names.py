@@ -149,7 +149,7 @@ class CardNameChoicesMixin:
         miss_damage = 0 if hit else int(data.get("miss_damage", 0) or 0)
         if miss_damage:
             self._deal_damage_to_player(
-                player, miss_damage, source=data.get("_damage_source"),
+                player, miss_damage, source=data.get("_damage_source"), asks=True,
                 then=lambda dealt: self.log.append(
                     f"{player.name} is dealt {dealt} damage for the miss"
                 ),

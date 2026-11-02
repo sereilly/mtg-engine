@@ -648,8 +648,16 @@ class LandTappedForManaMixin:
         # seat, so it executes the instruction against the seat it froze rather
         # than reading it back out of a context it never built.
         amount = int(instruction.payload.get("amount", 1))
+        # Asks CR 616.1e's question (``asks``): the damaged seat is the one
+        # tapping, and a person tapping a land is at the table to answer. What
+        # carries on before the answer — the rest of the cost payment, the
+        # spell it pays for going on the stack — is what by the rules happens
+        # before this trigger resolves anyway (it is not a mana ability and
+        # would use the stack, CR 605.4a); a resolution that tapped the land to
+        # pay an offer (CR 605.3a) waits behind the question, because the
+        # offer's steps are a resumable loop (``engine/resumption.py``).
         self._deal_damage_to_player(
-            player, amount, source=perm,
+            player, amount, source=perm, asks=True,
             then=lambda damage: self.log.append(
                 f"{perm.card.name} triggered: {player.name} took {damage} damage"
             ),

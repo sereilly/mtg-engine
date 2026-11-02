@@ -717,7 +717,7 @@ class EffectsMixin:
         victim_player = self.players[target_seat]
         if target_permanent_index is None:
             self._deal_damage_to_player(
-                victim_player, amount, source=source,
+                victim_player, amount, source=source, asks=True,
                 then=lambda dealt: self.log.append(
                     f"{card_name} dealt {dealt} damage to {victim_player.name} (opponent's choice)"
                 ),
@@ -731,7 +731,7 @@ class EffectsMixin:
             self.log.append(f"{card_name}: '{perm.card.name}' is not a valid 'any target' target (115.4)")
             return
         apply_damage_to_creature(
-            self, perm, amount, source,
+            self, perm, amount, source, asks=True,
             log_message=lambda dealt: f"{card_name} dealt {dealt} damage to {perm.card.name} (opponent's choice)",
         )
 
@@ -965,10 +965,12 @@ class EffectsMixin:
 
         ``restart`` is what re-runs the event, and supplying it is what allows
         the question to be asked at all. ``asks=True`` builds the obvious one —
-        "re-run exactly this call" — and is only honest from inside a resumable
-        loop (``engine/resumption.py``), which is what records the work behind
-        the event. Pass ``restart`` yourself when the re-run has to be wider
-        than this call: the combat damage step does, because it applies the life
+        "re-run exactly this call" — and is only honest where nothing behind
+        the event depends on it: inside a resumable loop
+        (``engine/resumption.py``), which records the work behind the event, or
+        as the last thing its own step does (a prompt's answer, an inline upkeep
+        toll). Pass ``restart`` yourself when the re-run has to be wider than
+        this call: the combat damage step does, because it applies the life
         loss and tallies lifelink from the same outcome.
 
         ``cant_be_prevented`` marks the event as one no prevention effect may
@@ -994,8 +996,8 @@ class EffectsMixin:
             # "Re-run exactly this call" — which is what the answer needs, since
             # `then` carries the consequences and the enclosing loop records the
             # work behind it. Only pass asks=True from inside a resumable loop
-            # (engine/resumption.py); otherwise the work behind this event is
-            # not recorded anywhere and would be lost.
+            # (engine/resumption.py), or as the last thing a step does;
+            # otherwise the work behind this event runs before the answer.
             def restart():
                 self._deal_damage_to_player(
                     target, amount, source, then=then, asks=True,
@@ -1104,8 +1106,14 @@ class EffectsMixin:
         if mirror_index is None or not (0 <= mirror_index < len(self.players)):
             return
         victim = self.players[mirror_index]
+        # A damage event of its own (Eye for an Eye is its source, per its
+        # ruling), so the seat it is dealt to is asked CR 616.1e's question
+        # like any other (``asks``): nothing of the mirrored event waits on
+        # it — that event has been dealt — and a loop the mirrored event was a
+        # step of stops behind this one's question
+        # (``resumption.run_resumable``).
         self._deal_damage_to_player(
-            victim, damage, source=None,
+            victim, damage, source=None, asks=True,
             then=lambda dealt: self.log.append(
                 f"Eye for an Eye dealt {dealt} damage to {victim.name} "
                 f"(mirroring the damage dealt to {target.name})"

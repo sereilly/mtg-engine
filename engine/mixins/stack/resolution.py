@@ -1247,8 +1247,15 @@ class StackResolutionMixin:
                             names = ", ".join(
                                 dict.fromkeys(permanent.card.name for permanent, _ in sources)
                             )
+                            # Asks CR 616.1e's question (``asks``). The
+                            # rider is a triggered ability by its own text,
+                            # resolved here rather than on the stack, so
+                            # what this land play does next — the entry, the
+                            # "plays a land" announcement — happening before
+                            # the answer is the order the rules would give
+                            # that trigger anyway.
                             self._deal_damage_to_player(
-                                caster, total,
+                                caster, total, asks=True,
                                 then=lambda damage: self.log.append(
                                     f"{names} dealt {damage} damage to {caster.name}"
                                 ),

@@ -17,7 +17,9 @@ recipients — plus, as round ``kg`` measured, four places that asked from a pla
 were dealt to *before* the answer (the fights, the bite-backs, The Fallen).
 
 Every case here is one site, driven with a card from the pool that compiles to
-it (every card carrying the kind is tried until one reaches the recipient). The
+it (every card carrying the kind is tried until one reaches the recipient). Seat
+1 is the active player, so a loop over several seats' recipients reaches seat
+1's first (APNAP, CR 616.1's last sentence; round kg3). The
 recipient that asks holds two applicable prevention effects — a "prevent the
 next 3" pool and a counting pool (Temper's shape), two shields from two sources
 whose order is visible — and its controller, seat 0, is interactive. Each case
@@ -168,41 +170,44 @@ def _execute(game, card, instruction, **context) -> None:
 
 
 def _wave(game, card, instruction):
-    """Each creature bites itself: the board's order, seat 0 first."""
+    """Each creature bites itself: seat 1's (the active player's) first, then
+    seat 0's in the board's order."""
     front = _put(game, 0, "Grizzly Bears")
     asker = _put(game, 0, "Grizzly Bears")
-    behind = _put(game, 1, "Grizzly Bears")
+    behind = _put(game, 0, "Grizzly Bears")
+    theirs = _put(game, 1, "Grizzly Bears")
     _arm_two(asker)
-    order = [p for p in game.all_permanents() if p in (front, asker, behind)]
-    return order, order.index(asker), lambda: _execute(game, card, instruction)
+    return [theirs, front, asker, behind], 2, lambda: _execute(game, card, instruction)
 
 
 def _recorded(game, card, instruction):
-    """Each of the creatures an earlier step recorded, in the record's order."""
+    """Each of the creatures an earlier step recorded: seat 1's first (APNAP),
+    then seat 0's in the record's order."""
     front = _put(game, 1, "Air Elemental")
     asker = _put(game, 0, "Air Elemental")
-    behind = _put(game, 1, "Air Elemental")
+    behind = _put(game, 0, "Air Elemental")
     for creature in (front, asker, behind):
         creature.attacking = True
     _arm_two(asker)
     key = instruction.payload.get("permanents_from")
-    record = [front.permanent_id, asker.permanent_id, behind.permanent_id]
+    record = [asker.permanent_id, front.permanent_id, behind.permanent_id]
     return [front, asker, behind], 1, lambda: _execute(
         game, card, instruction, x_value=2, results={key: record},
     )
 
 
 def _the_fallen(game, card, instruction):
-    """Each opponent it has damaged, then each planeswalker: three seats, the
-    source on seat 2, its record naming seat 1 before seat 0."""
+    """Each opponent it has damaged and each planeswalker, in APNAP order:
+    three seats, seat 1 active, the source on seat 2, its record naming seat 0
+    before seat 1 — seat 1 and its planeswalker are reached first."""
     source = _put(game, 2, card.name)
     walker = _put(game, 1, "Chandra, Heart of Fire")
     _arm_two(game.players[0])
     source.metadata[DAMAGED_THIS_GAME] = {
-        "seats": [1, 0], "permanents": [walker.permanent_id],
+        "seats": [0, 1], "permanents": [walker.permanent_id],
     }
     return (
-        [game.players[1], game.players[0], walker], 1,
+        [game.players[1], walker, game.players[0]], 2,
         lambda: _execute(
             game, card, instruction, caster=game.players[2],
             source_permanent=source,
@@ -322,12 +327,13 @@ def _bite_player(game, card, instruction):
 
 
 def _two_target_fight(game, card, instruction):
-    """Seat 1's creature fights seat 0's: the first half — the one that asks —
-    is dealt to seat 0's, and the second, to seat 1's, must wait for it."""
+    """Seat 1's creature fights seat 0's: the half dealt to seat 1's comes
+    first (it is the active player's, APNAP), and the half dealt to seat 0's —
+    the one that asks — after it."""
     fighter = _put(game, 1, "Grizzly Bears")
     opponent = _put(game, 0, "Grizzly Bears")
     _arm_two(opponent)
-    return [opponent, fighter], 0, lambda: _execute(
+    return [fighter, opponent], 1, lambda: _execute(
         game, card, instruction, caster=game.players[1], target=game.players[0],
         x_value=0,
         target_permanent_id=[fighter.permanent_id, opponent.permanent_id],
@@ -338,7 +344,8 @@ def _source_fight(game, card, instruction):
     fighter = _put(game, 1, card.name)
     opponent = _put(game, 0, "Grizzly Bears")
     _arm_two(opponent)
-    return [opponent, fighter], 0, lambda: _execute(
+    # The half dealt to the source (seat 1's, the active player's) first.
+    return [fighter, opponent], 1, lambda: _execute(
         game, card, instruction, caster=game.players[1], target=game.players[0],
         source_permanent=fighter, target_permanent_id=[opponent.permanent_id],
     )
@@ -351,7 +358,9 @@ def _self_damage(game, card, instruction):
     asker = _put(game, 0, "Grizzly Bears")
     _arm_two(asker)
     _arm_two(game.players[1])
-    return [asker, game.players[1]], 0, lambda: _execute(
+    # Seat 1 is the active player: its self-damage is dealt (and would be
+    # asked) before seat 0's creature's (APNAP).
+    return [game.players[1], asker], 1, lambda: _execute(
         game, card, instruction, caster=game.players[1], target=game.players[0],
         target_permanent_id=[asker.permanent_id],
     )
@@ -536,15 +545,18 @@ def _pool_left(recipient) -> int:
 def test_wave_of_reckoning_cast_asks_at_the_phantom_and_finishes_after_the_answer():
     """Wave of Reckoning cast through the stack. Seat 0's Phantom Centaur bites
     itself for 5 with two effects applicable: its own counter shield and a
-    "prevent the next 3" pool. The creature in front of it has bitten when the
-    question is asked, the one behind it has not; the answer is honoured, the
-    rest bite, the summary is written once and the sorcery reaches the
-    graveyard only then (CR 608.2n)."""
+    "prevent the next 3" pool. The creatures in front of it — seat 1's first,
+    seat 1 being the active player (APNAP, CR 616.1's last sentence), then
+    seat 0's in board order — have bitten when the question is asked, the one
+    behind it has not; the answer is honoured, the rest bite, the summary is
+    written once and the sorcery reaches the graveyard only then (CR
+    608.2n)."""
     for pick, pool_left, phantom_counters in (("next n damage", 0, 2), ("remove a counter", 3, 2)):
         game = _game(interactive=True)
         front = _put(game, 0, "Grizzly Bears")
         phantom = _put(game, 0, "Phantom Centaur")
-        behind = _put(game, 1, "Grizzly Bears")
+        behind = _put(game, 0, "Grizzly Bears")
+        theirs = _put(game, 1, "Grizzly Bears")
         add_shield(phantom, make_numeric_pool(3, source_name="Healing Salve"))
         game.players[1].hand.append(_POOL["Wave of Reckoning"])
         assert _counters(phantom) == 3
@@ -554,6 +566,7 @@ def test_wave_of_reckoning_cast_asks_at_the_phantom_and_finishes_after_the_answe
         choice = game.pending_choice_of("effect_order")
         assert choice is not None and choice.player_index == 0
         assert front.damage_marked == 2, "the creature in front of the Phantom has bitten"
+        assert theirs.damage_marked == 2, "the active player's creature bit first"
         assert behind.damage_marked == 0, "the creature behind it has not"
         assert _counters(phantom) == 3 and _pool_left(phantom) == 3
         assert any(item.card.name == "Wave of Reckoning" for item in game.stack), (
@@ -568,7 +581,7 @@ def test_wave_of_reckoning_cast_asks_at_the_phantom_and_finishes_after_the_answe
         assert _pool_left(phantom) == pool_left
         assert _counters(phantom) == phantom_counters
         assert phantom.damage_marked == 0
-        assert not game.is_on_battlefield(front) and not game.is_on_battlefield(behind)
+        assert not any(game.is_on_battlefield(bear) for bear in (front, behind, theirs))
         summary = [line for line in game.log if line.startswith("Wave of Reckoning: each creature")]
         assert len(summary) == 1
         assert any(card.name == "Wave of Reckoning" for card in game.players[1].graveyard)

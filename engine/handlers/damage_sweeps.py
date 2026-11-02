@@ -22,6 +22,12 @@ recipients (:func:`_sweep`): the recipients behind the one that asked are still
 dealt to when the answer arrives, and the summary line is the loop's last step.
 These sweeps called the damage entry points without ``asks``, so the seat got
 the default and never saw the question (Judgment's W1G2 measured it; W2G2).
+
+**The recipients are asked in APNAP order** (CR 616.1's last sentence): a
+sweep deals to every recipient at once, so each affected player's choices are
+made at the same time — the active player's first, then each other player's
+in turn order (``effect_ordering.in_apnap_order``, applied by :func:`_sweep`).
+They walked ``game.players``, which asked seat 0 first on every turn.
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..dexterity import flip_lands_on
+from ..effect_ordering import in_apnap_order
 from ..game_types import single_chosen_id
 from ..models import Permanent
 from ..named_counters import counters_on
@@ -71,12 +78,7 @@ def _sweep_amount(instruction: OracleInstruction, context: OracleExecutionContex
     return resolve_amount(instruction.payload.get("amount", 0), context.x_value)
 
 
-#: The item of the players-and-creatures sweep that deals to the creatures,
-#: read off the board when the loop reaches it -- after the players, as before.
-_THE_CREATURES = object()
-
-
-def _sweep(game: Game, recipients, hit, done) -> None:
+def _sweep(game: Game, recipients, hit, done, *, affected=None) -> None:
     """*hit* each of *recipients* in turn and then run *done*, resumably.
 
     The one loop every sweep here runs, so a recipient whose event stops to
@@ -84,8 +86,14 @@ def _sweep(game: Game, recipients, hit, done) -> None:
     it back. *done* -- the summary -- is the loop's own last step
     (``run_resumable``'s ``then``) rather than a line after it, because work
     written after a resumable loop does not run when a step suspends. Must be
-    the last thing its caller does."""
-    run_resumable(game, recipients, hit, then=done)
+    the last thing its caller does.
+
+    The recipients are walked in APNAP order of the seat each one's question
+    goes to (``in_apnap_order``; *affected* maps an item to its recipient
+    where the item is something else)."""
+    run_resumable(
+        game, in_apnap_order(game, recipients, affected=affected), hit, then=done,
+    )
 
 
 @effect_handler("deal_damage_each_creature_and_player")
@@ -123,24 +131,26 @@ def _mass_damage_players_and_creatures(
     one on the stack per creature dealt to, and the state-based sweep that kills
     them still runs once, after.
 
-    One resumable loop (:func:`_sweep`): the players, then the creatures, then
-    *done* -- each event free to stop and ask its recipient's controller which
-    effect applies first (CR 616.1e)."""
-    def hit_creature(perm: Permanent) -> None:
-        apply_damage_to_creature(game, perm, damage, source, asks=True)
+    One resumable loop (:func:`_sweep`) and then *done* -- each event free to
+    stop and ask its recipient's controller which effect applies first (CR
+    616.1e), seat by seat in APNAP order: the active player and their
+    creatures, then the next player and theirs. The creatures are the ones
+    the predicate names as the sweep begins (Earthquake's ruling: "whether or
+    not a creature is without flying is only checked on resolution"); they
+    were read off the board after the players had been dealt to."""
+    creatures = [
+        perm for perm in game.all_permanents()
+        if perm.is_creature and creature_predicate(perm)
+    ]
 
     def hit(item) -> None:
-        if item is _THE_CREATURES:
-            _sweep(game, [
-                perm
-                for player in game.players
-                for perm in list(player.battlefield)
-                if perm.is_creature and creature_predicate(perm)
-            ], hit_creature, None)
+        if isinstance(item, Permanent):
+            if game.is_on_battlefield(item):
+                apply_damage_to_creature(game, item, damage, source, asks=True)
             return
         game._deal_damage_to_player(item, damage, source=source, asks=True)
 
-    _sweep(game, [*game.players, _THE_CREATURES], hit, done)
+    _sweep(game, [*game.players, *creatures], hit, done)
 
 
 @effect_handler("earthquake_damage")
@@ -400,5 +410,5 @@ def deal_damage_each_matching(
         else:
             game.log.append(f"{card.name} dealt {damage} damage to {', '.join(struck)}")
 
-    _sweep(game, recipients, hit, summary)
+    _sweep(game, recipients, hit, summary, affected=lambda entry: entry[0])
     return True, "resolved"
