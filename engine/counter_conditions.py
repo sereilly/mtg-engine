@@ -389,7 +389,12 @@ def spend_next_spell_promises(game: "Game", item: "StackItem") -> None:
     spent = [
         promise for promise in promises
         if promise.seat == item.caster_index
-        and any(card_has_type(item.card, card_type) for card_type in promise.card_types)
+        and any(
+            card_has_type(
+                item.card, card_type, game=game, owner=item.caster_index,
+            )
+            for card_type in promise.card_types
+        )
     ]
     if not spent:
         return

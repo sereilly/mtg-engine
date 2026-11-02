@@ -245,7 +245,7 @@ def _matches(modifier: CostModifier, card, colors) -> bool:
     )
 
 
-def _chosen_type_holds(permanent, card) -> bool:
+def _chosen_type_holds(permanent, card, *, game=None, seat=None) -> bool:
     """Whether *card* has the creature type *permanent* chose as it entered.
 
     The one narrowing in this file that is answered off the **taxing**
@@ -254,13 +254,23 @@ def _chosen_type_holds(permanent, card) -> bool:
     the same key ``subject_filters`` reads for "creatures of the chosen type",
     so one recorded word answers both questions.
 
+    The spell's half is ``object_creature_types.card_creature_types`` with
+    *seat*, the caster: "the same is true for creature spells you control"
+    (Conspiracy) makes a Bear spell its chosen type **and not a Bear**
+    (CR 205.1a, 613.1). This read the printed type line, so an Urza's
+    Incubator naming the type its controller's Conspiracy names discounted
+    nothing that Conspiracy had retyped. A caller with no seat gets the
+    printed answer.
+
     False when nothing is recorded: a permanent whose choice has not been made
     narrows to nothing rather than to everything.
     """
+    from .object_creature_types import card_creature_types
+
     word = getattr(permanent, "metadata", {}).get("chosen_creature_type")
     if not word:
         return False
-    return str(word).lower() in (getattr(card, "type_line", "") or "").lower()
+    return str(word).lower() in card_creature_types(game, card, seat)
 
 
 def _timing_holds(game, modifier: CostModifier, caster_index: int | None) -> bool:
@@ -427,13 +437,12 @@ def _tax_floored(
             # asked here rather than in ``_matches``: that function answers
             # about the taxed card alone and has no permanent to read.
             #
-            # Containment in the printed type line for ``_has_printed_type``'s
-            # reason — a card being cast is not a permanent, so CR 613.1 leaves
-            # the line as the whole of what there is to ask. No word recorded
-            # yet discounts nothing, which is the safe direction: a dropped
-            # narrowing would take {2} off every creature spell in the game.
+            # The spell's creature types are asked of the caster's seat (see
+            # ``_chosen_type_holds``). No word recorded yet discounts nothing,
+            # which is the safe direction: a dropped narrowing would take {2}
+            # off every creature spell in the game.
             if modifier.chosen_creature_type and not _chosen_type_holds(
-                permanent, card
+                permanent, card, game=game, seat=controller_index
             ):
                 continue
             # "**Cycling** abilities you activate…" (Fluctuator) narrows by

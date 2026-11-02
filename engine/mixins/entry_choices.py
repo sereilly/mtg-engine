@@ -603,19 +603,24 @@ class EntryChoicesMixin:
         target creature cards of the creature type of your choice from your
         graveyard", Aphetto Dredging) names a board of its own: the caster's
         graveyard, whose creature cards are what the word decides. So the
-        default there is the type most of them share (printed, CR 613.1 —
-        nothing outside the battlefield is retyped), which is the most the
+        default there is the type most of them share, which is the most the
         spell could return; an empty pile falls back to the reading above.
+        Each card's types through ``card_creature_types`` with the caster's
+        seat — the pile's owner, and the spell's controller for the card's
+        own types below: "the same is true for creature spells you control and
+        creature cards you own that aren't on the battlefield" (Conspiracy)
+        makes every one of them the chosen type and nothing else (CR 205.1a,
+        613.1), so the printed count named a type no card in the pile had.
         """
+        from ..object_creature_types import card_creature_types
         from ..printed_characteristics import printed_shape
 
         if card is not None and self._cast_type_narrows_graveyard_targets(card):
             pile: dict[str, int] = {}
             for held in self.players[caster_index].graveyard:
-                types, subtypes = printed_shape(held)
-                if "creature" not in types:
+                if "creature" not in printed_shape(held)[0]:
                     continue
-                for word in subtypes:
+                for word in card_creature_types(self, held, caster_index):
                     pile[word] = pile.get(word, 0) + 1
             if pile:
                 return max(sorted(pile), key=lambda word: pile[word])
@@ -623,9 +628,9 @@ class EntryChoicesMixin:
         if counts:
             return max(sorted(counts), key=lambda word: counts[word])
 
-        if card is not None:
-            types, printed = printed_shape(card)
-            if "creature" in types and printed:
+        if card is not None and "creature" in printed_shape(card)[0]:
+            printed = card_creature_types(self, card, caster_index)
+            if printed:
                 return sorted(printed)[0]
         return "human"
 

@@ -39,7 +39,7 @@ _COMPARE = {
 }
 
 
-def card_has_type(card, wanted: str) -> bool:
+def card_has_type(card, wanted: str, *, game=None, owner=None) -> bool:
     """Whether *card* has the card type *wanted* (CR 205.2).
 
     A card has **every** type its line names, so Ornithopter is an artifact card
@@ -59,9 +59,25 @@ def card_has_type(card, wanted: str) -> bool:
     Sliver and Quick Sliver, which ask this function with a creature type.
     Asked only for a creature-type word the line does not carry, so every
     other question costs what it did.
+
+    **And except its owner's static**, for a creature-type word asked with
+    *game* and *owner* (the seat whose zone holds the card; a spell's
+    controller): "the same is true for creature spells you control and
+    creature cards you own that aren't on the battlefield" (Conspiracy) makes
+    a Bear card a Goblin card **and not a Bear** (CR 205.1a), which is
+    ``object_creature_types.card_creature_types``' question — so it is asked
+    there. A caller that cannot say whose card it is gets the printed answer,
+    the safe direction.
     """
     type_line = (getattr(card, "type_line", "") or "").lower()
     word = str(wanted).lower()
+    if game is not None and owner is not None:
+        from .grammar.vocabulary import CREATURE_TYPES
+
+        if word in CREATURE_TYPES:
+            from .object_creature_types import card_creature_types
+
+            return word in card_creature_types(game, card, owner)
     if word in type_line:
         return True
     if "creature" not in type_line:
@@ -233,14 +249,18 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     # played for: "search your library for a Goblin card" finds every creature
     # in it while a Conspiracy naming Goblin is out. Asked through the same seam
     # `card_colors` above asks for CR 202.2, so a caller with no seat gets the
-    # printed answer it always got.
+    # printed answer it always got -- and of the **same seat**: the one whose
+    # zone holds the card (CR 108.3's owner), never the chooser. It was asked
+    # of ``owner`` as the caller spelled it, which is the seat answering the
+    # prompt, so a search of another player's zone (``zone_seat``) applied the
+    # chooser's Conspiracy to that player's cards and ignored their own.
     wanted_subtypes = restrictions.get("subtypes") or ()
     any_subtypes = restrictions.get("any_subtypes") or ()
     if wanted_subtypes or any_subtypes:
         from .object_creature_types import creature_type_override_for_seat
 
         override = (
-            creature_type_override_for_seat(game, owner)
+            creature_type_override_for_seat(game, _zone_owner(data, owner))
             if "creature" in type_line else None
         )
 

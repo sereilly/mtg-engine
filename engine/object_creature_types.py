@@ -232,15 +232,18 @@ def card_creature_types(game=None, card=None, seat=None) -> frozenset[str]:
     if "creature" not in types:
         return printed
     override = creature_type_override_for_seat(game, seat)
+    if override is None:
+        return printed
     # CR 205.1a: the new subtype **replaces** the existing creature types, so
-    # the Bear stops being a Bear. Only the creature types — a card printed as
-    # an artifact creature keeps its artifact type — but a card outside the
-    # battlefield has no computed characteristics, and the printed subtypes of
-    # a creature card that also carries another set's are read off one line
-    # here. Splitting them would need the vocabulary; the population is
-    # artifact creatures, whose artifact subtypes (Equipment, Vehicle) never
-    # appear on one, so the printed set is the creature set.
-    return frozenset({override}) if override is not None else printed
+    # the Bear stops being a Bear (the card's ruling, 2013-09-20: "Affected
+    # spells, cards, and creatures lose all of their other creature types").
+    # Only the creature types — "replaces any existing subtypes from the
+    # appropriate set" — so a subtype of another of the card's types (a land
+    # creature's Forest) stays. Told apart by the vocabulary, never a list
+    # spelled here.
+    from .grammar.vocabulary import CREATURE_TYPES
+
+    return (printed - CREATURE_TYPES) | {override}
 
 
 def object_creature_types(game, obj, seat=None) -> frozenset[str]:
