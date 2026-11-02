@@ -37,6 +37,20 @@ Validated backwards: on the tree before the change this fails naming 265 of
 The floors are what stop a later filter from making the sweep pass by
 examining nothing.
 
+**An entry that asks first.** A permanent that prints an "as it enters"
+choice beside its entry trigger (Brass Herald, Traveler's Cloak) waits for the
+answer on its way, in no zone (CR 614.12a, ``engine/entry_awaiting.py``), at a
+table that holds for answers — and this one seats a person at each seat. Its
+trigger has not triggered then: it triggers when the permanent enters
+(CR 603.6a). So each road answers the entry's prompts as the person would
+(``_answer_the_entry``: the empty answer, keeping the prompt's default) with
+the dispatch still recorded, and requires that until the answer the
+permanent was on no battlefield and its trigger neither on the stack nor run.
+Read before the answer, as it was until ``kg3/entryfix``, the two cards'
+triggers were nowhere and the sweep failed calling them unexplained; with
+the answer's completion of the entry made to run the trigger inline it
+names exactly those two cards on their roads.
+
 **What is left, pinned.** Three Auras' entry sentences are not dispatched as
 triggers at all when the Aura is *cast*: ``_apply_aura_effect`` performs them
 itself, by text, as the Aura attaches — Animate Dead's and Dance of the Dead's
@@ -73,6 +87,10 @@ _MIN_STACKED_WHEN_CAST = 255
 _MIN_STACKED_WHEN_PUT = 240
 _MIN_LAND_TRIGGERS = 25
 _MIN_AURA_TRIGGERS = 20
+# ...and how many entries waited for an "as it enters" choice first (CR
+# 614.12a) and were examined after it was answered: Brass Herald on all three
+# roads and Traveler's Cloak cast and put (November 2026).
+_MIN_WAITED = 5
 
 #: Cast Auras whose entry sentence ``_apply_aura_effect`` performs inline, by
 #: text, instead of the entry site announcing the trigger they compile. A
@@ -228,14 +246,75 @@ def _announcement(game, card, payments) -> dict:
     return {}
 
 
-def _enter(card, road) -> tuple[Game, list, Permanent | None] | None:
-    """Put *card* onto seat 0's battlefield by *road*; None if a cast was
-    refused (an Aura cast with no target named, say)."""
+def _awaited_entries(game, card) -> list:
+    """*card*'s entries waiting on their way for an "as it enters" choice
+    (CR 614.12a, ``engine/entry_awaiting.py``)."""
+    return [
+        record for record in game.entries_in_progress
+        if record.permanent.card is card and record.finish is not None
+    ]
+
+
+def _answer_the_entry(game, card, triggers, executed_in_entry) -> dict | None:
+    """Answer every "as it enters" prompt *card*'s entry owes, as the person
+    at that seat does — the empty answer, which keeps the default the prompt
+    carries — and say what the table held while they were owed. None when
+    the entry asked nothing.
+
+    CR 614.12a: "that choice is made before the permanent enters the
+    battlefield." At a table that holds for answers — this one seats a
+    person at each seat — the entry waits for the answer with the permanent
+    in no zone, so its entry trigger has not triggered yet (CR 603.6a: it
+    triggers when the permanent *enters*). Read before the answer, Brass
+    Herald and Traveler's Cloak had no trigger anywhere, and the sweep called
+    them unexplained. The answer is the road their trigger takes, so it is
+    answered here, with the dispatch still recorded: an instruction the
+    answer's completion of the entry ran itself is counted inline like any
+    other.
+    """
+    if not _awaited_entries(game, card):
+        return None
+    instructions = [trigger.instruction for trigger in triggers]
+    waiting = {
+        "on_battlefield": any(
+            game.is_on_battlefield(record.permanent)
+            for record in _awaited_entries(game, card)
+        ),
+        "stacked": any(
+            item.ability_instruction is instruction
+            for item in game.stack for instruction in instructions
+        ),
+        "ran": any(
+            ran is instruction
+            for ran in executed_in_entry for instruction in instructions
+        ),
+    }
+    for _ in range(8):
+        on_its_way = [record.permanent for record in _awaited_entries(game, card)]
+        owed = next((
+            choice for choice in game.pending_choices
+            if any(choice.data.get("_entering_permanent") is permanent
+                   for permanent in on_its_way)
+        ), None)
+        if owed is None:
+            break
+        if not game.resolve_pending_choice(owed.kind, owed.player_index):
+            game.take_choice_default(owed)
+    waiting["still_waiting"] = bool(_awaited_entries(game, card))
+    return waiting
+
+
+def _enter_observed(card, road) -> tuple[Game, list, Permanent | None, dict | None] | None:
+    """:func:`_enter`, and what the table held while the entry waited for an
+    "as it enters" answer (:func:`_answer_the_entry`) — None if it asked
+    nothing."""
     game, executed_in_entry = _table(card)
+    triggers = _entry_triggers_of(card)
     if road == "put":
         permanent = Permanent(card=card)
         game._put_permanent_onto_battlefield(0, permanent, None)
-        return game, executed_in_entry, permanent
+        waiting = _answer_the_entry(game, card, triggers, executed_in_entry)
+        return game, executed_in_entry, permanent, waiting
     payments = _kickers(game, card)
     keywords = _announcement(game, card, payments) if road == "cast" else {}
     if payments:
@@ -249,9 +328,21 @@ def _enter(card, road) -> tuple[Game, list, Permanent | None] | None:
         # The permanent spell, and nothing else: one resolution.
         assert game.stack and game.stack[-1].card is card, card.name
         game.resolve_top_of_stack(pause_for_choices=True)
+    waiting = _answer_the_entry(game, card, triggers, executed_in_entry)
     permanent = next(
         (perm for perm in game.controlled_by(0) if perm.card is card), None
     )
+    return game, executed_in_entry, permanent, waiting
+
+
+def _enter(card, road) -> tuple[Game, list, Permanent | None] | None:
+    """Put *card* onto seat 0's battlefield by *road*, answering any "as it
+    enters" choice its entry waits for; None if a cast was refused (an Aura
+    cast with no target named, say)."""
+    entered = _enter_observed(card, road)
+    if entered is None:
+        return None
+    game, executed_in_entry, permanent, _waiting = entered
     return game, executed_in_entry, permanent
 
 
@@ -282,15 +373,36 @@ def test_w2g6_no_entry_trigger_is_carried_out_inside_the_entry():
     stacked = {road: 0 for road in _ROADS}
     land_triggers = aura_triggers = 0
     stacked_cards: dict[str, set] = {road: set() for road in _ROADS}
+    waited: list[tuple[str, str]] = []
+    early: list[str] = []
 
     for card, found in rows:
         land_triggers += len(found) * (card.primary_type == "land")
         aura_triggers += len(found) * ("Aura" in card.type_line)
         for road in _ROADS:
-            entered = _enter(card, road)
+            entered = _enter_observed(card, road)
             if entered is None:
                 continue
-            game, executed_in_entry, _permanent = entered
+            game, executed_in_entry, _permanent, waiting = entered
+            if waiting is not None:
+                # CR 614.12a's road: the entry waited for its choice. Until
+                # the answer the permanent is on no battlefield and nothing
+                # has triggered (CR 603.6a); the rows below read the table
+                # after the answer.
+                waited.append((card.name, road))
+                early.extend(
+                    f"{card.name} [{road}]: {what}"
+                    for what, wrong in (
+                        ("on the battlefield before its choice was answered",
+                         waiting["on_battlefield"]),
+                        ("its entry trigger on the stack before its choice was answered",
+                         waiting["stacked"]),
+                        ("its entry trigger run before its choice was answered",
+                         waiting["ran"]),
+                        ("still on its way after every answer", waiting["still_waiting"]),
+                    )
+                    if wrong
+                )
             for trigger in found:
                 if any(ran is trigger.instruction for ran in executed_in_entry):
                     inline[road].append(card.name)
@@ -326,6 +438,11 @@ def test_w2g6_no_entry_trigger_is_carried_out_inside_the_entry():
         for road, names in inline.items() if names
     }
     assert not unexplained, unexplained[:12]
+    assert not early, early
+    # The entries that waited were examined after their answer, not skipped:
+    # a sweep that stopped answering would examine none and find nothing.
+    assert len(waited) >= _MIN_WAITED, waited
+    assert {"Brass Herald", "Traveler's Cloak"} <= {name for name, _road in waited}, waited
     assert performed_by_the_attach == _PERFORMED_BY_THE_ATTACH, (
         sorted(performed_by_the_attach ^ _PERFORMED_BY_THE_ATTACH)
     )
