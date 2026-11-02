@@ -1056,16 +1056,15 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         effect, logging it. Returns the sacrificed land, or None if the player
         controls no land.
 
-        One caller left — the pay-or-tap-and-sacrifice upkeep, where an
-        *opponent* does the choosing and this engine simplifies that to the
-        first land. Serendib Djinn used to be the other, and is now an ordinary
-        stack trigger whose sacrifice goes through the standing forced-sacrifice
+        One caller left — the pay-or-tap-and-sacrifice upkeep (Demonic
+        Hordes), handing it the land an opponent chose
+        (``UpkeepEffectsMixin._sacrifice_a_land_an_opponent_chooses``).
+        Serendib Djinn used to be the other, and is now an ordinary stack
+        trigger whose sacrifice goes through the standing forced-sacrifice
         prompt like every other one.
 
-        ``chosen`` is the land its controller picked (CR 701.21a: you choose
-        which of your own permanents a sacrifice takes). Without one — AI /
-        headless play, or an effect where another player does the choosing — the
-        first land is taken, the deterministic forced-sacrifice fallback."""
+        ``chosen`` is the land picked for it. Without one the first land is
+        taken, the deterministic forced-sacrifice fallback."""
         for idx, land in enumerate(controller.battlefield):
             if not land.has_type("land"):
                 continue
