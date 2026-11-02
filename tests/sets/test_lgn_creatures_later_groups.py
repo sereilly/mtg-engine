@@ -1337,7 +1337,7 @@ def test_w1g6_elvish_soultiller_default_names_its_own_commonest_graveyard_type(s
     Mutant already in the graveyard, goes back with the Elves."""
     game, me = _w1g6_soultiller_dies(set_pool, interactive=False)
     _w1g6_resolve(game)
-    assert "Elvish Soultiller: chose elf" in game.log
+    assert "Elvish Soultiller: chose Elf" in game.log
     assert sorted(c.name for c in me.graveyard) == ["Forest", "Goblin Sky Raider"]
     assert sorted(c.name for c in me.library) == [
         "Elvish Soultiller", "Elvish Warrior", "Forest", "Forest", "Forest",

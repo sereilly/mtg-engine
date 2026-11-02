@@ -2852,7 +2852,7 @@ def test_debug_cast_free_forwards_text_change_colors():
     state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
     lifeforce = state["players"][0]["battlefield"][0]
     assert lifeforce["text_changes"] == [{"from": "black", "to": "red"}]
-    assert any("changed B text to R" in line for line in state["log"])
+    assert any("changed black text to red" in line for line in state["log"])
 
 
 def test_catalog_lists_every_set_a_card_was_printed_in():

@@ -97,7 +97,7 @@ def test_a_persons_colour_is_chosen_before_the_sliver_enters_and_soul_warden_see
     assert not game.entries_in_progress
     # Soul Warden saw it enter — after the choice, never before.
     assert any(item.card.name == "Soul Warden" for item in game.stack)
-    chose = game.log.index("Ward Sliver: chose U")
+    chose = game.log.index("Ward Sliver: chose blue")
     entered = game.log.index("Human put Ward Sliver onto battlefield")
     finished = game.log.index("Ward Sliver finished resolving")
     assert chose < entered < finished

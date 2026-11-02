@@ -115,7 +115,7 @@ class TestLaceTargetsSpellOrPermanent:
         game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)  # stack=[bolt]
         game.queue_from_hand(0, "Chaoslace", target_stack_index=0)        # targets the bolt
         game.resolve_stack()
-        assert any("became R" in line for line in game.log)
+        assert any("became red" in line for line in game.log)
 
 
 # ---------------------------------------------------------------------------

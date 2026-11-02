@@ -1370,7 +1370,7 @@ def test_w1g9_gratuitous_violence_doubles_its_controllers_creatures_in_combat(se
     seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
     _w1g9_hit_unblocked(game, seeker)
     assert game.players[1].life == 16
-    assert "2 damage becomes 4" in game.log
+    assert "2 damage becomes 4 (Gratuitous Violence)" in game.log
 
     game = _w1g9_table()
     _w1g9_enter(game, 0, ons["Gratuitous Violence"])
@@ -2107,6 +2107,6 @@ def test_w2g4_aether_charge_has_the_beast_deal_the_damage(set_pool):
 
     game, bob = _w2g4_charge_against(set_pool, "Circle of Protection: Red")
     assert bob.life == 16
-    assert "Ravenous Baloth dealt 4 damage" in game.log
+    assert "Ravenous Baloth dealt 4 damage to Bob" in game.log
 
 # ==== end W2G4 ======================================================

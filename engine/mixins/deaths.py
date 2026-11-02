@@ -63,7 +63,7 @@ _INLINE_DIES_KINDS = frozenset({
 
 
 class DeathsMixin:
-    def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
+    def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> bool:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead.
 
         Recorded on ``Game.departing`` for the duration: the dies-triggers this
@@ -74,12 +74,14 @@ class DeathsMixin:
         """
         self.departing.append(permanent)
         try:
-            self._move_permanent_to_graveyard(player, permanent)
+            return self._move_permanent_to_graveyard(player, permanent)
         finally:
             self.departing.pop()
 
-    def _move_permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
-        """:meth:`_permanent_to_graveyard`'s body."""
+    def _move_permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> bool:
+        """:meth:`_permanent_to_graveyard`'s body. True when the permanent
+        died (CR 700.4: put into a graveyard from the battlefield, a token
+        included), False when a replacement sent it elsewhere."""
         # **What it was as it left** (CR 603.10a): a dies-trigger looks back
         # in time, so "a creature" / "a land" is asked of the permanent as it
         # last existed on the battlefield, through the layers (CR 613.1d) —
@@ -114,7 +116,7 @@ class DeathsMixin:
             self, "would_die", {"player": player, "permanent": permanent}
         )
         if consumed:
-            return
+            return False
         # …and the wider event the graveyard is one destination of: "if the
         # creature **would leave the battlefield**, exile it instead" (Dreams of
         # the Dead). A second contention set at the same moment rather than a
@@ -124,7 +126,7 @@ class DeathsMixin:
         # asked at all: the narrower reading is the one a card printed about
         # dying means.
         if self._leaving_battlefield_replaced(permanent, player, "graveyard"):
-            return
+            return False
         if not permanent.metadata.get("is_token", False):
             # CR 400.3: the card goes to its owner's graveyard, which differs
             # from the controller's when the permanent was stolen (Control Magic).
@@ -143,7 +145,7 @@ class DeathsMixin:
                 owner, permanent.card, from_zone="battlefield",
                 from_battlefield=permanent,
             ):
-                return
+                return False
         # "Whenever a land is put into a graveyard from the battlefield…"
         # (Dingus Egg). Announced here, on the one seam every land death
         # already passes through, not from the destruction paths: it used to be
@@ -385,6 +387,7 @@ class DeathsMixin:
         leave_hook = ON_LEAVE_BATTLEFIELD.get(permanent.effective_card.name)
         if leave_hook is not None:
             leave_hook(self, player, permanent)
+        return True
 
     @staticmethod
     def default_sacrifice_pick(
@@ -613,9 +616,13 @@ class DeathsMixin:
             announce_destroyed(
                 self, permanent, cause(permanent) if callable(cause) else cause
             )
-            self._permanent_to_graveyard(player, permanent)
+            died = self._permanent_to_graveyard(player, permanent)
             if on_destroy is not None:
-                on_destroy(permanent)
+                # Whether it reached the graveyard, so the caller's line can
+                # say "died" only of a permanent that did (CR 700.4): a
+                # Disintegrated creature's "was exiled instead of dying" was
+                # followed by "died (704.5g: lethal damage)".
+                on_destroy(permanent, died)
             destroyed.append(permanent)
         self.remove_all_from_battlefield(destroyed)
         destruction_finished(self)

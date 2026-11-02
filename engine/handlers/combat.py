@@ -607,7 +607,10 @@ def left_right_combat_division(game: Game, instruction: OracleInstruction, conte
 @effect_handler("prevent_all_combat_damage")
 def prevent_all_combat_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     game.combat_damage_prevented_until_eot = True
-    game.log.append("Combat damage prevented until end of turn")
+    game.log.append(
+        f"{getattr(context.card, 'name', '') or 'An effect'}: all combat damage "
+        "is prevented this turn"
+    )
     return True, "resolved"
 
 
@@ -671,7 +674,10 @@ def grant_banding_to_target(game: Game, instruction: OracleInstruction, context:
     # the first creature only when no explicit target was supplied (AI/headless).
     target_creature = resolve_target_permanent(game, context)
     if target_creature is None:
-        game.log.append("No valid creature target for banding effect")
+        game.log.append(
+            f"{getattr(context.card, 'name', '') or 'An effect'}: no valid creature "
+            "to gain banding"
+        )
         return False, "no valid creature target for banding effect"
     from .keywords import DURATION_WORDS, grant_lifetime
 

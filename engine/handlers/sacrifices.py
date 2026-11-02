@@ -40,8 +40,8 @@ def balance_resources(game: Game, instruction: OracleInstruction, context: Oracl
     counted again among the creatures. The rounds are
     ``SacrificeChoicesMixin.begin_balance``'s; each player answers their own
     (a human is prompted, an AI or headless seat takes the default)."""
-    if not game.begin_balance():
-        game.log.append("Balance: nothing to normalize")
+    if not game.begin_balance(context.card.name):
+        game.log.append(f"{context.card.name}: nothing to normalize")
         return True, "resolved"
     return True, "pending_balance"
 

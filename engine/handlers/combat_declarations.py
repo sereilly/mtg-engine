@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._targets import (recorded_permanent_ids, attached_host, bound_permanent,
+from ._targets import (departed_object_said, recorded_permanent_ids, attached_host, bound_permanent,
                        names_a_target_list as _names_a_list,
                        resolve_target_permanent, resolve_target_permanents)
 from .registry import effect_handler
@@ -194,7 +194,7 @@ def force_target_to_attack_until_eot(game: Game, instruction: OracleInstruction,
     )
     if chosen is None:
         game.log.append(
-            f"{context.card.name}: its target is gone (608.2b)"
+            f"{context.card.name}: {departed_object_said(context)}"
         )
         return True, "resolved"
     add_turn_requirement(chosen, MUST_ATTACK_UNTIL_EOT)
@@ -342,7 +342,7 @@ def force_target_to_block_until_eot(game: Game, instruction: OracleInstruction, 
         fallback_on_invalid_choice=False,
     )
     if chosen is None:
-        game.log.append(f"{context.card.name}: its target is gone (608.2b)")
+        game.log.append(f"{context.card.name}: {departed_object_said(context)}")
         return True, "resolved"
     _owe_block(game, chosen, attacker, context)
     return True, "resolved"
@@ -883,7 +883,7 @@ def target_cant_attack_until_eot(game: Game, instruction: OracleInstruction, con
         fallback_on_invalid_choice=False,
     )
     if target_creature is None:
-        game.log.append(f"{context.card.name}: its target is gone (608.2b)")
+        game.log.append(f"{context.card.name}: {departed_object_said(context)}")
         return True, "resolved"
     target_creature.metadata[CANT_ATTACK_UNTIL_EOT] = True
     game.log.append(f"{target_creature.card.name} can't attack this turn")
@@ -928,7 +928,7 @@ def target_cant_block_source_until_eot(game: Game, instruction: OracleInstructio
         fallback_on_invalid_choice=False,
     )
     if chosen is None:
-        game.log.append(f"{context.card.name}: its target is gone (608.2b)")
+        game.log.append(f"{context.card.name}: {departed_object_said(context)}")
         return True, "resolved"
     denied = list(chosen.metadata.get(CANT_BLOCK_ATTACKERS_UNTIL_EOT) or ())
     if attacker.permanent_id not in denied:

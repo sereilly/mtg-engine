@@ -91,7 +91,7 @@ def test_blind_seer_recolours_the_spell_it_names(catalog_by_name):
 
     assert game._stack_item_colors(bolt) == ("U",)
     assert game._effective_colors(bears) == {"G"}
-    assert "Lightning Bolt (on the stack) became U until end of turn (Blind Seer)" in game.log
+    assert "Lightning Bolt (on the stack) became blue until end of turn (Blind Seer)" in game.log
     red_blast = catalog_by_name["Red Elemental Blast"]
     assert [
         entry["name"]

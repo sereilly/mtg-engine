@@ -250,7 +250,7 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
                 f"Returned {returned_card.name} from graveyard to hand"
             )
         if not picked:
-            game.log.append("No card was returned from the graveyard")
+            game.log.append(f"{_source_name(context)}: no card was returned from the graveyard")
         return True, "resolved"
 
     # "Return **up to one** target creature card…" announced naming nobody
@@ -259,7 +259,7 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     # an announcement that named nobody is owed none: it returned the first
     # creature card in the graveyard for a player who had chosen zero.
     if named_no_target(context.choices):
-        game.log.append("No card was returned from the graveyard")
+        game.log.append(f"{_source_name(context)}: no card was returned from the graveyard")
         return True, "resolved"
 
     # Honor the caster's chosen graveyard card (Rule 601.2c). Regrowth
@@ -277,7 +277,10 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
             (i for i in range(len(caster.graveyard)) if _eligible_slot(i)), None
         )
         if chosen_index is None:
-            game.log.append(f"No {' or '.join(card_types)} card in graveyard to return")
+            game.log.append(
+                f"{_source_name(context)}: no {' or '.join(card_types)} card "
+                "in graveyard to return"
+            )
             return True, "resolved"
         chosen = caster.graveyard.pop(chosen_index)
         game.put_card_into_hand(caster, chosen)
@@ -288,7 +291,9 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
             (i for i in range(len(caster.graveyard)) if _eligible_slot(i)), None
         )
         if chosen_index is None:
-            game.log.append(f"No {card_type} card in graveyard to return")
+            game.log.append(
+                f"{_source_name(context)}: no {card_type} card in graveyard to return"
+            )
             return True, "resolved"
         chosen = caster.graveyard.pop(chosen_index)
         game.put_card_into_hand(caster, chosen)
@@ -322,7 +327,7 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
             (i for i in range(len(caster.graveyard)) if _eligible_slot(i)), None
         )
         if chosen_index is None:
-            game.log.append("No creature to return")
+            game.log.append(f"{_source_name(context)}: no creature card to return")
             return True, "resolved"
         chosen = caster.graveyard.pop(chosen_index)
         game.put_card_into_hand(caster, chosen)
@@ -334,7 +339,12 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
         game.put_card_into_hand(caster, chosen)
         game.log.append(f"Returned {chosen.name} from graveyard to hand")
         return True, "resolved"
-    game.log.append("Returned creature from graveyard" if returned else "No creature to return")
+    # The card, as every other return in this handler names it: "Returned
+    # creature from graveyard" said neither which card nor what returned it.
+    game.log.append(
+        f"Returned {returned.name} from graveyard to hand" if returned
+        else f"{_source_name(context)}: no creature card to return"
+    )
     return True, "resolved"
 
 
@@ -518,6 +528,12 @@ def return_source_card_to_owners_hand(game: Game, instruction: OracleInstruction
     return True, "resolved"
 
 
+def _source_name(context: OracleExecutionContext) -> str:
+    """The card a resolving return is printed on, for the log line that says
+    what it did — "No creature to return" named nothing at all."""
+    return getattr(context.card, "name", "") or "An effect"
+
+
 def _mana_value_of(card) -> int:
     """A card's mana value (CR 202.3), for the step that reads what a bounce
     returned.
@@ -622,7 +638,7 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
             owner = return_permanent_to_owners_hand(game, perm, context.caster)
             game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
         if not chosen:
-            game.log.append("No permanents to return")
+            game.log.append(f"{_source_name(context)}: no permanents to return")
         return True, "resolved"
     # A narrowed or widened bounce ("up to one target non-Spirit creature",
     # Roaming Ghostlight; "up to one other target creature or planeswalker",
@@ -694,7 +710,11 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
     bounced = game._bounce_target_creature(returned)
     if bounced and returned is not None:
         context.results["returned_mana_value"] = _mana_value_of(returned.card)
-    game.log.append("Returned creature to hand" if bounced else "No creature to return")
+    game.log.append(
+        f"{returned.card.name} returned to its owner's hand ({_source_name(context)})"
+        if bounced and returned is not None
+        else f"{_source_name(context)}: no creature to return"
+    )
     return True, "resolved"
 
 

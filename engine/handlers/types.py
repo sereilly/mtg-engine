@@ -54,7 +54,7 @@ def add_mire_counter_to_target_land(game: Game, instruction: OracleInstruction, 
         game, context, predicate=lambda p: p.has_type("land") and not _is_swamp(p)
     )
     if target_land is None:
-        game.log.append("No valid non-Swamp land for mire counter")
+        game.log.append(f"{context.card.name}: no valid non-Swamp land for a mire counter")
         return True, "resolved"
 
     target_land.metadata["mire_counter"] = True

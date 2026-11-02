@@ -469,7 +469,10 @@ class DeclareBlockersStepMixin:
             return False, "every attacker must be labeled left or right"
         self.combat_attacker_piles = chosen
         self.combat_left_right_attacker_locked = True
-        self.log.append("Attacker labeled each creature left/right")
+        self.log.append(
+            f"{self.players[attacker_index].name} labeled each attacking "
+            "creature left or right"
+        )
         return True, "attacker piles assigned"
 
     def _block_mana_costs_of(

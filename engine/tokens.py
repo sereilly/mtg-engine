@@ -105,6 +105,24 @@ def default_token_name(subtypes: Sequence[str]) -> str:
     return " ".join(words + ["Token"])
 
 
+def tokens_said(name: str, count: int) -> str:
+    """*count* tokens named *name*, as a log line says them: "a Goblin Token",
+    "2 Bird Tokens", "a Kaldra token".
+
+    A token named by :func:`default_token_name` already ends in "Token" (CR
+    111.4), so the noun is not said again — "created a Bird Token token" read
+    the name and then the word it ends in. A token with a name of its own
+    (Kaldra, a copy) keeps "token" as the noun that says what it is. The
+    article is a vowel test, as ``alternative_costs._article``'s is, and for
+    its reason: a sentence that reads badly is the cost of being wrong.
+    """
+    named_token = name.endswith(" Token")
+    if count == 1:
+        article = "an" if name[:1].lower() in "aeiou" else "a"
+        return f"{article} {name}" if named_token else f"{article} {name} token"
+    return f"{count} {name}s" if named_token else f"{count} {name} tokens"
+
+
 #: Which metadata record each characteristic a token may take "**of the chosen
 #: color and type**" (Volrath's Laboratory) is written under — the same keys
 #: ``engine/enter_effects.py`` stamps as a permanent enters and

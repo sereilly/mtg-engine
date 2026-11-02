@@ -1004,6 +1004,26 @@ def resolve_target_permanent(
     )
 
 
+def departed_object_said(context: OracleExecutionContext) -> str:
+    """Why a resolving effect does nothing because the permanent it acts on
+    is gone — said as what that permanent *was* to the ability.
+
+    A target that has gone is CR 608.2b's ("its target is gone"). But the
+    object a trigger is **about** is never its target (CR 115.10a; the
+    context builder hands ``StackItem.about_permanent_id`` over on the target
+    channels only where the ability chose nothing): Toxin Sliver's "destroy
+    that creature" names the creature its Sliver dealt damage to, and that
+    creature usually died of the damage first. Nothing was targeted, so CR
+    608.2b judged nothing — the permanent left the battlefield and the one
+    that would come back is a new object (CR 400.7). Told apart by what the
+    channels hold: exactly the object the event named, and nothing chosen.
+    """
+    about = getattr(context, "about_permanent_id", None)
+    if about is not None and target_ids(context.target_permanent_id) == [about]:
+        return "that permanent has left the battlefield (400.7)"
+    return "its target is gone (608.2b)"
+
+
 def bound_permanent(
     game: Game,
     context: OracleExecutionContext,

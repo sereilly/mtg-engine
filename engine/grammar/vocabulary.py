@@ -276,6 +276,25 @@ def display_type_word(word: str) -> str:
     )
 
 
+def display_color_word(symbol) -> str:
+    """*symbol*, a colour as the engine records it ("U"), said as a player
+    would say it ("blue").
+
+    :func:`display_type_word`'s twin for the other characteristic a choice
+    records in code: a chosen colour is kept as its mana symbol, because that
+    is what a mana pool and a colour test compare, and a log line that prints
+    the record says "chose U". Inverted from :data:`COLOR_WORDS` rather than
+    written out, so the two spellings of one mapping cannot drift. Anything
+    that is not one of the five symbols is returned as written ("colorless",
+    a word already spelled).
+    """
+    text = str(symbol or "")
+    for word, letter in COLOR_WORDS.items():
+        if text.upper() == letter:
+            return word
+    return text
+
+
 __all__ = [
     "ABILITY_WORDS", "ALL_SUBTYPES", "ARTIFACT_TYPES", "BASIC_LAND_WORDS",
     "CARD_TYPES",
@@ -285,7 +304,8 @@ __all__ = [
     "NUMBER_WORDS", "NUMERIC_ARGUMENT_KEYWORDS", "ORDINAL_WORDS",
     "PLANESWALKER_TYPES", "SPELL_TYPES",
     "SUBTYPE_INDEX",
-    "SUPERTYPES", "TYPE_LINE_SUPERTYPES", "display_type_word", "manifest",
+    "SUPERTYPES", "TYPE_LINE_SUPERTYPES", "display_color_word",
+    "display_type_word", "manifest",
     "match_longest",
 ]
 

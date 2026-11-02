@@ -23,7 +23,7 @@ from ..game_types import target_ids
 from ..simultaneous_damage import deal_at_once
 from ._common import apply_damage_to_creature
 from ._filters import permanent_matches_filter
-from ._targets import (recorded_permanent_ids, attached_host,
+from ._targets import (departed_object_said, recorded_permanent_ids, attached_host,
                        defending_player_seat, resolve_target_permanent)
 from .registry import effect_handler
 
@@ -381,7 +381,7 @@ def target_bites_itself(game, instruction, context):
         fallback_on_invalid_choice=False,
     )
     if biter is None:
-        game.log.append(f"{context.card.name}: its target is gone (608.2b)")
+        game.log.append(f"{context.card.name}: {departed_object_said(context)}")
         return True, "resolved"
     amount = max(0, int(biter.effective_power))
     if amount <= 0:

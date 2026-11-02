@@ -74,7 +74,7 @@ def test_sleight_of_mind_names_a_spell_and_the_stack_shows_the_change():
     (item,) = state["stack"]
     assert item["card"]["name"] == "Terror"
     assert {"from": "black", "to": "white"} in item["card"]["text_changes"]
-    assert "Sleight of Mind changed B text to W on Terror (on the stack)" in state["log"]
+    assert "Sleight of Mind changed black text to white on Terror (on the stack)" in state["log"]
 
     # And the Terror is countered by its changed text: the Lions are white.
     _pass_priority(sid, 0)

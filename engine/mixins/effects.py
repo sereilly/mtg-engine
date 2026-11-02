@@ -1253,12 +1253,14 @@ class EffectsMixin:
             selected_color = self._normalize_mana_color(preferred_color) or "G"
             controller.mana_pool[selected_color] += 1
 
-    def _return_creature_from_graveyard(self, caster: PlayerState) -> bool:
+    def _return_creature_from_graveyard(self, caster: PlayerState):
+        """The creature card returned to *caster*'s hand, or None — the card
+        rather than a yes, so the caller's log line can say which."""
         for idx, card in enumerate(caster.graveyard):
             if card.primary_type == "creature":
                 self.put_card_into_hand(caster, caster.graveyard.pop(idx))
-                return True
-        return False
+                return card
+        return None
 
     def _reanimate_creature_to_battlefield(
         self,

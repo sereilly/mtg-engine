@@ -688,17 +688,32 @@ CHOSEN_LAND_TYPES_KEY = "chosen_land_types"
 CHOSEN_CREATURE_TYPE_KEY = "chosen_creature_type"
 CHOSEN_NUMBER_KEY = "chosen_number"
 
-_COLOR_SYMBOL_WORDS = {
-    "W": "white", "U": "blue", "B": "black", "R": "red", "G": "green",
-}
-
-
 def _shown_word(game, value) -> str:
     return str(value)
 
 
+# A colour and a type are recorded as the engine compares them -- a mana symbol,
+# a lowercase catalog word -- and shown as a player says them ("blue",
+# "Goblin"): the grammar's one spelling of each, imported lazily for
+# :func:`_entry_choice_catalogs`' reason.
 def _shown_color(game, value) -> str:
-    return _COLOR_SYMBOL_WORDS.get(str(value).upper(), str(value))
+    from .grammar.vocabulary import display_color_word
+
+    return display_color_word(value)
+
+
+def _shown_type(game, value) -> str:
+    from .grammar.vocabulary import display_type_word
+
+    return display_type_word(str(value))
+
+
+def _shown_types(game, value) -> str:
+    from .grammar.vocabulary import display_type_word
+
+    return ", ".join(
+        display_type_word(str(part)) if part else "nothing" for part in (value or ())
+    )
 
 
 def _shown_player(game, value) -> str:
@@ -802,7 +817,7 @@ ENTRY_CHOICES: "tuple[EntryChoice, ...]" = (
     EntryChoice(
         CHOSEN_LAND_TYPES_KEY, "Chosen land types (first, second)",
         lambda text, lines, name: chooses_two_land_types_on_enter(text),
-        _shown_each,
+        _shown_types,
     ),
     EntryChoice(
         CHOSEN_CREATURE_TYPE_KEY, "Chosen creature type",
@@ -811,7 +826,7 @@ ENTRY_CHOICES: "tuple[EntryChoice, ...]" = (
             or chooses_color_and_creature_type_on_enter(text)
             or opponent_chooses_creature_type_on_enter(text)
         ),
-        _shown_word,
+        _shown_type,
     ),
     EntryChoice(
         CHOSEN_LAND_TYPE_KEY, "Chosen land type",
@@ -819,7 +834,7 @@ ENTRY_CHOICES: "tuple[EntryChoice, ...]" = (
             chooses_land_type_on_enter(text)
             or _two_options_record(lines, name) == CHOSEN_LAND_TYPE_KEY
         ),
-        _shown_word,
+        _shown_type,
     ),
     EntryChoice(
         CHOSEN_NUMBER_KEY, "Chosen number",
