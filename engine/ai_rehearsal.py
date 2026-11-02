@@ -35,6 +35,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 
 from .ai_weighed_cast import permitted_casts
+from .text_changes import spell_text_card
 
 
 # --- The measure: what a seat's position is worth -----------------------------
@@ -1275,11 +1276,13 @@ def _casts_open(game, seat: int) -> frozenset:
 def _mana_value_on_the_stack(game) -> int:
     """The mana value of the object on top of *game*'s stack — X included
     (CR 202.3e) — or 0 with nothing there: what a cast just put on the stack
-    was charged, read before it resolves."""
+    was charged, read before it resolves — off what the spell says
+    (``text_changes.spell_text_card``), the reader every stack object's
+    characteristics go through."""
     if not game.stack:
         return 0
     item = game.stack[-1]
-    card = item.card
+    card = spell_text_card(item)
     value = int(float(getattr(card, "cmc", 0) or 0))
     x_count = (getattr(card, "mana_cost", "") or "").upper().count("{X}")
     return value + x_count * int(getattr(item, "x_value", 0) or 0)
