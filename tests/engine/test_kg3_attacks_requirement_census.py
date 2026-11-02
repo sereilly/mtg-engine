@@ -52,6 +52,7 @@ from engine import Game, PlayerState
 from engine.aura_attachment import attach_aura
 from engine.card_loader import load_catalog
 from engine.combat_restrictions import declaration_tap_costs
+from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.named_counters import add_counters
 from engine.turn_state import MUST_ATTACK_ON_SEAT_TURN_KEY
@@ -71,7 +72,7 @@ _FRAGMENTS = ("if able", "can't attack", "no more than", "attack unless",
 
 def _census_cards():
     found = {}
-    for card in load_catalog():
+    for card in compilation_units(load_catalog()):
         text = (card.oracle_text or "").lower()
         if "attack" not in text:
             continue
