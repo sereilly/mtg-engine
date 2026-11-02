@@ -25037,6 +25037,13 @@ function initBattlefieldCanvas() {
   if (!canvasEl) return;
 
   battlefieldCanvas = new BattlefieldCanvas(canvasEl, {
+    // The floating prompt dock's left edge, so the camera never frames a
+    // permanent underneath it (Legions' Phase 5, at 1920x1080).
+    rightObstructionPageX() {
+      const dock = document.querySelector(".floating-dock");
+      const rect = dock?.getBoundingClientRect();
+      return rect && rect.width > 0 ? rect.left : null;
+    },
     onCardClick({ seat: cardSeat, idx: permanentIndex, card }) {
       if (!currentState || seat === null) return;
       try {
