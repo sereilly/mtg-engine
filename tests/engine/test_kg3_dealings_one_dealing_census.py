@@ -23,8 +23,9 @@ shape, two ways:
   marker must come from a line printing them as two sentences (Tracker's bite
   and bite back — two events, its ruling of 2009-10-01).
 
-Validated backwards on 7d311d9f: no loop called ``deal_at_once`` and nine of
-them opened no dealing; no compiled sequence carried the marker.
+Validated backwards on 7d311d9f (the census's own reading, the helper and
+the marker not existing there): fifteen of the nineteen damage loops opened no
+dealing and were not excused, and no compiled sequence carried a marker.
 
 The boards are driven in ``tests/rules/test_kg3_dealings_one_dealing.py`` and
 ``tests/regressions/test_kg3_dealings_boards.py``.
