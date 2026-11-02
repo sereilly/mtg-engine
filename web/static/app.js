@@ -164,6 +164,12 @@ let combatBlockerDraft = {};
 // CR 702.22k: the active player's choice of which band member each creature
 // blocking their band damages. Maps blocker_idx -> chosen attacker (band member).
 let combatBandBlockerDraft = {};
+// The band-blocker dialog's split, chosen and not yet sent, while the active
+// player's own division of a band member's damage is still to come: both are
+// that player's announcement (CR 510.1, 702.22k), so they go as one request
+// from the attacker dialog. { key: the combat damage step it was chosen in
+// (getCombatDamagePassKey), split: {blocker id: {member id: damage}} }.
+let combatBandBlockerHeld = null;
 // CR 510.1d: the defending player's division of a multi-blocking creature's
 // damage (Two-Headed Giant of Foriys). Maps blocker_idx -> {attacker_idx: damage}.
 let combatMultiblockDraft = {};
@@ -483,6 +489,7 @@ function syncCombatDrafts(state = currentState) {
     combatDamageDraft = {};
     combatDamageOfferDraft = {};
     combatBandBlockerDraft = {};
+    combatBandBlockerHeld = null;
     combatMultiblockDraft = {};
     combatDividedDraft = { key: "", byAttacker: {} };
     combatDamageDialogKey = "";
@@ -22528,11 +22535,14 @@ function renderCombatControls(state) {
   }
 
   // CR 702.22k: a creature is blocking the active player's band — they choose which
-  // band member it damages, before the normal attacker assignment.
+  // band member it damages, before the normal attacker assignment. Once chosen
+  // and held for that assignment (`heldBandBlockerSplit`), the panel goes on to
+  // the attacker division below, which sends both.
   if (
     isCombatStep(state, "combat_damage") &&
     seat === state.current_turn &&
     getBandBlockerInfo(state) &&
+    !heldBandBlockerSplit(state) &&
     !combat?.damage_resolved
   ) {
     const prompt = document.createElement("div");
@@ -22583,6 +22593,10 @@ function renderCombatControls(state) {
         `${names} may assign combat damage as though ${offered.length === 1 ? "it weren't" : "they weren't"} blocked. Open the dialog to choose`
         + (divided ? ", and to split the damage of an attacker blocked by multiple creatures." : ".");
     }
+    const heldSplit = heldBandBlockerSplit(state);
+    if (heldSplit) {
+      prompt.textContent += " Your band blocker damage is chosen and is sent with this.";
+    }
     damagePanel.appendChild(prompt);
 
     const openBtn = document.createElement("button");
@@ -22590,6 +22604,18 @@ function renderCombatControls(state) {
     openBtn.textContent = "Assign Combat Damage";
     openBtn.addEventListener("click", () => openCombatDamageDialog(state));
     actions.appendChild(openBtn);
+    if (heldSplit) {
+      // Back to the band-blocker dialog: the held split is dropped and chosen
+      // again, then this dialog follows it as before.
+      const backBtn = document.createElement("button");
+      backBtn.type = "button";
+      backBtn.textContent = "Change Band Blocker Damage";
+      backBtn.addEventListener("click", () => {
+        combatBandBlockerHeld = null;
+        settleCombatDamageDialog();
+      });
+      actions.appendChild(backBtn);
+    }
 
     // Auto-open the dialog the first time we reach this assignment for this
     // combat damage step — each of the two, when there is a first-strike one.
@@ -22671,6 +22697,22 @@ function getBlockedAttackerGroups(state = currentState, minBlockersFor = () => 2
     const a = Number(pair.attacker_index);
     if (!byAttacker.has(a)) byAttacker.set(a, []);
     byAttacker.get(a).push(Number(pair.blocker_index));
+  }
+  // CR 702.22h: a creature blocking one member of an attacking band blocks
+  // every member. `combat.band_blocks` is what the band spread onto each
+  // member (attacker index -> blocker indices, on the same defender's
+  // battlefield, CR 702.22d), and those are as much the creatures blocking it
+  // as the declared ones — the division is among all of them (CR 510.1c). Read
+  // from the declared pairs alone, a Hill Giant banded with a Benalish Hero
+  // and blocked by a wall on each had one blocker here, and its controller was
+  // never asked how its damage divides.
+  for (const [attacker, spread] of Object.entries(combat.band_blocks || {})) {
+    const a = Number(attacker);
+    if (!byAttacker.has(a)) byAttacker.set(a, []);
+    const blockers = byAttacker.get(a);
+    for (const b of spread || []) {
+      if (!blockers.includes(Number(b))) blockers.push(Number(b));
+    }
   }
 
   const groups = [];
@@ -22789,6 +22831,10 @@ function validateCombatDamageGroup(group, mode = combatDamageDialogMode) {
 function closeCombatDamageDialog() {
   const modal = q("combatDamageModal");
   if (modal) modal.classList.add("hidden");
+  // The band-blocker dialog relabels the shared button "Next" when the
+  // attacker division follows it; every other dialog confirms.
+  const confirmBtn = q("combatDamageConfirmBtn");
+  if (confirmBtn) confirmBtn.textContent = "Confirm Damage";
 }
 
 // CR 702.22k: the active player chooses which band member each creature blocking
@@ -22799,6 +22845,26 @@ function getBandBlockerInfo(state = currentState) {
   if (!info || !Array.isArray(info.blockers) || info.blockers.length === 0) return null;
   if (seat !== info.attacker_seat) return null;
   return info;
+}
+
+// Whether the band-blocker split, once chosen, waits for the attacker dialog
+// rather than being sent: this seat also divides a band member's own damage
+// among the creatures blocking it (CR 510.1c — the band spread each blocker
+// over every member, CR 702.22h, so a member can have two). Both divisions are
+// the active player's one announcement (CR 510.1, 702.22k); sent alone, the
+// split had the step dealt with the engine's default for every member, and
+// the attacking player was never asked how a Hill Giant's 3 divides.
+function bandBlockerSplitWaits(state = currentState) {
+  return getAttackerAssignGroups(state).length > 0;
+}
+
+// The band-blocker split held for the attacker dialog's announcement, by id —
+// or null when none is held for THIS combat damage step (CR 510.4: a second
+// step is announced afresh).
+function heldBandBlockerSplit(state = currentState) {
+  if (!combatBandBlockerHeld || !state) return null;
+  if (combatBandBlockerHeld.key !== getCombatDamagePassKey(state)) return null;
+  return combatBandBlockerHeld.split;
 }
 
 function openBandBlockerDialog(state = currentState) {
@@ -22920,7 +22986,9 @@ function openBandBlockerDialog(state = currentState) {
     };
   }
   const confirmBtn = q("combatDamageConfirmBtn");
+  const waits = bandBlockerSplitWaits(state);
   if (confirmBtn) {
+    confirmBtn.textContent = waits ? "Next: Attackers' Damage" : "Confirm Damage";
     confirmBtn.onclick = async () => {
       // By id, off the board this dialog was drawn on: the blocker on the
       // defending player's battlefield, each band member on the active
@@ -22946,6 +23014,15 @@ function openBandBlockerDialog(state = currentState) {
         }
       } catch (e) {
         updateActionHint(e.message, true);
+        return;
+      }
+      // A band member's own division still to come: hold the split for the
+      // attacker dialog, which sends both as one announcement (CR 510.1), and
+      // let the panel open that dialog now.
+      if (waits) {
+        combatBandBlockerHeld = { key: getCombatDamagePassKey(state), split: blockerDamageSplit };
+        updateActionHint("Band blocker damage chosen. Now assign your attackers' damage.");
+        settleCombatDamageDialog();
         return;
       }
       // As in openDamageDialog: what this seat is still owed after the answer
@@ -23590,6 +23667,7 @@ function openDamageDialog(state = currentState, mode = "attacker") {
   }
   const confirmBtn = q("combatDamageConfirmBtn");
   if (confirmBtn) {
+    confirmBtn.textContent = "Confirm Damage";
     confirmBtn.onclick = async () => {
       if (groups.some((g) => !validateCombatDamageGroup(g, mode).valid)) return;
       const assignment = {};
@@ -23663,7 +23741,15 @@ function openDamageDialog(state = currentState, mode = "attacker") {
           if (Object.keys(dividedAmongDefenders).length) {
             announcement.divided_among_defenders = dividedAmongDefenders;
           }
+          // The band-blocker split chosen first (CR 702.22k), sent with the
+          // members' own divisions as the one announcement it is part of.
+          const heldSplit = heldBandBlockerSplit(currentState);
+          if (heldSplit) announcement.blocker_damage_split_by_id = heldSplit;
           await sendAction(announcement);
+          if (heldSplit) {
+            combatBandBlockerHeld = null;
+            combatBandBlockerDraft = {};
+          }
           updateActionHint("Combat damage resolved.");
         }
         combatDamageOfferDraft = {};
@@ -23742,6 +23828,9 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
           ? offerNote.trim()
           : "Distribute each attacker's power among the creatures blocking it. The total assigned to a blocker's row cannot exceed the attacker's damage."
             + offerNote;
+    if (mode !== "banding" && heldBandBlockerSplit(currentState)) {
+      subtitleEl.textContent += " The band blocker damage you chose is sent with this.";
+    }
   }
 
   const cardThumb = (card, sub) => {
@@ -24920,6 +25009,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
     combatDamageDraft = {};
     combatDamageOfferDraft = {};
     combatBandBlockerDraft = {};
+    combatBandBlockerHeld = null;
     combatMultiblockDraft = {};
     closeCombatDamageDialog();
   }
@@ -24927,6 +25017,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
     combatDamageDraft = {};
     combatDamageOfferDraft = {};
     combatBandBlockerDraft = {};
+    combatBandBlockerHeld = null;
     combatMultiblockDraft = {};
     combatDamageDialogKey = "";
     closeCombatDamageDialog();

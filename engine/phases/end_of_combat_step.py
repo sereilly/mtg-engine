@@ -226,7 +226,9 @@ class EndOfCombatStepMixin:
                     and attacker_idx in self.combat_attackers
                 ):
                     defending_idx = self.combat_attackers.get(attacker_idx)
-                    for blocker_idx in self._combat_blockers_for_attacker(attacker_idx):
+                    # Its band's spread blocks are creatures blocking it too
+                    # (CR 702.22h).
+                    for blocker_idx in self._attacker_all_blockers(attacker_idx):
                         blocker = self.permanent_at(defending_idx, blocker_idx)
                         if blocker is not None:
                             blocker_ids.append(blocker.permanent_id)
