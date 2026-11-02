@@ -599,7 +599,10 @@ class PoolPaymentMixin:
             if seat is None:
                 return ()
             paying_for = getattr(purpose, "card", None) or getattr(purpose, "source", None)
-            return mana_wants(self, seat, paying_for=paying_for)
+            return mana_wants(
+                self, seat, paying_for=paying_for,
+                cast=getattr(purpose, "kind", None) == CAST,
+            )
 
         return wants
 

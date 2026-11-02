@@ -392,7 +392,7 @@ class PaymentChoicesMixin:
             and not _land_mana_is_unplannable(self, land)
         ]
 
-    def _pay_planned_cost(self, player, planner, *, spend=None) -> bool:
+    def _pay_planned_cost(self, player, planner, *, spend=None, paying_for=None) -> bool:
         """Pay a cost an effect collects, and say whether it was paid.
 
         *planner* answers ``mana_payment.plan_payment`` for the cost **against
@@ -432,6 +432,11 @@ class PaymentChoicesMixin:
         which case the lands already tapped stay tapped and what they made
         stays in the pool, exactly as for a player who tapped and then could
         not pay. Callers treat it as the cost not having been paid.
+
+        *paying_for* is the permanent the payment is for where its caller
+        knows — a face-down permanent being turned up (CR 702.37e), whose
+        turn-up is this payment rather than a want beside it
+        (``mana_wants.mana_wants``).
         """
         seat = next(
             (index for index, found in enumerate(self.players) if found is player),
@@ -452,7 +457,7 @@ class PaymentChoicesMixin:
 
         def wants():
             if not read:
-                read.append(mana_wants(self, seat))
+                read.append(mana_wants(self, seat, paying_for=paying_for))
             return read[0]
 
         with payment_wants_in_force(wants):

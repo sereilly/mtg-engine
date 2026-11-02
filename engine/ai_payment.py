@@ -711,8 +711,13 @@ class _PaymentPlanner:
         if self._wants is None:
             from .mana_wants import mana_wants
 
+            # A plan told of a spell is that spell's cast, and what the
+            # spell leaves behind is a want too (`mana_wants.wants_left_behind`).
             self._wants = (
-                mana_wants(self.game, self.seat, paying_for=self._paying_for)
+                mana_wants(
+                    self.game, self.seat, paying_for=self._paying_for,
+                    cast=self.spell is not None,
+                )
                 if self.seat is not None else ()
             )
         return self._wants
