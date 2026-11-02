@@ -17,6 +17,18 @@ def _seat_type(session: Session, seat: int) -> str:
     return session.seat_types.get(seat) or session.seat_types.get(str(seat), "human")
 
 
+def _mark_interactive_seats(session: Session) -> None:
+    """Tell the engine which seats a person answers for
+    (``Game.interactive_seats``), so a decision owed to one of them is asked
+    rather than defaulted. Before anything the server runs for a seat: every
+    action (``actions.do_action``), and turn 1's beginning phase, which a
+    route may run before any action has been sent
+    (``turn_steps._begin_first_turn``)."""
+    session.game.interactive_seats = {
+        s for s in range(len(session.game.players)) if _seat_type(session, s) == "human"
+    }
+
+
 def _player_has_lost(game, seat: int) -> bool:
     """Whether the player in *seat* has lost the game.
 

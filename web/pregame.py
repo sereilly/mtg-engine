@@ -288,11 +288,16 @@ def _pregame_confirm_bottom(session: Session) -> None:
 
 
 def _pregame_start_game(session: Session) -> None:
+    """The pregame is over (CR 103.5 done): the starting player takes their
+    first turn (CR 103.8). Its beginning phase is owed rather than run here
+    — ``turn_steps`` is above this module in ``web.LAYERS`` — and the route or
+    action that got here runs it (``turn_steps._settle_pregame``)."""
     starting_player = session.pregame_starting_player or 0
     session.pregame_phase = None
     session.current_turn = starting_player
     session.game.active_player_index = starting_player
     session.game.start_priority_window(starting_player)
+    session.first_turn_owed = True
 
 
 def _pregame_auto_advance(session: Session) -> None:

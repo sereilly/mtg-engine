@@ -8,7 +8,6 @@ from __future__ import annotations
 from fastapi import HTTPException
 from .action_registry import action_handler
 from .pregame import (
-    _pregame_auto_advance,
     _pregame_confirm_bottom,
     _pregame_confirm_bottom_simultaneous,
     _pregame_declare_mulligan,
@@ -16,6 +15,7 @@ from .pregame import (
     _pregame_keep_player,
     _round_undecided,
 )
+from .turn_steps import _settle_pregame
 
 
 @action_handler("coin_flip_choose", pregame=True)
@@ -38,7 +38,7 @@ def _action_coin_flip_choose(session, req, seat_type):
         f"{session.game.players[req.seat].name} chooses to go {'first' if choice == 0 else 'second'}"
     )
     _pregame_enter_mulligan(session, starting_player)
-    _pregame_auto_advance(session)
+    _settle_pregame(session)
 
 def _require_declaring_seat(session, req, seat_type) -> None:
     """The seat may declare keep or mulligan now (CR 103.5): the sequential
@@ -73,13 +73,13 @@ def _action_mulligan_take(session, req, seat_type):
             status_code=400, detail="cannot take another mulligan (hand would be 0 cards)"
         )
     _pregame_declare_mulligan(session, req.seat)
-    _pregame_auto_advance(session)
+    _settle_pregame(session)
 
 @action_handler("mulligan_keep", pregame=True)
 def _action_mulligan_keep(session, req, seat_type):
     _require_declaring_seat(session, req, seat_type)
     _pregame_keep_player(session, req.seat)
-    _pregame_auto_advance(session)
+    _settle_pregame(session)
 
 @action_handler("mulligan_bottom_select", pregame=True)
 def _action_mulligan_bottom_select(session, req, seat_type):
@@ -128,7 +128,7 @@ def _action_mulligan_bottom_confirm(session, req, seat_type):
                 detail=f"must select exactly {required} card(s)",
             )
         _pregame_confirm_bottom_simultaneous(session, req.seat)
-        _pregame_auto_advance(session)
+        _settle_pregame(session)
     else:
         if session.pregame_phase != "bottom_select":
             raise HTTPException(status_code=400, detail="not in bottom card selection phase")
@@ -142,4 +142,4 @@ def _action_mulligan_bottom_confirm(session, req, seat_type):
                 detail=f"must select exactly {session.mulligan_bottom_required} card(s)",
             )
         _pregame_confirm_bottom(session)
-        _pregame_auto_advance(session)
+        _settle_pregame(session)

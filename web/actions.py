@@ -33,7 +33,7 @@ from .schemas import GameActionRequest
 
 from .runtime import _require_session, _save_snapshot
 from .events import _notify_session_change
-from .seats import _seat_type
+from .seats import _mark_interactive_seats, _seat_type
 from .turn_steps import (
     _cleanup_discard_requirement,
     _optional_trigger_pending,
@@ -1024,9 +1024,7 @@ def do_action(session_id: str, req: GameActionRequest):
     # Keep the engine's set of human-controlled seats current, so forced-sacrifice
     # effects (Lich) dealt to a human during this action defer to an interactive
     # prompt instead of auto-resolving.
-    session.game.interactive_seats = {
-        s for s in range(len(session.game.players)) if _seat_type(session, s) == "human"
-    }
+    _mark_interactive_seats(session)
 
     # Remember the human's phase-rail hold-priority preferences so the AI can stop
     # at them even on steps (turn start, end step) it would otherwise resolve itself.
