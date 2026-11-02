@@ -13,6 +13,14 @@ the recorded ``default_option`` immediately. Both paths finish through the same
 registered resolver, so there is one completion path to keep correct rather than
 an inline branch and a ``confirm_`` method that must agree forever.
 
+A queued offer is a prompt like any on ``Game.pending_choices``, and it waits
+the same way (CR 608.2): it records the stack object resolving as it was
+offered (``_stack_item``), which stays on the stack until its last decision is
+answered; it suspends the loop the event was a step of, so "draw, then discard"
+does not discard before the draw is decided; and its answer runs inside the
+one answer envelope (``PendingChoicesMixin._answer_pending_choice``), which
+resumes that loop and releases the object.
+
 Adding an interactive replacement is therefore two registrations — an
 interceptor that offers the choice and a resolver that applies it — and no new
 ``Game`` field, prompt plumbing, or confirm method.
@@ -109,6 +117,17 @@ def offer_replacement_choice(game, choice: ReplacementChoice) -> tuple[bool, int
     if choice.player_index not in game.interactive_seats:
         return False, resolve_choice(game, choice, choice.default_option)
     stamp_draw_of(game, choice)
+    # Which stack object is still resolving because of this offer (CR 608.2):
+    # the stamp ``Game.arm_pending_choice`` gives a prompt on the other queue,
+    # for the same reason — the interceptor that offers it knows nothing about
+    # the stack. Every kind on this queue holds priority, so no kind is asked.
+    # Unstamped, Shock finished resolving and went to the graveyard while
+    # Blood of the Martyr's "you may have that damage dealt to you instead"
+    # was still owed, and Mox Diamond's spell had left the stack with its
+    # discard toll unanswered.
+    resolving = getattr(game, "resolving_stack_item", None)
+    if resolving is not None and "_stack_item" not in choice.data:
+        choice.data["_stack_item"] = resolving
     game.pending_replacement_choices.append(choice)
     return True, 0
 

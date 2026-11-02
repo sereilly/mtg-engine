@@ -17,10 +17,10 @@ class PhaseStepsMixin:
         step's remaining triggers into a board the answer has not shaped yet. The
         caller resumes once the prompt is answered.
 
-        With no interactive seat there is nobody to stop for: headless and AI
-        play queue the same prompts and drain them deterministically afterwards,
-        so those runs resolve exactly as they did. That is also what keeps a
-        seeded simulation reproducible.
+        A driver's table holds the object the same way and answers at once
+        (:meth:`_resolve_window_answering_prompts`). With nobody to stop for —
+        a bare headless table — the same prompts are queued and the caller
+        drains them afterwards (``holds_for_answers``).
 
         **An empty stack is not yet the end of the step.** CR 500.2: a step
         ends "when the stack is empty and all players pass in succession", and
@@ -36,8 +36,7 @@ class PhaseStepsMixin:
         check is made where the players would pass, and the window goes round
         again for whatever it put there (:meth:`_window_may_close`).
         """
-        pause_for_choices = bool(self.interactive_seats)
-        if not pause_for_choices and (
+        if not self.interactive_seats and (
             self.prompt_driver is not None or self.priority_driver is not None
         ):
             # One object at a time, which a table whose players are asked
@@ -45,12 +44,16 @@ class PhaseStepsMixin:
             # the next object resolves.
             self._resolve_window_answering_prompts()
             return
+        # An interactive seat to stop for, or nobody (``holds_for_answers``;
+        # a driver's table took the branch above).
+        pause_for_choices = self.holds_for_answers()
         for _ in range(self.MAX_SETTLE_ITERS):
             # One object at a time, with the state-based check a player would
-            # make before receiving priority between them (CR 704.3, 117.5).
-            while self.stack and self.resolve_top_of_stack(pause_for_choices=pause_for_choices):
-                if not (pause_for_choices and self.waiting_prompt() is not None):
-                    self._check_between_resolutions()
+            # make before receiving priority between them (CR 704.3, 117.5) —
+            # inside the resolution's trigger window, so what it set off
+            # chooses after the check (``resolve_next_object``).
+            while self.stack and self.resolve_next_object(pause_for_choices=pause_for_choices):
+                pass
             if not self.stack:
                 if self._window_may_close(waits=pause_for_choices):
                     return
@@ -222,16 +225,29 @@ class PhaseStepsMixin:
         # as it stands (a step-end offer someone acted in, which only ends
         # once everyone passes): the top resolves without being offered again.
         passed = False
+        # CR 608.2: an object that stops to ask is held on the stack for the
+        # answer — with a driver, answered at the top of the next pass — and
+        # released by it (``holds_for_answers``, ``_release_stack_item``).
+        # False only for a table with a priority driver and no prompt driver,
+        # whose prompts nobody here answers.
+        pause_for_choices = self.holds_for_answers()
         for _ in range(self.MAX_SETTLE_ITERS):
             answered = self.drive_owed_prompts()
-            if answered:
+            # While a resolution still waits on a later answer it is not over,
+            # and neither the state-based check nor priority has a moment in
+            # it (CR 704.3, 117.3b); its release makes the check.
+            waiting = self.resolution_waiting()
+            if answered and not waiting:
                 self.check_state_based_actions()
-            if self.stack and not (passed and not answered):
+            if self.stack and not waiting and not (passed and not answered):
                 self.offer_priority()
             passed = False
-            resolved = bool(self.stack) and self.resolve_top_of_stack()
-            if resolved:
-                self._check_between_resolutions()
+            # The resolution and its state-based check, one unit of play
+            # (``resolve_next_object``); a held one is checked by its release.
+            resolved = (
+                bool(self.stack) and not waiting
+                and self.resolve_next_object(pause_for_choices=pause_for_choices)
+            )
             if not answered and not resolved:
                 # An object that refuses to resolve ends the window as it
                 # always did. An *empty* stack ends it only once the check
@@ -412,7 +428,10 @@ class PhaseStepsMixin:
         # All players have passed in succession.
         self.priority_pass_count = 0
         if self.stack:
-            self.resolve_top_of_stack(pause_for_choices=True)
+            # The resolution and CR 704.3's check after it, one unit of play
+            # (``resolve_next_object``): the check is made before its trigger
+            # window closes, unless the resolution stopped to ask.
+            self.resolve_next_object(pause_for_choices=True)
             # CR 117.3b gives the active player priority "after a spell or
             # ability resolves" — a resolution that stopped to ask somebody
             # something has not, so nobody gets priority yet and the seat that
@@ -430,8 +449,8 @@ class PhaseStepsMixin:
                 return "awaiting_choice"
             # 704.3: state-based actions are checked before any player would
             # receive priority after a spell or ability resolves (e.g. an Aura
-            # now illegally attached is put into its owner's graveyard).
-            self.check_state_based_actions()
+            # now illegally attached is put into its owner's graveyard) — made
+            # by ``resolve_next_object`` inside the resolution's window.
             # 117.3b: active player gets priority after a spell/ability resolves.
             self.priority_player_index = self.active_player_index
             return "resolved_top"

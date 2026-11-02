@@ -224,13 +224,17 @@ def test_603_3d_a_clone_of_man_o_war_asks_for_the_bounce_target(set_pool):
     (owed,) = [c for c in game.pending_choices if c.kind == "trigger_target"]
     offered = {t["permanent_id"] for t in owed.data["targets"]}
     assert {bears.permanent_id, man_o_war.permanent_id} <= offered
+    # Clone's spell has finished resolving (CR 608.3): the ability it set off
+    # is put on the stack after it, and that is what waits for the target
+    # (CR 603.3, 603.3d) — not the spell, held for its own trigger's choice.
+    assert owed.data.get("_stack_item") is None
+    assert [item.card.name for item in game.stack if not item.is_ability] == []
     assert game.confirm_trigger_target(0, permanent_id=bears.permanent_id)
     resolve_stack(game)
 
     assert not game.is_on_battlefield(bears)
     assert [c.name for c in game.players[1].hand] == ["Grizzly Bears"]
     assert game.is_on_battlefield(man_o_war), "the copied creature was bounced"
-    assert "Clone finished resolving" in game.log
 
 
 @pytest.mark.cr("603.3d")

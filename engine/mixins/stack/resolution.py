@@ -448,11 +448,12 @@ class StackResolutionMixin:
         stack at all — and those same 29, and only those, are what the priority
         path leaves unheld. That is what named this loop as the seam.
 
-        The condition is ``bool(self.interactive_seats)`` — the same derivation
-        ``_resolve_priority_window`` already makes, and for the same reason: with
-        nobody to stop for, headless and AI play queue the same prompts and drain
-        them deterministically afterwards, so a seeded run resolves exactly as it
-        did.
+        The condition is :meth:`holds_for_answers` — the derivation
+        ``_resolve_priority_window`` makes too: a table with an interactive
+        seat, or with a ``prompt_driver`` (the simulator), whose driver answers
+        at the top of this loop with the object still on the stack. With
+        nobody to stop for, a bare headless table queues the same prompts and
+        its caller drains them afterwards.
 
         **What it does not do is answer anything.** A prompt owed by a seat the
         engine plays still holds the object here, exactly as it does on the
@@ -469,22 +470,33 @@ class StackResolutionMixin:
         whoever drains. Invoke Prejudice ("counter that spell unless that player
         pays {X}{X}") is the card that reaches it in an ordinary duel.
         """
-        # CR 608.2 / CR 117.3b, only where there is somebody to wait for.
-        pause_for_choices = bool(self.interactive_seats)
+        # CR 608.2 / CR 117.3b, only where there is somebody to wait for
+        # (``holds_for_answers``: an interactive seat, or a prompt driver).
+        pause_for_choices = self.holds_for_answers()
         iterations = 0
         while True:
-            self.check_state_based_actions()
+            # A resolution waiting on its answer is not finished, so no sweep
+            # yet (CR 704.3 names no moment inside one): the answer's release
+            # makes it (``_release_stack_item``).
+            waiting = self.resolution_waiting()
+            if not waiting:
+                self.check_state_based_actions()
             # A table whose prompts a driver answers (`Game.prompt_driver`, the
             # AI simulator): what the object just resolved asked is answered
-            # *here*, before the next object resolves, rather than after this
-            # whole loop has returned. Inert for every other game, so the
-            # sentence above about not answering anything still holds for them.
+            # *here*, with that object still on the stack (it held for the
+            # answer, ``holds_for_answers``), before anything else happens.
+            # Inert for every other game, so the sentence above about not
+            # answering anything still holds for them.
             if self.drive_owed_prompts():
                 iterations += 1
                 if iterations > self.MAX_SETTLE_ITERS:
                     break
                 continue
-            if not self.stack:
+            # Held for an answer nobody here gives — an interactive seat's, or
+            # a driver's from inside its own answer (``drive_owed_prompts`` is
+            # not re-entered): the answer path releases the object and the
+            # caller comes back.
+            if waiting or not self.stack:
                 break
             # CR 117.4: the top resolves once every player has passed in
             # succession — asked of a table whose seats a driver plays
@@ -493,28 +505,65 @@ class StackResolutionMixin:
             # and in the untap step, where nobody receives priority (CR 502.4).
             if self.current_step != "untap":
                 self.offer_priority()
-            if not self.resolve_top_of_stack(pause_for_choices=pause_for_choices):
+            # One unit of play: the resolution and its state-based check in
+            # one trigger window (``resolve_next_object``).
+            if not self.resolve_next_object(pause_for_choices=pause_for_choices):
                 # Top item is paused on a pending choice (Word of Command).
                 break
             # A resolution that stopped to ask holds its object on the stack
-            # (CR 608.2). Break *here* rather than letting the loop come round:
-            # the next iteration's SBA check would run mid-resolution, which is
-            # a sweep at a moment CR 704.3 does not name. The caller resumes
-            # when the last of the object's prompts is answered — the answer
-            # path releases it (`_release_stack_item`).
-            if (
-                pause_for_choices
-                and self.stack
-                and self.stack[-1].resolution_held
-                and self.stack_item_is_waiting(self.stack[-1])
-            ):
-                break
+            # (CR 608.2), and the loop comes round to the top without sweeping
+            # (``waiting`` above): a driver answers there, and anything else
+            # breaks there for the caller. The answer path releases the object
+            # when the last of its prompts is answered (`_release_stack_item`).
             iterations += 1
             if iterations > self.MAX_SETTLE_ITERS:
                 self.log.append(
                     f"_settle aborted after {self.MAX_SETTLE_ITERS} iterations (possible loop)"
                 )
                 break
+    def resolve_next_object(self, *, pause_for_choices: bool) -> bool:
+        """Resolve the top object **as one unit of play**: its resolution and
+        the state-based check after it, in one trigger window. True when an
+        object resolved (as :meth:`resolve_top_of_stack`).
+
+        CR 603.3: a triggered ability is put on the stack the next time a
+        player would receive priority; CR 117.5 / 704.3 make the game perform
+        state-based actions first; CR 603.3d chooses the ability's targets as
+        it is put there. The resolution's own window closed as its last
+        instruction returned and every loop then made its check, so a trigger
+        fired *inside* a resolving spell chose before the check — Chandra's
+        Incinerator, triggered by Earthquake's damage to an opponent, was
+        offered the creatures Earthquake had just dealt lethal damage to, and
+        Karmic Justice, by Devastate's land, the ones its 1 damage had. Every
+        loop that resolves the stack resolves through here
+        (``_settle``, ``_resolve_priority_window``,
+        ``_resolve_window_answering_prompts``, ``pass_priority``), so the
+        window closes after the check (:meth:`_check_inside_the_resolution_window`):
+        the abilities the resolution set off, the ones its destructions set
+        off and the ones the check itself sets off (a death, a record the
+        sweep announces) go on the stack together, choose after the check, and
+        are ordered as one (CR 603.3b).
+
+        A resolution that stopped to ask is not over, so there is no check yet:
+        the window hands what it collected to the held object, and the release
+        makes the check (``_release_stack_item``)."""
+        with self.putting_triggers_on_stack():
+            resolved = self.resolve_top_of_stack(pause_for_choices=pause_for_choices)
+            checked = resolved and self._check_inside_the_resolution_window()
+        if resolved and not checked and not self.resolution_waiting():
+            self._check_between_resolutions()
+        return resolved
+
+    def _check_inside_the_resolution_window(self) -> bool:
+        """The state-based check :meth:`resolve_next_object` makes before its
+        window closes; True when it has dealt with the check (made it, or
+        found the resolution still waiting on an answer, whose release makes
+        it). Named so a census can put the check back outside the window,
+        which is the tree before (``tests/rules/test_kg3_holds_trigger_after_state_check.py``)."""
+        if not self.resolution_waiting():
+            self._check_between_resolutions()
+        return True
+
     def resolve_stack(self, pause_for_choices: bool = False) -> None:
         while self.stack:
             if not self.resolve_top_of_stack(pause_for_choices=pause_for_choices):
@@ -536,9 +585,11 @@ class StackResolutionMixin:
         answered — and *only* then, because answering one prompt is how the next
         step of the same resolution arms its own.
 
-        Headless/auto paths leave this False, so the object resolves and pops
-        immediately and the caller drains the prompts deterministically,
-        preserving seeded behaviour."""
+        Every loop that resolves the stack passes ``holds_for_answers()``: a
+        table with an interactive seat and one with a prompt driver (the
+        simulator, which answers with the object still held) hold; a bare
+        headless table leaves this False, so the object resolves and pops
+        immediately and the caller drains the prompts afterwards."""
         if not self.stack:
             return False
         # A triggered ability whose choices were waiting for its unit of play
@@ -604,15 +655,25 @@ class StackResolutionMixin:
         # this is the one place that knows, and everything below reaches the
         # damage paths with a bare CardDefinition that cannot say.
         self.resolving_items.append(item)
-        try:
-            # Everything this resolution sets off goes on the stack together
-            # once it is over (CR 603.3, CR 603.3b): one window, whichever fire
-            # sites — a sweep's deaths, an entry, a batch — put them there.
-            with self.putting_triggers_on_stack():
+        # Everything this resolution sets off goes on the stack together once
+        # it is over (CR 603.3, CR 603.3b): one window, whichever fire sites —
+        # a sweep's deaths, an entry, a batch, the destructions it made — put
+        # them there. Open until the resolution has finished: past the hold,
+        # when it stops to ask (the window gives what it collected to the held
+        # object, ``held_triggers``), and, in the loops that resolve the stack,
+        # past the state-based check after it (``resolve_next_object``).
+        with self.putting_triggers_on_stack():
+            try:
                 self._run_stack_item_resolution(item)
-        finally:
-            self.resolving_items.pop()
-            self.resolving_stack_item = previous_resolving
+            finally:
+                self.resolving_items.pop()
+                self.resolving_stack_item = previous_resolving
+            return self._after_the_instructions(item, pause_for_choices, woc_before)
+
+    def _after_the_instructions(self, item, pause_for_choices: bool, woc_before) -> bool:
+        """The rest of :meth:`resolve_top_of_stack` once *item*'s instructions
+        have run, inside its trigger window: the recompute, Power Sink's
+        payment, the hold, the destruction triggers, Word of Command."""
         # **The resolution seam** (CR 611.3a: a static ability's effect applies
         # at any given moment to whatever its text indicates). Whatever this
         # object just did — recoloured a creature, changed a type, moved a
@@ -629,8 +690,10 @@ class StackResolutionMixin:
         # upkeep, and one laced white under a Crusade was not pumped.
         self._recompute_continuous_effects()
         # Power Sink armed a pending "pay {X} or be countered" for the targeted
-        # spell's controller. On the human priority path leave it for the prompt;
-        # headless/AI resolves it deterministically (pay if able, else countered).
+        # spell's controller. Where the table holds for answers it is held with
+        # the object like every other prompt — a person answers it, a driver
+        # gives its default (``_default_mana_payment``, the same answer as
+        # below); a bare headless table pays if able, else is countered, now.
         payment = self.pending_choice_of("mana_payment")
         if payment is not None and payment.data.get("_new"):
             payment.data.pop("_new", None)

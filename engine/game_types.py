@@ -504,6 +504,14 @@ class StackItem(_TargetIdsGuard):
     # ``_release_stack_item`` runs it and clears it; None for an ability, or a
     # spell nothing held.
     finish_resolution: Callable[[], None] | None = None
+    # The triggered abilities set off while this object was held for an answer,
+    # waiting with it: ``(collected, unannounced)``, the two lists of the
+    # trigger window that closed on the hold (``putting_triggers_on_stack``).
+    # The window that releases the object takes them back
+    # (``_release_stack_item``), so they choose their targets and are ordered
+    # once the resolution is over and its state-based check made (CR 603.3b,
+    # 603.3d, 117.5). None while nothing waits; never compared or printed.
+    held_triggers: tuple | None = field(default=None, repr=False, compare=False)
     # CR 108.3: the seat that **owns** this object's card, which is where
     # CR 400.3 sends it whenever it leaves the stack for a graveyard, a hand, a
     # library or exile — resolving (CR 608.2n), countered (CR 701.6a), removed

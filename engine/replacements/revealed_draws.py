@@ -20,6 +20,7 @@ from ..replacement_choices import (
     offer_replacement_choice,
     replacement_choice,
 )
+from ..resumption import run_resumable
 from ..search_filters import card_has_type
 from .draws import QUEUED_EXCLUDES, draws_behind, queued_excludes
 from .registry import (DRAW_LOOKING_AT_TOP, DRAW_REVEALED_AND_TAXED,
@@ -555,7 +556,39 @@ def _revealed_draw_taxed(game, payload: dict) -> ReplacementOutcome | None:
     queued = max(0, count - 1)
     queued_excludes = tuple(payload.get("exclude_sources") or ())
     before = len(player.hand)
-    drawn = game._draw_with_replacements(player, 1, exclude_sources=excludes)
+    payload["drawn"] = 0
+
+    def draw() -> None:
+        payload["drawn"] += game._draw_with_replacements(
+            player, 1, exclude_sources=excludes
+        )
+
+    def reveal() -> None:
+        _reveal_and_tax(
+            game, payload, player=player, seat=seat, source=source,
+            before=before, queued=queued, queued_excludes=queued_excludes,
+        )
+
+    # **The reveal is a later step than the draw it reveals.** The draw goes
+    # back through the seam, where another replacement may offer its player a
+    # choice (CR 614: Obstinate Familiar's skip, Pursuit of Knowledge's
+    # counter) — and until that is answered nothing has been drawn. Run
+    # straight through, the hand had not grown, so the card the answer drew
+    # was never revealed or taxed. Two steps of one resumable loop: an owed
+    # offer stops it after the draw, and the answer resumes it
+    # (``engine/resumption.py``). With no offer queued — every seat the engine
+    # plays — the two run back to back exactly as they did.
+    run_resumable(game, (draw, reveal), lambda step: step())
+    return ReplacementOutcome(replaced=True)
+
+
+def _reveal_and_tax(
+    game, payload: dict, *, player, seat: int, source, before: int,
+    queued: int, queued_excludes: tuple,
+) -> None:
+    """Breathstealer's Crypt's second half, once its draw has happened: reveal
+    the card the hand grew by, offer the tax on a creature, and make the draws
+    queued behind this one (see :func:`_revealed_draw_taxed`)."""
     revealed = player.hand[-1] if len(player.hand) > before else None
     if revealed is not None:
         game.record_reveal(seat, [revealed.name])
@@ -587,15 +620,12 @@ def _revealed_draw_taxed(game, payload: dict) -> ReplacementOutcome | None:
             # Dodecapod onto the battlefield and your own does not.
             cause_seat=game.controller_index_of(source),
         )
-        payload["drawn"] = drawn
-        return ReplacementOutcome(replaced=True)
+        return
     # No offer to make, so the draws queued behind this one happen here. They
     # are their own events (CR 121.2) and get their own trip through the seam —
     # including this replacement again, which is what a two-card draw under a
     # Crypt is.
     if queued:
-        drawn += game._draw_with_replacements(
+        payload["drawn"] += game._draw_with_replacements(
             player, queued, exclude_sources=queued_excludes,
         )
-    payload["drawn"] = drawn
-    return ReplacementOutcome(replaced=True)

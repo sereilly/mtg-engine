@@ -12,7 +12,9 @@ and resume the loop it suspended. ``effect_suspended``,
 what the rest of the engine asks about time: whether a loop has to stop, whether
 an object is still resolving, whether anybody may receive priority (CR 608.2,
 CR 117.3b). Both queues are read here — a replacement suspended on a decision
-(``engine/replacement_choices.py``) is a prompt like any other.
+(``engine/replacement_choices.py``) is a prompt like any other: it holds the
+object it was offered during, suspends the loop its event was a step of, and is
+answered inside the same envelope (``_answer_pending_choice``).
 
 The families of prompt are the mixins beside this one; the package docstring
 lists them, and ``table.py`` registers every kind.
@@ -116,19 +118,27 @@ class PendingChoicesMixin:
 
         The question about the whole queue: whether *anything* is owed. A loop
         deciding whether its own step stopped asks :meth:`suspended_beyond`
-        instead."""
-        return any(
-            spec_for(choice.kind).suspends and not choice.data.get("_answered")
-            for choice in self.pending_choices
-        )
+        instead.
+
+        **Both queues.** A replacement suspended on a decision (CR 614,
+        ``engine/replacement_choices.py``) has taken its event away until the
+        answer — the draw is not drawn, the damage not dealt, the discarded
+        card in no zone — so the steps behind that event wait for it exactly
+        as they wait for a scry. Every offer on that queue suspends, and none
+        needs ``_answered``: its answer path takes it off the queue before
+        applying it. Left out, "draw two cards, then discard a card" (Catalog)
+        under Obstinate Familiar asked for the discard with the draw still
+        undecided."""
+        return bool(self.owed_suspensions())
 
     def owed_suspensions(self) -> tuple:
-        """The suspending choices owed right now, as a snapshot a loop takes
-        before running one of its steps (``engine/resumption.run_resumable``)."""
+        """The suspending choices owed right now, on either queue, as a
+        snapshot a loop takes before running one of its steps
+        (``engine/resumption.run_resumable``)."""
         return tuple(
             choice for choice in self.pending_choices
             if spec_for(choice.kind).suspends and not choice.data.get("_answered")
-        )
+        ) + tuple(self.pending_replacement_choices)
 
     def suspended_beyond(self, owed: tuple) -> bool:
         """Whether a suspending choice is owed that was **not** in *owed* — a
@@ -147,10 +157,8 @@ class PendingChoicesMixin:
         offer about it. Identity, not equality: two seats can owe look-alike
         choices."""
         return any(
-            spec_for(choice.kind).suspends
-            and not choice.data.get("_answered")
-            and not any(choice is earlier for earlier in owed)
-            for choice in self.pending_choices
+            not any(choice is earlier for earlier in owed)
+            for choice in self.owed_suspensions()
         )
 
     def permanent_is_entering(self, permanent) -> bool:
@@ -201,12 +209,18 @@ class PendingChoicesMixin:
     # kinds named by hand in ``pass_priority``.
 
     def choices_for_stack_item(self, item) -> list[PendingChoice]:
-        """Queued prompts belonging to *item*'s resolution, oldest first.
+        """Queued prompts belonging to *item*'s resolution, oldest first on
+        each queue — the prompt queue's, then the CR 614 queue's (a replacement
+        suspended on a decision is stamped the same way, in
+        ``replacement_choices.offer_replacement_choice``).
 
         Identity, not equality: two stack objects can look alike (two copies of
         one spell), and a resolution that answered to a look-alike's prompts
         would leave the wrong one on the stack."""
-        return [c for c in self.pending_choices if c.data.get("_stack_item") is item]
+        return [
+            c for c in (*self.pending_choices, *self.pending_replacement_choices)
+            if c.data.get("_stack_item") is item
+        ]
 
     def announcement_choice_for(self, item):
         """The choice *item* made as it was **announced**, still unanswered.
@@ -244,6 +258,43 @@ class PendingChoicesMixin:
             spec_for(c.kind).open_for(self, c) for c in self.choices_for_stack_item(item)
         )
 
+    def holds_for_answers(self) -> bool:
+        """Whether a resolution that stops to ask holds its object on the
+        stack at this table (CR 608.2) — the ``pause_for_choices`` every loop
+        that resolves the stack passes, derived here once.
+
+        Two tables have somebody to hold for. One with an interactive seat,
+        whose answer arrives on a later request (the web). And one with a
+        ``prompt_driver`` (the AI simulator), whose answer is taken before
+        anything else happens: the object waits on the stack, the driver
+        answers, the answer releases it (``_release_stack_item``: the
+        state-based check, priority, the abilities its destructions set off)
+        — the same road the web's answer takes. The simulator used to resolve
+        straight through and answer afterwards, so the object had left the
+        stack, a state-based check had been made and the destruction triggers
+        announced before the driver answered: 154 of 1,260 driven resolutions
+        across eight seeded Legions/Onslaught games armed a prompt that held
+        nothing, and in 3 the check acted first.
+
+        A bare headless ``Game`` (no driver, nobody interactive) holds nothing:
+        its prompts stay queued for the caller to drain once the engine call
+        returns, which is what the tests reading that queue are written
+        against (``_settle``)."""
+        return bool(self.interactive_seats) or self.prompt_driver is not None
+
+    def resolution_waiting(self) -> bool:
+        """Whether some object on the stack is part-way through resolving and
+        waiting on an answer (CR 608.2) — in which case nothing else resolves,
+        nobody receives priority and no state-based check is made until the
+        answer is in (CR 704.3 names no moment inside a resolution). Asked of
+        the whole stack, not its top: an answer that sets off a trigger puts
+        it above the object still waiting on the next answer."""
+        return any(
+            getattr(item, "resolution_held", False)
+            and self.stack_item_is_waiting(item)
+            for item in self.stack
+        )
+
     def _release_stack_item(self, item, force: bool = False) -> None:
         """Take a held stack object off the stack once its resolution is done.
 
@@ -261,28 +312,36 @@ class PendingChoicesMixin:
             if entry is item:
                 del self.stack[index]
                 item.resolution_held = False
-                # The step the resolution handed over (a spell's CR 608.2n
-                # bin) — run after the object has left the stack, so the card
-                # is in exactly one zone at every moment a client can see.
-                tail, item.finish_resolution = item.finish_resolution, None
-                if tail is not None:
-                    tail()
-                self.log.append(f"{item.card.name} finished resolving")
-                # The resolution is over *now*, so what ``pass_priority`` does
-                # after one that ran straight through happens here for one that
-                # stopped to ask: CR 704.3's check before anyone receives
-                # priority, and CR 117.3b's priority to the active player. The
-                # seat that owed the answer was holding the window only because
-                # it owed it.
-                self.check_state_based_actions()
-                if self.priority_player_index is not None:
-                    self.priority_player_index = self.active_player_index
-                    self.priority_pass_count = 0
-                # …and CR 603.3b's: the abilities this object's destructions
-                # triggered were waiting for it to finish, and it has. After
-                # the state-based check, which is the order the rule gives.
-                # See engine/destruction_events.py.
-                destruction_finished(self)
+                # The end of the resolution's unit of play (CR 603.3b, 117.5):
+                # one trigger window around the last step, the state-based
+                # check and the destruction triggers, which takes back what the
+                # resolution set off while it was held (``held_triggers``) —
+                # so every one of them chooses its targets after the check.
+                with self.putting_triggers_on_stack():
+                    self._rejoin_held_triggers(item)
+                    # The step the resolution handed over (a spell's CR 608.2n
+                    # bin) — run after the object has left the stack, so the
+                    # card is in exactly one zone at every moment a client can
+                    # see.
+                    tail, item.finish_resolution = item.finish_resolution, None
+                    if tail is not None:
+                        tail()
+                    self.log.append(f"{item.card.name} finished resolving")
+                    # The resolution is over *now*, so what ``pass_priority``
+                    # does after one that ran straight through happens here for
+                    # one that stopped to ask: CR 704.3's check before anyone
+                    # receives priority, and CR 117.3b's priority to the active
+                    # player. The seat that owed the answer was holding the
+                    # window only because it owed it.
+                    self.check_state_based_actions()
+                    if self.priority_player_index is not None:
+                        self.priority_player_index = self.active_player_index
+                        self.priority_pass_count = 0
+                    # …and CR 603.3b's: the abilities this object's
+                    # destructions triggered were waiting for it to finish, and
+                    # it has. After the state-based check, which is the order
+                    # the rule gives. See engine/destruction_events.py.
+                    destruction_finished(self)
                 return
 
     def _answer_pending_choice(self, choice: PendingChoice, apply):
@@ -293,7 +352,20 @@ class PendingChoicesMixin:
         resolution rather than a first step that resolved and a remainder that
         happens with nothing on the stack. Releasing afterwards is the only
         place the object leaves: every answer path — a player's confirm, an AI
-        seat's default — goes through here."""
+        seat's default — goes through here.
+
+        **An answer is a unit of play** (``putting_triggers_on_stack``): what
+        it sets off chooses its targets once it is done — after the release's
+        state-based check when it was the last answer, or, while the object
+        still waits on another, with that object (``held_triggers``)."""
+        with self._answer_window():
+            return self._answer_inside_its_window(choice, apply)
+
+    def _answer_window(self):
+        """The trigger window an answer is (:meth:`_answer_pending_choice`)."""
+        return self.putting_triggers_on_stack()
+
+    def _answer_inside_its_window(self, choice: PendingChoice, apply):
         item = choice.data.get("_stack_item")
         previous = self.resolving_stack_item
         if item is not None:
@@ -431,9 +503,12 @@ class PendingChoicesMixin:
         tail, the draw record grew, and the sweep that turns the record into
         "whenever you draw a card" (Tolarian Kraken) never ran, so the trigger
         waited for whatever next happened to check state. Nothing to do while
-        the resumption suspended again — the next answer settles it.
+        the resumption suspended again — the next answer settles it — nor
+        while the object is still held waiting on another decision it armed
+        (``resolution_waiting``): that resolution is not over, and its release
+        makes the check (``_release_stack_item``).
         """
-        if self.effect_suspended:
+        if self.effect_suspended or self.resolution_waiting():
             return
         self.check_state_based_actions()
 
@@ -478,9 +553,10 @@ class PendingChoicesMixin:
         (``_resolve_priority_window``, ``_settle``) — so the answer to a prompt
         is taken before the next object resolves and before the step that
         armed it ends, rather than whenever the driver's own loop next comes
-        round. Inert without a driver, and inert at a table with a human at
-        it: there the object is held on the stack for the answer (CR 608.2)
-        and the web layer's own loops decide who is asked.
+        round, and with the object that armed it still held on the stack
+        (``holds_for_answers``, CR 608.2): the answer is what releases it.
+        Inert without a driver, and inert at a table with a human at it: there
+        the web layer's own loops decide who is asked.
 
         "Answered any" is read off the queue rather than reported by the
         driver, so a driver that declines a kind it does not know is seen as
