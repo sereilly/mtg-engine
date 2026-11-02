@@ -492,7 +492,7 @@ class OptionalPayChoicesMixin:
         if damage > 0:
             source = entry.get("_source_permanent")
             self._deal_damage_to_player(
-                player, damage, source=source,
+                player, damage, source=source, asks=True,
                 then=lambda dealt: self.log.append(
                     f"{entry['card_name']} dealt {dealt} damage to {player.name}"
                 ),

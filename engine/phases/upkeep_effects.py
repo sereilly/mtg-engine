@@ -26,6 +26,18 @@ printed name.
 Everything a handler may read arrives on :class:`UpkeepContext` — including the
 five prompt channels, so a new effect can join the protocol without changing
 this seam.
+
+**Their damage asks CR 616.1e's question** (``asks=True``): an affected seat
+with two applicable prevention or replacement effects chooses which applies
+first, and the answer re-runs the one event with its report (``then``). Each
+handler's damage is the last thing it does — Cyclone's sweep is one resumable
+loop with its summary as the last step — so nothing of *its* resolution runs
+past the question. The step's loop over these handlers is not resumable: the
+handlers behind one that asks are carried out before its answer, which is an
+order among inline upkeep triggers the engine already picks for itself (CR
+603.3b's is their controllers', and nothing here asks it). The step itself
+waits for the answer before its priority window ends
+(``PhaseStepsMixin.window_left_unfinished``).
 """
 
 from dataclasses import dataclass
@@ -167,18 +179,60 @@ class UpkeepEffectsMixin:
             self.log.append(
                 f"{controller.name} paid {counters} green for {permanent.card.name}"
             )
-            for victim in self.players:
-                self._deal_damage_to_player(victim, counters, source=permanent)
-            for victim in self.players:
-                for perm in list(victim.battlefield):
-                    if perm.is_creature:
-                        self._mark_damage_on_permanent(perm, counters, source=permanent)
-            self.log.append(
-                f"{permanent.card.name} dealt {counters} damage to each creature and each player"
-            )
+            self._wind_sweep(permanent, counters)
         else:
             self.sacrifice_permanent(permanent)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
+
+    def _wind_sweep(self, permanent, counters: int) -> None:
+        """"…this enchantment deals damage equal to the number of wind counters
+        on it to each creature and each player." (Cyclone.)
+
+        **One resumable loop, in APNAP order** — the shape every sweep in
+        ``handlers/damage_sweeps.py`` has, for its reasons. Each recipient's
+        event may stop to ask its affected player which effect applies first
+        (CR 616.1e), so the recipients behind it wait in ``resume_stack`` for
+        the answer, and the summary is the loop's last step. The damage is
+        dealt to every recipient at once, so the seats' choices are made in
+        APNAP order (CR 616.1's last sentence): the active player about
+        themself and their creatures, then each other player
+        (``effect_ordering.in_apnap_order``). These were two plain loops in
+        seat order that asked nobody, and the creatures were marked with the
+        bare seam, so "whenever this creature is dealt damage" (Fungusaur) did
+        not see Cyclone at all; ``apply_damage_to_creature`` is both halves of
+        the event.
+
+        The set is fixed as the sweep begins: "each creature" is the creatures
+        on the battlefield as the effect is carried out.
+        """
+        from ..effect_ordering import in_apnap_order
+        from ..handlers._common import apply_damage_to_creature
+        from ..models import PlayerState
+        from ..resumption import run_resumable
+
+        recipients = in_apnap_order(self, [
+            *self.players,
+            *(perm for perm in self.all_permanents() if perm.is_creature),
+        ])
+
+        def hit(victim) -> None:
+            if isinstance(victim, PlayerState):
+                self._deal_damage_to_player(
+                    victim, counters, source=permanent, asks=True,
+                )
+                return
+            if self.is_on_battlefield(victim):
+                apply_damage_to_creature(
+                    self, victim, counters, permanent, asks=True,
+                )
+
+        run_resumable(
+            self, recipients, hit,
+            then=lambda: self.log.append(
+                f"{permanent.card.name} dealt {counters} damage to each "
+                "creature and each player"
+            ),
+        )
 
     @upkeep_effect("upkeep_self", "cumulative_upkeep")
     def _on__upkeep_self__cumulative_upkeep(self, ctx: UpkeepContext) -> None:
@@ -475,8 +529,10 @@ class UpkeepEffectsMixin:
             amount = max(0, amount - paid)
             if paid:
                 self.log.append(f"{victim.name} paid {paid} mana to prevent {paid} damage from {permanent.card.name}")
+        # Asks (CR 616.1e) — the last thing this resolution does, with its
+        # report in ``then``; see the module docstring.
         self._deal_damage_to_player(
-            victim, amount, source=permanent,
+            victim, amount, source=permanent, asks=True,
             then=lambda damage: self.log.append(
                 f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}"
             ),
@@ -603,7 +659,7 @@ class UpkeepEffectsMixin:
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
         else:
             self._deal_damage_to_player(
-                controller, damage_amt, source=permanent,
+                controller, damage_amt, source=permanent, asks=True,
                 then=lambda dealt: self.log.append(
                     f"{permanent.card.name} dealt {dealt} upkeep damage to {controller.name}"
                 ),

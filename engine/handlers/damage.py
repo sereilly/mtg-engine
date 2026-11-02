@@ -1444,26 +1444,38 @@ def deal_damage_and_opponent_choice(game: Game, instruction: OracleInstruction, 
     target rides the normal context targeting (handled by deal_damage); the
     opposing choice becomes a pending prompt for a human chooser, or a
     deterministic pick (kill a creature of the activator's if able, else the
-    activator's face) for AI/headless play."""
-    deal_damage(game, instruction, context)
+    activator's face) for AI/headless play.
 
+    **The two halves are one resumable loop.** The first damage event may stop
+    to ask its recipient's controller which effect applies first (CR 616.1e),
+    and the second is the opponent's prompt — whose default, for a seat nobody
+    asks, *deals* its damage the moment it is armed. Written as two statements,
+    the second was dealt before the first one's answer.
+    """
     caster_index = game.players.index(context.caster)
-    chooser_index = next(
-        (i for i, p in enumerate(game.players) if i != caster_index and not p.lost), None
-    )
-    if chooser_index is None:
-        return True, "resolved"
-    amount = int(instruction.payload.get("opponent_amount", instruction.payload.get("amount", 0)))
-    # An interactive chooser is prompted; every other seat takes the kind's
-    # deterministic default the moment this is armed.
-    if game.arm_pending_choice(
-        "opponent_damage", chooser_index,
-        caster_index=caster_index, amount=amount, card_name=context.card.name,
-        _source_permanent=context.source_permanent,
-    ) is not None:
-        game.log.append(
-            f"{game.players[chooser_index].name} chooses any target for {context.card.name}'s {amount} damage"
+
+    def opponents_half() -> None:
+        chooser_index = next(
+            (i for i, p in enumerate(game.players) if i != caster_index and not p.lost), None
         )
+        if chooser_index is None:
+            return
+        amount = int(instruction.payload.get("opponent_amount", instruction.payload.get("amount", 0)))
+        # An interactive chooser is prompted; every other seat takes the kind's
+        # deterministic default the moment this is armed.
+        if game.arm_pending_choice(
+            "opponent_damage", chooser_index,
+            caster_index=caster_index, amount=amount, card_name=context.card.name,
+            _source_permanent=context.source_permanent,
+        ) is not None:
+            game.log.append(
+                f"{game.players[chooser_index].name} chooses any target for {context.card.name}'s {amount} damage"
+            )
+
+    run_resumable(
+        game, [lambda: deal_damage(game, instruction, context), opponents_half],
+        lambda half: half(),
+    )
     return True, "resolved"
 
 

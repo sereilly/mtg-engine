@@ -38,16 +38,18 @@ The caller supplies the re-run, because an event is more than its replacements �
 a draw nothing replaces still has to draw — and only the caller knows what doing
 it again means. A caller that cannot offer one simply does not, and every seat
 takes the default there: a missing capability at one declared place rather than
-a branch scattered through the process. Every damage call in
-``engine/handlers`` offers one, and so does the combat damage step, because
-each carries its consequences as a ``then`` and each runs inside a loop that
-records the work behind it (``engine/resumption.py``) — held statically by
-``tests/engine/test_kg_damage_handler_asks.py``. A damage event dealt where no
-such loop holds the work behind it does not: an upkeep toll or sweep resolved
-inline (``engine/phases/upkeep_effects.py``), a prompt's answer
-(``mixins/stack/choices/``), a land play's rider, a redirect applied inside
-another event (``replacements/redirects.py``). There every seat takes the
-default.
+a branch scattered through the process. **Every damage call in the engine
+offers one** — each carries its consequences as a ``then``, and each is either a
+step of a loop that records the work behind it (``engine/resumption.py``) or
+the last thing its own step does: the handlers and the combat damage step
+(``tests/engine/test_kg_damage_handler_asks.py``), and everything else — an
+upkeep toll or sweep resolved inline, a prompt's answer, a land's rider, an
+Aura's entry, Eye for an Eye's mirror, a shield's rider and the damage a CR
+614.9 redirect moves (``replacements/redirects.deal_redirected_damage``, the
+modified event's own 616.1 process, asked of its new affected player)
+(``tests/engine/test_kg3_damage_asks_outside_handlers.py``). Several seats
+asked about one effect's damage are asked in APNAP order (616.1's last
+sentence, :func:`in_apnap_order`).
 
 A non-interactive seat is never asked, so AI and headless play stay entirely
 synchronous.
@@ -200,6 +202,40 @@ def affected_seat(game, affected) -> int | None:
         if player is affected:
             return index
     return game.controller_index_of(affected)
+
+
+def in_apnap_order(game, recipients, *, affected: Callable[[Any], Any] | None = None) -> list:
+    """*recipients* in the order CR 616.1's choices about them are made.
+
+    "If two or more players have to make these choices at the same time,
+    choices are made in APNAP order (see rule 101.4)." One effect dealing
+    damage to several recipients deals it at once, so every affected player's
+    616.1e choice is made at the same time — the active player's (about
+    themself and every permanent they control), then each other player's in
+    turn order. The engine deals the events one at a time and each asks as it
+    is dealt, so the order a loop deals in *is* the order the seats are asked
+    in, and a loop walking ``game.players`` asked seat 0 first on every turn.
+
+    Each recipient is ranked by the seat :func:`affected_seat` gives the
+    choice to; *affected* maps a loop's item to the player or permanent it is
+    about, for a loop whose items are something else (a seat index is read as
+    that seat). Stable: within one seat the caller's order stands, which is
+    the player's own order of their choices defaulted (CR 101.4c). A
+    recipient with no seat to ask goes last. Seats that have left the game
+    keep their place — whether to deal to them is the caller's question.
+    """
+    rank = {
+        seat: place
+        for place, seat in enumerate(game.apnap_seats(include_lost=True))
+    }
+
+    def seat_of(item) -> int | None:
+        about = item if affected is None else affected(item)
+        if isinstance(about, int) and not isinstance(about, bool):
+            return about
+        return affected_seat(game, about)
+
+    return sorted(recipients, key=lambda item: rank.get(seat_of(item), len(rank)))
 
 
 #: Returned by an ``ask`` hook that has queued a prompt instead of answering.

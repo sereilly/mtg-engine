@@ -109,6 +109,71 @@ def _match_group(pattern, line: str, group: str) -> str | None:
     return match.group(group) if match is not None else None
 
 
+def deal_redirected_damage(
+    game, new_recipient, amount: int, *, source, combat: bool = False,
+    then=None, redirect: DamageRedirect | None = None,
+) -> None:
+    """Deal the damage a redirect moved to *new_recipient* (CR 614.9).
+
+    **The one hand-off every redirect here makes**, and the answer to what
+    CR 616.1e's question is inside another event's 616.1 process. A redirect
+    is chosen and applied in the *original* event's process, by its affected
+    player; what it leaves behind — the same damage, dealt to someone else —
+    is CR 616.2's modified event, and the effects now applicable to it are
+    the new recipient's, chosen by the new affected player (CR 616.1: "the
+    affected object's controller … or the affected player"). CR 616.1g's
+    order is kept by construction: nothing about the moved damage is chosen
+    until the redirect has been. The moved damage is run as a fresh
+    ``deal_damage`` for the new recipient, and nothing has been applied to it
+    when it asks, so it may suspend and be re-run whole on the answer —
+    exactly what every other asking call does. The original event does not
+    wait: it is consumed, or carries its unmoved remainder on, and nothing it
+    still does depends on the moved damage; a loop it was a step of stops
+    behind the question (``resumption.run_resumable``). Every redirect here
+    dealt its moved damage without asking, so the new recipient took the
+    default order (SET_PLAYBOOK's Known-gaps entry: eight calls).
+
+    *then* is what the redirect reports once the damage has landed, given the
+    amount dealt; it runs inside the event, so a suspended hand-off reports
+    nothing until it is dealt. *redirect*'s ``applying`` is held over the
+    hand-off — and over its re-run — so a record aimed back at its own
+    recipient cannot apply to the damage it has just moved (CR 614.5).
+
+    A permanent dealt the damage is dealt it in full: its "whenever this
+    creature is dealt damage" triggers fire (``_fire_dealt_damage_triggers``),
+    which the bare marking seam the redirects called does not do — so the
+    damage a Veteran Bodyguard or a Shimian Night Stalker took went unseen by
+    every such trigger on the creature that took it.
+    """
+
+    def landed(dealt: int) -> None:
+        if dealt > 0 and not isinstance(new_recipient, PlayerState):
+            game._fire_dealt_damage_triggers(new_recipient, dealt, combat=combat)
+        if then is not None:
+            then(dealt)
+
+    def hand_off() -> None:
+        held = redirect.applying if redirect is not None else None
+        if redirect is not None:
+            redirect.applying = True
+        try:
+            if isinstance(new_recipient, PlayerState):
+                game._deal_damage_to_player(
+                    new_recipient, amount, source=source, then=landed,
+                    restart=hand_off,
+                )
+            else:
+                game._mark_damage_on_permanent(
+                    new_recipient, amount, source=source, combat=combat,
+                    then=landed, restart=hand_off,
+                )
+        finally:
+            if redirect is not None:
+                redirect.applying = held
+
+    hand_off()
+
+
 def _protecting_bodyguard(game, payload: dict):
     """The untapped permanent that would take this damage instead, or None.
 
@@ -153,15 +218,15 @@ def _redirect_damage_to_bodyguard(game, payload: dict) -> ReplacementOutcome | N
     """
     bodyguard = _protecting_bodyguard(game, payload)
     recipient = payload["recipient"]
-    game._mark_damage_on_permanent(
-        bodyguard,
-        payload["amount"],
+    amount = payload["amount"]
+    deal_redirected_damage(
+        game, bodyguard, amount,
         source=payload.get("source"),
         combat=bool(payload.get("combat")),
-    )
-    game.log.append(
-        f"{bodyguard.card.name} takes {payload['amount']} damage instead of "
-        f"{recipient.name} (redirect)"
+        then=lambda _dealt: game.log.append(
+            f"{bodyguard.card.name} takes {amount} damage instead of "
+            f"{recipient.name} (redirect)"
+        ),
     )
     return ReplacementOutcome(replaced=True)
 
@@ -199,9 +264,16 @@ def _redirect_damage_to_player(game, payload: dict) -> ReplacementOutcome | None
     redirect_idx = _jade_monolith_seat(game, payload)
     permanent.metadata.pop("redirect_damage_to_player", None)
     permanent.metadata.pop("redirect_damage_source", None)
-    game._deal_damage_to_player(game.players[redirect_idx], amount)
-    game.log.append(
-        f"Damage to {permanent.card.name} redirected to {game.players[redirect_idx].name} (Jade Monolith)"
+    # "…**that source** deals that damage to you instead": the damage keeps its
+    # source (CR 614.9 moves the recipient, nothing else), so a Circle of
+    # Protection naming its colour still applies and its lifelink still gains.
+    # It was handed over with no source at all.
+    taker = game.players[redirect_idx]
+    deal_redirected_damage(
+        game, taker, amount, source=payload.get("source"),
+        then=lambda _dealt: game.log.append(
+            f"Damage to {permanent.card.name} redirected to {taker.name} (Jade Monolith)"
+        ),
     )
     return ReplacementOutcome(replaced=True)
 
@@ -224,11 +296,18 @@ def _redirect_one_damage_to_owner(game, payload: dict) -> ReplacementOutcome | N
     amount = payload["amount"]
     redirect = int(permanent.metadata.get("redirect_one_damage_to_owner_until_eot", 0))
     permanent.metadata["redirect_one_damage_to_owner_until_eot"] = redirect - 1
-    owner_seat = game.controller_index_of(permanent)
+    # "…is dealt to **its owner** instead" — the owner (CR 108.3), not whoever
+    # controls it now, and by the source that was dealing it (CR 614.9 moves
+    # the recipient only). It read the controller and dropped the source.
+    owner_seat = game.owner_index_of(permanent)
     owner = game.players[owner_seat] if owner_seat is not None else None
     if owner is not None:
-        game._deal_damage_to_player(owner, 1)
-        game.log.append(f"1 damage redirected from {permanent.card.name} to {owner.name}")
+        deal_redirected_damage(
+            game, owner, 1, source=payload.get("source"),
+            then=lambda _dealt: game.log.append(
+                f"1 damage redirected from {permanent.card.name} to {owner.name}"
+            ),
+        )
     return ReplacementOutcome(new_amount=amount - 1)
 
 
@@ -297,32 +376,29 @@ def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
     if moved <= 0:  # pragma: no cover - `spent` already excludes an empty pool
         return None
     redirect.spend(moved, moment=damage_moment(game, bool(payload.get("combat"))))
-    # Held while the hand-off runs so a pair of records aimed at each other
-    # cannot recurse: the new event runs the whole contention set again, and an
-    # unspent record with no uses limit would still be applicable.
-    redirect.applying = True
-    try:
-        if isinstance(new_recipient, PlayerState):
-            game._deal_damage_to_player(new_recipient, moved, source=source)
-            taker = new_recipient.name
-        else:
-            game._mark_damage_on_permanent(
-                new_recipient, moved, source=source, combat=bool(payload.get("combat"))
-            )
-            taker = new_recipient.card.name
-    finally:
-        redirect.applying = False
+    from_name = getattr(recipient, "name", None) or getattr(
+        getattr(recipient, "card", None), "name", "it"
+    )
+    taker = (
+        new_recipient.name if isinstance(new_recipient, PlayerState)
+        else new_recipient.card.name
+    )
+    # ``applying`` is held while the hand-off runs (and over its re-run) so a
+    # pair of records aimed at each other cannot recurse: the new event runs
+    # the whole contention set again, and an unspent record with no uses
+    # limit would still be applicable.
+    deal_redirected_damage(
+        game, new_recipient, moved, source=source,
+        combat=bool(payload.get("combat")), redirect=redirect,
+        then=lambda _dealt: game.log.append(
+            f"{moved} damage to {from_name} is dealt to {taker} instead"
+            + (f" ({redirect.source_name})" if redirect.source_name else "")
+        ),
+    )
     drop_spent(recipient)
     for items in (getattr(game, "resolving_items", None) or (),):
         for item in items:
             drop_spent(item)
-    from_name = getattr(recipient, "name", None) or getattr(
-        getattr(recipient, "card", None), "name", "it"
-    )
-    game.log.append(
-        f"{moved} damage to {from_name} is dealt to {taker} instead"
-        + (f" ({redirect.source_name})" if redirect.source_name else "")
-    )
     if moved < amount:
         return ReplacementOutcome(new_amount=amount - moved)
     return ReplacementOutcome(replaced=True)
@@ -434,22 +510,22 @@ def _resolve_optional_damage_redirect(
     source = choice.data["_source"]
     amount = int(choice.data["amount"])
     taker = game.players[choice.player_index]
-    redirect.applying = True
-    try:
-        if option_index == _TAKE_THE_DAMAGE:
-            redirect.spend()
-            game._deal_damage_to_player(taker, amount, source=source)
-            game.log.append(
+    if option_index == _TAKE_THE_DAMAGE:
+        redirect.spend()
+        deal_redirected_damage(
+            game, taker, amount, source=source, redirect=redirect,
+            then=lambda _dealt: game.log.append(
                 f"{amount} damage to {choice.data['from_name']} is dealt to "
                 f"{taker.name} instead"
                 + (f" ({redirect.source_name})" if redirect.source_name else "")
-            )
-        elif isinstance(recipient, PlayerState):  # pragma: no cover - not printed
-            game._deal_damage_to_player(recipient, amount, source=source)
-        else:
-            game._mark_damage_on_permanent(
-                recipient, amount, source=source, combat=bool(choice.data["combat"])
-            )
-    finally:
-        redirect.applying = False
+            ),
+        )
+    else:
+        # Declined: the damage goes where it was headed, as the event run
+        # again with this record held out of it — the same hand-off, back to
+        # the original recipient, whose seat is asked in its turn.
+        deal_redirected_damage(
+            game, recipient, amount, source=source,
+            combat=bool(choice.data["combat"]), redirect=redirect,
+        )
     return 0

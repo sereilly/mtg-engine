@@ -12,6 +12,7 @@ from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine, target_ids
 from ..handlers import EFFECT_HANDLERS
 from ..handlers._amounts import count_from_payload
+from ..handlers._common import apply_damage_to_creature
 from ..oracle_types import X_FROM_COUNT, substitute_x_bounds
 from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import (AURA_REANIMATION_PHRASES, AURA_REANIMATION_TAPPED,
@@ -728,9 +729,25 @@ class OracleInstructionsMixin:
             # Earthbind: on enter, if creature has flying, deal 2 damage and strip flying
             if "if enchanted creature has flying" in text and "deals 2 damage" in text:
                 if target_creature.has_keyword("flying"):
-                    self._mark_damage_on_permanent(target_creature, 2, source=aura_permanent)
-                    remove_keyword(target_creature, "flying")
-                    self.log.append(f"{aura_permanent.card.name} dealt 2 damage to {target_creature.card.name} and stripped flying")
+                    # The whole damage event (``apply_damage_to_creature``:
+                    # "whenever this creature is dealt damage" sees it, which
+                    # the bare marking seam did not), and it asks the
+                    # creature's controller CR 616.1e's question
+                    # (``asks``). What follows the damage in the sentence —
+                    # the flying, the report — is its ``then``, so the
+                    # answer brings it back; nothing else this resolution
+                    # does reads either.
+                    def grounded(_dealt: int, creature=target_creature, aura=aura_permanent) -> None:
+                        remove_keyword(creature, "flying")
+                        self.log.append(
+                            f"{aura.card.name} dealt 2 damage to {creature.card.name} "
+                            "and stripped flying"
+                        )
+
+                    apply_damage_to_creature(
+                        self, target_creature, 2, aura_permanent, asks=True,
+                        then=grounded,
+                    )
                 ran_entry_text = True
 
             # Paralyze's enter-tap is no longer performed here. The line
