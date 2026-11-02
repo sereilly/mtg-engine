@@ -1571,6 +1571,12 @@ h2.targeting-valid {
   color: #e16d70;
 }
 
+.cda-trample-over {
+  font-size: 0.85rem;
+  color: var(--ink);
+  opacity: 0.8;
+}
+
 #combatDamageConfirmBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;

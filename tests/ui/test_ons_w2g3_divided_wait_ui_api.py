@@ -135,7 +135,8 @@ def test_w2g3_a_division_naming_a_recipient_with_nothing_is_a_400(set_pool):
 
 
 _DIALOG = [
-    "getCombatState", "getUnblockedAssignmentOffers", "getBlockedAttackerGroups",
+    "getCombatState", "getUnblockedAssignmentOffers", "getTrampleAssignmentOffers",
+    "getBlockedAttackerGroups",
     "defenderAssignsAttackerDamage", "cardHasKeyword", "getAttackerAssignGroups",
     "getDividedAssignmentOffers", "withDividedAssignmentGroups", "getCombatDraftStepKey",
     "getCombatDamagePassKey", "dividedDraftFor", "validateDividedGroup",

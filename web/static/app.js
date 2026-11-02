@@ -21935,8 +21935,13 @@ function renderCombatControls(state) {
     const offered = groups.filter((g) => g.offer);
     const divided = groups.some((g) => !g.offer && !g.divide);
     const dividing = groups.filter((g) => g.divide);
+    const trampling = groups.filter((g) => g.trampleTo && g.blockers.length === 1 && !g.offer && !g.divide);
     if (dividing.length > 0) {
       prompt.textContent = dividedAssignmentPanelText(dividing, divided || offered.length > 0);
+    } else if (offered.length === 0 && trampling.length === groups.length) {
+      const names = trampling.map((g) => g.attackerCard?.name || "A creature").join(", ");
+      prompt.textContent =
+        `${names} ${trampling.length === 1 ? "has" : "have"} trample. Open the dialog to choose how much damage goes to the blocker and how much tramples over.`;
     } else if (offered.length === 0) {
       prompt.textContent = "An attacker is blocked by multiple creatures. Open the dialog to split its damage.";
     } else {
@@ -21972,6 +21977,27 @@ function renderCombatControls(state) {
 function getUnblockedAssignmentOffers(state = currentState) {
   const offers = new Map();
   const info = state?.unblocked_assignment;
+  if (!info || seat === null || seat !== info.attacker_seat) return offers;
+  for (const entry of info.attackers || []) {
+    offers.set(Number(entry.attacker_index), {
+      attackerId: Number(entry.attacker_id),
+      damage: Math.max(0, Number(entry.damage) || 0),
+      recipient: entry.recipient || {},
+    });
+  }
+  return offers;
+}
+
+// A trampler blocked by ONE creature with more than lethal damage to assign
+// (CR 702.19b): the excess over lethal is this seat's to place, on the blocker
+// or past it. The attackers the server says THIS seat has to answer that for
+// (`state.trample_assignment`, the engine's `trample_assignments_to_ask` — the
+// list that holds the combat damage step until this seat answers), by attacker
+// index: { attackerId, damage, recipient }. With two or more blockers a
+// trampler is a division already and is in the dialog for that reason.
+function getTrampleAssignmentOffers(state = currentState) {
+  const offers = new Map();
+  const info = state?.trample_assignment;
   if (!info || seat === null || seat !== info.attacker_seat) return offers;
   for (const entry of info.attackers || []) {
     offers.set(Number(entry.attacker_index), {
@@ -22475,15 +22501,23 @@ function openMultiblockDamageDialog(state = currentState) {
 // dealt to the player.
 function getAttackerAssignGroups(state = currentState) {
   const offers = getUnblockedAssignmentOffers(state);
+  // …and a trampler blocked by one creature with damage to spare (CR 702.19b),
+  // listed with that one blocker: what its row leaves of the attacker's damage
+  // tramples over to `trampleTo`.
+  const trample = getTrampleAssignmentOffers(state);
   const pastBlockers = new Set(
     (getCombatState(state)?.assigns_past_blockers || []).map((idx) => Number(idx)),
   );
-  return withDividedAssignmentGroups(state, getBlockedAttackerGroups(state, (attackerIdx) => (offers.has(attackerIdx) ? 1 : 2))
+  return withDividedAssignmentGroups(state, getBlockedAttackerGroups(
+    state,
+    (attackerIdx) => (trample.has(attackerIdx) ? 1 : offers.has(attackerIdx) ? 1 : 2),
+  )
     .filter((g) => !pastBlockers.has(g.attackerIdx))
     .filter(
       (g) => offers.has(g.attackerIdx) || !defenderAssignsAttackerDamage(state, g.attackerIdx),
     )
-    .map((g) => (offers.has(g.attackerIdx) ? { ...g, offer: offers.get(g.attackerIdx) } : g)));
+    .map((g) => (offers.has(g.attackerIdx) ? { ...g, offer: offers.get(g.attackerIdx) } : g))
+    .map((g) => (trample.has(g.attackerIdx) ? { ...g, trampleTo: trample.get(g.attackerIdx).recipient } : g)));
 }
 
 // ---- Butcher Orgg: "You may assign this creature's combat damage divided as
@@ -22827,10 +22861,16 @@ function getDefenderBandingGroups(state = currentState) {
   const owed = new Map();
   for (const attackerIdx of info.attacker_indices || []) owed.set(Number(attackerIdx), null);
   for (const entry of info.attackers || []) owed.set(Number(entry.attacker_index), entry);
-  return getBlockedAttackerGroups(state, (attackerIdx) => (owed.get(attackerIdx)?.offer ? 1 : 2))
+  return getBlockedAttackerGroups(
+    state,
+    (attackerIdx) => (owed.get(attackerIdx)?.trample ? 1 : owed.get(attackerIdx)?.offer ? 1 : 2),
+  )
     .filter((g) => owed.has(g.attackerIdx))
     .map((g) => {
       const entry = owed.get(g.attackerIdx);
+      // A trampler in front of one blocker (CR 702.19b): this defending
+      // player places its excess, on the blocker or past it to themself.
+      if (entry?.trample) g = { ...g, trampleTo: entry.trample.recipient || {} };
       if (!entry?.offer) return g;
       return {
         ...g,
@@ -23161,6 +23201,18 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
       ? `Assigned ${group.power} / ${group.power} to ${unblockedRecipientLabel(group.offer.recipient)}`
       : `Assigned ${result.total} / ${group.power}`;
     footer.appendChild(totalEl);
+    // Trample (CR 702.19b): what the blockers' rows leave of the attacker's
+    // damage is assigned past them, to the player or planeswalker it attacks —
+    // said here, because no input names that recipient.
+    if (group.trample && !sentPast && result.valid && result.total < group.power) {
+      const over = document.createElement("span");
+      over.className = "cda-trample-over";
+      over.dataset.attackerIndex = String(group.attackerIdx);
+      over.textContent =
+        ` — ${group.power - result.total} tramples over to `
+        + unblockedRecipientLabel(group.trampleTo || group.offer?.recipient || {});
+      footer.appendChild(over);
+    }
     if (result.violation) {
       const warn = document.createElement("span");
       warn.className = "cda-warning";

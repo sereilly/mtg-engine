@@ -58,6 +58,16 @@ def _through_combat_damage(game, item_name):
             for choice in game.pending_choices_of("trigger_target")
         ) or game.current_step in ("end_of_combat", "postcombat_main"):
             return
+        if game.trample_assignments_to_ask(0):
+            # A trampler blocked by one creature asks the interactive attacker
+            # where its excess goes (CR 702.19b; kg3 wire): answered here the
+            # way the step used to answer it unasked — lethal to the blocker,
+            # the rest to the player.
+            ok, why = game.resolve_combat_damage(
+                0, attacker_damage=game._build_auto_damage_assignment()
+            )
+            assert ok, why
+            continue
         game.advance_combat_phase()
 
 

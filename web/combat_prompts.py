@@ -157,6 +157,14 @@ def _build_banding_assignment_info(session: Session, viewer_seat: int | None) ->
                 {"recipient": _unblocked_recipient(game, attacker_idx)}
                 if offered else None
             ),
+            # A trampler in front of one blocker (CR 702.19b): listed with
+            # that one blocker because its excess over lethal is this seat's
+            # to place — on the blocker, or past it to `recipient`.
+            "trample": (
+                {"recipient": _unblocked_recipient(game, attacker_idx)}
+                if attacker_idx in game.trample_assignments_to_ask(defender_index)
+                else None
+            ),
         })
     return {
         "defender_seat": defender_index,
@@ -325,6 +333,44 @@ def _build_unblocked_assignment_info(session: Session, viewer_seat: int | None) 
     # *defending* player is asked (CR 702.22j), and those are in that player's
     # prompt — `_build_banding_assignment_info` — not this one.
     for attacker_idx in game.unblocked_assignments_to_ask(active_index):
+        attacker = game.permanent_at(active_index, attacker_idx)
+        if attacker is None:
+            continue
+        attackers.append({
+            "attacker_index": attacker_idx,
+            "attacker_id": attacker.permanent_id,
+            "damage": combat_damage_assigned_by(attacker),
+            "recipient": _unblocked_recipient(game, attacker_idx),
+        })
+    if not attackers:
+        return None
+    return {"attacker_seat": active_index, "attackers": attackers}
+
+
+def _build_trample_assignment_info(session: Session, viewer_seat: int | None) -> dict | None:
+    """State block shown to the active player for each of their tramplers
+    blocked by one creature with more than lethal damage to assign (CR
+    702.19b): the excess is theirs to place — on the blocker, or past it to
+    the player or planeswalker being attacked — and the dialog lists the
+    attacker with its one blocker, the rest of its damage going to
+    ``recipient``.
+
+    **Which attackers is the engine's answer**, ``Game.trample_assignments_to_ask``
+    — the list that stops the combat damage step for a person — so the dialog
+    and the step cannot disagree. The answer is the ordinary division on
+    ``assign_combat_damage``: whatever the blocker's entry leaves of the
+    attacker's damage tramples over. A defending player who assigns a
+    trampler's damage (CR 702.22j) is asked in their own prompt
+    (``banding_assignment``'s ``trample``), not this one.
+    """
+    game = session.game
+    if game.current_step != "combat_damage" or game.combat_damage_resolved:
+        return None
+    active_index = game.active_player_index
+    if viewer_seat is not None and viewer_seat != active_index:
+        return None
+    attackers = []
+    for attacker_idx in game.trample_assignments_to_ask(active_index):
         attacker = game.permanent_at(active_index, attacker_idx)
         if attacker is None:
             continue

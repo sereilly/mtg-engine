@@ -276,6 +276,8 @@ def test_one_banding_blocker_asks_the_defender_and_nobody_else():
             "damage": 5,
             "blocker_indices": [0],
             "offer": {"recipient": {"kind": "player", "seat": 1, "name": game.players[1].name}},
+            # No trample, so no excess for the defender to place (kg3 wire).
+            "trample": None,
         }],
     }
     assert defender["unblocked_assignment"] is None

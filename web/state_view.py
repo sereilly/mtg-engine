@@ -103,6 +103,7 @@ from .combat_prompts import (
     _build_divided_assignment_info,
     _build_multiblock_assignment_info,
     _build_raging_river_info,
+    _build_trample_assignment_info,
     _build_unblocked_assignment_info,
 )
 from .game_flow import settle_before_observation
@@ -1440,6 +1441,10 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         # among defending player and/or any number of creatures they control"
         # (Butcher Orgg): the attackers that may, and whom they may divide among.
         "divided_assignment": _build_divided_assignment_info(session, viewer_seat),
+        # A trampler blocked by one creature with more than lethal to assign
+        # (CR 702.19b): the active player's attackers whose excess the dialog
+        # asks them to place, on the blocker or past it.
+        "trample_assignment": _build_trample_assignment_info(session, viewer_seat),
         "raging_river": _build_raging_river_info(session, viewer_seat),
         "camouflage": _build_camouflage_info(session, viewer_seat),
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,
