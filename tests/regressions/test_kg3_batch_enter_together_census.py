@@ -328,3 +328,24 @@ def test_every_newcomer_sees_every_other_enter(road, first, interactive):
             f"{road}: the Soul Warden already there gained {present_gain}, "
             f"one per creature entering is {present_expected}"
         )
+
+
+@pytest.mark.parametrize("interactive", [False, True], ids=["nobody_asked", "a_person"])
+def test_two_dodecapods_one_discard_puts_onto_the_battlefield(interactive):
+    """The discard road (Dodecapod: "If a spell or ability an opponent controls
+    causes you to discard this card, put it onto the battlefield with two
+    +1/+1 counters on it instead"): Mind Rot's two discards are one event, so
+    both Golems enter together — each with its counters, a Soul Warden already
+    there seeing both. Nothing among the newcomers observes, so this row is
+    the road working, not the order (the census above is the order)."""
+    game = _table(interactive=interactive)
+    _place(game, 0, WARDEN)
+    game.players[1].hand = [_CARDS["Dodecapod"], _CARDS["Dodecapod"]]
+    game.players[0].hand = [_CARDS["Mind Rot"]]
+    before = _life(game)
+    assert game.cast_from_hand(0, "Mind Rot", target_player_index=1).supported
+    _settle(game)
+    golems = [p for p in game.controlled_by(1) if p.card.name == "Dodecapod"]
+    assert len(golems) == 2, game.log[-10:]
+    assert all(p.effective_power == 5 for p in golems), [p.effective_power for p in golems]
+    assert _life(game)[0] - before[0] == 2
