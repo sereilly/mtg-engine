@@ -1896,7 +1896,8 @@ def test_w4g1_the_chosen_attack_and_the_rest_cannot_on_that_players_turn(set_poo
     turtle, armodon, dragonfly = victims
     _w4g1_activate(game, [turtle, armodon])
 
-    assert turtle.metadata[_W4G1_MUST_KEY] == {"seat": 1, "seat_turn": 1}
+    # One stamp per effect (CR 508.1d counts each), the turn it names.
+    assert turtle.metadata[_W4G1_MUST_KEY] == [{"seat": 1, "seat_turn": 1}]
     assert dragonfly.metadata.get(_W4G1_MUST_KEY) is None
 
     game.start_next_turn()          # the turn the ability named
