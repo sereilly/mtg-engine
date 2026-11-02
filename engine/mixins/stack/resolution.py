@@ -37,8 +37,8 @@ from ...prevention.shields import carry_spell_shields_onto_permanent
 from ...resumption import run_resumable
 from ...state_triggers import release_latch
 from ...target_descriptions import ANNOUNCED_SEAT
-from ...text_changes import (apply_text_changes, carry_spell_text_changes,
-                             spell_text_card)
+from ...text_changes import (carry_spell_text_changes, spell_text_card,
+                             spell_text_of)
 from ...targeting import graveyard_target_spec
 
 
@@ -1008,7 +1008,7 @@ class StackResolutionMixin:
         text_change_effects=(),
     ) -> None:
         caster = self.players[caster_index]
-        text_card = apply_text_changes(card, text_change_effects or ())
+        text_card = spell_text_of(card, text_change_effects)
         owner_seat = caster_index if owner_index is None else owner_index
         owner = self.players[owner_seat]
         primary_type = card.primary_type

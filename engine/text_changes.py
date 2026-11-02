@@ -386,8 +386,16 @@ def spell_text_card(item) -> "CardDefinition":
     ability (whose ``card`` is its source's, and which carries no record) reads
     exactly what it always read.
     """
-    card = getattr(item, "card", None)
-    changes = getattr(item, "text_change_effects", None)
+    return spell_text_of(
+        getattr(item, "card", None), getattr(item, "text_change_effects", None),
+    )
+
+
+def spell_text_of(card, changes) -> "CardDefinition":
+    """What a spell whose printed card is *card* says under the recorded
+    *changes* — :func:`spell_text_card` for a caller holding the two apart
+    (``Game._resolve_card``, handed the stack object's card and record rather
+    than the object). *card* itself when *changes* is empty."""
     if not changes or card is None:
         return card
     return apply_text_changes(card, changes)
@@ -704,5 +712,6 @@ __all__ = [
     "carry_spell_text_changes", "change_color_word", "change_creature_word",
     "change_land_word", "changed_words", "creature_type_plural",
     "creature_types_written", "current_text_card", "has_text_changes",
-    "one_pass", "spell_text_card", "spell_text_changes", "text_changes",
+    "one_pass", "spell_text_card", "spell_text_changes", "spell_text_of",
+    "text_changes",
 ]

@@ -509,20 +509,19 @@ _PRINTED_COMPILES = re.compile(r"compile_card_oracle\(\s*[\w\.]+\.card\s*\)")
 
 #: module -> how many compiles of a possessive ``.card`` survive, and why.
 PRINTED_COMPILE_BASELINE: dict[str, int] = {
-    # A spell on the stack: the stack item's card is the object being asked.
-    "counter_conditions.py": 1,
+    # A spell on the stack **as it is announced**: the stack item's card is
+    # the object being asked, and no effect can have changed its text yet.
+    # Everywhere a spell is asked later — CR 608.2b's re-check, a stack
+    # object's targets, a counter's question — it is asked what it says,
+    # ``text_changes.spell_text_card`` (kg3: a text change can name a spell;
+    # tests/engine/test_kg3_textspell_spell_text_reads.py), which took the
+    # entries counter_conditions, stack_targets and legality_resolution had.
     "mixins/target_announcements.py": 1,
     # …and a spell cast from a graveyard's own card target (Odyssey), and a
     # modal spell's announced mode (``arm_modal_mode_targets``, which went to
     # ``cast_announcement`` when ``casting.py`` split at the 2,000-line cap).
     "mixins/stack/casting.py": 1,
     "mixins/stack/cast_announcement.py": 1,
-    "stack_targets.py": 1,
-    # The resolving spell CR 608.2b re-asks (``resolving_targets_all_legal``)
-    # and the stack item whose graveyard target Ground Seal made untargetable
-    # (``sealed_graveyard_target_refusal``) — both CR 608.2b's, which is
-    # where they went when ``legality.py`` split.
-    "legality_resolution.py": 2,
     # CR 707.9: a copier's *own* exceptions ("except it's an enchantment in
     # addition to its other types") are read off the copier as printed, before
     # the copy that would replace its text is recorded.

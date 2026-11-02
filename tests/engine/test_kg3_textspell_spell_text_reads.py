@@ -329,12 +329,12 @@ def test_no_printed_card_read_entry_is_dead():
 
 def test_the_resolution_folds_the_record_and_carries_it():
     """``_resolve_card`` receives the printed card and the record; it folds
-    them once (``apply_text_changes``) for every text read, carries them onto
+    them once (``spell_text_of``) for every text read, carries them onto
     the permanent a permanent spell becomes (CR 400.7a), and
     ``_apply_spell_text`` compiles what the spell says (``text_card``)."""
     modules = list(_modules())
     assert ("engine/mixins/stack/resolution.py", "_resolve_card") in functions_calling(
-        modules, "apply_text_changes",
+        modules, "spell_text_of",
     )
     assert ("engine/mixins/stack/resolution.py", "_resolve_card") in functions_calling(
         modules, "carry_spell_text_changes",
