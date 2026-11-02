@@ -173,7 +173,7 @@ def defender_assigns_line(line: str) -> bool:
     have: ``engine/grammar/registries.py`` asks it so the printed line is
     *claimed*, ``engine/derived_static_claims.py``'s support gate asks it so the card is
     admitted on the strength of a rule that exists, and
-    ``phases/combat_damage_step`` asks it so the line is *enforced*. A
+    ``phases/combat_damage_assignment`` asks it so the line is *enforced*. A
     substitution claimed and not enforced is an enchantment that reports
     supported while the attacking player goes on assigning.
 

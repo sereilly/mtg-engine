@@ -11,7 +11,7 @@ entered for an unblocked or single-blocked Orgg — the offer declined over the
 head of the only player allowed to take it — and stopped for a double-blocked
 one only because two blockers already demanded a division.
 
-A twin of :meth:`~engine.phases.combat_damage_step.CombatDamageStepMixin.unblocked_assignments_to_ask`,
+A twin of :meth:`~engine.phases.combat_damage_assignment.CombatDamageAssignmentMixin.unblocked_assignments_to_ask`,
 and read by the same two questions that one is
 (``_needs_manual_damage_assignment``, which stops the step, and
 ``_manual_assignment_has_declared_multiblock``, which tells the web layer a

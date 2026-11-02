@@ -347,7 +347,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # creature attacking you.** You can divide that creature's combat damage as
     # you choose among any of the creatures blocking it." (Defensive
     # Formation.) CR 510.1a's assigner substituted, enforced by
-    # `phases/combat_damage_step._defender_assigns_attacker_damage`.
+    # `phases/combat_damage_assignment._defender_assigns_attacker_damage`.
     #
     # **Both sentences, one channel.** The second says what the first *means* —
     # CR 510.1c already lets whoever assigns divide the damage among the
