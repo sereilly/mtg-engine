@@ -393,9 +393,10 @@ def lower_untargeted_return(
     # names a permanent nobody wrote down, and the handler would find nothing
     # while the card reported supported.
     #
-    # The noun re-states the trigger's own subject (CR 109.5's "that"), so it is
-    # not a further narrowing to honour — but any field beyond the restatement
-    # is, and one dropped here is a bounce wider than the card prints.
+    # The noun re-states the trigger's own subject (the printed "that", naming
+    # the object the trigger event named), so it is not a further narrowing to
+    # honour — but any field beyond the restatement is, and one dropped here is
+    # a bounce wider than the card prints.
     if (
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier == "that"
