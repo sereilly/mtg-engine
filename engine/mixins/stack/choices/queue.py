@@ -258,6 +258,42 @@ class PendingChoicesMixin:
             spec_for(c.kind).open_for(self, c) for c in self.choices_for_stack_item(item)
         )
 
+    def holds_for_answers(self) -> bool:
+        """Whether a resolution that stops to ask holds its object on the
+        stack at this table (CR 608.2) — the ``pause_for_choices`` every loop
+        that resolves the stack passes, derived here once.
+
+        Two tables have somebody to hold for. One with an interactive seat,
+        whose answer arrives on a later request (the web). And one with a
+        ``prompt_driver`` (the AI simulator), whose answer is taken before
+        anything else happens: the object waits on the stack, the driver
+        answers, the answer releases it (``_release_stack_item``: the
+        state-based check, priority, the abilities its destructions set off)
+        — the same road the web's answer takes. The simulator used to resolve
+        straight through and answer afterwards, so the object had left the
+        stack, a state-based check had been made and the destruction triggers
+        announced before the driver answered: 154 of 1,260 driven resolutions
+        across eight seeded Legions/Onslaught games armed a prompt that held
+        nothing, and in 3 the check acted first.
+
+        A bare headless ``Game`` (no driver, nobody interactive) holds nothing:
+        its prompts stay queued for the caller to drain once the engine call
+        returns, which is what the tests reading that queue are written
+        against (``_settle``)."""
+        return bool(self.interactive_seats) or self.prompt_driver is not None
+
+    def resolution_waiting(self) -> bool:
+        """Whether some object on the stack is part-way through resolving and
+        waiting on an answer (CR 608.2) — in which case nothing else resolves,
+        nobody receives priority and no state-based check is made until the
+        answer is in (CR 704.3 names no moment inside a resolution). Asked of
+        the whole stack, not its top: an answer that sets off a trigger puts
+        it above the object still waiting on the next answer."""
+        return any(
+            item.resolution_held and self.stack_item_is_waiting(item)
+            for item in self.stack
+        )
+
     def _release_stack_item(self, item, force: bool = False) -> None:
         """Take a held stack object off the stack once its resolution is done.
 
@@ -445,9 +481,12 @@ class PendingChoicesMixin:
         tail, the draw record grew, and the sweep that turns the record into
         "whenever you draw a card" (Tolarian Kraken) never ran, so the trigger
         waited for whatever next happened to check state. Nothing to do while
-        the resumption suspended again — the next answer settles it.
+        the resumption suspended again — the next answer settles it — nor
+        while the object is still held waiting on another decision it armed
+        (``resolution_waiting``): that resolution is not over, and its release
+        makes the check (``_release_stack_item``).
         """
-        if self.effect_suspended:
+        if self.effect_suspended or self.resolution_waiting():
             return
         self.check_state_based_actions()
 
@@ -492,9 +531,10 @@ class PendingChoicesMixin:
         (``_resolve_priority_window``, ``_settle``) — so the answer to a prompt
         is taken before the next object resolves and before the step that
         armed it ends, rather than whenever the driver's own loop next comes
-        round. Inert without a driver, and inert at a table with a human at
-        it: there the object is held on the stack for the answer (CR 608.2)
-        and the web layer's own loops decide who is asked.
+        round, and with the object that armed it still held on the stack
+        (``holds_for_answers``, CR 608.2): the answer is what releases it.
+        Inert without a driver, and inert at a table with a human at it: there
+        the web layer's own loops decide who is asked.
 
         "Answered any" is read off the queue rather than reported by the
         driver, so a driver that declines a kind it does not know is seen as
