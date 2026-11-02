@@ -800,6 +800,24 @@ def harms_its_own_source(instruction: OracleInstruction | None) -> bool:
     )
 
 
+def hampers_its_own_source(instruction: OracleInstruction | None) -> bool:
+    """Whether an ability's harm to its own source (:func:`harms_its_own_source`)
+    is a **hamper** that leaves it on the battlefield — a keyword or a line
+    lost, the source tapped, phased out — and never a removal.
+
+    The shape that is sometimes worth its price, and only a rehearsal can say
+    when: Swooping Talon sheds its flying so the creature it provoked can
+    block it, Canopy Dragon trades its trample for flying, Deep Spawn taps
+    itself for shroud in front of a removal spell, Rainbow Efreet phases out
+    of one. Ribbon Snake's own controller gains nothing by it, and a
+    rehearsal reads exactly that. 17 abilities on 16 cards in the shipped
+    pool (kg3)."""
+    if instruction is None:
+        return False
+    kinds = {step.kind for step in _effect_steps(instruction)}
+    return bool(kinds & SOURCE_HAMPER_KINDS) and not kinds & SOURCE_REMOVAL_KINDS
+
+
 def sized_by_its_own_empty_counters(
     instruction: OracleInstruction | None, source,
 ) -> bool:
@@ -1203,6 +1221,7 @@ __all__ = [
     "entry_targets_a_spell",
     "hand_entry_steps",
     "harms_its_own_source",
+    "hampers_its_own_source",
     "hand_pick_entry_consumer",
     "offer_buys_a_drawback_to_its_source",
     "planned_mana_yield",

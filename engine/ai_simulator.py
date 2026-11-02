@@ -26,7 +26,7 @@ from .ai_abilities import (
     choose_hand_activation_action,
 )
 from .ai_payment import tap_planned_lands
-from .ai_rehearsal import mid_resolution, rehearsing
+from .ai_rehearsal import blocks_still_to_come, mid_resolution, rehearsing
 from .ai_special_actions import special_action_before_combat
 from .ai_weighed_cast import permitted_casts
 from .card_loader import load_cards
@@ -197,6 +197,13 @@ class SimulationReport:
     casts_in_response: int = 0
     casts_in_combat: int = 0
     casts_on_opponents_turn: int = 0
+    #: Of the casts in combat, those made in the declare-attackers step with
+    #: the attack declared and the blocks still to come (the
+    #: ``"declare_attackers"`` window, CR 508.2): a creature flashed in to
+    #: block with. **Zero in every run before kg3**: that window was passed
+    #: without asking, so no simulated seat had ever cast an ambush blocker,
+    #: and a flash creature came down at the end step or not at all.
+    casts_before_blocks: int = 0
     #: The refusals among them, by card and the engine's reason — counted like
     #: ``refused_casts``, because a refused response costs nothing but the
     #: mana its taps floated, and the seat proposes it again at the next window.
@@ -210,7 +217,8 @@ class SimulationReport:
     priority_offers: int = 0
     priority_offers_weighed: int = 0
     #: Abilities activated at the same moments, by window (``"response"``,
-    #: ``"combat"``, ``"end_step"`` — `_instant_speed_window`), and the
+    #: ``"declare_attackers"``, ``"combat"``, ``"end_step"`` —
+    #: `_instant_speed_window`), and the
     #: refusals among them. Empty in every run before round 4 for the casts'
     #: reason: the only activations a simulated seat made were its own main
     #: phase's, so a regeneration shield was never raised in front of the
@@ -948,6 +956,14 @@ def _instant_speed_window(game: Game, seat: int) -> str | None:
       counterspell, a shield in front of a burn spell, removal in response to
       a pump. A seat does not answer its own object — it lets it resolve and
       is asked again (CR 117.3c gives it priority first, and it passes).
+    * ``"declare_attackers"`` — the declare-attackers step with the attack
+      declared and the blocks still to come (CR 508.2,
+      ``ai_rehearsal.blocks_still_to_come``), for **every** seat: the
+      defender's ambush blocker (a creature with flash), an ability that
+      changes who can block whom (gaining flying to block a flier; Swooping
+      Talon shedding its own so the creature it provoked can block it). What
+      is done here is only what adds a block, read through the fight
+      (``ai_rehearsal.pays_before_the_blocks``); the rest waits for:
     * ``"combat"`` — the declare-blockers step with attackers in it, for
       **both** seats (CR 509.2): the trick that wins a block, the removal that
       kills an attacker, the pump on an unblocked one.
@@ -955,12 +971,14 @@ def _instant_speed_window(game: Game, seat: int) -> str | None:
       for a creature cast on that turn, a draw that was held up.
 
     Everything else — the upkeep, the draw step, beginning of combat, the
-    declare-attackers step, the combat-damage and end-of-combat steps, a seat's
-    own end step — is passed without asking (named in ROADMAP as what is
-    left); the engine still gives priority there, so adding one is a line here.
+    combat-damage and end-of-combat steps, a seat's own end step — is passed
+    without asking (named in ROADMAP as what is left); the engine still gives
+    priority there, so adding one is a line here.
     """
     if game.stack:
         return "response" if game.stack[-1].caster_index != seat else None
+    if blocks_still_to_come(game):
+        return "declare_attackers"
     if (
         game.current_turn_phase == "combat"
         and game.current_step == "declare_blockers"
@@ -1047,6 +1065,7 @@ def _answer_priority(
         return False
     report.casts_in_response += answering is not None
     report.casts_in_combat += in_combat
+    report.casts_before_blocks += window == "declare_attackers"
     report.casts_on_opponents_turn += off_turn
     report.modal_casts.update(index for index, _label in modes_named)
     if action.from_zone != "hand":

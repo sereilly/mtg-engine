@@ -32,6 +32,7 @@ from .ai_target_sides import (
 from .ai_valuation import (
     foreign_activation_use,
     hand_entry_steps,
+    hampers_its_own_source,
     harms_its_own_source,
     is_mana_ability,
     reaches_both_sides,
@@ -221,17 +222,16 @@ def _activation_candidate(
     if is_mana_ability(ability.instruction):
         return None
 
-    # "Return this creature to its owner's hand" (Quicksilver Wall),
-    # "This creature loses flying until end of turn" (Ribbon Snake),
-    # "Destroy this enchantment" (Volrath's Dungeon): an effect that removes
-    # or hampers **its own source**. Mostly a drawback printed for an
-    # opponent to pay for (CR 602.1b), otherwise a rescue that needs a
-    # response window this main-phase chooser never has — and the score
-    # below rates it 2.5 like anything else, so the AI bounced its own wall
-    # for {4} and paid 5 life to destroy its own Dungeon. Read off the
-    # compiled program (`ai_valuation.harms_its_own_source`), the reading
-    # `choose_foreign_activation_action` takes the other way.
-    if harms_its_own_source(ability.instruction):
+    # "Return this creature to its owner's hand" (Quicksilver Wall), "Destroy
+    # this enchantment" (Volrath's Dungeon): an effect that **removes its own
+    # source** — mostly a drawback printed for an opponent to pay for (CR
+    # 602.1b), scored 2.5 like anything else, so the AI bounced its own wall
+    # for {4}. Skipped (`ai_valuation.harms_its_own_source`, read the other
+    # way by `choose_foreign_activation_action`). A **hamper** that leaves the
+    # source in play (Swooping Talon shedding flying for its provoke) is
+    # rehearsed instead, through the fight, at the gate below (kg3).
+    hampers = hampers_its_own_source(ability.instruction)
+    if harms_its_own_source(ability.instruction) and not hampers:
         return None
 
     # A cost paid in permanents or cards is a trade this policy cannot
@@ -795,7 +795,7 @@ def _activation_candidate(
     # (Riptide Mangler, `_OWN_REWRITE_KINDS`) and a shield (LGN C2: Deftblade
     # Elite in both main phases, `ai_valuation.shields_only`).
     if (
-        ability_index is not None
+        ability_index is not None or hampers
         or _sets_only_what_its_source_is(ability.instruction)
         or waits_on_a_later_draw(ability.instruction) or shields_only(ability.instruction)
         or (
@@ -945,20 +945,21 @@ def _land_ability_worth(
     outlasts the turn, and the lasting swing is positive: Krosan Verge's two
     lands for one, a ping, a token. **What is gone by the end of the turn is
     read again through the fight** (``ai_rehearsal.priced_by_the_fight``), as
-    a precombat cast is: a manland's animation is worth the attack it makes,
-    and nothing at all with no combat ahead.
+    a precombat cast is — or before the blocks of a declared attack
+    (``blocks_still_to_come``): a manland's animation is worth the attack or
+    the block it makes, and nothing at all with no combat ahead.
 
     Unlike a cast, an ability nobody could rehearse is not proposed — no land
     ability was before, and "could not be weighed" is no reason to start.
     """
-    from .ai_rehearsal import combat_is_still_to_come, priced_by_the_fight
+    from .ai_rehearsal import (blocks_still_to_come, combat_is_still_to_come,
+                               priced_by_the_fight)
 
     rehearsal = _rehearse_activation(game, seat, action)
     if rehearsal is None or not (rehearsal.accepted and rehearsal.changed):
         return None
-    if (
-        priced_by_the_fight(rehearsal.now, rehearsal.lasting, rehearsal.fleeting)
-        and combat_is_still_to_come(game, seat)
+    if priced_by_the_fight(rehearsal.now, rehearsal.lasting, rehearsal.fleeting) and (
+        combat_is_still_to_come(game, seat) or blocks_still_to_come(game)
     ):
         fought = _rehearse_activation(game, seat, action, through_combat=True)
         if fought is not None and fought.accepted:

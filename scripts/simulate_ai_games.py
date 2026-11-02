@@ -90,7 +90,8 @@ def main() -> int:
     # zero beside a large offer count is a different finding from no offers.
     print(
         f"Instant speed: {report.casts_in_response} in response, "
-        f"{report.casts_in_combat} in combat, "
+        f"{report.casts_in_combat} in combat "
+        f"({report.casts_before_blocks} before blocks), "
         f"{report.casts_on_opponents_turn} on the opponent's turn "
         f"(priority offered {report.priority_offers} time(s), "
         f"{report.priority_offers_weighed} holding an instant it could pay for)"
