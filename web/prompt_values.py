@@ -233,6 +233,54 @@ def _with_consequences(text: str, sentence: str) -> str:
     return sentence
 
 
+def _preorder(step):
+    """*step* and every instruction nested in its payload, in printed order
+    (a payload's keys are written in the order the lowering read them)."""
+    if step is None or not hasattr(step, "kind"):
+        return
+    yield step
+    for value in dict(getattr(step, "payload", None) or {}).values():
+        nested = value if isinstance(value, (list, tuple)) else (value,)
+        for item in nested:
+            if hasattr(item, "kind") and hasattr(item, "payload"):
+                yield from _preorder(item)
+
+
+def _paired_offer(card, offer, line: str) -> "str | None":
+    """The sentence of *line* that *offer* (a ``may`` step) makes, or None.
+
+    A pairing, never a guess: the compiled unit holding the step (the spell's
+    instructions, or one ability's) is walked in printed order, and only when
+    its ``may`` steps and the line's offer sentences are as many as each other
+    — two or more — is the step's position the sentence's. A unit with an
+    offer of another kind, or a line a text change has made disagree with its
+    program, pairs nothing and the caller keeps the whole text.
+    """
+    if offer is None or card is None or getattr(offer, "kind", None) != "may":
+        return None
+    from engine.oracle import compile_card_oracle
+
+    program = compile_card_oracle(card)
+    units = [(tuple(program.instructions), "")]
+    for ability in (*program.activated_abilities, *program.triggered_abilities):
+        if ability.instruction is not None:
+            units.append(((ability.instruction,), ability.source_line or ""))
+    for steps, source_line in units:
+        mays = [
+            step for root in steps for step in _preorder(root) if step.kind == "may"
+        ]
+        position = next((i for i, step in enumerate(mays) if step is offer), None)
+        if position is None:
+            position = next((i for i, step in enumerate(mays) if step == offer), None)
+        if position is None:
+            continue
+        sentences = _offer_sentences(source_line or line)
+        if len(sentences) < 2 or len(sentences) != len(mays):
+            return None
+        return sentences[position]
+    return None
+
+
 def offer_wording(data: dict) -> dict:
     """What a prompt with no words of its own can say: the printed sentence
     it was armed by, and for "X unless Y" which half each answer is.
@@ -283,7 +331,16 @@ def offer_wording(data: dict) -> dict:
         line = getattr(data.get("_context"), "ability_text", "") or ""
         own = [sentence for sentence in _offer_sentences(line) if sentence in offers]
         if len(own) != 1:
-            return {"card_text": text}
+            # One line making two offers, the second nested in the first's
+            # "if you do" (Chain of Vapor: "…may sacrifice a land of their
+            # choice. If the player does, they may copy this spell …"): both
+            # prompts read the whole line, so the person deciding whether to
+            # sacrifice a land was shown the copy too, and the reverse. The
+            # offer's own step says which it is (:func:`_paired_offer`).
+            paired = _paired_offer(card, data.get("_offer"), line or text)
+            if paired is None or paired not in offers:
+                return {"card_text": text}
+            own = [paired]
         offers = own
     sentence = offers[0]
     wording = {"card_text": _with_consequences(text, sentence)}

@@ -1064,6 +1064,12 @@ def _offer_to_seat(
         # differently when every seat is being asked the same question
         # (``ai_prompts.offer_buys_own_drawback``).
         "_offered_actor": instruction.payload.get("actor", "you"),
+        # The offer itself, so the prompt can say *which* of a line's offers
+        # this is: Chain of Vapor's "may sacrifice a land" and its nested "may
+        # copy this spell" are two ``may`` steps of one printed line, and the
+        # person was shown the whole line for both (``web/prompt_values
+        # .offer_wording``). Display only; nothing dispatches on it.
+        "_offer": instruction,
     }
     # "…**If you do**, untap this land." (Forsaken City.) Where the offered
     # action is a pick the seat may still not make, the lowering names what
