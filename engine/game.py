@@ -457,6 +457,12 @@ class Game(
     # decision is outstanding; a leftover entry means a loop recorded a
     # continuation nobody came back for.
     resume_stack: list = field(default_factory=list)
+    # CR 614.12a: each permanent between "would enter" and "is on the
+    # battlefield" — while its entry state is performed (in no zone), and,
+    # at a table that holds for answers, while its "as it enters" choice is
+    # owed (``engine/entry_awaiting.py``). Empty between entries in every
+    # game, so a ``vars()`` walker reads it the same before and after.
+    entries_in_progress: list = field(default_factory=list)
     # Seats controlled by a human, set by the web layer each action. Empty in
     # headless/AI play, so forced sacrifices there resolve inline without a prompt.
     interactive_seats: set[int] = field(default_factory=set)

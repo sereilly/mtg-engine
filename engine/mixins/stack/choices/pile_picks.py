@@ -237,15 +237,21 @@ class PileChoicesMixin:
         arrival = Permanent(card=card)
         if seat != owner_index:
             arrival.metadata["owner_player_index"] = owner_index
-        self._put_permanent_onto_battlefield(seat, arrival, None)
-        if choice.data.get("tapped"):
-            arrival.tapped = True
+        tapped = bool(choice.data.get("tapped"))
+
+        # Once it is there — the entry's ``then``, run at the answer when an
+        # "as it enters" choice keeps it on its way (CR 614.12a).
+        def arrived() -> None:
+            if tapped:
+                arrival.tapped = True
+            self._recompute_continuous_effects()
+
+        self._put_permanent_onto_battlefield(seat, arrival, None, then=arrived)
         self.discard_pending_choice(choice)
         self.log.append(
             f"{self.players[seat].name} chose {card.name} from the exiled cards"
-            + (" (tapped)" if choice.data.get("tapped") else "")
+            + (" (tapped)" if tapped else "")
         )
-        self._recompute_continuous_effects()
         return True
 
     def _default_exiled_pile_claim(self, choice: PendingChoice) -> None:

@@ -724,17 +724,22 @@ def _put_entrants(game, context, entrants, hosts) -> None:
             stays(card, owner, "has nothing it could enchant", "303.4g")
             continue
         permanent = Permanent(card=card)
-        game._put_permanent_onto_battlefield(seat, permanent, None)
-        if host is not None:
-            attach_aura(permanent, host)
+
+        # Once it is there — at the answer, when an "as it enters" choice
+        # keeps it on its way (CR 614.12a, the entry's ``then``).
+        def arrived(permanent=permanent, host=host, owner=owner, card=card) -> None:
+            if host is not None:
+                attach_aura(permanent, host)
+                game.log.append(
+                    f"{owner.name} puts {card.name} onto the battlefield attached "
+                    f"to {host.card.name} ({context.card.name})"
+                )
+                return
             game.log.append(
-                f"{owner.name} puts {card.name} onto the battlefield attached "
-                f"to {host.card.name} ({context.card.name})"
+                f"{owner.name} puts {card.name} onto the battlefield ({context.card.name})"
             )
-            continue
-        game.log.append(
-            f"{owner.name} puts {card.name} onto the battlefield ({context.card.name})"
-        )
+
+        game._put_permanent_onto_battlefield(seat, permanent, None, then=arrived)
 
 
 @effect_handler("reveal_cards_from_hand")

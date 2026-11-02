@@ -36,6 +36,7 @@ from ..control import (base_controller, change_control, control_changes,
                        set_base_controller)
 from ..delayed_triggers import (end_source_tapped_delayed_triggers,
                                 fire_delayed_triggers)
+from ..entry_awaiting import entry_in_progress
 from ..events import Event, collect
 from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change, end_land_type_changes_tied_to
@@ -159,9 +160,19 @@ class ControlSeamMixin:
             # **you** control" has a seat to compare for the one permanent
             # the control seam cannot see yet.
             entering = getattr(self, "_entering_under", None)
-            if entering is None or entering[0] is not permanent:
-                return None
-            seat = entering[1]
+            if entering is not None and entering[0] is permanent:
+                seat = entering[1]
+            else:
+                # …and the same answer for a permanent **on its way** (CR
+                # 614.12a): while its entry state is performed, and while an
+                # "as it enters" choice keeps it waiting
+                # (``engine/entry_awaiting.py``). The counters it enters with
+                # are placed under that seat's replacements, and the prompt
+                # asking about it names that seat's player.
+                record = entry_in_progress(self, permanent)
+                if record is None:
+                    return None
+                seat = record.controller_index
         if not has_control_change(permanent):
             return seat
         base = base_controller(permanent)

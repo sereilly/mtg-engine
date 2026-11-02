@@ -217,6 +217,9 @@ _CALLERS = {
     # legal host remains in its current zone), in the nested check
     ("engine/handlers/reanimation.py", "return_source_card_to_battlefield"),
     ("engine/handlers/reanimation.py", "stays_where_it_is"),
+    # …and the attach itself, made once the Aura is on the battlefield — the
+    # entry's ``then``, which waits for an "as it enters" choice (CR 614.12a)
+    ("engine/handlers/reanimation.py", "arrived"),
     # Nomad Mythmaker (Judgment): "attached to a creature you control", the
     # hosts offered as the ability resolves and asked once more as the Aura
     # enters — nested helpers found under their own names too

@@ -23,6 +23,7 @@ lists them, and ``table.py`` registers every kind.
 from __future__ import annotations
 
 from ....destruction_events import destruction_finished
+from ....entry_awaiting import awaited_entries
 from ....pending_choices import CHOICE_SPECS, PendingChoice, spec_for
 from ....replacement_choices import pending_choices_for, stamp_draw_of
 from ....resumption import resume_after_answer
@@ -128,7 +129,14 @@ class PendingChoicesMixin:
         needs ``_answered``: its answer path takes it off the queue before
         applying it. Left out, "draw two cards, then discard a card" (Catalog)
         under Obstinate Familiar asked for the discard with the draw still
-        undecided."""
+        undecided.
+
+        **And an entry waiting for its "as it enters" choice** (CR 614.12a,
+        ``engine/entry_awaiting.py``), whatever kind its prompt is: the
+        permanent is not on the battlefield until the answer, so the steps
+        behind the one that put it there — "…return it to the battlefield.
+        It gains haste" — wait for it as they wait for a scry, and resume once
+        the answer has completed the entry (``_finish_answered_entries``)."""
         return bool(self.owed_suspensions())
 
     def owed_suspensions(self) -> tuple:
@@ -138,7 +146,7 @@ class PendingChoicesMixin:
         return tuple(
             choice for choice in self.pending_choices
             if spec_for(choice.kind).suspends and not choice.data.get("_answered")
-        ) + tuple(self.pending_replacement_choices)
+        ) + tuple(self.pending_replacement_choices) + awaited_entries(self)
 
     def suspended_beyond(self, owed: tuple) -> bool:
         """Whether a suspending choice is owed that was **not** in *owed* — a
@@ -305,7 +313,12 @@ class PendingChoicesMixin:
         queued past the answer on purpose (``is_open``), so it is *queued*, not
         *open*, that holds the object here; the ability that finishes it removes
         it itself. ``force`` is the priority path's backstop, releasing an object
-        whose prompts went away without releasing it."""
+        whose prompts went away without releasing it — and, for the same
+        reason, completing an entry whose last "as it enters" prompt went away
+        unanswered (``_finish_answered_entries``), which would otherwise leave
+        its permanent on its way for ever."""
+        if force:
+            self._finish_answered_entries()
         if item is None or (not force and self.choices_for_stack_item(item)):
             return
         for index, entry in enumerate(self.stack):
@@ -419,6 +432,7 @@ class PendingChoicesMixin:
             accepted = bool(spec.resolve(self, choice, response))
             if accepted:
                 self._close_answered_choice(choice)
+                self._after_an_entry_answer()
             return accepted
         # This choice stops suspending *before* the answer is applied, never
         # after: applying it can arm the next prompt, and lifting afterwards
@@ -434,9 +448,19 @@ class PendingChoicesMixin:
             choice.data.pop("_answered", None)
             return False
         self._close_answered_choice(choice)
+        # The entry this answer completes goes onto the battlefield *before*
+        # the loop behind it resumes (CR 614.12a, ``engine/entry_awaiting.py``).
+        self._finish_answered_entries()
         resume_after_answer(self)
         self._settle_resumed_resolution()
         return True
+
+    def _after_an_entry_answer(self) -> None:
+        """For an answer of a kind that does not suspend: complete the entry
+        it was the last choice of, and — since a waiting entry is itself an
+        owed suspension — resume the loop that put the permanent there."""
+        if self._finish_answered_entries():
+            resume_after_answer(self)
 
     def _close_answered_choice(self, choice: PendingChoice) -> None:
         """Take an answered *choice* off the queue, if its resolver did not.
@@ -479,6 +503,7 @@ class PendingChoicesMixin:
         if not spec.suspends:
             spec.default(self, choice)
             self._close_answered_choice(choice)
+            self._after_an_entry_answer()
             return True
         choice.data["_answered"] = True
         try:
@@ -487,6 +512,7 @@ class PendingChoicesMixin:
             choice.data.pop("_answered", None)
             raise
         self._close_answered_choice(choice)
+        self._finish_answered_entries()
         resume_after_answer(self)
         self._settle_resumed_resolution()
         return True

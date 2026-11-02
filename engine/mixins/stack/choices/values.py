@@ -473,6 +473,33 @@ class ValueChoicesMixin:
             creature_type=creature_type, land_type=land_type,
         )
 
+    def _default_enter_choice(self, choice: PendingChoice) -> None:
+        """The answer a seat gives when nobody asks it.
+
+        A seat nobody asks had every default stamped on the permanent as it
+        entered (Black Vise, Jihad), so there is nothing left to apply and the
+        prompt is dropped. A person had nothing stamped (CR 614.12a: the
+        choice is made before the permanent enters;
+        ``PermanentStateMixin._stamps_entry_default``), so a person's prompt
+        answered by default — a drain, a seat the table stopped waiting for —
+        is answered with the defaults it carries, through the resolver an
+        answer goes through."""
+        if choice.player_index not in self.interactive_seats:
+            self.discard_pending_choice(choice)
+            return
+        data = choice.data
+        answered = self._resolve_enter_choice(
+            choice,
+            opponent_index=data.get("default_seat"),
+            mana_color=data.get("default_color"),
+            card_name=data.get("default_card_name"),
+            land_types=data.get("default_land_types"),
+            creature_type=data.get("default_creature_type"),
+            land_type=data.get("default_land_type"),
+        )
+        if not answered:
+            self.discard_pending_choice(choice)
+
     def _resolve_enter_choice(
         self, choice: PendingChoice, opponent_index: int | None = None,
         mana_color: str | None = None, card_name: str | None = None,
@@ -481,6 +508,20 @@ class ValueChoicesMixin:
         land_type: str | None = None,
     ) -> bool:
         player_index = choice.player_index
+        # **An empty answer keeps the default**, in every shape below that says
+        # so. For a seat nobody asks, the default is the record stamped as the
+        # permanent entered; for a person nothing was stamped (CR 614.12a,
+        # ``PermanentStateMixin._stamps_entry_default``), so the default kept is
+        # the one the prompt carries. The colour beside an opponent (Jihad) is
+        # not one of those shapes — an empty colour there is refused, below.
+        if player_index in self.interactive_seats:
+            data = choice.data
+            if not data.get("opponents"):
+                mana_color = mana_color or data.get("default_color")
+            land_type = land_type or data.get("default_land_type")
+            land_types = land_types or data.get("default_land_types")
+            creature_type = creature_type or data.get("default_creature_type")
+            card_name = card_name or data.get("default_card_name")
         # "…choose **a creature type**." (An-Zerrin Ruins.) A fifth shape of
         # this one prompt and the fourth that names no seat, so it answers and
         # returns rather than falling through to the opponent check.
@@ -516,7 +557,7 @@ class ValueChoicesMixin:
                     return False
                 if word not in LAND_TYPES:
                     return False
-                if self.is_on_battlefield(permanent):
+                if self.entry_choice_applies(permanent):
                     permanent.metadata["chosen_land_type"] = word
                     self.log.append(
                         f"{choice.data['card_name']}: chose {word}"
@@ -546,7 +587,7 @@ class ValueChoicesMixin:
                 word = str(creature_type).strip().lower()
                 if word not in CREATURE_TYPES:
                     return False
-            if self.is_on_battlefield(permanent):
+            if self.entry_choice_applies(permanent):
                 chose: list[str] = []
                 if word is not None:
                     permanent.metadata["chosen_creature_type"] = word
@@ -592,7 +633,7 @@ class ValueChoicesMixin:
                     return False
                 if any(word not in BASIC_LAND_WORDS for word in pair):
                     return False
-                if self.is_on_battlefield(permanent):
+                if self.entry_choice_applies(permanent):
                     permanent.metadata[CHOSEN_LAND_TYPES] = pair
                     self.log.append(
                         f"{choice.data['card_name']}: chose {pair[0]} and {pair[1]}"
@@ -691,7 +732,7 @@ class ValueChoicesMixin:
             # the offer, the five colours are not what bounds the answer.
             if color is not None and not _entry_choice_option_allowed(choice, color):
                 return False
-            if color is not None and self.is_on_battlefield(permanent):
+            if color is not None and self.entry_choice_applies(permanent):
                 permanent.metadata["chosen_color"] = color
                 self.log.append(f"{choice.data['card_name']}: chose {color}")
                 self._recalculate_lord_buffs()
@@ -708,7 +749,7 @@ class ValueChoicesMixin:
             # recorded — the card names none, and ``chosen_player_index`` is
             # what Black Vise's and Jihad's statics read.
             self.discard_pending_choice(choice)
-            if self.is_on_battlefield(permanent) and not self.players[opponent_index].lost:
+            if self.entry_choice_applies(permanent) and not self.players[opponent_index].lost:
                 self.log.append(
                     f"{choice.data['card_name']}: "
                     f"{self.players[player_index].name} has "
@@ -735,7 +776,7 @@ class ValueChoicesMixin:
                 return False
         # The permanent may already be gone (e.g. destroyed at instant speed);
         # the choice then has nothing to apply to, but the prompt still clears.
-        if self.is_on_battlefield(permanent):
+        if self.entry_choice_applies(permanent):
             permanent.metadata["chosen_player_index"] = opponent_index
             chose = f"{self.players[player_index].name} chose {self.players[opponent_index].name}"
             if color is not None:

@@ -253,7 +253,9 @@ def _w1g6_cast_golem(set_pool, colour):
     game.players[0].hand.append(set_pool("INV")["Alloy Golem"])
     assert game.queue_from_hand(0, "Alloy Golem").supported
     game.resolve_top_of_stack()
-    golem = next(p for p in game.controlled_by(0) if p.card.name == "Alloy Golem")
+    from tests.helpers import entering_or_present
+
+    golem = entering_or_present(game, 0, "Alloy Golem")  # on its way (CR 614.12a)
     assert [(c.kind, c.player_index) for c in game.pending_choices] == [("enter_choice", 0)]
     assert game.confirm_enter_choice(0, mana_color=colour)
     return game, golem, theirs  # _w1g6_cast_golem

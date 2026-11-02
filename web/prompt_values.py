@@ -938,8 +938,9 @@ def _color_choice(ctx: PromptContext, choices: list) -> dict:
 
 @prompt_renderer("body_choice")
 def _body_choice(ctx: PromptContext, choices: list) -> dict:
-    """Primal Clay: "it becomes your choice of <body>". The first printed body
-    is already applied, so the prompt offers to replace it."""
+    """Primal Clay: "it becomes your choice of <body>". Asked of a person
+    while the Clay is on its way with no body applied (CR 614.12a); the
+    answer is the body it enters on."""
     data = choices[0].data
     return {
         "card_name": data["card_name"],

@@ -373,7 +373,9 @@ def test_wood_elemental_offers_its_forests_as_it_enters(set_pool):
     assert prompt is not None and prompt["player_index"] == 0
     assert prompt["count"] == 2, "only the untapped Forests are offered"
     assert prompt["up_to"] is True, "any number, not exactly two"
-    elemental = next(p for p in p1.battlefield if p.card.name == "Wood Elemental")
+    from tests.helpers import entering_or_present
+
+    elemental = entering_or_present(game, 0, "Wood Elemental")  # on its way (CR 614.12a)
     assert (elemental.effective_power, elemental.effective_toughness) == (0, 0)
 
 

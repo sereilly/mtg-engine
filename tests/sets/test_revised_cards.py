@@ -518,8 +518,8 @@ def test_primal_clays_wall_body_is_actually_a_wall(catalog):
 
     game.queue_from_hand(0, "Primal Clay")
     game.resolve_top_of_stack()
-    clay = game.players[0].battlefield[0]
     assert game.confirm_enter_body_choice(0, 2)
+    clay = game.players[0].battlefield[0]  # there once the body is chosen (CR 614.12a)
 
     assert (clay.effective_power, clay.effective_toughness) == (1, 6)
     assert game._has_keyword(clay, "defender")
@@ -538,8 +538,8 @@ def test_a_different_body_leaves_no_wall_behind(catalog):
 
     game.queue_from_hand(0, "Primal Clay")
     game.resolve_top_of_stack()
-    clay = game.players[0].battlefield[0]
     assert game.confirm_enter_body_choice(0, 1)
+    clay = game.players[0].battlefield[0]  # there once the body is chosen (CR 614.12a)
 
     assert (clay.effective_power, clay.effective_toughness) == (2, 2)
     assert game._has_keyword(clay, "flying")

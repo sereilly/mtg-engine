@@ -1842,9 +1842,10 @@ def test_w4g4_the_entry_prompt_offers_exactly_the_two_printed_words(set_pool):
 
     assert pending["needs_land_type"] is True
     assert pending["entry_choice_options"] == ["island", "swamp"]
-    # Stamped before the prompt, so a seat that never answers still has a
-    # choice on record rather than an inert enchantment.
-    assert roots.metadata["chosen_land_type"] in ("island", "swamp")
+    # A person is asked with nothing recorded (CR 614.12a); the default a
+    # seat that never answers takes rides on the prompt.
+    assert "chosen_land_type" not in roots.metadata
+    assert pending["default_land_type"] in ("island", "swamp")
 
 
 def test_w4g4_an_unprinted_land_type_is_refused_not_repaired(set_pool):
@@ -1853,7 +1854,7 @@ def test_w4g4_an_unprinted_land_type_is_refused_not_repaired(set_pool):
     game, roots, _ = _w4g4_roots_board(set_pool("MIR"))
 
     assert game.confirm_enter_choice(0, land_type="forest") is False
-    assert roots.metadata["chosen_land_type"] != "forest"
+    assert roots.metadata.get("chosen_land_type") != "forest"
     assert game.pending_enter_choice is not None
 
 
@@ -2070,10 +2071,11 @@ def test_w4g4_an_unprinted_colour_is_refused_not_repaired(set_pool):
 
     assert game.pending_enter_choice["entry_choice_options"] == ["B", "R"]
     assert game.confirm_enter_choice(0, mana_color="W") is False
-    assert equity.metadata["chosen_color"] in ("B", "R")
-    # A board answering neither option falls to the first printed word rather
-    # than to an alphabetical accident.
-    assert equity.metadata["chosen_color"] == "B"
+    # Nothing recorded for a person until they answer (CR 614.12a). The
+    # default the prompt carries: a board answering neither option falls to
+    # the first printed word rather than to an alphabetical accident.
+    assert "chosen_color" not in equity.metadata
+    assert game.pending_enter_choice["default_color"] == "B"
 
 
 def test_w4g4_the_default_is_the_option_the_opponents_answer_most(set_pool):

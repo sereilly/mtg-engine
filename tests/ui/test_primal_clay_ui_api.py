@@ -59,15 +59,18 @@ def test_body_choice_is_surfaced_to_the_controller():
 
 def test_controller_chooses_the_body():
     sid, _session_obj, game = _session()
-    clay = game.players[0].battlefield[0]
-    # The first printed body applies immediately, so headless play never blocks.
-    assert (clay.effective_power, clay.effective_toughness) == (3, 3)
+    # CR 614.12a: a person chooses before the Clay enters, so while asked it is
+    # on its way — on no battlefield, with no body applied (a seat nobody asks
+    # takes the first printed one as the prompt is armed instead).
+    clay = game.pending_body_choice["permanent"]
+    assert not game.is_on_battlefield(clay) and "chosen_body" not in clay.metadata
 
     resp = client.post(
         f"/api/sessions/{sid}/action",
         json={"seat": 0, "action": "body_choice_confirm", "hand_index": 2},
     )
     assert resp.status_code == 200, resp.text
+    assert game.players[0].battlefield[-1] is clay
     assert (clay.effective_power, clay.effective_toughness) == (1, 6)
     assert game._has_keyword(clay, "defender") is True
     assert game.pending_body_choice is None

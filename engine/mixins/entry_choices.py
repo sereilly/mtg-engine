@@ -71,6 +71,21 @@ class EntryChoicesMixin:
         """Answer a pending "your choice of <body>" prompt."""
         return self.resolve_pending_choice("body_choice", player_index, option_index=option_index)
 
+    def _default_body_choice(self, choice) -> None:
+        """The answer a seat gives when nobody asks it: the first printed body.
+
+        A seat nobody asks had that body applied as the permanent entered, so
+        there is nothing left to do but drop the prompt. A person had none
+        applied (CR 614.12a, ``_stamps_entry_default``), so a person's prompt
+        answered by default applies it now — the same body, by the same
+        resolver an answer goes through."""
+        permanent = choice.data.get("permanent")
+        if permanent is None or "chosen_body" in permanent.metadata:
+            self.discard_pending_choice(choice)
+            return
+        if not self._resolve_body_choice(choice, 0):
+            self.discard_pending_choice(choice)
+
     def _resolve_body_choice(self, choice, option_index: int) -> bool:
         options = choice.data["options"]
         if not (0 <= option_index < len(options)):
@@ -393,9 +408,9 @@ class EntryChoicesMixin:
             return
         default_seat = opponents[0]
         if len(opponents) > 1 and controller in self.interactive_seats:
-            permanent.metadata["chosen_creature_type"] = (
-                self._protecting_creature_type(default_seat)
-            )
+            # Nothing stamped: a person is choosing who chooses, and the
+            # permanent waits on its way for both answers (CR 614.12a,
+            # ``_stamps_entry_default``).
             self.arm_pending_choice(
                 "enter_choice", controller,
                 card_name=permanent.card.name, permanent=permanent,
@@ -411,13 +426,18 @@ class EntryChoicesMixin:
         type that protects the most of the chooser's own creatures stamped as
         its default (:meth:`_protecting_creature_type`)."""
         default_type = self._protecting_creature_type(chooser)
-        permanent.metadata["chosen_creature_type"] = default_type
+        if self._stamps_entry_default(chooser):
+            permanent.metadata["chosen_creature_type"] = default_type
         self.arm_pending_choice(
             "enter_choice", chooser,
             card_name=permanent.card.name, permanent=permanent,
             needs_color=False, opponents=[], default_seat=None,
             default_color=None, needs_creature_type=True,
             default_creature_type=default_type,
+            # Armed by the controller's *answer* when several opponents could
+            # choose, after the entry state has stamped its prompts — so it
+            # says itself which permanent it keeps on its way.
+            _entering_permanent=permanent,
         )
 
     def _protecting_creature_type(self, seat: int) -> str:

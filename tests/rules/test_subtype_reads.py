@@ -29,8 +29,8 @@ def _wall_bodied_clay(game: Game, seat: int) -> Permanent:
     game.players[seat].hand = [_CATALOG["Primal Clay"]]
     game.queue_from_hand(seat, "Primal Clay")
     game.resolve_top_of_stack()
-    clay = game.players[seat].battlefield[-1]
     assert game.confirm_enter_body_choice(seat, 2)
+    clay = game.players[seat].battlefield[-1]
     assert clay.has_type("wall")
     clay.metadata["summoning_sickness_turn"] = -99
     return clay
@@ -70,8 +70,8 @@ def test_the_same_creature_on_another_body_can_block_it():
     p2.hand = [_CATALOG["Primal Clay"]]
     game.queue_from_hand(1, "Primal Clay")
     game.resolve_top_of_stack()
-    clay = p2.battlefield[-1]
     assert game.confirm_enter_body_choice(1, 0)
+    clay = p2.battlefield[-1]
     clay.metadata["summoning_sickness_turn"] = -99
 
     assert not clay.has_type("wall")

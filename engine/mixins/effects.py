@@ -1267,8 +1267,15 @@ class EffectsMixin:
         card_filter=None,
         card_type: str = "creature",
         entering_as=None,
+        then=None,
     ) -> "Permanent | None":
         """Put one permanent card from a graveyard onto *caster*'s battlefield.
+
+        *then* is called with the arrival once it is on the battlefield — the
+        entry's ``then`` (``_put_permanent_onto_battlefield``), so a caller
+        that attaches it or grants it something does so after an "as it
+        enters" choice has been made (CR 614.12a). Not called when nothing
+        returned.
 
         Returns the arriving :class:`Permanent`, or None when there was none to
         return. **The object, not a boolean**: the sentences a card prints after
@@ -1330,7 +1337,10 @@ class EffectsMixin:
                 arrival.metadata["owner_player_index"] = owner_index
             if entering_as is not None:
                 entering_as(arrival)
-            self._put_permanent_onto_battlefield(controller_index, arrival, None)
+            self._put_permanent_onto_battlefield(
+                controller_index, arrival, None,
+                then=(lambda: then(arrival)) if then is not None else None,
+            )
             return arrival
 
         # "Return target creature card from your graveyard" (Resurrection): honor the

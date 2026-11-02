@@ -436,9 +436,38 @@ def _complete_reanimation(
     Aura, its host) is settled — split out of :func:`reanimate_creature` so a
     host chosen at resolution (:func:`_reanimate_onto_chosen_host`) finishes
     through the very same lines a named host does."""
+    def arrived(reanimated) -> None:
+        """What is done to the arrival once it is on the battlefield — the
+        entry's ``then``: at the answer when an "as it enters" choice keeps
+        it on its way (CR 614.12a), at once otherwise, and with None when
+        nothing came back."""
+        # "It gains haste." — folded into the reanimation because the
+        # permanent does not exist until this step runs, and read off the
+        # arrival itself rather than off "the newest permanent the caster
+        # controls", which an enters-trigger creating a token makes wrong.
+        # "…**attached to this creature**." (Iridescent Drake.) CR 303.4f
+        # attaches the Aura as part of the same move, inside this one
+        # resolution — nothing checks state-based actions between the arrival
+        # and this line, so the Aura is never an unattached one for CR 704.5m
+        # to find. Through ``attach_aura``, which stamps the CR 613.7e
+        # timestamp and records both directions.
+        if reanimated is not None and attach_host is not None:
+            from ..aura_attachment import attach_aura
+
+            attach_aura(reanimated, attach_host)
+        gains = tuple(instruction.payload.get("gains") or ())
+        if reanimated is not None and gains:
+            for keyword in gains:
+                grant_keyword(reanimated, keyword)
+        game.log.append(
+            f"Reanimated {card_type} to battlefield" if reanimated is not None
+            else f"No {card_type} to reanimate"
+        )
+
     reanimated = game._reanimate_creature_to_battlefield(
         caster, source_player, idx, card_filter=card_filter, card_type=card_type,
         entering_as=_entering_characteristics(instruction.payload, context),
+        then=arrived,
     )
     # "enchant creature **put onto the battlefield with Necromancy**" — the
     # relation that clause is about, stamped by the step that performs it
@@ -452,23 +481,6 @@ def _complete_reanimation(
         reanimated.metadata[PUT_ONTO_BATTLEFIELD_BY] = (
             context.source_permanent.permanent_id
         )
-    # "It gains haste." — folded into the reanimation because the permanent
-    # does not exist until this step runs, and read off the arrival itself
-    # rather than off "the newest permanent the caster controls", which an
-    # enters-trigger creating a token makes wrong.
-    # "…**attached to this creature**." (Iridescent Drake.) CR 303.4f attaches
-    # the Aura as part of the same move, inside this one resolution — nothing
-    # checks state-based actions between the arrival and this line, so the Aura
-    # is never an unattached one for CR 704.5m to find. Through ``attach_aura``,
-    # which stamps the CR 613.7e timestamp and records both directions.
-    if reanimated is not None and attach_host is not None:
-        from ..aura_attachment import attach_aura
-
-        attach_aura(reanimated, attach_host)
-    gains = tuple(instruction.payload.get("gains") or ())
-    if reanimated is not None and gains:
-        for keyword in gains:
-            grant_keyword(reanimated, keyword)
     # "If the creature would leave the battlefield, exile it instead of putting
     # it anywhere else." (Dreams of the Dead.) Armed on the permanent this step
     # created, which is the only object the sentence can be about — the
@@ -500,10 +512,8 @@ def _complete_reanimation(
         int(getattr(reanimated.effective_card, "cmc", 0) or 0)
         if reanimated is not None else 0
     )
-    game.log.append(
-        f"Reanimated {card_type} to battlefield" if reanimated is not None
-        else f"No {card_type} to reanimate"
-    )
+    if reanimated is None:
+        arrived(None)
     return True, "resolved"
 
 
@@ -578,19 +588,25 @@ def reanimate_aura_onto_source(game: Game, instruction: OracleInstruction, conte
         context.results[REANIMATED_PERMANENTS] = ()
         return True, "resolved"
     caster.graveyard.pop(idx)
+
+    # Once it is there (the entry's ``then``: at the answer, when an "as it
+    # enters" choice keeps it on its way, CR 614.12a).
+    def arrived() -> None:
+        attach_aura(arrival, host)
+        # CR 704.5m is asked at once, the way the attach handler asks it:
+        # layer contributions are computed on read, so nothing has to be
+        # refreshed — but an Aura that arrived on a host it may not stay on
+        # has to go now rather than at the next sweep.
+        game.check_state_based_actions()
+        context.results[REANIMATED_PERMANENTS] = (arrival.permanent_id,)
+        game.log.append(
+            f"{aura_card.name} returned to the battlefield attached to "
+            f"{host.card.name}"
+        )
+
     game._put_permanent_onto_battlefield(
-        game.seat_index(caster), arrival, None, from_zone="graveyard"
-    )
-    attach_aura(arrival, host)
-    # CR 704.5m is asked at once, the way the attach handler asks it: layer
-    # contributions are computed on read, so nothing has to be refreshed — but
-    # an Aura that arrived on a host it may not stay on has to go now rather
-    # than at the next sweep.
-    game.check_state_based_actions()
-    context.results[REANIMATED_PERMANENTS] = (arrival.permanent_id,)
-    game.log.append(
-        f"{aura_card.name} returned to the battlefield attached to "
-        f"{host.card.name}"
+        game.seat_index(caster), arrival, None, from_zone="graveyard",
+        then=arrived,
     )
     return True, "resolved"
 
@@ -666,16 +682,21 @@ def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: Or
             # construction.
             if owner_seat != seat:
                 permanent.metadata["owner_player_index"] = owner_seat
-            game._put_permanent_onto_battlefield(seat, permanent, None)
-            context.results["reanimated_bound_card"] = True
-            if instruction.payload.get("sacrifice_when_control_lost"):
-                source = context.source_permanent
-                if source is not None:
-                    link_sacrifice_to_source(permanent, source, seat)
-            game.log.append(
-                f"{card.name} entered the battlefield under "
-                f"{game.players[seat].name}'s control ({context.card.name})"
-            )
+
+            # The entry's ``then`` (CR 614.12a: at the answer, when an "as it
+            # enters" choice keeps it on its way).
+            def arrived(permanent=permanent, seat=seat, card=card) -> None:
+                context.results["reanimated_bound_card"] = True
+                if instruction.payload.get("sacrifice_when_control_lost"):
+                    source = context.source_permanent
+                    if source is not None:
+                        link_sacrifice_to_source(permanent, source, seat)
+                game.log.append(
+                    f"{card.name} entered the battlefield under "
+                    f"{game.players[seat].name}'s control ({context.card.name})"
+                )
+
+            game._put_permanent_onto_battlefield(seat, permanent, None, then=arrived)
             break
         else:
             # CR 603.6: the ability looks for the object in the zone it moves it
@@ -837,33 +858,37 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
     if isinstance(chosen_seat, int):
         permanent.metadata["chosen_player_index"] = chosen_seat
 
-    game._put_permanent_onto_battlefield(seat, permanent, None)
-    # "…return it to the battlefield under your control **and put a death
-    # counter on it**." (Bogardan Phoenix.) The permanent this step created,
-    # recorded by id for the sentence behind it — CR 400.7 makes it a *new
-    # object*, so "it" cannot mean the one that died, and every other reader in
-    # the resolution is still holding the dead one. The reanimation's own
-    # channel, because the question is the reanimation's question asked of the
-    # ability's own source.
-    context.results.setdefault(REANIMATED_PERMANENTS, []).append(
-        permanent.permanent_id
-    )
-    game.log.append(
-        f"{card.name} returned to the battlefield under {game.players[seat].name}'s control"
-    )
+    # Once it is there — the entry's ``then``, run at the answer when an "as
+    # it enters" choice keeps it on its way (CR 614.12a).
+    def arrived() -> None:
+        # "…return it to the battlefield under your control **and put a death
+        # counter on it**." (Bogardan Phoenix.) The permanent this step
+        # created, recorded by id for the sentence behind it — CR 400.7 makes
+        # it a *new object*, so "it" cannot mean the one that died, and every
+        # other reader in the resolution is still holding the dead one. The
+        # reanimation's own channel, because the question is the
+        # reanimation's question asked of the ability's own source.
+        context.results.setdefault(REANIMATED_PERMANENTS, []).append(
+            permanent.permanent_id
+        )
+        game.log.append(
+            f"{card.name} returned to the battlefield under {game.players[seat].name}'s control"
+        )
 
-    host_key = payload.get("attached_to")
-    if host_key:
-        host = game.permanent_by_id(context.results.get(host_key))
-        # CR 303.4j asked one more time at the move itself, over the same
-        # predicate the picker used: a host chosen legally may have stopped
-        # being one while the rest of this resolution ran.
-        refusal = aura_attach_refusal(game, permanent, host)
-        if refusal is None:
-            attach_aura(permanent, host)
-            game.log.append(f"{card.name} attached to {host.card.name}")
-        else:
-            game.log.append(f"{card.name} could not attach: {refusal}")
+        host_key = payload.get("attached_to")
+        if host_key:
+            host = game.permanent_by_id(context.results.get(host_key))
+            # CR 303.4j asked one more time at the move itself, over the same
+            # predicate the picker used: a host chosen legally may have
+            # stopped being one while the rest of this resolution ran.
+            refusal = aura_attach_refusal(game, permanent, host)
+            if refusal is None:
+                attach_aura(permanent, host)
+                game.log.append(f"{card.name} attached to {host.card.name}")
+            else:
+                game.log.append(f"{card.name} could not attach: {refusal}")
+
+    game._put_permanent_onto_battlefield(seat, permanent, None, then=arrived)
     return True, "resolved"
 
 
@@ -920,29 +945,34 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
         return True, "resolved"
     tapped = bool(instruction.payload.get("tapped"))
     arrived = Permanent(card=card, tapped=tapped)
+
+    # Once it is there — the entry's ``then``, run at the answer when an "as
+    # it enters" choice keeps it on its way (CR 614.12a).
+    def returned() -> None:
+        game.log.append(
+            f"{card.name} returned from "
+            + ("exile" if zone == "exile" else "the graveyard")
+            + " to the battlefield"
+            + (" tapped" if tapped else "")
+        )
+        # "…**with a +1/+1 counter on it**." (Sand Golem.) CR 121.2 puts the
+        # counters on as the permanent arrives, so they go on *this* object
+        # rather than on whatever a later step might find — the permanent is
+        # new (CR 400.7) and no target names it.
+        #
+        # Through the placement seams rather than by poking metadata, so the
+        # P/T pair reaches layer 7d and the CR 704.5q sweep can find it: a
+        # counter placed by hand is a counter nothing can take off.
+        for kind, count in (instruction.payload.get("counters") or {}).items():
+            if str(kind) == "+1/+1":
+                game.place_plus1_counters(arrived, int(count))
+            else:
+                game.place_pt_counters(arrived, str(kind), int(count))
+            game.log.append(f"{card.name} enters with {count} {kind} counter(s)")
+
     game._put_permanent_onto_battlefield(
-        game.players.index(caster), arrived, None
+        game.players.index(caster), arrived, None, then=returned,
     )
-    game.log.append(
-        f"{card.name} returned from "
-        + ("exile" if zone == "exile" else "the graveyard")
-        + " to the battlefield"
-        + (" tapped" if tapped else "")
-    )
-    # "…**with a +1/+1 counter on it**." (Sand Golem.) CR 121.2 puts the
-    # counters on as the permanent arrives, so they go on *this* object rather
-    # than on whatever a later step might find — the permanent is new
-    # (CR 400.7) and no target names it.
-    #
-    # Through the placement seams rather than by poking metadata, so the P/T
-    # pair reaches layer 7d and the CR 704.5q sweep can find it: a counter
-    # placed by hand is a counter nothing can take off.
-    for kind, count in (instruction.payload.get("counters") or {}).items():
-        if str(kind) == "+1/+1":
-            game.place_plus1_counters(arrived, int(count))
-        else:
-            game.place_pt_counters(arrived, str(kind), int(count))
-        game.log.append(f"{card.name} enters with {count} {kind} counter(s)")
     return True, "resolved"
 
 
@@ -1377,22 +1407,27 @@ def _return_planned_cards(
             permanent = Permanent(card=card)
             if tapped:
                 permanent.tapped = True
-            game._put_permanent_onto_battlefield(seat, permanent, None)
             host = hosts.get((seat, index))
-            if host is not None:
-                # Attached as part of the same move, inside this resolution —
-                # the arrangement ``reanimate_aura_onto_source`` keeps, so the
-                # Aura is never an unattached one for CR 704.5m to find.
-                attach_aura(permanent, host)
+
+            # Once it is there — the entry's ``then``, run at the answer when
+            # an "as it enters" choice keeps it on its way (CR 614.12a).
+            def arrived(permanent=permanent, host=host, player=player, card=card) -> None:
+                if host is not None:
+                    # Attached as part of the same move, inside this
+                    # resolution — the arrangement
+                    # ``reanimate_aura_onto_source`` keeps, so the Aura is
+                    # never an unattached one for CR 704.5m to find.
+                    attach_aura(permanent, host)
+                    game.log.append(
+                        f"{player.name} returned {card.name} to the battlefield "
+                        f"from the graveyard attached to {host.card.name}"
+                    )
+                    return
                 game.log.append(
-                    f"{player.name} returned {card.name} to the battlefield "
-                    f"from the graveyard attached to {host.card.name}"
+                    f"{player.name} returned {card.name} to the battlefield from the graveyard"
                 )
-                returned += 1
-                continue
-            game.log.append(
-                f"{player.name} returned {card.name} to the battlefield from the graveyard"
-            )
+
+            game._put_permanent_onto_battlefield(seat, permanent, None, then=arrived)
             returned += 1
     if not returned:
         game.log.append(f"{card_name}: no cards to return")
