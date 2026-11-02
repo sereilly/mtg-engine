@@ -1169,6 +1169,8 @@ function openStateSyncStream() {
   const seatParam = Number.isInteger(seat) ? `?seat=${seat}` : "";
   const source = new EventSource(`/api/sessions/${sessionId}/events${seatParam}`);
   source.addEventListener("state", (event) => {
+    // The server changed something: the next re-ask need not wait.
+    snapStateRefetchBackoff();
     let skipStale = false;
     // A rematch rebuilds the game with a fresh (shorter) log, so the monotonic-log
     // stale guard would wrongly discard it — bypass the guard for those resets too.
@@ -1341,6 +1343,20 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
     return;
   }
 
+  // CR 508.1d: a Juggernaut (or Dueling Grounds beside one) makes the empty
+  // declaration illegal, so End Turn stops here and says what is required
+  // instead of sending it and looping on the refusal.
+  if (owesOwnAttack && emptyAttackDeclarationRefused(state)) {
+    autoPassTurnEndEnabled = false;
+    autoPassMode = null;
+    const required = attackRequirementLines(getCombatState(state), seat);
+    updateActionHint(
+      `End Turn stopped: you must declare attackers. ${required.join(" ")}`.trim(), true,
+    );
+    renderBoard(state);
+    return;
+  }
+
   autoPassTurnEndRequestedStateKey = stateKey;
   autoPassTurnEndInFlight = true;
   try {
@@ -1406,9 +1422,55 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
 // not. A fetched state is the one the SSE path has always rendered. The
 // per-sender state key makes a state already acted on a no-op, which is what
 // ends the chain.
+//
+// **It backs off while nothing changes, and one re-ask serves every sender.**
+// Each sender's `finally` asks, so one state used to cost a fetch per sender,
+// and a sender that kept standing down on an unchanged board re-asked for as
+// long as it did: a human-vs-human host tab made thousands of state GETs in
+// minutes. A re-ask already scheduled is shared (`stateRefetchScheduled`),
+// and its delay grows with how many renders in a row found the state key
+// unchanged (`stateRefetchDelayMs`) — none for the first, so the stall this
+// exists for is still re-asked at once. Any change, a pushed event and any
+// action of the player's snap it back (`snapStateRefetchBackoff`); the SSE
+// stream still delivers every change the server makes in the meantime.
 function retryAutoAdvanceAfterFlight() {
-  if (!sessionId) return;
-  getState().catch(() => {});
+  if (!sessionId || stateRefetchScheduled) return;
+  stateRefetchScheduled = true;
+  setTimeout(() => {
+    stateRefetchScheduled = false;
+    getState().catch(() => {});
+  }, stateRefetchDelayMs());
+}
+
+let stateRefetchScheduled = false;
+// Renders in a row whose state key (`getAutoPassStateKey`) was the one before.
+let stateRefetchQuietRenders = 0;
+let stateRefetchLastKey = "";
+const STATE_REFETCH_BACKOFF_BASE_MS = 250;
+const STATE_REFETCH_BACKOFF_MAX_MS = 4000;
+
+function stateRefetchDelayMs() {
+  if (stateRefetchQuietRenders <= 1) return 0;
+  return Math.min(
+    STATE_REFETCH_BACKOFF_MAX_MS,
+    STATE_REFETCH_BACKOFF_BASE_MS * 2 ** (stateRefetchQuietRenders - 2),
+  );
+}
+
+// Called with every state rendered: an unchanged key lengthens the next
+// re-ask's delay, a changed one ends the back-off.
+function noteStateForRefetchBackoff(state) {
+  const key = getAutoPassStateKey(state);
+  if (key && key === stateRefetchLastKey) {
+    stateRefetchQuietRenders += 1;
+  } else {
+    stateRefetchQuietRenders = 0;
+  }
+  stateRefetchLastKey = key;
+}
+
+function snapStateRefetchBackoff() {
+  stateRefetchQuietRenders = 0;
 }
 
 function isStackHoverHolding() {
@@ -1536,6 +1598,9 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
     }
     const combat = getCombatState(state);
     if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && !combat?.attackers_locked) {
+      // CR 508.1d: an empty declaration a requirement forbids is the
+      // player's to make otherwise (the Declare Attackers panel says what).
+      if (emptyAttackDeclarationRefused(state)) return;
       await sendAction({
         seat,
         action: "declare_attackers",
@@ -2611,6 +2676,28 @@ function landWordOptionsForTarget(perm) {
     .join(" ")
     .toLowerCase();
   return MANA_COLOR_OPTIONS.filter((o) => haystack.includes(LAND_TYPE_BY_SYMBOL[o.symbol]));
+}
+
+// The same narrowing for a **spell** on the stack (a text change can name
+// one, CR 612): the land words its text reads *now* — the printed text with
+// the wire's `text_changes` (`{from, to}`, already netted) applied, so a
+// spell whose "Island" an earlier Hack made "Swamp" offers Swamp and not
+// Island. Every land type was offered, and an unwritten one logged "had no
+// effect".
+function landWordOptionsForSpell(card) {
+  if (!card || typeof card !== "object") return [];
+  let text = `${card.type || ""} ${card.oracle_text || ""}`.toLowerCase();
+  const changes = (Array.isArray(card.text_changes) ? card.text_changes : [])
+    .map((change) => [String(change?.from || "").toLowerCase(), String(change?.to || "").toLowerCase()])
+    .filter(([from, to]) => from && from !== to)
+    .sort((a, b) => b[0].length - a[0].length);
+  if (changes.length) {
+    const escape = (word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(changes.map(([from]) => escape(from)).join("|"), "g");
+    const to = new Map(changes);
+    text = text.replace(pattern, (word) => to.get(word) ?? word);
+  }
+  return MANA_COLOR_OPTIONS.filter((o) => text.includes(LAND_TYPE_BY_SYMBOL[o.symbol]));
 }
 
 // What the ability chosen from the menu — or the permanent's only one — adds,
@@ -7470,6 +7557,9 @@ function applyGraveyardPilePrompt(info) {
 }
 
 function applyRetargetChoicePrompt(info) {
+  // Two options that would read the same — two Willbenders one seat
+  // controls — are told apart by where each sits (`retargetOptionLabels`).
+  const labels = retargetOptionLabels(info.options || []);
   applyChoiceButtonPrompt(info, {
     title: "Choose a new target",
     action: "retarget_choice_confirm",
@@ -7477,8 +7567,80 @@ function applyRetargetChoicePrompt(info) {
     // A face and a permanent can share a name in this game (a player called
     // after their commander), so the kind is on the button rather than left to
     // be inferred.
-    labelOf: retargetOptionLabel,
+    labelOf: (option) => labels.get(option.index) ?? retargetOptionLabel(option),
   });
+}
+
+// Every retarget option's button text, with options that would otherwise
+// read the same told apart: two same-named permanents one seat controls
+// ("Willbender — yours" twice, Legions' post-promotion pass). Each says what
+// the board shows of it — tapped, its power and toughness, damage, counters —
+// where that differs between them, and otherwise where it sits in the pile
+// the board stacks same-named permanents into (drawn back to front in
+// battlefield order: "back of the pile", "2nd of 3 from the back"). Keyed by
+// the option's `index`, which is what the answer names.
+function retargetOptionLabels(options, state = currentState) {
+  const labels = new Map();
+  const groups = new Map();
+  for (const option of options) {
+    const label = retargetOptionLabel(option);
+    labels.set(option.index, label);
+    if (option.kind !== "permanent" || !Number.isInteger(option.id)) continue;
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(option);
+  }
+  const ordinal = (n) => {
+    const tail = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th");
+    return `${n}${tail}`;
+  };
+  // What the board shows of a permanent, one phrase per visible difference.
+  const shown = (perm) => {
+    if (!perm || typeof perm !== "object") return {};
+    const counters = Object.entries(perm.counters || {})
+      .filter(([, n]) => Number(n) > 0)
+      .map(([kind, n]) => `${n} ${kind} counter${Number(n) === 1 ? "" : "s"}`)
+      .join(", ");
+    return {
+      tapped: perm.tapped ? "tapped" : "untapped",
+      stats: Number.isInteger(perm.power) && Number.isInteger(perm.toughness)
+        ? `${perm.power}/${perm.toughness}` : "",
+      damage: Number(perm.damage_marked || 0) > 0 ? `${perm.damage_marked} damage` : "no damage",
+      counters: counters || "no counters",
+    };
+  };
+  for (const [label, twins] of groups) {
+    if (twins.length < 2) continue;
+    const placed = twins.map((option) => {
+      const battlefield = state?.players?.[option.seat]?.battlefield || [];
+      const position = battlefield.findIndex((perm) => perm?.id === option.id);
+      return { option, position, seen: shown(position >= 0 ? battlefield[position] : null) };
+    }).sort((a, b) => a.position - b.position);
+    const differing = ["tapped", "stats", "damage", "counters"].filter(
+      (field) => new Set(placed.map((p) => p.seen[field] || "")).size > 1,
+    );
+    const words = placed.map(({ seen }) => differing.map((field) => seen[field]).filter(Boolean).join(", "));
+    const distinct = new Set(words).size === placed.length && words.every(Boolean);
+    // Same-named permanents share one pile on the board; a face-down one and
+    // one carrying an Aura each keep a slot of their own, laid left to right.
+    const enchanted = (option) => (state?.players || []).some((player, ownerSeat) =>
+      (player?.battlefield || []).some((perm) => perm && typeof perm === "object"
+        && Number(perm.attached_to_seat ?? ownerSeat) === option.seat
+        && Number.isInteger(perm.attached_to_index)
+        && (state.players[option.seat]?.battlefield || [])[perm.attached_to_index]?.id === option.id));
+    const ownSlots = placed.some(({ option }) => {
+      const perm = (state?.players?.[option.seat]?.battlefield || []).find((p) => p?.id === option.id);
+      return perm?.face_down === true || enchanted(option);
+    });
+    placed.forEach(({ option }, rank) => {
+      const where = ownSlots
+        ? `${ordinal(rank + 1)} from the left`
+        : placed.length === 2
+          ? (rank === 0 ? "back of the pile" : "front of the pile")
+          : `${ordinal(rank + 1)} of ${placed.length} from the back of the pile`;
+      labels.set(option.index, `${label} (${distinct ? words[rank] : where})`);
+    });
+  }
+  return labels;
 }
 
 // One retarget option's button text. A permanent is named as a target tile
@@ -21740,6 +21902,38 @@ function selectStackSpellTarget(arrayIndex) {
     target_stack_index: arrayIndex,
   };
 
+  // A text change aimed at a spell (Sleight of Mind, Magical Hack — CR 612
+  // on the stack): the two words are chosen here as they are for a permanent
+  // target, the "from" land words narrowed to the ones the spell's text reads
+  // now (`landWordOptionsForSpell`). The cast went out naming no word at all.
+  if (cardRequiresCastColorChoice(pending.card)) {
+    const isLandType = /basic land type/.test((pending.card.oracle_text || "").toLowerCase());
+    const fromOptions = isLandType ? landWordOptionsForSpell(item.card) : null;
+    if (isLandType && !fromOptions.length) {
+      clearPendingHandCast();
+      updateActionHint(
+        `${item.card?.name || "That spell"} has no basic land type in its text for ${pending.cardName} to replace.`,
+        true,
+      );
+      return;
+    }
+    pendingManaColor = {
+      kind: "cast",
+      step: "from",
+      fromColor: null,
+      isLandType,
+      cardName: pending.cardName,
+      castActionBody: actionBody,
+      oracleText: pending.card.oracle_text || "",
+      colorOptions: fromOptions || undefined,
+    };
+    renderActivationPrompt();
+    updateActionHint(
+      `Choose the ${isLandType ? "land type" : "color word"} to replace in ${item.card?.name || "the spell"}'s text.`,
+    );
+    return;
+  }
+
   updateActionHint(`Casting ${pending.cardName} at ${item.card?.name || "spell"}...`);
   sendAction(actionBody)
     .then(() => {
@@ -21816,6 +22010,52 @@ function blockRequirementLines(combat, defenderSeat) {
   return lines;
 }
 
+// CR 508.1d, as the attacking player reads it — `blockRequirementLines`'s
+// twin over `combat.attack_requirements`: one line per requirement the server
+// lists for `attackerSeat` (the same sentence counted once), and the count a
+// declaration must obey when they cannot all be obeyed together (Dueling
+// Grounds beside two Juggernauts). Empty where nothing is required.
+function attackRequirementLines(combat, attackerSeat) {
+  const entry = attackRequirementEntry(combat, attackerSeat);
+  const requirements = entry?.requirements || [];
+  if (!requirements.length) return [];
+  const counts = new Map();
+  for (const r of requirements) {
+    const reason = r.conditional ? `${r.reason}, if its condition is met` : r.reason;
+    counts.set(reason, (counts.get(reason) || 0) + 1);
+  }
+  const lines = [...counts].map(([reason, n]) => `Required: ${reason}${n > 1 ? ` (×${n})` : ""}.`);
+  const most = Number(entry.most_obeyable);
+  if (Number.isInteger(most) && most < requirements.length) {
+    lines.push(
+      `Only ${most} of these ${requirements.length} requirements can be obeyed together — ` +
+      `your declaration must obey ${most} (CR 508.1d).`,
+    );
+  }
+  return lines;
+}
+
+function attackRequirementEntry(combat, attackerSeat) {
+  return (combat?.attack_requirements || []).find(
+    (e) => Number(e.attacking_player_index) === Number(attackerSeat),
+  ) || null;
+}
+
+// Whether declaring **no** attackers obeys too few of CR 508.1d's
+// requirements to be legal: the empty declaration obeys every conditional
+// requirement (its condition is unmet) and no other, and the server refuses a
+// declaration obeying fewer than `most_obeyable`. The automatic senders that
+// declare nobody (End Turn, a disabled phase) ask this first, rather than
+// sending a declaration the server answers with a 400 — a Juggernaut alone
+// would loop End Turn on that refusal.
+function emptyAttackDeclarationRefused(state, attackerSeat = seat) {
+  const entry = attackRequirementEntry(getCombatState(state), attackerSeat);
+  const requirements = entry?.requirements || [];
+  if (!requirements.length) return false;
+  const obeyedByNone = requirements.filter((r) => r.conditional).length;
+  return Number(entry.most_obeyable) > obeyedByNone;
+}
+
 function renderCombatControls(state) {
   const summary = q("combatSummary");
   const actions = q("combatActions");
@@ -21862,6 +22102,15 @@ function renderCombatControls(state) {
       prompt.textContent = "Declare attackers: click creatures, or use Alpha Strike to toggle all valid attackers, then press OK.";
     }
     damagePanel.appendChild(prompt);
+    // CR 508.1d: what this declaration has to obey, before it is sent.
+    if (!combat?.attackers_locked) {
+      for (const line of attackRequirementLines(combat, seat)) {
+        const row = document.createElement("div");
+        row.className = "combat-summary block-requirement";
+        row.textContent = line;
+        damagePanel.appendChild(row);
+      }
+    }
 
     if (combat?.attackers_locked) return;
     const alphaStrikeBtn = document.createElement("button");
@@ -24242,6 +24491,8 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   const incomingLogLen = Array.isArray(state?.log) ? state.log.length : -1;
   const currentLogLen = Array.isArray(currentState?.log) ? currentState.log.length : -1;
   if (!skipStaleCheck && incomingLogLen < currentLogLen) return;
+  // The re-ask back-off (`retryAutoAdvanceAfterFlight`) counts unchanged renders.
+  noteStateForRefetchBackoff(state);
   // Kicked from a still-open lobby: our seat is no longer joined (we lost the
   // connection long enough for the server to free the slot, or the session
   // moved on without us). Back to the menu — the join link re-seats us while
@@ -26259,6 +26510,7 @@ function carryCastZoneAndCost(body) {
 
 async function sendAction(actionBody) {
   if (!sessionId) return;
+  snapStateRefetchBackoff();
   // Always carry the current phase-rail hold preferences so the server knows where
   // to stop on the AI's turn — including steps it resolves itself (turn start, end).
   const body = { stop_steps: opponentStopSteps(), self_stop_steps: selfStopSteps(), ...actionBody };
