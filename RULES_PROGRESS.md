@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**430 / 640 tracked rules covered (67%)** — 3319 tests, 0 unannotated.
+**430 / 640 tracked rules covered (67%)** — 3325 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -120,7 +120,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **101.1** Whenever a card’s text directly contradicts these rules, the card takes precedence. The card over... *(1 tests)*
 - [x] **101.2** When a rule or effect allows or directs something to happen, and another effect states that it ca... *(2 tests)*
 - [x] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ... *(2 tests)*
-- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(24 tests, subrules b)*
+- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(26 tests, subrules b)*
 
 ### 102. Players
 
@@ -151,7 +151,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **105.1** There are five colors in the Magic game: white, blue, black, red, and green. *(6 tests)*
 - [x] **105.2** An object can be one or more of the five colors, or it can be no color at all. An object is the c... *(12 tests, subrules abc)*
-- [x] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an... *(5 tests)*
+- [x] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an... *(7 tests)*
 - [ ] **105.4** If a player is asked to choose a color, they must choose one of the five colors. “Multicolored” i...
 - [ ] **105.5** If an effect refers to a color pair, it means exactly two of the five colors. There are ten color...
 
@@ -738,7 +738,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(2 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(184 tests, subrules bcdfghmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(187 tests, subrules bcdfghmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -830,7 +830,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(60 tests, subrules efg)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(62 tests, subrules efg)*
 - [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General
@@ -890,7 +890,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.12** Indestructible *(3 tests, subrules b)*
 - [x] **702.14** Landwalk *(17 tests, subrules abc)*
 - [x] **702.15** Lifelink *(12 tests, subrules be)*
-- [x] **702.16** Protection *(61 tests, subrules abcdefgmn)*
+- [x] **702.16** Protection *(64 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(11 tests, subrules a)*
 - [x] **702.19** Trample *(26 tests, subrules bdf)*
