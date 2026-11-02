@@ -525,11 +525,11 @@ def test_208_2b_a_creature_enters_as_one_of_the_bodies_its_card_lists(
     characteristics."
 
     Primal Clay, the pool's only one. The star is answered on the way in rather
-    than continuously, so all three assertions are about the same permanent at
-    different moments: the printed star, the body it entered on, and the body
-    its controller replaced that with. The default is the *first* body printed
-    and not the biggest, because a headless seat has to arrive somewhere and
-    picking "best" would be the engine choosing for the player.
+    than continuously: a person is asked while the Clay is on its way, on no
+    battlefield and with no body (CR 614.12a), and it enters on the body they
+    choose; a headless seat's default is the *first* body printed and not the
+    biggest, because a headless seat has to arrive somewhere and picking "best"
+    would be the engine choosing for the player.
 
     "Additional characteristics" is the half that is easy to drop and quiet when
     dropped: the third body is a 1/6 **Wall** with defender, and a Clay that took
@@ -543,17 +543,27 @@ def test_208_2b_a_creature_enters_as_one_of_the_bodies_its_card_lists(
 
     game.queue_from_hand(0, "Primal Clay")
     game.resolve_top_of_stack()
-    clay = player.battlefield[-1]
-
-    assert clay.card.power == "*" and clay.card.toughness == "*"
-    assert (clay.effective_power, clay.effective_toughness) == (3, 3)
-    assert game.pending_choice_of("body_choice", 0) is not None, (
+    asked = game.pending_choice_of("body_choice", 0)
+    assert asked is not None, (
         "two or more listed values is a choice, so it has to be asked"
     )
+    clay = asked.data["permanent"]
+
+    assert clay.card.power == "*" and clay.card.toughness == "*"
+    assert not game.is_on_battlefield(clay) and "chosen_body" not in clay.metadata
 
     assert game.confirm_enter_body_choice(0, 2)
     game._settle()
 
+    assert player.battlefield[-1] is clay
     assert (clay.effective_power, clay.effective_toughness) == (1, 6)
     assert clay.has_keyword("defender")
     assert clay.has_type("wall")
+
+    headless = PlayerState(name="P1", hand=[catalog_by_name["Primal Clay"]])
+    game = Game(players=[headless, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.queue_from_hand(0, "Primal Clay")
+    game.resolve_top_of_stack()
+    clay = headless.battlefield[-1]
+    assert (clay.effective_power, clay.effective_toughness) == (3, 3)

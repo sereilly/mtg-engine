@@ -849,29 +849,38 @@ class HandChoicesMixin:
             card=card,
             tapped=bool((choice.data.get("_payload") or {}).get("tapped")),
         )
-        self._put_permanent_onto_battlefield(
-            choice.player_index, arrival, None
-        )
-        # "…onto the battlefield **attached to this creature**." (Academy
-        # Researchers.) CR 303.4f: the Aura is attached as it enters. Done here
-        # rather than by a step behind this one because the permanent does not
-        # exist until the answer arrives — the same reason the id record below
-        # is written here — and because an Aura that existed for even one
-        # state-based check attached to nothing would be put into a graveyard
-        # by CR 704.5m.
-        #
-        # The host is addressed by the id the arming froze (CR 400.7), and the
-        # legality was already asked of the *candidate list* — CR 303.4a is why
-        # this card is not in the offer at all when the source cannot carry it,
-        # so nothing is re-checked here that could leave the Aura unattached.
         host_id = (choice.data.get("_payload") or {}).get("attach_to_permanent_id")
-        if isinstance(host_id, int):
-            from ....aura_attachment import attach_aura
 
-            host = self.permanent_by_id(host_id)
-            if host is not None:
-                attach_aura(arrival, host)
-                self._recompute_continuous_effects()
+        # Once it is there — the entry's ``then``, run at the answer when an
+        # "as it enters" choice keeps it on its way (CR 614.12a).
+        def arrived() -> None:
+            # "…onto the battlefield **attached to this creature**." (Academy
+            # Researchers.) CR 303.4f: the Aura is attached as it enters. Done
+            # here rather than by a step behind this one because the permanent
+            # does not exist until the answer arrives — the same reason the id
+            # record below is written here — and because an Aura that existed
+            # for even one state-based check attached to nothing would be put
+            # into a graveyard by CR 704.5m.
+            #
+            # The host is addressed by the id the arming froze (CR 400.7), and
+            # the legality was already asked of the *candidate list* — CR
+            # 303.4a is why this card is not in the offer at all when the
+            # source cannot carry it, so nothing is re-checked here that could
+            # leave the Aura unattached.
+            if isinstance(host_id, int):
+                from ....aura_attachment import attach_aura
+
+                host = self.permanent_by_id(host_id)
+                if host is not None:
+                    attach_aura(arrival, host)
+                    self._recompute_continuous_effects()
+            self.log.append(
+                f"{player.name} put {card.name} onto the battlefield ({name})"
+            )
+
+        self._put_permanent_onto_battlefield(
+            choice.player_index, arrival, None, then=arrived,
+        )
         # "If you do, sacrifice **it** …" (Flash). By id, like every other
         # producer of a permanent this engine records: the permanent may leave
         # between two steps of one resolution, and a returning one is a new
@@ -893,7 +902,6 @@ class HandChoicesMixin:
         choice.data["_context"].results.setdefault(OFFER_TAKEN_RESULTS, []).append(
             card.name
         )
-        self.log.append(f"{player.name} put {card.name} onto the battlefield ({name})")
         self.discard_pending_choice(choice)
         return True
 

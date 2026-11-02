@@ -177,8 +177,29 @@ class LibrarySearchChoicesMixin:
             # Bribery is the one that separates it from the line above: "put
             # that card onto the battlefield **under your control**" is the
             # searcher's side, out of the searched player's deck.
+            rider = choice.data.get("untap_found_if")
+
+            # Once it is there — the entry's ``then``, run at the answer when
+            # an "as it enters" choice keeps it on its way (CR 614.12a).
+            def arrived(found=found, card=card, caster=caster, rider=rider) -> None:
+                # "Then if you control four or more lands, untap that land."
+                # (Fabled Passage.) Counted *after* the land has entered,
+                # which is when the printed "then" happens — so the land
+                # counts itself. Through `become_untapped`, because anything
+                # that must happen when a permanent untaps has one place to be.
+                if rider and found.tapped:
+                    from ....handlers._amounts import evaluate_count
+
+                    held = evaluate_count(self, caster, rider["filter"])
+                    if held >= int(rider["threshold"]):
+                        self.become_untapped(found)
+                        self.log.append(
+                            f"{card.name} untaps ({held} counted)"
+                        )
+
             self._put_permanent_onto_battlefield(
-                landing_seat(choice.data, choice.player_index), found, None
+                landing_seat(choice.data, choice.player_index), found, None,
+                then=arrived,
             )
             # "…put that card onto the battlefield, then shuffle. **That
             # Dragon** gains haste until end of turn. Exile **it** at the
@@ -197,21 +218,6 @@ class LibrarySearchChoicesMixin:
             if record is not None:
                 record.setdefault(SEARCHED_PERMANENTS, [])
                 record[SEARCHED_PERMANENTS].append(found.permanent_id)
-            # "Then if you control four or more lands, untap that land."
-            # (Fabled Passage.) Counted *after* the land has entered, which is
-            # when the printed "then" happens — so the land counts itself. Through
-            # `become_untapped`, because anything that must happen when a
-            # permanent untaps has one place to be.
-            rider = choice.data.get("untap_found_if")
-            if rider and found.tapped:
-                from ....handlers._amounts import evaluate_count
-
-                held = evaluate_count(self, caster, rider["filter"])
-                if held >= int(rider["threshold"]):
-                    self.become_untapped(found)
-                    self.log.append(
-                        f"{card.name} untaps ({held} counted)"
-                    )
         elif destination == "library_top":
             # "…then shuffle and put that card on top." (Enlightened Tutor,
             # Mystical Tutor, Worldly Tutor.) The **order** is the effect: the

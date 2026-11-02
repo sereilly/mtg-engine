@@ -377,18 +377,25 @@ def discarded_onto_battlefield(game, player, card, cause_seat) -> bool:
         return False
     seat = next(i for i, seated in enumerate(game.players) if seated is player)
     arrival = Permanent(card=card)
-    game._put_permanent_onto_battlefield(seat, arrival, None, from_zone="hand")
-    game.log.append(
-        f"{player.name} discarded {card.name}, which was put onto the "
-        "battlefield instead of into their graveyard"
+
+    # Once it is there — the entry's ``then``, run at the answer when an "as
+    # it enters" choice keeps it on its way (CR 614.12a).
+    def arrived() -> None:
+        game.log.append(
+            f"{player.name} discarded {card.name}, which was put onto the "
+            "battlefield instead of into their graveyard"
+        )
+        if game.is_on_battlefield(arrival):
+            for kind, count in spec["counters"].items():
+                if kind == "+1/+1":
+                    game.place_plus1_counters(arrival, int(count))
+                else:
+                    game.place_pt_counters(arrival, kind, int(count))
+                game.log.append(f"{card.name} enters with {count} {kind} counter(s)")
+
+    game._put_permanent_onto_battlefield(
+        seat, arrival, None, from_zone="hand", then=arrived,
     )
-    if game.is_on_battlefield(arrival):
-        for kind, count in spec["counters"].items():
-            if kind == "+1/+1":
-                game.place_plus1_counters(arrival, int(count))
-            else:
-                game.place_pt_counters(arrival, kind, int(count))
-            game.log.append(f"{card.name} enters with {count} {kind} counter(s)")
     return True
 
 

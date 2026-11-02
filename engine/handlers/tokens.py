@@ -290,6 +290,46 @@ def token_recipient_seats(
     return recipients
 
 
+def _token_arrived(game: Game, payload: dict, context: OracleExecutionContext, token) -> None:
+    """What ``create_token`` does to each token once it is on the battlefield
+    — the entry's ``then``, run at the answer when an "as it enters" choice
+    keeps a token on its way (CR 614.12a), and at once otherwise."""
+    # "…that are tapped and attacking" (Basri Ket): entry state, not an
+    # attack declaration — the tokens join the combat the trigger saw
+    # (CR 111.10c-style entry), attacking whatever seat is already under
+    # attack.
+    if payload.get("tapped"):
+        token.tapped = True
+    # "Create Stangg Twin, a … token. **Exile that token** when …"
+    # (Stangg.) Which permanent this step made, for the sentences behind it
+    # in the same resolution: a token is a new object with a fresh id
+    # (CR 400.7), so nothing about it can be looked up afterwards.
+    #
+    # Written for every token maker, and deliberately the *last* one when
+    # several are made: the phrase "that token" is singular, and the
+    # lowering admits it only behind a maker — a card printing it after a
+    # plural maker would be a card this engine has not met, and it would
+    # arrive as one token addressed rather than as a silently wider effect.
+    context.results[CREATED_TOKEN_RESULT_KEY] = token.permanent_id
+    # …and **all** of them, for the plural back-reference ("Exile
+    # them", Waylay). Appended per token rather than assigned at the
+    # end of the loop, so a sentence behind a maker that made some and
+    # then stopped still names the ones it made.
+    context.results.setdefault(CREATED_TOKENS_RESULT_KEY, []).append(
+        token.permanent_id
+    )
+    if payload.get("attacking") and game.current_turn_phase == "combat":
+        defending = (context.trigger_context or {}).get("trigger_defending_player_index")
+        if not isinstance(defending, int):
+            defending = next(iter(sorted(game.combat_defending_players())), None)
+        if isinstance(defending, int):
+            slot = game.battlefield_index_of(token)
+            if slot is not None:
+                game.combat_attackers[slot] = defending
+                token.attacking = True
+                token.defending_player_index = defending
+
+
 @effect_handler("create_token")
 def create_token(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Generic token creation: payload carries name / P/T / type_line / colors /
@@ -507,41 +547,10 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         if context.source_permanent is not None:
             metadata[CREATED_WITH_PERMANENT_ID] = context.source_permanent.permanent_id
         token = Permanent(card=token_card, metadata=metadata)
-        game._put_permanent_onto_battlefield(seat, token, None)
-        # "…that are tapped and attacking" (Basri Ket): entry state, not an
-        # attack declaration — the tokens join the combat the trigger saw
-        # (CR 111.10c-style entry), attacking whatever seat is already under
-        # attack.
-        if payload.get("tapped"):
-            token.tapped = True
-        # "Create Stangg Twin, a … token. **Exile that token** when …"
-        # (Stangg.) Which permanent this step made, for the sentences behind it
-        # in the same resolution: a token is a new object with a fresh id
-        # (CR 400.7), so nothing about it can be looked up afterwards.
-        #
-        # Written for every token maker, and deliberately the *last* one when
-        # several are made: the phrase "that token" is singular, and the
-        # lowering admits it only behind a maker — a card printing it after a
-        # plural maker would be a card this engine has not met, and it would
-        # arrive as one token addressed rather than as a silently wider effect.
-        context.results[CREATED_TOKEN_RESULT_KEY] = token.permanent_id
-        # …and **all** of them, for the plural back-reference ("Exile
-        # them", Waylay). Appended per token rather than assigned at the
-        # end of the loop, so a sentence behind a maker that made some and
-        # then stopped still names the ones it made.
-        context.results.setdefault(CREATED_TOKENS_RESULT_KEY, []).append(
-            token.permanent_id
+        game._put_permanent_onto_battlefield(
+            seat, token, None,
+            then=lambda token=token: _token_arrived(game, payload, context, token),
         )
-        if payload.get("attacking") and game.current_turn_phase == "combat":
-            defending = (context.trigger_context or {}).get("trigger_defending_player_index")
-            if not isinstance(defending, int):
-                defending = next(iter(sorted(game.combat_defending_players())), None)
-            if isinstance(defending, int):
-                slot = game.battlefield_index_of(token)
-                if slot is not None:
-                    game.combat_attackers[slot] = defending
-                    token.attacking = True
-                    token.defending_player_index = defending
     if isinstance(raw_count, dict) and "seat_record" in raw_count:
         # Already said per seat, inside the loop.
         return True, "resolved"

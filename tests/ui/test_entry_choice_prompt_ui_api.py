@@ -72,10 +72,17 @@ def _w2g3_choosers() -> list[str]:
 def _w2g3_rendered_prompts(name: str) -> list[dict]:
     """The ``enter_choice`` payloads *name* raises for an interactive seat — as
     the server renders them, never as written here. Three seats, so a lone
-    "choose an opponent" is a real question."""
+    "choose an opponent" is a real question.
+
+    Entered through the one entry road there is, so each prompt is rendered
+    the way a client meets it: about a permanent **on its way**, on no
+    battlefield until the answer (CR 614.12a, ``engine/entry_awaiting.py``).
+    This used to place the permanent on the battlefield and call
+    ``_initialize_permanent_state`` on it, which asked the renderer about a
+    permanent that had a battlefield position no real prompt's has."""
     entering = Permanent(card=_POOL[name])
     game = Game(players=[
-        PlayerState(name="P1", battlefield=[entering]),
+        PlayerState(name="P1"),
         PlayerState(name="P2", battlefield=[
             Permanent(card=_POOL["Grizzly Bears"]), Permanent(card=_POOL["Forest"]),
         ]),
@@ -83,7 +90,10 @@ def _w2g3_rendered_prompts(name: str) -> list[dict]:
     ])
     game.enforce_mana_costs = False
     game.interactive_seats = {0, 1, 2}
-    game._initialize_permanent_state(entering, 0, 1)
+    game._sync_control()
+    game._put_permanent_onto_battlefield(0, entering, 1)
+    if game.pending_choices:
+        assert not game.is_on_battlefield(entering), name
     rendered = []
     for seat in range(3):
         queued = [

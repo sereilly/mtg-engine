@@ -672,16 +672,21 @@ def _put_linked_pile_onto_battlefield(
                     f"{owner.name}'s exile"
                 )
                 continue
+        # Attached as part of the same move, inside this resolution — the
+        # arrangement Replenish's return keeps, so the Aura is never an
+        # unattached one for CR 704.5m to find — once it is there (the entry's
+        # ``then``, at the answer when an "as it enters" choice keeps it on
+        # its way, CR 614.12a).
         arrival = game.leave_linked_exile(
-            entry, "battlefield", controller_index=controller_index
+            entry, "battlefield", controller_index=controller_index,
+            then=(
+                (lambda aura, host=host: attach_aura(aura, host))
+                if host is not None else None
+            ),
         )
         if arrival is None:
             continue
         if host is not None:
-            # Attached as part of the same move, inside this resolution — the
-            # arrangement Replenish's return keeps, so the Aura is never an
-            # unattached one for CR 704.5m to find.
-            attach_aura(arrival, host)
             moved.append(f"{card.name} (enchanting {host.card.name})")
         else:
             moved.append(card.name)

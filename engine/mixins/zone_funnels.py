@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from ..aura_attachment import attach_aura
 from ..cast_permissions import end_while_exiled_grants
 from ..continuous import next_timestamp
 from ..control import set_base_controller
@@ -542,9 +543,14 @@ class ZoneFunnelsMixin:
         return taken
 
     def leave_linked_exile(
-        self, entry: dict, zone: str, *, controller_index: int | None = None
+        self, entry: dict, zone: str, *, controller_index: int | None = None,
+        then: "Callable[[Permanent], None] | None" = None,
     ) -> "Permanent | None":
         """Take one linked-exile entry's card out of exile and into *zone*.
+
+        *then* is called with a **battlefield** arrival once it is there — the
+        entry's ``then`` (``_put_permanent_onto_battlefield``), so a caller that
+        attaches it does so after any "as it enters" choice (CR 614.12a).
 
         *controller_index* is the seat a **battlefield** arrival enters under
         (CR 110.2a: the player the effect instructed to put it there). It
@@ -594,13 +600,20 @@ class ZoneFunnelsMixin:
             # only thing that could say otherwise is the write that made them
             # differ.
             arrival.metadata["owner_player_index"] = owner_index
-        self._put_permanent_onto_battlefield(seat, arrival, None)
-        if entry.get("tapped"):
-            arrival.tapped = True
-        if entry.get("counters"):
-            from ..handlers.linked_exile import restore_noted_counters
+        # Once it is there — the entry's ``then``, run at the answer when an
+        # "as it enters" choice keeps it on its way (CR 614.12a) — and then
+        # whatever the caller does with it (*then*, called with the arrival).
+        def arrived() -> None:
+            if entry.get("tapped"):
+                arrival.tapped = True
+            if entry.get("counters"):
+                from ..handlers.linked_exile import restore_noted_counters
 
-            restore_noted_counters(self, arrival, entry["counters"])
+                restore_noted_counters(self, arrival, entry["counters"])
+            if then is not None:
+                then(arrival)
+
+        self._put_permanent_onto_battlefield(seat, arrival, None, then=arrived)
         return arrival
 
     def return_linked_exile(self, permanent: Permanent, why: str, ending: str) -> None:
@@ -635,22 +648,26 @@ class ZoneFunnelsMixin:
             destination = str(entry.get("to", "hand"))
             if card not in owner.exile:
                 continue
-            arrival = self.leave_linked_exile(entry, destination)
+            # "…**attached to that permanent**" — the Auras go back onto the
+            # creature the entry before them brought back, which is why they
+            # travel in one record and in printed order. Nothing to attach to
+            # means the Aura simply arrives, and CR 704.5n's sweep bins it.
+            # Attached once the Aura is there (the entry's ``then``).
+            host = returned if entry.get("attach_to_returned") else None
+            arrival = self.leave_linked_exile(
+                entry, destination,
+                then=(
+                    (lambda aura, host=host: attach_aura(aura, host))
+                    if host is not None else None
+                ),
+            )
             if arrival is None:
                 self.log.append(
                     f"{card.name} returns to {owner.name}'s {destination} "
                     f"({permanent.card.name} {why})"
                 )
                 continue
-            # "…**attached to that permanent**" — the Auras go back onto the
-            # creature the entry before them brought back, which is why they
-            # travel in one record and in printed order. Nothing to attach to
-            # means the Aura simply arrives, and CR 704.5n's sweep bins it.
-            if entry.get("attach_to_returned") and returned is not None:
-                from ..aura_attachment import attach_aura
-
-                attach_aura(arrival, returned)
-            else:
+            if host is None:
                 returned = arrival
             self.log.append(
                 f"{card.name} returns to the battlefield "

@@ -101,8 +101,8 @@ def test_702_3b_a_primal_clay_on_its_wall_body_cannot_attack():
     p1.hand = [_CATALOG["Primal Clay"]]
     game.queue_from_hand(0, "Primal Clay")
     game.resolve_top_of_stack()
-    clay = p1.battlefield[-1]
     assert game.confirm_enter_body_choice(0, 2)
+    clay = p1.battlefield[-1]
     clay.metadata["summoning_sickness_turn"] = -99
 
     assert clay.has_type("wall") and game._has_keyword(clay, "defender")
@@ -121,8 +121,8 @@ def test_a_primal_clay_on_a_body_without_defender_still_attacks():
     p1.hand = [_CATALOG["Primal Clay"]]
     game.queue_from_hand(0, "Primal Clay")
     game.resolve_top_of_stack()
-    clay = p1.battlefield[-1]
     assert game.confirm_enter_body_choice(0, 0)
+    clay = p1.battlefield[-1]
     clay.metadata["summoning_sickness_turn"] = -99
 
     assert not game._has_keyword(clay, "defender")
