@@ -102,7 +102,9 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
         # (Obstinate Familiar's offer) suspends a seat's draw, and the cards
         # arrive with the answer — so the report is the step after the draw,
         # read off the drawer's own record (:func:`_drew_since`), and the next
-        # seat's draw waits for the answer rather than running past it.
+        # seat's draw waits for the answer rather than running past it (CR
+        # 121.2c: the active player performs all of their draws first, then
+        # each other player in turn order).
         drew_before: dict[int, int] = {}
 
         def draw_then_report(step) -> None:

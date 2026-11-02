@@ -241,8 +241,8 @@ def test_truce_under_a_familiar_nobody_is_asked_about():
 def test_each_player_draws_reports_what_arrived_and_in_turn_order():
     """"Each player draws a card" (Winter Sky's shape): the report per seat
     is what that seat's draw delivered, and the next seat's draw waits for an
-    interactive offer about the one before it (CR 121.2 — a draw is finished
-    before the next begins)."""
+    interactive offer about the one before it (CR 121.2c: the active player
+    performs all of their draws first, then each other player in turn order)."""
     from engine.oracle_types import OracleInstruction
     from engine.game_types import OracleExecutionContext
 
