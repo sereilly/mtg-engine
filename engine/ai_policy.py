@@ -98,6 +98,7 @@ from .ai_abilities import (
     choose_activation_action,
     _abilities_weighed,
     _ACTIVATIONS_SET_ASIDE,
+    _AT_INSTANT_SPEED,
     _queue_activation,
     _rehearse_activation,
 )
@@ -394,9 +395,11 @@ def choose_instant_speed_activation(
     with deliberating():
         for _ in range(INSTANT_ACTIVATIONS_WEIGHED):
             token = _ACTIVATIONS_SET_ASIDE.set(frozenset(set_aside))
+            speed = _AT_INSTANT_SPEED.set(True)
             try:
                 action = choose_activation_action(game, player_index)
             finally:
+                _AT_INSTANT_SPEED.reset(speed)
                 _ACTIVATIONS_SET_ASIDE.reset(token)
             if action is None:
                 return None
@@ -426,19 +429,19 @@ def activate_chosen_ability(game: Game, seat: int, action: ActivationAction):
 
 
 def holds_an_ability_it_could_activate(game: Game, player_index: int) -> bool:
-    """Whether `choose_activation_action` has anything to look at: an
-    untapped permanent *player_index* controls that is not summoning sick,
-    with an ability the chooser weighs (`ai_abilities._abilities_weighed`: a
-    land's non-mana abilities, anything else's first) that is not a mana
-    ability — the chooser's own first gates, asked before it is."""
+    """Whether `choose_activation_action` has anything to look at at instant
+    speed: a permanent *player_index* controls with an ability the chooser
+    weighs (`ai_abilities._abilities_weighed`: a land's non-mana abilities,
+    anything else's first) that is not a mana ability, and that is no {T}
+    ability of a tapped or summoning-sick permanent (CR 107.5, 602.5a) — the
+    chooser's own first gates, asked before it is. An attacking creature is
+    tapped, and its "{1}: loses flying" is something to look at."""
     for permanent in game.controlled_by(player_index):
-        if permanent.tapped:
-            continue
-        if game._is_summoning_sick(permanent):
-            continue
+        held = permanent.tapped or game._is_summoning_sick(permanent)
         if any(
             ability.instruction is not None
             and not is_mana_ability(ability.instruction)
+            and not (held and ability.cost.requires_tap)
             for _index, ability in _abilities_weighed(game, permanent)
         ):
             return True
