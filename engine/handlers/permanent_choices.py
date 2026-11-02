@@ -389,6 +389,18 @@ def _chooser_seat(game, payload: dict, context) -> int | None:
         return _controlled_by_seat(game, "target", context, payload)
     if chooser != "opponent":
         return caster_seat
+    # The opponent the controller named for this pick (CR 601.7a / 602.3a /
+    # 608.2d, ``player_choices.ask_which_opponent``) — so the battlefield "they
+    # control" is read from and the seat asked are one answer. Before anyone
+    # is named, the first live opponent: the stated default the naming offers.
+    from .player_choices import NAMED_OPPONENT
+
+    named = (context.results or {}).get(NAMED_OPPONENT)
+    if (
+        isinstance(named, int) and 0 <= named < len(game.players)
+        and named != caster_seat and not game.players[named].lost
+    ):
+        return named
     return next(
         (
             index
@@ -654,7 +666,54 @@ def choose_permanent(
     remainder_key = payload.get("remainder_key")
     if remainder_key is not None:
         context.results[str(remainder_key)] = None
-    seat = _chooser_seat(game, payload, context)
+    if payload.get("chooser") == "opponent":
+        # "**An opponent** chooses target creature they control." (Echo
+        # Chamber, Nova Pentacle, Preacher, Infernal Denizen.) Which opponent
+        # is the controller's to say where several could make the choice
+        # (CR 601.7a / 602.3a / 608.2d) — asked first, and the pick is armed
+        # for the seat named. "Could" is the candidate rule asked from each
+        # opponent's seat: "…they control" offers nothing to an opponent with
+        # no creature, and naming one would be naming nobody.
+        from .player_choices import NAMED_OPPONENT, ask_which_opponent
+
+        def could_choose(opponent: int) -> bool:
+            saved = context.results.get(NAMED_OPPONENT)
+            context.results[NAMED_OPPONENT] = opponent
+            try:
+                return bool(permanent_choice_candidates(game, payload, context))
+            finally:
+                context.results[NAMED_OPPONENT] = saved
+
+        card_name = getattr(context.card, "name", "")
+        opponents = game.opponents_of(game.players.index(context.caster))
+
+        def pick(opponent: int | None) -> None:
+            if opponent is None and opponents:
+                # Opponents there are, and none of them has anything to choose
+                # — the pick's own "nothing to choose" outcome, said as such.
+                game.log.append(f"{card_name}: there is no permanent it could choose")
+                return
+            _choose_permanent_for(game, payload, context, opponent)
+
+        ask_which_opponent(
+            game, context,
+            card_name=card_name,
+            prompt="Choose the opponent who makes this choice.",
+            could_choose=could_choose,
+            then=pick,
+        )
+        return True, "resolved"
+    return _choose_permanent_for(
+        game, payload, context, _chooser_seat(game, payload, context)
+    )
+
+
+def _choose_permanent_for(
+    game: Game, payload: dict, context: OracleExecutionContext, seat: int | None,
+) -> tuple[bool, str]:
+    """:func:`choose_permanent`'s pick, put to *seat*."""
+    result_key = payload["result_key"]
+    remainder_key = payload.get("remainder_key")
     if seat is not None:
         # Who was asked, for a later sentence that speaks about them rather than
         # about what they picked — "…deals 1 damage to **that player**"

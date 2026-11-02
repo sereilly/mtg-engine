@@ -995,6 +995,36 @@ def _hand_could_use_mana(game: Game, player_index: int) -> bool:
     return False
 
 
+def order_discard(game: Game, player_index: int, slots, source_card) -> list[int]:
+    """*slots* (hand positions) in the order a seat nobody asks discards them.
+
+    Hand order, the stated default, **except** where the sentence behind the
+    discard tests which card went (``ai_prompt_readers.
+    discard_spares_a_penalty``): "…each player who didn't discard a creature
+    card this way loses 4 life" (Strongarm Tactics) puts the cards that spare
+    the penalty first, and the plain test puts the cards that incur it last.
+    Stable, so hand order still breaks every tie — a preference, never a
+    filter: a seat holding no such card still discards.
+    """
+    from .ai_prompt_readers import discard_spares_a_penalty
+    from .handlers._filters import _card_matches_filter
+
+    order = list(slots)
+    tested = discard_spares_a_penalty(source_card)
+    if tested is None:
+        return order
+    described, negated = tested
+    player = game.players[player_index]
+
+    def spares(slot: int) -> bool:
+        matches = bool(_card_matches_filter(
+            player.hand[slot], described, game=game, owner=player,
+        ))
+        return matches == negated
+
+    return sorted(order, key=lambda slot: not spares(slot))
+
+
 def order_hand_pick(
     game: Game, player_index: int, candidates, payload: dict, source_card
 ) -> list[int]:

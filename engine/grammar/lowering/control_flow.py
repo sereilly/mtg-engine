@@ -45,7 +45,8 @@ from ...oracle_types import (EVENT_SPELL_MANA_COST, MANA_PAID_BY_SEAT,
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import _stamp_x_from_count, count_spec
-from ._collapses import (event_seat_performs, offered_seat_performs,
+from ._collapses import (each_seat_pays_its_own_toll,
+                         event_seat_performs, offered_seat_performs,
                          without_restated_target,
                          _each_player_optional_discard,
                          _each_player_optional_draw,
@@ -843,6 +844,11 @@ def _lower_may(
     # "Target opponent may **draw a card**": the bare imperative's subject is
     # the seat the offer names, not the ability's controller.
     node = offered_seat_performs(node)
+    # "Each opponent sacrifices … **unless they pay** {3}" (Rishadan Brigand):
+    # the pronoun is each seat of the set the penalty names, so the toll is
+    # put to every one of them — before the actor is resolved below, which
+    # would otherwise read "they" as the resolution's one target seat.
+    node = each_seat_pays_its_own_toll(node)
     for collapse in (
         _each_player_optional_discard,
         _each_player_optional_pay_mana,

@@ -1473,23 +1473,28 @@ def deal_damage_and_opponent_choice(game: Game, instruction: OracleInstruction, 
     deterministic pick (kill a creature of the activator's if able, else the
     activator's face) for AI/headless play.
 
+    **Which** opponent chooses is the activator's to say where there are
+    several (CR 602.3a; the card's 2020-11-10 ruling: "You choose which
+    opponent chooses the second target"), asked through the one seam every
+    unnamed "an opponent" goes through (``player_choices.ask_which_opponent``).
+
     **The two halves are one resumable loop.** The first damage event may stop
     to ask its recipient's controller which effect applies first (CR 616.1e),
     and the second is the opponent's prompt — whose default, for a seat nobody
     asks, *deals* its damage the moment it is armed. Written as two statements,
-    the second was dealt before the first one's answer.
+    the second was dealt before the first one's answer. The opponent half is
+    itself a loop (which opponent, then the prompt), nested in this one's step.
     """
-    caster_index = game.players.index(context.caster)
+    from .player_choices import ask_which_opponent
 
-    def opponents_half() -> None:
-        chooser_index = next(
-            (i for i, p in enumerate(game.players) if i != caster_index and not p.lost), None
-        )
+    caster_index = game.players.index(context.caster)
+    amount = int(instruction.payload.get("opponent_amount", instruction.payload.get("amount", 0)))
+
+    def arm(chooser_index: int | None) -> None:
         if chooser_index is None:
             return
-        amount = int(instruction.payload.get("opponent_amount", instruction.payload.get("amount", 0)))
-        # An interactive chooser is prompted; every other seat takes the kind's
-        # deterministic default the moment this is armed.
+        # An interactive chooser is prompted; every other seat takes the
+        # kind's deterministic default the moment this is armed.
         if game.arm_pending_choice(
             "opponent_damage", chooser_index,
             caster_index=caster_index, amount=amount, card_name=context.card.name,
@@ -1498,6 +1503,14 @@ def deal_damage_and_opponent_choice(game: Game, instruction: OracleInstruction, 
             game.log.append(
                 f"{game.players[chooser_index].name} chooses any target for {context.card.name}'s {amount} damage"
             )
+
+    def opponents_half() -> None:
+        ask_which_opponent(
+            game, context,
+            card_name=context.card.name,
+            prompt=f"Choose the opponent who chooses a target for {context.card.name}'s {amount} damage.",
+            then=arm,
+        )
 
     run_resumable(
         game, [lambda: deal_damage(game, instruction, context), opponents_half],

@@ -1100,26 +1100,24 @@ class AbilityTargetsMixin:
                 continue
             if payload.get("among_record") or payload.get("legal_host_for_source"):
                 continue
-            seat = next(
-                (
-                    index
-                    for index, player in enumerate(self.players)
-                    if index != controller_index and not player.lost
-                ),
-                None,
-            )
-            # The same seat ``handlers/permanent_choices._chooser_seat`` will
-            # pick, so the gate and the resolution cannot disagree about whose
-            # board was asked. No opponent at all is a choice nobody can make,
-            # which the resolution already reports and this must not turn into
-            # a refusal.
-            if seat is None:
+            # **Any** opponent who could make the choice, because the controller
+            # names which one (CR 602.3a: "if there is more than one opponent
+            # who could make such a choice, the ability's controller decides
+            # which") — the seats ``player_choices.ask_which_opponent`` offers
+            # as the ability resolves. This asked the first opponent alone, so
+            # at three seats an Echo Chamber whose first opponent had no
+            # creature was refused with a legal choice on the table. No
+            # opponent at all is a choice nobody can make, which the resolution
+            # already reports and this must not turn into a refusal.
+            seats = self.opponents_of(controller_index)
+            if not seats:
                 continue
             described = payload.get("filter") or {}
             if any(
                 subject_matches(
                     self, perm, described, observer=seat, source=source
                 )
+                for seat in seats
                 for perm in self.controlled_by(seat)
             ):
                 continue

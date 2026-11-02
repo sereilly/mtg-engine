@@ -279,11 +279,12 @@ class SpellChoicesMixin:
         return True
 
     def _default_retarget_choice(self, choice: PendingChoice) -> None:
-        """The stated policy: the **first** live candidate offered, in board
-        order — on the side the re-aimed object's effect is worth aiming at
-        for the seat choosing, where that side holds one
-        (:meth:`_retarget_preferred_seats`). Deterministic rather than clever,
-        for ``_default_player_choice``'s reason.
+        """The stated policy: on the side the re-aimed object's effect is
+        worth aiming at for the seat choosing, where that side holds one
+        (:meth:`_retarget_preferred_seats`), the dearest permanent there
+        (:meth:`_dearest_permanents_first`); board order between equals and
+        everywhere else. Deterministic, for ``_default_player_choice``'s
+        reason.
 
         Board order alone named the chooser's own face first: Willbender
         turned face up against a Lightning Bolt aimed at its controller's
@@ -297,9 +298,42 @@ class SpellChoicesMixin:
                 position for position in live
                 if self._retarget_option_seat(options[position]) in wanted
             ]
+            if wanted:
+                preferred = self._dearest_permanents_first(options, preferred)
             live = preferred + [position for position in live if position not in preferred]
         if not live or not self._resolve_retarget_choice(choice, live[0]):
             self._record_retarget_choice(choice, None)
+
+    def _dearest_permanents_first(self, options, positions: list) -> list:
+        """*positions* with the permanents among them dearest first
+        (``ai_rehearsal.permanent_worth``), each player left in its place.
+
+        "…change that spell's target to another creature." (Meddle.) On the
+        side the effect is worth aiming at, which permanent it lands on is
+        the whole of the choice: a removal spell re-aimed at the chooser's
+        opponents should take their best creature, a pump re-aimed at the
+        chooser its own best. Board order took the first legal change. The
+        sort is stable, so equal worth keeps board order, and a player face
+        among the options keeps its slot — which face beats which creature is
+        a trade this does not price.
+        """
+        from ....ai_rehearsal import permanent_worth
+
+        slots = [
+            index for index, position in enumerate(positions)
+            if options[position].get("kind") == "permanent"
+            and self.permanent_by_id(options[position].get("permanent_id")) is not None
+        ]
+        ranked = sorted(
+            (positions[index] for index in slots),
+            key=lambda position: -permanent_worth(
+                self.permanent_by_id(options[position].get("permanent_id"))
+            ),
+        )
+        out = list(positions)
+        for index, position in zip(slots, ranked):
+            out[index] = position
+        return out
 
     def _retarget_option_seat(self, option: dict) -> "int | None":
         """Whose a retarget candidate is: a face's seat, a permanent's
