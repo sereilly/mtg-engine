@@ -30,7 +30,8 @@ from ...game_types import (OracleExecutionContext, OracleStateMachine,
                            SimulationResult, StackItem, as_target_ids)
 from ...oracle import compile_card_oracle
 from ...stack_targets import names_a_target
-from ...subject_filters import filter_head_noun, subject_matches
+from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
+from .activation_charges import _named_discard_positions
 from ...target_requirements import narrow_offer
 from ...refusals import noting, refuse, take_back_refused_attempt
 
@@ -115,7 +116,6 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("sacrifice_self", "a sacrifice-this cost"),
         ("return_self_to_hand", "a return-this-to-hand cost"),
         ("exile_filter", "a chosen exile cost"),
-        ("discard_cards", "a discard cost"),
         ("discard_at_random", "a random discard cost"),
         ("discard_whole_hand", "a discard-your-hand cost"),
         ("discard_self", "a discard-this cost"),
@@ -139,8 +139,10 @@ def _graveyard_cost_refusal(cost) -> str | None:
     ):
         if getattr(cost, field, None):
             return f"{label} is not charged from a graveyard"
-    if cost.sacrifice_filter is not None and cost.sacrifice_count != 1:
-        return "only a one-permanent sacrifice cost is charged from a graveyard"
+    if cost.sacrifice_filter is not None and (
+        not isinstance(cost.sacrifice_count, int) or cost.sacrifice_count < 1
+    ):
+        return "only a counted sacrifice cost is charged from a graveyard"
     return None
 
 
@@ -437,6 +439,12 @@ class CardActivationMixin:
         target_player_index: int | None = None,
         target_permanent_index: int | None = None,
         target_permanent_ids: "list[int | None] | None" = None,
+        # "{1}{B}, **Discard a card**: Return this card from your graveyard to
+        # your hand." (Undead Gladiator.) Which cards in hand pay a discard
+        # cost, by hand position — the battlefield door's spelling
+        # (``_named_discard_positions``); None is the deterministic pick.
+        cost_hand_index: int | None = None,
+        cost_other_hand_indices: "list[int] | None" = None,
     ) -> SimulationResult:
         """Activate an ability of a card **in a graveyard** (Ashen Ghoul,
         Whiteout).
@@ -455,11 +463,17 @@ class CardActivationMixin:
         sickness, the "loses all abilities" read, the tap -- is about a
         permanent, and a card in a graveyard is not one.
 
-        **Two cost shapes, and any third is refused rather than waived.** Mana
-        (Ashen Ghoul's {B}) and one sacrificed permanent named by a printed noun
-        phrase (Whiteout's "Sacrifice a snow land"). A cost this cannot charge
-        makes the ability unactivatable (CR 602.5c) -- the alternative is an
-        ability activated for free, which is the silent direction.
+        **The cost shapes it charges, and any other is refused rather than
+        waived.** Mana (Ashen Ghoul's {B}), a counted sacrifice named by a
+        printed noun phrase (Whiteout's "Sacrifice a snow land", Coffin
+        Puppets' "Sacrifice two lands"), a tap of other permanents (Gangrenous
+        Goliath) and a discard from the hand (Undead Gladiator's "Discard a
+        card"). A cost this cannot charge makes the ability unactivatable (CR
+        602.5c) -- the alternative is an ability activated for free, which is
+        the silent direction. Coffin Puppets and Undead Gladiator were
+        supported cards whose ability this door refused for anyone until the
+        kg3 round: the sacrifice was one permanent only, and a discard was on
+        the deny list.
         """
         controller = self.players[controller_index]
         matches = [
@@ -563,7 +577,7 @@ class CardActivationMixin:
 
         # CR 601.2h/602.5c: the whole cost is checked before any of it is spent,
         # so an ability with an unpayable half does not pay the other half.
-        sacrifice_victim = None
+        sacrifice_victims: list = []
         if cost.sacrifice_filter is not None:
             candidates = [
                 perm
@@ -572,32 +586,80 @@ class CardActivationMixin:
                     self, perm, cost.sacrifice_filter, observer=controller_index,
                 )
             ]
-            if not candidates:
+            # "Sacrifice **two** lands" (Coffin Puppets): one land is no more
+            # a payment than none (CR 601.2h).
+            wanted = int(cost.sacrifice_count)
+            if len(candidates) < wanted:
+                noun = filter_head_noun(cost.sacrifice_filter)
                 details = (
-                    f"{card.name}: no {filter_head_noun(cost.sacrifice_filter)} "
-                    "available to sacrifice"
+                    f"{card.name}: no {noun} available to sacrifice"
+                    if not candidates else
+                    f"{card.name}: not enough {noun}s to sacrifice for its cost"
                 )
                 return refuse(card.name, "unsupported", details)
             # The same announcement an ability on the battlefield makes, so the
             # same check: a permanent named to pay that cannot is a refusal,
-            # not a request for the default (CR 601.2h).
+            # not a request for the default (CR 601.2h). Several are named by
+            # ``cost_permanent_ids`` where the cost taps nothing (the tap
+            # cost's channel otherwise).
+            named_ids = (
+                [cost_permanent_id] if cost_permanent_id is not None else []
+            ) + (
+                list(cost_permanent_ids or ())
+                if wanted > 1 and not cost.tap_count else []
+            )
             named_cost_refusal = self._named_cost_refusal(
-                card, controller, candidates,
-                [cost_permanent_id] if cost_permanent_id is not None else None,
-                None,
+                card, controller, candidates, named_ids or None, None,
             )
             if named_cost_refusal is not None:
                 return refuse(
                     card.name, "unsupported", named_cost_refusal,
                 )
-            named = (
-                self.permanent_by_id(cost_permanent_id)
-                if cost_permanent_id is not None else None
+            # The payer's named permanents first, then the deterministic pick
+            # for the rest — the one rule every unnamed sacrifice takes
+            # (``sacrifice_preference_key``: a permanent whose death loses the
+            # game last, then the smallest).
+            for found in (self.permanent_by_id(pid) for pid in named_ids):
+                if (
+                    found is not None and len(sacrifice_victims) < wanted
+                    and any(perm is found for perm in candidates)
+                    and not any(perm is found for perm in sacrifice_victims)
+                ):
+                    sacrifice_victims.append(found)
+            for perm in sorted(candidates, key=self.sacrifice_preference_key):
+                if len(sacrifice_victims) >= wanted:
+                    break
+                if not any(perm is chosen for chosen in sacrifice_victims):
+                    sacrifice_victims.append(perm)
+
+        # "{1}{B}, **Discard a card**: Return this card from your graveyard to
+        # your hand." (Undead Gladiator.) The cards in hand the printed phrase
+        # admits (``_discard_cost_payable``): the payer's named positions
+        # first, then the payable cards in hand order — the battlefield door's
+        # default — resolved to cards before anything leaves the hand.
+        discard_cost_cards: list = []
+        if cost.discard_cards:
+            hand = controller.hand
+            if len(self._discard_cost_payable(cost, controller)) < cost.discard_cards:
+                details = (
+                    f"{card.name}: not enough cards in hand to discard for its cost"
+                )
+                return refuse(card.name, "unsupported", details)
+            named, denial = _named_discard_positions(
+                hand, cost, cost_hand_index, cost_other_hand_indices,
+                game=self, owner=controller,
             )
-            sacrifice_victim = (
-                named if any(perm is named for perm in candidates)
-                else self.default_sacrifice_pick(candidates)
-            )
+            if denial is not None:
+                return refuse(card.name, "unsupported", f"{card.name}: {denial}")
+            positions = named + [
+                index for index, held in enumerate(hand)
+                if index not in named and card_matches_any(
+                    held, cost.discard_filters, game=self, owner=controller,
+                )
+            ]
+            discard_cost_cards = [
+                hand[index] for index in positions[:cost.discard_cards]
+            ]
 
         # "**Tap three untapped Clerics you control**: Return this card from
         # your graveyard to your hand." (Gangrenous Goliath.) The permanents
@@ -641,11 +703,19 @@ class CardActivationMixin:
                 + ", ".join(p.card.name for p in tap_cost_permanents)
                 + " to pay its cost"
             )
-        if sacrifice_victim is not None:
+        for sacrifice_victim in sacrifice_victims:
             self.sacrifice_permanent(sacrifice_victim)
             self.log.append(
                 f"{controller.name} sacrificed {sacrifice_victim.card.name} "
                 f"to activate {card.name}"
+            )
+        for discarded in discard_cost_cards:
+            # Out of the hand by identity (one copy), then discarded — the
+            # battlefield door's two lines (``take_card_from_hand``).
+            self.take_card_from_hand(controller, discarded)
+            self._discard_card(controller, discarded, as_cost=True)
+            self.log.append(
+                f"{controller.name} discarded {discarded.name} to activate {card.name}"
             )
 
         # The card leaves the graveyard only when the *effect* moves it
