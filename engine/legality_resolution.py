@@ -40,6 +40,7 @@ from .legality import (
     _ability_target_quantifiers,
     cast_target_obligation,
     announced_by_a_choice,
+    targeting_instruction,
 )
 
 
@@ -988,11 +989,14 @@ class ResolutionTargetsMixin:
           it resolves, so "every target" is not something the stack object
           records — :meth:`stale_comparison_refusal` leaves the same card alone
           for the same reason;
-        * a **roles** announcement with a role that is a seat or a spell, for
-          the reason the spell side gives of a player role. A roles
-          announcement of permanents and **graveyard cards** (Goblin Welder,
-          the Advocates) is judged the way a roles *spell* is — still there
-          and still targetable; each role's description and relation is
+        * a **roles** announcement with a role that is a spell (none in
+          either manifest role). A roles announcement of permanents,
+          **graveyard cards** (Goblin Welder, the Advocates) and **players**
+          (Keeper of the Dead, the Planeswalker's Scorn and Favor, Soldevi
+          Heretic) is judged role by role — a permanent still there and still
+          targetable, a card still in its pile, a player still among those
+          the role's own enumeration offers (:meth:`role_seat_is_offered`);
+          each role's description and relation is
           ``handlers/_targets.roles_still_legal``'s.
 
         A **graveyard** target is legal while any copy of the chosen card is
@@ -1034,8 +1038,25 @@ class ResolutionTargetsMixin:
                 # the permanent given shroud in response is blanked while the
                 # cards still return, and the cards gone with the creature still
                 # there is a legal resolution (the card's 2004-10-04 ruling).
-                # A seat or a spell role is still declined, for the reason above.
-                if any(target.kind not in ("permanent", "graveyard") for target in targets):
+                #
+                # **A seat role is judged too**, as one its own enumeration
+                # still offers (``role_seat_is_offered``, the predicate the
+                # handler's per-target half asks): "**Target opponent** reveals
+                # a card at random … **Target creature** gets -X/-X" (the
+                # Planeswalker's Scorn and Favor), "Choose **target opponent**
+                # … Destroy target nonblack creature that player controls"
+                # (Keeper of the Dead), "…**target opponent** may draw a card"
+                # (Soldevi Heretic), and an "any target" role a player answered
+                # (Shieldmage Advocate). Declined, each of them resolved with
+                # every target illegal — the Advocate's shield still went up
+                # around a player who had gained shroud.
+                #
+                # A spell role is still declined, for the reason above: no
+                # ability in either manifest role prints one.
+                if any(
+                    target.kind not in ("permanent", "graveyard", "player")
+                    for target in targets
+                ):
                     return None
                 # The card the announcement was enumerated for: an activation
                 # reads its permanent's **effective** card (a Clone's abilities
@@ -1052,11 +1073,23 @@ class ResolutionTargetsMixin:
                             (target, self.graveyard_target_is_legal(target.stamp))
                         )
                         continue
-                    permanent = self.permanent_by_id(target.permanent_id)
                     role = (
                         role_specs[target.position]
                         if 0 <= target.position < len(role_specs) else None
                     )
+                    if target.kind == "player":
+                        activated = bool(getattr(item, "activated", False))
+                        verdicts.append((target, role is not None and self.role_seat_is_offered(
+                            item.caster_index, card, role, target.seat,
+                            source=source,
+                            ability_instruction=(
+                                targeting_instruction(item.ability_instruction)
+                                if activated else None
+                            ),
+                            triggered=not activated,
+                        )))
+                        continue
+                    permanent = self.permanent_by_id(target.permanent_id)
                     verdicts.append((target, bool(
                         permanent is not None
                         and self.is_on_battlefield(permanent)

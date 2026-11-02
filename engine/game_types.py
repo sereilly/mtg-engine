@@ -727,6 +727,14 @@ class OracleExecutionContext(_TargetIdsGuard):
     # a branch inside one role's scope can spend another role (Crooked Scales'
     # toll buys a repeat of the whole flip, opponent's creature included).
     announced_targets: tuple | None = None
+    # The seat a several-role announcement named for the **player** role the
+    # scoped step's own role depends on — "…target nonblack creature **that
+    # player** controls" after "target opponent" (Keeper of the Dead) — as it
+    # was named, whether or not that player is still a legal target (CR
+    # 608.2b judges the creature on its own). Set by
+    # ``handlers/control_flow._role_scoped``; read by
+    # ``handlers/_targets.frozen_that_player_seat``. None everywhere else.
+    relation_seat: int | None = None
     # **This resolution's targets were chosen by a player's announcement** —
     # a spell (CR 601.2c) or an activated ability (CR 602.2b), whose every
     # owed target was named by its caller or defaulted from the picker's own

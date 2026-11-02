@@ -469,6 +469,14 @@ def frozen_that_player_seat(game: Game, context: OracleExecutionContext) -> int 
     chosen = (context.results or {}).get("chosen_player")
     if isinstance(chosen, int) and 0 <= chosen < len(game.players):
         return chosen
+    # …and where that step chose nobody because its seat is **no longer a
+    # legal target** (a shroud gained in response, CR 608.2b), the seat the
+    # announcement named for the player role this step's own role depends on
+    # (``OracleExecutionContext.relation_seat``). The illegal player is not
+    # affected; the creature "that player controls" is still legal and is.
+    related = getattr(context, "relation_seat", None)
+    if isinstance(related, int) and 0 <= related < len(game.players):
+        return related
     # A **spell** has no firing event, so there is nothing frozen to read — and
     # the pronoun still has an antecedent: the sentence in front of it. "Cast
     # this spell only during an opponent's turn. Tap target creature **that
@@ -831,25 +839,18 @@ def _role_seat_is_still_a_target(
     True where the resolving object's controller cannot be found: a context
     with no seat to ask from is not evidence that a target went illegal.
     """
-    from ..player_comparisons import comparison_at_resolution
-
     caster = next(
         (index for index, player in enumerate(game.players) if player is context.caster),
         None,
     )
     if caster is None:
         return True
-    source = context.source_permanent
     # …without a comparison the card bounds to the announcement ("…as you
-    # activate this ability", Keeper of the Dead's rulings): see
-    # ``player_comparisons.comparison_at_resolution``.
-    role = comparison_at_resolution(role)
-    return any(
-        entry.get("kind") == "player" and entry.get("seat") == seat
-        for entry in game._enumerate_targets(
-            caster, context.card, dict(role), for_cast=False,
-            source_permanent=source, ability_source=source, triggered=True,
-        )
+    # activate this ability", Keeper of the Dead's rulings): the one predicate
+    # the whole-object verdict asks too (``Game.role_seat_is_offered``).
+    return game.role_seat_is_offered(
+        caster, context.card, role, seat,
+        source=context.source_permanent, triggered=True,
     )
 
 

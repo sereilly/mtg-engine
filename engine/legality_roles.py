@@ -570,3 +570,39 @@ class RoleTargetsMixin:
             if addresses is not None:
                 addresses.append(("player", "role", position, None))
         return verdicts
+
+    def role_seat_is_offered(
+        self, caster_index: int, card: CardDefinition, role: dict, seat: int, *,
+        source=None, ability_instruction=None, triggered: bool = False,
+    ) -> bool:
+        """CR 608.2b for the **player** one role of an announcement named: is
+        *seat* still among the players that role's own enumeration offers?
+
+        The announcement's question, asked again through the list the picker
+        and the gate read (``_enumerate_targets`` over the role, as
+        :meth:`role_target_options` asks it), so a player who gained shroud in
+        response (Ivory Mask, CR 702.18a) or left the game (CR 800.4a) is
+        missing from it for the reason they could not have been named — and
+        without a comparison the card bounds to the announcement ("…as you
+        activate this ability", Keeper of the Dead's 2009-10-01 ruling:
+        ``player_comparisons.comparison_at_resolution``).
+
+        Two readers, at the rule's two halves: an ability's whole-object
+        verdict (``legality_resolution.ability_target_verdicts``) and a
+        handler's per-target one (``handlers/_targets._role_seat_is_still_a_target``).
+        *triggered* asks as a triggered ability would, which skips only "can't
+        be the targets of spells or activated abilities" (Peace Talks).
+        """
+        from .player_comparisons import comparison_at_resolution
+
+        if not isinstance(seat, int) or not 0 <= seat < len(self.players):
+            return False
+        return any(
+            entry.get("kind") == "player" and entry.get("seat") == seat
+            for entry in self._enumerate_targets(
+                caster_index, card, dict(comparison_at_resolution(role)),
+                for_cast=False, ability_instruction=ability_instruction,
+                source_permanent=source, ability_source=source,
+                triggered=triggered,
+            )
+        )
