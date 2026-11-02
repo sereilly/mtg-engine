@@ -37,7 +37,6 @@ import inspect
 import textwrap
 import typing
 from functools import lru_cache
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -52,11 +51,9 @@ from web.debug_actions import _DEBUG_ANYTIME_ACTIONS
 from web.schemas import ActionKind, GameActionRequest
 
 from tests.helpers import _mk_creature_card
-from .js_requests import load_scripts
-from .test_kg_client_request_schemas import Census
+from .test_kg_client_request_schemas import census
 
 client = TestClient(app)
-STATIC = Path(__file__).resolve().parents[2] / "web" / "static"
 
 #: Request fields that name a permanent by its battlefield slot, each with
 #: the fields that name the same permanent(s) by id — empty where the wire
@@ -218,9 +215,8 @@ def test_no_prompt_answers_a_permanent_by_slot_but_the_combat_family():
 
 
 def test_every_client_answer_outside_the_combat_family_names_its_permanent_by_id():
-    census = Census(load_scripts(STATIC))
     examined, missing = 0, []
-    for site, body in census.read:
+    for site, body in census().read:
         if site.url != "/api/sessions/{}/action" or body.kinds is None:
             continue
         kinds = set(body.kinds) & prompt_answers()

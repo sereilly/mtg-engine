@@ -19060,21 +19060,29 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     // The cost pick — either the whole choice (__costOnly) or the second half
     // of it (__costStage) — rides the cost field, never the target one.
     if (pending.__costOnly || pending.__costStage) {
+      // The source by its id as well as the cost: an activation that names
+      // neither a seat nor its permanent's id is refused at a table of three
+      // or more ("target_seat is required in a 3+ player game"), and a
+      // cost-only pick ("Sacrifice a creature: …" with no target) named
+      // neither.
       const costBody = withPermanentId(
-        {
-          seat,
-          action: "activate",
-          permanent_name: pending.cardName,
-          permanent_index: pending.sourcePermanentIndex,
-          cost_permanent_index: selectedPermanentIndex,
-          ...(pending.__costStage
-            ? {
-                target_seat: pending.chosenTargetSeat,
-                target_permanent_index: pending.chosenTargetIndex,
-              }
-            : {}),
-        },
-        "cost_permanent_id", selectedTarget, selectedPermanentIndex,
+        withPermanentId(
+          {
+            seat,
+            action: "activate",
+            permanent_name: pending.cardName,
+            permanent_index: pending.sourcePermanentIndex,
+            cost_permanent_index: selectedPermanentIndex,
+            ...(pending.__costStage
+              ? {
+                  target_seat: pending.chosenTargetSeat,
+                  target_permanent_index: pending.chosenTargetIndex,
+                }
+              : {}),
+          },
+          "cost_permanent_id", selectedTarget, selectedPermanentIndex,
+        ),
+        "permanent_id", seat, pending.sourcePermanentIndex,
       );
       if (Number.isInteger(pending.abilityIndex)) costBody.ability_index = pending.abilityIndex;
       // "{T}, Sacrifice a Forest: Add three mana in any combination of {R}
@@ -21627,23 +21635,28 @@ function selectStackSpellTarget(arrayIndex) {
   if (pending.castAction === "activate") {
     // Jade Monolith's second stage: the clicked stack spell is the chosen
     // damage SOURCE — send it alongside the already-chosen creature target.
-    const body = pending.__sourceStage
-      ? {
-          seat,
-          action: "activate",
-          permanent_name: pending.cardName,
-          permanent_index: pending.sourcePermanentIndex,
-          target_seat: pending.chosenTargetSeat,
-          target_permanent_index: pending.chosenTargetIndex,
-          source_stack_index: arrayIndex,
-        }
-      : {
-          seat,
-          action: "activate",
-          permanent_name: pending.cardName,
-          permanent_index: pending.sourcePermanentIndex,
-          target_stack_index: arrayIndex,
-        };
+    // Both by the source's id too: a stack target names no seat, and an
+    // activation naming neither is refused at a table of three or more.
+    const body = withPermanentId(
+      pending.__sourceStage
+        ? {
+            seat,
+            action: "activate",
+            permanent_name: pending.cardName,
+            permanent_index: pending.sourcePermanentIndex,
+            target_seat: pending.chosenTargetSeat,
+            target_permanent_index: pending.chosenTargetIndex,
+            source_stack_index: arrayIndex,
+          }
+        : {
+            seat,
+            action: "activate",
+            permanent_name: pending.cardName,
+            permanent_index: pending.sourcePermanentIndex,
+            target_stack_index: arrayIndex,
+          },
+      "permanent_id", seat, pending.sourcePermanentIndex,
+    );
     // Which ability, as every other activate body says — without it a
     // multi-ability permanent resolved its *first* ability, and the cost the
     // ability announced (`pendingActivationCost`) could not find its body.
