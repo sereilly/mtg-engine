@@ -1025,9 +1025,21 @@ def _choice_scores(order, of_kind, owner_of, pips, generic, left, wants, profile
 def _wants_left(rest: "list[frozenset[str]]", wants) -> tuple:
     """How well *rest* serves *wants* (``(want, times, tier)``, cards before
     abilities), as a key that sorts better-is-larger: how many it pays
-    **together** — taken in the order listed, each kept if it still fits
-    beside those before it — then how many of those are the cards' tier
-    (`PaymentWants`), then how many it pays one at a time.
+    **together** — taken smallest first (then cards before abilities, then
+    in the order listed), each kept if it still fits beside those before it
+    — then how many of those are the cards' tier (`PaymentWants`), then how
+    many it pays one at a time.
+
+    **Smallest first, because taken in the order listed the count was not
+    monotone**: a richer *rest* could score lower. Turning Liege of the Axe
+    up for {1}{W} from {W:3, G:4, C:7} beside a Savannah, with Akroma, Angel
+    of Wrath ({5}{W}{W}{W}) listed before three cheaper cards, the {C} spend
+    kept Akroma payable — and Akroma, packed first, crowded out the three —
+    while the {W} spend made Akroma unpayable and fitted the three: so the
+    {W}{W} spend scored higher although every cost it leaves payable the
+    {W}{C} spend leaves payable too (round kg3's reproduction of Legions'
+    browser observation). A large want taken last cannot crowd out small
+    ones.
 
     Together first, because a turn is several payments. Scored one at a
     time, the seeded M21 game paid Walking Corpse with both Swamps off
@@ -1042,7 +1054,10 @@ def _wants_left(rest: "list[frozenset[str]]", wants) -> tuple:
     """
     together: dict[str, int] = {}
     packed = cards = 0
-    for want, times, tier in wants:
+    ordered = sorted(
+        enumerate(wants), key=lambda item: (sum(item[1][0].values()), item[1][2], item[0]),
+    )
+    for _position, (want, times, tier) in ordered:
         for _ in range(times):
             trial = dict(together)
             for symbol, amount in want.items():
