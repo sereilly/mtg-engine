@@ -378,7 +378,9 @@ def _preferred_role_option(
 def _choose_role_targets(
     game: Game, caster_index: int, card: CardDefinition
 ):
-    """Pick one target per **role** for a spell naming several kinds of target.
+    """Pick one target per **role** for a spell naming several kinds of target:
+    ``(seat, slots, ids, stack, refs)`` (`_role_answer`; *refs* is the
+    announcement, `CastAction.target_role_refs`).
 
     ``None`` when *card* names no roles at all — every other spell in the pool —
     and ``()`` when it names them and no chain this seat would announce exists,
@@ -447,37 +449,54 @@ def _choose_role_targets(
         return _weighed_seat_prefix(game, caster_index, card, picks)
     if not picks:
         return ()
-    # A **card in a graveyard** answers a role ("…Return up to one target
-    # Zombie card from your graveyard to your hand", Cruel Revival) on no
-    # channel a ``CastAction`` carries: the positional id list below would
-    # read its graveyard slot as a *battlefield* slot and name whatever
-    # permanent sat there, which the cast gate refuses — and a seat that
-    # re-proposes a refused card every turn is what ``refused_casts`` counts.
-    # So the chain stops before it where every role from there on is optional
-    # (the announcement ends there, CR 601.2c), and is no chain this seat can
-    # announce where one is not. Naming the card needs the action to carry
-    # ``target_role_refs``, as an activation's does.
-    first_card = next(
-        (level for level, pick in enumerate(picks) if pick.get("kind") == "graveyard"),
-        None,
-    )
-    if first_card is not None:
-        if not all(level in optional for level in range(first_card, len(picks))):
-            return ()
-        picks = picks[:first_card]
-        if not picks:
-            return ()
-    # A **player** role's answer is the seat itself (Donate's "target player"),
-    # and it fills no slot in the positional id list — the seat travels on the
-    # field every cast already carries, which is what the resolution reads back.
-    # Held as ``None`` in both lists rather than dropped, because those lists
-    # are positional in role order and a short one shifts every slot after it.
-    #
-    # A **stack** role's answer ("Counter target spell and … deals 3 damage to
-    # target creature", Suffocating Blast) is held the same way and for the
-    # same reason: the spell travels on ``target_stack_index``, the one field
-    # a cast names a stack object on.
-    off_board = ("player", "stack")
+    return _role_answer(game, caster_index, picks)
+
+
+def role_ref(game: Game, pick: dict) -> "dict | None":
+    """One role's answer in the announcement's own per-role spelling
+    (``target_role_refs``, which `casting._cast_onto_stack` translates with
+    `_role_announcement_stamps`): a ``seat``, ``{"stack": True}``, a
+    ``graveyard_seat`` / ``graveyard_index`` pair, or a ``permanent_id`` —
+    None where a permanent has none (nothing the gate would accept).
+
+    `ai_abilities._choose_activation_role_targets`' ``ref_of`` for a cast."""
+    kind = pick.get("kind")
+    if kind == "player":
+        return {"seat": pick.get("seat")}
+    if kind == "stack":
+        return {"stack": True}
+    if kind == "graveyard":
+        return {
+            "graveyard_seat": pick.get("seat"),
+            "graveyard_index": pick.get("index"),
+        }
+    permanent_id = game.permanent_id_of(game.permanent_at(pick.get("seat"), pick.get("index")))
+    return {"permanent_id": permanent_id} if isinstance(permanent_id, int) else None
+
+
+def _role_answer(game: Game, caster_index: int, picks: list):
+    """A chain of role *picks* as `_choose_role_targets` answers it:
+    ``(seat, slots, ids, stack, refs)`` — or ``()`` where no announcement can
+    carry it.
+
+    **The announcement is *refs*** (`CastAction.target_role_refs`), one entry
+    per role: the only spelling that can say two players (Wheel and Deal's
+    opponents, Kaboom!'s players) or a card in a graveyard (Cruel Revival's
+    "up to one target Zombie card from your graveyard"). A cast had no such
+    field, so an AI seat named at most one player in a chain of seat roles and
+    stopped Cruel Revival's chain before its Zombie card — the positional id
+    list would have read the card's graveyard slot as a battlefield slot.
+
+    The other four are what every cast has always carried and every gate the
+    candidate builders ask still reads, derived from the same picks: a
+    **player** role's seat and a **stack** role's spell travel off the
+    positional lists, held as ``None`` there because those lists are
+    positional in role order; a graveyard role likewise. The seat is the first
+    player named, else the first board a permanent role is on (the ids address
+    the boards a roles spell spans, CR 400.7); *stack* is the one spell a stack
+    role names (`target_stack_index`).
+    """
+    off_board = ("player", "stack", "graveyard")
     ids = [
         None if pick.get("kind") in off_board
         else game.permanent_id_of(game.permanent_at(pick["seat"], pick["index"]))
@@ -490,14 +509,13 @@ def _choose_role_targets(
         len(game.stack) - 1 - pick["stack_index"]
         for pick in picks if pick.get("kind") == "stack"
     ]
-    if len(seats) > 1 or len(spells) > 1:
-        # Two player roles would be one seat sent twice, which the resolution
-        # refuses on the other side of the same fact — and two stack roles one
-        # spell. Skipped rather than cast.
+    if len(spells) > 1:
+        # Two stack roles would be one spell named twice. Skipped rather than
+        # cast.
         return ()
-    # The seat is still sent for every other roles spell too, because every cast
-    # carries one; the *ids* are what address the two boards a roles spell may
-    # span (CR 400.7).
+    refs = [role_ref(game, pick) for pick in picks]
+    if any(ref is None for ref in refs):
+        return ()
     seat = seats[0] if seats else next(
         (pick["seat"] for pick in picks if pick.get("kind") not in off_board),
         caster_index,
@@ -505,7 +523,7 @@ def _choose_role_targets(
     indices = [
         None if pick.get("kind") in off_board else pick["index"] for pick in picks
     ]
-    return seat, indices, ids, (spells[0] if spells else None)
+    return seat, indices, ids, (spells[0] if spells else None), refs
 
 
 def _names_x_targets(card: CardDefinition) -> bool:
@@ -543,29 +561,30 @@ def _weighed_seat_prefix(game: Game, caster_index: int, card: CardDefinition, pi
 
     Ties go to the shorter announcement; a length nobody could rehearse is not
     weighed, and with none weighable the walk's full answer stands, as it did.
-    The shape is the one every roles answer has: ``(seat, slots, ids, stack)``,
-    with no seat at all for a cast that names none (the engine reads an
-    announcement of no seat and no object as naming no opponent).
+    The shape is the one every roles answer has: ``(seat, slots, ids, stack,
+    refs)``, with no seat at all for a cast that names none (the engine reads
+    an announcement of no seat and no object as naming no opponent) and every
+    seat named in *refs*, one per role — so a prefix of two opponents is two
+    seats (CR 601.2c), which this stopped at before a cast could carry a
+    seat per role.
     """
     def shaped(chosen):
         seats = [pick["seat"] for pick in chosen]
         return (
             seats[0] if seats else None,
             [None] * len(chosen), [None] * len(chosen), None,
+            [{"seat": seat} for seat in seats] or None,
         )
 
     best, best_swing = None, None
     for length in range(len(picks) + 1):
         answer = shaped(picks[:length])
-        if length > 1 and len({pick["seat"] for pick in picks[:length]}) > 1:
-            # Two seats is two player roles on one field, which a cast's
-            # announcement cannot carry (`_choose_role_targets` skips it).
-            break
         rehearsal = _rehearse_announcement(
             game, caster_index, card,
             _announcement(
                 card, target=answer[0], caster=caster_index,
                 permanent_index=answer[1], permanent_ids=answer[2],
+                role_refs=answer[4],
             ),
         )
         if rehearsal is None or not rehearsal.accepted:
@@ -660,6 +679,17 @@ def _role_chain(
             candidates,
             key=lambda option: -_role_option_worth(game, option),
         )
+    elif candidates and all(option.get("kind") == "graveyard" for option in candidates):
+        # **A card in a graveyard** ("Return up to one target Zombie card from
+        # your graveyard to your hand", Cruel Revival) — a role no cast could
+        # announce before a cast carried ``target_role_refs``, so no chain
+        # reached one. The pile's order is when each card arrived, not what it
+        # is worth: the card with the greatest mana value first, stable — the
+        # activation side's pick for "target card from a graveyard"
+        # (`ai_abilities._activation_candidate`).
+        candidates = sorted(
+            candidates, key=lambda option: -_graveyard_option_value(game, option),
+        )
     for pick in candidates:
         rest = _role_chain(
             pick.get("next") or [], sides, level + 1, caster_index, card, game,
@@ -676,6 +706,15 @@ def _role_option_worth(game: Game, option: dict) -> float:
         return 0.0
     permanent = game.permanent_at(option.get("seat"), option.get("index"))
     return permanent_worth(permanent) if permanent is not None else 0.0
+
+
+def _graveyard_option_value(game: Game, option: dict) -> float:
+    """The mana value of the graveyard card a role option names, 0 when the
+    slot holds none."""
+    pile = game.players[option.get("seat")].graveyard
+    index = option.get("index")
+    held = pile[index] if isinstance(index, int) and 0 <= index < len(pile) else None
+    return float(getattr(held, "cmc", 0) or 0)
 
 
 def _choose_several_targets(

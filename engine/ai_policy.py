@@ -683,10 +683,14 @@ def _combat_instant_candidate(
     # window. With a role on the stack (Suffocating Blast) this is also the
     # only chooser that ever sees a spell to name.
     roles = _choose_role_targets(game, player_index, card) if divided is None else None
+    role_refs: "list[dict] | None" = None
     if roles is not None:
         if roles == ():
             return None
-        target, target_permanent_index, target_permanent_ids, role_stack = roles
+        (
+            target, target_permanent_index, target_permanent_ids, role_stack,
+            role_refs,
+        ) = roles
         if role_stack is not None:
             stack_target = role_stack
     elif divided is None:
@@ -730,6 +734,7 @@ def _combat_instant_candidate(
         land_tap_colors=tap_colors,
         mode_index=_announced_mode(card),
         target_stack_index=stack_target,
+        target_role_refs=role_refs,
         # Where the card is and which permission the cast names — "hand" and
         # no alternative cost for every candidate this chooser built before.
         from_zone=_cast_zone(card),

@@ -901,6 +901,9 @@ def _cast_candidate_announcing(
     # The spell a **stack role** names (see `_choose_role_targets`); None for
     # every cast whose announcement has no such role.
     role_stack_index: int | None = None
+    # …and the roles announcement itself, one answer per role
+    # (`CastAction.target_role_refs`); None for a spell naming no roles.
+    role_refs: list[dict] | None = None
     if aura_enchant_noun(card) is not None:
         aura_choice = _choose_aura_target(game, player_index, card)
         if aura_choice is None:
@@ -930,7 +933,7 @@ def _cast_candidate_announcing(
                 return None
             (
                 target, target_permanent_index, target_permanent_ids,
-                role_stack_index,
+                role_stack_index, role_refs,
             ) = roles
         else:
             several = _choose_several_targets(
@@ -1156,6 +1159,7 @@ def _cast_candidate_announcing(
         optional_cost_payments=dict(offers) if announces_offer else None,
         mode_index=_announced_mode(card),
         target_stack_index=role_stack_index,
+        target_role_refs=role_refs,
     )
     # **What the cast would do, asked of the engine** — for a spell, whose
     # whole worth is its resolution. The finished announcement is carried out

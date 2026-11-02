@@ -53,7 +53,7 @@ def test_the_ai_names_each_opponents_most_valuable_permanent(set_pool):
     card = game.players[0].hand[0]
     chosen = _choose_role_targets(game, 0, card)
     assert chosen not in (None, ())
-    _seat, _indices, ids, _stack = chosen
+    _seat, _indices, ids, _stack, _refs = chosen
     named = [game.permanent_by_id(pid).card.name for pid in ids]
     assert named == ["B Giant", "C Elf"]
 
@@ -90,7 +90,7 @@ def test_the_ai_aims_kaboom_at_the_opponent_and_their_planeswalker(set_pool):
 
     chosen = _choose_role_targets(game, 0, game.players[0].hand[0])
     assert chosen not in (None, ())
-    seat, indices, ids, _stack = chosen
+    seat, indices, ids, _stack, _refs = chosen
     assert seat == 1
     assert ids == [None, walker.permanent_id]
 

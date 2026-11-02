@@ -247,7 +247,7 @@ def test_the_ai_skips_the_optional_role_when_its_side_has_nothing():
     picked = _choose_role_targets(game, 0, _POOL["Primal Might"])
 
     assert picked, "no chain at all"
-    _seat, indices, ids, _stack = picked
+    _seat, indices, ids, _stack, _refs = picked
     assert len(ids) == 1 and ids[0] in (mine.permanent_id, also.permanent_id)
 
 
@@ -255,7 +255,7 @@ def test_the_ai_aims_the_fight_at_the_other_side():
     from engine.ai_targets import _choose_role_targets
 
     game, _mine, _also, theirs = _table()
-    _seat, _indices, ids, _stack = _choose_role_targets(game, 0, _POOL["Primal Might"])
+    _seat, _indices, ids, _stack, _refs = _choose_role_targets(game, 0, _POOL["Primal Might"])
 
     assert len(ids) == 2 and ids[1] == theirs.permanent_id
 
