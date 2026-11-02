@@ -480,17 +480,29 @@ class PermanentChoicesMixin:
         # controller most — the dearest by ``ai_rehearsal.permanent_worth``,
         # board order between equals. Board order's first answer was the
         # Crab's controller's first land.
+        #
+        # **And its mirror: a pick the chooser makes among its own.** "…choose
+        # a creature you control and an opponent. Flip a coin. If you lose the
+        # flip, that opponent gains control of that creature." (Risky Move);
+        # "…gain control of target creature of an opponent's choice they
+        # control" (Preacher, the opponent choosing). The step behind takes
+        # the one chosen from the seat choosing it, so the seat gives up the
+        # one that costs it least — the cheapest by the same worth, board order
+        # between equals. Board order risked a Butcher Orgg over a Festering
+        # Goblin (Onslaught's W2G5: 5 of 24 Risky Move picks).
         if live and getattr(context, "card", None) is not None:
             from ....ai_prompt_readers import pick_is_taken_from_its_controller
 
             if pick_is_taken_from_its_controller(
                 context.card, str(choice.data.get("result_key") or "")
-            ) and all(
-                self.controller_index_of(perm) != choice.player_index for perm in live
             ):
                 from ....ai_rehearsal import permanent_worth
 
-                live = sorted(live, key=lambda perm: -permanent_worth(perm))
+                controllers = {self.controller_index_of(perm) for perm in live}
+                if choice.player_index not in controllers:
+                    live = sorted(live, key=lambda perm: -permanent_worth(perm))
+                elif controllers == {choice.player_index}:
+                    live = sorted(live, key=permanent_worth)
         if not live or not self._resolve_permanent_choice(
             choice, live[0].permanent_id
         ):

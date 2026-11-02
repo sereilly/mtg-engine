@@ -563,19 +563,26 @@ class HandChoicesMixin:
 
     def _default_discard(self, choice: PendingChoice) -> None:
         """Discard the lowest-index *eligible* cards, keeping them in the
-        graveyard.
+        graveyard — the ones sparing a printed penalty first
+        (``ai_prompts.order_discard``).
 
         Lowest-index is the stated policy; which cards are candidates at all is
         not policy but the card's printed phrase, so it is read from the same
         list the interactive seat is offered. Re-read each time round, because
         each discard renumbers the hand behind it.
         """
+        from ....ai_prompts import order_discard
         from ....handlers.discards import _resolve_one_discard
 
         discarded = 0
         took: list = []
         for _ in range(int(choice.data["count"])):
-            eligible = self.live_discard_candidates(choice)
+            # Hand order, except where the sentence behind tests which card
+            # went (Strongarm Tactics): the card sparing the penalty first.
+            eligible = order_discard(
+                self, choice.player_index, self.live_discard_candidates(choice),
+                choice.data.get("_source_card"),
+            )
             if not eligible:
                 break
             if not _resolve_one_discard(

@@ -956,11 +956,17 @@ def pick_is_tested_for_a_shared_color(card: CardDefinition, result_key: str) -> 
 
 
 #: The steps that take a recorded permanent away from whoever controls it —
-#: out of play, not merely tapped or phased for a turn.
+#: out of play, not merely tapped or phased for a turn — or hand it to another
+#: seat: "…that opponent gains control of that creature" (Risky Move), "gain
+#: control of target creature of an opponent's choice they control"
+#: (Preacher). A control change is the permanent leaving its controller's
+#: side as surely as an exile is.
 _TAKEN_FROM_ITS_CONTROLLER = frozenset({
     "exile_recorded_permanent",
     "sacrifice_recorded_permanent",
     "return_recorded_permanents_to_hand",
+    "give_control_of_chosen_to_player",
+    "steal_target_linked_to_source",
 })
 
 
@@ -1419,6 +1425,49 @@ def reads_what_its_cost_exiled(instructions) -> bool:
     return mentions(tuple(instructions or ()))
 
 
+def discard_spares_a_penalty(card: CardDefinition | None) -> "tuple[dict, bool] | None":
+    """What a discard of *card*'s is **tested for** by the sentence behind it,
+    or None: the card filter and whether the test is negated.
+
+    "Each player discards a card. Then each player who **didn't discard a
+    creature card this way** loses 4 life." (Strongarm Tactics.) The penalty
+    is read off which card each seat discarded (``recipient_did``, a
+    ``discarded_this_way`` deed), so the card a seat nobody asks gives up
+    decides whether it pays it — and the discard default took its first
+    card, losing 4 life holding a creature card in 5 of 12 discards
+    (Onslaught's W2G5). Negated, a matching card spares the penalty; plain
+    ("each player who discarded a creature card …"), a matching card is the
+    one that incurs it.
+
+    Read off the compiled steps, so any card printing the shape is answered
+    and no card is named.
+    """
+    if card is None:
+        return None
+    program = compile_card_oracle(card)
+    roots = (
+        tuple(program.instructions)
+        + tuple(a.instruction for a in program.activated_abilities if a.instruction is not None)
+        + tuple(t.instruction for t in program.triggered_abilities if t.instruction is not None)
+    )
+
+    def walk(instructions):
+        for instruction in instructions:
+            payload = getattr(instruction, "payload", None) or {}
+            deed = payload.get("recipient_did")
+            if isinstance(deed, dict) and deed.get("kind") == "discarded_this_way":
+                return dict(deed.get("filter") or {}), bool(deed.get("negated"))
+            for key in ("steps", "then", "else", "action", "otherwise", "effect"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)):
+                    found = walk(nested)
+                    if found is not None:
+                        return found
+        return None
+
+    return walk(roots)
+
+
 __all__ = [
     "GRAVEYARD_DENIAL_KINDS",
     "SELF_PAYMENT_KINDS",
@@ -1429,6 +1478,7 @@ __all__ = [
     "color_most_worth_sweeping",
     "chosen_name_is_read_off_the_targets_library",
     "denied_graveyard_pile",
+    "discard_spares_a_penalty",
     "exiled_search_pile_comes_back",
     "exiled_search_pile_comes_back_one_at_a_time",
     "exiles_a_graveyard_target",

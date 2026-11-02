@@ -218,7 +218,7 @@ def _seed_seat_discards(results: dict, seats) -> None:
 
 def _ask_seat_to_discard(
     game: Game, seat: int, count: int, *, results: dict, cause_seat: int,
-    inline_default: bool = False,
+    inline_default: bool = False, source_card=None,
 ) -> None:
     """One seat's turn in an each-seat discard, asked in APNAP order by
     ``resumption.ask_in_turn_order`` (CR 101.4: the active player chooses
@@ -239,7 +239,14 @@ def _ask_seat_to_discard(
     resolution is on the seat stack to say whose spell made it discard — and
     "a spell or ability an opponent controls causes you to discard" (Dodecapod)
     is a question about exactly that.
+
+    *source_card* is the card whose sentence this is, carried for the
+    default: where the sentence behind tests which card was discarded
+    (Strongarm Tactics), a seat nobody asks discards the one that spares it
+    the penalty (``ai_prompts.order_discard``).
     """
+    from ..ai_prompts import order_discard
+
     player = game.players[seat]
     count = min(int(count or 0), len(player.hand))
     if count <= 0:
@@ -248,7 +255,9 @@ def _ask_seat_to_discard(
     if inline_default and seat not in game.interactive_seats:
         took: list = []
         for _ in range(count):
-            card = player.hand[0]
+            card = player.hand[
+                order_discard(game, seat, range(len(player.hand)), source_card)[0]
+            ]
             game.take_card_from_hand(player, card)
             game._discard_card(player, card, cause_seat=cause_seat)
             took.append(card)
@@ -261,6 +270,7 @@ def _ask_seat_to_discard(
         allow_top_of_library=game._controls_top_of_library_discard(player),
         _results=results,
         _cause_seat=cause_seat,
+        _source_card=source_card,
     )
     game.log.append(f"{player.name} must choose {count} card(s) to discard")
 
@@ -288,6 +298,7 @@ def each_opponent_discards_cards(game: Game, instruction: OracleInstruction, con
             _ask_seat_to_discard(
                 game, seat, amount,
                 results=context.results, cause_seat=caster_index,
+                source_card=context.card,
             )
 
     ask_in_turn_order(game, ask)
@@ -840,7 +851,7 @@ def each_player_discards_a_card(game: Game, instruction: OracleInstruction, cont
             _ask_seat_to_discard(
                 game, seat, owed[seat],
                 results=context.results, cause_seat=caster_index,
-                inline_default=True,
+                inline_default=True, source_card=context.card,
             )
 
     ask_in_turn_order(game, ask)

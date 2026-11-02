@@ -1188,9 +1188,11 @@ def test_w1g13_syphon_mind_draws_only_for_what_was_discarded(set_pool):
 def test_w1g13_strongarm_tactics_charges_each_seat_that_kept_its_creatures(set_pool):
     """"Each player discards a card. Then each player who didn't discard a
     creature card this way loses 4 life." The active player first (here a seat
-    nobody asks, which discards its first card), Bob asked and answering with a
-    creature card, and Cara — whose empty hand discarded nothing — counted as
-    not having discarded one. The loss waits for Bob's answer."""
+    nobody asks, which discards the creature card that spares it the loss —
+    kg3's ``ai_prompts.order_discard``, where it used to discard its first
+    card), Bob asked and answering with a creature card, and Cara — whose empty
+    hand discarded nothing — counted as not having discarded one. The loss
+    waits for Bob's answer."""
     giant = _w1g13_creature("Hill Giant", 3, 3)
     game = _w1g13_table(
         set_pool,
@@ -1200,13 +1202,13 @@ def test_w1g13_strongarm_tactics_charges_each_seat_that_kept_its_creatures(set_p
     )
     alice, bob, cara = game.players
     assert game.cast_from_hand(0, "Strongarm Tactics").supported
-    assert [c.name for c in alice.graveyard] == ["Plains"], "Alice chose first"
+    assert [c.name for c in alice.graveyard] == ["Bear"], "Alice chose first"
     assert [(c.kind, c.player_index) for c in game.pending_choices] == [("discard", 1)]
     assert (alice.life, cara.life) == (20, 20), "no loss before the last answer"
     _w1g13_discard(game, 1, 1)
     _w1g13_resolve_stack(game)
     assert [c.name for c in bob.graveyard] == ["Hill Giant"]
-    assert (alice.life, bob.life, cara.life) == (16, 20, 16)
+    assert (alice.life, bob.life, cara.life) == (20, 20, 16)
 
 
 def _w1g13_tokens(game, seat, name="Bear Token"):
