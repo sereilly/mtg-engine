@@ -63,6 +63,7 @@ from engine.activation_zones import HAND
 from engine.ai_payment import _PaymentPlanner, _paying_for
 from engine.card_loader import load_catalog
 from engine.mana_payment import mana_cost_from_symbols, plan_payment
+from engine.mana_wants import wants_left_behind
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
@@ -120,6 +121,11 @@ def _real_costs() -> dict[str, object]:
             continue
         program = compile_card_oracle(card)
         if not program.supported or usable_activated_abilities(program, zone=HAND):
+            continue
+        # A flashback cost is a want the card leaves behind as it is cast
+        # (kg3/payment), in the held card's tier: Acorn Harvest's {1}{G}
+        # against a {B}{B} in hand is a trade between two wants, not a strand.
+        if wants_left_behind(card, cast=True, from_hand=True)[0]:
             continue
         found[printed] = card
     return found

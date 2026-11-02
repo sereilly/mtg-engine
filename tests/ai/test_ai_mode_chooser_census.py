@@ -296,6 +296,13 @@ def board(card, placements=(), *, window=None, grave=(), stack=None):
             and "Defender" not in (perm.card.oracle_text or "")
         ]
         game.declare_attackers(OPP, attackers, defending_player_index=ME)
+        # The defending seat's window for a spell that adds no block — a Fog,
+        # a removal spell — is after the blocks, where they are known
+        # (kg3/aidefend, ``ai_rehearsal.pays_before_the_blocks``). Seat 0 has
+        # nothing on a "combat" board to block with.
+        game.advance_combat_phase()
+        assert game.current_step == "declare_blockers", game.current_step
+        game.declare_blockers(ME, {})
     elif window == "attack":
         game.start_turn(ME)
         game._close_current_priority_step()

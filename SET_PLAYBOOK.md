@@ -788,7 +788,12 @@ green, the trackers agreeing the set ships.
    quick pass): the `full`-marked inventories and censuses are the ones a set
    widens, and read first on the promotion commit (step 9) they turn red after
    it rather than while a group is still in the code (Onslaught's Charms rows,
-   Legions' zone-cast census; kg3 found two `full`-only reds this way). Promotion
+   Legions' zone-cast census). A round with no promotion runs it too: kg3's
+   wave gates ran the quick pass, and its rehearsal, the round's first whole
+   full pass, found four censuses no group had run, each driving a table
+   that did not yet answer a branch's new question (an entry prompt, a
+   trample assignment, a flashback left behind as a want, the defender's
+   window after the blocks). Promotion
    widens every `load_catalog()` guard and shows the set
    to `parse_coverage` for the first time, so findings surface here by
    construction; rehearsing early hands them to somebody still in the code. A

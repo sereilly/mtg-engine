@@ -67,6 +67,7 @@ def _session(board, opposing=()):
         for name in names:
             permanent = Permanent(card=_CARDS[name])
             game._put_permanent_onto_battlefield(seat, permanent, None)
+            _answer_the_entry(game)
             permanent.metadata["summoning_sickness_turn"] = -99
             permanent.tapped = False
     game._recompute_continuous_effects()
@@ -78,6 +79,22 @@ def _session(board, opposing=()):
     game.current_turn_phase, game.current_step = "precombat_main", None
     game.start_priority_window(0)
     return sid, game
+
+
+def _answer_the_entry(game):
+    """Answer an "as it enters" prompt as the person at that seat does — the
+    empty answer, keeping the prompt's default. At a table with a person the
+    entry waits for it with the permanent on its way, in no zone (CR
+    614.12a), and the wire lists it as arriving, with no picker."""
+    for _ in range(8):
+        owed = next((
+            choice for choice in game.pending_choices
+            if choice.data.get("_entering_permanent") is not None
+        ), None)
+        if owed is None:
+            return
+        if not game.resolve_pending_choice(owed.kind, owed.player_index):
+            game.take_choice_default(owed)
 
 
 def _permanent(sid, name):

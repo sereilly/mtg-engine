@@ -1539,8 +1539,13 @@ them as entries:
   red on `test_face_blind_guards` (its repo scan is `full`). A census red
   that `entry` introduced was found by a later agent's whole-file run, and a
   seeded test that `aidefend`'s policy moved was found by `logs`. The briefs
-  now name the `full` structural guards, and the round's last wave-close
-  rehearsal ran the full pass.
+  now name the `full` structural guards. The wave gates ran the quick pass,
+  so the last wave-close rehearsal was the round's first whole full pass. It
+  found four more censuses whose tables did not answer a branch's new
+  question: an entry prompt (`entry`), a trample assignment (`wire`), a
+  flashback left behind as a want (`payment`), and the defender's window
+  after the blocks (`aidefend`). Each was fixed in the census, at the head of
+  the chain.
 - **A meeting list is "changed since `main`".** A link's tests leave the list
   once `main` passes it, and a per-set file is in no list unless a branch
   edits it. A branch from an older base had wave 1's 47 test files run on its

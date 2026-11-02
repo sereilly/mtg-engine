@@ -153,6 +153,21 @@ def _answer_as_the_human(session) -> bool:
     """The human's answer to whatever they owe, through the engine's answer
     funnel (the default response), and the action tail every request runs."""
     game = session.game
+    owed = (
+        game.trample_assignments_to_ask(HUMAN)
+        if game.current_step == "combat_damage" and not game.combat_damage_resolved
+        else []
+    )
+    if owed:
+        # A trampler blocked by one creature asks its human assigner (CR
+        # 702.19b, kg3/wire), and the web waits for the dialog: its
+        # Auto-assign (the engine's own division, lethal to the blocker and
+        # the rest past it), then Confirm Damage.
+        ok, _ = game.resolve_combat_damage(HUMAN, attacker_damage={
+            idx: game._default_attacker_division(idx) for idx in owed
+        })
+        _auto_resolve_ai_pending(session)
+        return ok
     waiting = game.waiting_prompt()
     if waiting is None or waiting.player_index != HUMAN:
         return False
