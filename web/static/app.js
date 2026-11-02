@@ -2670,6 +2670,12 @@ function resolvePendingManaSplit(key) {
   const pending = pendingManaColor;
   pendingManaColor = null;
   renderActivationPrompt();
+  // A **cast**'s split (Burnt Offering): the cast is waiting in `sendAction`
+  // (`askCastManaSplit`), and the answer goes back to it.
+  if (typeof pending.castResolve === "function") {
+    pending.castResolve(split);
+    return;
+  }
   // In words: the action hint is plain text, where "{R}{R}{G}" would show
   // its braces.
   const words = { W: "white", U: "blue", B: "black", R: "red", G: "green", C: "colorless" };
@@ -2693,6 +2699,55 @@ function resolvePendingManaSplit(key) {
   sendAction(body)
     .then(() => updateActionHint(`Activated ${pending.cardName} for ${text}.`))
     .catch((e) => updateActionHint(e.message, true));
+}
+
+// "Add X mana in any combination of {B} and/or {R}, where X is the
+// sacrificed creature's mana value" (Burnt Offering): the **cast**'s split,
+// asked with the activation's own chooser above. The server states it on the
+// card (`mana_combination`: `symbols` and a printed `count`, or the count
+// each permanent paying the cost would make it, `count_by_cost` by id); the
+// cast body carries the answer as `mana_combination`. Null where there is
+// nothing to choose — no such card, one symbol, no mana, or a count the body
+// does not settle (the server's default split then).
+function castManaSplitFor(body, state = currentState) {
+  if (!body || body.action !== "cast" || body.mana_combination != null || seat === null) return null;
+  const me = state?.players?.[seat];
+  if (!me) return null;
+  const zones = [me.hand, me.graveyard, me.exile, me.command_zone];
+  const held = Number.isInteger(body.hand_index) && (body.from_zone == null || body.from_zone === "hand")
+    ? me.hand?.[body.hand_index] : null;
+  const card = held && typeof held === "object" && held.name === body.card_name
+    ? held
+    : zones.flatMap((zone) => (Array.isArray(zone) ? zone : []))
+      .find((c) => c && typeof c === "object" && c.name === body.card_name && c.mana_combination);
+  const combination = card?.mana_combination;
+  if (!combination || !Array.isArray(combination.symbols) || combination.symbols.length < 2) return null;
+  let count = Number.isInteger(combination.count) ? combination.count : null;
+  if (count === null && combination.count_by_cost && Number.isInteger(body.cost_permanent_id)) {
+    const byCost = combination.count_by_cost[String(body.cost_permanent_id)];
+    count = Number.isInteger(byCost) ? byCost : null;
+  }
+  if (!Number.isInteger(count) || count < 1) return null;
+  return {
+    cardName: body.card_name,
+    oracleText: card.oracle_text || "",
+    combination: { symbols: combination.symbols.map((symbol) => String(symbol).toUpperCase()), count },
+  };
+}
+
+// Open the split chooser for a cast and wait for the answer: the split, or
+// null when the prompt is cancelled.
+function askCastManaSplit(split) {
+  return new Promise((resolve) => {
+    pendingManaColor = {
+      cardName: split.cardName,
+      oracleText: split.oracleText,
+      combination: split.combination,
+      castResolve: resolve,
+    };
+    renderActivationPrompt();
+    updateActionHint(`Choose the mana ${split.cardName} adds.`);
+  });
 }
 
 function chosenAbilityMana(card) {
@@ -13546,8 +13601,16 @@ function renderActivationPrompt() {
     // a cost is paid in full or not at all), so the confirm is held on it —
     // this used to say the rest was left to the engine's default pick.
     let shortAlternative = null;
+    // CR 118.9a: one alternative cost may be applied, and which is the
+    // caster's choice — a morph card under Dream Halls is face down for {3}
+    // *or* a discard. So "pay the mana cost" is offered once, before every
+    // alternative, and each alternative's buttons carry its position
+    // (`alternative_index`, sent back as `alternative_cost_index`).
+    let declineOffered = false;
     for (const offer of pending.offers) {
       if (offer.kind === "alternative") {
+        const altIndex = alternativeOfferIndex(offer);
+        const thisOne = pending.alternative !== null && pending.alternativeIndex === altIndex;
         // CR 118.9: paid *rather than* the mana cost, so the two are the two
         // arms of one choice rather than a box to tick beside the cost.
         const declined = pending.alternative === null;
@@ -13555,30 +13618,34 @@ function renderActivationPrompt() {
         // under Sphere of Resistance a pitched card and a life still owe {1}.
         // The server's label (`mana_owed`), absent on an untaxed board.
         const owedNote = alternativeOfferOwedNote(offer);
-        const buttons = [
+        const offerHead = alternativeOfferHead(offer);
+        const buttons = declineOffered ? [] : [
           `<button type="button" class="prompt-choice-btn${declined ? " selected" : ""}"`
           + ` data-alt-choice="decline">Pay ${pending.card.mana_cost ? renderSymbolsInline(pending.card.mana_cost) : "its mana cost"}</button>`,
         ];
+        declineOffered = true;
         if (!offer.payable) {
           rows.push(
-            `<div>Alternative cost: ${renderSymbolsInline(offer.label)} — you can't pay it right now.</div>`,
+            `<div>${offerHead.replace("Instead of its mana cost", "Alternative cost")}${renderSymbolsInline(offer.label)} — you can't pay it right now.</div>`,
           );
+          if (buttons.length) rows.push(`<div class="prompt-choice-row">${buttons.join("")}</div>`);
+          continue;
         } else if (Array.isArray(offer.hand_choices)) {
           // The verb is the backend's (`hand_verb`): a discard cost (Dream
           // Halls, Outbreak) puts the card in the graveyard, not in exile.
           const verb = offer.hand_verb === "discard" ? "Discard" : "Exile";
           for (const choice of offer.hand_choices) {
-            const on = pending.alternative === choice.index;
+            const on = thisOne && pending.alternative === choice.index;
             buttons.push(
               `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
-              + ` data-alt-choice="${choice.index}">${verb} ${escapeHtml(choice.name)}</button>`,
+              + ` data-alt-choice="${choice.index}" data-alt-index="${altIndex}">${verb} ${escapeHtml(choice.name)}</button>`,
             );
           }
           // "…discard an Island card **and another card**" (Foil): once the
           // first card is chosen, which other card(s) go with it. Naming fewer
           // than the cost takes leaves the rest to the engine's default pick.
           const others = Number(offer.other_discards || 0);
-          if (others > 0 && Number.isInteger(pending.alternative)
+          if (others > 0 && thisOne && Number.isInteger(pending.alternative)
               && Array.isArray(offer.other_hand_choices)) {
             const otherButtons = offer.other_hand_choices
               .filter((choice) => choice.index !== pending.alternative)
@@ -13588,7 +13655,7 @@ function renderActivationPrompt() {
                   + ` data-alt-other="${choice.index}" data-alt-other-count="${others}">`
                   + `${verb} ${escapeHtml(choice.name)}</button>`;
               });
-            rows.push(`<div>Instead of its mana cost: ${renderSymbolsInline(offer.label)}${owedNote}</div>`);
+            rows.push(`<div>${offerHead}${renderSymbolsInline(offer.label)}${owedNote}</div>`);
             rows.push(`<div class="prompt-choice-row">${buttons.join("")}</div>`);
             rows.push(`<div>…and ${others === 1 ? "another card" : `${others} other cards`}:</div>`);
             rows.push(`<div class="prompt-choice-row">${otherButtons.join("")}</div>`);
@@ -13600,7 +13667,7 @@ function renderActivationPrompt() {
           // *which* one. Each button toggles one candidate into the payment, up
           // to the printed count — and the whole count, or none of it: the
           // engine refuses a list shorter than the cost (CR 118.3).
-          const chosenIds = altPermanentIds(pending.alternative);
+          const chosenIds = thisOne ? altPermanentIds(pending.alternative) : [];
           const verb = offer.permanent_verb === "return" ? "Return"
             : offer.permanent_verb === "tap" ? "Tap" : "Sacrifice";
           const wanted = Math.max(1, Number(offer.permanent_count || 1));
@@ -13611,18 +13678,18 @@ function renderActivationPrompt() {
             const on = chosenIds.includes(choice.id);
             buttons.push(
               `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
-              + ` data-alt-perm="${choice.id}" data-alt-perm-count="${Number(offer.permanent_count || 1)}">`
+              + ` data-alt-perm="${choice.id}" data-alt-perm-count="${Number(offer.permanent_count || 1)}" data-alt-index="${altIndex}">`
               + `${verb} ${escapeHtml(choice.name)}</button>`,
             );
           }
         } else {
-          const on = pending.alternative === true;
+          const on = thisOne && pending.alternative === true;
           buttons.push(
             `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
-            + ` data-alt-choice="take">${renderSymbolsInline(offer.label)}</button>`,
+            + ` data-alt-choice="take" data-alt-index="${altIndex}">${renderSymbolsInline(alternativeOfferButtonText(offer))}</button>`,
           );
         }
-        rows.push(`<div>Instead of its mana cost: ${renderSymbolsInline(offer.label)}${owedNote}</div>`);
+        rows.push(`<div>${offerHead}${renderSymbolsInline(offer.label)}${owedNote}</div>`);
         rows.push(`<div class="prompt-choice-row">${buttons.join("")}</div>`);
         continue;
       }
@@ -13708,6 +13775,7 @@ function renderActivationPrompt() {
         const raw = btn.dataset.altChoice;
         setCastAlternativeCost(
           raw === "decline" ? null : raw === "take" ? true : Number(raw),
+          Number(btn.dataset.altIndex || 0),
         );
       });
     });
@@ -13715,6 +13783,7 @@ function renderActivationPrompt() {
       btn.addEventListener("click", () => {
         toggleCastAlternativePermanent(
           Number(btn.dataset.altPerm), Number(btn.dataset.altPermCount || 1),
+          Number(btn.dataset.altIndex || 0),
         );
       });
     });
@@ -14295,7 +14364,7 @@ function renderActivationPrompt() {
       `It adds ${count} mana in any combination of ${symbols.map((symbol) => `{${symbol}}`).join(" and/or ")}. Choose the split.`,
     );
     steps.innerHTML = [
-      `<div>Ability: ${renderSymbolsInline(pendingManaColor.oracleText || "Activated mana ability")}</div>`,
+      `<div>${pendingManaColor.castResolve ? "Spell" : "Ability"}: ${renderSymbolsInline(pendingManaColor.oracleText || "Activated mana ability")}</div>`,
       `<div class="prompt-choice-row">${manaSplits(symbols, count).map(
         (split) => `<button type="button" class="prompt-choice-btn" data-mana-split="${escapeHtml(manaSplitKey(split))}">`
           + `${renderSymbolsInline(manaSplitText(split))}</button>`,
@@ -16942,6 +17011,30 @@ function alternativeOfferOwedNote(offer) {
   return ` — ${renderSymbolsInline(offer.mana_owed)} in mana in all (cost increases apply to it, CR 118.9d)`;
 }
 
+// An alternative offer's position among the card's alternatives
+// (`alternative_index`, CR 118.9a); 0 for a server that sent none.
+function alternativeOfferIndex(offer) {
+  return Number.isInteger(offer?.alternative_index) ? offer.alternative_index : 0;
+}
+
+// The words before an alternative offer's label: whose offer it is when a
+// permanent grants it ("Instead of its mana cost, by Dream Halls: discard a
+// card that shares a color with it").
+function alternativeOfferHead(offer) {
+  return offer?.granted_by
+    ? `Instead of its mana cost, by ${escapeHtml(offer.granted_by)}: `
+    : "Instead of its mana cost: ";
+}
+
+// The take-button for an alternative with nothing to pick: the morph's says
+// what it does ("Cast face down for {3}"), any other its own label.
+function alternativeOfferButtonText(offer) {
+  if (offer?.keyword === "morph") {
+    return offer.mana_owed ? `Cast face down for ${offer.mana_owed}` : "Cast face down";
+  }
+  return offer?.label || "Take it";
+}
+
 function startCastOfferPrompt(card, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return false;
@@ -16962,6 +17055,9 @@ function startCastOfferPrompt(card, castAction = "cast") {
     // The hand positions paying an alternative cost's "and another card"
     // (Foil), beside the one `alternative` names.
     alternativeOthers: [],
+    // *Which* alternative (CR 118.9a), by the offer's `alternative_index`:
+    // meaningful only while `alternative` is not null.
+    alternativeIndex: null,
     handIndex: pendingCastHandCard?.handIndex ?? null,
     refreshing: false,
   };
@@ -17014,10 +17110,15 @@ function setCastOfferTimes(symbols, times) {
 
 // CR 118.9a: one alternative cost, so this is a choice between paying the mana
 // cost and paying that one — never a toggle that could leave both announced.
-function setCastAlternativeCost(choice) {
+function setCastAlternativeCost(choice, altIndex = 0) {
   const pending = pendingCastOffers;
   if (!pending) return;
+  if (choice !== null && pending.alternativeIndex !== altIndex) {
+    // Another alternative's half chosen: the first one's picks go with it.
+    pending.alternativeOthers = [];
+  }
   pending.alternative = choice;
+  pending.alternativeIndex = choice === null ? null : altIndex;
   // The card now paying the narrowed half cannot also be "another card".
   pending.alternativeOthers = (pending.alternativeOthers || [])
     .filter((index) => index !== choice);
@@ -17052,10 +17153,11 @@ function altPermanentIds(alternative) {
 // One candidate in or out of the payment. Choosing any is taking the
 // alternative cost; a count of one swaps rather than refusing a second click,
 // because the player is changing their mind, not adding a second creature.
-function toggleCastAlternativePermanent(permanentId, count) {
+function toggleCastAlternativePermanent(permanentId, count, altIndex = 0) {
   const pending = pendingCastOffers;
   if (!pending || !Number.isInteger(permanentId)) return;
-  let ids = altPermanentIds(pending.alternative).slice();
+  let ids = pending.alternativeIndex === altIndex
+    ? altPermanentIds(pending.alternative).slice() : [];
   if (ids.includes(permanentId)) {
     ids = ids.filter((id) => id !== permanentId);
   } else if (count <= 1) {
@@ -17064,6 +17166,7 @@ function toggleCastAlternativePermanent(permanentId, count) {
     ids.push(permanentId);
   }
   pending.alternative = ids.length ? { permanentIds: ids } : null;
+  pending.alternativeIndex = ids.length ? altIndex : null;
   renderActivationPrompt();
 }
 
@@ -17078,6 +17181,14 @@ function confirmCastOffers() {
   if (Object.keys(pending.taken).length) announced.optional_cost_payments = { ...pending.taken };
   if (pending.alternative !== null) {
     announced.alternative_cost = true;
+    // Which one (CR 118.9a), whenever the offer says: the engine refuses a
+    // bare announcement where two apply rather than choosing for the player.
+    const chosenOffer = pending.offers.find(
+      (offer) => offer.kind === "alternative" && alternativeOfferIndex(offer) === pending.alternativeIndex,
+    );
+    if (chosenOffer && Number.isInteger(chosenOffer.alternative_index)) {
+      announced.alternative_cost_index = chosenOffer.alternative_index;
+    }
     if (Number.isInteger(pending.alternative)) {
       announced.alternative_cost_hand_index = pending.alternative;
       if ((pending.alternativeOthers || []).length) {
@@ -17089,8 +17200,7 @@ function confirmCastOffers() {
       announced.alternative_cost_permanent_ids = permanentIds.slice();
     }
     // What the cast still owes in mana, for the auto-tap (CR 118.9d).
-    const taken = pending.offers.find((offer) => offer.kind === "alternative");
-    pendingCastAlternativeOwed = taken?.mana_owed || "";
+    pendingCastAlternativeOwed = chosenOffer?.mana_owed || "";
   } else {
     pendingCastAlternativeOwed = null;
   }
@@ -26207,6 +26317,17 @@ async function sendAction(actionBody) {
   }
   carryAnnouncedSeat(body, actionBody);
   carryCastZoneAndCost(body);
+  // A cast that makes mana "in any combination of" (Burnt Offering) owes its
+  // split with the announcement: asked here, where every cast body passes,
+  // once the cost it may depend on is on the body. Written onto the caller's
+  // body too, so an insufficient-mana retry resends the same split.
+  const castSplit = castManaSplitFor(body);
+  if (castSplit) {
+    const chosen = await askCastManaSplit(castSplit);
+    if (!chosen) throw new Error(`Cast of ${castSplit.cardName} cancelled.`);
+    body.mana_combination = chosen;
+    actionBody.mana_combination = chosen;
+  }
   carryMadnessAnswer(body);
   const payload = await postJson(`/api/sessions/${sessionId}/action`, body);
   renderState(payload);
@@ -26527,6 +26648,9 @@ for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
 
 q("promptCancelBtn").addEventListener("click", () => {
   SFX.onMenuCancel();
+  // A cast waiting on its mana split (`askCastManaSplit`) is told it was
+  // cancelled, so its caller's catch ends the cast.
+  if (typeof pendingManaColor?.castResolve === "function") pendingManaColor.castResolve(null);
   const wasCasting = !!(pendingCastTarget || pendingCastX || pendingCastDivision || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingCastOffers || pendingCastCreatureType);
   pendingActivation = null;
   pendingCastOffers = null;

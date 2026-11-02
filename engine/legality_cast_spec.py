@@ -671,6 +671,20 @@ class CastTargetSpecMixin:
         offer = self._trigger_target_candidates(prospective, announced=True)
         return None if offer is None else offer[2]
 
+    def _alternative_cost_granter(self, cost) -> "str | None":
+        """The name of the permanent whose text grants *cost* (Dream Halls),
+        read off each permanent's *effective* card as
+        ``applicable_alternative_costs`` reads it; None for a cost the card
+        prints on itself."""
+        from .alternative_costs import granted_alternative_cost
+
+        for _seat, permanent in self.permanents_with_controller():
+            if granted_alternative_cost(
+                permanent.effective_card.oracle_text or ""
+            ) == cost:
+                return permanent.card.name
+        return None
+
     def cast_cost_offers(
         self,
         caster_index: int,
@@ -723,14 +737,30 @@ class CastTargetSpecMixin:
         # one reader the announcement's check and the CR 601.2h gate also ask:
         # an offer this picker could not describe is a price no client can take,
         # which is the whole of what the alternative-cost prompt exists for.
-        for cost in self.applicable_alternative_costs(caster_index, card):
+        #
+        # **Every** applicable one, each with its position (``alternative_index``,
+        # what the cast's ``alternative_cost_index`` names back): CR 118.9a
+        # applies one, and which one is the caster's choice — a morph card
+        # under Dream Halls is face down for {3} *or* a discard. Only the first
+        # was offered, and the cast refused the bare announcement outright.
+        alternatives = self.applicable_alternative_costs(caster_index, card)
+        for position, cost in enumerate(alternatives):
             entry: dict = {
                 "kind": "alternative",
                 "label": cost.describe(),
+                "alternative_index": position,
                 "payable": self._unpayable_alternative_cost(
                     caster_index, card, cost, spell_hand_index=spell_hand_index,
                 ) is None,
             }
+            if cost.keyword:
+                entry["keyword"] = cost.keyword
+            granted_by = self._alternative_cost_granter(cost)
+            if granted_by is not None:
+                # Whose offer this is when a permanent grants it (Dream Halls):
+                # beside a printed one, "discard a card that shares a color
+                # with it" is a price no button on the card itself explains.
+                entry["granted_by"] = granted_by
             # CR 118.9d: "any additional costs, cost increases, and cost
             # reductions that affect that spell are applied to that alternative
             # cost." So a pitched card and a life are not the whole price under
@@ -813,11 +843,6 @@ class CastTargetSpecMixin:
                     )
                 ]
             offers.append(entry)
-            # CR 118.9a: only one alternative cost may be applied, and
-            # ``_resolve_alternative_cost`` refuses a card printing two rather
-            # than choosing for the player. Offering both would be this picker
-            # describing an announcement the engine will not accept.
-            break
 
         # Which of these offers is the card's **buyback** (CR 702.27a), so the
         # prompt can name the price rather than showing a bare "{3}" or a bare

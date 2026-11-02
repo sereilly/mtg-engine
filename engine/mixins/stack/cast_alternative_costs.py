@@ -162,6 +162,7 @@ class AlternativeCastCostsMixin:
         named_hand_index: int | None,
         spell_hand_index: int | None,
         required: "AlternativeCost | None" = None,
+        chosen_index: int | None = None,
     ) -> "tuple[AlternativeCost | None, CardDefinition | None, str | None]":
         """CR 601.2b's announcement: ``(cost taken, card that pays it, refusal)``.
 
@@ -200,17 +201,23 @@ class AlternativeCastCostsMixin:
                     f"{card.name} can't be cast that way: it prints no alternative "
                     f"cost (CR 118.9)"
                 )
-            if len(printed) > 1:
-                # CR 118.9a: only one alternative cost may be applied. No card
-                # in the pool prints two, so rather than invent a choice nobody
-                # has to make, the cast is refused and names the rule — a
-                # silent "take the first" would be this engine picking which
-                # price the player pays.
+            if chosen_index is not None and not 0 <= chosen_index < len(printed):
                 return None, None, (
-                    f"{card.name} prints more than one alternative cost and only "
-                    f"one may be applied (CR 118.9a)"
+                    f"{card.name} can't be cast that way: no alternative cost "
+                    f"at position {chosen_index} (CR 118.9)"
                 )
-            cost = printed[0]
+            if len(printed) > 1 and chosen_index is None:
+                # CR 118.9a: only one alternative cost may be applied, and the
+                # caster chooses which (``chosen_index``: a morph card under
+                # Dream Halls is face down for {3} *or* a discard). A cast
+                # naming none is refused and names the rule — a silent "take
+                # the first" would be this engine picking which price the
+                # player pays.
+                return None, None, (
+                    f"{card.name} may be cast for more than one alternative cost "
+                    f"and only one may be applied: name which (CR 118.9a)"
+                )
+            cost = printed[0 if chosen_index is None else chosen_index]
         if cost.exile_from_hand is None and cost.discard_from_hand is None:
             return cost, None, None
         payable = self._alternative_cost_payers(

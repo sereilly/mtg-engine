@@ -145,6 +145,11 @@ class SpellCastingMixin:
         # announced; None is the deterministic pick, as for every cost choice
         # here.
         alternative_cost_other_hand_indices: list[int] | None = None,
+        # CR 118.9a: *which* alternative cost, when more than one applies — a
+        # position in ``applicable_alternative_costs`` (a morph card under
+        # Dream Halls: face down for {3}, or a discard). None where one is
+        # offered; with two and none named the cast is refused, never guessed.
+        alternative_cost_index: int | None = None,
         # CR 601.2b's *optional* additional cost, and how many times each offer
         # was taken: ``{"{1}{R}": 2, "{1}{G}": 1}``. Announced with the cast for
         # the reason every other cost choice here is — 601.2b is one step, and a
@@ -202,6 +207,7 @@ class SpellCastingMixin:
             alternative_cost_hand_index=alternative_cost_hand_index,
             alternative_cost_permanent_ids=alternative_cost_permanent_ids,
             alternative_cost_other_hand_indices=alternative_cost_other_hand_indices,
+            alternative_cost_index=alternative_cost_index,
             optional_cost_payments=optional_cost_payments,
             chosen_creature_type=chosen_creature_type,
             chosen_source_seat=chosen_source_seat,
@@ -320,6 +326,11 @@ class SpellCastingMixin:
         # …and which further cards pay its "and another card" (Foil), by hand
         # position (see `cast_from_hand`). None is the deterministic pick.
         alternative_cost_other_hand_indices: list[int] | None = None,
+        # CR 118.9a: *which* alternative cost, when more than one applies — a
+        # position in ``applicable_alternative_costs`` (a morph card under
+        # Dream Halls: face down for {3}, or a discard). None where one is
+        # offered; with two and none named the cast is refused, never guessed.
+        alternative_cost_index: int | None = None,
         # CR 601.2b's *optional* additional cost, and how many times each offer
         # was taken: ``{"{1}{R}": 2, "{1}{G}": 1}``. Announced with the cast for
         # the reason every other cost choice here is — 601.2b is one step, and a
@@ -423,6 +434,7 @@ class SpellCastingMixin:
         morph_cost = announced_morph_cost(
             self, caster_index, held,
             alternative_cost=alternative_cost, permission=permission,
+            chosen_index=alternative_cost_index,
         )
         if morph_cost is not None:
             card = face_down_card(held)
@@ -889,6 +901,7 @@ class SpellCastingMixin:
             self._resolve_alternative_cost(
                 caster_index, card,
                 taking_it=alternative_cost,
+                chosen_index=alternative_cost_index,
                 named_hand_index=alternative_cost_hand_index,
                 spell_hand_index=hand_index if from_zone == "hand" else None,
                 # CR 118.9b: the permission this cast is made under may

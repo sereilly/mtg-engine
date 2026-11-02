@@ -317,6 +317,7 @@ def _action_cast(session, req, seat_type):
     timed = cast_timing_card(
         session.game, req.seat, card,
         alternative_cost=bool(req.alternative_cost), permission=permission,
+        chosen_index=req.alternative_cost_index,
     )
     instant_speed = casts_at_instant_speed(timed, session.game, req.seat)
     if req.seat != session.current_turn and not instant_speed:
