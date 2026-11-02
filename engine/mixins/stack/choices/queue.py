@@ -12,7 +12,9 @@ and resume the loop it suspended. ``effect_suspended``,
 what the rest of the engine asks about time: whether a loop has to stop, whether
 an object is still resolving, whether anybody may receive priority (CR 608.2,
 CR 117.3b). Both queues are read here — a replacement suspended on a decision
-(``engine/replacement_choices.py``) is a prompt like any other.
+(``engine/replacement_choices.py``) is a prompt like any other: it holds the
+object it was offered during, suspends the loop its event was a step of, and is
+answered inside the same envelope (``_answer_pending_choice``).
 
 The families of prompt are the mixins beside this one; the package docstring
 lists them, and ``table.py`` registers every kind.
@@ -116,19 +118,27 @@ class PendingChoicesMixin:
 
         The question about the whole queue: whether *anything* is owed. A loop
         deciding whether its own step stopped asks :meth:`suspended_beyond`
-        instead."""
-        return any(
-            spec_for(choice.kind).suspends and not choice.data.get("_answered")
-            for choice in self.pending_choices
-        )
+        instead.
+
+        **Both queues.** A replacement suspended on a decision (CR 614,
+        ``engine/replacement_choices.py``) has taken its event away until the
+        answer — the draw is not drawn, the damage not dealt, the discarded
+        card in no zone — so the steps behind that event wait for it exactly
+        as they wait for a scry. Every offer on that queue suspends, and none
+        needs ``_answered``: its answer path takes it off the queue before
+        applying it. Left out, "draw two cards, then discard a card" (Catalog)
+        under Obstinate Familiar asked for the discard with the draw still
+        undecided."""
+        return bool(self.owed_suspensions())
 
     def owed_suspensions(self) -> tuple:
-        """The suspending choices owed right now, as a snapshot a loop takes
-        before running one of its steps (``engine/resumption.run_resumable``)."""
+        """The suspending choices owed right now, on either queue, as a
+        snapshot a loop takes before running one of its steps
+        (``engine/resumption.run_resumable``)."""
         return tuple(
             choice for choice in self.pending_choices
             if spec_for(choice.kind).suspends and not choice.data.get("_answered")
-        )
+        ) + tuple(self.pending_replacement_choices)
 
     def suspended_beyond(self, owed: tuple) -> bool:
         """Whether a suspending choice is owed that was **not** in *owed* — a
@@ -147,10 +157,8 @@ class PendingChoicesMixin:
         offer about it. Identity, not equality: two seats can owe look-alike
         choices."""
         return any(
-            spec_for(choice.kind).suspends
-            and not choice.data.get("_answered")
-            and not any(choice is earlier for earlier in owed)
-            for choice in self.pending_choices
+            not any(choice is earlier for earlier in owed)
+            for choice in self.owed_suspensions()
         )
 
     def permanent_is_entering(self, permanent) -> bool:
@@ -201,12 +209,18 @@ class PendingChoicesMixin:
     # kinds named by hand in ``pass_priority``.
 
     def choices_for_stack_item(self, item) -> list[PendingChoice]:
-        """Queued prompts belonging to *item*'s resolution, oldest first.
+        """Queued prompts belonging to *item*'s resolution, oldest first on
+        each queue — the prompt queue's, then the CR 614 queue's (a replacement
+        suspended on a decision is stamped the same way, in
+        ``replacement_choices.offer_replacement_choice``).
 
         Identity, not equality: two stack objects can look alike (two copies of
         one spell), and a resolution that answered to a look-alike's prompts
         would leave the wrong one on the stack."""
-        return [c for c in self.pending_choices if c.data.get("_stack_item") is item]
+        return [
+            c for c in (*self.pending_choices, *self.pending_replacement_choices)
+            if c.data.get("_stack_item") is item
+        ]
 
     def announcement_choice_for(self, item):
         """The choice *item* made as it was **announced**, still unanswered.

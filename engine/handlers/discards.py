@@ -23,7 +23,7 @@ from ..counted_names import cards_sharing_a_name
 from ..oracle_types import (DISCARDED_BY_SEAT, DISCARDED_CARDS_BY_SEAT,
                             DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
                             X_FROM_COUNT_PER_RECIPIENT)
-from ..resumption import ask_in_turn_order
+from ..resumption import ask_in_turn_order, run_resumable
 from ._amounts import evaluate_count, resolve_amount
 from ._filters import _card_matches_filter
 from ._targets import frozen_that_player_seat
@@ -45,33 +45,49 @@ def draw_then_discard_self(game: Game, instruction: OracleInstruction, context: 
     draw_count = int(instruction.payload.get("draw", 0))
     discard_count = int(instruction.payload.get("discard", 0))
     held_before = len(caster.hand)
-    drawn = game._draw_with_replacements(caster, draw_count)
-    game.log.append(f"{card.name}: {caster.name} drew {drawn} card(s)")
+    armed = []
 
-    # "…then discard one **of them**" (Krovikan Sorcerer). The candidates are
-    # the positions this resolution's draw landed in, measured rather than
-    # assumed from the count: a replacement can turn a draw into something else
-    # (CR 614), so the hand may have grown by fewer cards than were asked for —
-    # and a range computed off ``draw_count`` would then offer cards the seat
-    # was already holding.
-    only_indices = (
-        list(range(held_before, len(caster.hand)))
-        if instruction.payload.get("from_drawn") else None
-    )
-    actual_discard = min(
-        discard_count,
-        len(only_indices) if only_indices is not None else len(caster.hand),
-    )
-    if actual_discard <= 0:
-        return True, "resolved"
-    game.arm_pending_choice(
-        "discard", game.players.index(caster),
-        count=actual_discard,
-        allow_top_of_library=game._controls_top_of_library_discard(caster),
-        **({"only_indices": only_indices} if only_indices is not None else {}),
-    )
-    game.log.append(f"{caster.name} must choose {actual_discard} card(s) to discard")
-    return True, "pending_discard"
+    def draw() -> None:
+        drawn = game._draw_with_replacements(caster, draw_count)
+        game.log.append(f"{card.name}: {caster.name} drew {drawn} card(s)")
+
+    def discard() -> None:
+        # "…then discard one **of them**" (Krovikan Sorcerer). The candidates
+        # are the positions this resolution's draw landed in, measured rather
+        # than assumed from the count: a replacement can turn a draw into
+        # something else (CR 614), so the hand may have grown by fewer cards
+        # than were asked for — and a range computed off ``draw_count`` would
+        # then offer cards the seat was already holding.
+        only_indices = (
+            list(range(held_before, len(caster.hand)))
+            if instruction.payload.get("from_drawn") else None
+        )
+        actual_discard = min(
+            discard_count,
+            len(only_indices) if only_indices is not None else len(caster.hand),
+        )
+        if actual_discard <= 0:
+            return
+        game.arm_pending_choice(
+            "discard", game.players.index(caster),
+            count=actual_discard,
+            allow_top_of_library=game._controls_top_of_library_discard(caster),
+            **({"only_indices": only_indices} if only_indices is not None else {}),
+        )
+        game.log.append(f"{caster.name} must choose {actual_discard} card(s) to discard")
+        armed.append(True)
+
+    # **"Then"**: the discard is a later step than the draw, and a draw an
+    # optional replacement offered to its player (CR 614 — Obstinate
+    # Familiar's skip, Pursuit of Knowledge's counter, Aladdin's Lamp's pick)
+    # has not happened until they answer. Two steps of one resumable loop, so
+    # an owed offer stops the loop after the draw and its answer resumes it
+    # (``engine/resumption.py``); run straight through, Catalog asked for its
+    # discard with both draws still undecided and the hand they were to fill
+    # empty. Where no offer is queued — every seat the engine plays — the two
+    # run back to back exactly as they did.
+    run_resumable(game, (draw, discard), lambda step: step())
+    return True, "pending_discard" if armed else "resolved"
 
 
 @effect_handler("discard_target_cards")

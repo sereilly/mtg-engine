@@ -9,8 +9,10 @@ the option the interceptor offered. Which option a seat nobody asks takes is
 the interceptor's to say, not this module's.
 
 Every one of them is answered through ``resolve_replacement_choice`` - the
-oldest offer of a kind a seat owes, applied inside the draw that armed it when
-a draw did (``answering_draw_prompt``, CR 121.2) - and
+oldest offer of a kind a seat owes, applied inside the one answer envelope
+(``_answer_pending_choice``: the stack object it was offered during still
+resolving, the draw that armed it when a draw did, CR 121.2, the loop it
+suspended resumed and the object released at the last answer, CR 608.2) - and
 ``auto_resolve_pending_replacement_choices`` takes every default for a seat
 that stops being interactive. The ``pending_*`` properties are views over the
 queue in the shapes the web layer reads. They were ``EffectsMixin``'s until the
@@ -25,6 +27,7 @@ from __future__ import annotations
 
 from ....pending_choices import PendingChoice
 from ....replacement_choices import pending_choices_for, resolve_choice
+from ....resumption import resume_after_answer
 
 
 class ReplacementChoicesMixin:
@@ -57,12 +60,25 @@ class ReplacementChoicesMixin:
         if not (0 <= option_index < len(choice.options)):
             return False
         self.pending_replacement_choices.pop(index)
-        # Inside the draw it belongs to, when a draw armed it: what the answer
-        # arms is that draw's too, and the draws parked behind it are released
-        # once it is applied (CR 121.2, ``answering_draw_prompt``).
-        with self.answering_draw_prompt(choice):
+
+        def apply() -> bool:
             resolve_choice(self, choice, option_index)
-        return True
+            # The offer suspended the loop its event was a step of (an owed
+            # replacement choice is an owed suspension, ``effect_suspended``):
+            # the rest of it runs now that the event has happened — the
+            # discard behind a draw, the next target of a divided damage —
+            # and is checked as the end of a resolution is (CR 704.3).
+            resume_after_answer(self)
+            self._settle_resumed_resolution()
+            return True
+
+        # Inside the one answer envelope every prompt is answered in: with the
+        # object the offer was made during still resolving, so what the answer
+        # arms holds it too; inside the draw it belongs to, when a draw armed
+        # it (CR 121.2, ``answering_draw_prompt``); and releasing the object
+        # once nothing it armed is owed any more (CR 608.2,
+        # ``_release_stack_item``).
+        return bool(self._answer_pending_choice(choice, apply))
 
     def auto_resolve_pending_replacement_choices(self) -> None:
         """Take the default on every queued choice (safety net for a seat that

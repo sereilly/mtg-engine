@@ -21,6 +21,7 @@ from ..models import Permanent
 from ..oracle_types import (DREW_BY_SEAT, DREW_COUNT, MILLED_THIS_WAY,
                             OTHER_THAN_EVENT_SUBJECT_PLAYER,
                             X_FROM_COUNT_PER_RECIPIENT)
+from ..resumption import run_resumable
 from ._amounts import per_recipient_amount, resolve_amount
 from ._filters import _card_matches_filter
 from .registry import effect_handler
@@ -373,16 +374,31 @@ def draw_reveal_discard_unless_land(game: Game, instruction: OracleInstruction, 
     # taken this draw (Aladdin's Lamp) or doubled it (Teferi's Ageless
     # Insight), so the top of the library before the draw is not reliably the
     # card that gets revealed.
-    if not game._draw_with_replacements(caster, 1) or not caster.cards_drawn_this_turn:
-        game.log.append(f"{card.name}: {caster.name} drew nothing to reveal")
-        return True, "resolved"
-    drawn = caster.cards_drawn_this_turn[-1]
-    game.log.append(f"{card.name}: {caster.name} drew and revealed {drawn.name}")
-    game.record_reveal(game.players.index(caster), [drawn.name])
-    if drawn.primary_type != "land":
-        caster.hand.remove(drawn)
-        game._discard_card(caster, drawn)
-        game.log.append(f"{caster.name} discarded {drawn.name} (not a land card)")
+    #
+    # Two steps of one resumable loop, because a draw its player is offered a
+    # replacement for (CR 614 — Aladdin's Lamp's pick, Obstinate Familiar's
+    # skip) has not happened until they answer: run straight through, the
+    # reveal read "drew nothing" and the card the answer drew was never
+    # revealed or discarded. An owed offer stops the loop after the draw and
+    # its answer resumes it (``engine/resumption.py``).
+    drawn_before = len(caster.cards_drawn_this_turn)
+
+    def draw() -> None:
+        game._draw_with_replacements(caster, 1)
+
+    def reveal() -> None:
+        if len(caster.cards_drawn_this_turn) <= drawn_before:
+            game.log.append(f"{card.name}: {caster.name} drew nothing to reveal")
+            return
+        drawn = caster.cards_drawn_this_turn[-1]
+        game.log.append(f"{card.name}: {caster.name} drew and revealed {drawn.name}")
+        game.record_reveal(game.players.index(caster), [drawn.name])
+        if drawn.primary_type != "land":
+            game.take_card_from_hand(caster, drawn)
+            game._discard_card(caster, drawn)
+            game.log.append(f"{caster.name} discarded {drawn.name} (not a land card)")
+
+    run_resumable(game, (draw, reveal), lambda step: step())
     return True, "resolved"
 
 
