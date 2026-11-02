@@ -193,6 +193,7 @@ def offered_the_doomed(r: Road) -> list[str]:
 _ROADS_FLOOR = 3
 
 
+@pytest.mark.cr("603.3d")
 def test_every_road_is_driven():
     assert len(ROADS) >= _ROADS_FLOOR
 

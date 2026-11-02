@@ -510,11 +510,24 @@ def _detach(game, *, owing_nothing: bool = False) -> None:
     if owing_nothing:
         game.pending_choices = []
         game.pending_replacement_choices = []
+        dropped = [
+            item for item in game.stack
+            if getattr(item, "finish_resolution", None) is not None
+            or getattr(item, "resolution_held", False)
+        ]
         game.stack = [
             item for item in game.stack
-            if getattr(item, "finish_resolution", None) is None
-            and not getattr(item, "resolution_held", False)
+            if not any(item is gone for gone in dropped)
         ]
+        # What a dropped object's resolution set off was waiting for it to
+        # finish (``StackItem.held_triggers``); with nothing left to finish
+        # it, those abilities choose as the next resolution begins, as any
+        # trigger still waiting does (``resolve_top_of_stack``).
+        for item in dropped:
+            held = getattr(item, "held_triggers", None)
+            if held:
+                game.unannounced_triggers.extend(held[1])
+                item.held_triggers = None
 
 
 def scratch_copy(game):
