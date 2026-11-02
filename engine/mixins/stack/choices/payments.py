@@ -15,7 +15,8 @@ from __future__ import annotations
 from .... import land_mana_swaps
 from ....pending_choices import PendingChoice
 from ....mana_payment import (generic_cost, mana_cost_label, payment_prices_in_force,
-                              payment_wants_in_force, plan_payment, untapped_mana_lands)
+                              payment_units_in_force, payment_wants_in_force,
+                              plan_payment, untapped_mana_lands)
 
 
 class PaymentChoicesMixin:
@@ -453,6 +454,7 @@ class PaymentChoicesMixin:
         # has a choice of lands to make. The callers' thunks are also asked
         # "can this be paid?", whose answer this never changes, so the wants
         # are named here — the one writer — rather than by each of them.
+        from ....board_payment import plan_over_land_units
         from ....mana_drawbacks import land_price_profile
         from ....mana_wants import mana_wants
 
@@ -466,9 +468,12 @@ class PaymentChoicesMixin:
         # …and with what each land charges beyond the tap
         # (``mana_drawbacks``), weighed after the wants: a Swamp pays a {1}
         # rather than a City of Brass, a Mountain the {R} beside a painland.
+        # …and with each land credited what one tap of it really adds
+        # (``board_payment.plan_over_land_units``): Ancient Tomb's {C}{C} is
+        # two units of one source, not one mana.
         with payment_wants_in_force(wants), payment_prices_in_force(
             lambda land: land_price_profile(self, land)
-        ):
+        ), payment_units_in_force(plan_over_land_units(self)):
             return self._pay_planned_cost_with(player, seat, planner, spend)
 
     def _pay_planned_cost_with(self, player, seat: int, planner, spend) -> bool:
