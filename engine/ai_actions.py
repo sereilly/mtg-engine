@@ -149,6 +149,12 @@ class CastAction:
     # other cast. See `ai_text_changes.choose_object_or_spell`.
     old_color: str | None = None
     new_color: str | None = None
+    # Which applicable alternative cost the cast takes (CR 118.9a), by its
+    # index among ``Game.applicable_alternative_costs`` — the cast path's
+    # ``alternative_cost_index``. None where one applies (the cast path takes
+    # it) or none is taken; named where several apply (a morph card's
+    # face-down {3} beside Dream Halls' discard), or the cast is refused.
+    alternative_cost_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -302,6 +308,8 @@ def cast_announcement(action: CastAction) -> dict:
         # CR 612's two words (see `CastAction.old_color`).
         "old_color": action.old_color,
         "new_color": action.new_color,
+        # CR 118.9a: which alternative cost, where several apply.
+        "alternative_cost_index": action.alternative_cost_index,
     }
 
 
