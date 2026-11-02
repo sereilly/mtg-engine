@@ -156,15 +156,24 @@ def prompt_owed_by(game, viewer_seat: int | None) -> dict | None:
     if choice is None:
         return None
     spec = CHOICE_SPECS.get(choice.kind)
-    seat = choice.player_index
     doing = (getattr(spec, "blocked_detail", None) or "make a decision")
     if doing.endswith(_BEFORE_OTHER_ACTIONS):
         doing = doing[: -len(_BEFORE_OTHER_ACTIONS)]
+    return owed_entry(game, choice.player_index, choice.kind, doing, viewer_seat)
+
+
+def owed_entry(game, seat, kind: str, doing: str, viewer_seat: int | None) -> dict:
+    """One ``prompt_owed_by`` value: the seat, its name, the decision's kind
+    and what the seat is doing — *doing* written to the seat that owes it
+    ("discard down to your maximum hand size") and told to any other viewer
+    in the third person. Shared by the pending-choice queue's answer above and
+    the session-level decisions ``web/state_view`` names (a cleanup discard,
+    an upkeep payment), so the status line reads one shape for both."""
     if viewer_seat != seat:
         doing = _THIRD_PERSON.sub(lambda m: _THIRD_PERSON_WORDS[m.group(0)], doing)
     players = getattr(game, "players", ())
     name = players[seat].name if isinstance(seat, int) and 0 <= seat < len(players) else ""
-    return {"seat": seat, "name": name, "kind": choice.kind, "doing": doing}
+    return {"seat": seat, "name": name, "kind": kind, "doing": doing}
 
 
 def auto_resolve_ai_prompts(game, seat_type: Callable[[int], str]) -> None:
