@@ -224,7 +224,7 @@ def apply_damage_to_creature(
             # rule that does not exist. Harmless for Fungusaur, whose counter on
             # a dying creature does nothing anyway; wrong for Brash Taunter,
             # which is *indestructible* and reflects every point it takes.
-            game._fire_dealt_damage_triggers(perm, dealt)
+            game._fire_dealt_damage_triggers(perm, dealt, source=source)
         if then is not None:
             then(dealt)
 

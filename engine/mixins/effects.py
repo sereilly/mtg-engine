@@ -147,6 +147,30 @@ class EffectsMixin:
 
     def _fire_dealt_damage_triggers(
         self, permanent: Permanent, amount: int = 0, *, combat: bool = False,
+        source=None,
+    ) -> None:
+        """*permanent* was dealt *amount* damage: announce its "is dealt
+        damage" triggers — or, when the damage is a chunk of a simultaneous
+        dealing (the combat damage step's, a sweep's), add it to the
+        permanent's total, which the dealing announces once as it finishes.
+
+        CR 603.2c: one event triggers once. Fungusaur's ruling (2004-10-04),
+        "If more than one creature damages it at one time, it only gets one
+        counter", and Boros Reckoner's (2017-03-14), "its ability triggers once
+        and one target is dealt that much damage" — so a creature blocked by
+        two creatures used to trigger twice, for each blocker's share.
+        *source* is what dealt the chunk, which is how a sweep's dealing knows
+        its own chunks (``engine/simultaneous_damage.py``)."""
+        from .. import simultaneous_damage
+
+        dealing = simultaneous_damage.joined(self, combat=combat, source=source)
+        if dealing is not None:
+            simultaneous_damage.record_creature(dealing, permanent, amount)
+            return
+        self._announce_dealt_damage_triggers(permanent, amount, combat=combat)
+
+    def _announce_dealt_damage_triggers(
+        self, permanent: Permanent, amount: int = 0, *, combat: bool = False,
     ) -> None:
         """Put 'whenever this creature is dealt damage' triggers (Fungusaur,
         Brash Taunter) onto the stack; they resolve off the stack (CR 603.3)
@@ -620,12 +644,14 @@ class EffectsMixin:
                 permanent.metadata["loyalty_counters"] = max(0, loyalty - outcome.result)
             if permanent.is_creature or not is_planeswalker:
                 permanent.damage_marked += outcome.result
-        # CR 702.15b. Combat is excluded because the combat damage step tallies
-        # its own lifelink across the step and gains once in its tail — this is
-        # the same call, and running it here too would gain twice for every
-        # blocked creature. `combat` is the flag that tells the two apart.
-        if not combat:
-            self._apply_lifelink(source, outcome.dealt, seat=event.get("source_seat"))
+        # CR 702.15b — gained here, as the damage is dealt, except for a chunk
+        # of the combat damage step's dealing, whose lifelink is gained once
+        # the step's damage is all dealt (CR 510.2: one life-gain event). The
+        # dealing tallies it rather than the step, so a chunk a CR 614.9
+        # redirect moved onto a creature (Veteran Bodyguard taking an unblocked
+        # lifelinker's damage) gains its controller life too: the step's own
+        # tally never saw it, and `combat` used to skip this line regardless.
+        self._apply_or_tally_lifelink(event, outcome.dealt)
         # CR 702.2b / 704.5h: nonzero damage from a source with deathtouch marks
         # the victim for destruction at the next state-based check — any damage,
         # not only combat damage. Lifelink directly above is the precedent: the
@@ -646,6 +672,27 @@ class EffectsMixin:
         if then is not None:
             then(outcome.dealt)
         return outcome.dealt
+
+    def _apply_or_tally_lifelink(self, event: dict, dealt: int) -> None:
+        """CR 702.15b for one dealt *event*: gained now, or — for a chunk of the
+        combat damage step's dealing — added to the dealing's tally, which
+        gains each controller's total once the step's damage is all dealt
+        (CR 510.2; ``engine/simultaneous_damage.py``)."""
+        from .. import simultaneous_damage
+
+        source = event.get("source")
+        combat = bool(event.get("combat"))
+        dealing = simultaneous_damage.joined(self, combat=combat, source=source)
+        if dealing is not None and dealing.combat:
+            gained = lifelink_life_gained(source, dealt)
+            if gained > 0:
+                seat = (
+                    self.controller_or_last_known(source)
+                    if isinstance(source, Permanent) else event.get("source_seat")
+                )
+                simultaneous_damage.record_lifelink(dealing, seat, gained)
+            return
+        self._apply_lifelink(source, dealt, seat=event.get("source_seat"))
 
     def _apply_lifelink(self, source, dealt: int, seat: int | None = None) -> None:
         """CR 702.15b for damage dealt outside the combat damage step.
@@ -936,7 +983,7 @@ class EffectsMixin:
 
     def _deal_damage_to_player(
         self, target: PlayerState, amount: int, source=None, *, then=None, restart=None,
-        asks: bool = False, cant_be_prevented: bool = False,
+        asks: bool = False, cant_be_prevented: bool = False, combat: bool = False,
     ) -> int:
         """Deal damage to a player and fire 'whenever you're dealt damage'
         triggers (e.g. Lich). ``source`` (a Permanent or spell CardDefinition)
@@ -977,6 +1024,14 @@ class EffectsMixin:
         apply to — "…and the damage can't be prevented" (Urza's Rage) — through
         ``damage_events.EVENT_PREVENTION_LOCK``. The creature seam takes the
         same flag; a sentence about "the damage" is about both recipients.
+
+        ``combat`` is for combat damage a CR 614.9 redirect moved onto a player
+        (``replacements.redirects.deal_redirected_damage``): it is still combat
+        damage (CR 510.2; Pariah's ruling, 2024-04-12: "the damage dealt to the
+        enchanted creature instead is still combat damage"), so "prevent all
+        combat damage" applies to it and "whenever … deals combat damage to a
+        player" sees it. This seam hard-coded False, because the combat damage
+        step deals its own chunks to players by ``deal_damage`` directly.
         """
         # Protection from the source's *name* (Runed Halo, CR 702.16i) used to be
         # read here, ahead of the face-up flip and ahead of every shield, under
@@ -1001,10 +1056,10 @@ class EffectsMixin:
             def restart():
                 self._deal_damage_to_player(
                     target, amount, source, then=then, asks=True,
-                    cant_be_prevented=cant_be_prevented,
+                    cant_be_prevented=cant_be_prevented, combat=combat,
                 )
 
-        event = {"recipient": target, "amount": amount, "source": source, "combat": False}
+        event = {"recipient": target, "amount": amount, "source": source, "combat": bool(combat)}
         if cant_be_prevented:
             event[EVENT_PREVENTION_LOCK] = True
         outcome = deal_damage(self, event, restart=restart)
@@ -1013,14 +1068,12 @@ class EffectsMixin:
         if outcome.dealt > 0:
             target.life -= outcome.result
             self._on_player_dealt_damage(target, outcome.dealt, source)
-            self._record_noncombat_damage_to_opponent(target, outcome.dealt, source)
+            if not combat:
+                self._record_noncombat_damage_to_opponent(target, outcome.dealt, source)
             self._apply_mirror_damage(target, outcome.dealt, source)
-            # CR 702.15b. No combat guard here, unlike the creature seam: the
-            # combat damage step deals to players directly rather than through
-            # this method (it applies prevention where the event is recorded, so
-            # routing back would double-prevent), and this call always passes
-            # combat=False.
-            self._apply_lifelink(source, outcome.dealt, seat=event.get("source_seat"))
+            # CR 702.15b, the creature seam's way: now, or into the combat
+            # damage step's dealing for a redirected combat chunk.
+            self._apply_or_tally_lifelink(event, outcome.dealt)
         if then is not None:
             then(outcome.dealt)
         return outcome.dealt

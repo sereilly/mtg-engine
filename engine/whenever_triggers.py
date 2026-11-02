@@ -302,9 +302,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # fails on the missing "deals", and a subject group the noun parser cannot
     # read refuses the whole condition rather than falling through to a later
     # pattern — the ordering rule this table states a few rows up.
+    #
+    # `damage_received` says the sentence reads the event from the recipient's
+    # side: once per recipient for the total of one simultaneous dealing, not
+    # once per source (CR 603.2c; Vengeful Pharaoh's ruling — "If multiple
+    # creatures deal combat damage to you simultaneously, Vengeful Pharaoh will
+    # only trigger once"). "Whenever **a source** deals damage to you" names
+    # the source, and is once per source (``engine/simultaneous_damage.py``).
     ("damage_dealt",
      r"whenever (?P<damage_recipient>you)(?:'re| are) dealt "
-     r"(?:(?P<damage_combat>combat|noncombat) )?damage(?P<damager_any>)"),
+     r"(?:(?P<damage_combat>combat|noncombat) )?damage(?P<damager_any>)"
+     r"(?P<damage_received>)"),
     ("damage_dealt",
      r"whenever (?:"
      r"(?P<damager_self>this (?:creature|artifact|enchantment|land|aura|permanent))"

@@ -782,6 +782,13 @@ class Game(
     # same simultaneous event (CR 603.10a). Empty outside a destruction. See
     # engine/destruction_events.py.
     destruction: DestructionLedger = field(default_factory=DestructionLedger)
+    # The simultaneous damage dealing open right now — the combat damage
+    # step's (CR 510.2) or a sweep's: damage several sources deal at once is
+    # one event, so the triggers that read it whole are announced once, for
+    # each recipient's and each source's total, as it finishes (CR 603.2c).
+    # None outside a dealing, which never stays open across a priority window.
+    # See engine/simultaneous_damage.py.
+    simultaneous_damage: object | None = None
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.

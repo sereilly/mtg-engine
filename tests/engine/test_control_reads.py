@@ -371,8 +371,9 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # so its `controller.battlefield[idx]` went with it.
     # 14 until round kg3 split CR 510.1's assignment out of the step: six of
     # them (the division gate, the default division, the blocker-split check,
-    # the recorded assignment) went to `combat_damage_assignment.py`.
-    "engine/phases/combat_damage_step.py": 8,
+    # the recorded assignment) went to `combat_damage_assignment.py`. 7 once
+    # kg3 `events` read the blockers' chunks once, before the dealing.
+    "engine/phases/combat_damage_step.py": 7,
     "engine/phases/combat_damage_assignment.py": 6,
     "engine/phases/combat_phase.py": 11,
     "engine/phases/declare_attackers_step.py": 4,

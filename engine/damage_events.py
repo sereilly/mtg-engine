@@ -40,6 +40,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from . import simultaneous_damage
 from .control import base_controller, last_controller
 from .damage_ledger import record_damage
 from .effect_ordering import Candidate, affected_seat, apply_in_order
@@ -107,13 +108,15 @@ def lifelink_life_gained(source, dealt: int) -> int:
     in the presence of one card, which is the kind of wrong that survives a
     green suite.
 
-    **The rule lives here; the timing does not.** Three callers share it and two
-    of them apply it differently, which is a real difference rather than a
-    missing abstraction. The combat damage step tallies across the step and
-    gains once at the end, because combat damage is dealt simultaneously
-    (CR 510.2) — a creature and its blocker trading lethal damage produce one
-    life-gain event, not two interleaved with deaths. Everything else gains as
-    the damage is dealt.
+    **The rule lives here; the timing does not.** Two callers share it
+    (``Game._apply_lifelink`` and ``Game._apply_or_tally_lifelink``), and the
+    difference between them is a real one rather than a missing abstraction. A
+    chunk of the combat damage step's dealing is tallied on the dealing and
+    gained once the step's damage is all dealt, because combat damage is dealt
+    simultaneously (CR 510.2) — a creature and its blocker trading lethal
+    damage produce one life-gain event, not two interleaved with deaths
+    (``engine/simultaneous_damage.py``). Everything else gains as the damage
+    is dealt.
 
     Lifelink applies to *any* damage the source deals, not only combat damage —
     which is what this function existing separately is for. It was combat-only
@@ -645,7 +648,32 @@ def _announce(game, event: dict, dealt: int) -> None:
     # rather than consequences of it: a trigger that fires on the damage may
     # kill the creature, and by then "it can't be regenerated" has to be true.
     _apply_dealer_riders(game, source, recipient)
+    # A chunk of a simultaneous dealing (CR 510.2, a sweep) is announced for
+    # the triggers naming both its ends; the ones naming one end are announced
+    # once, for that end's total, as the dealing finishes (CR 603.2c —
+    # ``engine/simultaneous_damage.py``).
+    dealing = simultaneous_damage.joined(
+        game, combat=bool(event.get("combat")), source=source,
+    )
+    if dealing is not None:
+        payload["occurrence"] = simultaneous_damage.CHUNK
+        simultaneous_damage.record_chunk(dealing, payload, dealt)
     emit(game, "damage_dealt", **payload)
+    if event.get("combat") and isinstance(recipient, PlayerState) and dealt > 0:
+        # Combat damage dealt to a player: three records of it, here at the
+        # seam rather than in the combat damage step's player loop, so that a
+        # chunk a CR 614.9 redirect moved onto a player — still combat damage
+        # (CR 510.2) — is counted as the loop's own are. CR 903.10a's
+        # commander tally (the damage *dealt*, CR 120.4b); "whenever one or
+        # more … deal combat damage to a player", once per player for the
+        # whole dealing; and the delayed "whenever <it> deals combat damage to
+        # a player" (Subira), which belongs to no permanent (CR 603.7).
+        game.record_commander_combat_damage(recipient, source, dealt)
+        seat = game.seat_index(recipient)
+        if dealing is not None:
+            simultaneous_damage.record_combat_damager(dealing, seat, source)
+        if isinstance(source, Permanent):
+            game._fire_delayed_combat_damage_triggers(source, recipient, dealt)
     if isinstance(source, Permanent):
         # "Until end of turn, whenever target creature **deals damage**, you
         # gain that much life." (Spiritualize.) The delayed twin of the

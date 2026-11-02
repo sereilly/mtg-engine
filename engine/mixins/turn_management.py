@@ -330,6 +330,11 @@ class TurnManagementMixin:
         # turn" and Backdraft's "one of those sorcery spells this turn" are one
         # window, and a record outliving it would read last turn's board.
         self.damage_ledger.clear()
+        # A simultaneous damage dealing (engine/simultaneous_damage.py) ends
+        # with the step or the sweep that opened it; one still open at a new
+        # turn was abandoned on an unanswered question and holds nothing anyone
+        # will finish.
+        self.simultaneous_damage = None
         for player in self.players:
             player.damage_taken_this_turn = 0
             player.artifact_damage_taken_this_turn = 0

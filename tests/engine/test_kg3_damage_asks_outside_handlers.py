@@ -148,11 +148,6 @@ _NOT_APNAP = {
     ("handlers/damage.py", "deal_damage_and_opponent_choice"):
         "the second half's recipient is the opponent's pick, made as that "
         "half is reached, so no order can be computed over the two in advance",
-    ("phases/combat_damage_step.py", "_deal_combat_damage_pass"):
-        "Known gap: the combat damage step walks blockers by defender, then "
-        "attackers' events, then defenders, which is APNAP in a duel (the "
-        "active player's attackers are dealt to first) and not among several "
-        "defending players; the module is being split this round (p0)",
     ("phases/combat_damage_step.py", "resolve_all_combat_damage"):
         "first-strike and regular passes, not recipients (CR 510.4)",
 }
@@ -237,7 +232,10 @@ def _damage_loops():
 
 def test_every_loop_dealing_damage_asks_its_seats_in_apnap_order():
     loops = _damage_loops()
-    assert len(loops) >= 20, loops
+    # A floor on what was examined: 24 loops when this was written, 19 once
+    # kg3 `events` made the combat damage step's six nested loops one loop
+    # over its APNAP-ordered chunks.
+    assert len(loops) >= 15, loops
     unordered = [
         f"{where}:{line} ({function})" for where, line, function, ordered in loops
         if not ordered and (where, function) not in _NOT_APNAP

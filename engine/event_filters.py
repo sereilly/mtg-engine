@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .subject_filters import subject_matches
+from .simultaneous_damage import answers as simultaneous_damage_answers
 from .events import (Event, _controller_of, destroyed_trigger_applies,
                      event_filter, trigger_subject_matches)
 
@@ -593,6 +594,11 @@ def _damage_dealt_filter(
     controller (CR 109.5), never anything the event carries.
     """
     payload = trig.condition.payload
+    # One simultaneous dealing is one event (CR 603.2c): a trigger naming one
+    # end of it answers that end's total, announced as the dealing finishes,
+    # and not each chunk (``engine/simultaneous_damage.py``).
+    if not simultaneous_damage_answers(payload, event.payload.get("occurrence")):
+        return False
     observer = game.controller_index_of(permanent)
     combat = payload.get("damage_combat")
     if combat == "combat" and not event.payload.get("combat"):

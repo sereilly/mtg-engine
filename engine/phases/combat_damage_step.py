@@ -15,14 +15,22 @@ out where every point goes and can be *refused* — a negative amount, a trample
 holding back lethal — so it deals nothing while it can still say no. Dealing (CR
 510.2) then runs the recorded events through CR 120.4 and can be *suspended*:
 any one of them may stop to ask the affected player which effect applies to it
-first (CR 616.1e). So the dealing half is a chain of resumable loops
-(``engine/resumption.py``) rather than plain ``for`` statements, and this step's
-own tail — the lifelink gain, the state-based actions, the log, and the
+first (CR 616.1e). So the dealing half is one resumable loop
+(``engine/resumption.py``) over the pass's chunks rather than plain ``for``
+statements, and this step's own tail — finishing the pass's simultaneous
+dealing (its once-per-recipient and once-per-source triggers and its lifelink,
+``engine/simultaneous_damage.py``), the state-based actions, the log, and the
 ``combat_first_strike_done`` / ``combat_damage_resolved`` flags that are the
-step's idea of how far through it is — is the *last step of the outermost loop*
-rather than code written after it. Work after a resumable loop does not run when
-one of its steps suspends and nothing records it, which for this step would mean
-a combat that half-happened and then declared itself resolved.
+step's idea of how far through it is — is the loop's *last step* rather than
+code written after it. Work after a resumable loop does not run when one of its
+steps suspends and nothing records it, which for this step would mean a combat
+that half-happened and then declared itself resolved.
+
+The chunks are dealt in APNAP order of the seat each one's CR 616.1e question
+goes to (CR 616.1's last sentence, ``effect_ordering.in_apnap_order``): the
+active player's (the blockers' damage to their attackers), then each defending
+player's in turn order (the attackers' damage to that player's blockers,
+planeswalkers and to the player).
 
 Both strike passes go through :meth:`resolve_all_combat_damage` for the same
 reason: the "call it, and call it again if that was only the first-strike pass"
@@ -36,7 +44,9 @@ from ..combat_assignment import (AS_THOUGH_UNBLOCKED_LOG,
                                  combat_damage_assigned_by,
                                  divided_announcement_refusal,
                                  still_legal_divisions)
-from ..damage_events import deal_damage, lifelink_life_gained
+from .. import simultaneous_damage
+from ..damage_events import deal_damage
+from ..effect_ordering import in_apnap_order
 from ..models import Permanent
 from ..damage_redirects import end_simultaneous_redirects
 from ..prevention.static import end_simultaneous_damage
@@ -273,75 +283,60 @@ class CombatDamageStepMixin:
         #
         # A damage event stops to ask the affected player which effect applies
         # first (CR 616.1e), and while it waits *nothing has happened* — so the
-        # blockers, attackers and band members behind it have to be recorded
-        # rather than run past, and so does this step's own tail. Each loop here
-        # is therefore the last thing its function does, and the tail is
-        # `finish`, a step of the outermost loop, rather than code written after
-        # it. See engine/resumption.py.
+        # chunks behind it have to be recorded rather than run past, and so
+        # does this step's own tail. The loop is therefore the last thing this
+        # function does, and the tail is `finish`, the loop's own last step,
+        # rather than code written after it. See engine/resumption.py.
         # ------------------------------------------------------------------
 
-        # CR 702.15b: damage dealt by a source with lifelink gains its controller
-        # that much life. Accumulated per controller and applied after all combat
-        # damage is dealt this step (the life-gain events happen simultaneously).
-        lifelink_gain: dict[int, int] = {}
+        # CR 510.2: all of it is dealt simultaneously — **one** event. What the
+        # step deals is one dealing (engine/simultaneous_damage.py), which the
+        # triggers reading the event from one end are announced from once, for
+        # each recipient's and each source's total (CR 603.2c), and which also
+        # tallies lifelink (CR 702.15b, gained once the damage is dealt) and
+        # the creatures that dealt combat damage to each player. A chunk a
+        # redirect moves is still combat damage and joins it too.
+        dealing = simultaneous_damage.begin(self, combat=True)
         # Life lost is accumulated as the events are applied, not summed from the
         # recorded amounts: damage redirected or replaced away never reduced
         # anyone's life, and `finish` reconstructs the before-life total by
         # adding these numbers back.
         life_lost_by_defender: dict[int, int] = {}
-        # Which of the attacking side's creatures dealt combat damage to each
-        # player this step, for the batched "one or more … deal combat damage"
-        # triggers below. Per *player*, because that is what the trigger is once
-        # per — and by permanent, because the trigger's subject is a noun phrase
-        # tested against each one.
-        damagers_by_defender: dict[int, list] = {}
         report: dict[str, str | None] = {"message": None}
 
-        def add_lifelink(controller_index: int, amount: int) -> None:
-            if amount > 0:
-                lifelink_gain[controller_index] = lifelink_gain.get(controller_index, 0) + amount
-
-        def _dealt_to_creature(victim, source, lifelink_seat: int):
-            """What follows one creature being dealt combat damage: fire its
-            "dealt damage" triggers and tally the dealer's lifelink. (Deathtouch is stamped by _mark_damage_on_permanent
-            itself — CR 702.2b is about damage, not combat damage.)
+        def _dealt_to_creature(victim, source):
+            """What follows one creature being dealt combat damage: its "dealt
+            damage" triggers, through the dealing (one trigger for the total).
+            (Deathtouch is stamped by _mark_damage_on_permanent itself — CR
+            702.2b is about damage, not combat damage — and lifelink is the
+            dealing's.)
 
             Handed to `_mark_damage_on_permanent` as its `then` rather than run
-            after it, so it travels with the event — CR 702.2b and 704.5h both
-            need damage to have *been dealt*, and damage prevented in full never
-            was (CR 615.6)."""
+            after it, so it travels with the event — damage prevented in full
+            was never dealt (CR 615.6)."""
 
             def dealt(amount: int) -> None:
-                if amount <= 0:
-                    return
-                # The damage-source record is written by
-                # ``_mark_damage_on_permanent`` itself now — one seam for
-                # combat and non-combat damage alike.
-                self._fire_dealt_damage_triggers(victim, amount, combat=True)
-                add_lifelink(lifelink_seat, lifelink_life_gained(source, amount))
+                if amount > 0:
+                    self._fire_dealt_damage_triggers(
+                        victim, amount, combat=True, source=source,
+                    )
 
             return dealt
 
-        # -- blockers deal, by defender, by blocker, by band member ----------
+        # -- the assignment, as chunks: (recipient, amount, source) ----------
+        #
+        # CR 510.1 fixes every amount before anything is dealt (510.2), so the
+        # blockers' chunks are read here, with the attackers' the assignment
+        # already recorded — off the board as it stands before the first point.
 
-        def one_band_member(defending_idx: int, blocker, entry) -> None:
-            member_idx, amount = entry
-            amount = int(amount)
-            if amount <= 0 or not (0 <= member_idx < len(attacker_controller.battlefield)):
-                return
-            member = attacker_controller.battlefield[member_idx]
-            self._mark_damage_on_permanent(
-                member, amount, source=blocker, combat=True,
-                then=_dealt_to_creature(member, blocker, defending_idx), asks=True,
-            )
-
-        def one_blocker(defending_idx: int, entry) -> None:
+        def blocker_chunks(defending_idx: int, entry) -> list:
             blocker_idx, attacker_idxs = entry
             defender = self.players[defending_idx]
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
-                return
+                return []
             if not attacker_idxs:
-                return
+                return []
+            blocker = defender.battlefield[blocker_idx]
             # CR 702.22j/k: an explicit division of this blocker's damage among the
             # band members it blocks (validated above) wins over the single-target
             # default. Each portion is dealt separately, so each is its own CR
@@ -352,17 +347,16 @@ class CombatDamageStepMixin:
             if split is None:
                 split = self.combat_multiblock_damage.get(blocker_idx)
             if split:
-                blocker = defender.battlefield[blocker_idx]
                 if combat_damage_assigned_by(blocker) <= 0:
-                    return
+                    return []
                 if not self._strikes_in_pass(blocker, run_first_pass, has_first_strike_pass):
-                    return
-                run_resumable(
-                    self,
-                    sorted(split.items()),
-                    lambda member: one_band_member(defending_idx, blocker, member),
-                )
-                return
+                    return []
+                return [
+                    (attacker_controller.battlefield[member_idx], int(amount), blocker)
+                    for member_idx, amount in sorted(split.items())
+                    if int(amount) > 0
+                    and 0 <= member_idx < len(attacker_controller.battlefield)
+                ]
             # A blocker deals its combat damage to one of the creatures it blocks
             # (CR 510.1c, defender's choice; default the first). A creature blocking
             # several attackers (Two-Headed Giant of Foriys) still deals once.
@@ -378,165 +372,115 @@ class CombatDamageStepMixin:
                 if allowed and 0 <= chosen < len(attacker_controller.battlefield):
                     attacker_idx = chosen
             if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
-                return
-            blocker = defender.battlefield[blocker_idx]
-            attacker = attacker_controller.battlefield[attacker_idx]
+                return []
             blocker_assigns = combat_damage_assigned_by(blocker)
             if blocker_assigns <= 0:
-                return
+                return []
             if not self._strikes_in_pass(blocker, run_first_pass, has_first_strike_pass):
-                return
-            self._mark_damage_on_permanent(
-                attacker, blocker_assigns, source=blocker, combat=True,
-                then=_dealt_to_creature(attacker, blocker, defending_idx), asks=True,
-            )
+                return []
+            return [(attacker_controller.battlefield[attacker_idx], blocker_assigns, blocker)]
 
-        def one_defenders_blockers(entry) -> None:
-            defending_idx, blocker_map = entry
-            if defending_idx < 0 or defending_idx >= len(self.players):
-                return
-            run_resumable(
-                self,
-                sorted(blocker_map.items()),
-                lambda blocker: one_blocker(defending_idx, blocker),
-            )
-
-        def blockers_deal() -> None:
-            run_resumable(self, sorted(self.combat_blockers.items()), one_defenders_blockers)
-
+        chunks: list = []
+        # -- blockers deal, by defender, by blocker, by band member ----------
+        for defending_idx, blocker_map in sorted(self.combat_blockers.items()):
+            if 0 <= defending_idx < len(self.players):
+                for entry in sorted(blocker_map.items()):
+                    chunks.extend(blocker_chunks(defending_idx, entry))
         # -- attackers deal to the creatures blocking them -------------------
-
-        def one_blocker_is_hit(entry) -> None:
-            defending_idx, blocker_idx, damage, a_idx = entry
+        for defending_idx, blocker_idx, damage, a_idx in attacker_damage_events:
             if defending_idx >= len(self.players):
-                return
+                continue
             defending_player = self.players[defending_idx]
             if blocker_idx < 0 or blocker_idx >= len(defending_player.battlefield):
-                return
-            blocker_perm = defending_player.battlefield[blocker_idx]
+                continue
             source_attacker = (
                 attacker_controller.battlefield[a_idx]
                 if 0 <= a_idx < len(attacker_controller.battlefield)
                 else None
             )
-            self._mark_damage_on_permanent(
-                blocker_perm, damage, source=source_attacker, combat=True,
-                then=_dealt_to_creature(
-                    blocker_perm, source_attacker, self.active_player_index
-                ),
-                asks=True,
-            )
+            chunks.append((defending_player.battlefield[blocker_idx], damage, source_attacker))
+        # -- attackers deal to the players and planeswalkers they attack -----
+        for defending_idx, damage, source_attacker, attacked_walker_id in defender_damage_events:
+            if defending_idx < 0 or defending_idx >= len(self.players):
+                continue
+            if attacked_walker_id is not None:
+                # The creature is attacking a planeswalker (CR 508.1b). Damage
+                # goes to the walker — removing loyalty (CR 120.3c) — and to
+                # nothing at all if it has left the battlefield (CR 510.1b).
+                walker = self.permanent_by_id(attacked_walker_id)
+                if walker is not None:
+                    chunks.append((walker, damage, source_attacker))
+                continue
+            chunks.append((self.players[defending_idx], damage, source_attacker))
 
-        def attackers_deal_to_blockers() -> None:
-            run_resumable(self, attacker_damage_events, one_blocker_is_hit)
+        # -- dealing, in APNAP order of the affected seats -------------------
 
-        # -- attackers deal to the players they are attacking ----------------
-
-        def one_defender_is_hit(entry) -> None:
+        def hit_player(defender, damage: int, source_attacker) -> None:
             """Each recorded event is run through CR 120.4 here, not where it was
             recorded. That is what makes several attackers work: an effect that
             caps the life loss sees the total the previous attacker left behind,
             which is 616.1f's re-check falling out of the placement. Shields,
             redirects (Veteran Bodyguard) and the life floor are all one sequence
             in engine/damage_events.py — the recorded amount is raw."""
-            defending_idx, damage, source_attacker, attacked_walker_id = entry
-            if defending_idx < 0 or defending_idx >= len(self.players):
-                return
-            if attacked_walker_id is not None:
-                # The creature is attacking a planeswalker (CR 508.1b). Damage
-                # goes to the walker — removing loyalty (CR 120.3c) — and to
-                # nothing at all if it has left the battlefield (CR 510.1b).
-                walker = self.permanent_by_id(attacked_walker_id)
-                if walker is None:
-                    return
-                self._mark_damage_on_permanent(
-                    walker, damage, source=source_attacker, combat=True,
-                    then=_dealt_to_creature(
-                        walker, source_attacker, self.active_player_index
-                    ),
-                    asks=True,
-                )
-                return
-            defender = self.players[defending_idx]
+            defending_idx = self.seat_index(defender)
 
             def hit() -> None:
                 # `hit` is its own restart: the whole event *and* everything this
                 # step does with it re-runs when the answer arrives, which is why
                 # none of the consequences below sit outside it.
-                outcome = deal_damage(
-                    self,
-                    {
-                        "recipient": defender,
-                        "amount": damage,
-                        "source": source_attacker,
-                        "combat": True,
-                    },
-                    restart=hit,
-                )
+                event = {
+                    "recipient": defender,
+                    "amount": damage,
+                    "source": source_attacker,
+                    "combat": True,
+                }
+                outcome = deal_damage(self, event, restart=hit)
                 if outcome.suspended or outcome.dealt <= 0:
                     return
                 defender.life -= outcome.result
                 life_lost_by_defender[defending_idx] = (
                     life_lost_by_defender.get(defending_idx, 0) + outcome.result
                 )
-                # CR 702.15b reads the damage *dealt*, which is why lifelink is
-                # tallied here rather than where the event was recorded: a result
-                # replacement (Ali from Cairo) lowers the life lost without lowering
-                # the damage, and the two numbers only exist together at this point.
-                add_lifelink(
-                    self.active_player_index,
-                    lifelink_life_gained(source_attacker, outcome.dealt),
-                )
-                # CR 903.10a: combat damage from a commander is tallied per
-                # commander for the whole game. Here rather than at the event's
-                # recording, for the reason lifelink is: the rule counts the
-                # damage *dealt* (CR 120.4b), and a result replacement (Ali from
-                # Cairo) lowers the life lost without lowering that.
-                self.record_commander_combat_damage(
-                    defender, source_attacker, outcome.dealt
-                )
+                # CR 702.15b reads the damage *dealt*, which the creature seam's
+                # tally has done for every other chunk — a result replacement
+                # (Ali from Cairo) lowers the life lost without lowering it.
+                self._apply_or_tally_lifelink(event, outcome.dealt)
                 self._on_player_dealt_damage(defender, outcome.dealt, source_attacker)
                 # Eye for an Eye: combat damage counts too — the attacker's
                 # controller takes the same amount. Applied here rather than by
                 # routing through _deal_damage_to_player, which would run the event
                 # a second time.
                 self._apply_mirror_damage(defender, outcome.dealt, source_attacker)
-                # "…deals damage to a player/opponent" (Hypnotic Specter) is
-                # announced by `damage_events._announce`, from inside the
-                # `deal_damage` call above — the one seam every damage event
-                # passes through, which is why there is nothing to fire here.
-                if source_attacker is not None:
-                    # The delayed ones (Subira) belong to no permanent, so no
-                    # battlefield scan can find them and they keep their own
-                    # site (CR 603.7).
-                    self._fire_delayed_combat_damage_triggers(
-                        source_attacker, defender, outcome.dealt
-                    )
-                    # "Whenever **one or more** … deal combat damage to a
-                    # player" is one trigger however many creatures dealt it, so
-                    # the pairs are recorded here and fired once each at the end
-                    # of the step — the per-attacker call above cannot batch
-                    # what it is called once per attacker for.
-                    if outcome.dealt > 0:
-                        damagers_by_defender.setdefault(
-                            self.players.index(defender), []
-                        ).append(source_attacker)
+                # "…deals damage to a player/opponent" (Hypnotic Specter), CR
+                # 903.10a's commander tally, the batched "one or more … deal
+                # combat damage to a player" and the delayed "whenever <it>
+                # deals combat damage to a player" (Subira) are all recorded by
+                # `damage_events._announce`, from inside the `deal_damage` call
+                # above — the one seam every damage event passes through, which
+                # is what lets a redirected chunk be counted as this one is.
 
             hit()
 
-        def attackers_deal_to_players() -> None:
-            run_resumable(self, defender_damage_events, one_defender_is_hit)
+        def deal_chunk(chunk) -> None:
+            recipient, damage, source = chunk
+            if isinstance(recipient, Permanent):
+                self._mark_damage_on_permanent(
+                    recipient, damage, source=source, combat=True,
+                    then=_dealt_to_creature(recipient, source), asks=True,
+                )
+                return
+            hit_player(recipient, damage, source)
 
         # -- the step's own tail, as its last step ---------------------------
 
         def finish() -> None:
-            # The batched "one or more … deal combat damage to a player"
-            # triggers, once per player damaged (CR 603.3: the ability triggers
-            # once however many creatures dealt the damage). Fired before the
-            # state-based check below for the same reason every other trigger in
-            # this step is: they go on the stack and resolve in the priority
-            # window after it.
-            self._fire_batched_combat_damage_triggers(damagers_by_defender)
+            # The dealing is over (CR 510.2): each recipient's and each source's
+            # total is announced once, with the batched "one or more … deal
+            # combat damage to a player" triggers, once per player damaged, and
+            # lifelink is gained. Before the state-based check below for the
+            # same reason every other trigger in this step is: they go on the
+            # stack and resolve in the priority window after it.
+            simultaneous_damage.finish(self, dealing)
 
             # This step's damage is dealt, so what the defending player
             # announced for it has been used (see `assigned_this_pass`).
@@ -548,11 +492,6 @@ class CombatDamageStepMixin:
             end_simultaneous_damage(self)
             # …and a shared "next time" one of its chunks opened (Glarecaster).
             end_simultaneous_redirects(self)
-
-            # CR 702.15b: apply lifelink life gain for damage dealt this step.
-            for controller_index, amount in lifelink_gain.items():
-                if 0 <= controller_index < len(self.players):
-                    self._gain_life(self.players[controller_index], amount, source_name="lifelink")
 
             # Written before the state-based check, so a loss follows its damage.
             if sum(life_lost_by_defender.values()) > 0:
@@ -577,10 +516,16 @@ class CombatDamageStepMixin:
             self.log.append("Resolved combat damage")
             report["message"] = "resolved combat damage"
 
+        # CR 616.1's last sentence: the affected players' choices about one
+        # event are made in APNAP order — every chunk the active player (or a
+        # permanent they control) is dealt, then each other player's in turn
+        # order — so the chunks are dealt, and their questions asked, in that
+        # order. Within a seat the order above stands (CR 101.4c).
         run_resumable(
             self,
-            [blockers_deal, attackers_deal_to_blockers, attackers_deal_to_players, finish],
-            lambda step: step(),
+            in_apnap_order(self, chunks, affected=lambda chunk: chunk[0]),
+            deal_chunk,
+            then=finish,
         )
         # `finish` is what writes the message, so an absent one means the step
         # stopped part-way; the answer comes back for the rest of it.

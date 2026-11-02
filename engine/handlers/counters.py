@@ -37,6 +37,30 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
+def _placed_on_self(game: Game, context: OracleExecutionContext) -> Permanent | None:
+    """The ability's own permanent, to put counters "on this creature" / "on
+    this Aura" — or None, logged, once it has left the battlefield.
+
+    CR 400.7: a permanent that leaves the battlefield becomes a new object with
+    no memory of the old one, so "this creature" no longer names anything, and
+    the counters land on nothing — the rule ``add_loyalty_counters`` above and
+    ``counter_removal.move_all_counters_to_self`` already read. These five
+    placements did not ask: Blood Hound, dealt lethal combat damage, logged
+    "Blood Hound gets 3 +1/+1 counters" from its graveyard as its "whenever
+    you're dealt damage" trigger resolved, the counters written onto the
+    detached object. None when the ability has no permanent at all, which each
+    caller answers in its own way.
+    """
+    source = context.source_permanent
+    if source is None or game.is_on_battlefield(source):
+        return source
+    game.log.append(
+        f"{context.card.name}: this permanent has left the battlefield, so "
+        "nothing receives its counters (CR 400.7)"
+    )
+    return None
+
+
 def place_loyalty_counters(permanent, count: int) -> int:
     """Put *count* loyalty counters on *permanent*; return the new total.
 
@@ -136,9 +160,11 @@ def add_power_counters_to_self(game: Game, instruction: OracleInstruction, conte
     to say four.
     """
     card = context.card
-    source_permanent = context.source_permanent
-    if source_permanent is None:
+    if context.source_permanent is None:
         return False, "ability not implemented"
+    source_permanent = _placed_on_self(game, context)
+    if source_permanent is None:
+        return True, "resolved"
     amount = instruction.payload.get("amount", 0)
     requested = context.x_value or 0 if amount == "x" else int(amount)
     cap = int(instruction.payload.get("cap", 0))
@@ -160,9 +186,9 @@ def add_plus1_counters_for_each_creature_died(game: Game, instruction: OracleIns
     """Khabál Ghoul: "At the beginning of each end step, put a +1/+1 counter on
     this creature for each creature that died this turn." Resolves off the stack;
     the death count is captured in trigger_context at fire time."""
-    source = context.source_permanent
     count = int((context.trigger_context or {}).get("count", 0))
-    if source is None or count <= 0:
+    source = _placed_on_self(game, context) if count > 0 else None
+    if source is None:
         return True, "resolved"
     game.place_plus1_counters(source, count)
     game.log.append(f"{source.card.name} gets {count} +1/+1 counter(s)")
@@ -172,9 +198,11 @@ def add_plus1_counters_for_each_creature_died(game: Game, instruction: OracleIns
 @effect_handler("add_counter_to_self")
 def add_counter_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
-    source_permanent = context.source_permanent
-    if source_permanent is None:
+    if context.source_permanent is None:
         return False, "ability not implemented"
+    source_permanent = _placed_on_self(game, context)
+    if source_permanent is None:
+        return True, "resolved"
     # "…put **that many** +1/+1 counters on this creature." (Tetravus.) The
     # count is a back-reference to what the step before it recorded; absent, the
     # payload means one, which is what every earlier caller emitted.
@@ -753,9 +781,9 @@ def add_corpse_counters_for_each_creature_died(game: Game, instruction: OracleIn
     """Scavenging Ghoul: "At the beginning of each end step, put a corpse counter on
     this creature for each creature that died this turn." Resolves off the stack; the
     death count is captured in trigger_context at fire time."""
-    source = context.source_permanent
     count = int((context.trigger_context or {}).get("count", 0))
-    if source is None or count <= 0:
+    source = _placed_on_self(game, context) if count > 0 else None
+    if source is None:
         return True, "resolved"
     source.metadata["corpse_counters"] = int(source.metadata.get("corpse_counters", 0)) + count
     game.log.append(f"{source.card.name} gets {count} corpse counter(s)")
@@ -774,7 +802,7 @@ def add_named_counter_to_self(game: Game, instruction: OracleInstruction, contex
     """
     from ..named_counters import add_counters
 
-    source = context.source_permanent
+    source = _placed_on_self(game, context)
     if source is None:
         return True, "resolved"
     counter = str(instruction.payload.get("counter", ""))

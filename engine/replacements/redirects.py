@@ -110,7 +110,7 @@ def _match_group(pattern, line: str, group: str) -> str | None:
 
 
 def deal_redirected_damage(
-    game, new_recipient, amount: int, *, source, combat: bool = False,
+    game, new_recipient, amount: int, *, source, combat: bool,
     then=None, redirect: DamageRedirect | None = None,
 ) -> None:
     """Deal the damage a redirect moved to *new_recipient* (CR 614.9).
@@ -133,6 +133,15 @@ def deal_redirected_damage(
     dealt its moved damage without asking, so the new recipient took the
     default order (SET_PLAYBOOK's Known-gaps entry: eight calls).
 
+    *combat* is the original event's flag, and required: damage a redirect
+    moves keeps being combat damage (CR 510.2; Wall of Souls' ruling,
+    2004-10-04: "Redirected damage is still combat damage"; Pariah's,
+    2024-04-12), so a "prevent all combat damage" shield still applies to it
+    and "whenever … deals combat damage to a player" still sees it. Three of
+    the six hand-offs here (Jade Monolith, Personal Incarnation, an optional
+    redirect taken) passed nothing, and the player seam dropped the flag for
+    every one of them.
+
     *then* is what the redirect reports once the damage has landed, given the
     amount dealt; it runs inside the event, so a suspended hand-off reports
     nothing until it is dealt. *redirect*'s ``applying`` is held over the
@@ -148,7 +157,9 @@ def deal_redirected_damage(
 
     def landed(dealt: int) -> None:
         if dealt > 0 and not isinstance(new_recipient, PlayerState):
-            game._fire_dealt_damage_triggers(new_recipient, dealt, combat=combat)
+            game._fire_dealt_damage_triggers(
+                new_recipient, dealt, combat=combat, source=source,
+            )
         if then is not None:
             then(dealt)
 
@@ -158,9 +169,12 @@ def deal_redirected_damage(
             redirect.applying = True
         try:
             if isinstance(new_recipient, PlayerState):
+                # *combat* travels to a player as it does to a creature:
+                # redirected combat damage is still combat damage (CR 510.2;
+                # Pariah's ruling), which the player seam used to drop.
                 game._deal_damage_to_player(
                     new_recipient, amount, source=source, then=landed,
-                    restart=hand_off,
+                    restart=hand_off, combat=combat,
                 )
             else:
                 game._mark_damage_on_permanent(
@@ -271,6 +285,7 @@ def _redirect_damage_to_player(game, payload: dict) -> ReplacementOutcome | None
     taker = game.players[redirect_idx]
     deal_redirected_damage(
         game, taker, amount, source=payload.get("source"),
+        combat=bool(payload.get("combat")),
         then=lambda _dealt: game.log.append(
             f"Damage to {permanent.card.name} redirected to {taker.name} (Jade Monolith)"
         ),
@@ -304,6 +319,7 @@ def _redirect_one_damage_to_owner(game, payload: dict) -> ReplacementOutcome | N
     if owner is not None:
         deal_redirected_damage(
             game, owner, 1, source=payload.get("source"),
+            combat=bool(payload.get("combat")),
             then=lambda _dealt: game.log.append(
                 f"1 damage redirected from {permanent.card.name} to {owner.name}"
             ),
@@ -514,6 +530,7 @@ def _resolve_optional_damage_redirect(
         redirect.spend()
         deal_redirected_damage(
             game, taker, amount, source=source, redirect=redirect,
+            combat=bool(choice.data["combat"]),
             then=lambda _dealt: game.log.append(
                 f"{amount} damage to {choice.data['from_name']} is dealt to "
                 f"{taker.name} instead"
