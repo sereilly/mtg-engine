@@ -376,7 +376,11 @@ class Rehearsal:
         graveyard this turn") — fleeting like mana, and like mana not
         nothing: it is spent on a cast this rehearsal is not a rehearsal of.
         Only a cast the caster **could make** there and then
-        (:func:`_could_make_now`): one nobody can pay for is spent on nothing.
+        (:func:`_could_make_now`): one nobody can pay for is spent on nothing;
+    ``blocks_added``
+        read through the fight, a block was declared on the cast's copy that
+        the copy with nothing cast did not declare — the reason to act before
+        the blocks rather than after them (:func:`pays_before_the_blocks`).
     """
 
     accepted: bool
@@ -390,6 +394,7 @@ class Rehearsal:
     combat_ahead: bool = False
     opened_a_cast: bool = False
     creature_ahead: bool = False
+    blocks_added: bool = False
 
     @property
     def swing(self) -> float:
@@ -590,6 +595,24 @@ def combat_is_still_to_come(game, seat: int) -> bool:
     return game.active_player_index == seat and _combat_ahead(game)
 
 
+def blocks_still_to_come(game) -> bool:
+    """Whether *game* is in a declare-attackers step whose attackers are
+    declared and whose blocks are not, with nothing on the stack — CR 508.2's
+    priority, before CR 509.1's declaration. The one moment a creature can be
+    cast to block with, or an ability used to change who can block whom, and
+    the moment a rehearsal plays the rest of that combat out from
+    (:func:`_fight_the_combat`), the blocks declared by the policy."""
+    return (
+        game.current_turn_phase == "combat"
+        and game.current_step == "declare_attackers"
+        and bool(game.combat_attackers)
+        and game.combat_attackers_locked
+        and not game.combat_blockers_locked
+        and not game.stack
+        and not game.is_game_over()
+    )
+
+
 def _combat_ahead(game) -> bool:
     """Whether *game* is in a main phase with nothing on the stack and a
     combat phase in what is left of its turn's plan (CR 500.1; CR 500.8 adds
@@ -631,23 +654,42 @@ def priced_by_the_fight(now: float, lasting: float, fleeting: bool) -> bool:
     return bool(fleeting) or now > lasting + _NO_SWING
 
 
-def run_out_the_turn(game, *, through_combat: bool = False) -> None:
+def pays_before_the_blocks(first: "Rehearsal | None", fought: "Rehearsal | None") -> bool:
+    """Whether an action weighed in the declare-attackers step
+    (:func:`blocks_still_to_come`) is one to take **there**: read through the
+    fight (*fought*) it adds a block (``blocks_added``), and it leaves the
+    seat better off than the same action read with no fight (*first*) — a
+    creature's body alone, which it would be worth cast in the end step.
+
+    Anything that adds no block can wait for the declare-blockers step, where
+    the blocks are known: a Fog, a removal spell, the attacker's own pump. An
+    ambusher that blocks nothing, or blocks to lose more than it is worth, is
+    held for the end step."""
+    if fought is None or not fought.accepted or not fought.blocks_added:
+        return False
+    floor = first.lasting if first is not None and first.accepted else 0.0
+    return fought.lasting > max(0.0, floor) + _NO_SWING
+
+
+def run_out_the_turn(game, *, through_combat: bool = False) -> frozenset:
     """Take *game* — a scratch copy (:func:`scratch_copy`) — to the end of
     its turn the way a rehearsal does: with its combat fought first if
     *through_combat* (the active seat's attack and the blocks declared by
     the policies that would declare them), then CR 514's cleanup. For a
     reader that makes a cast for real and wants it priced as a rehearsal
-    would price it."""
-    _run_out_the_turn(game, through_combat=through_combat)
+    would price it. Returns the blocks the fight declared
+    (``ai_combat.CombatOutcome.blocks_declared``)."""
+    return _run_out_the_turn(game, through_combat=through_combat)
 
 
-def _fight_the_combat(game) -> None:
+def _fight_the_combat(game) -> frozenset:
     """Play a scratch copy's combat phases from the main phase it is in: the
     active seat's attack, the blocks, the damage — each declared by the
     policy that would declare it in a game nobody is asked about
     (``ai_combat.run_ai_combat_phase``, the simulator's own driver) — and
     every further combat the turn's plan holds (CR 500.8), each entered the
-    way the turn enters it.
+    way the turn enters it. Returns ``(blocker id, attacker id)`` for every
+    block declared on the way.
 
     The one place a rehearsal lets something be *decided* on the way to the
     end of the turn, and it is asked for by name (:func:`rehearse`'s
@@ -655,25 +697,37 @@ def _fight_the_combat(game) -> None:
     alike. What it buys is the difference a precombat cast makes to the
     fight: three more damage from a Giant Growth, none at all under the
     caster's own Fog.
-    """
-    from .ai_combat import run_ai_combat_phase
 
+    **A combat already under way is finished first**, from the step it is
+    in: asked in the declare-attackers step (:func:`blocks_still_to_come`),
+    the attack stands and the blocks are what the policy declares — with the
+    creature an ambush cast, or the block an ability made possible. Run out
+    with nothing decided, that combat dealt no damage at all: the blocks
+    were owed, and the walk stopped at them.
+    """
+    from .ai_combat import CombatOutcome, run_ai_combat_phase
+
+    outcome = CombatOutcome()
+    if game.current_turn_phase == "combat" and not game.is_game_over():
+        run_ai_combat_phase(game, game.active_player_index, outcome=outcome)
+        _settle_scratch(game)
     for _ in range(_REHEARSAL_PASSES):
         if not _combat_ahead(game):
-            return
+            break
         before = (game.current_turn_phase, repr(game.turn_phases_remaining))
         if game.current_turn_phase != "precombat_main":
             # A combat added after this main phase: entered through the
             # turn's own successor, so a skip of it (CR 500.11) is spent.
             if game.enter_next_turn_phase() != "combat":
-                return
-        run_ai_combat_phase(game, game.active_player_index)
+                break
+        run_ai_combat_phase(game, game.active_player_index, outcome=outcome)
         _settle_scratch(game)
         if (game.current_turn_phase, repr(game.turn_phases_remaining)) == before:
-            return
+            break
+    return frozenset(outcome.blocks_declared)
 
 
-def _run_out_the_turn(game, *, through_combat: bool = False) -> None:
+def _run_out_the_turn(game, *, through_combat: bool = False) -> frozenset:
     """Take a scratch copy to the end of its turn: a combat whose blocks are
     already declared deals its damage, the end step's triggers fire
     (CR 513.1: "at the beginning of the next end step" — a card exiled
@@ -684,10 +738,10 @@ def _run_out_the_turn(game, *, through_combat: bool = False) -> None:
     Nothing is *decided* on the way — no attack is declared, no block made —
     so what is read afterwards is what the cast left, and not what a policy
     then did with it. *through_combat* is the exception, asked for by name:
-    the turn's combat is fought first (:func:`_fight_the_combat`).
+    the turn's combat is fought first (:func:`_fight_the_combat`), and the
+    blocks it declared are returned (none, without it).
     """
-    if through_combat:
-        _fight_the_combat(game)
+    blocks = _fight_the_combat(game) if through_combat else frozenset()
     for _ in range(_REHEARSAL_PASSES):
         if game.current_turn_phase != "combat" or game.is_game_over():
             break
@@ -697,14 +751,15 @@ def _run_out_the_turn(game, *, through_combat: bool = False) -> None:
         if game.current_step == step:
             break
     if game.is_game_over():
-        return
+        return blocks
     if game.current_turn_phase != "ending" and not game.stack:
         game.resolve_end_step(game.active_player_index)
         _settle_scratch(game)
         if game.is_game_over():
-            return
+            return blocks
     game.resolve_cleanup_step(game.active_player_index)
     _settle_scratch(game)
+    return blocks
 
 
 def position_digest(game) -> dict:
@@ -901,7 +956,7 @@ def _measured(game, *, through_combat: bool = False) -> dict:
         "digest": position_digest(game),
         "now": standings(game, now=True),
     }
-    _run_out_the_turn(game, through_combat=through_combat)
+    reading["blocks"] = _run_out_the_turn(game, through_combat=through_combat)
     reading["lasting"] = standings(game, now=False)
     reading["table"] = game
     return reading
@@ -1494,6 +1549,7 @@ def _rehearse(
             fleeting=fleeting, made_mana=made_mana, through_combat=through_combat,
             combat_ahead=combat_ahead, opened_a_cast=opened_a_cast,
             creature_ahead=creature_ahead,
+            blocks_added=bool(reading["blocks"] - untouched["blocks"]),
         )
     except Exception as raised:
         _note_raised(label or spell_name, raised)
@@ -1507,6 +1563,7 @@ __all__ = [
     "CARD_WORTH",
     "REHEARSALS_RAISED",
     "Rehearsal",
+    "blocks_still_to_come",
     "conceal_from",
     "combat_is_still_to_come",
     "forget_damage_history",
@@ -1514,6 +1571,7 @@ __all__ = [
     "has_a_creature_to_fight_with",
     "permanent_loss",
     "permanent_worth",
+    "pays_before_the_blocks",
     "position_digest",
     "priced_by_the_fight",
     "rehearse",

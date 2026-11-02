@@ -53,7 +53,7 @@ from .ai_weighed_cast import (
     permitted_casts,
     castable_commanders,
 )
-from .ai_rehearsal import deliberating
+from .ai_rehearsal import blocks_still_to_come, deliberating, pays_before_the_blocks
 from .ai_valuation import entry_sacrifice_is_unavoidable, entry_targets_a_spell, is_mana_ability
 from .faces import castable_faces
 from .game import Game
@@ -98,6 +98,7 @@ from .ai_abilities import (
     choose_activation_action,
     _abilities_weighed,
     _ACTIVATIONS_SET_ASIDE,
+    _AT_INSTANT_SPEED,
     _queue_activation,
     _rehearse_activation,
 )
@@ -383,18 +384,31 @@ def choose_instant_speed_activation(
     nothing, and only carrying it out tells the two apart. A proposal turned
     down is set aside and the next-best asked for, up to
     `INSTANT_ACTIVATIONS_WEIGHED` of them.
+
+    In the declare-attackers step with the blocks still to come
+    (``ai_rehearsal.blocks_still_to_come``) the proposal is read again with
+    the rest of that combat fought, and made only where it adds a block that
+    pays (``ai_rehearsal.pays_before_the_blocks``).
     """
     set_aside: set[int] = set(_ACTIVATIONS_SET_ASIDE.get())
+    before_blocks = blocks_still_to_come(game)
     with deliberating():
         for _ in range(INSTANT_ACTIVATIONS_WEIGHED):
             token = _ACTIVATIONS_SET_ASIDE.set(frozenset(set_aside))
+            speed = _AT_INSTANT_SPEED.set(True)
             try:
                 action = choose_activation_action(game, player_index)
             finally:
+                _AT_INSTANT_SPEED.reset(speed)
                 _ACTIVATIONS_SET_ASIDE.reset(token)
             if action is None:
                 return None
             rehearsal = _rehearse_activation(game, player_index, action)
+            if before_blocks and rehearsal is not None and rehearsal.accepted:
+                fought = _rehearse_activation(
+                    game, player_index, action, through_combat=True,
+                )
+                rehearsal = fought if pays_before_the_blocks(rehearsal, fought) else None
             if (
                 rehearsal is not None
                 and _worth_proposing(rehearsal)
@@ -415,19 +429,19 @@ def activate_chosen_ability(game: Game, seat: int, action: ActivationAction):
 
 
 def holds_an_ability_it_could_activate(game: Game, player_index: int) -> bool:
-    """Whether `choose_activation_action` has anything to look at: an
-    untapped permanent *player_index* controls that is not summoning sick,
-    with an ability the chooser weighs (`ai_abilities._abilities_weighed`: a
-    land's non-mana abilities, anything else's first) that is not a mana
-    ability — the chooser's own first gates, asked before it is."""
+    """Whether `choose_activation_action` has anything to look at at instant
+    speed: a permanent *player_index* controls with an ability the chooser
+    weighs (`ai_abilities._abilities_weighed`: a land's non-mana abilities,
+    anything else's first) that is not a mana ability, and that is no {T}
+    ability of a tapped or summoning-sick permanent (CR 107.5, 602.5a) — the
+    chooser's own first gates, asked before it is. An attacking creature is
+    tapped, and its "{1}: loses flying" is something to look at."""
     for permanent in game.controlled_by(player_index):
-        if permanent.tapped:
-            continue
-        if game._is_summoning_sick(permanent):
-            continue
+        held = permanent.tapped or game._is_summoning_sick(permanent)
         if any(
             ability.instruction is not None
             and not is_mana_ability(ability.instruction)
+            and not (held and ability.cost.requires_tap)
             for _index, ability in _abilities_weighed(game, permanent)
         ):
             return True
@@ -534,14 +548,23 @@ def _weighed_at_instant_speed_now(
     body arrives after every sorcery-speed answer the opponent had, and the
     mana it spends was the opponent's turn's to spend), or in response to a
     spell when the creature's own entry names a spell (Mystic Snake's "counter
-    target spell", ``ai_valuation.entry_targets_a_spell``). Everything else is
-    weighed in every window an instant is: a flashed Aura is a combat trick, a
-    flashed sorcery an instant with a surcharge. In each case the rehearsal
-    decides (`_combat_instant_candidate`).
+    target spell", ``ai_valuation.entry_targets_a_spell``) — or **to block
+    with**: in the declare-attackers step of an attack on its seat, before
+    the blocks (``ai_rehearsal.blocks_still_to_come``), where it is cast only
+    if the block it makes pays (``ai_rehearsal.pays_before_the_blocks``).
+    Everything else is weighed in every window an instant is: a flashed Aura
+    is a combat trick, a flashed sorcery an instant with a surcharge. In each
+    case the rehearsal decides (`_combat_instant_candidate`).
     """
     from .cast_timing import casts_at_instant_speed
 
     if card.primary_type == "land":
+        return False
+    if blocks_still_to_come(game) and player_index not in game.combat_defending_players():
+        # Before the blocks a spell is cast for a block it adds, and the
+        # blocks are the defending seats': the attacker's tricks wait for
+        # the declare-blockers step (its abilities are still weighed here —
+        # Swooping Talon's toggle).
         return False
     if card.primary_type == "instant":
         return True
@@ -554,7 +577,10 @@ def _weighed_at_instant_speed_now(
         if game.stack:
             if not entry_targets_a_spell(card):
                 return False
-        elif game.current_step != "end":
+        elif game.current_step != "end" and not (
+            blocks_still_to_come(game)
+            and player_index in game.combat_defending_players()
+        ):
             return False
     return casts_at_instant_speed(card, game, player_index)
 
@@ -751,6 +777,20 @@ def _combat_instant_candidate(
     rehearsal = _rehearse_announcement(
         game, player_index, card, cast_announcement(candidate), planned=candidate,
     )
+    if blocks_still_to_come(game):
+        # Before the blocks: read again with the rest of the combat fought
+        # (the blocks declared by the policy, the damage dealt), and cast
+        # here only for a block it adds that pays — an ambush. Everything
+        # else waits for the declare-blockers step, or the end step.
+        if rehearsal is None or not rehearsal.accepted:
+            return None
+        fought = _rehearse_announcement(
+            game, player_index, card, cast_announcement(candidate),
+            planned=candidate, through_combat=True,
+        )
+        if not pays_before_the_blocks(rehearsal, fought):
+            return None
+        rehearsal = fought
     if not _worth_proposing(rehearsal):
         return None
     if rehearsal is None and _names_an_unweighed_seat(game, player_index, card):

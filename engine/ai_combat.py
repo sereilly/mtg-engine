@@ -81,6 +81,29 @@ class CombatOutcome:
     #: **every** seat's blocks, so this is the one worth an issue rather than a
     #: count.
     silent_blocks: list[tuple[str, str]] = field(default_factory=list)
+    #: ``(blocker permanent_id, attacker permanent_id)`` for every block this
+    #: driver declared. What a rehearsal compares between two copies of one
+    #: combat (``ai_rehearsal.Rehearsal.blocks_added``): an action taken before
+    #: the blocks is taken for a block it adds.
+    blocks_declared: set[tuple[int, int]] = field(default_factory=set)
+
+
+def declared_block_pairs(game, defender_index: int) -> set[tuple[int, int]]:
+    """``(blocker permanent_id, attacker permanent_id)`` for each block
+    *defender_index* has declared this combat (``Game.combat_blockers``)."""
+    active = game.active_player_index
+    pairs: set[tuple[int, int]] = set()
+    for blocker_slot, attacker_slots in (game.combat_blockers.get(defender_index) or {}).items():
+        blocker = game.permanent_at(defender_index, blocker_slot)
+        if blocker is None:
+            continue
+        for attacker_slot in (
+            attacker_slots if isinstance(attacker_slots, list) else [attacker_slots]
+        ):
+            attacker = game.permanent_at(active, attacker_slot)
+            if attacker is not None:
+                pairs.add((blocker.permanent_id, attacker.permanent_id))
+    return pairs
 
 
 #: The log line for an offer turned down, after the creature's name. The
@@ -734,6 +757,7 @@ def run_ai_combat_phase(game, seat: int, *, outcome: CombatOutcome | None = None
                 game._prune_combat_state()
                 continue
             declare_ai_blockers(game, pending, outcome=outcome)
+            outcome.blocks_declared |= declared_block_pairs(game, pending)
             # `+=`, not `=`: this runs once per defending player per combat and
             # the outcome spans a whole phase, so assigning would report only
             # whichever defender declared last.

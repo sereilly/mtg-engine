@@ -79,9 +79,22 @@ def compelled_block_worth(game: "Game", attacker: "Permanent", blocker: "Permane
     lost (``ai_rehearsal.permanent_worth``, read as the board will be once
     the turn is over). A block that kills neither is :data:`_STALEMATE`, and a
     blocker that cannot block the attacker at all (no flying against a flier)
-    is a creature untapped to block somebody else.
+    is a creature untapped to block somebody else — **unless the attacker can
+    shed what stops the block** with an ability of its own its controller can
+    activate now (Swooping Talon's "{1}: This creature loses flying until end
+    of turn", :func:`_shed_for_the_block`): then it is the fight with that
+    shed, less the damage the evasion would have dealt. The shedding itself
+    is the controller's later decision, rehearsed through the fight before
+    the blocks (``ai_policy.choose_instant_speed_activation``).
     """
     if not game._can_block_attacker(blocker, attacker):
+        shed = _shed_for_the_block(game, attacker, blocker)
+        if shed is not None:
+            table, shed_attacker, shed_blocker = shed
+            return (
+                compelled_block_worth(table, shed_attacker, shed_blocker)
+                - _evasion_damage_worth(game, attacker, blocker)
+            )
         return -permanent_worth(blocker, now=False) * _UNTAPPED_FOR_NOTHING_SHARE
     kills, dies = fight_outcome(game, attacker, blocker)
     worth = 0.0
@@ -92,6 +105,74 @@ def compelled_block_worth(game: "Game", attacker: "Permanent", blocker: "Permane
     if not kills and not dies:
         return _STALEMATE
     return worth
+
+
+def _shed_for_the_block(game: "Game", attacker: "Permanent", blocker: "Permanent"):
+    """``(table, attacker, blocker)`` on a copy of *game* on which *attacker*'s
+    controller has activated an ability of *attacker*'s own that hampers it
+    (``ai_valuation.hampers_its_own_source``: a keyword lost, never the
+    creature itself) and after which *blocker* can block it — or None.
+
+    Only an ability the controller could activate **now**: no {T} on a
+    tapped attacker, nothing the activation prohibitions refuse, a cost the
+    engine's gate and the board can pay. The ability is the engine's own,
+    activated and resolved on a scratch copy cut loose from whatever is
+    resolving (``ai_rehearsal._detach``) and asked the engine's own question
+    (``_can_block_attacker``) — so what it sheds is whatever its program
+    says, never a keyword named here."""
+    import random
+
+    from .activation_prohibitions import activation_prohibition
+    from .ai_rehearsal import _detach, scratch_copy
+    from .ai_valuation import hampers_its_own_source, is_mana_ability
+    from .board_payment import board_can_pay
+
+    seat = game.controller_index_of(attacker)
+    for index, ability in enumerate(game.usable_abilities_of(attacker)):
+        if ability.instruction is None or is_mana_ability(ability.instruction):
+            continue
+        if not hampers_its_own_source(ability.instruction):
+            continue
+        if ability.cost.requires_tap and (attacker.tapped or game._is_summoning_sick(attacker)):
+            continue
+        if activation_prohibition(game, seat, attacker, ability) is not None:
+            continue
+        if game.unpayable_activation_cost(seat, attacker, ability) is not None:
+            continue
+        if game.enforce_mana_costs and not board_can_pay(game, seat, dict(ability.cost.mana)):
+            continue
+        state = random.getstate()
+        try:
+            table = scratch_copy(game)
+            _detach(table, owing_nothing=True)
+            table.enforce_mana_costs = False
+            shed = table.permanent_by_id(attacker.permanent_id)
+            held = table.permanent_by_id(blocker.permanent_id)
+            if shed is None or held is None:
+                continue
+            result = table.queue_permanent_ability(
+                seat, shed.card.name, permanent_index=table.battlefield_index_of(shed),
+                ability_index=index,
+            )
+            if not getattr(result, "supported", False):
+                continue
+            table.resolve_top_of_stack()
+        finally:
+            random.setstate(state)
+        if table._can_block_attacker(held, shed):
+            return table, shed, held
+    return None
+
+
+def _evasion_damage_worth(game: "Game", attacker: "Permanent", blocker: "Permanent") -> float:
+    """What the combat damage *attacker* deals unblocked is worth to its seat
+    against *blocker*'s controller (``ai_rehearsal.life_worth``) — the price
+    of shedding the evasion that kept it unblocked."""
+    from .ai_rehearsal import life_worth
+
+    defender = game.players[game.controller_index_of(blocker)]
+    damage = combat_damage_assigned_by(attacker)
+    return life_worth(defender.life) - life_worth(defender.life - damage)
 
 
 def fight_outcome(game: "Game", attacker: "Permanent", blocker: "Permanent") -> "tuple[bool, bool]":

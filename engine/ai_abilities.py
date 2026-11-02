@@ -32,6 +32,7 @@ from .ai_target_sides import (
 from .ai_valuation import (
     foreign_activation_use,
     hand_entry_steps,
+    hampers_its_own_source,
     harms_its_own_source,
     is_mana_ability,
     reaches_both_sides,
@@ -116,31 +117,34 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
     a rehearsal of it says it leaves the seat ahead (:func:`_land_ability_worth`).
     It is asked after the turn's casts have tapped what they needed, so the
     land it taps is one nothing else this main phase wanted.
+
+    A tapped or summoning-sick permanent is passed over, except **at instant
+    speed** (``_AT_INSTANT_SPEED``, every proposal rehearsed): there only its
+    {T} abilities are (CR 107.5, 602.5a) — an attacker's "{1}: …" is not.
     """
     player = game.players[player_index]
 
     best: ActivationAction | None = None
     set_aside = _ACTIVATIONS_SET_ASIDE.get()
+    at_instant_speed = _AT_INSTANT_SPEED.get()
     # One deliberation: every land ability weighed here is rehearsed against
     # the same table with nothing activated.
     with deliberating():
         for permanent_index, permanent in enumerate(player.battlefield):
-            if permanent.tapped:
-                continue
-            if game._is_summoning_sick(permanent):
+            held = permanent.tapped or game._is_summoning_sick(permanent)
+            if held and not at_instant_speed:
                 continue
             # One the instant-speed chooser has rehearsed and turned down this
             # time it was asked (`ai_policy.choose_instant_speed_activation`),
             # so the next-best is the one proposed.
             if permanent.permanent_id in set_aside:
                 continue
-
-            # A permanent an effect stripped of its abilities ("loses all
-            # abilities", CR 305.7) has none to propose: the engine refuses
-            # every one, so naming one is a turn spent on a refusal, every turn.
+            # Stripped of its abilities (CR 305.7): the engine refuses each.
             if game.lost_abilities_refusal(permanent) is not None:
                 continue
             for ability_index, ability in _abilities_weighed(game, permanent):
+                if held and ability.cost.requires_tap:
+                    continue
                 candidate = _activation_candidate(
                     game, player_index, permanent_index, permanent,
                     ability, ability_index,
@@ -221,17 +225,12 @@ def _activation_candidate(
     if is_mana_ability(ability.instruction):
         return None
 
-    # "Return this creature to its owner's hand" (Quicksilver Wall),
-    # "This creature loses flying until end of turn" (Ribbon Snake),
-    # "Destroy this enchantment" (Volrath's Dungeon): an effect that removes
-    # or hampers **its own source**. Mostly a drawback printed for an
-    # opponent to pay for (CR 602.1b), otherwise a rescue that needs a
-    # response window this main-phase chooser never has — and the score
-    # below rates it 2.5 like anything else, so the AI bounced its own wall
-    # for {4} and paid 5 life to destroy its own Dungeon. Read off the
-    # compiled program (`ai_valuation.harms_its_own_source`), the reading
-    # `choose_foreign_activation_action` takes the other way.
-    if harms_its_own_source(ability.instruction):
+    # An effect that **removes its own source** (Quicksilver Wall's bounce,
+    # Volrath's Dungeon): a drawback printed for an opponent to pay for (CR
+    # 602.1b), skipped (`ai_valuation.harms_its_own_source`). A **hamper** that
+    # leaves it in play (Swooping Talon shedding flying) is rehearsed below.
+    hampers = hampers_its_own_source(ability.instruction)
+    if harms_its_own_source(ability.instruction) and not hampers:
         return None
 
     # A cost paid in permanents or cards is a trade this policy cannot
@@ -795,7 +794,7 @@ def _activation_candidate(
     # (Riptide Mangler, `_OWN_REWRITE_KINDS`) and a shield (LGN C2: Deftblade
     # Elite in both main phases, `ai_valuation.shields_only`).
     if (
-        ability_index is not None
+        ability_index is not None or hampers
         or _sets_only_what_its_source_is(ability.instruction)
         or waits_on_a_later_draw(ability.instruction) or shields_only(ability.instruction)
         or (
@@ -944,21 +943,21 @@ def _land_ability_worth(
     measure. Proposed only where the engine took it, it changed something that
     outlasts the turn, and the lasting swing is positive: Krosan Verge's two
     lands for one, a ping, a token. **What is gone by the end of the turn is
-    read again through the fight** (``ai_rehearsal.priced_by_the_fight``), as
-    a precombat cast is: a manland's animation is worth the attack it makes,
-    and nothing at all with no combat ahead.
+    read again through the fight** (``ai_rehearsal.priced_by_the_fight``)
+    before a combat or a declared attack's blocks: a manland's animation is
+    worth the attack or block it makes, and nothing with no combat ahead.
 
     Unlike a cast, an ability nobody could rehearse is not proposed — no land
     ability was before, and "could not be weighed" is no reason to start.
     """
-    from .ai_rehearsal import combat_is_still_to_come, priced_by_the_fight
+    from .ai_rehearsal import (blocks_still_to_come, combat_is_still_to_come,
+                               priced_by_the_fight)
 
     rehearsal = _rehearse_activation(game, seat, action)
     if rehearsal is None or not (rehearsal.accepted and rehearsal.changed):
         return None
-    if (
-        priced_by_the_fight(rehearsal.now, rehearsal.lasting, rehearsal.fleeting)
-        and combat_is_still_to_come(game, seat)
+    if priced_by_the_fight(rehearsal.now, rehearsal.lasting, rehearsal.fleeting) and (
+        combat_is_still_to_come(game, seat) or blocks_still_to_come(game)
     ):
         fought = _rehearse_activation(game, seat, action, through_combat=True)
         if fought is not None and fought.accepted:
@@ -1025,6 +1024,8 @@ def _sized_x_activation(
 _ACTIVATIONS_SET_ASIDE: ContextVar[frozenset] = ContextVar(
     "ai_activations_set_aside", default=frozenset(),
 )
+#: True while `ai_policy.choose_instant_speed_activation` asks (see above).
+_AT_INSTANT_SPEED: ContextVar[bool] = ContextVar("ai_at_instant_speed", default=False)
 
 
 def _madness_discard_index(
