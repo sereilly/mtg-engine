@@ -264,6 +264,12 @@ class TriggeredAbilitiesMixin:
         self.collected_triggers = []
         try:
             yield
+            # **A resolution waiting on an answer has not finished** (CR
+            # 608.2), so its unit of play has not either: what it set off
+            # waits with the held object and is taken back by the window that
+            # releases it, after its state-based check (``held_triggers``).
+            if self._hold_triggers_with_waiting_resolution():
+                return
             # The choices the unit's triggers waited to make, now that it has
             # finished (CR 603.3c-d, 117.5; ``_trigger_choice_waits``) — while
             # the window is still open, so a trigger an announcement sets off
@@ -279,6 +285,54 @@ class TriggeredAbilitiesMixin:
             # choice) — the rule's two halves, in its order.
             restore_apnap(self, collected)
             offer_trigger_order(self, collected)
+
+    def _hold_triggers_with_waiting_resolution(self) -> bool:
+        """At the outermost window's close: when an object on the stack is
+        held waiting on an answer, give it this window's triggers to wait
+        with, and close the window without announcing or ordering anything.
+        True when it did.
+
+        CR 603.3b: abilities that triggered "since the last time a player
+        received priority" go on the stack together, and nobody receives
+        priority while a resolution waits on its answer (CR 608.2, 117.3b).
+        So a trigger fired before a resolution stopped to ask — or by an
+        answer that was not its last, or by a mana ability tapped to pay one —
+        is put on the stack with the rest once the resolution has finished and
+        its state-based check is made (CR 117.5): the window
+        ``_release_stack_item`` opens takes them back
+        (:meth:`_rejoin_held_triggers`). Announced here instead, a trigger
+        fired inside a resolution that went on to ask chose its target before
+        the answer and before the check — off a board neither had settled.
+        """
+        held = next(
+            (
+                item for item in reversed(self.stack)
+                if item.resolution_held and self.stack_item_is_waiting(item)
+            ),
+            None,
+        )
+        if held is None:
+            return False
+        collected, unannounced = held.held_triggers or ((), ())
+        held.held_triggers = (
+            (*collected, *self.collected_triggers),
+            (*unannounced, *self.unannounced_triggers),
+        )
+        self.collected_triggers = None
+        self.unannounced_triggers = []
+        return True
+
+    def _rejoin_held_triggers(self, item) -> None:
+        """Take back into the window open now what *item*'s resolution set off
+        while it was held (:meth:`_hold_triggers_with_waiting_resolution`),
+        oldest first, ahead of anything this window has collected itself."""
+        held, item.held_triggers = item.held_triggers, None
+        if not held:
+            return
+        collected, unannounced = held
+        if self.collected_triggers is not None:
+            self.collected_triggers[:0] = list(collected)
+        self.unannounced_triggers[:0] = list(unannounced)
 
     @contextmanager
     def deferring_triggers(self):

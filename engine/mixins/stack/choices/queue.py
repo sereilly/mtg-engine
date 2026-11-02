@@ -311,28 +311,36 @@ class PendingChoicesMixin:
             if entry is item:
                 del self.stack[index]
                 item.resolution_held = False
-                # The step the resolution handed over (a spell's CR 608.2n
-                # bin) — run after the object has left the stack, so the card
-                # is in exactly one zone at every moment a client can see.
-                tail, item.finish_resolution = item.finish_resolution, None
-                if tail is not None:
-                    tail()
-                self.log.append(f"{item.card.name} finished resolving")
-                # The resolution is over *now*, so what ``pass_priority`` does
-                # after one that ran straight through happens here for one that
-                # stopped to ask: CR 704.3's check before anyone receives
-                # priority, and CR 117.3b's priority to the active player. The
-                # seat that owed the answer was holding the window only because
-                # it owed it.
-                self.check_state_based_actions()
-                if self.priority_player_index is not None:
-                    self.priority_player_index = self.active_player_index
-                    self.priority_pass_count = 0
-                # …and CR 603.3b's: the abilities this object's destructions
-                # triggered were waiting for it to finish, and it has. After
-                # the state-based check, which is the order the rule gives.
-                # See engine/destruction_events.py.
-                destruction_finished(self)
+                # The end of the resolution's unit of play (CR 603.3b, 117.5):
+                # one trigger window around the last step, the state-based
+                # check and the destruction triggers, which takes back what the
+                # resolution set off while it was held (``held_triggers``) —
+                # so every one of them chooses its targets after the check.
+                with self.putting_triggers_on_stack():
+                    self._rejoin_held_triggers(item)
+                    # The step the resolution handed over (a spell's CR 608.2n
+                    # bin) — run after the object has left the stack, so the
+                    # card is in exactly one zone at every moment a client can
+                    # see.
+                    tail, item.finish_resolution = item.finish_resolution, None
+                    if tail is not None:
+                        tail()
+                    self.log.append(f"{item.card.name} finished resolving")
+                    # The resolution is over *now*, so what ``pass_priority``
+                    # does after one that ran straight through happens here for
+                    # one that stopped to ask: CR 704.3's check before anyone
+                    # receives priority, and CR 117.3b's priority to the active
+                    # player. The seat that owed the answer was holding the
+                    # window only because it owed it.
+                    self.check_state_based_actions()
+                    if self.priority_player_index is not None:
+                        self.priority_player_index = self.active_player_index
+                        self.priority_pass_count = 0
+                    # …and CR 603.3b's: the abilities this object's
+                    # destructions triggered were waiting for it to finish, and
+                    # it has. After the state-based check, which is the order
+                    # the rule gives. See engine/destruction_events.py.
+                    destruction_finished(self)
                 return
 
     def _answer_pending_choice(self, choice: PendingChoice, apply):
@@ -343,7 +351,20 @@ class PendingChoicesMixin:
         resolution rather than a first step that resolved and a remainder that
         happens with nothing on the stack. Releasing afterwards is the only
         place the object leaves: every answer path — a player's confirm, an AI
-        seat's default — goes through here."""
+        seat's default — goes through here.
+
+        **An answer is a unit of play** (``putting_triggers_on_stack``): what
+        it sets off chooses its targets once it is done — after the release's
+        state-based check when it was the last answer, or, while the object
+        still waits on another, with that object (``held_triggers``)."""
+        with self._answer_window():
+            return self._answer_inside_its_window(choice, apply)
+
+    def _answer_window(self):
+        """The trigger window an answer is (:meth:`_answer_pending_choice`)."""
+        return self.putting_triggers_on_stack()
+
+    def _answer_inside_its_window(self, choice: PendingChoice, apply):
         item = choice.data.get("_stack_item")
         previous = self.resolving_stack_item
         if item is not None:

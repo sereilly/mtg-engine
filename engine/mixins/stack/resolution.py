@@ -505,7 +505,9 @@ class StackResolutionMixin:
             # and in the untap step, where nobody receives priority (CR 502.4).
             if self.current_step != "untap":
                 self.offer_priority()
-            if not self.resolve_top_of_stack(pause_for_choices=pause_for_choices):
+            # One unit of play: the resolution and its state-based check in
+            # one trigger window (``resolve_next_object``).
+            if not self.resolve_next_object(pause_for_choices=pause_for_choices):
                 # Top item is paused on a pending choice (Word of Command).
                 break
             # A resolution that stopped to ask holds its object on the stack
@@ -519,6 +521,49 @@ class StackResolutionMixin:
                     f"_settle aborted after {self.MAX_SETTLE_ITERS} iterations (possible loop)"
                 )
                 break
+    def resolve_next_object(self, *, pause_for_choices: bool) -> bool:
+        """Resolve the top object **as one unit of play**: its resolution and
+        the state-based check after it, in one trigger window. True when an
+        object resolved (as :meth:`resolve_top_of_stack`).
+
+        CR 603.3: a triggered ability is put on the stack the next time a
+        player would receive priority; CR 117.5 / 704.3 make the game perform
+        state-based actions first; CR 603.3d chooses the ability's targets as
+        it is put there. The resolution's own window closed as its last
+        instruction returned and every loop then made its check, so a trigger
+        fired *inside* a resolving spell chose before the check — Chandra's
+        Incinerator, triggered by Earthquake's damage to an opponent, was
+        offered the creatures Earthquake had just dealt lethal damage to, and
+        Karmic Justice, by Devastate's land, the ones its 1 damage had. Every
+        loop that resolves the stack resolves through here
+        (``_settle``, ``_resolve_priority_window``,
+        ``_resolve_window_answering_prompts``, ``pass_priority``), so the
+        window closes after the check (:meth:`_check_inside_the_resolution_window`):
+        the abilities the resolution set off, the ones its destructions set
+        off and the ones the check itself sets off (a death, a record the
+        sweep announces) go on the stack together, choose after the check, and
+        are ordered as one (CR 603.3b).
+
+        A resolution that stopped to ask is not over, so there is no check yet:
+        the window hands what it collected to the held object, and the release
+        makes the check (``_release_stack_item``)."""
+        with self.putting_triggers_on_stack():
+            resolved = self.resolve_top_of_stack(pause_for_choices=pause_for_choices)
+            checked = resolved and self._check_inside_the_resolution_window()
+        if resolved and not checked and not self.resolution_waiting():
+            self._check_between_resolutions()
+        return resolved
+
+    def _check_inside_the_resolution_window(self) -> bool:
+        """The state-based check :meth:`resolve_next_object` makes before its
+        window closes; True when it has dealt with the check (made it, or
+        found the resolution still waiting on an answer, whose release makes
+        it). Named so a census can put the check back outside the window,
+        which is the tree before (``tests/rules/test_kg3_holds_trigger_after_state_check.py``)."""
+        if not self.resolution_waiting():
+            self._check_between_resolutions()
+        return True
+
     def resolve_stack(self, pause_for_choices: bool = False) -> None:
         while self.stack:
             if not self.resolve_top_of_stack(pause_for_choices=pause_for_choices):
@@ -610,15 +655,25 @@ class StackResolutionMixin:
         # this is the one place that knows, and everything below reaches the
         # damage paths with a bare CardDefinition that cannot say.
         self.resolving_items.append(item)
-        try:
-            # Everything this resolution sets off goes on the stack together
-            # once it is over (CR 603.3, CR 603.3b): one window, whichever fire
-            # sites — a sweep's deaths, an entry, a batch — put them there.
-            with self.putting_triggers_on_stack():
+        # Everything this resolution sets off goes on the stack together once
+        # it is over (CR 603.3, CR 603.3b): one window, whichever fire sites —
+        # a sweep's deaths, an entry, a batch, the destructions it made — put
+        # them there. Open until the resolution has finished: past the hold,
+        # when it stops to ask (the window gives what it collected to the held
+        # object, ``held_triggers``), and, in the loops that resolve the stack,
+        # past the state-based check after it (``resolve_next_object``).
+        with self.putting_triggers_on_stack():
+            try:
                 self._run_stack_item_resolution(item)
-        finally:
-            self.resolving_items.pop()
-            self.resolving_stack_item = previous_resolving
+            finally:
+                self.resolving_items.pop()
+                self.resolving_stack_item = previous_resolving
+            return self._after_the_instructions(item, pause_for_choices, woc_before)
+
+    def _after_the_instructions(self, item, pause_for_choices: bool, woc_before) -> bool:
+        """The rest of :meth:`resolve_top_of_stack` once *item*'s instructions
+        have run, inside its trigger window: the recompute, Power Sink's
+        payment, the hold, the destruction triggers, Word of Command."""
         # **The resolution seam** (CR 611.3a: a static ability's effect applies
         # at any given moment to whatever its text indicates). Whatever this
         # object just did — recoloured a creature, changed a type, moved a
