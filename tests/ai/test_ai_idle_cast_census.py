@@ -87,6 +87,11 @@ WHOLE_PARTS = tuple(range(1, SAMPLE_EVERY)) if full_census() else ()
 ALWAYS = frozenset({
     "Swords to Plowshares", "Donate", "Kor Chant", "Ertai's Trickery", "Winnow",
     "Mind Rot", "Duress", "Wrath of God", "Hymn to Tourach",
+    # Unpinned at kg3 (`aiplay`): mana made is worth something only beyond
+    # what it cost (``ai_rehearsal._made_more_mana_than_it_cost``), and a
+    # regeneration whose delayed steal is bound to its target is aimed
+    # across the table (``ai_target_sides._spent_on_the_earlier_target``).
+    "Drain Power", "Debt of Loyalty",
 })
 
 #: A cast is a loss when it leaves its caster this much worse off: half a
@@ -322,18 +327,7 @@ def findings(rows) -> dict:
 # -- the pins -------------------------------------------------------------------
 
 #: Casts still proposed that move nothing, each with why it stands.
-#:
-#: Drain Power ("Target player activates a mana ability of each land they
-#: control. Then that player loses all unspent mana and you add the mana lost
-#: this way.") on the mirror board, found at kg3 when the digest sample first
-#: reached the card: proposed at a score of 3.5, it pays {U}{U} for the one
-#: {U} the opposing Island makes, on a board where the caster holds forty
-#: mana and nothing to spend it on, and the sweep's lasting reading measures
-#: a swing of 0.0. Left for the AI's reading of a spell that moves mana
-#: between pools; the policy's rehearsal reads the opposing land tapped.
-IDLE: dict = {
-    ("Drain Power", None, "mirror"): "a mana-moving spell with nothing to spend the mana on",
-}
+IDLE: dict = {}
 
 #: Casts still proposed that leave their caster worse off, each with why.
 #:
@@ -355,17 +349,7 @@ LOSSES: dict = {
 }
 
 #: Casts that name the caster's own permanent with a better twin opposite.
-#:
-#: Debt of Loyalty ("Regenerate target creature. You gain control of that
-#: creature if it regenerates this way.") on the mirror board, found at kg3
-#: by the first whole-pool sweep the digest shares made: aimed at the
-#: caster's own creature (3.0) where the same cast at the opposing twin
-#: measures 11.5 — its second sentence steals what it regenerates. The engine
-#: is right (no control changes until the creature regenerates); left for the
-#: AI's target side of a conditional steal.
-OWN_GOALS: dict = {
-    ("Debt of Loyalty", None, "mirror"): "a regeneration that steals is aimed at the caster's own",
-}
+OWN_GOALS: dict = {}
 
 SWEPT = ALWAYS | {key[0] for pins in (IDLE, LOSSES, OWN_GOALS) for key in pins}
 assert SWEPT <= set(POOL), sorted(SWEPT - set(POOL))

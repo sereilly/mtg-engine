@@ -36,6 +36,7 @@ from dataclasses import dataclass
 
 from .ai_weighed_cast import permitted_casts
 from .entry_awaiting import awaited_entries
+from .text_changes import spell_text_card
 
 
 # --- The measure: what a seat's position is worth -----------------------------
@@ -604,22 +605,32 @@ def combat_is_still_to_come(game, seat: int) -> bool:
     return game.active_player_index == seat and _combat_ahead(game)
 
 
-def blocks_still_to_come(game) -> bool:
+def blocks_owed(game) -> bool:
     """Whether *game* is in a declare-attackers step whose attackers are
-    declared and whose blocks are not, with nothing on the stack — CR 508.2's
-    priority, before CR 509.1's declaration. The one moment a creature can be
-    cast to block with, or an ability used to change who can block whom, and
-    the moment a rehearsal plays the rest of that combat out from
-    (:func:`_fight_the_combat`), the blocks declared by the policy."""
+    declared and whose blocks are not — whatever is on the stack. A copy
+    made here owes the blocks once its stack has resolved, so a rehearsal
+    that does not fight the rest of the combat (:func:`_fight_the_combat`)
+    reads a combat that deals no damage at all: a response to an attack
+    trigger (kg3) was read that way."""
     return (
         game.current_turn_phase == "combat"
         and game.current_step == "declare_attackers"
         and bool(game.combat_attackers)
         and game.combat_attackers_locked
         and not game.combat_blockers_locked
-        and not game.stack
         and not game.is_game_over()
     )
+
+
+def blocks_still_to_come(game) -> bool:
+    """Whether *game* is in a declare-attackers step whose attackers are
+    declared and whose blocks are not, with nothing on the stack — CR 508.2's
+    priority, before CR 509.1's declaration (:func:`blocks_owed`, the stack
+    empty). The one moment a creature can be cast to block with, or an
+    ability used to change who can block whom, and the moment a rehearsal
+    plays the rest of that combat out from (:func:`_fight_the_combat`), the
+    blocks declared by the policy."""
+    return blocks_owed(game) and not game.stack
 
 
 def _combat_ahead(game) -> bool:
@@ -1271,6 +1282,44 @@ def _casts_open(game, seat: int) -> frozenset:
     )
 
 
+def _mana_value_on_the_stack(game) -> int:
+    """The mana value of the object on top of *game*'s stack — X included
+    (CR 202.3e) — or 0 with nothing there: what a cast just put on the stack
+    was charged, read before it resolves — off what the spell says
+    (``text_changes.spell_text_card``), the reader every stack object's
+    characteristics go through."""
+    if not game.stack:
+        return 0
+    item = game.stack[-1]
+    card = spell_text_card(item)
+    value = int(float(getattr(card, "cmc", 0) or 0))
+    x_count = (getattr(card, "mana_cost", "") or "").upper().count("{X}")
+    return value + x_count * int(getattr(item, "x_value", 0) or 0)
+
+
+def _made_more_mana_than_it_cost(clone, seat: int, pools: list, cost: int) -> bool:
+    """Whether a resolution on *clone* left *seat* more mana than the cast
+    was charged (*cost*, its mana value): the mana that **appeared** in
+    *seat*'s pool across the resolution (*pools* is every pool as the
+    payment left it), above what paying for it took out.
+
+    A ritual is mana gone by the end of the turn because it is spent, on a
+    cast this rehearsal is not a rehearsal of — so the mana it made is not
+    nothing (``Rehearsal.made_mana``). Only mana **beyond its price** is
+    that: "Target player activates a mana ability of each land they control
+    … you add the mana lost this way" (Drain Power) at an opponent with one
+    Island pays {U}{U} for {U}, and was proposed at the base score for the
+    one mana it "made" (the idle census, kg3). Dark Ritual makes three for
+    one. Mana appearing in another seat's pool is nothing this seat spends.
+    """
+    was = pools[seat] if 0 <= seat < len(pools) else {}
+    appeared = sum(
+        max(0, int(amount or 0) - int(was.get(symbol, 0) or 0))
+        for symbol, amount in clone.players[seat].mana_pool.items()
+    )
+    return appeared > cost
+
+
 def _opened_a_cast(game, seat: int, could_cast: frozenset, spell_name) -> bool:
     """Whether *game* — a copy on which a cast of *spell_name* has just
     resolved — lets *seat* make a cast from outside its hand that the table
@@ -1461,6 +1510,7 @@ def _rehearse(
         # goes is not: "unless they pay {1}", paid, is a spell that did
         # nothing and cost a mana more.
         pools = [dict(player.mana_pool) for player in clone.players]
+        cost = _mana_value_on_the_stack(clone)
         if not getattr(result, "supported", False):
             return Rehearsal(
                 accepted=False, refusal=str(getattr(result, "details", "") or ""),
@@ -1472,11 +1522,7 @@ def _rehearse(
         # …and whether there is anything to fight it with, read off the same
         # copy: a cast can be what makes the creature (Animate Land).
         creature_ahead = has_a_creature_to_fight_with(clone, seat)
-        made_mana = any(
-            int(amount or 0) > int(was.get(symbol, 0) or 0)
-            for was, player in zip(pools, clone.players)
-            for symbol, amount in player.mana_pool.items()
-        )
+        made_mana = _made_more_mana_than_it_cost(clone, seat, pools, cost)
         opened_a_cast = _opened_a_cast(
             clone, seat, untouched["could_cast"], spell_name,
         )
@@ -1572,6 +1618,7 @@ __all__ = [
     "CARD_WORTH",
     "REHEARSALS_RAISED",
     "Rehearsal",
+    "blocks_owed",
     "blocks_still_to_come",
     "conceal_from",
     "combat_is_still_to_come",

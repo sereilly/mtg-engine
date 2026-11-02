@@ -9,7 +9,7 @@ seeded runs). The engine now asks `Game.priority_driver` for each player in
 turn before every resolution and as every step's window closes
 (`Game.offer_priority`), and the simulator's driver answers through
 `ai_policy.choose_combat_instant_cast_action` in the three windows it takes
-(`ai_simulator._instant_speed_window`).
+(`ai_priority.instant_speed_window`).
 
 Each test plays a real cast or step on a `_SimulatedGame` built the way
 `run_ai_simulation` builds one — mana enforced, both drivers set — and reads
@@ -19,7 +19,7 @@ from collections import Counter
 
 import pytest
 
-from engine import ai_rehearsal, ai_simulator
+from engine import ai_priority, ai_rehearsal, ai_simulator
 from engine.ai_combat import run_ai_combat_phase
 from engine.ai_actions import CastAction
 from engine.models import Permanent, PlayerState
@@ -201,11 +201,11 @@ def test_a_refused_response_is_counted_and_the_window_goes_on(monkeypatch):
         land_tap_indices=(), score=5.0, hand_index=0,
     )
     monkeypatch.setattr(
-        ai_simulator, "choose_combat_instant_cast_action",
+        ai_priority, "choose_combat_instant_cast_action",
         lambda table, seat: refused if seat == 1 else None,
     )
     monkeypatch.setattr(
-        ai_simulator, "holds_an_instant_it_could_pay_for", lambda table, seat: True,
+        ai_priority, "holds_an_instant_it_could_pay_for", lambda table, seat: True,
     )
     game.players[0].mana_pool["R"] = 1
 
@@ -328,7 +328,7 @@ def test_the_windows_the_simulator_answers(where, seat, stack_owner, expected):
             target_player_index=1, target_permanent_index=None, x_value=None,
         ))
 
-    assert ai_simulator._instant_speed_window(game, seat) == expected
+    assert ai_priority.instant_speed_window(game, seat) == expected
 
 
 def test_the_report_counts_what_the_windows_offered():

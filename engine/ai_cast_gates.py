@@ -202,19 +202,33 @@ def _alternative_cost_is_payable(
     # would be a second answer to "what may this be paid with", and the
     # direction it fails in is a seat that holds a castable spell all game --
     # which is the shape this function was written for in the first place.
+    return bool(payable_alternative_indices(game, player_index, card, hand_index))
+
+
+def payable_alternative_indices(
+    game: Game, player_index: int, card: CardDefinition, hand_index: int,
+) -> list[int]:
+    """Every alternative cost (CR 118.9) that applies to *card* and that this
+    board can pay now, by its index among ``applicable_alternative_costs`` —
+    the index a cast names it by (``alternative_cost_index``).
+
+    CR 118.9a applies one of them; which one is the caster's choice, and with
+    two applicable a cast that names neither is refused. This took exactly
+    one or none, so a seat with Dream Halls on the table and a morph card in
+    hand — the face-down {3} and the discard both applicable — took neither
+    and held the card (`ai_casts._cast_candidate_announcing` weighs each)."""
     printed = game.applicable_alternative_costs(player_index, card)
-    if len(printed) != 1:
-        # None to take, or more than one and CR 118.9a lets only one be
-        # applied — a choice this policy has no card to make and the cast path
-        # refuses outright.
-        return False
-    return game._unpayable_alternative_cost(
-        player_index, card, printed[0], spell_hand_index=hand_index,
-    ) is None
+    return [
+        index for index, cost in enumerate(printed)
+        if game._unpayable_alternative_cost(
+            player_index, card, cost, spell_hand_index=hand_index,
+        ) is None
+    ]
 
 
 def _alternative_cost_tap_plan(
     game: Game, player_index: int, card: CardDefinition, *, extra_generic: int = 0,
+    index: "int | None" = None,
 ) -> "tuple[tuple[int, ...], tuple[str, ...]] | None":
     """The taps that pay the **mana** an alternative-cost cast of *card* still
     owes (CR 118.9d), or None when the board cannot pay it.
@@ -227,11 +241,16 @@ def _alternative_cost_tap_plan(
     an untapped creature you control rather than pay this spell's mana cost",
     Lashknife, with a Llanowar Elves the only creature) is no plan: the mana
     would be made and the cast refused for want of an untapped creature.
+
+    *index* names which of the applicable alternatives (CR 118.9a) is planned
+    for; None is the only one there is, and no plan where there are several.
     """
     printed = game.applicable_alternative_costs(player_index, card)
-    if len(printed) != 1:
+    if index is None and len(printed) != 1:
         return None
-    cost = printed[0]
+    if index is not None and not 0 <= index < len(printed):
+        return None
+    cost = printed[0 if index is None else index]
     owed = game.alternative_cost_mana(
         player_index, card, cost, extra_generic=extra_generic,
     )

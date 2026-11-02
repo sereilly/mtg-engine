@@ -90,6 +90,7 @@ from .ai_cast_gates import (
     _printed_costs_are_payable,
     _alternative_cost_is_payable,
     _alternative_cost_tap_plan,
+    payable_alternative_indices,
     _can_cast_with_targets,
     _caster_can_make_its_sacrifices,
     _entry_gate_gives_back_more_than_it_brings,
@@ -106,6 +107,7 @@ from .ai_targets import (
     _choose_single_object_target,
 )
 from .ai_divisions import choose_divided_targets
+from .ai_text_changes import choose_object_or_spell
 
 
 #: What casting from the command zone is worth over casting the same card from
@@ -771,6 +773,39 @@ def _offers_taken(card: CardDefinition, offers: "dict[str, int] | None"):
     return taken
 
 
+def _better_alternative(
+    game: Game, player_index: int, card: CardDefinition, action: "CastAction",
+    alternatives: list[tuple],
+) -> "CastAction":
+    """*action* taking whichever of *alternatives* — ``(taps, colours,
+    alternative_cost_index)``, each a payable CR 118.9 alternative — its
+    rehearsal measures more, the first on a tie, or the first when none can
+    be rehearsed.
+
+    A permanent's cast is worth what it puts on the battlefield, which is
+    what the rehearsal reads — the face-down 2/2 a morph's {3} makes against
+    the face-up creature a Dream Halls discard makes, less the card the
+    discard spends — so it is asked of every card, not only a spell."""
+    best, best_swing = None, None
+    for taps, colours, index in alternatives:
+        variant = replace(
+            action, land_tap_indices=taps, land_tap_colors=colours,
+            alternative_cost_index=index,
+        )
+        rehearsal = _rehearse_announcement(
+            game, player_index, card, cast_announcement(variant), planned=variant,
+        )
+        rehearsal = _weighed_through_the_fight(
+            game, player_index, card, cast_announcement(variant), rehearsal,
+            planned=variant,
+        )
+        if rehearsal is None or not rehearsal.accepted:
+            continue
+        if best_swing is None or rehearsal.swing > best_swing:
+            best, best_swing = variant, rehearsal.swing
+    return best if best is not None else action
+
+
 def _cast_candidate_announcing(
     game: Game,
     player_index: int,
@@ -904,6 +939,8 @@ def _cast_candidate_announcing(
     # …and the roles announcement itself, one answer per role
     # (`CastAction.target_role_refs`); None for a spell naming no roles.
     role_refs: list[dict] | None = None
+    # A text change's two words (`CastAction.old_color` / ``new_color``).
+    text_words: tuple = (None, None)
     if aura_enchant_noun(card) is not None:
         aura_choice = _choose_aura_target(game, player_index, card)
         if aura_choice is None:
@@ -955,6 +992,19 @@ def _cast_candidate_announcing(
                 if _names_x_targets(card):
                     x_value = len(target_permanent_index)
                 # --- end W2G2 ---------------------------------------------------
+            elif (chosen := choose_object_or_spell(
+                game, player_index, card, target, x_value=x_value,
+            )) is not None:
+                # "Target spell or permanent" (a Lace, a text change) and a
+                # text change's words: the object and the words weighed
+                # together (`ai_text_changes`), or nothing worth the card.
+                if chosen == ():
+                    return None
+                target = chosen.seat
+                target_permanent_index = chosen.permanent_index
+                target_permanent_ids = chosen.permanent_ids
+                role_stack_index = chosen.stack_index
+                text_words = (chosen.old_color, chosen.new_color)
             else:
                 single = _choose_single_object_target(
                     game, player_index, card, target, x_value=x_value,
@@ -1021,6 +1071,10 @@ def _cast_candidate_announcing(
         return None
     tap_indices: tuple[int, ...] = ()
     tap_colors: tuple[str, ...] = ()
+    # CR 118.9a, where several alternatives apply: each payable one as
+    # ``(taps, colours, its index)`` — weighed against each other below, by
+    # rehearsal, once the cast they would make is built.
+    alternatives: list[tuple] = []
 
     # CR 601.2b: a cast made under a permission that requires an alternative
     # cost announces it (`PermittedCast.alternative_cost`) — that is what the
@@ -1123,8 +1177,6 @@ def _cast_candidate_announcing(
             # life and exiling a card is a real price, and a seat that took it
             # while holding the mana would be spending two resources to save
             # none.
-            if not _alternative_cost_is_payable(game, player_index, card, hand_index):
-                return None
             # CR 118.9d: the cost increases in force are "applied to that
             # alternative cost", so a pitch spell under Sphere of Resistance
             # owes {1} beside its card and its life. Planned here for the
@@ -1132,12 +1184,23 @@ def _cast_candidate_announcing(
             # proposal with nothing tapped behind it is refused, the same card
             # every turn — and through the one reader the offer's `payable`
             # and the castable highlight price the same announcement with.
-            plan = _alternative_cost_tap_plan(
-                game, player_index, card, extra_generic=extra_generic,
-            )
-            if plan is None:
+            #
+            # **Each applicable alternative that can be paid** (CR 118.9a
+            # applies one, the caster's choice): a morph card's face-down {3}
+            # beside Dream Halls' discard is two casts, and the one made is
+            # the one its rehearsal measures more (below). Named by index
+            # where several apply, or the cast path refuses the cast.
+            several = len(game.applicable_alternative_costs(player_index, card)) > 1
+            for index in payable_alternative_indices(game, player_index, card, hand_index):
+                plan = _alternative_cost_tap_plan(
+                    game, player_index, card, extra_generic=extra_generic,
+                    index=index if several else None,
+                )
+                if plan is not None:
+                    alternatives.append((*plan, index if several else None))
+            if not alternatives:
                 return None
-            tap_indices, tap_colors = plan
+            tap_indices, tap_colors, _named = alternatives[0]
             alternative_cost = True
         else:
             tap_indices, tap_colors = plan
@@ -1160,7 +1223,12 @@ def _cast_candidate_announcing(
         mode_index=_announced_mode(card),
         target_stack_index=role_stack_index,
         target_role_refs=role_refs,
+        old_color=text_words[0],
+        new_color=text_words[1],
+        alternative_cost_index=alternatives[0][2] if alternatives else None,
     )
+    if len(alternatives) > 1:
+        action = _better_alternative(game, player_index, card, action, alternatives)
     # **What the cast would do, asked of the engine** — for a spell, whose
     # whole worth is its resolution. The finished announcement is carried out
     # on a scratch copy of the game (`_rehearse_announcement`) and three

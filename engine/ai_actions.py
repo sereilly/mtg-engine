@@ -140,6 +140,21 @@ class CastAction:
     # and never named Cruel Revival's card. None for every spell naming no
     # roles. See `ai_targets._role_answer`.
     target_role_refs: list[dict] | None = None
+    # The two words a text change announces (CR 612), as mana symbols —
+    # `queue_from_hand`'s ``old_color`` replaced by ``new_color``: "replacing
+    # all instances of one color word with another" (Sleight of Mind), "…one
+    # basic land type with another" (Magical Hack, the symbol naming the land
+    # type). The fields did not exist, so every text change an AI seat cast
+    # rewrote nothing, and the rehearsal never proposed one. None for every
+    # other cast. See `ai_text_changes.choose_object_or_spell`.
+    old_color: str | None = None
+    new_color: str | None = None
+    # Which applicable alternative cost the cast takes (CR 118.9a), by its
+    # index among ``Game.applicable_alternative_costs`` — the cast path's
+    # ``alternative_cost_index``. None where one applies (the cast path takes
+    # it) or none is taken; named where several apply (a morph card's
+    # face-down {3} beside Dream Halls' discard), or the cast is refused.
+    alternative_cost_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -290,6 +305,11 @@ def cast_announcement(action: CastAction) -> dict:
         # where given it is the announcement, and the cast path derives the
         # seat and the ids above from it.
         "target_role_refs": action.target_role_refs,
+        # CR 612's two words (see `CastAction.old_color`).
+        "old_color": action.old_color,
+        "new_color": action.new_color,
+        # CR 118.9a: which alternative cost, where several apply.
+        "alternative_cost_index": action.alternative_cost_index,
     }
 
 

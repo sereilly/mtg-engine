@@ -2,10 +2,11 @@
 
 Since kg3 they derive the ``spell_or_permanent`` picker (a permanent or a spell
 on the stack) and a named spell's change is recorded on its stack object. The
-AI's single-object chooser answers that picker from its permanent half, as it
-does for the Laces (``ai_targets._choose_single_object_target``), so a seat
-nobody asks aims them at permanents still; what this holds is that nothing the
-union now reaches raises — the cast, the rehearsal of it, the resolution.
+AI weighs both halves of that picker and the words it names
+(``ai_text_changes.choose_object_or_spell``, kg3 `aiplay`, which casts each to
+effect in ``tests/ai/test_kg3_aiplay_text_changers.py``); what this holds is
+that nothing the union now reaches raises — the cast, the rehearsal of it, the
+resolution.
 """
 from __future__ import annotations
 

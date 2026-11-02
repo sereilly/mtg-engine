@@ -129,11 +129,18 @@ _OPPONENT_KINDS = frozenset({
     # CR 613 layer 2: taking a permanent is never aimed at one's own.
     "gain_control_of_target",
     "gain_control_until_eot",
+    # ...and the delayed steal bound to the target: "You gain control of
+    # that creature if it regenerates this way" (Debt of Loyalty).
+    "gain_control_of_bound_permanent",
     "steal_target_linked_to_source",
     "bid_life_for_control",
     # Removal one zone over from destroy: exile, the library, the hand.
     "exile_target_permanent",
     "exile_until_leaves_or_untaps",
+    # ...and the exile spent on a target an earlier step recorded: "Exile
+    # one of those creatures and put two +1/+1 counters on the other"
+    # (Cannibalize), where the counters are the price and the exile the point.
+    "exile_recorded_permanent",
     # …and the same removal spelled as phasing: "target creature phases out
     # until this enchantment leaves the battlefield" (Oubliette). The kind has
     # no category to answer for it.
@@ -403,6 +410,32 @@ def denies_its_target(instruction: OracleInstruction) -> bool:
 _SPENT_ON_THE_EARLIER_TARGET = frozenset({"prevent_damage_to_target_until_eot"})
 
 
+def _spent_on_the_earlier_target(instruction: OracleInstruction) -> "OracleInstruction | None":
+    """The step to read, for a step with no target of its own printed after
+    one that named one, when it acts on **that** object — or None.
+
+    Three ways the pool says so: a kind listed in
+    ``_SPENT_ON_THE_EARLIER_TARGET``; a step that acts on the permanents an
+    earlier step recorded (``permanents_from``: "Untap target creature and
+    gain control of it until end of turn", Threaten, whose steal reads the
+    untap's record); and a delayed trigger bound to the target
+    (``binds_target``: "Regenerate target creature. You gain control of that
+    creature if it regenerates this way", Debt of Loyalty), read as the
+    instruction it will carry out. Read alone, the untap and the haste made
+    Threaten "you", and the regeneration made Debt of Loyalty "you": an AI
+    seat cast each at its own creature, or held it, with the opposing one
+    measuring two to four times as much (the combat-trick and idle
+    censuses, kg3).
+    """
+    payload = instruction.payload or {}
+    if instruction.kind in _SPENT_ON_THE_EARLIER_TARGET or payload.get("permanents_from"):
+        return instruction
+    delayed = payload.get("instruction")
+    if payload.get("binds_target") and hasattr(delayed, "kind"):
+        return delayed
+    return None
+
+
 def _spell_object_target_steps(card: CardDefinition) -> tuple[OracleInstruction, ...]:
     """Every step of *card*'s spell program that names an **object** target,
     wrappers opened (``sequence``, ``if_then``, ``may``).
@@ -417,10 +450,11 @@ def _spell_object_target_steps(card: CardDefinition) -> tuple[OracleInstruction,
     **seat** role ("…and 2 damage to target player or planeswalker", Lunge) is
     left out: it says nothing about a permanent.
 
-    **And a step spent on the object an earlier step named** (one of
-    ``_SPENT_ON_THE_EARLIER_TARGET``, with no target of its own): the shield
-    in "Untap target attacking creature. Prevent all combat damage … dealt to
-    and dealt by that creature" is about the same creature the untap is.
+    **And a step spent on the object an earlier step named**
+    (:func:`_spent_on_the_earlier_target`, with no target of its own): the
+    shield in "Untap target attacking creature. Prevent all combat damage …
+    dealt to and dealt by that creature" is about the same creature the untap
+    is, and so are Threaten's steal and Debt of Loyalty's delayed one.
     """
     from .target_roles import SEAT_ROLE_KINDS, payload_own_role
 
@@ -449,10 +483,10 @@ def _spell_object_target_steps(card: CardDefinition) -> tuple[OracleInstruction,
                 found.append(instruction)
             elif (
                 found and targets is None
-                and instruction.kind in _SPENT_ON_THE_EARLIER_TARGET
                 and not payload.get("on_source")
+                and (spent := _spent_on_the_earlier_target(instruction)) is not None
             ):
-                found.append(instruction)
+                found.append(spent)
             for key in ("steps", "then", "else", "action", "otherwise"):
                 nested = (instruction.payload or {}).get(key)
                 if isinstance(nested, (list, tuple)):

@@ -175,7 +175,12 @@ TRICKS = frozenset({
     "Traitorous Greed", "Orim's Touch",
 })
 NOT_TRICKS = frozenset({"Sleight of Hand", "Dark Ritual", "Terror"})
-ALWAYS = TRICKS | NOT_TRICKS
+#: Unpinned at kg3 (`aiplay`): a steal until end of turn, and a regeneration
+#: whose delayed steal is bound to its target, are aimed across the table
+#: (``ai_target_sides._spent_on_the_earlier_target``). Swept every run, so
+#: the share they would otherwise fall in is not what keeps them honest.
+UNPINNED = frozenset({"Threaten", "Debt of Loyalty"})
+ALWAYS = TRICKS | NOT_TRICKS | UNPINNED
 
 
 def board(card, name: str) -> Game:
@@ -568,23 +573,7 @@ _OWN_ONLY = "its side is the opponent's and its one target is the caster's own; 
 #: own 2/2; at one it attacks for three. Sized by what each size does only
 #: where the X is life (``ai_casts._cast_candidate_sized``).
 _MANA_X = "an X in mana is the largest affordable, and +X/-X at that kills the attacker"
-#: Threaten ("Untap target creature and gain control of it until end of
-#: turn. That creature gains haste until end of turn."): held on three boards
-#: where a cast by hand wins — the rival (4.0), the wall (2.0) and after
-#: combat (4.5) — and cast for less than the best by hand on the sick one
-#: (0.0 against 2.0). Found at kg3 by the first whole-pool sweep the digest
-#: shares made (it was in neither position sample); the policy's reading of
-#: a steal until end of turn, left for an AI round.
-_STEAL = "a steal until end of turn is held where the stolen creature wins the fight"
-#: Debt of Loyalty ("Regenerate target creature. You gain control of that
-#: creature if it regenerates this way."): cast on the rival board for a
-#: swing of 2.0 where a cast by hand measures 9.0 — the idle census's own
-#: goal, at a creature of the caster's, on this board. Found at kg3, likewise.
-_REGENERATE_STEAL = "a regeneration that steals is aimed at the caster's own"
 HELD: dict = {
-    ("Threaten", None, "after"): _STEAL,
-    ("Threaten", None, "rival"): _STEAL,
-    ("Threaten", None, "wall"): _STEAL,
     ("About Face", None, "wall"): _SWITCH,
     ("Transmutation", None, "wall"): _SWITCH,
     ("Afflict", None, "open"): _OWN_ONLY,
@@ -618,8 +607,6 @@ SMALLER: dict = {
         ("Soul Burn", None, board): _SPEND_X
         for board in ("after", "bare", "open", "rival", "sick", "wall")
     },
-    ("Threaten", None, "sick"): _STEAL,
-    ("Debt of Loyalty", None, "rival"): _REGENERATE_STEAL,
 }
 PRICED: dict = {
     ("Desperate Gambit", None, "open"): _COIN,

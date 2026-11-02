@@ -327,6 +327,18 @@ def _rehearse_announcement(
             rehearsal = replace(
                 rehearsal, now=rehearsal.now + worth, lasting=rehearsal.lasting + worth,
             )
+        # ...and **the words a text change rewrites on a permanent** (CR
+        # 612): a Circle of Protection's colour, a protection, a landwalk
+        # are a standing's same number whichever word they name, and worth
+        # what that word is aimed at (`ai_text_changes.text_change_worth`).
+        now_worth, lasting_worth = _late.ai_text_changes.text_change_worth(
+            game, seat, card, announcement,
+        )
+        if now_worth or lasting_worth:
+            rehearsal = replace(
+                rehearsal, now=rehearsal.now + now_worth,
+                lasting=rehearsal.lasting + lasting_worth,
+            )
     return rehearsal
 
 
