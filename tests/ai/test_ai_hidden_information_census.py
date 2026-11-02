@@ -33,8 +33,10 @@ and score.
 
 Validated backwards, over the whole pool (1,073 ``(card, mode)``s) on the
 tree before the copy concealed anything: see ``BEFORE``, the rows that
-differed there, which the suite always sweeps. The suite runs a fixed share
-of the rest (``SAMPLE_EVERY``); run it as a module for all of it
+differed there, which the suite always sweeps. The suite runs one share of
+the rest (``SAMPLE_EVERY``, by a digest of the card's name); the full pass
+sweeps every share, each its own test (``WHOLE_PARTS``); run it as a module
+for all of it in one go
 (``python -m tests.ai.test_ai_hidden_information_census``). And it is
 validated backwards **in the suite** too: with the concealment taken out
 again (`test_the_sweep_can_tell`), the named rows differ.
@@ -54,7 +56,7 @@ from engine.ai_actions import cast_announcement
 from engine.ai_policy import choose_cast_action
 from tests.ai import test_ai_idle_cast_census as idle
 from tests.ai import test_ai_mode_chooser_census as modes
-from tests.helpers import _mk_card
+from tests.helpers import _mk_card, full_census, stable_part
 
 ME, OPP = 0, 1
 POOL = modes.POOL
@@ -77,9 +79,13 @@ OWN_LIBRARY = (
     "Lightning Bolt", "Grizzly Bears", "Craw Wurm", "Sol Ring", "Wrath of God",
 )
 
-#: The suite's share of the pool: every card whose place in the sorted
-#: population is a multiple of this, and the named ones.
+#: The suite's share of the pool: one card in this many, by a digest of its
+#: name (``tests.helpers.stable_part`` — never its place in the sorted
+#: population, which moved at every promotion), and the named ones.
 SAMPLE_EVERY = 12
+#: The other shares, each its own test under the full pass, so the whole pool
+#: is swept and the workers share it (1,397 rows took 331 s in one process).
+WHOLE_PARTS = tuple(range(1, SAMPLE_EVERY)) if full_census() else ()
 
 #: ``(card, mode)`` -> the proposals that differed, on the tree whose copy
 #: held the real hands and libraries. Each is swept by the suite.
@@ -148,10 +154,14 @@ def run(card, mode) -> dict:
     return row
 
 
-def census(sample: bool) -> list:
+def census(part: "int | None" = None) -> list:
+    """Every row, or one digest share of them: share 0 is the suite's sample
+    and carries the named cards."""
     rows = []
-    for position, (card, mode) in enumerate(idle.population()):
-        if sample and position % SAMPLE_EVERY and card.name not in ALWAYS:
+    for card, mode in idle.population():
+        if part is not None and stable_part(card.name, SAMPLE_EVERY) != part and not (
+            part == 0 and card.name in ALWAYS
+        ):
             continue
         rows.append(run(card, mode))
     return rows
@@ -197,13 +207,15 @@ class the_real_hidden_cards:
 
 @pytest.fixture(scope="module")
 def rows() -> list:
-    return census(sample=True)
+    return census(part=0)
 
 
 @pytest.mark.full
 def test_the_sweep_examined_the_pool(rows):
-    """The floor: a sweep that reaches nothing passes everything."""
-    assert len(rows) >= 85
+    """The floor: a sweep that reaches nothing passes everything. Measured
+    at kg3 on the digest share: 124 rows over 115 cards, 81 proposed in some
+    world."""
+    assert len(rows) >= 110
     assert ALWAYS <= {row["card"] for row in rows}
     # ...and that it is a sweep of proposals: a cast that is never proposed
     # is the same in every world whatever the copy shows.
@@ -211,7 +223,7 @@ def test_the_sweep_examined_the_pool(rows):
         row for row in rows
         if any(row["proposals"].get(world) is not None for world in WORLDS)
     ]
-    assert len(proposed) >= 45, len(proposed)
+    assert len(proposed) >= 70, len(proposed)
 
 
 @pytest.mark.full
@@ -221,6 +233,18 @@ def test_no_proposal_crashed(rows):
 
 @pytest.mark.full
 def test_a_proposal_is_the_same_whatever_the_hidden_cards_are(rows):
+    assert differing(rows) == {}
+
+
+@pytest.mark.full
+@pytest.mark.parametrize("part", WHOLE_PARTS)
+def test_the_rest_of_the_pool_share_by_share(part):
+    """The full pass's sweep of every other share: no crash, and every
+    proposal the same in every world. Measured at kg3 over the whole pool:
+    1,397 rows, 861 proposed in some world, none differing."""
+    rows = census(part=part)
+    assert len(rows) >= 60, (part, len(rows))
+    assert {tag(row): row["error"] for row in rows if row["error"]} == {}
     assert differing(rows) == {}
 
 
@@ -246,7 +270,7 @@ def test_duress_is_weighed_against_a_hand_it_cannot_see():
 
 
 if __name__ == "__main__":
-    rows = census(sample="--sample" in sys.argv)
+    rows = census(part=0 if "--sample" in sys.argv else None)
     found = differing(rows)
     errors = {tag(row): row["error"] for row in rows if row["error"]}
     proposed = sum(

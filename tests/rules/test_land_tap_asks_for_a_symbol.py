@@ -53,7 +53,7 @@ from engine.mana_could_produce import lands_could_produce
 from engine.mana_payment import generic_cost, plan_payment, untapped_mana_lands
 from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.models import Permanent
-from tests.helpers import _nosick
+from tests.helpers import _nosick, stable_sample
 
 SYMBOLS = ("W", "U", "B", "R", "G", "C")
 
@@ -133,7 +133,7 @@ def _lands(by_name):
         card.name for card in by_name.values()
         if "land" in card.type_line.lower().split("—")[0]
     )
-    return sorted(set(names[::STRIDE]) | set(PINNED))
+    return sorted({name for name in names if stable_sample(name, STRIDE)} | set(PINNED))
 
 
 def _adders(by_name):
@@ -188,12 +188,14 @@ def _census(by_name, lands=None):
 def test_what_a_land_is_tapped_for_is_one_answer_for_three_readers(_by_name):
     counts, wrong = _census(_by_name)
 
-    # Floors: a sweep that reaches nothing passes. Measured 116 boards, 696
-    # cases, 552 taps with an ability named, 201 cases that make the symbol.
-    assert counts["boards"] >= 100, counts
-    assert counts["cases"] >= 600, counts
-    assert counts["named"] >= 480, counts
-    assert counts["makes"] >= 180, counts
+    # Floors: a sweep that reaches nothing passes. Measured at kg3 on the
+    # digest sample: 136 boards, 816 cases, 636 taps with an ability named,
+    # 232 cases that make the symbol (the whole pool, under the full pass:
+    # 486, 2,916, 2,376 and 815, none wrong).
+    assert counts["boards"] >= 120, counts
+    assert counts["cases"] >= 720, counts
+    assert counts["named"] >= 560, counts
+    assert counts["makes"] >= 200, counts
     assert wrong == [], wrong[:20]
 
 

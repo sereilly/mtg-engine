@@ -93,7 +93,9 @@ def test_the_triggered_offer_takes_its_label_from_the_condition():
         trig.effect_kind for trig in compile_card_oracle(CATALOG["Ice Cave"]).triggered_abilities
         if trig.instruction is not None and trig.instruction.kind == "unless_player_pays"
     }
-    assert labels == {"triggered_counterspells"}
+    # The cast moment's word since kg3 (it read the counterspell it offers):
+    # ``tests/engine/test_kg3_chores_moment_labels.py``.
+    assert labels == {"triggered_cast"}
 
 
 @pytest.mark.parametrize("name, kind, label", [

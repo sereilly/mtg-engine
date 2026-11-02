@@ -38,6 +38,7 @@ from engine.card_loader import load_catalog
 from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
+from tests.helpers import stable_sample
 from web.app import app, store
 
 client = TestClient(app)
@@ -77,6 +78,8 @@ BOARDS: dict[str, tuple[list[str], tuple[str, ...]]] = {
 #: Every (board, card) pair is previewed where the card glows; one dark pair
 #: in this many is, because a dark card is the common case and a preview is a
 #: copy of the game.
+#: Which ones is a digest of the pair (``tests.helpers.stable_sample``), so a
+#: card added to the pool adds pairs and moves none; the full pass takes all.
 _DARK_STRIDE = 4
 
 
@@ -207,12 +210,10 @@ def census():
         me = _state(sid)["players"][0]
         glowing = set(me["playable_hand_indices"])
         table = copy.deepcopy(session.game)
-        dark_seen = 0
         for index, name in enumerate(hand):
             body = {"seat": 0, "action": "cast", "card_name": name, "target_seat": 1}
             if index not in glowing:
-                dark_seen += 1
-                if dark_seen % _DARK_STRIDE:
+                if not stable_sample(f"{label}: {name}", _DARK_STRIDE):
                     continue
                 found["dark_previewed"] += 1
                 if _preview(sid, body)["payable"]:
@@ -266,6 +267,8 @@ def test_no_dark_card_has_a_paying_plan(census):
 
 @pytest.mark.full
 def test_the_census_examined_enough(census):
+    # Measured at kg3: 248 castable, 284 dark pairs previewed on the digest
+    # sample (1,240 under the full pass, none payable).
     assert census["castable"] >= 200, census["castable"]
     assert census["dark_previewed"] >= 250, census["dark_previewed"]
 

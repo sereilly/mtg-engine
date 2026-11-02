@@ -109,7 +109,7 @@ def _parse_damage_dealt_event(
     elif stream.accept_phrase("a", "source"):
         # "Whenever **a source** deals damage to this creature" (Crag Saurian).
         # The unnarrowed damager, and an empty filter is exactly that — CR
-        # 109.5's word covers a spell and an ability as well as a permanent, so
+        # 120.7's word covers a spell and an ability as well as a permanent, so
         # there is nothing here for a noun phrase to describe. Below "a source
         # you control", which is a strict prefix of nothing and would be claimed
         # by this branch if it came first, and above the noun parser, which

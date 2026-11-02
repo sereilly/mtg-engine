@@ -719,7 +719,7 @@ def _prevent_desert_damage(game, payload: dict) -> ReplacementOutcome | None:
 #: **The source class is payload too.** "If **a creature** you control would
 #: deal damage to a permanent or player, it deals double that damage instead."
 #: (Gratuitous Violence.) The same sentence with the damager narrowed from CR
-#: 109.5's "source" to a creature — a spell or a noncreature permanent's
+#: 120.7's "source" to a creature — a spell or a noncreature permanent's
 #: ability is not one — and with the recipient left implicit at the end, which
 #: English may do because the sentence already named it. One row with an
 #: optional tail, so the third printing is not a second table.
@@ -762,7 +762,7 @@ def damage_multiplier_line(line: str) -> tuple[int, bool] | None:
 def _multiplier_source_answers(source, source_class: str) -> bool:
     """Whether a damage *source* is what the multiplier's printed class names.
 
-    "A source" is every source (CR 109.5). "A creature" is a creature
+    "A source" is every source (CR 120.7). "A creature" is a creature
     **permanent** — read through the layers (CR 613), so an animated land
     counts while animated — and never a spell or a card in another zone,
     whose damage source is its printed ``CardDefinition`` (no

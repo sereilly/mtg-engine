@@ -248,7 +248,7 @@ def damage_dealt_to_seat(game, seat: int | None) -> int:
 
 
 def damage_dealt_by_cast(game, item) -> int:
-    """How much damage one *cast* dealt this turn (CR 109.5's per-cast source)."""
+    """How much damage one *cast* dealt this turn (CR 120.7's per-cast source)."""
     if item is None:
         return 0
     return sum(

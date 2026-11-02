@@ -182,7 +182,7 @@ def damage_record_answers(record: TurnReplacement, payload: dict) -> bool:
 
     Every printed narrowing is a test here: "combat" (a ping ability is not),
     "a creature" at either end (a Lightning Bolt is not a creature source, and
-    a player is not a creature recipient), and the printed floor. CR 109.5
+    a player is not a creature recipient), and the printed floor. CR 113.7
     makes a creature's own ability's source the permanent, which is why the
     source test is the object's type and the combat test the event's flag.
     """

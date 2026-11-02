@@ -774,7 +774,7 @@ def chosen_damage_source(
     stack, and the two arrive on different fields — ``seat`` plus
     ``permanent_index`` for the first, a bottom-first ``stack_index`` for the
     second. A spell is recorded as its ``CardDefinition``, which is the source
-    a spell deals its damage with (CR 109.5) and the identity
+    a spell deals its damage with (CR 120.7) and the identity
     ``damage_redirects.source_matches`` then compares.
 
     Here rather than in either announcement path because **both** write the

@@ -72,7 +72,7 @@ from engine.grammar.vocabulary import CREATURE_TYPES
 from engine.layer_bridge import (computed_abilities, computed_colors,
                                  computed_types)
 from engine.models import CardDefinition, Permanent, _abilities_stripped
-from tests.helpers import _nosick, resolve_stack
+from tests.helpers import _nosick, resolve_stack, stable_sample
 
 
 def _mk(name, type_line, colors=(), power="2", toughness="2"):
@@ -327,19 +327,22 @@ def _census(by_name, names):
 
 
 def _sample():
-    return sorted(set(LORDS[::STRIDE]) | set(PINNED))
+    return sorted({name for name in LORDS if stable_sample(name, STRIDE)} | set(PINNED))
 
 
 @pytest.mark.cr("613.1f", "613.6", "613.8a", "613.8b")
 def test_no_lord_gives_anything_once_it_has_lost_its_abilities(_by_name):
     counts, leaks = _census(_by_name, _sample())
 
-    # Floors: a sweep that reaches nothing passes. Measured 39 lords and 124
-    # cases, 85 with the source older than its loss and 39 with it newer.
-    assert counts["lords"] >= 36, counts
-    assert counts["cases"] >= 110, counts
-    assert counts["source first"] >= 75, counts
-    assert counts["remover first"] >= 34, counts
+    # Floors: a sweep that reaches nothing passes. Measured at kg3 on the
+    # digest sample: 37 lords and 106 cases, 70 with the source older than its
+    # loss and 36 with it newer (the position sample had 39 / 124 / 85 / 39;
+    # the pins, one per derivation and per way of stripping, are in both). The
+    # whole pool, under the full pass: 94 lords, 274 cases, 182 and 92, no leak.
+    assert counts["lords"] >= 34, counts
+    assert counts["cases"] >= 96, counts
+    assert counts["source first"] >= 63, counts
+    assert counts["remover first"] >= 32, counts
     assert leaks == [], f"an ability that is not there still applied: {leaks[:12]}"
 
 

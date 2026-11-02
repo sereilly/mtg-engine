@@ -2,8 +2,10 @@
 
 ``effect_kind`` is a *label*, never dispatch. It reaches ``SimulationResult.effect_kind``
 (the string the duel scripts and the per-card tests report a cast by),
-``scripts/support_report.py``'s buckets, and ``StackItem.ability_effect_kind``
-(the stack object's own copy of the same report).
+``StackItem.ability_effect_kind`` (the stack object's own copy of the same
+report) and ``scripts/oracle_diff.py``'s stored programs. Nothing else reads
+it: ``scripts/support_report.py`` buckets by card type and refusal, never by
+label, and whether a delayed trigger is one is the enqueue's ``delayed`` flag.
 
 **Its prefix says nothing about the ability's kind**, and nothing may read it as
 if it did: ``add_counter_to_target`` is ``triggered_counter`` in the activated
@@ -883,10 +885,25 @@ TRIGGERED_LABELS: dict[str, str] = {
     # productions that emit it.
     #
     # Each takes the family of what the ability *does*, which is the whole
-    # contract of this table: the label feeds `SimulationResult`, the support
-    # report's buckets, and the `triggered_` prefix the web layer turns into a
-    # stack item's `is_triggered`.
-    "if_then": "triggered_label",
+    # contract of this table: the label feeds `SimulationResult` and the
+    # stack item's own copy of it.
+    #
+    # `if_then` is the exception in this block: a **wrapper**, condition-blind
+    # here, so it names its shape — `triggered_conditional`, the twin of
+    # `activated_conditional` — for every condition that has no row of its own
+    # in TRIGGERED_LABELS_BY_CONDITION (an entry trigger, a death, an end step).
+    # It read `triggered_label` until kg3, a word naming neither the shape nor
+    # the moment; Insubordination's end step and Erg Raiders' are the same
+    # wrapper and take the same word.
+    "if_then": "triggered_conditional",
+    # Lim-Dûl's Hex and Oath of Lim-Dûl: "…for each player, …" / "for each 1
+    # life you lost, …". A **wrapper** (its payload carries the step it
+    # repeats), so condition-blind it names the shape, as `activated_repeated`
+    # does for Heroism; the upkeep's row below still lets that moment name
+    # itself. Oath's "whenever you lose life" had a row reading
+    # `spell_pattern` — the fallback marker, which is a leaf's bucket too —
+    # until kg3.
+    "for_each": "triggered_repeated",
     "remove_all_counters_from_matching": "triggered_counter",
     "search_library": "triggered_library",
     # Skyship Weatherlight's entry: "search your library for any number of
@@ -1481,17 +1498,33 @@ TRIGGERED_LABELS: dict[str, str] = {
     "target_player_loses_game": "triggered_game_end",
 }
 
-# The one instruction kind whose label depends on what triggered it: `may` wraps
+# The wrapper kinds whose label depends on what triggered them: `may` wraps
 # whatever the optional clause offers, so the wrapper says nothing about the
-# effect. Verduran Enchantress's optional draw was labelled a draw; the
-# pay-{1}-gain-1-life cycle (Crystal Rod and its four siblings, Soul Net) was
-# never claimed by a rule at all and kept the `spell_pattern` marker.
+# effect, and the **condition names the moment** — never the effect behind the
+# wrapper, which differs card by card. One condition, one word: every wrapper
+# row sharing a condition shares its label, and a word that is also a leaf
+# effect's bucket names the moment only where the moment is of that kind (a
+# draw, a discard, a destruction) — both held by
+# ``tests/engine/test_kg3_chores_moment_labels.py``. Until kg3 eleven rows named
+# the effect of the card that prompted them (Thelon's Chant's damage,
+# Insubordination's destruction, Verduran Enchantress's draw, Bazaar of
+# Wonders' counterspell) or the `spell_pattern` fallback marker.
 TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
-    # Bazaar of Wonders: "Whenever a player casts a spell, counter it if a card
-    # with the same name is in a graveyard...". An `if_then` wrapper, so the
-    # condition is the only half of the pair that says anything -- and what it
-    # says is that this is a counterspell, which is the bucket Mana Vortex's
-    # own cast trigger already takes below.
+    # The cast moment: "whenever a player casts a spell" / "whenever an
+    # opponent casts" / "whenever you cast an enchantment spell" / "when you
+    # cast this spell". Bazaar of Wonders ("counter it if …"), Ice Cave (a
+    # price offered round the table), Mana Vortex (its own counter), Verduran
+    # Enchantress (a draw), the Crystal Rod cycle and Rhystic Study (life, a
+    # card) — what each offers differs, and the moment, a spell cast, does
+    # not: `triggered_cast`, the word ("you_cast_spell", "may") already had.
+    # The first three read `triggered_counterspells`, the Enchantress
+    # `triggered_draw`, the rest `spell_pattern`.
+    ("spell_cast", "if_then"): "triggered_cast",
+    ("spell_cast", "unless_player_pays"): "triggered_cast",
+    ("spell_cast", "may"): "triggered_cast",
+    ("opponent_casts_spell", "may"): "triggered_cast",
+    ("enchantment_cast", "may"): "triggered_cast",
+    ("self_cast", "may"): "triggered_cast",
     # --- Mercadian Masques, at its promotion -----------------------------
     # Five `may` wrappers over three conditions, each taking the bucket the
     # condition's nearest neighbour already has. The set prints
@@ -1510,12 +1543,9 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # Foster, beside `dies` and `attached_creature_dies`: whose creature died
     # narrows the trigger, not what the ability is about.
     ("creature_you_control_dies", "may"): "triggered_death",
-    ("spell_cast", "if_then"): "triggered_counterspells",
-    # Ice Cave: "Whenever a player casts a spell, any other player may pay that
-    # spell's mana cost. If a player does, counter the spell." The chain kind
-    # says only that a price is offered round the table; the condition is what
-    # says this is a counterspell, the bucket the conditional one above takes.
-    ("spell_cast", "unless_player_pays"): "triggered_counterspells",
+    # Fecundity, Inheritance, Soul Net: "whenever a creature dies, … may …".
+    # The death moment, beside the two rows above; it read `spell_pattern`.
+    ("creature_dies", "may"): "triggered_death",
     # Icy Prison: "At the beginning of your upkeep, sacrifice this enchantment
     # unless any player pays {3}." The wrapper says nothing about what is
     # offered, so the condition names the moment, beside ("upkeep_self", "may").
@@ -1525,9 +1555,6 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # would have been reported as an upkeep effect rather than falling back,
     # which is what makes this table name it.
     ("upkeep_self", "unless_player_pays"): "upkeep_effect",
-    ("creature_dies", "may"): "spell_pattern",
-    ("enchantment_cast", "may"): "triggered_draw",
-    ("spell_cast", "may"): "spell_pattern",
     # Living Artifact, once its fused reading went away. The condition is what
     # says this is an upkeep effect; the wrapper still says nothing, and the
     # optional clause behind it ("remove a counter … gain 1 life") is neither a
@@ -1541,9 +1568,6 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # payload, not a different kind of ability.
     ("upkeep_enchanted_controller", "may"): "upkeep_effect",
     ("upkeep_each", "may"): "upkeep_effect",
-    # Mana Vortex counters its own spell unless a land is sacrificed. The
-    # condition is what makes this a cast trigger; the wrapper is silent.
-    ("self_cast", "may"): "triggered_counterspells",
     # Onslaught's cycling triggers. Every one of the ten "when you cycle this
     # card" lines and four of the five "whenever a player cycles a card" lines
     # open "you may", and what they offer ranges over life, a shield, a tap, a
@@ -1621,14 +1645,18 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # --- Ice Age's promotion ---
     # `may`, `if_then` and `for_each` are wrappers: they say a decision or a
     # loop happens and nothing about what it does, so the condition is the only
-    # half of the pair that names the moment.
-    ("opponent_casts_spell", "may"): "spell_pattern",
-    ("creature_attacks", "may"): "spell_pattern",
-    ("permanent_becomes_tapped", "may"): "spell_pattern",
+    # half of the pair that names the moment. Three of these read
+    # `spell_pattern` — the fallback marker, which is also a leaf's bucket —
+    # until kg3: an attack is the combat moment, and a permanent becoming
+    # tapped is the tap moment, as ("permanent_becomes_untapped", "may") is the
+    # untap's. Oath of Lim-Dûl's `for_each` now takes the condition-blind
+    # shape row, and Insubordination's end-step `if_then` (which read
+    # `triggered_destruction`, though the card deals damage) the conditional
+    # one, as every other end step's `if_then` does.
+    ("creature_attacks", "may"): "triggered_combat",
+    ("permanent_becomes_tapped", "may"): "triggered_tap",
     ("upkeep_self", "if_then"): "upkeep_effect",
     ("upkeep_self", "for_each"): "upkeep_effect",
-    ("you_lose_life", "for_each"): "spell_pattern",
-    ("end_step_enchanted_controller", "if_then"): "triggered_destruction",
     # --- Fallen Empires, at its promotion -----------------------------------
     # Goblin Flotilla's "At the beginning of each combat, unless you pay {R},
     # …", beside ("combat_your_turn", "may") and the other combat offers above.
@@ -1638,14 +1666,14 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     ("combat", "may"): "triggered_combat",
     # Thelon's Chant and Tourach's Chant: "Whenever a player puts a <land type>
     # onto the battlefield, this enchantment deals 3 damage to that player
-    # unless they put a -1/-1 counter on a creature they control." The offer is
-    # the damage's price, so the ability reports what it *does* when the offer
-    # is declined. It cited `unless_player_pays`' row for Scarwood Bandits,
-    # which read the same way until the kg round gave that wrapper its shape's
-    # label. This row still names the declined branch rather than the moment,
-    # which is the rule the rest of this table follows; no guard can tell the
-    # two apart, because a moment's word and an effect's are both labels.
-    ("matching_permanent_enters", "may"): "triggered_damage",
+    # unless they put a -1/-1 counter on a creature they control." — and eight
+    # more "whenever a <noun> enters, … may …" (Aura Shards destroys, Mana
+    # Echoes adds mana, Totem Speaker gains life). The moment is a permanent
+    # entering, so the word is ("enters_battlefield", "may")'s. It read
+    # `triggered_damage`, the Chants' declined branch, until kg3; the guard
+    # that tells a moment's word from an effect's is the declared list of
+    # shared words in ``test_kg3_chores_moment_labels``.
+    ("matching_permanent_enters", "may"): "triggered_etb",
     # --- Odyssey, at its promotion ------------------------------------------
     # `may` says nothing, so each row names the moment, as M21's and Legends'
     # blocks above do. Confessor: "Whenever a player discards a card, you may

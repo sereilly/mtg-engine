@@ -441,7 +441,7 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
         # "Whenever a source deals damage to this creature, **that source's
         # controller** gains control of this creature." (Crag Saurian.) The
         # controller of the object the firing event was about — for a damage
-        # event, whatever dealt the damage (CR 109.5), which the damage seam
+        # event, whatever dealt the damage (CR 120.7), which the damage seam
         # derives once and freezes into the trigger's context. A board read
         # cannot answer it: the source may be a spell, which has no controller
         # at all, and by resolution it has left the stack (CR 603.10).

@@ -381,7 +381,7 @@ def _source_in_subject(game, shield: Shield, source) -> bool:
 
     **A source that is not a permanent gets the one question a card can answer.**
     A spell reaches the damage paths as its printed ``CardDefinition``
-    (CR 109.5), which has no battlefield, no controller and no layers — so every
+    (CR 120.7), which has no battlefield, no controller and no layers — so every
     key in the vocabulary is unanswerable about it except ``named``, which is a
     characteristic of the card itself. "…would be dealt to this creature **by
     Torrent of Lava** this turn" names a spell and nothing else, and answering
@@ -479,7 +479,7 @@ def _resolving_object_shields(game) -> list[Shield]:
     matching the damage's source.
 
     **That is the only way a spell can be recognised.** A spell's damage source
-    is its printed ``CardDefinition`` (CR 109.5) — one object per *card*, handed
+    is its printed ``CardDefinition`` (CR 120.7) — one object per *card*, handed
     out once per copy by the deck builder — so a shield matching on the source
     would silence a second copy too, on a card that named one. A ``StackItem``
     is one object per cast, and this seam is where it is knowable.
@@ -793,7 +793,7 @@ def _protection_prevents_damage(game, event: dict) -> PreventionOutcome | None:
 
 
 def _source_label(source) -> str:
-    """A damage source's name for the log, whichever of CR 109.5's two shapes it
+    """A damage source's name for the log, whichever of CR 120.7's two shapes it
     is — ``recipient_label``'s twin at the other end of the event."""
     card = getattr(source, "effective_card", None) or getattr(source, "card", source)
     return getattr(card, "name", None) or "that source"
@@ -1053,7 +1053,7 @@ def _damage_the_source_controller(
     * how much, because "that much" is what this shield absorbed and no arming
       knows it;
     * **whose** source it was — ``source_seat``, derived once inside
-      ``deal_damage`` for CR 109.5's reason: a spell's ``source`` is the card as
+      ``deal_damage`` for CR 120.7's reason: a spell's ``source`` is the card as
       printed, shared by every copy and controlled by nobody, so no read of it
       can answer.
 

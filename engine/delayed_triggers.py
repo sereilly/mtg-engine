@@ -665,6 +665,9 @@ class DelayedTrigger:
             "card": self.card,
             "instruction": self.instruction,
             "effect_kind": "triggered_delayed",
+            # The fact the label used to be read for (CR 603.2d: a delayed
+            # ability never triggers an additional time), stated directly.
+            "delayed": True,
             "ability_text": self.source_name,
             # CR 603.7c for a chosen *player*: the ability is about the seat the
             # creating ability targeted, handed over on the field every "that

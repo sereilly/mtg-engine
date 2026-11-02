@@ -21,8 +21,9 @@ This guard holds that, over the files that act — every module under
   position nowhere;
 * every positional sampler left anywhere else is counted, per module
   (``POSITIONAL_SAMPLERS``), so a new one is noticed and a converted one
-  tightens the table. Each of those reads the **shipped** pool, which moves
-  only at a promotion: what each re-samples is said beside its row.
+  tightens the table. The table is empty since kg3, which converted the last
+  ten — each over the **shipped** pool, so each had re-sampled at every
+  promotion — so a positional sampler anywhere is now a red.
 
 A partition (``names[part::N]`` with ``part`` over every part) is not a sample
 — every row is still examined, only the test id that reports it moves — and is
@@ -40,28 +41,25 @@ TESTS = Path(__file__).resolve().parents[1]
 #: The name a position counter is compared against, by convention.
 _SHARE_WORDS = ("STRIDE", "SAMPLE", "EVERY")
 
-#: Positional samplers left, per module — each over the shipped pool
-#: (``load_catalog()`` / ``manifest_set_paths()``), so each re-samples at a
-#: promotion and at nothing else. Converting one is a one-line change to
-#: ``stable_sample`` plus re-measuring its floors once.
-POSITIONAL_SAMPLERS = {
-    # `position % SAMPLE_EVERY` over `modes.POOL` (the shipped pool by name);
-    # each has a module mode that sweeps everything.
-    "ai/test_ai_activation_effective_card_census.py": 1,
-    "ai/test_ai_combat_trick_census.py": 1,
-    "ai/test_ai_hidden_information_census.py": 1,
-    "ai/test_ai_idle_cast_census.py": 1,
-    # `_units[::4]` over the catalog's permanent spells.
-    "engine/test_permanent_spell_target_readers_census.py": 1,
-    # `rng.sample(pool, 2)`: seeded pairs drawn from a list the catalog fills.
-    "engine/test_trigger_order_census.py": 1,
-    # `lands[::STRIDE]` / `names[::STRIDE]` / `LORDS[::STRIDE]` beside pins.
-    "rules/test_gained_land_type_mana.py": 1,
-    "rules/test_land_tap_asks_for_a_symbol.py": 1,
-    "rules/test_static_of_a_source_that_lost_its_abilities.py": 1,
-    # `dark_seen % _DARK_STRIDE` over the catalog's lands.
-    "ui/test_auto_tap_plan_census.py": 1,
-}
+#: Positional samplers left, per module. Empty since kg3, which switched the
+#: last ten (each over the shipped pool, so each had re-sampled at every
+#: promotion) to ``stable_sample`` and re-measured their floors; a new one is
+#: a red here, not a row.
+POSITIONAL_SAMPLERS: dict[str, int] = {}
+
+#: The modules kg3 converted, each of which now samples by the digest.
+CONVERTED_AT_KG3 = frozenset({
+    "ai/test_ai_activation_effective_card_census.py",
+    "ai/test_ai_combat_trick_census.py",
+    "ai/test_ai_hidden_information_census.py",
+    "ai/test_ai_idle_cast_census.py",
+    "engine/test_permanent_spell_target_readers_census.py",
+    "engine/test_trigger_order_census.py",
+    "rules/test_gained_land_type_mana.py",
+    "rules/test_land_tap_asks_for_a_symbol.py",
+    "rules/test_static_of_a_source_that_lost_its_abilities.py",
+    "ui/test_auto_tap_plan_census.py",
+})
 
 
 def _is_share_name(node: ast.AST) -> bool:
@@ -171,7 +169,7 @@ def test_every_positional_sampler_left_is_counted():
     assert {
         "regressions/test_ody_w2g2_zone_cast_census.py",
         "rules/test_loses_all_abilities_timestamp_order.py",
-    } <= set(users), users
+    } | CONVERTED_AT_KG3 <= set(users), sorted(CONVERTED_AT_KG3 - set(users))
 
 
 def test_a_digest_sample_is_a_fact_about_the_row(monkeypatch):

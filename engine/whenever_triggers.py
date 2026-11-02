@@ -319,7 +319,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"|(?P<damager_attached>enchanted (?:creature|artifact|enchantment|land|permanent))"
      r"|a source (?P<damager_controller>you) control"
      # "Whenever **a source** deals damage to this creature" (Crag Saurian).
-     # The damager narrowed by nothing at all — CR 109.5's word covers a spell,
+     # The damager narrowed by nothing at all — CR 120.7's word covers a spell,
      # an ability and a permanent alike, and no `ObjectFilter` can name the
      # first two. So it is a **marker** group rather than a subject one: read
      # through the noun parser, "a source" would become a filter, and a filter

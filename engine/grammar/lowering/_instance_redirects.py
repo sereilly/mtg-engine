@@ -227,7 +227,7 @@ def _lower_spell_class_instance_redirect(
 
     ``redirection._lower_source_class_redirect`` with the class named as a kind
     of **spell** rather than as a noun phrase over permanents — a spell's
-    damage source is its printed card (CR 109.5), which a noun phrase cannot
+    damage source is its printed card (CR 120.7), which a noun phrase cannot
     be asked of — so it is the same instruction with the class on a different
     key, and the record behind it is the one Harsh Judgment's static sentence
     derives (``DamageRedirect.spell_sources``).

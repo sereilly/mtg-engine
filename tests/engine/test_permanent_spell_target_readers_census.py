@@ -49,7 +49,7 @@ from engine.targeting import (
     stack_object_target_spec,
 )
 from engine.cast_targets import cast_announced_entry_trigger
-from tests.helpers import resolve_stack
+from tests.helpers import resolve_stack, stable_sample
 
 #: Floors, because a sweep that reaches nothing passes. 52 permanents, 14
 #: watchers and 75 casts on the day.
@@ -267,10 +267,13 @@ def test_no_reader_finds_a_target_on_a_permanent_spell(_pool, _units, _watchers)
 def test_the_census_sees_a_reader_that_trusts_the_fields(_pool, _units, _watchers, monkeypatch):
     """Backwards: with the one predicate answering False — a permanent spell
     read as the fields it carries — the readers, the pickers and Reparations
-    are each named. One unit in four, which is enough to name them all."""
+    are each named. One unit in four, by a digest of its name
+    (``tests.helpers.stable_sample``), which is enough to name them all."""
     monkeypatch.setattr(stack_targets, "permanent_spell_targets_nothing", lambda item: False)
 
-    findings, lines, examined = _census(_pool, _units[::4], _watchers)
+    findings, lines, examined = _census(
+        _pool, [unit for unit in _units if stable_sample(unit[0].name, 4)], _watchers,
+    )
 
     assert examined >= _MIN_CASTS // 5, examined
     for reader in (

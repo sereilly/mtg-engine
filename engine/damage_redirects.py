@@ -196,7 +196,7 @@ class DamageRedirect:
     #: ``source`` is one object, ``sources`` a noun phrase asked of a permanent,
     #: and this is a class of **spells** — ``(card types, colour symbol)`` —
     #: which a noun phrase cannot be asked of, because a spell's damage source
-    #: is its printed card (CR 109.5) and has no battlefield state to read.
+    #: is its printed card (CR 120.7) and has no battlefield state to read.
     #: Answered by :func:`spell_source_matches`. ``None`` is every other record.
     spell_sources: "tuple[tuple[str, ...], str | None] | None" = None
     #: "The next time damage would be dealt to this creature **and/or you**"
@@ -344,7 +344,7 @@ def source_matches(chosen, source) -> bool:
     ``CardDefinition``, so comparing cards would move the damage of a *second*
     Serra Angel the player never pointed at — the same look-alike bug the
     control seam bans ``list.index`` for. A chosen *spell* has only its card to
-    be known by (CR 109.5: a spell's source is the card as printed), so that
+    be known by (CR 120.7: a spell's source is the card as printed), so that
     comparison stays card-identity, and it is exactly why a spell cannot be
     told apart from a second copy of itself in the same deck.
     """
@@ -434,7 +434,7 @@ def resolving_object_redirects(game) -> list[DamageRedirect]:
     source.
 
     **That is the only way a spell can be recognised.** A spell's damage source
-    is its printed ``CardDefinition`` (CR 109.5) — one object per *card*, handed
+    is its printed ``CardDefinition`` (CR 120.7) — one object per *card*, handed
     out once per copy by the deck builder — so a record matching on the source
     would move a second copy's damage too, on a card that named one. A
     ``StackItem`` is one object per cast, and this seam is where it is knowable.
@@ -686,7 +686,7 @@ def source_class_matches(game, redirect: DamageRedirect, source) -> bool:
     is — a record that names no class narrows by nothing.
 
     Only a permanent can answer a printed noun phrase: a spell's source is its
-    ``CardDefinition`` (CR 109.5), which has no battlefield state for the filter
+    ``CardDefinition`` (CR 120.7), which has no battlefield state for the filter
     to read, and handing one to the matcher would answer True for every key it
     could not test. So a non-permanent source is outside every class-scoped
     record rather than inside all of them — the narrow direction, and the one a

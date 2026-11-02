@@ -24,7 +24,7 @@ from . import ast
 #: the file was incidental.
 #:
 #: **"aura" is one of them**, and its absence was the whole of six Urza's
-#: Saga cards. A card names itself by whatever noun it likes (CR 109.5), and
+#: Saga cards. A card names itself by whatever noun it likes (CR 700.7), and
 #: the two sibling tables that answer the same question -- ``readers._SELF_NOUNS``
 #: and ``delay_openers._SELF_TYPE_WORDS``, whose comment already claims to be
 #: "the same set ``triggers.py`` reads after 'this'" -- both carried the word

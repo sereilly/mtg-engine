@@ -977,7 +977,7 @@ def _g5c_board(*battlefields):
 # "Whenever **a source** deals damage to **this creature**, **that source's
 # controller** gains control of this creature." Three pieces the engine had
 # separately and had never been asked for together: an unnarrowed damager (CR
-# 109.5's "source" covers a spell and an ability, which no `ObjectFilter` can
+# 120.7's "source" covers a spell and an ability, which no `ObjectFilter` can
 # name), the ability's own permanent as the *recipient*, and the seat the damage
 # seam already derives for every event.
 

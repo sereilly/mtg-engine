@@ -2031,7 +2031,7 @@ def test_702_16e_protection_prevents_noncombat_damage_from_a_permanent(set_pool)
 @pytest.mark.cr("702.16e")
 def test_702_16e_protection_prevents_damage_from_a_spell_source(set_pool):
     """Earthquake is a *spell*, so its damage source is the printed
-    ``CardDefinition`` (CR 109.5) and not a permanent.
+    ``CardDefinition`` (CR 120.7) and not a permanent.
 
     The four combat call sites could only ever hand over a creature, so the
     quality reader had a permanent-shaped signature and ``has_type`` would have

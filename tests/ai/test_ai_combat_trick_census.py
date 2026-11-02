@@ -77,10 +77,12 @@ the fight's. (Four more are in the population because the digest the
 census compares with, ``ai_rehearsal.position_digest``, now reads exile and
 the standing permissions by name.)
 
-The whole pool takes several minutes, so the suite runs a fixed share of the
-population (``SAMPLE_EVERY``) plus every card named in a pin or in ``ALWAYS``,
-split across the boards so ``-n`` can share it out; run it as a module
-(``python -m tests.ai.test_ai_combat_trick_census``) for all of it.
+The whole pool takes several minutes, so the suite runs one share of the
+population (``SAMPLE_EVERY``, by a digest of the card's name) plus every card
+named in a pin or in ``ALWAYS``, split across the boards so ``-n`` can share it
+out; the full pass sweeps every share on every board, each its own test
+(``WHOLE_PARTS``); run it as a module
+(``python -m tests.ai.test_ai_combat_trick_census``) for all of it in one go.
 
 It reads nothing the policy's second reading added — the fight is
 ``ai_combat``'s driver, the run-out and "is anything left" are its own
@@ -119,6 +121,7 @@ from engine.models import Permanent
 from tests.ai import test_ai_mode_chooser_census as modes
 from tests.ai.test_ai_idle_cast_census import only_mode
 from tests.ai.test_ai_idle_cast_census import population as spells
+from tests.helpers import full_census, stable_part
 
 ME, OPP = 0, 1
 POOL = modes.POOL
@@ -165,6 +168,8 @@ X_VALUES = (1, 2, 3, 5, 10)
 #: tricks this round was briefed with, and three that are not tricks — a
 #: draw, a ritual and a removal spell, each of which must stay out of it.
 SAMPLE_EVERY = 4
+#: The other shares, each its own test per board under the full pass.
+WHOLE_PARTS = tuple(range(1, SAMPLE_EVERY)) if full_census() else ()
 TRICKS = frozenset({
     "Fog", "Giant Growth", "Hatred", "Jump", "Twiddle", "Seething Anger",
     "Traitorous Greed", "Orim's Touch",
@@ -491,12 +496,15 @@ def run(card, mode, name: str) -> dict:
 EXAMINED = Counter()
 
 
-def population(sample: bool) -> list:
+def population(part: "int | None" = None) -> list:
     """``(card, mode)`` for every supported instant and sorcery priced by the
-    fight on the ``PROBE`` board — of a fixed share of them when *sample*."""
+    fight on the ``PROBE`` board — of one digest share of them when *part* is
+    given (``tests.helpers.stable_part``; share 0 carries every swept card)."""
     found = []
-    for position, (card, mode) in enumerate(spells()):
-        if sample and position % SAMPLE_EVERY and card.name not in SWEPT:
+    for card, mode in spells():
+        if part is not None and stable_part(card.name, SAMPLE_EVERY) != part and not (
+            part == 0 and card.name in SWEPT
+        ):
             continue
         EXAMINED["spells"] += 1
         if in_population(card, mode):
@@ -560,7 +568,23 @@ _OWN_ONLY = "its side is the opponent's and its one target is the caster's own; 
 #: own 2/2; at one it attacks for three. Sized by what each size does only
 #: where the X is life (``ai_casts._cast_candidate_sized``).
 _MANA_X = "an X in mana is the largest affordable, and +X/-X at that kills the attacker"
+#: Threaten ("Untap target creature and gain control of it until end of
+#: turn. That creature gains haste until end of turn."): held on three boards
+#: where a cast by hand wins — the rival (4.0), the wall (2.0) and after
+#: combat (4.5) — and cast for less than the best by hand on the sick one
+#: (0.0 against 2.0). Found at kg3 by the first whole-pool sweep the digest
+#: shares made (it was in neither position sample); the policy's reading of
+#: a steal until end of turn, left for an AI round.
+_STEAL = "a steal until end of turn is held where the stolen creature wins the fight"
+#: Debt of Loyalty ("Regenerate target creature. You gain control of that
+#: creature if it regenerates this way."): cast on the rival board for a
+#: swing of 2.0 where a cast by hand measures 9.0 — the idle census's own
+#: goal, at a creature of the caster's, on this board. Found at kg3, likewise.
+_REGENERATE_STEAL = "a regeneration that steals is aimed at the caster's own"
 HELD: dict = {
+    ("Threaten", None, "after"): _STEAL,
+    ("Threaten", None, "rival"): _STEAL,
+    ("Threaten", None, "wall"): _STEAL,
     ("About Face", None, "wall"): _SWITCH,
     ("Transmutation", None, "wall"): _SWITCH,
     ("Afflict", None, "open"): _OWN_ONLY,
@@ -590,8 +614,12 @@ LOSSES: dict = {
 #: nothing; the fight has nothing to do with the X.
 _SPEND_X = "an X spent only in black and/or red is sized short of what the pool pays"
 SMALLER: dict = {
-    ("Soul Burn", None, board): _SPEND_X
-    for board in ("after", "bare", "open", "rival", "sick", "wall")
+    **{
+        ("Soul Burn", None, board): _SPEND_X
+        for board in ("after", "bare", "open", "rival", "sick", "wall")
+    },
+    ("Threaten", None, "sick"): _STEAL,
+    ("Debt of Loyalty", None, "rival"): _REGENERATE_STEAL,
 }
 PRICED: dict = {
     ("Desperate Gambit", None, "open"): _COIN,
@@ -612,8 +640,18 @@ _POPULATION: list = []
 
 def _population() -> list:
     if not _POPULATION:
-        _POPULATION.extend(population(sample=True))
+        _POPULATION.extend(population(part=0))
     return _POPULATION
+
+
+#: Each other share's population, read once per process.
+_SHARES: dict = {}
+
+
+def _share(part: int) -> list:
+    if part not in _SHARES:
+        _SHARES[part] = population(part=part)
+    return _SHARES[part]
 
 
 PINS = {"held": HELD, "idle": IDLE, "loss": LOSSES, "smaller": SMALLER, "priced": PRICED}
@@ -625,7 +663,8 @@ def test_the_population_is_the_pool_s_combat_tricks():
     everything."""
     population = _population()
     assert EXAMINED["spells"] >= 300, dict(EXAMINED)
-    assert len(population) >= 60, len(population)
+    # 89 at kg3 on the digest share (84 cards); 66, 74 and 74 in the others.
+    assert len(population) >= 80, len(population)
     named = {card.name for card, _mode in population}
     assert TRICKS <= named, sorted(TRICKS - named)
     assert not NOT_TRICKS & named, sorted(NOT_TRICKS & named)
@@ -637,11 +676,14 @@ def test_the_population_is_the_pool_s_combat_tricks():
 #: leaves anything and the policy held it. A board that reaches none of the
 #: three says nothing about whether a trick is cast for the fight it changes.
 #: (On the tree before the fight was weighed, every board's third number but
-#: ``rival``'s was a handful: the trick was cast there anyway.)
+#: ``rival``'s was a handful: the trick was cast there anyway.) Re-measured at
+#: kg3 on the digest share, before Threaten and Debt of Loyalty were pinned
+#: in: after (89, 20, 58), bare (42, 9, 32), lethal and open (88, 25, 33),
+#: rival (89, 50, 20), sick (89, 14, 59), wall (89, 36, 39).
 FLOORS = {
-    "after": (60, 12, 40), "bare": (18, 0, 15), "lethal": (60, 20, 20),
-    "open": (60, 20, 20), "rival": (60, 35, 12), "sick": (60, 8, 40),
-    "wall": (60, 30, 22),
+    "after": (80, 16, 50), "bare": (36, 6, 28), "lethal": (80, 21, 28),
+    "open": (80, 21, 28), "rival": (80, 44, 16), "sick": (80, 11, 52),
+    "wall": (80, 31, 34),
 }
 
 
@@ -672,8 +714,27 @@ def test_each_trick_is_cast_for_the_fight_it_changes_and_only_then(name):
         })
 
 
+@pytest.mark.full
+@pytest.mark.parametrize("part", WHOLE_PARTS)
+@pytest.mark.parametrize("name", sorted(BOARDS))
+def test_the_rest_of_the_pool_share_by_share(name, part):
+    """The full pass's sweep of every other share on board *name*: every
+    finding a pinned one, by leg, and nothing crashed — the claims the
+    share-0 test above makes, on this share's rows."""
+    rows = [run(card, mode, name) for card, mode in _share(part)]
+    found = findings(rows)
+    assert found["error"] == {}
+    cards = {(row["card"], row["mode"]) for row in rows}
+    for leg, pins in PINS.items():
+        pinned = {key for key in pins if key[2] == name and key[:2] in cards}
+        assert set(found[leg]) == pinned, (leg, {
+            key: found[leg].get(key, "pinned, not found")
+            for key in sorted(set(found[leg]) ^ pinned, key=repr)
+        })
+
+
 if __name__ == "__main__":
-    everything = population(sample="--sample" in sys.argv)
+    everything = population(part=0 if "--sample" in sys.argv else None)
     print(f"population: {len(everything)} (card, mode)s, "
           f"{len({card.name for card, _ in everything})} cards", flush=True)
     rows = []

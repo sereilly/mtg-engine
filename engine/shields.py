@@ -63,7 +63,7 @@ END_OF_TURN = "end_of_turn"
 #: spell** this turn." (Hidden Retreat.) A blanket with no points and no uses,
 #: hung off the **stack item** rather than off a recipient — the exact twin of
 #: ``DamageRedirect``'s Reverberation record one module over, and for its
-#: reason: a spell's damage source is its printed ``CardDefinition`` (CR 109.5),
+#: reason: a spell's damage source is its printed ``CardDefinition`` (CR 120.7),
 #: one object per card and shared by every copy, so a shield matching on the
 #: source would silence a second copy too. A ``StackItem`` is one object per
 #: cast, and ``Game.resolving_items`` is where a damage path can reach it.

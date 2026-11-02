@@ -2172,7 +2172,7 @@ def test_justice_answers_a_red_creatures_damage(set_pool):
 
 
 def test_justice_answers_a_red_spells_damage(set_pool):
-    """"…or **spell**". A spell's source is the printed card (CR 109.5), which
+    """"…or **spell**". A spell's source is the printed card (CR 120.7), which
     the damage dispatcher had refused outright — a noun phrase describes
     permanents. The union is the one shape that names the spell half, and the
     colour is the only word that distributes onto it.

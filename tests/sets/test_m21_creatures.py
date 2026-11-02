@@ -2520,7 +2520,7 @@ def test_the_tapped_this_way_count_needs_a_tap_in_front_of_it():
 def test_hooded_blightfang_ignores_a_walker_damaged_by_a_spell(set_pool):
     """"A creature you control with deathtouch" describes permanents, and a
     damage source need not be one — for a spell it is the printed card
-    (CR 109.5), with no controller and no computed types. It is not in the set
+    (CR 120.7), with no controller and no computed types. It is not in the set
     the phrase names, which is a question the filter answers rather than a
     crash the announcement avoids by not happening."""
     pool = set_pool("M21")

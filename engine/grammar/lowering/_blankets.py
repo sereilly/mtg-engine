@@ -582,7 +582,7 @@ def _lower_prevent_all(
             # on it: a spell is chosen from the stack and is recognised at
             # damage time by the *cast* rather than by the source object — the
             # exact axis ``redirection._lower_spell_damage_redirect`` splits on
-            # one family over, and for the same reason (CR 109.5 makes a
+            # one family over, and for the same reason (CR 120.7 makes a
             # spell's source its printed card, shared by every copy).
             #
             # Read before the ``targets`` description below, which would put a

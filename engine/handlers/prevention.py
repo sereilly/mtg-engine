@@ -640,7 +640,7 @@ def chosen_shield_source(game, context, *, from_target_channel: bool = True):
         return recorded
     if context.stack_target is not None:
         # A spell on the stack: matched later by its card identity, which is the
-        # same ``CardDefinition`` the spell deals its damage with (CR 109.5).
+        # same ``CardDefinition`` the spell deals its damage with (CR 120.7).
         return context.stack_target.card
     if not from_target_channel:
         return None
@@ -730,7 +730,7 @@ def default_damage_source(game, seat: int, *, colors: tuple[str, ...] = ()):
     the player choose.
 
     A spell comes back as its ``CardDefinition`` — the object it will deal its
-    damage with (CR 109.5), and what ``chosen_shield_source`` returns for an
+    damage with (CR 120.7), and what ``chosen_shield_source`` returns for an
     announced one.
     """
     from ..object_colors import share_a_color
@@ -1486,7 +1486,7 @@ def prevent_damage_by_target_spell_until_eot(
     The shield hangs off the **stack item**, not off a recipient and not off the
     card, and that is the whole of what makes this card possible — the exact
     reasoning Reverberation's redirect gives one family over. A spell's damage
-    source is its printed ``CardDefinition`` (CR 109.5), one object per card and
+    source is its printed ``CardDefinition`` (CR 120.7), one object per card and
     handed out once per copy by the deck builder, so a shield matching on the
     source would silence a *second* copy too. A ``StackItem`` is one object per
     cast, and ``prevention.shields._resolving_object_shields`` is where the damage paths

@@ -182,7 +182,7 @@ def lower_pronoun_exile(
 
     "The creature", "it", "that token", "the token" — none of which prints a
     card type, which is what keeps them out of :func:`lower_restated_noun_exile`
-    above — and "this creature", the source (CR 109.5). ``None`` where the
+    above — and "this creature", the source (CR 700.7). ``None`` where the
     sentence is none of them, so the several-target, hand and single-target
     readings after it are reached exactly as they were.
     """

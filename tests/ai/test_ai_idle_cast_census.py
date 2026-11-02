@@ -41,9 +41,11 @@ proposed (6,985 rehearsals asked for, none of which could not be run), none
 idle, no own goal, and the three losses in ``LOSSES`` below, which are one
 card flipping a coin.
 
-The whole pool takes ten minutes, so the suite runs a fixed sixth of it
-(``SAMPLE_EVERY``) plus every card named in a pin or in ``ALWAYS``; run it as
-a module (``python -m tests.ai.test_ai_idle_cast_census``) for all of it.
+The whole pool takes ten minutes, so the suite runs one sixth of it
+(``SAMPLE_EVERY``, by a digest of the card's name) plus every card named in a
+pin or in ``ALWAYS``; the full pass sweeps every sixth, each its own test
+(``WHOLE_PARTS``); run it as a module
+(``python -m tests.ai.test_ai_idle_cast_census``) for all of it in one go.
 """
 from __future__ import annotations
 
@@ -61,6 +63,7 @@ from engine.ai_policy import choose_cast_action
 from engine.ai_rehearsal import CARD_WORTH, scratch_copy, standings
 from engine.oracle import compile_card_oracle
 from tests.ai import test_ai_mode_chooser_census as modes
+from tests.helpers import full_census, stable_part
 
 ME, OPP = 0, 1
 POOL = modes.POOL
@@ -74,9 +77,12 @@ UNITS = (
 )
 LAYOUTS = {"empty": (), "own": (ME,), "mirror": (ME, OPP)}
 
-#: The suite's share of the pool: every card whose place in the sorted
-#: population is a multiple of this, and the named ones.
+#: The suite's share of the pool: one card in this many, by a digest of its
+#: name (``tests.helpers.stable_part`` — never its place in the sorted
+#: population, which moved at every promotion), and the named ones.
 SAMPLE_EVERY = 6
+#: The other shares, each its own test under the full pass.
+WHOLE_PARTS = tuple(range(1, SAMPLE_EVERY)) if full_census() else ()
 #: Cards the suite always sweeps: the ones the round was briefed with.
 ALWAYS = frozenset({
     "Swords to Plowshares", "Donate", "Kor Chant", "Ertai's Trickery", "Winnow",
@@ -254,7 +260,9 @@ def run(card, mode, layout: str) -> dict:
 REHEARSALS = Counter()
 
 
-def census(sample: bool) -> list:
+def census(part: "int | None" = None) -> list:
+    """Every row, or one digest share of them: share 0 is the suite's sample
+    and carries every card named in a pin or in ``ALWAYS``."""
     from engine import ai_policy, ai_prompts, ai_scoring
 
     # Every policy module that rehearses reads ``rehearse`` out of its own
@@ -280,8 +288,10 @@ def census(sample: bool) -> list:
         if real is not None:
             for module in readers:
                 patches.enter_context(mock.patch.object(module, "rehearse", counted))
-        for position, (card, mode) in enumerate(population()):
-            if sample and position % SAMPLE_EVERY and card.name not in SWEPT:
+        for card, mode in population():
+            if part is not None and stable_part(card.name, SAMPLE_EVERY) != part and not (
+                part == 0 and card.name in SWEPT
+            ):
                 continue
             for layout in LAYOUTS:
                 rows.append(run(card, mode, layout))
@@ -312,7 +322,18 @@ def findings(rows) -> dict:
 # -- the pins -------------------------------------------------------------------
 
 #: Casts still proposed that move nothing, each with why it stands.
-IDLE: dict = {}
+#:
+#: Drain Power ("Target player activates a mana ability of each land they
+#: control. Then that player loses all unspent mana and you add the mana lost
+#: this way.") on the mirror board, found at kg3 when the digest sample first
+#: reached the card: proposed at a score of 3.5, it pays {U}{U} for the one
+#: {U} the opposing Island makes, on a board where the caster holds forty
+#: mana and nothing to spend it on, and the sweep's lasting reading measures
+#: a swing of 0.0. Left for the AI's reading of a spell that moves mana
+#: between pools; the policy's rehearsal reads the opposing land tapped.
+IDLE: dict = {
+    ("Drain Power", None, "mirror"): "a mana-moving spell with nothing to spend the mana on",
+}
 
 #: Casts still proposed that leave their caster worse off, each with why.
 #:
@@ -334,7 +355,17 @@ LOSSES: dict = {
 }
 
 #: Casts that name the caster's own permanent with a better twin opposite.
-OWN_GOALS: dict = {}
+#:
+#: Debt of Loyalty ("Regenerate target creature. You gain control of that
+#: creature if it regenerates this way.") on the mirror board, found at kg3
+#: by the first whole-pool sweep the digest shares made: aimed at the
+#: caster's own creature (3.0) where the same cast at the opposing twin
+#: measures 11.5 — its second sentence steals what it regenerates. The engine
+#: is right (no control changes until the creature regenerates); left for the
+#: AI's target side of a conditional steal.
+OWN_GOALS: dict = {
+    ("Debt of Loyalty", None, "mirror"): "a regeneration that steals is aimed at the caster's own",
+}
 
 SWEPT = ALWAYS | {key[0] for pins in (IDLE, LOSSES, OWN_GOALS) for key in pins}
 assert SWEPT <= set(POOL), sorted(SWEPT - set(POOL))
@@ -344,19 +375,21 @@ assert SWEPT <= set(POOL), sorted(SWEPT - set(POOL))
 
 @pytest.fixture(scope="module")
 def rows() -> list:
-    return census(sample=True)
+    return census(part=0)
 
 
 @pytest.mark.full
 def test_the_sweep_examined_the_pool(rows):
-    """The floor: a sweep that reaches nothing passes everything."""
-    assert len(rows) >= 540
-    assert len({row["card"] for row in rows}) >= 170
+    """The floor: a sweep that reaches nothing passes everything. Measured at
+    kg3 on the digest share: 732 rows over 230 cards, 269 proposed (53, 76
+    and 140 on the three layouts), 1,867 rehearsals asked for."""
+    assert len(rows) >= 660
+    assert len({row["card"] for row in rows}) >= 205
     assert ALWAYS <= {row["card"] for row in rows}
     proposed = [row for row in rows if row["proposed"]]
     # ...and that it is a sweep of casts, not of refusals: a third of the
     # boards still draw a proposal, on each of the three layouts.
-    assert len(proposed) >= 120
+    assert len(proposed) >= 230
     assert {row["layout"] for row in proposed} == set(LAYOUTS)
 
 
@@ -371,7 +404,7 @@ def test_every_cast_weighed_was_rehearsed(rows):
     proposed, here, on these boards. A rehearsal that cannot be run answers
     None and the cast is proposed unmeasured — which is the old policy, and
     would pass none of them, but only for the cards it happened to."""
-    assert REHEARSALS["asked"] >= 300, dict(REHEARSALS)
+    assert REHEARSALS["asked"] >= 1500, dict(REHEARSALS)
     assert REHEARSALS["not run"] == 0, dict(REHEARSALS)
 
 
@@ -397,6 +430,31 @@ def test_no_cast_names_its_own_permanent_with_a_better_twin_opposite(rows):
     }
 
 
+def _pinned_in(pins: dict, rows) -> set:
+    """The pins whose card a share's rows examined."""
+    cards = {row["card"] for row in rows}
+    return {key for key in pins if key[0] in cards}
+
+
+@pytest.mark.full
+@pytest.mark.parametrize("part", WHOLE_PARTS)
+def test_the_rest_of_the_pool_share_by_share(part):
+    """The full pass's sweep of every other share: no crash, and each finding
+    a pinned one — the claims the share-0 tests above make, on the rows this
+    share examined. The whole pool at kg3, in one process (332 s): 4,191
+    rows over 1,333 cards, 1,461 proposed, 10,070 rehearsals, and the four
+    losses, one idle cast and one own goal pinned above."""
+    rows = census(part=part)
+    assert len(rows) >= 300, (part, len(rows))
+    found = findings(rows)
+    assert found["error"] == {}
+    for leg, pins in (("idle", IDLE), ("loss", LOSSES), ("own goal", OWN_GOALS)):
+        assert set(found[leg]) == _pinned_in(pins, rows), (leg, {
+            key: found[leg].get(key, "pinned, not found")
+            for key in sorted(set(found[leg]) ^ _pinned_in(pins, rows), key=repr)
+        })
+
+
 @pytest.mark.full
 def test_the_named_casts_are_held_or_aimed_across_the_table(rows):
     """The ones this round was briefed with, so each stays readable in the
@@ -420,7 +478,7 @@ def test_the_named_casts_are_held_or_aimed_across_the_table(rows):
 
 
 if __name__ == "__main__":
-    rows = census(sample="--sample" in sys.argv)
+    rows = census(part=0 if "--sample" in sys.argv else None)
     found = findings(rows)
     tally = Counter()
     for row in rows:

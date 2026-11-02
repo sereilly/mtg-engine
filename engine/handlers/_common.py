@@ -162,7 +162,7 @@ def damage_dealer(context: "OracleExecutionContext"):
     * ``damage_events.DAMAGED_THIS_GAME`` is kept *on the source permanent*, so
       a card-sourced event writes no record at all.
 
-    A spell is its own source (CR 109.5) and has no permanent — which is
+    A spell is its own source (CR 120.7) and has no permanent — which is
     exactly what ``source_permanent is None`` says, and so is a trigger that
     fired from a graveyard (``events.graveyard_trigger_events`` sets it None on
     purpose). Both fall through to the card, which is the truth for them and

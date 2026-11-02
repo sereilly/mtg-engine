@@ -401,7 +401,7 @@ class ProtectionMixin:
 
         *as_damage_source* means the same thing here as it does one method up,
         and it is not decoration: a spell is a damage source as readily as a
-        permanent is (CR 109.5), so Ghostly Flame rewrites a red *burn spell*
+        permanent is (CR 120.7), so Ghostly Flame rewrites a red *burn spell*
         into a colorless source exactly as it rewrites a red creature. Reading
         ``card.colors`` for a damage question would have left protection from
         red stopping a Lightning Bolt the board had made colorless.
@@ -438,7 +438,7 @@ class ProtectionMixin:
             # card type of a **spell**. Every caller hands this method a card
             # for one of two reasons — a spell choosing a target
             # (``_can_be_targeted``, which asks only when no ability is
-            # choosing) or a spell as a damage source (CR 109.5) — so the type
+            # choosing) or a spell as a damage source (CR 120.7) — so the type
             # is the whole question here. The printed line, as for the
             # card-type arm below: a spell has no layer-4 effect in this pool.
             return value in (card.type_line or "").lower().split()
@@ -458,7 +458,7 @@ class ProtectionMixin:
     ) -> bool:
         """Whether a damage source of **either** shape has *quality*.
 
-        CR 109.5 gives a damage event two kinds of source: a ``Permanent`` for a
+        CR 120.7 gives a damage event two kinds of source: a ``Permanent`` for a
         permanent's combat damage or ability, and the printed
         ``CardDefinition`` for a spell. The two answer different methods — a
         permanent's type resolves through the layer system, a card's is read off
@@ -501,7 +501,7 @@ class ProtectionMixin:
         prevented and not which creatures may block, and reading it at both
         would be a strictly different card.
 
-        *source* is whatever a damage event carries (CR 109.5) — a permanent or
+        *source* is whatever a damage event carries (CR 120.7) — a permanent or
         a spell's printed card — because the damage half is now asked of every
         damage event rather than only of the four combat sites, and those were
         the only callers that could guarantee a permanent.

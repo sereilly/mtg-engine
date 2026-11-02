@@ -42,8 +42,9 @@ them were a cost the board could not pay and went with the activation cost
 gate (Torment's W2G3), and the last four went with the rehearsal of an
 activation that gives up its source (ONS W2G5), so ``REFUSED`` is empty.
 
-The suite sweeps a fixed share (``SAMPLE_EVERY``) and the named cards; run it
-as a module for all of it
+The suite sweeps one share (``SAMPLE_EVERY``, by a digest of the card's name)
+and the named cards; the full pass sweeps every share, each its own test
+(``WHOLE_PARTS``); run it as a module for all of it in one go
 (``python -m tests.ai.test_ai_activation_effective_card_census``).
 """
 from __future__ import annotations
@@ -64,7 +65,7 @@ from engine.copies import become_copy
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.ai import test_ai_mode_chooser_census as modes
-from tests.helpers import _mk_card
+from tests.helpers import _mk_card, full_census, stable_part
 
 ME, OPP = 0, 1
 POOL = modes.POOL
@@ -78,7 +79,12 @@ BLANK = _mk_card(
 #: What an ability can be aimed at, per seat.
 UNITS = ("white creature", "black creature", "artifact", "enchantment", "island")
 
+#: The suite's share of the pool: one card in this many, by a digest of its
+#: name (``tests.helpers.stable_part`` — never its place in the sorted
+#: population, which moved at every promotion), and the named ones.
 SAMPLE_EVERY = 8
+#: The other shares, each its own test under the full pass.
+WHOLE_PARTS = tuple(range(1, SAMPLE_EVERY)) if full_census() else ()
 
 #: Activations the seat proposes and the engine declines, each with why —
 #: **found by this sweep and left**: every one was proposed for the printed
@@ -207,10 +213,14 @@ def run(card, placement: str) -> "dict | None":
     return row
 
 
-def census(sample: bool) -> list:
+def census(part: "int | None" = None) -> list:
+    """Every row, or one digest share of them: share 0 is the suite's sample
+    and carries the named cards."""
     rows = []
-    for position, card in enumerate(population()):
-        if sample and position % SAMPLE_EVERY and card.name not in ALWAYS:
+    for card in population():
+        if part is not None and stable_part(card.name, SAMPLE_EVERY) != part and not (
+            part == 0 and card.name in ALWAYS
+        ):
             continue
         for placement in PLACEMENTS:
             row = run(card, placement)
@@ -245,15 +255,30 @@ def pays_in_its_own_counters(card) -> bool:
     return ability is not None and bool(ability.cost.remove_counter)
 
 
+def lives_on_its_entry_counters(card) -> bool:
+    """Whether the card is a creature of toughness 0 or less as printed
+    ("This creature enters with two +1/+1 counters on it", Anthroplasm, a
+    0/0). A blank creature that *becomes* a copy of it gets no counters, so
+    in a game it is put into its owner's graveyard at once (CR 704.5f); this
+    sweep's board makes no state-based check, so the copy stands as a 0/0 and
+    the seat rightly activates nothing — the rehearsal's copy of the game
+    does check. Found at kg3 by the first whole-pool sweep."""
+    try:
+        return int(card.toughness) <= 0
+    except (TypeError, ValueError):
+        return False
+
+
 def copies_left_idle(rows) -> list:
     """Cards whose printed self is activated and whose copy is not, though
-    the copy could pay for it."""
+    the copy could pay for it and would stand."""
     by_key = {tag(row): row for row in rows}
     return sorted(
         card for (card, placement), row in by_key.items()
         if placement == "printed" and row["by_subject"]
         and not by_key[(card, "copied")]["by_subject"]
         and not pays_in_its_own_counters(POOL[card])
+        and not lives_on_its_entry_counters(POOL[card])
     )
 
 
@@ -261,19 +286,23 @@ def copies_left_idle(rows) -> list:
 
 @pytest.fixture(scope="module")
 def rows() -> list:
-    return census(sample=True)
+    return census(part=0)
 
 
 @pytest.mark.full
 def test_the_sweep_examined_the_pool(rows):
-    """The floor: a sweep that reaches nothing passes everything."""
+    """The floor: a sweep that reaches nothing passes everything. Measured
+    at kg3 on the digest share: 526 cards in each of the first two
+    placements and 49 worn; 109 printed, 108 copied and 4 worn activated by
+    their subject. The whole pool (161 s in one process): 4,420 and 377;
+    855, 838 and 15, no refusal and no error."""
     counts = tally(rows)
-    assert counts[("printed", "examined")] >= 330
+    assert counts[("printed", "examined")] >= 470
     assert counts[("copied", "examined")] == counts[("printed", "examined")]
-    assert counts[("worn", "examined")] >= 40
+    assert counts[("worn", "examined")] >= 44
     # ...and that it is a sweep of activations, not of permanents with
     # nothing to activate.
-    assert counts[("printed", "by subject")] >= 40, dict(counts)
+    assert counts[("printed", "by subject")] >= 98, dict(counts)
     assert ALWAYS <= {row["card"] for row in rows}
 
 
@@ -304,7 +333,7 @@ def test_a_copy_is_activated_where_its_original_is(rows):
     counts = tally(rows)
     # 100 until ONS W2G5: four of them were the verse enchantments' proposals,
     # which the engine refused and the rehearsal of a self-sacrifice now holds.
-    assert counts[("copied", "by subject")] >= 95, dict(counts)
+    assert counts[("copied", "by subject")] >= 97, dict(counts)
     by_key = {tag(row): row for row in rows}
     # ...and the ones that cannot are held, not proposed and refused.
     assert by_key[("Triskelion", "printed")]["by_subject"]
@@ -354,6 +383,25 @@ def test_a_land_given_an_ability_is_weighed(rows):
     assert by_key[("Barbed Field", "worn")]["proposed"]
 
 
+@pytest.mark.full
+@pytest.mark.parametrize("part", WHOLE_PARTS)
+def test_the_rest_of_the_pool_share_by_share(part):
+    """The full pass's sweep of every other share: no proposal crashed, what
+    is refused is the pinned set, and a copy is activated where its original
+    is — the claims the share-0 tests above make, on this share's rows."""
+    rows = census(part=part)
+    assert tally(rows)[("printed", "examined")] >= 25, (part, len(rows))
+    assert {tag(row): row["error"] for row in rows if row["error"]} == {}
+    cards = {row["card"] for row in rows}
+    refused = {tag(row) for row in rows if row["refused"]}
+    pinned = {
+        (name, placement) for name in REFUSED if name in cards
+        for placement in ("printed", "copied")
+    }
+    assert refused == pinned, sorted(refused ^ pinned)
+    assert copies_left_idle(rows) == []
+
+
 def test_a_clone_of_a_pinger_pings():
     """One row, on the board: a copy of Prodigal Sorcerer taps to deal 1
     damage. Its own card is a 1/3 with no text."""
@@ -373,7 +421,7 @@ def test_a_clone_of_a_pinger_pings():
 
 
 if __name__ == "__main__":
-    rows = census(sample="--sample" in sys.argv)
+    rows = census(part=0 if "--sample" in sys.argv else None)
     counts = tally(rows)
     for key in sorted(counts):
         print(key, counts[key])
