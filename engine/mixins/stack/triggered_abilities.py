@@ -71,6 +71,12 @@ class TriggeredAbilitiesMixin:
         # ``_upkeep_trigger_legal_targets``. See ``StackItem.targets_chosen``;
         # False for every fire site that stamps what its event was about.
         targets_chosen: bool = False,
+        # A **delayed** triggered ability (CR 603.7), which CR 603.2d never
+        # triggers an additional time. Stated by its one builder
+        # (``DelayedTrigger.trigger_event``) rather than read off the
+        # ``triggered_delayed`` label it also carries: a label is a report,
+        # and a relabelled delayed ability would have been doubled.
+        delayed: bool = False,
     ) -> None:
         """Put a single triggered ability onto the stack as a StackItem (CR 603.3).
 
@@ -104,6 +110,7 @@ class TriggeredAbilitiesMixin:
                 announced_at_cast=announced_at_cast,
                 target_stack_item=target_stack_item,
                 targets_chosen=targets_chosen,
+                delayed=delayed,
             ))
             return
         stack_card = card if card is not None else (source_permanent.card if source_permanent is not None else None)
@@ -134,8 +141,7 @@ class TriggeredAbilitiesMixin:
         # event was about ("destroy that Wall"), and the event is the same
         # event however many times the ability triggers.
         for instance in range(1 + additional_triggers(
-            self, source_permanent, controller_index,
-            delayed=effect_kind == "triggered_delayed",
+            self, source_permanent, controller_index, delayed=delayed,
         )):
             from_the_cast = announced_at_cast and instance == 0
             if announced_at_cast and not from_the_cast:

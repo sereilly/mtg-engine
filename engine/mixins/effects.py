@@ -1327,12 +1327,14 @@ class EffectsMixin:
         land's controller" compiles to the recipient that reads it. It used to
         swap in a hand-built ``deal_damage_to_player`` carrying its own victim
         and a hard-coded 2 instead, so the compiled program was never what
-        ran and the lowering's fall-through went unnoticed.
+        ran and the lowering's fall-through went unnoticed. Its label stayed
+        behind until kg3: every trigger here reported Ankh's
+        ``triggered_damage`` (Tectonic Instability's tap too), where each now
+        carries its own compiled label.
         """
         events = [
             make_trigger_event(
                 controller_index, permanent, trig,
-                effect_kind="triggered_damage",
                 ability_text=None,
                 trigger_context={"event_subject_controller": land_controller_index},
             )
@@ -1352,12 +1354,11 @@ class EffectsMixin:
         `_process_land_enters` states one method up — and it *cannot* be
         re-derived at resolution: by then the land is a card in a graveyard
         (CR 400.7), and under a control-change effect that seat was never its
-        owner.
+        owner. Each trigger carries its own compiled label, as there.
         """
         events = [
             make_trigger_event(
                 controller_index, permanent, trig,
-                effect_kind="triggered_damage",
                 trigger_context={"event_subject_controller": land_controller_index},
             )
             for controller_index, permanent, trig in iter_triggered_abilities(
