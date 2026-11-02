@@ -999,8 +999,8 @@ def has_nonmana_activated_ability(card) -> bool:
 
 
 def _intrinsic_land_mana_ability():
-    from .oracle_types import (ActivatedAbilityCost, OracleInstruction,
-                               ParsedActivatedAbility)
+    from .activated_ability_cost import ActivatedAbilityCost
+    from .oracle_types import OracleInstruction, ParsedActivatedAbility
 
     return ParsedActivatedAbility(
         source_line="",
