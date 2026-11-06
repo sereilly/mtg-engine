@@ -352,11 +352,15 @@ def _after_blockers_are_declared(game: "Game", controller_index: int, source) ->
     (CR 506.1 names the five steps): the ability makes an attacking creature
     blocked, and outside a combat there is no attacker for it to name.
 
-    A *skipped* declare-blockers step (CR 506.1: skipped when nobody attacked)
-    never locks, so the window never opens on a turn with no combat in it —
-    which is the honest answer rather than a special case.
+    A *skipped* declare-blockers step (CR 508.8: skipped when nobody
+    attacked) shuts the window for that whole combat phase (CR 506.8f, which
+    CR 506.8g applies to abilities): the end of combat step after it is not
+    after blockers were declared, though it is the step that follows a real
+    declaration too (``Game.combat_skips_blocks_and_damage``).
     """
     if game.current_turn_phase != "combat":
+        return False
+    if game.combat_skips_blocks_and_damage():
         return False
     if game.current_step in ("combat_damage", "end_of_combat"):
         return True

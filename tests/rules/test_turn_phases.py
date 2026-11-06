@@ -53,12 +53,8 @@ def test_advance_combat_moves_to_postcombat_main():
     ok, _ = game.declare_attackers(0, [])
     assert ok
 
-    game.advance_combat_phase()
-    assert game.current_step == "declare_blockers"
-
-    ok, _ = game.declare_blockers(1, {})
-    assert ok
-
+    # Nobody attacked: CR 508.8 skips the declare blockers and combat damage
+    # steps, so the end of combat step is next.
     game.advance_combat_phase()
     assert game.current_step == "end_of_combat"
 
@@ -491,15 +487,12 @@ def test_declare_attackers_auto_skips_when_no_legal_attackers_exist():
     assert game.combat_attackers_locked is False
 
     game.advance_combat_phase()
-    assert game.current_step == "declare_blockers"
-
-    game.advance_combat_phase()
     assert game.current_step == "end_of_combat"
     assert game.combat_attackers_locked is True
     # CR 508.8: no attackers skips the declare blockers step — and only it and
     # the damage step; the declare attackers step itself still happened.
     assert "P1 has no valid attackers" in game.log
-    assert "No attackers; declare blockers step skipped (508.8)" in game.log
+    assert "No attackers; declare blockers and combat damage steps skipped (508.8)" in game.log
     assert not any("declare attackers step skipped" in entry for entry in game.log)
     assert not any(entry.startswith("Declare blockers step complete") for entry in game.log)
 

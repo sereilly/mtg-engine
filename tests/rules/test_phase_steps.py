@@ -335,9 +335,8 @@ def _advance_to_end_of_combat(game: Game) -> None:
     game.advance_combat_phase()  # declare_attackers
     ok, _ = game.declare_attackers(0, [])
     assert ok
-    game.advance_combat_phase()  # declare_blockers
-    ok, _ = game.declare_blockers(1, {})
-    assert ok
+    # Nobody attacked, so CR 508.8 skips the declare blockers and combat
+    # damage steps: the end of combat step is next.
     game.advance_combat_phase()  # end_of_combat
     assert game.current_step == "end_of_combat"
 

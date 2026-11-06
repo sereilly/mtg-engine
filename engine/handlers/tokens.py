@@ -328,6 +328,10 @@ def _token_arrived(game: Game, payload: dict, context: OracleExecutionContext, t
             slot = game.battlefield_index_of(token)
             if slot is not None:
                 game.combat_attackers[slot] = defending
+                # CR 508.8: "put onto the battlefield attacking" keeps the
+                # declare blockers and combat damage steps as a declared
+                # attacker does.
+                game.combat_creatures_attacked = True
                 token.attacking = True
                 token.defending_player_index = defending
 
