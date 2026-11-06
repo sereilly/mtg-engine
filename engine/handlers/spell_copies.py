@@ -178,6 +178,9 @@ def _offer_copy_new_target(
         options=[{"kind": "keep", "name": "Keep the original's target"}]
         + [_target_option(game, option) for option in options],
         context=context,
+        # Taken by default (a test's drain, an abandoned seat), the offer is
+        # declined, as ``copy_spell_target``'s is.
+        default_keeps=True,
     )
     context.results[f"{_COPY_NEW_TARGET}_slots"] = slots
 

@@ -388,6 +388,24 @@ def test_w1g1_reaping_the_graves_copies_keep_the_target_for_a_default_seat(set_p
     assert any("every target is illegal" in line for line in game.log)
 
 
+def test_w1g1_a_copys_graveyard_offer_taken_by_default_keeps_the_target(set_pool):
+    """An interactive seat's offer answered by the registry's default (a
+    drain, an abandoned seat) is declined, as ``copy_spell_target``'s is —
+    not re-aimed by Deflection's "aim it where it helps" policy."""
+    game, _, _ = _w1g1_table(
+        set_pool, ["Dark Ritual", "Reaping the Graves"],
+        graveyard=["Grizzly Bears", "Craw Wurm"], interactive=[0],
+    )
+    _w1g1_cast_fillers(game, 0, 1)
+    assert game.queue_from_hand(0, "Reaping the Graves", target_permanent_index=0).supported
+    assert game.resolve_top_of_stack()
+    owed = game.pending_choice_of("retarget_choice")
+    assert owed is not None
+    game.take_choice_default(owed)
+    (copy,) = _w1g1_copies(game)
+    assert copy.target_graveyard_card.card.name == "Grizzly Bears"
+
+
 @_w1g1_pytest.mark.parametrize("before", [0, 1, 3])
 def test_w1g1_sprouting_vines_searches_once_per_copy(set_pool, before):
     library = ["Forest", "Island", "Swamp", "Mountain", "Plains", "Grizzly Bears"] * 2
