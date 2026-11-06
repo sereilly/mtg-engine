@@ -75,6 +75,11 @@
       "status": "pass",
       "updated_at": 1782005045.2563467
     },
+    "Ancient Ooze": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968790.0916226
+    },
     "Angelic Curator": {
       "reason": "",
       "status": "pass",
@@ -128,7 +133,7 @@
     "Artificial Evolution": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1793499822.6878147
+      "updated_at": 1793971217.270423
     },
     "Ashnod's Altar": {
       "reason": "",
@@ -144,6 +149,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1793498766.2530568
+    },
+    "Aven Farseer": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968723.1450295
     },
     "Aven Fisher": {
       "reason": "",
@@ -264,6 +274,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1793554778.574823
+    },
+    "Bladewing the Risen": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968851.749049
     },
     "Blatant Thievery": {
       "reason": "",
@@ -400,6 +415,11 @@
       "status": "pass",
       "updated_at": 1791787836.1057532
     },
+    "Carbonize": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968654.3802385
+    },
     "Careful Study": {
       "reason": "",
       "status": "pass",
@@ -469,6 +489,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782797545.2013893
+    },
+    "Chill Haunting": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793971301.6734116
     },
     "Chromatic Orrery": {
       "reason": "",
@@ -544,6 +569,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791787854.2120926
+    },
+    "Coast Watcher": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968738.3209622
     },
     "Coat of Arms": {
       "reason": "",
@@ -700,6 +730,11 @@
       "status": "pass",
       "updated_at": 1793498752.165909
     },
+    "Daru Spiritualist": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793969089.0691187
+    },
     "Death Ward": {
       "reason": "",
       "status": "pass",
@@ -719,6 +754,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791884619.1295793
+    },
+    "Decree of Savagery": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793969027.4263856
     },
     "Deep Analysis": {
       "reason": "",
@@ -790,6 +830,11 @@
       "status": "pass",
       "updated_at": 1786234602.8408866
     },
+    "Dimensional Breach": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968920.0686605
+    },
     "Dingus Egg": {
       "reason": "",
       "status": "pass",
@@ -830,10 +875,25 @@
       "status": "pass",
       "updated_at": 1791787839.58826
     },
+    "Dragon Fangs": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968753.540972
+    },
     "Dragon Whelp": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782693770.4119496
+    },
+    "Dragon Wings": {
+      "reason": "Its return-from-graveyard trigger fires while it is on the battlefield attached to Shivan Dragon (CR 113.6m): Bladewing and Eternal Dragon entering each raised a Yes/No that did nothing (Dragon Wings was no longer in the graveyard). Return from graveyard onto Shivan Dragon worked.",
+      "status": "fail",
+      "updated_at": 1793969152.8465033
+    },
+    "Dragonspeaker Shaman": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968820.4109173
     },
     "Drain Life": {
       "reason": "",
@@ -955,6 +1015,11 @@
       "status": "pass",
       "updated_at": 1793569987.6045651
     },
+    "Eternal Dragon": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968624.057784
+    },
     "Eternal Flame": {
       "reason": "",
       "status": "pass",
@@ -979,6 +1044,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1792615604.041074
+    },
+    "Faces of the Past": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793969012.2481508
     },
     "False Orders": {
       "reason": "",
@@ -1120,6 +1190,11 @@
       "status": "pass",
       "updated_at": 1781503124.4112332
     },
+    "Forgotten Ancient": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968935.2364838
+    },
     "Fork": {
       "reason": "",
       "status": "pass",
@@ -1190,6 +1265,11 @@
       "status": "pass",
       "updated_at": 1786223889.7736194
     },
+    "Gilded Light": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793971232.3635616
+    },
     "Glasses of Urza": {
       "reason": "",
       "status": "pass",
@@ -1215,6 +1295,11 @@
       "status": "pass",
       "updated_at": 1781411321.368721
     },
+    "Goblin Brigand": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968563.5067792
+    },
     "Goblin Clearcutter": {
       "reason": "",
       "status": "pass",
@@ -1239,6 +1324,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791787842.6988528
+    },
+    "Goblin Warchief": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968548.365649
     },
     "Goblin Warrens": {
       "reason": "",
@@ -1285,6 +1375,11 @@
       "status": "pass",
       "updated_at": 1792615195.6480482
     },
+    "Grip of Chaos": {
+      "reason": "Its trigger on Bladewing the Risen's entry trigger is offered in the same order-your-triggers window as that trigger (CR 117.5/603.3b: it triggers once that trigger is on the stack, so it goes on top); the player may order it beneath and dodge the reselection. Reselection itself (Spark Spray to a random creature) works.",
+      "status": "fail",
+      "updated_at": 1793969201.3934116
+    },
     "Grizzly Bears": {
       "reason": "",
       "status": "pass",
@@ -1314,6 +1409,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1784516439.4814968
+    },
+    "Haunting Misery": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793971262.5240133
     },
     "Healing Salve": {
       "reason": "",
@@ -1610,10 +1710,20 @@
       "status": "pass",
       "updated_at": 1791884561.0395966
     },
+    "Krosan Drover": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968805.2720056
+    },
     "Krosan Vorine": {
       "reason": "",
       "status": "pass",
       "updated_at": 1793570003.571395
+    },
+    "Krosan Warchief": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968518.1506844
     },
     "Kudzu": {
       "reason": "",
@@ -1715,6 +1825,11 @@
       "status": "pass",
       "updated_at": 1791900810.2259123
     },
+    "Long-Term Plans": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793969042.5854294
+    },
     "Longhorn Firebeast": {
       "reason": "",
       "status": "pass",
@@ -1784,6 +1899,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1793570152.2525067
+    },
+    "Mangara's Tome": {
+      "reason": "Its face-down pile is matched to exile by card identity: a pile Mountain beside a Three Wishes Mountain was shown face up to the owner and offered as playable via Three Wishes. The {2} draw replacement and the search modal (Exile k of 5, library only) work; log names no card.",
+      "status": "fail",
+      "updated_at": 1793971357.3766937
     },
     "Meddle": {
       "reason": "",
@@ -1874,6 +1994,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1793554762.629204
+    },
+    "Mistform Warchief": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968951.4436996
     },
     "Molten Influence": {
       "reason": "",
@@ -1970,6 +2095,16 @@
       "status": "pass",
       "updated_at": 1791886040.6455135
     },
+    "Necropotence": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793971201.6648703
+    },
+    "Nefarious Lich": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793971316.7696285
+    },
     "Nether Shadow": {
       "reason": "",
       "status": "pass",
@@ -2060,6 +2195,11 @@
       "status": "pass",
       "updated_at": 1792623617.3802717
     },
+    "Parallel Thoughts": {
+      "reason": "Face-down pile is matched to exile by card identity: with same-named cards also exiled face up (Dimensional Breach), 4 of the 7 pile cards (Mountain, Forest, Goblin Warchief, Temple) show face up to both seats and 4 Breach cards show hidden; taking the pile top removed the Breach-exiled Temple and left the pile's Temple in exile. Search modal (library only, Exile k of 7) fine.",
+      "status": "fail",
+      "updated_at": 1793969184.797967
+    },
     "Paralyze": {
       "reason": "",
       "status": "pass",
@@ -2074,6 +2214,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782358756.4484005
+    },
+    "Pemmin's Aura": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968608.9252028
     },
     "Pernicious Deed": {
       "reason": "",
@@ -2185,6 +2330,11 @@
       "status": "pass",
       "updated_at": 1781585810.397277
     },
+    "Proteus Machine": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968866.9206884
+    },
     "Psionic Blast": {
       "reason": "",
       "status": "pass",
@@ -2214,6 +2364,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1792622324.4033132
+    },
+    "Putrid Raptor": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968889.7327487
     },
     "Pyramids": {
       "reason": "",
@@ -2249,6 +2404,21 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791900830.336597
+    },
+    "Raven Guild Initiate": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968578.6501489
+    },
+    "Reaping the Graves": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793969057.7441394
+    },
+    "Recuperate": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968966.582837
     },
     "Red Elemental Blast": {
       "reason": "",
@@ -2305,6 +2475,11 @@
       "status": "pass",
       "updated_at": 1783041006.6960363
     },
+    "Reward the Faithful": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968692.7935581
+    },
     "Righteousness": {
       "reason": "",
       "status": "pass",
@@ -2324,6 +2499,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1793499635.7301686
+    },
+    "Riptide Survivor": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968707.9621696
     },
     "Rites of Refusal": {
       "reason": "",
@@ -2419,6 +2599,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782586144.231241
+    },
+    "Scattershot": {
+      "reason": "Storm copies announce becomes-the-target on the original's target before the re-aim prompt (CR 707.10c): 7 copies on Daru Spiritualist fired 7 Daru triggers, then the 2 re-aimed at Zealous Inquisitor fired again; Daru ended 1/17 (should be 1/11). Prompt itself (copy k of 7, keep) fine.",
+      "status": "fail",
+      "updated_at": 1793969136.2695708
     },
     "Scavenging Ghoul": {
       "reason": "",
@@ -2540,6 +2725,11 @@
       "status": "pass",
       "updated_at": 1793555150.8667746
     },
+    "Shoreline Ranger": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968639.2300205
+    },
     "Shower of Coals": {
       "reason": "",
       "status": "pass",
@@ -2549,6 +2739,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1792619404.7884426
+    },
+    "Siege-Gang Commander": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968533.2520058
     },
     "Silent Dart": {
       "reason": "",
@@ -2579,6 +2774,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782364012.382203
+    },
+    "Skeletal Scrying": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793971285.4944525
+    },
+    "Skirk Volcanist": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968502.4886167
     },
     "Skittish Valesk": {
       "reason": "",
@@ -2649,6 +2854,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782763087.914169
+    },
+    "Spark Spray": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793969073.9241629
     },
     "Sparksmith": {
       "reason": "",
@@ -2735,6 +2945,11 @@
       "status": "pass",
       "updated_at": 1791787834.440406
     },
+    "Sulfuric Vortex": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968669.6011615
+    },
     "Sunglasses of Urza": {
       "reason": "",
       "status": "pass",
@@ -2790,6 +3005,11 @@
       "status": "pass",
       "updated_at": 1791900815.918794
     },
+    "Temple of the False God": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968768.710585
+    },
     "Temporal Spring": {
       "reason": "",
       "status": "pass",
@@ -2824,6 +3044,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1788931761.7442148
+    },
+    "Three Wishes": {
+      "reason": "Face-down exile and its play permission are matched by card identity: with Mangara's Tome's pile also holding a Mountain, the pile's Mountain showed face up to its owner and was playable via Three Wishes (played it); Three Wishes' own Mountain then showed hidden and was no longer playable. Log names no hidden card (fine).",
+      "status": "fail",
+      "updated_at": 1793971333.799092
     },
     "Throne of Bone": {
       "reason": "",
@@ -2929,6 +3154,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782544634.319353
+    },
+    "Upwelling": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968835.5838203
     },
     "Uthden Troll": {
       "reason": "",
@@ -3105,6 +3335,11 @@
       "status": "pass",
       "updated_at": 1791884563.5701327
     },
+    "Wheel and Deal": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793971247.4520786
+    },
     "Wheel of Fortune": {
       "reason": "",
       "status": "pass",
@@ -3194,6 +3429,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1786226525.1387873
+    },
+    "Zealous Inquisitor": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968593.7781878
+    },
+    "Zombie Cutthroat": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793968904.9276135
     },
     "Zombie Master": {
       "reason": "",
