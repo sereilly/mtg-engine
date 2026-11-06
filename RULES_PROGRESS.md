@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**430 / 640 tracked rules covered (67%)** — 3337 tests, 0 unannotated.
+**431 / 641 tracked rules covered (67%)** — 3344 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -89,7 +89,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/16 | 12% |
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 35/35 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 36/36 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 4/4 | 100% |
 | [704. State-Based Actions](#704-state-based-actions) | 8/8 | 100% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -909,6 +909,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.37** Morph *(11 tests, subrules ace)*
 - [x] **702.38** Amplify *(11 tests, subrules ab)*
 - [x] **702.39** Provoke *(5 tests, subrules ab)*
+- [x] **702.40** Storm *(7 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
 
@@ -947,7 +948,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **707.7** If a pair of linked abilities are copied, those abilities will be similarly linked to one another...
 - [ ] **707.8** When copying a melded permanent or other double-faced permanent, use the copiable values of the f...
 - [x] **707.9** Copy effects may include modifications or exceptions to the copying process. *(15 tests, subrules abc)*
-- [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(19 tests, subrules ac)*
+- [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(21 tests, subrules ac)*
 - [ ] **707.11** If an effect refers to a permanent by name, the effect still tracks that permanent even if it cha...
 - [ ] **707.12** An effect that instructs a player to cast a copy of an object (and not just copy a spell) follows...
 - [ ] **707.13** One card (Garth One-Eye) instructs a player to create a copy of a card defined by name rather tha...

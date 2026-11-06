@@ -25,34 +25,12 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**13 unclaimed sentence(s) across 13 supported card(s).**
+**2 unclaimed sentence(s) across 2 supported card(s).**
 
-- **Astral Steel**
-  - `storm`
-- **Brain Freeze**
-  - `storm`
-- **Dragonstorm**
-  - `storm`
-- **Hindering Touch**
-  - `storm`
-- **Hunting Pack**
-  - `storm`
 - **Parallel Thoughts**
   - `if you would draw a card, you may instead put the top card of the pile you exiled into your hand`
-- **Reaping the Graves**
-  - `storm`
-- **Scattershot**
-  - `storm`
-- **Sprouting Vines**
-  - `storm`
 - **Sulfuric Vortex**
   - `if a player would gain life, that player gains no life instead`
-- **Temporal Fissure**
-  - `storm`
-- **Tendrils of Agony**
-  - `storm`
-- **Wing Shards**
-  - `storm`
 
 ## Acknowledged simplifications
 

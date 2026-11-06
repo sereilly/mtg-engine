@@ -53,7 +53,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | LGN | 145 | 235 | 71.9% | 71.9% | 47.7% | 108 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| SCG *(measured)* | 143 | 262 | 71.4% | 66.8% | 44.7% | 97 |
+| SCG *(measured)* | 143 | 262 | 71.4% | 67.2% | 45.0% | 98 |
 | **All (shipped)** | **8507** | **12662** | **89.9%** | **89.4%** | **62.1%** | **6671** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -7081,6 +7081,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Look at target player's hand and choose X cards from it. That player discards those cards.`
 - **Mind Whip**
   - `At the beginning of the upkeep of enchanted creature's controller, that player may pay {3}. If they don't, this Aura deals 2 damage to that player and you tap that creature.`
+- **Mind's Desire**
+  - `Shuffle your library. Then exile the top card of your library. Until end of turn, you may play that card without paying its mana cost.`
 - **Mindbender Spores**
   - `Whenever this creature blocks a creature, put four fungus counters on that creature. The creature gains "This creature doesn't untap during your untap step if it has a fungus counter on it" and "At the beginning of your upkeep, remove a fungus counter from this creature."`
 - **Mindless Automaton**
