@@ -5047,3 +5047,10 @@ pre {
   align-items: stretch;
   gap: 4px;
 }
+
+/* The exile search's confirm while it is held at the search's floor
+   (CR 701.23d, "Exile 2 of 3"): visibly not yet a button to press. */
+#searchExileConfirmBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
