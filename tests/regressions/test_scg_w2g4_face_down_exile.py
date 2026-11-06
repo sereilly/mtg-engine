@@ -185,3 +185,30 @@ def test_gusthas_scepter_exiles_a_card_face_down_without_naming_it():
     assert face_down_exiled_cards(game, 0, 0) == []
     assert _named(game, _SECRET) == [], _named(game, _SECRET)
     assert any("exiled a card face down from their hand" in line for line in game.log)
+
+
+def test_a_kept_entry_goes_back_to_the_pile_as_it_was():
+    """"Return each creature card exiled with this artifact" (Cold Storage)
+    drains the pile and puts back the cards it does not name. Rebuilt through
+    ``link_exiled_card`` they lost what that call was not handed — the face-
+    down flag and a look permission — so a card exiled face down came back
+    face up. ``linked_exile.put_back_linked_entry`` returns the entry itself."""
+    from engine.linked_exile import link_exiled_card, linked_entries
+
+    storage_card = _card("TMP", "Cold Storage")
+    game = _game(mine=[storage_card])
+    storage = next(p for p in game.controlled_by(0) if p.card is storage_card)
+    relic = _card("2ED", "Black Lotus")
+    game.players[0].exile.append(relic)
+    link_exiled_card(storage, relic, 0, face_down=True, looker_index=0)
+
+    result = game.activate_permanent_ability(0, "Cold Storage", ability_index=1)
+    assert result.supported, result.details
+    _settle(game)
+
+    (entry,) = linked_entries(storage)
+    assert entry["card"] is relic
+    assert entry.get("face_down") and entry.get("looker_index") == 0
+    # Still hidden from the table and readable by the seat that may look.
+    assert any(held is relic for held in face_down_exiled_cards(game, 0, 1))
+    assert face_down_exiled_cards(game, 0, 0) == []

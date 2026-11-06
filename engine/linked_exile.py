@@ -8,7 +8,8 @@ the objects the first one moved, and to nothing else.
 
 **One record, one writer, one reader.**  The record is a list of entries under
 ``RECORD_KEY`` in the exiling permanent's ``metadata``; :func:`link_exiled_card`
-is the only thing that appends to it and :func:`linked_entries` /
+(and :func:`put_back_linked_entry`, for an entry a sweep drained and kept)
+are the only things that append to it and :func:`linked_entries` /
 :func:`take_linked_entries` are the only things that read or drain it.  It lives
 on the *permanent* rather than on the game for two reasons: a record on the
 permanent goes wherever the permanent does, and — the reason the whole file is
@@ -149,6 +150,22 @@ def link_exiled_card(
     held.append(entry)
     source.metadata[RECORD_KEY] = held
     return entry
+
+
+def put_back_linked_entry(source: "Permanent", entry: dict[str, Any]) -> None:
+    """Return a drained *entry* to *source*'s record, **as it was**.
+
+    A sweep that drains the pile and keeps part of it ("Return each creature
+    card exiled with this artifact", Cold Storage; "all other cards you own",
+    Duplicity) puts the rest back. Rebuilt through :func:`link_exiled_card`,
+    each kept entry lost whatever that call was not handed — a Cold Storage
+    pile's face-down flag, a look permission, its destination — and a card
+    exiled face down came back to the record face up. The same dict goes back
+    instead, so every fact on it survives.
+    """
+    held = list(source.metadata.get(RECORD_KEY) or ())
+    held.append(entry)
+    source.metadata[RECORD_KEY] = held
 
 
 def shuffle_linked_pile(source: "Permanent", shuffler) -> None:

@@ -486,16 +486,12 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
                 wanted.append(entry)
         entries = wanted
         if excluded:
-            from ..linked_exile import link_exiled_card
+            from ..linked_exile import put_back_linked_entry
 
             for entry in excluded:
-                link_exiled_card(
-                    source, entry["card"], int(entry["owner_index"]),
-                    ends_on=tuple(entry.get("ends_on") or ()),
-                    face_down=bool(entry.get("face_down")),
-                )
+                put_back_linked_entry(source, entry)
     if wanted_type is not None:
-        from ..linked_exile import link_exiled_card
+        from ..linked_exile import put_back_linked_entry
 
         # Through the one card-in-a-zone matcher (_card_matches_filter),
         # never primary_type: CR 205.2a gives a card every type printed on
@@ -512,10 +508,7 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
         kept = [e for e in entries if not _answers(e)]
         entries = [e for e in entries if _answers(e)]
         for entry in kept:
-            link_exiled_card(
-                source, entry["card"], int(entry["owner_index"]),
-                ends_on=tuple(entry.get("ends_on") or ()),
-            )
+            put_back_linked_entry(source, entry)
     if not entries:
         name = context.card.name if context.card is not None else "that permanent"
         game.log.append(f"nothing is exiled with {name}")
