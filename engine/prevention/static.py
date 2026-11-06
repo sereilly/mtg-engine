@@ -26,6 +26,7 @@ from __future__ import annotations
 import re
 
 from ..damage_source_colors import damage_source_colors
+from ..effect_ordering import source_names
 from ..models import PlayerState
 from ..named_counters import add_counters, counters_on, remove_counters
 from ..next_damage import DAMAGE_PREVENTED_NEXT, armed_for_event, spend_for_event
@@ -338,11 +339,12 @@ def attached_prevent_all_from_source_type(line: str) -> dict | None:
     return _shield_from_match(match)
 
 
-def _source_type_shielded_by(game, event: dict) -> dict | None:
-    """The source class the damaged permanent is shielded against.
+def _source_type_shields(game, event: dict):
+    """``(holder, resolved)`` for each line shielding the damaged permanent
+    against a source class, in the order they are read. Pure.
 
-    Pure: it reads text and answers, spending nothing. Two places print the
-    line, and both are read here: the recipient's own text ("dealt to **this**
+    It reads text and answers, spending nothing. Two places print the line,
+    and both are read here: the recipient's own text ("dealt to **this**
     creature", so a second copy on the battlefield shields itself and not its
     twin) and the text of whatever is attached to it ("dealt to **enchanted**
     creature", which is a shield the recipient's own text says nothing about).
@@ -351,25 +353,28 @@ def _source_type_shielded_by(game, event: dict) -> dict | None:
 
     recipient = event["recipient"]
     if isinstance(recipient, PlayerState) or recipient is None:
-        return None
-    for line in getattr(recipient, "effective_card", recipient.card).oracle_text.splitlines():
-        wanted = prevent_all_from_source_type(line)
-        if wanted is None or not _condition_holds(game, wanted, recipient):
-            continue
-        resolved = _resolved_chosen_color(wanted, recipient)
-        if resolved is not None:
-            return resolved
-    for attached in auras_attached_to(recipient):
-        for line in attached.effective_card.oracle_text.splitlines():
-            wanted = attached_prevent_all_from_source_type(line)
-            if wanted is None or not _condition_holds(game, wanted, attached):
+        return
+    places = [(recipient, prevent_all_from_source_type)] + [
+        (attached, attached_prevent_all_from_source_type)
+        for attached in auras_attached_to(recipient)
+    ]
+    for holder, reader in places:
+        card = getattr(holder, "effective_card", None) or holder.card
+        for line in (card.oracle_text or "").splitlines():
+            wanted = reader(line)
+            if wanted is None or not _condition_holds(game, wanted, holder):
                 continue
-            # The colour is the **Aura's**, recorded as it entered — not the
-            # enchanted creature's, which has none of its own.
-            resolved = _resolved_chosen_color(wanted, attached)
+            # An Aura's colour is the **Aura's**, recorded as it entered — not
+            # the enchanted creature's, which has none of its own.
+            resolved = _resolved_chosen_color(wanted, holder)
             if resolved is not None:
-                return resolved
-    return None
+                yield holder, resolved
+
+
+def _source_type_shielded_by(game, event: dict) -> dict | None:
+    """The source class the damaged permanent is shielded against: the first
+    line :func:`_source_type_shields` reads, or None."""
+    return next((resolved for _holder, resolved in _source_type_shields(game, event)), None)
 
 
 def _condition_holds(game, wanted: dict, holder) -> bool:
@@ -442,8 +447,35 @@ def _source_class_label(wanted: dict) -> str:
     return "matching"
 
 
+def _source_type_blanket_sources(game, event: dict) -> list:
+    """The permanent whose line shields the recipient against this source —
+    the recipient itself ("…to **this** creature by artifact sources") or an
+    Aura on it ("…to **enchanted** creature"). Pure."""
+    return _once(
+        holder for holder, resolved in _source_type_shields(game, event)
+        if (event.get("combat") or not resolved.get("combat_only"))
+        and _source_shield_matches(
+            game, event.get("source"), event["recipient"], resolved,
+            event.get("source_seat"),
+        )
+    )
+
+
+def _once(items) -> list:
+    """*items* in order, each object once — by identity, because a
+    ``Permanent`` compares by value and does not hash."""
+    seen: set[int] = set()
+    kept = []
+    for item in items:
+        if id(item) not in seen:
+            seen.add(id(item))
+            kept.append(item)
+    return kept
+
+
 @prevention_effect(
     SOURCE_TYPE_BLANKET, applies=_applies_source_type_blanket,
+    sources=_source_type_blanket_sources,
     label="Prevent all damage to this permanent from the described sources",
 )
 def _prevent_all_from_source_type(game, event: dict) -> PreventionOutcome | None:
@@ -535,15 +567,10 @@ def prevent_n_of_damage(line: str) -> int | None:
     return described["points"] if described else None
 
 
-def _static_points_prevented(game, event: dict) -> int:
-    """How many points every such line on the recipient's board shaves off this
-    event. Pure — nothing is spent, because nothing here is a charge.
-
-    **Summed** across the battlefield, for ``replacements.damage._spell_damage_delta``'s
-    reason exactly: CR 616.1 would apply two Armors as two effects in an order
-    the affected player picks, subtraction commutes, and one candidate per
-    registration is the model ``apply_in_order`` has. Clamped to the event, so
-    two Armors against 1 damage prevent 1 and not 2.
+def _static_point_lines(game, event: dict):
+    """``(permanent, points)`` for every line on the recipient's board that
+    shaves points off this event. Pure — nothing is spent, because nothing
+    here is a charge.
 
     "To **you**" is the Armor's controller (CR 109.5), which is why the scan is
     over the recipient's own battlefield: an opponent's Armor does nothing for
@@ -557,19 +584,17 @@ def _static_points_prevented(game, event: dict) -> int:
     never covers a player.
     """
     recipient = event["recipient"]
-    amount = event["amount"]
-    if amount <= 0 or recipient is None:
-        return 0
+    if event["amount"] <= 0 or recipient is None:
+        return
     if isinstance(recipient, PlayerState):
         seat = game.players.index(recipient) if recipient in game.players else None
         if seat is None:
-            return 0
+            return
         printers = [(seat, permanent) for permanent in game.controlled_by(seat)]
     else:
         printers = list(game.permanents_with_controller())
     from ..subject_filters import subject_matches
 
-    total = 0
     source_colors: tuple[str, ...] | None = None
     for seat, permanent in printers:
         for line in (permanent.effective_card.oracle_text or "").splitlines():
@@ -593,17 +618,38 @@ def _static_points_prevented(game, event: dict) -> int:
                     )
                 if described["color"] not in source_colors:
                     continue
-            total += described["points"]
-    return min(total, amount)
+            yield permanent, described["points"]
+
+
+def _static_points_prevented(game, event: dict) -> int:
+    """How many points every such line on the recipient's board shaves off this
+    event (:func:`_static_point_lines`).
+
+    **Summed** across the battlefield, for ``replacements.damage._spell_damage_delta``'s
+    reason exactly: CR 616.1 would apply two Armors as two effects in an order
+    the affected player picks, subtraction commutes, and one candidate per
+    registration is the model ``apply_in_order`` has. Clamped to the event, so
+    two Armors against 1 damage prevent 1 and not 2.
+    """
+    if event["amount"] <= 0 or event["recipient"] is None:
+        return 0
+    total = sum(points for _permanent, points in _static_point_lines(game, event))
+    return min(total, event["amount"])
 
 
 def _applies_static_points(game, event: dict) -> bool:
     return _static_points_prevented(game, event) > 0
 
 
+def _static_points_sources(game, event: dict) -> list:
+    """The permanents whose lines :func:`_static_points_prevented` sums for
+    this event (Urza's Armor, the Spheres, Daunting Defender). Pure."""
+    return _once(perm for perm, _points in _static_point_lines(game, event))
+
+
 @prevention_effect(
-    STATIC_POINTS, applies=_applies_static_points,
-    label="A static prevention",
+    STATIC_POINTS, applies=_applies_static_points, sources=_static_points_sources,
+    label="Prevent some of that damage",
 )
 def _prevent_static_points(game, event: dict) -> PreventionOutcome | None:
     """A static prevention: "If a source would deal damage to you, prevent 1 of
@@ -621,9 +667,10 @@ def _prevent_static_points(game, event: dict) -> PreventionOutcome | None:
     permanent (CR 611.2) rather than needing a sweep.
     """
     prevented = _static_points_prevented(game, event)
+    by = ", ".join(source_names(_static_points_sources(game, event)))
     game.log.append(
         f"{recipient_label(event['recipient'])} prevented {prevented} of "
-        f"{event['amount']} damage (a static prevention)"
+        f"{event['amount']} damage ({by or 'a static prevention'})"
     )
     return PreventionOutcome(prevented=prevented)
 
@@ -667,8 +714,15 @@ def _place_counter_unpreventable(game, event: dict) -> None:
     )
 
 
+def _static_whole_event_sources(game, event: dict) -> list:
+    """The permanent :func:`_static_prevention_source` finds (Nine Lives)."""
+    found = _static_prevention_source(game, event)
+    return [] if found is None else [found[0]]
+
+
 @prevention_effect(
     STATIC_WHOLE_EVENT, applies=_applies_static_whole_event,
+    sources=_static_whole_event_sources,
     unpreventable=_place_counter_unpreventable,
     label="Prevent the damage and put a counter on this permanent",
 )
@@ -835,8 +889,15 @@ def _remove_counter_unpreventable(game, event: dict) -> None:
     )
 
 
+def _the_recipient(game, event: dict) -> list:
+    """The damaged permanent, whose own text prints the shield (the Phantoms)."""
+    recipient = event["recipient"]
+    return [] if isinstance(recipient, PlayerState) or recipient is None else [recipient]
+
+
 @prevention_effect(
     SELF_WHOLE_EVENT_COUNTER, applies=_applies_self_counter_shield,
+    sources=_the_recipient,
     unpreventable=_remove_counter_unpreventable,
     label="Prevent the damage and remove a counter from the creature",
 )
@@ -944,6 +1005,7 @@ def _remove_counters_per_damage_unpreventable(game, event: dict) -> None:
 
 @prevention_effect(
     PER_POINT_COUNTER_SHIELD, applies=_applies_per_damage_counter,
+    sources=_the_recipient,
     unpreventable=_remove_counters_per_damage_unpreventable,
     label="Prevent each 1 damage by removing a counter from the creature",
 )
@@ -1047,9 +1109,9 @@ def prevent_all_to_controller(line: str) -> dict | None:
     return described
 
 
-def _controller_blanket_for(game, event: dict) -> dict | None:
-    """The blanket shielding this player *against this event*, read off their
-    own battlefield. Pure.
+def _controller_blankets(game, event: dict):
+    """``(permanent, described)`` for each blanket shielding this player
+    *against this event*, read off their own battlefield. Pure.
 
     A player has no text of their own, so the line is found on the permanents
     they control — the same read ``_source_type_shielded_by`` makes of a
@@ -1064,10 +1126,10 @@ def _controller_blanket_for(game, event: dict) -> dict | None:
     """
     recipient = event["recipient"]
     if not isinstance(recipient, PlayerState):
-        return None
+        return
     seat = game.players.index(recipient) if recipient in game.players else None
     if seat is None:
-        return None
+        return
     for permanent in game.controlled_by(seat):
         for line in permanent.effective_card.oracle_text.splitlines():
             described = prevent_all_to_controller(line)
@@ -1086,8 +1148,12 @@ def _controller_blanket_for(game, event: dict) -> dict | None:
                 event.get("source_seat") == seat
             ):
                 continue
-            return described
-    return None
+            yield permanent, described
+
+
+def _controller_blanket_for(game, event: dict) -> dict | None:
+    """The first blanket :func:`_controller_blankets` finds, or None."""
+    return next((described for _perm, described in _controller_blankets(game, event)), None)
 
 
 def _applies_controller_blanket(game, event: dict) -> bool:
@@ -1099,8 +1165,20 @@ def _applies_controller_blanket(game, event: dict) -> bool:
     return bool(event.get("combat")) or not described["combat_only"]
 
 
+def _controller_blanket_sources(game, event: dict) -> list:
+    """The permanents whose blanket covers this event (Glacial Chasm, Energy
+    Field), by :func:`_controller_blankets`' reading. Pure."""
+    if event["amount"] <= 0:
+        return []
+    return [
+        permanent for permanent, described in _controller_blankets(game, event)
+        if event.get("combat") or not described["combat_only"]
+    ]
+
+
 @prevention_effect(
     CONTROLLER_BLANKET, applies=_applies_controller_blanket,
+    sources=_controller_blanket_sources,
     label="Prevent all damage that would be dealt to you",
 )
 def _prevent_all_to_controller(game, event: dict) -> PreventionOutcome | None:
@@ -1175,21 +1253,22 @@ _SPELL_CLASSES = frozenset({
 })
 
 
-def _spell_class_blanket(game, event: dict) -> dict | None:
-    """The spell-class blanket covering this event, or None. Pure.
+def _spell_class_blankets(game, event: dict):
+    """``(permanent, described)`` for each spell-class blanket covering this
+    event. Pure.
 
     Scanned over every battlefield rather than the recipient's: the sentence
     names no recipient at all, so an opponent's Energy Storm covers this damage
     exactly as your own would.
     """
     if event["amount"] <= 0:
-        return None
+        return
     source = event.get("source")
     if source is None or hasattr(source, "metadata"):
         # A permanent is not a spell however it is dealing the damage
         # (CR 110.1). A spell's source is the card as printed (CR 120.7), which
         # is the shape with no ``metadata``.
-        return None
+        return
     for permanent in game.all_permanents():
         for line in permanent.effective_card.oracle_text.splitlines():
             described = prevent_all_from_spell_class(line)
@@ -1201,16 +1280,27 @@ def _spell_class_blanket(game, event: dict) -> dict | None:
                 source_has_type(game, source, word)
                 for word in described["classes"]
             ):
-                return described
-    return None
+                yield permanent, described
+
+
+def _spell_class_blanket(game, event: dict) -> dict | None:
+    """The first blanket :func:`_spell_class_blankets` finds, or None."""
+    return next((described for _perm, described in _spell_class_blankets(game, event)), None)
 
 
 def _applies_spell_class_blanket(game, event: dict) -> bool:
     return _spell_class_blanket(game, event) is not None
 
 
+def _spell_class_blanket_sources(game, event: dict) -> list:
+    """Every permanent whose spell-class blanket covers this event (Energy
+    Storm). Pure."""
+    return _once(perm for perm, _d in _spell_class_blankets(game, event))
+
+
 @prevention_effect(
     SPELL_CLASS_BLANKET, applies=_applies_spell_class_blanket,
+    sources=_spell_class_blanket_sources,
     label="Prevent all damage dealt by the described spells",
 )
 def _prevent_all_from_spell_class(game, event: dict) -> PreventionOutcome | None:
@@ -1313,8 +1403,9 @@ def prevent_all_to_matching(line: str) -> dict | None:
     }
 
 
-def _matching_blanket_for(game, event: dict) -> str | None:
-    """The name of a permanent whose blanket covers this event, or None. Pure.
+def _matching_blankets(game, event: dict):
+    """Each permanent whose blanket covers this event, once per covering line.
+    Pure.
 
     Every battlefield, because the sentence names no controller of its own:
     Bubble Matrix shields both seats' creatures and Inner Sanctum shields its
@@ -1333,7 +1424,7 @@ def _matching_blanket_for(game, event: dict) -> str | None:
     the board reads now.
     """
     if event["amount"] <= 0:
-        return None
+        return
     from ..models import Permanent
     from ..subject_filters import subject_matches
 
@@ -1354,21 +1445,36 @@ def _matching_blanket_for(game, event: dict) -> str | None:
             ends = [protected]
             if described["two_way"]:
                 ends.append(dealer)
-            for end in ends:
-                if end is not None and subject_matches(
+            if any(
+                end is not None and subject_matches(
                     game, end, dict(described["filter"]),
                     observer=seat, source=permanent,
-                ):
-                    return permanent.card.name
-    return None
+                )
+                for end in ends
+            ):
+                yield permanent
+
+
+def _matching_blanket_for(game, event: dict) -> str | None:
+    """The name of the first permanent :func:`_matching_blankets` finds, or
+    None."""
+    found = next(_matching_blankets(game, event), None)
+    return None if found is None else found.card.name
 
 
 def _applies_matching_blanket(game, event: dict) -> bool:
     return _matching_blanket_for(game, event) is not None
 
 
+def _matching_blanket_sources(game, event: dict) -> list:
+    """Every permanent whose "…to <phrase>" blanket covers this event (Bubble
+    Matrix, Inner Sanctum, Statecraft). Pure."""
+    return _once(_matching_blankets(game, event))
+
+
 @prevention_effect(
     MATCHING_BLANKET, applies=_applies_matching_blanket,
+    sources=_matching_blanket_sources,
     label="Prevent all damage to the described permanents",
 )
 def _prevent_all_to_matching(game, event: dict) -> PreventionOutcome | None:
@@ -1410,8 +1516,16 @@ def _applies_chosen_source_one_shot(game, event: dict) -> bool:
     ) > 0
 
 
+def _chosen_source_one_shot_sources(game, event: dict) -> list:
+    """The source carrying the marker, which records no arming card (Desperate
+    Gambit's losing flip): the option names the object it is on."""
+    source = event.get("source")
+    return [] if source is None else [source]
+
+
 @prevention_effect(
     CHOSEN_SOURCE_ONE_SHOT, applies=_applies_chosen_source_one_shot,
+    sources=_chosen_source_one_shot_sources,
     label="Prevent the next damage the chosen source would deal",
 )
 def _prevent_next_damage_from_chosen_source(game, event: dict) -> PreventionOutcome | None:
@@ -1505,6 +1619,7 @@ def _applies_small_event_blanket(game, event: dict) -> bool:
 
 @prevention_effect(
     SMALL_EVENT_BLANKET, applies=_applies_small_event_blanket,
+    sources=_the_recipient,
     label="Prevent damage of the printed amount or less",
 )
 def _prevent_small_event(game, event: dict) -> PreventionOutcome | None:
@@ -1557,9 +1672,9 @@ def prevent_between_shared_colors(line: str) -> dict | None:
     return {"combat_only": bool(match.group("combat"))}
 
 
-def _shared_color_blanket_for(game, event: dict) -> str | None:
-    """The name of a permanent whose shared-colour blanket covers this event,
-    or None. Pure.
+def _shared_color_blankets(game, event: dict):
+    """Each permanent whose shared-colour blanket covers this event, once per
+    covering line. Pure.
 
     Three things have to be true of the event before any board is scanned, and
     each is a printed word:
@@ -1581,20 +1696,20 @@ def _shared_color_blanket_for(game, event: dict) -> str | None:
     Well-Laid Plans covers your creatures exactly as your own would.
     """
     if event["amount"] <= 0:
-        return None
+        return
     from ..models import Permanent
     from ..object_colors import share_a_color
 
     recipient = event["recipient"]
     source = event.get("source")
     if not isinstance(recipient, Permanent) or not isinstance(source, Permanent):
-        return None
+        return
     if source is recipient or not recipient.is_creature or not source.is_creature:
-        return None
+        return
     if not share_a_color(
         game._effective_colors(recipient), game._effective_colors(source)
     ):
-        return None
+        return
     for permanent in game.all_permanents():
         for line in (permanent.effective_card.oracle_text or "").splitlines():
             described = prevent_between_shared_colors(line)
@@ -1602,16 +1717,29 @@ def _shared_color_blanket_for(game, event: dict) -> str | None:
                 continue
             if described["combat_only"] and not event.get("combat"):
                 continue
-            return permanent.card.name
-    return None
+            yield permanent
 
 
 def _applies_shared_color_blanket(game, event: dict) -> bool:
     return _shared_color_blanket_for(game, event) is not None
 
 
+def _shared_color_blanket_for(game, event: dict) -> str | None:
+    """The name of the first permanent :func:`_shared_color_blankets` finds,
+    or None."""
+    found = next(_shared_color_blankets(game, event), None)
+    return None if found is None else found.card.name
+
+
+def _shared_color_blanket_sources(game, event: dict) -> list:
+    """Every permanent whose shared-colour blanket covers this event
+    (Well-Laid Plans). Pure."""
+    return _once(_shared_color_blankets(game, event))
+
+
 @prevention_effect(
     SHARED_COLOR_BLANKET, applies=_applies_shared_color_blanket,
+    sources=_shared_color_blanket_sources,
     label="Prevent damage between creatures that share a color",
 )
 def _prevent_between_shared_colors(game, event: dict) -> PreventionOutcome | None:

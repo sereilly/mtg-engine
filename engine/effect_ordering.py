@@ -78,8 +78,12 @@ class Candidate:
                      about effects that may then not be chosen.
     apply         -- ``(game, event) -> outcome``. Runs only once chosen, and
                      may assume ``applies`` just returned True.
-    label         -- the option the ``effect_order`` prompt shows and the log
-                     names: one short line (:func:`option_label`)
+    label         -- what the effect does, as the ``effect_order`` prompt
+                     shows it and the log names it: one short line
+                     (:func:`option_label`)
+    sources       -- ``(game, event) -> [source, …]``: the objects generating
+                     this effect for this event (CR 616.1), which the option
+                     names beside the label (:func:`option_text`). Pure.
     """
 
     key: str
@@ -123,6 +127,12 @@ class Candidate:
     #: Applied at most once per event (615.12a), which the loop below gives
     #: every candidate.
     unpreventable_apply: Callable[[Any, dict], Any] | None = None
+    #: What generates this effect for the event in front of it: the
+    #: permanents whose text it is, the shields' granting cards, the spell
+    #: that armed it. Read only to *name* the effect — never to decide whether
+    #: it applies, which ``applies`` alone answers — and pure for the same
+    #: reason. None names nothing beside the label.
+    sources: Callable[[Any, dict], Any] | None = None
 
 
 #: ``Candidate.amount_role`` values. See :func:`choose_effect`.
@@ -154,6 +164,52 @@ def option_label(label: str, *, key: str) -> str:
             f"not {label!r}"
         )
     return text
+
+
+def source_name(source) -> str:
+    """How one source of an effect is named to every seat: a permanent or a
+    stack object by its card's name — for a face-down one, the blank 2/2's
+    (CR 708.2: ``Permanent.card`` *is* the blank while it is hidden) — a card
+    by its name, and a name recorded when the effect was created as itself.
+
+    Duck-typed, for the reason :func:`affected_seat` is: this module imports
+    nothing from the engine."""
+    if isinstance(source, str):
+        return source
+    card = getattr(source, "card", None)
+    if card is not None and getattr(card, "name", None):
+        return str(card.name)
+    return str(getattr(source, "name", "") or "")
+
+
+def source_names(sources) -> list[str]:
+    """The name of each of *sources*, in order and once each — two Sulfuric
+    Vortexes are one effect in contention (one candidate stands for both), and
+    the option says which card it is, not how many."""
+    names: list[str] = []
+    for source in sources or ():
+        name = source_name(source)
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def option_text(game, event: dict, candidate: Candidate) -> str:
+    """The option CR 616.1e's ``effect_order`` prompt offers for *candidate*:
+    what the effect does and, beside it, what generates it — "Gain no life
+    instead (Sulfuric Vortex)".
+
+    The label alone named the effect and not its source, so two effects that do
+    the same thing read the same, and one that does what an exemplar card does
+    read as that card whatever printed it. CR 616.1 is a choice among *effects*;
+    a person tells two apart by where each comes from. Everything named is
+    public — a permanent, a resolved spell, a name written when the effect was
+    created — and a face-down source is named as every seat sees it
+    (:func:`source_name`)."""
+    names = source_names(candidate.sources(game, event)) if candidate.sources else []
+    if not names:
+        return candidate.label
+    return f"{candidate.label} ({', '.join(names)})"
 
 
 @dataclass
@@ -284,7 +340,7 @@ def apply_in_order(
     *,
     chooser_index: int | None = None,
     stop: Callable[[Any, dict], bool] | None = None,
-    ask: Callable[[Any, int | None, list[Candidate]], Any] | None = None,
+    ask: Callable[[Any, int | None, list[Candidate], dict], Any] | None = None,
 ) -> OrderingTrace:
     """Apply *candidates* to *event* following CR 616.1.
 
@@ -293,7 +349,9 @@ def apply_in_order(
     the process early — a consumed event has nothing left for anything to
     modify.
 
-    ``ask`` is how the affected player is consulted (616.1e). It is called only
+    ``ask`` is how the affected player is consulted (616.1e):
+    ``ask(game, chooser_index, applicable, event)``, the event so the options
+    can name each effect's sources (:func:`option_text`). It is called only
     on a round with more than one applicable effect, and only **before anything
     has been applied**. It returns the chosen candidate, or :data:`SUSPENDED`
     to mean "a prompt is queued; stop".
@@ -327,7 +385,7 @@ def apply_in_order(
                 trace.unasked.append(tuple(c.key for c in applicable))
             chosen = choose_effect(game, chooser_index, applicable)
         else:
-            answer = ask(game, chooser_index, applicable)
+            answer = ask(game, chooser_index, applicable, event)
             if answer is SUSPENDED:
                 trace.suspended = True
                 return trace

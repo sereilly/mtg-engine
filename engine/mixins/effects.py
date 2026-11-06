@@ -878,6 +878,17 @@ class EffectsMixin:
             phrase in perm.effective_card.oracle_text.lower() for perm in self.controlled_by(player)
         )
 
+    def _permanents_with_text(self, player: PlayerState, phrase: str) -> list:
+        """The permanents *player* controls whose text holds *phrase* — the
+        ones :meth:`_player_controls_text` answers about, named: what a
+        text-keyed replacement's log line and CR 616.1e's ``effect_order``
+        option say generated the effect, rather than an exemplar card's name
+        written into the line."""
+        return [
+            perm for perm in self.controlled_by(player)
+            if phrase in perm.effective_card.oracle_text.lower()
+        ]
+
     def place_plus1_counters(self, permanent: Permanent, count: int = 1) -> int:
         """Put *count* +1/+1 counters on *permanent*, as a replaceable event.
 
@@ -1205,8 +1216,8 @@ class EffectsMixin:
         self._deal_damage_to_player(
             victim, damage, source=None, asks=True,
             then=lambda dealt: self.log.append(
-                f"Eye for an Eye dealt {dealt} damage to {victim.name} "
-                f"(mirroring the damage dealt to {target.name})"
+                f"{dealt} damage is dealt to {victim.name}, mirroring the damage "
+                f"dealt to {target.name}"
             ),
         )
 

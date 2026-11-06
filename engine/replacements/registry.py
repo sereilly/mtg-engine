@@ -21,13 +21,13 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from ..effect_ordering import (
-    OPTION_LABEL_LIMIT,
     SUSPENDED,
     Candidate,
     affected_seat,
     apply_in_order,
     choose_effect,
     option_label,
+    option_text,
 )
 
 
@@ -46,9 +46,12 @@ class ReplacementOutcome:
 
 Interceptor = Callable[[Any, dict], Optional[ReplacementOutcome]]
 Applicability = Callable[[Any, dict], bool]
-#: ``(game, event) -> [(instance key, option label), …]`` — see
+#: ``(game, event) -> [(instance key, source), …]`` — see
 #: :func:`replacement_effect`'s ``instances``.
 Instances = Callable[[Any, dict], list]
+#: ``(game, event) -> [source, …]`` — see :func:`replacement_effect`'s
+#: ``sources``.
+Sources = Callable[[Any, dict], list]
 
 REPLACEMENTS: dict[str, list[Candidate]] = {}
 #: The registrations that stand for **several effects at once**, by key: each
@@ -395,37 +398,34 @@ SHUFFLE_INSTEAD_OF_GRAVEYARD = 20  # Legacy Weapon
 REPLACED = "_replaced"
 
 
-def _docstring_label(fn) -> str:
-    """The option label a registration that names none takes: its docstring up
-    to the first colon — refused at import unless that is one short line."""
-    text = (fn.__doc__ or fn.__name__).split(":")[0].strip()
-    if "\n" in text or len(text) > OPTION_LABEL_LIMIT:
-        raise ValueError(
-            f"{fn.__name__}: its docstring does not open with a one-line "
-            "effect_order label; pass label= to @replacement_effect"
-        )
-    return text
-
-
 def replacement_effect(
     kind: str, order: int, *, applies: Applicability, redirects: bool = False,
     prevents: bool = False,
     amount_role: str = "",
-    label: str | None = None,
+    label: str,
+    sources: Sources,
     instances: Instances | None = None,
 ) -> Callable[[Interceptor], Interceptor]:
     """Register an interceptor for an event kind.
+
+    ``sources`` is **required**: it reads ``(game, event)`` and returns what
+    generates this effect for this event — the permanents whose text it is,
+    the record's arming card — for CR 616.1e's ``effect_order`` prompt to name
+    beside the label ("Gain no life instead (Sulfuric Vortex)",
+    ``effect_ordering.option_text``). Pure, like ``applies``, and asked only of
+    an effect that applies. A record that keeps no arming card answers with
+    nothing, and its reader's docstring says so.
 
     ``instances`` is for a registration that stands for **any number of
     effects** — one per activation of an ability that arms one, where CR 616.1
     counts each as an effect of its own ("If multiple Words have been used
     prior to drawing a card, then you can choose which one to apply (and use
     up) each time you draw a card", the Words, 2004-10-04). It reads
-    ``(game, event)`` and returns ``[(instance key, option label), …]``, oldest
+    ``(game, event)`` and returns ``[(instance key, source), …]``, oldest
     first; :func:`replacement_candidates`, given the event, makes one CR 616.1
     candidate of each, so CR 616.1e's ``effect_order`` prompt offers them
-    apart. Each instance's ``apply`` calls the interceptor with
-    ``instance=<key>``. The keys must be stable while the event is suspended
+    apart — each the registration's label with its own source beside it.
+    Each instance's ``apply`` calls the interceptor with ``instance=<key>``. The keys must be stable while the event is suspended
     on the prompt — nothing happens in between — and equal effects should be
     one instance, so the prompt never asks between two identical options. The
     default for a seat nobody asks is the first, for ``choose_effect``'s tie
@@ -436,13 +436,12 @@ def replacement_effect(
     any of them, which an interceptor that answers by applying itself makes
     impossible. It must be pure.
 
-    ``label`` is the option CR 616.1e's ``effect_order`` prompt shows — one
-    short line (``effect_ordering.option_label``). Left out, it is still read
-    off the docstring up to its first colon, the way every label here was until
-    the kg round; but a docstring whose text there is not one short line now
-    raises at import instead of putting a paragraph in front of a player
-    (Infernal Darkness' substitution did), so that registration names its own.
-    ``engine/prevention`` requires the argument outright.
+    ``label`` is **required** too: what the effect does, as CR 616.1e's
+    ``effect_order`` prompt shows it — one short line
+    (``effect_ordering.option_label``). It was read off the docstring up to
+    its first colon until kg4, which made most options an exemplar card's
+    name ("Lich", "Jade Monolith", "Disintegrate-style") whatever printed the
+    sentence; naming the card is ``sources``' job.
 
     A duplicate order within a kind raises at import, matching ``@parse_rule``
     and ``@prevention_effect``: with the default choice being the lowest order,
@@ -459,10 +458,7 @@ def replacement_effect(
                 )
         registered.append(
             Candidate(key=fn.__name__, order=order, applies=applies, apply=fn,
-                      label=(
-                          option_label(label, key=fn.__name__) if label is not None
-                          else _docstring_label(fn)
-                      ),
+                      label=option_label(label, key=fn.__name__),
                       # CR 614.9: this one *moves* the damage rather than
                       # changing it, which is the half of Whippoorwill's clause
                       # a replacement can be. Declared here so a new redirect
@@ -480,7 +476,8 @@ def replacement_effect(
                       prevents=prevents,
                       # CR 616.1e's default needs to know a cap from a
                       # multiplier (`effect_ordering.choose_effect`).
-                      amount_role=amount_role)
+                      amount_role=amount_role,
+                      sources=sources)
         )
         registered.sort(key=lambda candidate: candidate.order)
         if instances is not None:
@@ -527,13 +524,16 @@ def replacement_candidates(
                 prevents_or_redirects=c.prevents_or_redirects,
                 prevents=c.prevents,
                 amount_role=c.amount_role,
+                sources=c.sources,
             ))
             continue
         if not c.applies(game, event):
             continue
-        for instance, label in instances(game, event):
+        for instance, source in instances(game, event):
             candidates.append(Candidate(
-                key=f"{c.key}:{instance}", order=c.order, label=label,
+                key=f"{c.key}:{instance}", order=c.order, label=c.label,
+                # The instance's own source, which is what tells two apart.
+                sources=lambda g, e, named=source: [named],
                 # Still armed: an instance's effect is spent by the event that
                 # applies it, and CR 616.1f re-asks the others afterwards.
                 applies=lambda g, e, ap=c.applies, rd=instances, inst=instance: (
@@ -576,7 +576,7 @@ def order_prompt_asker(kind: str, restart: Callable[[], Any]) -> Callable:
     headless play never queue and never suspend.
     """
 
-    def ask(game, chooser_index, applicable):
+    def ask(game, chooser_index, applicable, event):
         recorded = _recorded_order(game, kind, chooser_index)
         if recorded is not None:
             by_key = {c.key: c for c in applicable}
@@ -586,17 +586,24 @@ def order_prompt_asker(kind: str, restart: Callable[[], Any]) -> Callable:
             return choose_effect(game, chooser_index, applicable)
         if chooser_index is None or chooser_index not in game.interactive_seats:
             return choose_effect(game, chooser_index, applicable)
+        # "<effect> (<source>)": what each effect does and what generates it,
+        # so two that do the same thing — or one that does what an exemplar
+        # card does — can be told apart (``effect_ordering.option_text``).
+        options = [
+            option_text(game, event, c) if c.label else c.key
+            for c in applicable
+        ]
         game.arm_pending_choice(
             "effect_order",
             chooser_index,
             event_kind=kind,
-            options=[c.label or c.key for c in applicable],
+            options=options,
             _keys=[c.key for c in applicable],
             _restart=restart,
         )
         game.log.append(
             f"{game.players[chooser_index].name} must choose which effect applies "
-            f"first ({', '.join(c.label or c.key for c in applicable)})"
+            f"first ({', '.join(options)})"
         )
         # Arming stopped the loop this event was a step of, so it does not run on
         # past a step that has not happened: ``effect_order`` is registered

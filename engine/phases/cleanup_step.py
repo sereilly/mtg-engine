@@ -143,6 +143,7 @@ class CleanupStepMixin:
         # anywhere else, so every turn-bounded record ends in one place.
         self.expire_stamped_phase_skips()
         self.combat_damage_prevented_until_eot = False
+        self.combat_damage_prevented_by = []
         self.combat_damage_prevented_for = []
         self.combat_damage_prevented_except_from = []
         # CR 603.7b: a delayed trigger scoped to "this turn" that has not fired

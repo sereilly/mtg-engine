@@ -217,6 +217,7 @@ class GameEndingMixin:
         # common case (no banner in play) leaves this empty and skips the sweep.
         banned_set_codes: set[str] = set()
         banner_perm_ids: set[int] = set()
+        banner_names: list[str] = []
         for _perm in self.all_permanents():
             for _instr in compile_card_oracle(_perm.effective_card).instructions:
                     if _instr.kind == "ban_and_sacrifice_set_permanents":
@@ -224,6 +225,8 @@ class GameEndingMixin:
                         if code is not None:
                             banned_set_codes.add(code)
                         banner_perm_ids.add(id(_perm))
+                        if _perm.card.name not in banner_names:
+                            banner_names.append(_perm.card.name)
         while changed:
             changed = False
 
@@ -541,7 +544,9 @@ class GameEndingMixin:
                             and card_set in banned_set_codes
                         ):
                             self.sacrifice_permanent(perm)
-                            self.log.append(f"{perm.card.name} sacrificed (City in a Bottle)")
+                            self.log.append(
+                                f"{perm.card.name} sacrificed ({', '.join(banner_names)})"
+                            )
                             changed = True
 
             # Old Man of the Sea: linked-duration steal ends the instant it

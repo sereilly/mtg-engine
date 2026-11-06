@@ -316,6 +316,10 @@ class Game(
     skip_phase_counts: dict[object, int] = field(default_factory=dict)
     skip_step_counts: dict[object, int] = field(default_factory=dict)
     combat_damage_prevented_until_eot: bool = False
+    # Who armed it — the resolved spells' names, as CR 616.1e's prompt names
+    # the blanket ("Prevent all combat damage this turn (Fog)"). Set beside
+    # the flag and cleared with it.
+    combat_damage_prevented_by: list = field(default_factory=list)
     # Blind Fury's "this turn" doubling was a list here, cleared by a line of
     # its own in the cleanup step. It is a record on its caster's seat now,
     # beside Equal Treatment's and Plagiarize's (``engine/turn_replacements.py``),

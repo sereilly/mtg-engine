@@ -656,11 +656,18 @@ def test_w1g5_three_damage_effects_contend_and_the_prompt_names_what_is_on_the_t
     [prompt] = game.pending_choices
     assert (prompt.kind, prompt.player_index) == ("effect_order", 0)
     options = list(prompt.data["options"])
-    assert options == ["A static prevention", "Delaying Shield", "Nefarious Lich"]
+    # Each option is what the effect does and the card generating it (kg4).
+    assert options == [
+        "Prevent some of that damage (Sphere of Law)",
+        "Put that many counters on the permanent instead (Delaying Shield)",
+        "Exile that many cards from your graveyard instead (Nefarious Lich)",
+    ], options
     assert len(game.stack) == 1, "the Bolt waits for the answer (CR 608.2)"
 
     assert game.resolve_pending_choice(
-        "effect_order", 0, option_index=options.index("Nefarious Lich"),
+        "effect_order", 0, option_index=options.index(
+            "Exile that many cards from your graveyard instead (Nefarious Lich)"
+        ),
     )
     assert [(c.kind, c.data["count"]) for c in game.pending_choices] == [
         ("graveyard_exile_pick", 3),

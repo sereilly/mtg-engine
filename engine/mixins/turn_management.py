@@ -413,7 +413,7 @@ class TurnManagementMixin:
             )
         player.life -= amount
         player.mana_pool["C"] = player.mana_pool.get("C", 0) + amount
-        self.log.append(f"{player.name} paid {amount} life via Channel for {amount} {{C}}")
+        self.log.append(f"{player.name} paid {amount} life for {amount} {{C}}")
         # Paying down to 0 is legal; the player then loses to SBAs (704.5a).
         self.check_state_based_actions()
         return SimulationResult("Channel", True, "spell_pattern", f"added {amount} C")

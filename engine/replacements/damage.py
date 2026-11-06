@@ -139,7 +139,36 @@ def _applies_life_floor(game, payload: dict) -> bool:
     return _floored_amount(game, payload) is not None
 
 
-@replacement_effect("life_loss", LIFE_FLOOR, applies=_applies_life_floor)
+def _life_floor_sources(game, payload: dict) -> list:
+    """Every permanent whose printed floor covers the damaged player now (Ali
+    from Cairo, Worship), by :func:`_life_floor_holder`'s reading. Pure."""
+    from ..static_bonuses import conditional_static_holds
+
+    player = payload["recipient"]
+    seat = game.players.index(player) if player in game.players else None
+    if seat is None:
+        return []
+    found = []
+    for permanent in game.controlled_by(seat):
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            described = damage_life_floor_condition(line)
+            if described is None:
+                continue
+            condition = described.get("condition")
+            if condition is not None and not conditional_static_holds(
+                game, seat, permanent, condition
+            ):
+                continue
+            found.append(permanent)
+            break
+    return found
+
+
+@replacement_effect(
+    "life_loss", LIFE_FLOOR, applies=_applies_life_floor,
+    sources=_life_floor_sources,
+    label="Your life total is reduced to 1 instead of less than 1",
+)
 def _floor_life_at_one(game, payload: dict) -> ReplacementOutcome | None:
     """Ali from Cairo: "Damage that would reduce your life total to less than
     1 reduces it to 1 instead."
@@ -289,13 +318,53 @@ def _applies_source_damage_cap(game, payload: dict) -> bool:
     return _capped_source_damage(game, payload) is not None
 
 
+def _source_damage_cap_sources(game, payload: dict) -> list:
+    """Every permanent whose printed cap would lower this event (Forethought
+    Amulet, Divine Presence), by :func:`_capped_source_damage`'s reading.
+    Pure."""
+    from ..prevention import source_has_type
+
+    recipient = payload["recipient"]
+    amount = payload["amount"]
+    source = payload.get("source")
+    if amount <= 0:
+        return []
+    found = []
+    if hasattr(recipient, "life"):
+        for permanent in game.controlled_by(recipient):
+            for line in (permanent.effective_card.oracle_text or "").splitlines():
+                read = source_damage_cap(line)
+                if read is None:
+                    continue
+                types, threshold, capped = read
+                if amount < threshold or capped >= amount:
+                    continue
+                if any(source_has_type(game, source, word) for word in types):
+                    found.append(permanent)
+                    break
+    for permanent in game.all_permanents():
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            read_any = any_source_damage_cap(line)
+            if read_any is None:
+                continue
+            threshold, capped = read_any
+            if amount >= threshold and capped < amount and not any(
+                permanent is seen for seen in found
+            ):
+                found.append(permanent)
+                break
+    return found
+
+
 @replacement_effect(
     "damage_to_player", DAMAGE_SOURCE_CAP, applies=_applies_source_damage_cap,
-    amount_role=CAP,
+    amount_role=CAP, sources=_source_damage_cap_sources,
+    label="It deals the capped amount of damage instead",
 )
 @replacement_effect(
     "damage_to_creature", DAMAGE_SOURCE_CAP, applies=_applies_source_damage_cap,
-    amount_role=CAP,
+    amount_role=CAP, sources=_source_damage_cap_sources,
+    label="It deals the capped amount of damage instead",
 )
 def _cap_damage_from_source_class(game, payload: dict) -> ReplacementOutcome | None:
     """Forethought Amulet: "If an instant or sorcery source would deal 3 or more
@@ -504,13 +573,37 @@ def _applies_spell_damage_delta(game, payload: dict) -> bool:
     return _spell_damage_delta(game, payload) != 0
 
 
+def _spell_damage_delta_sources(game, payload: dict) -> list:
+    """Every permanent whose line moves this event (Benevolent Unicorn,
+    Sulfuric Vapors, Lashknife Barrier), by :func:`_spell_damage_delta`'s
+    reading. Pure."""
+    if (payload.get("amount") or 0) <= 0:
+        return []
+    found = []
+    for permanent in game.all_permanents():
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            read = _read_damage_delta(line)
+            if read is None:
+                continue
+            source_class, _points, protected = read
+            if _source_answers_class(
+                game, payload.get("source"), source_class,
+                payload.get("source_seat"),
+            ) and _delta_covers(game, permanent, payload.get("recipient"), protected):
+                found.append(permanent)
+                break
+    return found
+
+
 @replacement_effect(
     "damage_to_player", DAMAGE_SOURCE_DELTA,
-    applies=_applies_spell_damage_delta,
+    applies=_applies_spell_damage_delta, sources=_spell_damage_delta_sources,
+    label="It deals that much damage plus or minus the printed amount instead",
 )
 @replacement_effect(
     "damage_to_creature", DAMAGE_SOURCE_DELTA,
-    applies=_applies_spell_damage_delta,
+    applies=_applies_spell_damage_delta, sources=_spell_damage_delta_sources,
+    label="It deals that much damage plus or minus the printed amount instead",
 )
 def _shift_spell_damage(game, payload: dict) -> ReplacementOutcome | None:
     """Benevolent Unicorn: "If a spell would deal damage to a permanent or
@@ -695,8 +788,34 @@ def _applies_desert_shield(game, payload: dict) -> bool:
     )
 
 
+def _desert_shield_sources(game, payload: dict) -> list:
+    """The creature whose own line shields it from Deserts (Desert Nomads, an
+    attacking Camel) and every attacking Camel banded with it. Pure."""
+    permanent = payload["recipient"]
+    if not _is_desert(payload.get("source")):
+        return []
+    text = (permanent.effective_card.oracle_text or "").lower()
+    found = []
+    if (
+        "prevent all damage that would be dealt to this creature by deserts" in text
+        or (_CAMEL_SHIELD_TEXT in text and permanent.attacking)
+    ):
+        found.append(permanent)
+    if permanent.attacking:
+        from ..banding import creatures_banded_with
+
+        found.extend(
+            mate for mate in creatures_banded_with(game, permanent)
+            if mate.attacking
+            and _CAMEL_SHIELD_TEXT in (mate.effective_card.oracle_text or "").lower()
+        )
+    return found
+
+
 @replacement_effect(
-    "damage_to_creature", SOURCE_TYPE_SHIELD, applies=_applies_desert_shield, prevents=True
+    "damage_to_creature", SOURCE_TYPE_SHIELD, applies=_applies_desert_shield,
+    prevents=True, sources=_desert_shield_sources,
+    label="Prevent the damage from the Desert",
 )
 def _prevent_desert_damage(game, payload: dict) -> ReplacementOutcome | None:
     """Desert Nomads: "Prevent all damage that would be dealt to this
@@ -834,13 +953,22 @@ def _applies_damage_multiplier(game, payload: dict) -> bool:
     return _damage_multiplier(game, payload) > 1
 
 
+def _damage_multiplier_sources(game, payload: dict) -> list:
+    """The permanents whose multipliers this event answers to (Fiery
+    Emancipation, Furnace of Rath), :func:`_damage_multipliers`' terms.
+    Pure."""
+    return [perm for factor, perm in _damage_multipliers(game, payload) if factor > 1]
+
+
 @replacement_effect(
     "damage_to_creature", DAMAGE_MULTIPLIER, applies=_applies_damage_multiplier,
-    amount_role=MULTIPLIER,
+    amount_role=MULTIPLIER, sources=_damage_multiplier_sources,
+    label="It deals a multiple of that damage instead",
 )
 @replacement_effect(
     "damage_to_player", DAMAGE_MULTIPLIER, applies=_applies_damage_multiplier,
-    amount_role=MULTIPLIER,
+    amount_role=MULTIPLIER, sources=_damage_multiplier_sources,
+    label="It deals a multiple of that damage instead",
 )
 def _multiply_damage_dealt(game, payload: dict) -> ReplacementOutcome | None:
     """Fiery Emancipation: "If a source **you control** would deal damage to a
@@ -888,13 +1016,26 @@ def _applies_turn_damage_multiplier(game, payload: dict) -> bool:
     return bool(_turn_damage_records(game, payload, multiplying=True))
 
 
+def _turn_damage_multiplier_sources(game, payload: dict) -> list:
+    """The spells that armed the turn-long doublings answering to this event
+    (Blind Fury), by the name each record carries. Pure."""
+    return [
+        record.source_name
+        for record in _turn_damage_records(game, payload, multiplying=True)
+    ]
+
+
 @replacement_effect(
     "damage_to_creature", COMBAT_DAMAGE_DOUBLER,
     applies=_applies_turn_damage_multiplier, amount_role=MULTIPLIER,
+    sources=_turn_damage_multiplier_sources,
+    label="It deals double that damage instead this turn",
 )
 @replacement_effect(
     "damage_to_player", COMBAT_DAMAGE_DOUBLER,
     applies=_applies_turn_damage_multiplier, amount_role=MULTIPLIER,
+    sources=_turn_damage_multiplier_sources,
+    label="It deals double that damage instead this turn",
 )
 def _multiply_turn_damage(game, payload: dict) -> ReplacementOutcome | None:
     """Blind Fury: "If a creature would deal combat damage to a creature this
@@ -938,13 +1079,27 @@ def _applies_turn_damage_becomes(game, payload: dict) -> bool:
     )
 
 
+def _turn_damage_becomes_sources(game, payload: dict) -> list:
+    """The spells that armed the turn's "it deals N instead" records that
+    would change this event (Equal Treatment). Pure."""
+    return [
+        record.source_name
+        for record in _turn_damage_records(game, payload, multiplying=False)
+        if record.becomes != payload["amount"]
+    ]
+
+
 @replacement_effect(
     "damage_to_creature", TURN_DAMAGE_BECOMES,
     applies=_applies_turn_damage_becomes, amount_role=CAP,
+    sources=_turn_damage_becomes_sources,
+    label="It deals the set amount of damage instead this turn",
 )
 @replacement_effect(
     "damage_to_player", TURN_DAMAGE_BECOMES,
     applies=_applies_turn_damage_becomes, amount_role=CAP,
+    sources=_turn_damage_becomes_sources,
+    label="It deals the set amount of damage instead this turn",
 )
 def _turn_damage_becomes(game, payload: dict) -> ReplacementOutcome | None:
     """Equal Treatment: "If any source would deal 1 or more damage to a
@@ -983,13 +1138,23 @@ def _applies_next_damage_doubled(game, payload: dict) -> bool:
     ) > 0
 
 
+def _next_damage_doubled_sources(game, payload: dict) -> list:
+    """The source carrying the "deals double the next time" marker: the
+    marker records no arming card, so the option names the object it is on.
+    Pure."""
+    source = payload.get("source")
+    return [] if source is None else [source]
+
+
 @replacement_effect(
     "damage_to_creature", NEXT_DAMAGE_DOUBLED, applies=_applies_next_damage_doubled,
-    amount_role=MULTIPLIER,
+    amount_role=MULTIPLIER, sources=_next_damage_doubled_sources,
+    label="The chosen source deals double that damage instead, this once",
 )
 @replacement_effect(
     "damage_to_player", NEXT_DAMAGE_DOUBLED, applies=_applies_next_damage_doubled,
-    amount_role=MULTIPLIER,
+    amount_role=MULTIPLIER, sources=_next_damage_doubled_sources,
+    label="The chosen source deals double that damage instead, this once",
 )
 def _double_next_damage_from_chosen_source(
     game, payload: dict

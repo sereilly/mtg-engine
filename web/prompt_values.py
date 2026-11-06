@@ -28,7 +28,10 @@ def _effect_order(ctx: PromptContext, choices: list) -> dict:
     """CR 616.1e: which of the effects attempting to modify one event applies
     first. The options are labelled with the effects themselves, in the order
     the engine would take by default, so the first option is "whatever would
-    have happened anyway"."""
+    have happened anyway" — each the effect and what generates it, "<effect>
+    (<source>)" ("Gain no life instead (Sulfuric Vortex)"), written by the
+    engine's one ask site (``effect_ordering.option_text``), so a person can
+    tell two effects that do one thing apart by their cards."""
     choice = choices[0]
     return {
         "player_seat": choice.player_index,

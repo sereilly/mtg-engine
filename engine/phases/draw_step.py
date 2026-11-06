@@ -294,7 +294,18 @@ class DrawStepMixin:
         has_sanctuary = self.may_skip_draw_for_protection(player_index)
         if has_sanctuary and sanctuary_choice is not False:
             player.island_sanctuary_protected = True
-            self.log.append(f"{player.name} skipped draw (Island Sanctuary active)")
+            offering = next(
+                (
+                    perm.card.name for perm in self.controlled_by(player_index)
+                    if (modifier := DRAW_STEP_MODIFIERS.get(perm.card.name)) is not None
+                    and modifier.optional_skip_grants_protection
+                ),
+                None,
+            )
+            self.log.append(
+                f"{player.name} skipped draw"
+                + (f" ({offering} active)" if offering else "")
+            )
             self._close_or_defer_step(phase, step, defer_priority)
             return 0
 

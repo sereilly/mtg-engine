@@ -1036,7 +1036,9 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
 def channel_life_for_mana(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
     caster.channel_active_until_eot = True
-    game.log.append(f"{caster.name} may pay life for {{C}} mana until end of turn (Channel)")
+    game.log.append(
+        f"{caster.name} may pay life for {{C}} mana until end of turn ({context.card.name})"
+    )
     return True, "resolved"
 
 

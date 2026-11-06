@@ -217,8 +217,17 @@ def _applies_bodyguard_redirect(game, payload: dict) -> bool:
     return _protecting_bodyguard(game, payload) is not None
 
 
+def _bodyguard_sources(game, payload: dict) -> list:
+    """The untapped creature that would take this damage (Veteran Bodyguard,
+    Martyrs of Korlis), as :func:`_protecting_bodyguard` finds it. Pure."""
+    found = _protecting_bodyguard(game, payload)
+    return [] if found is None else [found]
+
+
 @replacement_effect(
-    "damage_to_player", REDIRECT_WHOLE_EVENT, applies=_applies_bodyguard_redirect, redirects=True
+    "damage_to_player", REDIRECT_WHOLE_EVENT, applies=_applies_bodyguard_redirect,
+    redirects=True, sources=_bodyguard_sources,
+    label="The damage is dealt to the untapped creature instead",
 )
 def _redirect_damage_to_bodyguard(game, payload: dict) -> ReplacementOutcome | None:
     """Veteran Bodyguard: "As long as this creature is untapped, all damage that
@@ -265,8 +274,17 @@ def _applies_jade_monolith(game, payload: dict) -> bool:
     return _jade_monolith_seat(game, payload) is not None
 
 
+def _jade_monolith_sources(game, payload: dict) -> list:
+    """The card that armed the creature's redirect (Jade Monolith), by the
+    name its handler wrote beside the record (``redirect_damage_by``). Pure."""
+    named = payload["recipient"].metadata.get("redirect_damage_by")
+    return [named] if named else []
+
+
 @replacement_effect(
-    "damage_to_creature", REDIRECT_WHOLE_EVENT, applies=_applies_jade_monolith, redirects=True
+    "damage_to_creature", REDIRECT_WHOLE_EVENT, applies=_applies_jade_monolith,
+    redirects=True, sources=_jade_monolith_sources,
+    label="That source deals the damage to the redirect's controller instead",
 )
 def _redirect_damage_to_player(game, payload: dict) -> ReplacementOutcome | None:
     """Jade Monolith: "The next time a source of your choice would deal damage
@@ -276,6 +294,7 @@ def _redirect_damage_to_player(game, payload: dict) -> ReplacementOutcome | None
     permanent = payload["recipient"]
     amount = payload["amount"]
     redirect_idx = _jade_monolith_seat(game, payload)
+    by = permanent.metadata.pop("redirect_damage_by", None)
     permanent.metadata.pop("redirect_damage_to_player", None)
     permanent.metadata.pop("redirect_damage_source", None)
     # "…**that source** deals that damage to you instead": the damage keeps its
@@ -287,7 +306,8 @@ def _redirect_damage_to_player(game, payload: dict) -> ReplacementOutcome | None
         game, taker, amount, source=payload.get("source"),
         combat=bool(payload.get("combat")),
         then=lambda _dealt: game.log.append(
-            f"Damage to {permanent.card.name} redirected to {taker.name} (Jade Monolith)"
+            f"Damage to {permanent.card.name} redirected to {taker.name}"
+            + (f" ({by})" if by else "")
         ),
     )
     return ReplacementOutcome(replaced=True)
@@ -300,8 +320,16 @@ def _applies_redirect_one_damage(game, payload: dict) -> bool:
     return charges > 0 and payload["amount"] > 0
 
 
+def _the_recipient(game, payload: dict) -> list:
+    """The damaged creature, whose own ability armed its redirect (Personal
+    Incarnation). Pure."""
+    return [payload["recipient"]]
+
+
 @replacement_effect(
-    "damage_to_creature", REDIRECT_ONE_POINT, applies=_applies_redirect_one_damage, redirects=True
+    "damage_to_creature", REDIRECT_ONE_POINT, applies=_applies_redirect_one_damage,
+    redirects=True, sources=_the_recipient,
+    label="1 of that damage is dealt to its owner instead",
 )
 def _redirect_one_damage_to_owner(game, payload: dict) -> ReplacementOutcome | None:
     """Personal Incarnation: "The next 1 damage that would be dealt to this
@@ -342,11 +370,23 @@ def _applies_recorded_redirect(game, payload: dict) -> bool:
     return _recorded_redirect(game, payload) is not None
 
 
+def _recorded_redirect_sources(game, payload: dict) -> list:
+    """The card that armed the redirect record that would move this damage
+    (Shimian Night Stalker, Nova Pentacle), by the record's name. Pure."""
+    found = _recorded_redirect(game, payload)
+    named = getattr(found, "source_name", None) if found is not None else None
+    return [named] if named else []
+
+
 @replacement_effect(
-    "damage_to_player", RECORDED_REDIRECT, applies=_applies_recorded_redirect, redirects=True
+    "damage_to_player", RECORDED_REDIRECT, applies=_applies_recorded_redirect,
+    redirects=True, sources=_recorded_redirect_sources,
+    label="That damage is dealt to another recipient instead",
 )
 @replacement_effect(
-    "damage_to_creature", RECORDED_REDIRECT, applies=_applies_recorded_redirect, redirects=True
+    "damage_to_creature", RECORDED_REDIRECT, applies=_applies_recorded_redirect,
+    redirects=True, sources=_recorded_redirect_sources,
+    label="That damage is dealt to another recipient instead",
 )
 def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
     """CR 614.9: the damage is dealt to another recipient instead.

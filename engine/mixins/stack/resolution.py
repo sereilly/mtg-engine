@@ -283,6 +283,14 @@ class StackResolutionMixin:
                     f"Put {card.name} into the graveyard, as replaced there "
                     f"({registered.label or registered.key})"
                 ),
+                # What would replace it there (Forbidden Crypt), asked about the
+                # event the graveyard seam would raise.
+                sources=(
+                    None if registered.sources is None
+                    else lambda game, _event, registered=registered: registered.sources(
+                        game, bound_for_graveyard
+                    )
+                ),
             ))
 
         def restart() -> None:
