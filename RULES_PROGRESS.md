@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**432 / 641 tracked rules covered (67%)** — 3359 tests, 0 unannotated.
+**432 / 641 tracked rules covered (67%)** — 3366 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -175,7 +175,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **107.1** The only numbers the Magic game uses are integers. *(3 tests, subrules ab)*
 - [x] **107.2** If anything needs to use a number that can’t be determined, either as a result or in a calculatio... *(1 tests)*
-- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(18 tests, subrules ab)*
+- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(21 tests, subrules ab)*
 - [x] **107.4** The mana symbols are {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, ... *(4 tests)*
 - [x] **107.5** The tap symbol is {T}. The tap symbol in an activation cost means “Tap this permanent.” A permane... *(2 tests)*
 - [ ] **107.6** The untap symbol is {Q}. The untap symbol in an activation cost means “Untap this permanent.” A p...
@@ -271,7 +271,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
 - [x] **115.5** A spell or ability on the stack is an illegal target for itself. *(2 tests)*
 - [x] **115.6** A spell or ability that requires targets may allow zero targets to be chosen. Such a spell or abi... *(6 tests)*
-- [x] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo... *(16 tests, subrules aef)*
+- [x] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo... *(17 tests, subrules aef)*
 - [x] **115.8** Modal spells and abilities may have different targeting requirements for each mode. An effect tha... *(2 tests)*
 - [x] **115.9** Some objects check what another spell or ability is targeting. Depending on the wording, these ma... *(1 tests, subrules a)*
 - [x] **115.10** Spells and abilities can affect objects and players they don’t target. In general, those objects ... *(2 tests, subrules a)*
@@ -299,7 +299,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
 - [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(4 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
-- [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(10 tests, subrules abc)*
+- [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(12 tests, subrules abc)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(5 tests)*
 - [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(32 tests, subrules abcd)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
@@ -669,7 +669,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(326 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(328 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(31 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [ ] **601.5** While announcing the choices of any targets and/or the division or distribution of any effects as...
@@ -688,7 +688,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 603. Handling Triggered Abilities
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
-- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(44 tests, subrules bcd)*
+- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(45 tests, subrules bcde)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(122 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
@@ -767,7 +767,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 612. Text-Changing Effects
 
-- [x] **612.1** Some continuous effects change an object’s text. This can apply to any words or symbols printed o... *(21 tests)*
+- [x] **612.1** Some continuous effects change an object’s text. This can apply to any words or symbols printed o... *(23 tests)*
 - [x] **612.2** A text-changing effect changes only those words that are used in the correct way (for example, a ... *(1 tests)*
 - [x] **612.3** Effects that add or remove abilities don’t change the text of the objects they affect, so any abi... *(1 tests)*
 - [ ] **612.4** A token’s subtypes and rules text are defined by the spell or ability that created the token. A t...
@@ -957,13 +957,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 708. Face-Down Spells and Permanents
 
 - [ ] **708.1** Some cards allow spells and permanents to be face down.
-- [x] **708.2** Face-down spells and face-down permanents have no characteristics other than those listed by the ... *(1 tests, subrules a)*
+- [x] **708.2** Face-down spells and face-down permanents have no characteristics other than those listed by the ... *(2 tests, subrules a)*
 - [x] **708.3** Objects that are put onto the battlefield face down are turned face down before they enter the ba... *(2 tests)*
 - [x] **708.4** Objects that are cast face down are turned face down before they are put onto the stack, so effec... *(2 tests)*
-- [x] **708.5** At any time, you may look at a face-down spell you control on the stack or a face-down permanent ... *(1 tests)*
+- [x] **708.5** At any time, you may look at a face-down spell you control on the stack or a face-down permanent ... *(4 tests)*
 - [ ] **708.6** If you control multiple face-down spells or face-down permanents, you must ensure at all times th...
 - [ ] **708.7** The ability or rules that allow a permanent to be face down may also allow the permanent’s contro...
-- [x] **708.8** As a face-down permanent is turned face up, its copiable values revert to its normal copiable val... *(3 tests)*
+- [x] **708.8** As a face-down permanent is turned face up, its copiable values revert to its normal copiable val... *(5 tests)*
 - [x] **708.9** If a face-down permanent or a face-down component of a merged permanent moves from the battlefiel... *(1 tests)*
 - [x] **708.10** If a face-down permanent becomes a copy of another permanent, its copiable values become the copi... *(1 tests)*
 - [ ] **708.11** If a face-down permanent would have an “As [this permanent] is turned face up . . .” ability afte...
