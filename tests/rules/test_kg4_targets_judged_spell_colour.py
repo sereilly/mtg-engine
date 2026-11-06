@@ -18,11 +18,18 @@ resolution therefore read the printed colour:
 * CR 115.7's change by an event — Psychic Battle (``stack_targets.change_slots``,
   which Grip of Chaos's reselect reads too);
 * a copy that may choose new targets — Fork's red copy
-  (``arm_copy_spell_target``), and Chain Lightning's copy, made while the
-  *original* resolves, which read the original's Lace as its own.
+  (``arm_copy_spell_target``).
 
 And hexproof from a colour read the printed colour even of the spell that
-was resolving (``object_colors.card_colors``, not ``spell_colors``).
+was resolving (``object_colors.card_colors``, not ``spell_colors``); and the
+resolving spell was found by its printed card alone, where CR 608.2b's
+re-check hands over what a text change made it (``spell_text_card``).
+
+Two copies are controls, right on the base and held here because the fix
+names the copy as the object judged: Chain Lightning's copy (it shares its
+Laced original's card, and is offered only after the original's resolution
+has popped — a copy asked *during* it would have read the original's Lace),
+and a storm copy (made by a trigger, an ability).
 
 The board for each: a spell made one colour, candidates with protection (or
 hexproof, or a "can't be the target of … spells") from the new colour and
@@ -32,9 +39,13 @@ asserted. Each road's own control (the colour it would have had) is in the
 same assertion: the creature guarded against the *old* colour must be
 offered.
 
-Measured backwards on 313bd09d: every road but the storm control offered the
-creature guarded against the spell's new colour and withheld the one guarded
-against its old one; the Thoughtlaced Bolt killed Sporeweb Weaver.
+Measured backwards on 313bd09d: nine of the eleven fail — every road but the
+two copy controls offered the creature guarded against the spell's new
+colour and withheld the one guarded against its old (Meddle and Silver
+Wyvern moved a white Bolt onto Black Knight), the Thoughtlaced Bolt was
+refused at Sporeweb Weaver, and the text-changed Terror passed the CR 608.2b
+gate to be caught a step late. With only the hexproof seed of
+``test_kg4_targets_hexproof_from.py`` applied, the same nine fail.
 """
 
 from __future__ import annotations
@@ -268,9 +279,10 @@ def test_forks_red_copy_is_offered_targets_as_a_red_spell():
 
 @pytest.mark.cr("707.10c", "707.2", "702.16b")
 def test_chain_lightnings_copy_is_not_the_laced_original():
-    """The copy is made while the *original* resolves, and a Lace on the
-    original is not copied (CR 707.2: "other effects … are not copied"): the
-    copy is red. It was judged as the original — white."""
+    """A control: a Lace on the original is not copied (CR 707.2: "other
+    effects … are not copied"), so the copy is red though it shares the
+    white original's card — named as the object judged, it is not taken for
+    the original."""
     game = _table(
         mine=["Black Knight", "Repentant Blacksmith"],
         theirs=["Mountain", "Mountain", "Grizzly Bears"],
