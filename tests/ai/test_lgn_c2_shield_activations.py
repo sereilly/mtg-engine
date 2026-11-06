@@ -129,8 +129,14 @@ def test_a_regeneration_shield_is_not_activated_in_a_main_phase():
 
 def test_the_flat_score_proposed_it_every_main_phase():
     """Backwards: with the shield read as any other effect, the chooser
-    proposes Deftblade's {1}{W} in both main phases on an empty board."""
-    with mock.patch.object(ai_abilities, "shields_only", lambda instruction: False):
+    proposes Deftblade's {1}{W} in both main phases on an empty board.
+
+    Since kg4 every other effect is held to the cast rule too
+    (``ai_abilities._moves_something``), which reads the idle shield as the
+    nothing it is — a second layer over this one, so the backwards reading
+    switches both off."""
+    with mock.patch.object(ai_abilities, "shields_only", lambda instruction: False), \
+            mock.patch.object(ai_abilities, "_moves_something", lambda *args: True):
         for phase in ("precombat_main", "postcombat_main"):
             game = _main_phase(_table(["Deftblade Elite", "Plains", "Plains"]), phase)
             action = choose_activation_action(game, 0)

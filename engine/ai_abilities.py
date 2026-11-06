@@ -893,6 +893,13 @@ def _activation_candidate(
         worth = _land_ability_worth(game, player_index, candidate)
         if worth is None:
             return None
+        return candidate
+    # **And every other ability** (kg4): proposed only where carried out on a
+    # copy it moves something that lasts without leaving the seat worse off
+    # (`_moves_something`) — in the main phase; at instant speed every
+    # proposal is rehearsed by its caller, and held to more.
+    if not _AT_INSTANT_SPEED.get() and not _moves_something(game, player_index, candidate):
+        return None
     return candidate
 
 
@@ -1141,21 +1148,100 @@ def _land_ability_worth(
     Unlike a cast, an ability nobody could rehearse is not proposed — no land
     ability was before, and "could not be weighed" is no reason to start.
     """
-    from .ai_rehearsal import (blocks_still_to_come, combat_is_still_to_come,
-                               priced_by_the_fight)
-
     rehearsal = _rehearse_activation(game, seat, action)
     if rehearsal is None or not (rehearsal.accepted and rehearsal.changed):
         return None
+    rehearsal = _read_through_the_fight(game, seat, action, rehearsal)
+    if rehearsal is None or not _worth_proposing(rehearsal) or rehearsal.lasting <= 0.0:
+        return None
+    return rehearsal.lasting
+
+
+def _moves_something(game: Game, seat: int, action: ActivationAction) -> bool:
+    """Whether *action* — an ability the main-phase chooser would propose by
+    its flat score alone — is one to propose: the cast rule (CLAUDE.md, "a
+    cast that moves nothing, or leaves its caster worse off, is not
+    proposed"; ``ai_scoring._worth_proposing``), asked of the activation
+    carried out on a copy (:func:`_rehearse_activation`) and read through the
+    fight where its good is gone by the end of the turn
+    (:func:`_read_through_the_fight`).
+
+    **Every ability, not the shapes named.** The chooser rehearsed a land's
+    ability, a hamper, a rewrite of its source, an armed draw, a shield, a
+    source given up and an effect reaching both sides, each because a seat had
+    been seen spending its mana on one for nothing; every other ability was
+    proposed at its flat 2.5 whatever it did — a firebreathing pump in the
+    second main phase, a "{T}: Untap target land" with every land untapped, a
+    "can't block" on a creature with nothing to block, a looter's draw with
+    nothing to discard (kg4: `tests/ai/test_kg4_aiact_moves_nothing.py`).
+    An ability nobody could rehearse is proposed as it always was."""
+    rehearsal = _rehearse_activation(game, seat, action)
+    if rehearsal is None:
+        return True
+    if rehearsal.accepted and rehearsal.changed:
+        rehearsal = _read_through_the_fight(game, seat, action, rehearsal)
+        if rehearsal is None:
+            return False
+    return _worth_proposing(rehearsal)
+
+
+def _read_through_the_fight(
+    game: Game, seat: int, action: ActivationAction, rehearsal: Rehearsal,
+) -> "Rehearsal | None":
+    """*rehearsal* read again **with the fight fought** where its good is gone
+    by the end of the turn (``ai_rehearsal.priced_by_the_fight``) and a
+    combat or a declared attack's blocks are ahead — or None for an ability
+    that **can wait for the blocks** (:func:`_waits_for_the_blocks`).
+
+    Made in the seat's own main phase before its combat, an ability whose
+    worth is the fight is made there only for a **declaration it changes**
+    (``Rehearsal.declarations_changed``): a manland animated to attack, a
+    creature shielded so that it attacks at all, a blocker tapped or told it
+    cannot block, a block deterred. One under which the attack and the blocks
+    are the same as without it can be made in the declare-blockers step, with
+    the blocks known (``ai_priority.instant_speed_window``'s ``"combat"``) —
+    and there only where it pays. Zealous Inquisitor's redirect was bought in the first
+    main phase wherever the fight it was read through went better for it, and
+    the mana was spent whether or not anything then blocked it (SCG Phase 5).
+    """
+    from .ai_rehearsal import (blocks_still_to_come, combat_is_still_to_come,
+                               priced_by_the_fight)
+
+    precombat = combat_is_still_to_come(game, seat)
     if priced_by_the_fight(rehearsal.now, rehearsal.lasting, rehearsal.fleeting) and (
-        combat_is_still_to_come(game, seat) or blocks_still_to_come(game)
+        precombat or blocks_still_to_come(game)
     ):
         fought = _rehearse_activation(game, seat, action, through_combat=True)
         if fought is not None and fought.accepted:
+            if precombat and not fought.declarations_changed and _waits_for_the_blocks(
+                game, seat, action,
+            ):
+                return None
             rehearsal = fought
-    if not _worth_proposing(rehearsal) or rehearsal.lasting <= 0.0:
-        return None
-    return rehearsal.lasting
+    return rehearsal
+
+
+def _waits_for_the_blocks(game: Game, seat: int, action: ActivationAction) -> bool:
+    """Whether *action*'s ability could as well be activated in the coming
+    declare-blockers step: its source is the seat's own permanent, its cost
+    taps nothing of its own (an attacker is tapped, CR 508.1f, and a {T}
+    ability of one that did not attack is one an untapped creature's body
+    spends), and its line prints no timing restriction (CR 602.5b: "Activate
+    only as a sorcery", "only during your upkeep") — read off the ability the
+    action names, so it names no card."""
+    from .activation_restrictions import prints_activation_restriction
+
+    if action.source_controller_index is not None:
+        return False
+    source = game.permanent_at(seat, action.permanent_index)
+    usable = game.usable_abilities_of(source) if source is not None else []
+    index = action.ability_index or 0
+    if not 0 <= index < len(usable):
+        return False
+    ability = usable[index]
+    if getattr(ability.cost, "requires_tap", False):
+        return False
+    return not prints_activation_restriction(ability.source_line or "")
 
 
 #: The largest X `_sized_x_activation` rehearses. Each size is a copy of the

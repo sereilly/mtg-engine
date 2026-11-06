@@ -417,7 +417,15 @@ class Rehearsal:
     ``blocks_added``
         read through the fight, a block was declared on the cast's copy that
         the copy with nothing cast did not declare — the reason to act before
-        the blocks rather than after them (:func:`pays_before_the_blocks`).
+        the blocks rather than after them (:func:`pays_before_the_blocks`);
+    ``declarations_changed``
+        read through the fight, the attackers or the blocks declared on the
+        cast's copy are not those the copy with nothing cast declared — an
+        attack it adds, a block it adds, deters or prevents (a tapped
+        blocker). Where they are the same, what the cast does to the fight is
+        what it does to a combat whose declarations it did not touch, and an
+        ability can wait for the blocks to be known
+        (``ai_abilities._read_through_the_fight``).
     """
 
     accepted: bool
@@ -432,6 +440,7 @@ class Rehearsal:
     opened_a_cast: bool = False
     creature_ahead: bool = False
     blocks_added: bool = False
+    declarations_changed: bool = False
 
     @property
     def swing(self) -> float:
@@ -742,7 +751,7 @@ def run_out_the_turn(game, *, through_combat: bool = False) -> frozenset:
     return _run_out_the_turn(game, through_combat=through_combat)
 
 
-def _fight_the_combat(game) -> frozenset:
+def _fight_the_combat(game, attacks: "set | None" = None) -> frozenset:
     """Play a scratch copy's combat phases from the main phase it is in: the
     active seat's attack, the blocks, the damage — each declared by the
     policy that would declare it in a game nobody is asked about
@@ -764,6 +773,9 @@ def _fight_the_combat(game) -> frozenset:
     creature an ambush cast, or the block an ability made possible. Run out
     with nothing decided, that combat dealt no damage at all: the blocks
     were owed, and the walk stopped at them.
+
+    *attacks*, where given, is filled with the ``permanent_id`` of every
+    attacker declared on the way (``CombatOutcome.attackers_declared``).
     """
     from .ai_combat import CombatOutcome, run_ai_combat_phase
 
@@ -784,10 +796,14 @@ def _fight_the_combat(game) -> frozenset:
         _settle_scratch(game)
         if (game.current_turn_phase, repr(game.turn_phases_remaining)) == before:
             break
+    if attacks is not None:
+        attacks |= outcome.attackers_declared
     return frozenset(outcome.blocks_declared)
 
 
-def _run_out_the_turn(game, *, through_combat: bool = False) -> frozenset:
+def _run_out_the_turn(
+    game, *, through_combat: bool = False, attacks: "set | None" = None,
+) -> frozenset:
     """Take a scratch copy to the end of its turn: a combat whose blocks are
     already declared deals its damage, the end step's triggers fire
     (CR 513.1: "at the beginning of the next end step" — a card exiled
@@ -801,7 +817,7 @@ def _run_out_the_turn(game, *, through_combat: bool = False) -> frozenset:
     the turn's combat is fought first (:func:`_fight_the_combat`), and the
     blocks it declared are returned (none, without it).
     """
-    blocks = _fight_the_combat(game) if through_combat else frozenset()
+    blocks = _fight_the_combat(game, attacks) if through_combat else frozenset()
     for _ in range(_REHEARSAL_PASSES):
         if game.current_turn_phase != "combat" or game.is_game_over():
             break
@@ -1016,7 +1032,10 @@ def _measured(game, *, through_combat: bool = False) -> dict:
         "digest": position_digest(game),
         "now": standings(game, now=True),
     }
-    reading["blocks"] = _run_out_the_turn(game, through_combat=through_combat)
+    reading["attacks"] = set()
+    reading["blocks"] = _run_out_the_turn(
+        game, through_combat=through_combat, attacks=reading["attacks"],
+    )
     reading["lasting"] = standings(game, now=False)
     reading["table"] = game
     return reading
@@ -1645,6 +1664,10 @@ def _rehearse(
             combat_ahead=combat_ahead, opened_a_cast=opened_a_cast,
             creature_ahead=creature_ahead,
             blocks_added=bool(reading["blocks"] - untouched["blocks"]),
+            declarations_changed=(
+                reading["attacks"] != untouched["attacks"]
+                or reading["blocks"] != untouched["blocks"]
+            ),
         )
     except Exception as raised:
         _note_raised(label or spell_name, raised)
