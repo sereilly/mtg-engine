@@ -28,14 +28,19 @@ from engine.ai_graveyard_activations import (
     activate_chosen_graveyard_ability,
     choose_graveyard_activation_action,
 )
-from engine.card_loader import load_catalog, manifest_set_path
+from engine.card_loader import (load_catalog, load_cards, manifest_set_path,
+                                manifest_set_paths)
 from engine.faces import compilation_units
 from engine.game import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from tests.helpers import _nosick, resolve_stack
 
-_CARDS = {card.name: card for card in load_catalog()}
+#: The boards are built from **both** manifest roles, so a measured set's
+#: graveyard ability can be given its board before the promotion that brings
+#: it into the census (Scourge's Eternal Dragon, at its rehearsal). The
+#: census itself reads the shipped pool alone (`_pool_graveyard_abilities`).
+_CARDS = {card.name: card for card in load_cards(manifest_set_paths(include_measured=True))}
 
 
 def _board(*, graveyard, lands=(), mine=(), theirs=(), hand=(), step="precombat_main"):
@@ -118,6 +123,14 @@ _BOARDS = {
         dict(graveyard=["Undead Gladiator"], lands=["Swamp"] * 2,
              hand=["Hill Giant", "Island"], step="upkeep"),
         (["Hill Giant", "Undead Gladiator"], ["Swamp"] * 2, []),
+    ),
+    # Scourge, at its promotion rehearsal: Shard Phoenix's shape at five mana
+    # ("{3}{W}{W}: Return this card from your graveyard to your hand. Activate
+    # only during your upkeep."). Every Plains taps for it, and a 5/5 flyer in
+    # hand outweighs the five untapped lands it costs for one upkeep.
+    "Eternal Dragon": (
+        dict(graveyard=["Eternal Dragon"], lands=["Plains"] * 5, step="upkeep"),
+        (["Eternal Dragon"], ["Plains"] * 5, []),
     ),
 }
 

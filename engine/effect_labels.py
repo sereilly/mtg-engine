@@ -866,6 +866,14 @@ ACTIVATED_LABELS: dict[str, str] = {
     # the bottom (CR 701.25a), so scry's `activated_look`, as the triggered
     # table already files the upkeep surveil beside its scry.
     "surveil": "activated_look",
+    # --- Scourge, at its promotion rehearsal -----------------------------
+    # Thundercloud Elemental: "{3}{U}: All other creatures lose flying until
+    # end of turn." Whiteout's sweep in the activated position for the first
+    # time, and the bucket of its two neighbours here — the team grant it
+    # mirrors and the one-target removal, `remove_target_keyword_until_eot` —
+    # which is also what the `pump` category default already said, so the
+    # row moves no label: it pins one.
+    "remove_team_keyword_until_eot": "activated_pump",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**

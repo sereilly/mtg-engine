@@ -1,13 +1,13 @@
 """How the AI divides: a divided spell's targets and shares (CR 601.2d), and
-counters divided among creatures.
+counters or damage a trigger divides among creatures.
 
 :func:`choose_divided_targets` is the announcement for a spell that divides
 an amount among its targets — which targets, one pick per printed slot from
 the board that slot names, and each one's share — or None for a card that
 divides nothing. :func:`divided_shrink_shares` and
 :func:`least_harmed_permanent` are the two halves of a toughness-lowering
-division a seat nobody asks makes: counters spread where a share kills
-first, or the creature they would hurt least.
+division a seat nobody asks makes — counters, or damage (``damage=True``):
+spread where a share kills first, or the creature it would hurt least.
 
 What a divided spell divides — its shape — is the compiled program's
 (``ai_target_sides.divided_shape``).
@@ -242,19 +242,25 @@ def _divided_announcement_total(spec: dict, x_value: int | None) -> int:
     return int(x_value or 0) + bonus
 
 
-def _counters_to_kill(game: Game, permanent, step: int) -> int:
-    """How many counters lowering toughness by *step* apiece leave *permanent*
-    with lethal damage or no toughness (CR 704.5f/g), read through the layers."""
+def _counters_to_kill(game: Game, permanent, step: int, deathtouch: bool = False) -> int:
+    """How many counters lowering toughness by *step* apiece — or points of
+    damage, at a step of one — leave *permanent* with lethal damage or no
+    toughness (CR 704.5f/g), read through the layers. One point from a source
+    with *deathtouch* is enough (CR 704.5h)."""
+    if deathtouch:
+        return 1
     left = max(1, int(permanent.effective_toughness) - int(permanent.damage_marked or 0))
     return -(-left // step)
 
 
 def divided_shrink_shares(
-    game: Game, permanent_ids, total: int, ceiling: int, counter: str,
+    game: Game, permanent_ids, total: int, ceiling: int, counter: str = "",
+    *, damage: bool = False, deathtouch: bool = False,
 ) -> "list[tuple[int, int]] | None":
-    """A division of *total* counters that **lower toughness** among the
-    creatures *permanent_ids* names — the ones a share can kill first — as
-    ``(permanent_id, share)`` pairs, or None where the counter lowers no
+    """A division of *total* counters that **lower toughness** — or of *total*
+    points of **damage** (``damage=True``) — among the creatures
+    *permanent_ids* names, the ones a share can kill first, as
+    ``(permanent_id, share)`` pairs; or None where the counter lowers no
     toughness or no share would kill anything.
 
     "When this creature dies, distribute three -1/-1 counters among one, two,
@@ -274,11 +280,23 @@ def divided_shrink_shares(
     not yet named while the ceiling has room — each still shrinks — and the
     rest on the last named. Every share is at least one and the shares total
     *total* (CR 601.2d).
+
+    **Damage is the same arithmetic at a step of one** (CR 704.5g: a creature
+    with damage marked on it at least equal to its toughness is destroyed),
+    and it wears off as these counters do — at the cleanup step (CR 514.2) —
+    so a share of it, too, is worth what it kills. Skirk Volcanist (SCG) is
+    the pool's divided damage trigger: "When this creature is turned face up,
+    it deals 3 damage divided as you choose among one, two, or three target
+    creatures." Reviewed at Scourge's promotion rehearsal, by running it: the
+    spread a seat nobody asks gave it put 1 apiece on a Hill Giant, a Craw
+    Wurm and a Grizzly Bears and killed nothing, and 2 + 1 over a Giant and
+    Bears the same. A source with *deathtouch* kills with one point apiece
+    (CR 704.5h).
     """
-    step = _toughness_step(counter)
+    step = _toughness_step(counter, damage=damage)
     if step <= 0 or total <= 0 or ceiling <= 0:
         return None
-    ranked = sorted(_shrink_ranking(game, permanent_ids, step))
+    ranked = sorted(_shrink_ranking(game, permanent_ids, step, deathtouch))
     shares: list[list[int]] = []
     left = int(total)
     for needed, _worth, _position, permanent_id in ranked:
@@ -302,10 +320,12 @@ def divided_shrink_shares(
 
 
 def least_harmed_permanent(
-    game: Game, permanent_ids, total: int, counter: str,
+    game: Game, permanent_ids, total: int, counter: str = "",
+    *, damage: bool = False, deathtouch: bool = False,
 ) -> "int | None":
-    """Of *permanent_ids*, the one *total* counters of kind *counter* would
-    hurt least, or None where the counter lowers no toughness.
+    """Of *permanent_ids*, the one *total* counters of kind *counter* — or
+    *total* damage (``damage=True``) — would hurt least, or None where the
+    counter lowers no toughness.
 
     The other half of :func:`divided_shrink_shares`: a toughness-lowering
     division with nothing on the side it wants still owes its target
@@ -314,11 +334,16 @@ def least_harmed_permanent(
     sturdiest); otherwise the one worth least
     (``ai_rehearsal.permanent_worth``). The offer's first was a Savannah
     Lions, killed beside a Hill Giant that would have lived through it.
+
+    Damage the same way (Scourge's rehearsal): Skirk Volcanist turned face up
+    with no opposing creature owes its 3 damage to one of its controller's
+    own, and the offer's first was the Volcanist itself — a 3/1, killed
+    beside a Serra Angel that would have lived through it.
     """
-    step = _toughness_step(counter)
+    step = _toughness_step(counter, damage=damage)
     if step <= 0:
         return None
-    ranked = list(_shrink_ranking(game, permanent_ids, step))
+    ranked = list(_shrink_ranking(game, permanent_ids, step, deathtouch))
     if not ranked:
         return None
     survivors = [entry for entry in ranked if entry[0] > total]
@@ -327,15 +352,19 @@ def least_harmed_permanent(
     return min(ranked, key=lambda entry: (-entry[1], entry[2]))[3]
 
 
-def _toughness_step(counter: str) -> int:
-    """How much toughness one *counter* takes away (CR 122.1a), 0 for none."""
+def _toughness_step(counter: str, *, damage: bool = False) -> int:
+    """How much toughness one *counter* takes away (CR 122.1a), 0 for none —
+    or, for *damage*, one: each point marked is a point nearer lethal
+    (CR 704.5g)."""
     from .pt import pt_counter_deltas
 
+    if damage:
+        return 1
     deltas = pt_counter_deltas(str(counter or ""))
     return -deltas[1] if deltas is not None else 0
 
 
-def _shrink_ranking(game: Game, permanent_ids, step: int):
+def _shrink_ranking(game: Game, permanent_ids, step: int, deathtouch: bool = False):
     """``(counters to kill, -worth, offer position, permanent_id)`` for each
     of *permanent_ids* still on the battlefield."""
     from .ai_rehearsal import permanent_worth
@@ -344,7 +373,7 @@ def _shrink_ranking(game: Game, permanent_ids, step: int):
         permanent = game.permanent_by_id(permanent_id)
         if permanent is not None:
             yield (
-                _counters_to_kill(game, permanent, step),
+                _counters_to_kill(game, permanent, step, deathtouch),
                 -permanent_worth(permanent, now=False),
                 position,
                 permanent_id,

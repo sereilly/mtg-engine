@@ -57,33 +57,60 @@ def test_every_shipped_auras_enchant_noun_has_a_matcher(catalog):
     regex admits by some other route (a colour word, a negation, a seat clause)
     still has to reach a row here once it has been split down to its head noun.
     """
-    from engine.mixins.stack.cast_target_validation import aura_enchant_noun
-    from engine.oracle import compile_card_oracle
-    from engine.enchant_targets import (
-        enchant_subject_colours,
-        enchant_subject_keyword_exclusion,
-        enchant_subject_seat,
+    from engine.mixins.stack.cast_target_validation import (
+        aura_enchant_noun,
+        enchant_noun_parts,
     )
+    from engine.oracle import compile_card_oracle
 
-    def _heads(clause: str) -> list[str]:
-        """The clause stripped to its noun(s), in the gate's own order: seat,
-        negated subtype, keyword exclusion, colours, then the union split."""
-        noun = enchant_subject_seat(clause)[0]
-        if noun.startswith("non-") and " " in noun:
-            noun = noun.split(" ", 1)[1]
-        noun = enchant_subject_keyword_exclusion(noun)[0]
-        noun = enchant_subject_colours(noun)[0]
-        return [part.strip() for part in noun.split(" or ")]
+    # The clause stripped to its noun(s) by the gate's own split rather than a
+    # copy of its order here. The copy is what went stale: the gate learned
+    # "nonbasic" (Uncontrolled Infestation, CR 205.4) as a fifth half and the
+    # copy did not, so at Scourge's promotion rehearsal this census looked
+    # "nonbasic land" up whole and reported a matcher missing that the gate
+    # has — a red about the census, not about the card.
+    def _heads(clause: str) -> tuple[str, ...]:
+        return enchant_noun_parts(clause).heads
 
     missing = []
+    examined = 0
     for card in compilation_units(catalog):
         noun = aura_enchant_noun(card)
         if noun is None or not compile_card_oracle(card).supported:
             continue
+        examined += 1
         for head in _heads(noun):
             if head not in _ENCHANT_TARGET_MATCHERS:
                 missing.append((card.name, noun, head))
     assert missing == []
+    # A floor on what it examined (373 supported Auras at Scourge's
+    # rehearsal), so a census that stopped finding Auras cannot pass by
+    # finding nothing to miss.
+    assert examined >= 300, examined
+
+
+@pytest.mark.parametrize("clause, heads, field, value", [
+    ("creature", ("creature",), None, None),
+    ("creature you control", ("creature",), None, None),
+    ("non-wall creature", ("creature",), "excluded_subtype", "wall"),
+    ("creature without flying", ("creature",), "without_keyword", "flying"),
+    ("red or green creature", ("creature",), "colours", ("R", "G")),
+    ("nonblack creature", ("creature",), "colours_excluded", True),
+    ("nonbasic land", ("land",), "excluded_supertype", "basic"),
+    ("artifact or creature", ("artifact", "creature"), None, None),
+])
+def test_the_gate_splits_each_half_of_the_clause_off_its_noun(clause, heads, field, value):
+    """``enchant_noun_parts`` is the split the gate tests and the census above
+    reads: each of CR 702.5's [quality] halves comes off and leaves the head
+    noun(s) a matcher row is keyed by. "nonbasic land" is the row that the
+    census's own copy of the order did not have."""
+    from engine.mixins.stack.cast_target_validation import enchant_noun_parts
+
+    parts = enchant_noun_parts(clause)
+
+    assert parts.heads == heads
+    if field is not None:
+        assert getattr(parts, field) == value
 
 
 def test_an_unread_enchant_noun_refuses_every_host_rather_than_admitting_all():

@@ -1267,5 +1267,278 @@ def test_w1g9_the_seeded_games_exercise_the_ancient_and_the_faces(set_pool):
 
 # ==== W2G5 ==========================================================
 # W2G5's tests go between this line and the "end W2G5" line.
+#
+# The promotion rehearsal's inventories and the deletion probe's readings:
+# Skirk Volcanist's divided damage trigger, as a seat nobody asks divides it
+# and as the AI weighs turning it face up; Eternal Dragon's graveyard
+# ability in its controller's upkeep; Mercurial Kite's "its controller's next
+# untap step" across a change of control; Bladewing the Risen's "Dragon
+# creatures" on a Dragon that is not a creature.
+
+from collections import Counter as _W2G5Counter
+from dataclasses import replace as _w2g5_replace
+
+import pytest as _w2g5_pytest
+
+from engine import Game as _W2G5Game, PlayerState as _W2G5PlayerState
+from engine import ai_simulator as _w2g5_ai_simulator
+from engine.ai_special_actions import (
+    choose_special_action as _w2g5_choose_special_action,
+    take_chosen_special_action as _w2g5_take_chosen_special_action,
+)
+from engine.card_loader import load_catalog as _w2g5_load_catalog
+from engine.control import change_control as _w2g5_change_control
+from engine.face_down import face_down_card as _w2g5_face_down_card
+from engine.models import Permanent as _W2G5Permanent
+from engine.special_actions import (
+    take_permanent_special_action as _w2g5_take_special_action,
+)
+from tests.helpers import declare_attack as _w2g5_declare_attack
+from tests.helpers import resolve_stack as _w2g5_resolve_stack
+
+_W2G5_CATALOG = {card.name: card for card in _w2g5_load_catalog()}
+
+
+def _w2g5_card(set_pool, name):
+    scg = set_pool("SCG")
+    return scg[name] if name in scg else _W2G5_CATALOG[name]
+
+
+def _w2g5_permanent(card, *, face_down=False):
+    permanent = _W2G5Permanent(card=_w2g5_face_down_card(card) if face_down else card)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def _w2g5_volcanist_table(set_pool, theirs=(), mine=(), *, mountains=2):
+    """Seat 0's face-down Skirk Volcanist beside *mountains* Mountains and
+    *mine*, seat 1's *theirs*; seat 0 holds priority in its main phase, mana
+    enforced, nobody asked anything."""
+    volcanist = _w2g5_permanent(_w2g5_card(set_pool, "Skirk Volcanist"), face_down=True)
+    own = [volcanist,
+           *[_w2g5_permanent(_W2G5_CATALOG["Mountain"]) for _ in range(mountains)],
+           *[_w2g5_permanent(_w2g5_card(set_pool, name)) for name in mine]]
+    placed = {name: _w2g5_permanent(_w2g5_card(set_pool, name)) for name in theirs}
+    game = _W2G5Game(players=[
+        _W2G5PlayerState(name="A", battlefield=own, library=[_W2G5_CATALOG["Island"]] * 10),
+        _W2G5PlayerState(name="B", battlefield=list(placed.values()),
+                         library=[_W2G5_CATALOG["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.turn = 3
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+    game._recompute_continuous_effects()
+    game.start_priority_window(0)
+    placed.update({p.card.name: p for p in own[1 + mountains:]})
+    return game, volcanist, placed
+
+
+def _w2g5_alive(game, placed):
+    return {name: game.is_on_battlefield(p) for name, p in placed.items()}
+
+
+@_w2g5_pytest.mark.parametrize("theirs, dead", [
+    (("Hill Giant", "Grizzly Bears"), {"Grizzly Bears"}),
+    (("Llanowar Elves", "Grizzly Bears", "Hill Giant"), {"Llanowar Elves", "Grizzly Bears"}),
+    (("Hill Giant", "Craw Wurm", "Grizzly Bears", "Llanowar Elves"),
+     {"Llanowar Elves", "Grizzly Bears"}),
+], ids=["giant-bears", "elves-bears-giant", "four"])
+def test_w2g5_skirk_volcanist_divides_its_damage_where_it_kills(set_pool, theirs, dead):
+    """"When this creature is turned face up, it deals 3 damage divided as you
+    choose among one, two, or three target creatures." A seat nobody asks
+    splits the 3 by what each share kills (CR 704.5g) — the lethal share
+    first, the remainder one apiece. Validated backwards: the spread it gave
+    before (1 apiece, or 2 + 1) killed nothing on the first and third boards
+    and the Elves alone on the second."""
+    game, volcanist, placed = _w2g5_volcanist_table(set_pool, theirs)
+
+    assert _w2g5_take_special_action(game, 0, volcanist, "turn_face_up") is None
+    _w2g5_resolve_stack(game)
+    game.check_state_based_actions()
+
+    assert {name for name, alive in _w2g5_alive(game, placed).items() if not alive} == dead
+    dealt = [line for line in game.log if line.startswith("Skirk Volcanist dealt")]
+    assert sum(int(line.split()[3]) for line in dealt) == 3, dealt
+
+
+def test_w2g5_skirk_volcanist_with_nothing_opposing_harms_its_own_board_least(set_pool):
+    """No opposing creature: a target is still owed (CR 603.3d). A Serra Angel
+    lives through all 3, so it takes them — the Volcanist itself, the offer's
+    first, died to them before; where every candidate dies, the one worth
+    least does."""
+    game, volcanist, placed = _w2g5_volcanist_table(
+        set_pool, mine=("Savannah Lions", "Serra Angel"),
+    )
+    assert _w2g5_take_special_action(game, 0, volcanist, "turn_face_up") is None
+    _w2g5_resolve_stack(game)
+    game.check_state_based_actions()
+    assert game.is_on_battlefield(volcanist)
+    assert _w2g5_alive(game, placed) == {"Savannah Lions": True, "Serra Angel": True}
+    assert placed["Serra Angel"].damage_marked == 3
+
+
+def test_w2g5_skirk_volcanist_no_share_kills_so_the_damage_is_concentrated(set_pool):
+    """A Serra Angel and a Craw Wurm: 3 damage kills neither, so it goes on one
+    (the divided spell's policy — a share is measured against a toughness)
+    rather than spread to no purpose."""
+    game, volcanist, placed = _w2g5_volcanist_table(set_pool, ("Serra Angel", "Craw Wurm"))
+    assert _w2g5_take_special_action(game, 0, volcanist, "turn_face_up") is None
+    _w2g5_resolve_stack(game)
+    assert sorted(p.damage_marked for p in placed.values()) == [0, 3]
+
+
+def test_w2g5_the_ai_turns_skirk_volcanist_face_up_where_its_damage_kills(set_pool):
+    """`ai_special_actions` rehearses the face-up and reads the trigger's
+    default split, so the split decides whether the card is played at all:
+    over an Elves, a Bears and a Giant, the spread (killing the Elves alone)
+    read as two Mountains thrown away and nothing was proposed. Now the
+    Elves and the Bears die for them."""
+    game, volcanist, placed = _w2g5_volcanist_table(
+        set_pool, ("Llanowar Elves", "Grizzly Bears", "Hill Giant"), mountains=3,
+    )
+
+    choice = _w2g5_choose_special_action(game, 0)
+
+    assert choice is not None and choice.kind == "turn_face_up"
+    _w2g5_take_chosen_special_action(game, 0, choice)
+    _w2g5_resolve_stack(game)
+    game.check_state_based_actions()
+    assert _w2g5_alive(game, placed) == {
+        "Llanowar Elves": False, "Grizzly Bears": False, "Hill Giant": True,
+    }
+    assert game.is_on_battlefield(volcanist) and volcanist.card.name == "Skirk Volcanist"
+
+
+def test_w2g5_the_ai_leaves_skirk_volcanist_down_where_nothing_dies(set_pool):
+    """The other half of the weighing: a lone Serra Angel survives 3, so two
+    Mountains buy nothing and the face-down creature stays as it is."""
+    game, volcanist, _placed = _w2g5_volcanist_table(set_pool, ("Serra Angel",), mountains=3)
+    assert _w2g5_choose_special_action(game, 0) is None
+
+
+# --- Eternal Dragon ---------------------------------------------------------------
+
+
+def test_w2g5_eternal_dragon_comes_back_in_its_controllers_upkeep(set_pool):
+    """"{3}{W}{W}: Return this card from your graveyard to your hand. Activate
+    only during your upkeep." The simulator answers its own upkeep's priority
+    (CR 117.3a) with the graveyard chooser, as it does for Shard Phoenix: the
+    Dragon comes back, counted, and its five Plains pay for it."""
+    players = [
+        _W2G5PlayerState(name="AI-A", graveyard=[_w2g5_card(set_pool, "Eternal Dragon")],
+                         library=[_W2G5_CATALOG["Plains"]] * 8),
+        _W2G5PlayerState(name="AI-B", library=[_W2G5_CATALOG["Plains"]] * 8),
+    ]
+    game = _w2g5_ai_simulator._SimulatedGame(
+        players=players, enforce_mana_costs=True,
+        prompt_driver=_w2g5_ai_simulator._resolve_pending_choices,
+    )
+    report = _w2g5_ai_simulator.SimulationReport(
+        games_requested=1, games_completed=0, interaction_count=0,
+    )
+    game.priority_driver = _w2g5_ai_simulator._priority_answerer(game, report, 1, [1])
+    game.turn = 3
+    game.active_player_index = 0
+    for _ in range(5):
+        game._put_permanent_onto_battlefield(0, _w2g5_permanent(_W2G5_CATALOG["Plains"]), None)
+    game._set_phase_and_step("beginning", "upkeep")
+
+    game._resolve_priority_window()
+
+    assert [card.name for card in game.players[0].hand] == ["Eternal Dragon"]
+    assert game.players[0].graveyard == []
+    assert report.activations_from_graveyard == _W2G5Counter({"Eternal Dragon": 1})
+    assert all(p.tapped for p in game.controlled_by(0))
+
+
+# --- Mercurial Kite ---------------------------------------------------------------
+
+
+def _w2g5_untap_step(game, seat):
+    game.active_player_index = seat
+    game.turn += 1
+    game.start_turn(seat)
+
+
+def test_w2g5_mercurial_kites_untap_step_is_whoever_controls_the_creature(set_pool):
+    """"That creature doesn't untap during its controller's next untap step."
+    The marker follows the creature, not the seat that controlled it when it
+    was dealt the damage — Tamiyo, the Moon Sage's ruling on the same words
+    (2012-05-01): "If the permanent changes controllers before its first
+    controller's next untap step has come around, then it won't untap during
+    its new controller's next untap step." So the Kite's controller steals
+    the Wall it froze: its own next untap step leaves the Wall tapped, the one
+    after untaps it."""
+    kite = _w2g5_permanent(_w2g5_card(set_pool, "Mercurial Kite"))
+    wall = _w2g5_permanent(_W2G5_CATALOG["Wall of Air"])
+    game = _W2G5Game(players=[
+        _W2G5PlayerState(name="A", battlefield=[kite], library=[_W2G5_CATALOG["Island"]] * 10),
+        _W2G5PlayerState(name="B", battlefield=[wall], library=[_W2G5_CATALOG["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+    game._recompute_continuous_effects()
+    _w2g5_declare_attack(game, 0, blocks={0: 0})
+    for _ in range(3):
+        game.advance_combat_phase()
+        _w2g5_resolve_stack(game)
+    assert game.is_on_battlefield(wall) and wall.tapped
+
+    _w2g5_change_control(wall, 0, source=kite)
+    game._sync_control()
+    assert game.controller_index_of(wall) == 0
+
+    _w2g5_untap_step(game, 1)
+    assert wall.tapped, "seat 1's untap step no longer reaches it"
+    _w2g5_untap_step(game, 0)
+    assert wall.tapped, "its new controller's next untap step is the one named"
+    _w2g5_untap_step(game, 1)
+    _w2g5_untap_step(game, 0)
+    assert not wall.tapped, "and the one after untaps it"
+
+
+# --- Bladewing the Risen ----------------------------------------------------------
+
+
+def test_w2g5_bladewings_pump_reaches_dragon_creatures_and_no_other_dragon(set_pool):
+    """"{B}{R}: Dragon creatures get +1/+1 until end of turn." The probe saw
+    "creatures" ignored by the rule that matched; it is the handler's own head
+    (``buff_creatures_global`` asks ``is_creature`` of every permanent), so a
+    Dragon that is not a creature — an invented Kindred Enchantment — Dragon
+    (CR 308.2: a kindred has creature types) — is a Dragon to ``has_type``
+    and still gets nothing."""
+    bladewing = _w2g5_permanent(_w2g5_card(set_pool, "Bladewing the Risen"))
+    hoard_card = _w2g5_replace(
+        _W2G5_CATALOG["Bad Moon"], name="Probe Hoard",
+        type_line="Kindred Enchantment — Dragon", oracle_text="",
+    )
+    hoard = _w2g5_permanent(hoard_card)
+    shivan = _w2g5_permanent(_W2G5_CATALOG["Shivan Dragon"])
+    game = _W2G5Game(players=[
+        _W2G5PlayerState(name="A", battlefield=[bladewing, hoard],
+                         library=[_W2G5_CATALOG["Swamp"]] * 10),
+        _W2G5PlayerState(name="B", battlefield=[shivan], library=[_W2G5_CATALOG["Swamp"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+    game._recompute_continuous_effects()
+    assert hoard.has_type("dragon") and not hoard.is_creature
+
+    assert game.activate_permanent_ability(0, "Bladewing the Risen").supported
+    _w2g5_resolve_stack(game)
+
+    assert (bladewing.effective_power, bladewing.effective_toughness) == (5, 5)
+    assert (shivan.effective_power, shivan.effective_toughness) == (6, 6)
+    assert not hoard.is_creature
+    assert any("gives 2 creature(s) +1/+1" in line for line in game.log)
 
 # ==== end W2G5 ======================================================

@@ -4,7 +4,9 @@ it divides lower toughness: split by what the shares kill.
 "When this creature dies, distribute three -1/-1 counters among one, two, or
 three target creatures. For each -1/-1 counter you put on a creature this
 way, remove a -1/-1 counter from that creature at the beginning of the next
-end step." (Shambling Swarm, Torment — the pool's only divided trigger.)
+end step." (Shambling Swarm, Torment — the pool's only divided trigger
+until Scourge's Skirk Volcanist, whose divided *damage* is the last test
+below.)
 
 Reviewed into the AI's divided-card inventory at Torment's promotion
 rehearsal, by running it. Its side was right (the opponent's creatures) and
@@ -125,3 +127,36 @@ def test_the_shares_are_a_lawful_division(set_pool):
     assert divided_shrink_shares(game, ids, 3, 3, "+1/+1") is None
     assert divided_shrink_shares(game, ids[:1], 3, 3, "-1/-1") is None
     assert least_harmed_permanent(game, ids, 3, "+1/+1") is None
+
+
+def test_damage_takes_the_same_arithmetic_at_a_step_of_one(set_pool):
+    """`damage=True` (Skirk Volcanist's divided damage trigger, reviewed at
+    Scourge's promotion rehearsal): a point of damage is a point nearer lethal
+    (CR 704.5g), so 3 damage over Craw Wurm, Llanowar Elves, Grizzly Bears and
+    Hill Giant kills the Elves and the Bears exactly as three -1/-1 counters
+    do — and every division is still lawful (CR 601.2d). From a source with
+    deathtouch one point apiece is lethal (CR 704.5h), so 3 kills three."""
+    game, placed = _table(set_pool, opponents=(
+        "Craw Wurm", "Llanowar Elves", "Grizzly Bears", "Hill Giant",
+    ))
+    names = ("Craw Wurm", "Llanowar Elves", "Grizzly Bears", "Hill Giant")
+    ids = [placed[name].permanent_id for name in names]
+    by_id = {placed[name].permanent_id: name for name in names}
+
+    shares = divided_shrink_shares(game, ids, 3, 3, damage=True)
+    assert {by_id[permanent_id]: share for permanent_id, share in shares} == {
+        "Llanowar Elves": 1, "Grizzly Bears": 2,
+    }
+    for total in range(1, 7):
+        for ceiling in range(1, 4):
+            shares = divided_shrink_shares(game, ids, total, ceiling, damage=True)
+            assert shares, (total, ceiling)
+            assert sum(share for _, share in shares) == total
+            assert all(share >= 1 for _, share in shares)
+            assert len(shares) <= ceiling
+    touched = divided_shrink_shares(game, ids, 3, 3, damage=True, deathtouch=True)
+    assert len(touched) == 3 and all(share == 1 for _, share in touched)
+    # Nothing on the list dies to 3: the Wurm alone.
+    assert divided_shrink_shares(game, ids[:1], 3, 3, damage=True) is None
+    # ...and of the Wurm and the Giant, the Wurm (toughness 4) lives through it.
+    assert by_id[least_harmed_permanent(game, [ids[3], ids[0]], 3, damage=True)] == "Craw Wurm"

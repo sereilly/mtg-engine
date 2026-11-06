@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import dataclasses
 import re
+from typing import NamedTuple
 
 from ...announced_creature_type import with_announced_creature_type
 from ...auras import aura_enchant_clause
@@ -157,6 +158,53 @@ def enchant_seat_satisfied(game, aura_seat: int | None, host_seat: int | None, n
     return host_seat in game.opponents_of(aura_seat)
 
 
+class EnchantNounParts(NamedTuple):
+    """An "enchant <noun>" clause taken apart into what the gate tests.
+
+    ``heads`` are the noun(s) looked up in :data:`_ENCHANT_TARGET_MATCHERS` —
+    one, or the members of a printed union — and every other field is one of
+    CR 702.5's [quality] halves, None (or empty) where the clause prints none.
+    """
+
+    heads: tuple[str, ...]
+    excluded_subtype: str | None
+    without_keyword: str | None
+    colours: tuple[str, ...]
+    colours_excluded: bool
+    excluded_supertype: str | None
+
+
+def enchant_noun_parts(noun: str) -> EnchantNounParts:
+    """*noun*'s halves, split in the gate's own order: seat, negated subtype,
+    keyword exclusion, colours, supertype exclusion, then the union.
+
+    The one split :func:`permanent_matches_enchant_noun` tests, handed out
+    whole so a reader asking "which matcher row does this clause reach?" asks
+    it of the gate rather than of a copy. The pool census
+    (``test_enchant_vocabularies``) kept its own copy of the order, and when
+    Uncontrolled Infestation's "nonbasic" became the gate's fifth half the
+    copy did not learn it — so at Scourge's promotion rehearsal the census
+    looked "nonbasic land" up whole and called a host the gate tests
+    correctly unmatched.
+    """
+    noun = enchant_subject_seat(noun)[0]
+    excluded = None
+    negated = _NON_SUBTYPE_ENCHANT.match(noun)
+    if negated is not None:
+        excluded, noun = negated.group("subtype"), negated.group("noun")
+    noun, without_keyword = enchant_subject_keyword_exclusion(noun)
+    noun, colours, colours_excluded = enchant_subject_colours(noun)
+    noun, excluded_supertype = enchant_subject_supertype_exclusion(noun)
+    return EnchantNounParts(
+        heads=tuple(part.strip() for part in noun.split(" or ")),
+        excluded_subtype=excluded,
+        without_keyword=without_keyword,
+        colours=tuple(colours),
+        colours_excluded=colours_excluded,
+        excluded_supertype=excluded_supertype,
+    )
+
+
 def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     """Whether *permanent* is a legal host for an Aura printing "enchant *noun*".
 
@@ -164,11 +212,7 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     ``aura_attachment.aura_attach_refusal`` and the CR 704.5m sweep — one answer, so the
     list offered and the rule enforced cannot drift.
     """
-    noun = enchant_subject_seat(noun)[0]
-    excluded = None
-    negated = _NON_SUBTYPE_ENCHANT.match(noun)
-    if negated is not None:
-        excluded, noun = negated.group("subtype"), negated.group("noun")
+    parts = enchant_noun_parts(noun)
     # "Enchant creature **without flying**" (Roots). The keyword half of
     # CR 702.5's [quality], split by the reader `enchant_targets.enchant_subject_spec`
     # builds the picker from — so the hosts offered and the hosts allowed are
@@ -180,8 +224,7 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     # The word itself is validated where the clause is *claimed*
     # (`enchant_targets.enchant_line_subject`): a keyword nothing implements answers
     # no for every creature, which would make this exclusion match them all.
-    noun, without_keyword = enchant_subject_keyword_exclusion(noun)
-    if without_keyword is not None and permanent.has_keyword(without_keyword):
+    if parts.without_keyword is not None and permanent.has_keyword(parts.without_keyword):
         return False
     # "Enchant **black** creature" (Decomposition) / "**red or green**" (Mind
     # Harness) / "**nonblack**" (Armor of Thorns). The colour half of CR 702.5's
@@ -190,31 +233,31 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     # `permanent_effective_colors`, which is CR 613 layer 5's answer: a creature
     # an effect has recoloured is judged on what it is now, and the CR 704.5m
     # sweep then puts the Aura in the graveyard if that made it illegal.
-    noun, colours, colours_excluded = enchant_subject_colours(noun)
-    if colours:
+    if parts.colours:
         from ...handlers._filters import permanent_effective_colors
 
-        present = permanent_effective_colors(permanent) & set(colours)
-        if bool(present) is colours_excluded:
+        present = permanent_effective_colors(permanent) & set(parts.colours)
+        if bool(present) is parts.colours_excluded:
             return False
     # "Enchant **nonbasic** land" (Uncontrolled Infestation). The supertype
     # half (CR 205.4), split by the reader the picker builds its spec from and
     # asked through ``Permanent.has_supertype`` — CR 613 layer 4, so a land an
     # effect made basic stops being a legal host and the CR 704.5m sweep then
     # puts the Aura in the graveyard.
-    noun, excluded_supertype = enchant_subject_supertype_exclusion(noun)
-    if excluded_supertype is not None and permanent.has_supertype(excluded_supertype):
+    if (
+        parts.excluded_supertype is not None
+        and permanent.has_supertype(parts.excluded_supertype)
+    ):
         return False
     # "Enchant **artifact or creature**" (Teferi's Curse). A printed union is an
     # OR, so any one member is enough — asked of the same matcher table a single
     # noun uses, which is what keeps a union from being a second vocabulary.
-    if " or " in noun:
-        parts = [part.strip() for part in noun.split(" or ")]
-        matchers = [_ENCHANT_TARGET_MATCHERS.get(part) for part in parts]
+    if len(parts.heads) > 1:
+        matchers = [_ENCHANT_TARGET_MATCHERS.get(head) for head in parts.heads]
         if any(matcher is None for matcher in matchers):
             return False
         return any(matcher(permanent) for matcher in matchers)
-    matcher = _ENCHANT_TARGET_MATCHERS.get(noun)
+    matcher = _ENCHANT_TARGET_MATCHERS.get(parts.heads[0])
     if matcher is None:
         # A noun nobody has read: **no** host, not every host.
         #
@@ -237,7 +280,7 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
         # which is visible in one game. ``test_enchant_vocabularies.py`` makes
         # it a failing test instead, which is visible without one.
         return False
-    if excluded is not None and permanent.has_type(excluded):
+    if parts.excluded_subtype is not None and permanent.has_type(parts.excluded_subtype):
         return False
     return matcher(permanent)
 

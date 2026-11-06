@@ -1166,5 +1166,47 @@ def test_w1g8_long_term_plans_finds_a_card_for_a_seat_nobody_asks(set_pool):
 
 # ==== W2G5 ==========================================================
 # W2G5's tests go between this line and the "end W2G5" line.
+#
+# The deletion probe's Metamorphose finding: "an artifact, creature,
+# enchantment, or land card" ignored `or`, which is the list's own
+# conjunction — the four nouns are the instruction's type union.
+
+from engine import Game as _W2G5Game, PlayerState as _W2G5PlayerState
+from engine.models import Permanent as _W2G5Permanent
+
+
+def test_w2g5_metamorphose_offers_each_of_its_four_types_and_no_spell(set_pool):
+    """"That opponent may put an artifact, creature, enchantment, or land card
+    from their hand onto the battlefield." Asked with one card of each type in
+    hand beside an instant and a sorcery, the opponent is offered the Sol
+    Ring, the Bad Moon, the Holy Strength, the Forest and the Grizzly Bears,
+    and neither the Lightning Bolt nor the Wrath of God."""
+    lea, scg = set_pool("LEA"), set_pool("SCG")
+    opponent_hand = ("Lightning Bolt", "Sol Ring", "Bad Moon", "Forest",
+                     "Grizzly Bears", "Wrath of God", "Holy Strength")
+    game = _W2G5Game(players=[
+        _W2G5PlayerState("A", hand=[scg["Metamorphose"]], library=[lea["Forest"]] * 12),
+        _W2G5PlayerState("B", hand=[lea[name] for name in opponent_hand],
+                         library=[lea["Forest"]] * 12),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {1}
+    wurm = _W2G5Permanent(card=lea["Craw Wurm"])
+    game._put_permanent_onto_battlefield(1, wurm, None)
+    game.start_turn(0)
+    game._settle()
+
+    assert game.queue_from_hand(
+        0, "Metamorphose", target_permanent_ids=[wurm.permanent_id],
+    ).supported
+    game.resolve_top_of_stack()
+    assert game.confirm_optional_pay(1, accept=True)
+    (choice,) = game.pending_choices_of("put_from_hand_choice", 1)
+    hand = game.players[1].hand
+
+    assert sorted(hand[i].name for i in game.live_put_from_hand_choices(choice)) == [
+        "Bad Moon", "Forest", "Grizzly Bears", "Holy Strength", "Sol Ring",
+    ]
+    assert game.players[1].library[0].name == "Craw Wurm"
 
 # ==== end W2G5 ======================================================
