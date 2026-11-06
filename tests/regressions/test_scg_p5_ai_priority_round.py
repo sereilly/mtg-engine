@@ -351,7 +351,6 @@ def test_the_active_ais_trick_after_the_persons_blocks_waits_for_the_pass():
     (attacker,) = _put(game, 1, ["Grizzly Bears"])
     _put(game, 1, ["Forest"])
     (blocker,) = _put(game, 0, ["Grizzly Bears"])
-    game.players[1].hand = [_CARDS["Giant Growth"]]
     blocked = False
     seen = {"with_priority": False, "states": []}
     for _ in range(60):
@@ -367,6 +366,9 @@ def test_the_active_ais_trick_after_the_persons_blocks_waits_for_the_pass():
             state["current_step"] == "declare_blockers" and not blocked
             and combat.get("attackers") and not combat.get("blockers_locked")
         ):
+            # The trick reaches the AI's hand only now, so its main phase
+            # cannot have spent it.
+            game.players[1].hand = [_CARDS["Giant Growth"]]
             _act(sid, action="declare_blockers", target_seat=0, blocker_pairs_by_id={
                 str(blocker.permanent_id): [attacker.permanent_id],
             })
@@ -378,3 +380,5 @@ def test_the_active_ais_trick_after_the_persons_blocks_waits_for_the_pass():
     assert blocked, game.log[-15:]
     assert any(card.name == "Giant Growth" for card in game.players[1].graveyard), game.log[-15:]
     _assert_round(seen, game)
+    # In the fight it is for, not afterwards in the second main phase.
+    assert seen["states"][0][0] == "declare_blockers", seen["states"]
