@@ -288,13 +288,23 @@ def compelled_blocks(game: "Game", defending_player_index: int) -> "dict[int, in
     chooses (``Game.obeying_block_declaration``) — so the fight a compelled
     creature wins alone is a fight nobody else need join. A requirement to
     block *something* (Watchdog) or for an attacker to be blocked by *someone*
-    names no pair, and is left to that maximisation."""
+    names no pair, and is left to that maximisation.
+
+    **Of a creature's requirements, the attacker that holds the most of
+    them**, the first such on a tie. CR 509.1c counts requirements obeyed,
+    and a creature provoked twice by one attacker (two instances of provoke,
+    CR 702.39b — every Sliver under two Hunter Slivers) obeys two by blocking
+    it and one by blocking another provoker: the engine's maximisation moves
+    it there whatever this seat declared. Read as "the first requirement",
+    the seat planned Goblin Turncoat onto Goblin Grappler and traded its
+    Hunter Sliver with the twice-provoking Crypt Sliver — and the engine then
+    put the Turncoat on the Crypt Sliver too, two blockers on a 1/1 the
+    Turncoat killed alone and Grappler unblocked (SCG Phase 5, the LGN
+    block-commitment census)."""
     attacker_seat = game.active_player_index
-    blocks: dict[int, int] = {}
+    held: dict[int, dict[int, int]] = {}
     for requirement in game.block_requirements(defending_player_index):
         if requirement.blocker is None or requirement.attacker is None:
-            continue
-        if requirement.blocker in blocks:
             continue
         blocker = game.permanent_at(defending_player_index, requirement.blocker)
         attacker = game.permanent_at(attacker_seat, requirement.attacker)
@@ -302,8 +312,12 @@ def compelled_blocks(game: "Game", defending_player_index: int) -> "dict[int, in
             continue
         if not game._can_block_attacker(blocker, attacker):
             continue
-        blocks[requirement.blocker] = requirement.attacker
-    return blocks
+        counts = held.setdefault(requirement.blocker, {})
+        counts[requirement.attacker] = counts.get(requirement.attacker, 0) + 1
+    # `max` keeps the first of equals in the order the requirements came, so
+    # a creature each of whose attackers holds one requirement is planned
+    # where it always was.
+    return {blocker: max(counts, key=counts.get) for blocker, counts in held.items()}
 
 
 def best_compelled_blocker(
