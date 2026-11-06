@@ -201,8 +201,14 @@ class GameEndingMixin:
         One window for CR 603.3b (``putting_triggers_on_stack``): the
         abilities one check sets off — two creatures dying to the same combat
         damage, each with a death trigger — go on the stack together, and
-        their controller orders them."""
-        with self.putting_triggers_on_stack():
+        their controller orders them.
+
+        Its own event, too (CR 704.3: "performs all applicable state-based
+        actions simultaneously as a single event"): an event putting
+        permanents onto the battlefield that is open around this check — an
+        answer re-joining one checks state as it settles — is set aside, so
+        the cards a sweep gives back (CR 610.3d) are not its newcomers."""
+        with self.putting_triggers_on_stack(), self.outside_any_entry_event():
             return self._check_state_based_actions()
 
     def _check_state_based_actions(self) -> bool:

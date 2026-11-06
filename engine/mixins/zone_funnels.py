@@ -40,7 +40,8 @@ from ..continuous import next_timestamp
 from ..control import set_base_controller
 from ..enter_effects import CAST_THIS_TURN_STAMP
 from ..delayed_triggers import end_exhausted_exile_delays
-from ..entry_awaiting import (EntryInProgress, entered_together,
+from ..entry_awaiting import (ENTRY_EVENT, DeferredEntry, EntryEvent,
+                              EntryInProgress, apnap_order, entered_together,
                               entry_in_progress, entry_is_awaited)
 from ..exiled_records import (forget_record, newest_record_for,
                               record_exiled_card)
@@ -50,6 +51,7 @@ from ..faces import whole_card
 from ..graveyard_order import record_graveyard_arrival
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN, EXILED_BY_SEAT
+from ..pending_choices import spec_for
 from ..replacements import apply_replacements
 from ..replacements.permanents import apply_entry_riders
 from ..tokens import is_token_card
@@ -808,20 +810,32 @@ class ZoneFunnelsMixin:
         610.3d returns at once when a sweep takes away every permanent that
         exiled them.
 
-        Each entry made inside the block performs its entry state as its call
-        is made, with the permanent in no zone (CR 614.12a) — so no newcomer's
-        entry replacement sees another: CR 614.12 asks only "continuous
-        effects that already exist", and CR 614.13a makes no object entering
-        at the same time a choosable one. When the block closes the entries
-        are completed together (``_finish_or_await``): every newcomer appended,
-        one recompute (CR 611.3c), each one's "…then" rider, and only then
-        each one's "enters" announcement and its own enter trigger, with
-        every newcomer on the battlefield to see them. Entered one at a time,
-        an observer among them saw only those behind it: a Goblin Assassin
-        returned by Planar Guide after a Goblin Clearcutter triggered once
-        instead of twice, and a Soul Warden put back by Living Death gained
-        life for the creatures after it and none for those before it (its
-        ruling, 2025-01-24: it triggers "for each of those other creatures").
+        Each entry made inside the block is **handed in** (``DeferredEntry``)
+        and nothing else of it happens until the event closes
+        (``_close_entry_event``). Then each newcomer's entry state is performed
+        in turn, with the permanent in no zone (CR 614.12a) and **in APNAP
+        order** of the seat it enters under (CR 101.4: the active player makes
+        any choices required, then each other player in turn order; CR
+        613.7m: their timestamps in that order) — so no newcomer's entry
+        replacement sees another: CR 614.12 asks only "continuous effects that
+        already exist", and CR 614.13a makes no object entering at the same
+        time a choosable one. Then the entries are completed together
+        (``_finish_or_await``): every newcomer appended, one recompute (CR
+        611.3c), each one's "…then" rider, and only then each one's "enters"
+        announcement and its own enter trigger, with every newcomer on the
+        battlefield to see them. Entered one at a time, an observer among them
+        saw only those behind it: a Goblin Assassin returned by Planar Guide
+        after a Goblin Clearcutter triggered once instead of twice, and a Soul
+        Warden put back by Living Death gained life for the creatures after it
+        and none for those before it (its ruling, 2025-01-24: it triggers "for
+        each of those other creatures").
+
+        **An event can outlive the block.** A prompt armed inside it carries
+        it (``entry_awaiting.ENTRY_EVENT``) and its answer re-joins it
+        (``rejoining_entry_event``), and the block's end closes it only once
+        no such prompt that stops a loop is still owed — otherwise the last
+        answer does. A loop whose steps each stop to ask opens its event with
+        :meth:`entering_together_through` instead.
 
         At a table that holds for answers an event any of whose newcomers
         still owes an "as it enters" choice waits as one, completed at the
@@ -834,29 +848,201 @@ class ZoneFunnelsMixin:
 
         Re-entrant: a block opened inside an open one is the same event. An
         entry that a newcomer's own entry state makes is an event of its own
-        — the block is set aside while an entry state is performed.
+        — the entry states are performed once the event is no longer open.
         """
         if self.entry_batch is not None:
             yield
             return
-        batch: list = []
-        self.entry_batch = batch
+        event = self._open_entry_event()
         try:
             yield
         except BaseException:
-            self.entry_batch = None
-            for record in batch:
-                self._forget_entry(record)
+            self._abandon_entry_event(event)
             raise
-        self.entry_batch = None
-        if not batch:
+        self._opener_finished(event)
+
+    def entering_together_through(self, run: "Callable") -> None:
+        """One event (CR 603.6a) around a **resumable loop** whose steps may
+        each stop to ask (``engine/resumption.py``): ``run(then)`` runs the
+        loop, and *then* is the loop's last step, which says the event has
+        been handed everything its loop will hand it.
+
+        "Each player may put an artifact, creature, enchantment, or land card
+        from their hand onto the battlefield" (Show and Tell): one offer per
+        seat, each answered after the call that made it has returned, and its
+        ruling (2008-04-01) is that "after all choices are made, the cards are
+        put onto the battlefield simultaneously". A ``with`` block around the
+        loop closed at the first seat's suspension, so each seat's card
+        entered at its own answer and a Soul Warden on the second seat never
+        saw the first seat's creature arrive. Here the event is set aside
+        whenever the loop stops (``entry_batch`` is None between answers, so
+        nothing else that happens meanwhile joins it), each answer re-joins it,
+        and it closes at the last answer.
+
+        Inside an open event the loop is part of that one, and *then* is None.
+        """
+        if self.entry_batch is not None:
+            run(None)
             return
-        with self.putting_triggers_on_stack():
-            waits = self._finish_or_await(batch)
-        if not waits:
-            for record in batch:
-                if record.then is not None:
-                    record.then()
+        event = self._open_entry_event()
+
+        def last_step() -> None:
+            self._opener_finished(event)
+
+        try:
+            run(last_step)
+        except BaseException:
+            self._abandon_entry_event(event)
+            raise
+        finally:
+            # Stopped to ask, or finished: either way nothing after this is
+            # the event's until an answer re-joins it.
+            if self.entry_batch is event:
+                self.entry_batch = None
+
+    def _open_entry_event(self) -> EntryEvent:
+        """Open a new event and make it the one entries are handed to."""
+        event = EntryEvent(item=self.resolving_stack_item)
+        self.entry_batch = event
+        self.open_entry_events.append(event)
+        return event
+
+    def _abandon_entry_event(self, event: EntryEvent) -> None:
+        """An event whose opener raised: nothing it was handed is performed."""
+        event.closed = event.opener_done = True
+        if self.entry_batch is event:
+            self.entry_batch = None
+        self._forget_entry_event(event)
+
+    def _forget_entry_event(self, event: EntryEvent) -> None:
+        self.open_entry_events = [
+            open_event for open_event in self.open_entry_events
+            if open_event is not event
+        ]
+
+    def _opener_finished(self, event: EntryEvent) -> None:
+        """Whatever opened *event* has handed it everything it will: it
+        closes now, unless a prompt it stamped is still owed — then at that
+        prompt's answer (``rejoining_entry_event``)."""
+        event.opener_done = True
+        if self.entry_batch is event:
+            self.entry_batch = None
+        if not self.entry_event_owed(event):
+            self._close_entry_event(event)
+
+    def entry_event_owed(self, event: EntryEvent) -> bool:
+        """Whether a decision armed inside *event* that stops a loop is still
+        owed — the loop behind it may hand the event more newcomers once it is
+        answered. On either queue; one being answered right now (``_answered``)
+        is not owed any more."""
+        return any(
+            choice.data.get(ENTRY_EVENT) is event
+            and spec_for(choice.kind).suspends
+            and spec_for(choice.kind).open_for(self, choice)
+            and not choice.data.get("_answered")
+            for choice in self.pending_choices
+        ) or any(
+            choice.data.get(ENTRY_EVENT) is event
+            for choice in self.pending_replacement_choices
+        )
+
+    @contextmanager
+    def rejoining_entry_event(self, choice):
+        """Answer *choice* as one more part of the event it was armed in (CR
+        603.6a): the entries the answer makes — and the loop it resumes —
+        are handed to that event, and once its opener is done and nothing it
+        stamped is owed, the event closes here. Inert for a prompt armed
+        outside any event, or in one that has closed."""
+        event = choice.data.get(ENTRY_EVENT)
+        if event is None or event.closed:
+            yield
+            return
+        outer = self.entry_batch
+        self.entry_batch = event
+        try:
+            yield
+        finally:
+            self.entry_batch = (
+                None if outer is event and event.closed else outer
+            )
+        self.close_entry_event_if_settled(event)
+
+    def close_entry_event_if_settled(self, event: EntryEvent) -> None:
+        """Close *event* if its opener is done and nothing it stamped is owed
+        — the moment after an answer, or after a prompt it stamped was
+        dropped unanswered."""
+        if (
+            not event.closed
+            and event.opener_done
+            and self.entry_batch is not event
+            and not self.entry_event_owed(event)
+        ):
+            self._close_entry_event(event)
+
+    def close_entry_events_of(self, item) -> None:
+        """The backstop for an event whose loop never came back: *item* has
+        finished resolving (``_release_stack_item``), so every event opened
+        while it resolved is closed — what it was handed enters now rather
+        than never."""
+        for event in list(self.open_entry_events):
+            if event.item is item and not event.closed:
+                self._close_entry_event(event)
+
+    @contextmanager
+    def outside_any_entry_event(self):
+        """Set the open event aside for something that is an event of its own
+        (a state-based check, CR 704.3), and hand it back afterwards."""
+        event, self.entry_batch = self.entry_batch, None
+        try:
+            yield
+        finally:
+            self.entry_batch = event
+
+    def _close_entry_event(self, event: EntryEvent) -> None:
+        """Perform everything *event* was handed, together (CR 603.6a).
+
+        Each newcomer's entry state first, in APNAP order of the seat it
+        enters under (``entry_awaiting.apnap_order``; CR 101.4, 613.7m), with
+        the event already closed — an entry a newcomer's entry state makes is
+        an event of its own — then ``_finish_or_await`` over every newcomer
+        nothing replaced, and each caller's ``then``: at once, or with the
+        rest of the entry when a choice keeps the event waiting."""
+        if event.closed:
+            return
+        event.closed = event.opener_done = True
+        if self.entry_batch is event:
+            self.entry_batch = None
+        self._forget_entry_event(event)
+        if not event.puts:
+            return
+        with self.outside_any_entry_event():
+            records: list = []
+            replaced: list = []
+            waits = False
+            with self.putting_triggers_on_stack():
+                try:
+                    for put in apnap_order(self, event.puts):
+                        record = self._begin_entry(put, stamp_id=False)
+                        if record is None:
+                            replaced.append(put)
+                        else:
+                            records.append(record)
+                except BaseException:
+                    for record in records:
+                        self._forget_entry(record)
+                    raise
+                if records:
+                    waits = self._finish_or_await(records)
+            # An entry a replacement took away (CR 614: Containment Priest)
+            # never waits: its caller's continuation runs now, as it always
+            # has.
+            for put in replaced:
+                if put.then is not None:
+                    put.then()
+            if not waits:
+                for record in records:
+                    if record.then is not None:
+                        record.then()
 
     def entry_is_awaited(self, permanent: Permanent) -> bool:
         """Whether *permanent*'s entry is waiting for its "as it enters"
@@ -945,7 +1131,41 @@ class ZoneFunnelsMixin:
         playing a land is a special action). It could not matter while no
         entering land could be a creature; under Living Lands a played Forest
         is one as it enters (CR 614.12), and Containment Priest asks.
+
+        **Inside an open event** (``entering_together``) the entry is handed
+        to it and True is returned: everything below is done when the event
+        closes, with its other newcomers (``_close_entry_event``). Only the
+        id is stamped now (CR 400.7), so a caller that records what it put
+        down ("if you do, sacrifice **it**", Flash) records the identity the
+        permanent will have.
         """
+        put = DeferredEntry(
+            permanent, controller_index, target_player_index,
+            was_cast=was_cast, from_zone=from_zone,
+            played_as_land=played_as_land, then=then,
+        )
+        event = self.entry_batch
+        if event is not None:
+            permanent.permanent_id = next_permanent_id()
+            event.puts.append(put)
+            return True
+        record = self._begin_entry(put, stamp_id=True)
+        if record is None:
+            return False
+        return self._finish_or_await([record])
+
+    def _begin_entry(self, put: DeferredEntry, *, stamp_id: bool):
+        """Everything of one entry up to the battlefield append: the board's
+        statics folded on, the "would enter" replacements, the stamps, and the
+        entry state with the permanent in no zone (CR 614.12a). The record of
+        the entry on its way — or None when a replacement took it away.
+
+        *stamp_id* is False for an entry an open event was handed, whose id
+        was stamped as it was handed in."""
+        permanent, controller_index = put.permanent, put.controller_index
+        target_player_index = put.target_player_index
+        was_cast, from_zone = put.was_cast, put.from_zone
+        played_as_land = put.played_as_land
         cast_as_a_spell = was_cast and not played_as_land
         # A permanent object entering again is a new object (CR 400.7): the
         # face-down values it was last seen leaving with (CR 708.9,
@@ -992,7 +1212,7 @@ class ZoneFunnelsMixin:
                 # then never arrived; what it wrote on everything else is
                 # rebuilt from the board as it really is.
                 self._recompute_continuous_effects()
-            return False
+            return None
         # "…if it **entered from your graveyard**" (Archfiend's Vessel). Stamped
         # on the permanent rather than kept on the game, because the question is
         # asked of one object and a permanent that leaves takes the answer with
@@ -1021,8 +1241,10 @@ class ZoneFunnelsMixin:
         # CR 400.7: what enters is a *new object*, so it gets a new identity —
         # nothing that held the old id may address it. Stamped before the append
         # so no reader can observe the permanent on the battlefield under an id
-        # it is about to lose.
-        permanent.permanent_id = next_permanent_id()
+        # it is about to lose. (An entry an open event was handed has had its
+        # id since it was handed in.)
+        if stamp_id:
+            permanent.permanent_id = next_permanent_id()
         # CR 613.7d, beside the id and for its reason: the object receives its
         # timestamp as it enters the zone, which is what a static ability on it
         # is ordered by (CR 613.7a). Before the append, so no layer read can
@@ -1047,13 +1269,13 @@ class ZoneFunnelsMixin:
         record = EntryInProgress(
             permanent, controller_index,
             target_player_index=target_player_index, was_cast=was_cast,
-            then=then,
+            then=put.then,
         )
         self.entries_in_progress.append(record)
         # The entry state is this permanent's own: whatever it puts onto the
         # battlefield is an event of its own, not one of this event's
-        # newcomers (``entering_together``).
-        batch, self.entry_batch = self.entry_batch, None
+        # newcomers — performed with no event open (``_close_entry_event``
+        # closes its event first; a lone entry is made outside one).
         try:
             self._initialize_permanent_state(
                 permanent, controller_index, target_player_index
@@ -1061,14 +1283,7 @@ class ZoneFunnelsMixin:
         except BaseException:
             self._forget_entry(record)
             raise
-        finally:
-            self.entry_batch = batch
-        if batch is not None:
-            # **One of several newcomers of one event** (CR 603.6a): the rest
-            # of its entry is done with theirs, as the event closes.
-            batch.append(record)
-            return True
-        return self._finish_or_await([record])
+        return record
 
     def _finish_or_await(self, records) -> bool:
         """Complete the entries one event made, *records* — or wait.

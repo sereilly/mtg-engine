@@ -35,7 +35,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 
 from .ai_weighed_cast import permitted_casts
-from .entry_awaiting import awaited_entries
+from .entry_awaiting import ENTRY_EVENT, awaited_entries
 from .text_changes import spell_text_card
 
 
@@ -530,6 +530,11 @@ def held_for_an_answer(game) -> bool:
         # 614.12a): the rest of its entry is a closure over this game
         # (``engine/entry_awaiting.py``).
         or bool(awaited_entries(game))
+        # …and one handed to an event still waiting on another seat's answer
+        # (CR 603.6a): it enters with the others when the original's last
+        # answer closes the event, and what its caller does to it then is a
+        # closure over this game (``DeferredEntry.then``).
+        or any(event.puts for event in getattr(game, "open_entry_events", ()))
     )
 
 
@@ -619,8 +624,15 @@ def scratch_copy_with(game, carried):
     # An event the original is still handing its newcomers (CR 603.6a,
     # ``ZoneFunnelsMixin.entering_together``) is no event on the copy: the
     # block that closes it is the original's, so a permanent the copy entered
-    # would join it and never arrive.
+    # would join it and never arrive. The same for one waiting across the
+    # original's decisions ("each player may put …"): what closes it is the
+    # original's loop, and an answer on the copy re-joining the copied event
+    # would hand it a permanent nothing on the copy will ever enter — so the
+    # copy's prompts carry no event, and its answers enter what they put.
     clone.entry_batch = None
+    clone.open_entry_events = []
+    for choice in (*clone.pending_choices, *clone.pending_replacement_choices):
+        choice.data.pop(ENTRY_EVENT, None)
     return clone, carried
 
 

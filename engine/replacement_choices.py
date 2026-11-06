@@ -31,6 +31,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from .entry_awaiting import ENTRY_EVENT
+
 
 @dataclass
 class ReplacementChoice:
@@ -129,6 +131,13 @@ def stamp_resolving(game, choice) -> None:
     targets = getattr(game, "resolving_targets", None)
     if targets and targets[-1] and RESOLVING_TARGETS not in choice.data:
         choice.data[RESOLVING_TARGETS] = targets[-1]
+    # …and the event putting permanents onto the battlefield that was open
+    # (CR 603.6a, ``entry_awaiting.ENTRY_EVENT``): the answer is one more part
+    # of it, so what it puts down — and what the loop it resumes puts down —
+    # enters with the rest ("each player may put …", Show and Tell).
+    event = getattr(game, "entry_batch", None)
+    if event is not None and not event.closed and ENTRY_EVENT not in choice.data:
+        choice.data[ENTRY_EVENT] = event
 
 
 def offer_replacement_choice(game, choice: ReplacementChoice) -> tuple[bool, int]:
