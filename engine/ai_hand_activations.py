@@ -20,6 +20,7 @@ module's reason: the action shape is its own
 
 from __future__ import annotations
 
+from .activation_prohibitions import activation_prohibition
 from .ai_valuation import is_mana_ability
 from .game import Game
 from .oracle import compile_card_oracle
@@ -76,6 +77,13 @@ def _choose_hand_activation_action(
             continue
         ability = from_hand[0]
         if ability.instruction is None:
+            continue
+        # CR 602.5 before anything is priced: the table ``activate_from_hand``
+        # refuses with (``engine/activation_prohibitions.py``) — a Stabilizer's
+        # "Players can't cycle cards", a City of Solitude on another seat's
+        # turn. Proposing what the engine refuses is the seat's one activation
+        # of the priority pass spent on nothing, every pass.
+        if activation_prohibition(game, player_index, card, ability) is not None:
             continue
 
         # A mana ability activated for its own sake empties at the end of the

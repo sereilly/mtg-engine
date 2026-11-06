@@ -435,6 +435,17 @@ def _parse_postmodifiers(
         if stream.accept_phrase("on", "the", "battlefield"):
             d.on_the_battlefield = True
             continue
+        # "Exile all artifacts, creatures, and lands **from the battlefield**,
+        # all cards from all graveyards, and all cards from all hands." (Decree
+        # of Annihilation.) The same scope with the preposition a verb that
+        # *moves* objects takes: the battlefield is one shared zone (CR 403.1),
+        # so the words say the set is scoped to nobody, exactly as "on the
+        # battlefield" does — the same field, so every lowering not written
+        # for it refuses the phrase by name. A permanent phrase only: "cards
+        # from the battlefield" names nothing a card prints.
+        if not d.is_card and stream.accept_phrase("from", "the", "battlefield"):
+            d.on_the_battlefield = True
+            continue
         # "a sorcery card you own **from outside the game**" (the Wishes, Ring
         # of Ma'rûf). Not a zone either (CR 400.11: "Outside the game is not a
         # zone"), so it sets a field of its own for the battlefield phrase's

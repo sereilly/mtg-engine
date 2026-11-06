@@ -165,13 +165,19 @@ _LAND_SCENARIOS: dict[str, tuple] = {
     ),
 }
 
-#: The one row no land can reach: "Only your opponents may activate this
+#: The rows no land can reach. "Only your opponents may activate this
 #: ability" (Clergy of the Holy Nimbus) is printed on an ability the player
 #: names by index, and the tap seam takes only a mana ability whose whole
 #: cost is {T} and whose line prints no clause it cannot ask mid-payment
 #: (``is_tap_alone_mana_ability``) — no land in the pool prints one, and such
 #: an ability goes down the activation path, which asks the table already.
-_UNREACHABLE = {"printed_permission"}
+_UNREACHABLE = {
+    "printed_permission",
+    # "Players can't cycle cards." (Stabilizer.) Binds only a card in a hand
+    # (CR 702.29a: cycling functions nowhere else), and a land's tap is never
+    # a cycling ability.
+    "cycling_ban",
+}
 
 
 def test_every_row_has_a_land_scenario():

@@ -26,13 +26,38 @@ zone in which its cost can be paid"), which is a rule about *costs* and not
 about this keyword, and it lives in ``engine/activation_zones.py`` where every
 activation path asks it.
 
-**Typecycling (CR 702.29e) is refused, loudly.** "Plainscycling {2}" means a
-library search rather than a draw, and CR 702.29f makes it a cycling ability
-for every purpose — so a card printing one must not be quietly read as though
-it printed the draw, and must not slip past as an unclaimed line either.
+**Typecycling (CR 702.29e) is the same rewrite with a search for its effect.**
+*"'[Type]cycling [cost]' means '[Cost], Discard this card: Search your library
+for a [type] card, reveal it, and put it into your hand. Then shuffle your
+library.'"* So "Plainscycling {2}" becomes "{2}, Discard this card: Search your
+library for a Plains card, reveal it, put it into your hand, then shuffle." —
+the sentence the printed reminder text spells, which the grammar already reads
+as a ``search_library`` with the type as its restriction. The type is "usually
+a subtype … but can be any card type, subtype, supertype, or combination
+thereof (as in 'basic landcycling')", so it is read word by word against
+``data/vocabulary/`` and never against a list of the five basic land types: a
+word no catalog knows leaves the line unrewritten, and the support gate refuses
+it naming the line rather than searching for a type nothing defines.
+
+CR 702.29f makes the result a cycling ability for every purpose — "Any cards
+that trigger when a player cycles a card will trigger …", "Any effect that
+stops players from cycling cards will stop players from activating cards'
+typecycling abilities", "Any effect that increases or reduces a cycling cost
+will increase or reduce a typecycling cost". All three are one question,
+:func:`is_cycling_ability`, and it answers yes about a typecycling ability
+without being told: it is the rewrite run backwards, and the rewrite now reads
+the line.
+
 :func:`is_cycling_line` is deliberately the *wide* shape, exactly as
 ``equipment.is_equip_line`` is: a variant the expansion cannot read reaches the
 support gate in ``engine/oracle.py`` and is refused naming the line.
+
+**"Players can't cycle cards."** (Stabilizer.) CR 702.29f's other sentence, and
+the board half of CR 602.5: a line read here (:func:`cycling_ban_line`), off
+the board (:func:`cycling_ban`), and asked through one row of
+``engine/activation_prohibitions.py`` by every door an ability is activated
+through. The row asks :func:`is_cycling_ability`, so the ban reaches a
+typecycling ability by construction.
 """
 
 from __future__ import annotations
@@ -57,17 +82,93 @@ _CYCLING_SHAPE = re.compile(r"^[a-z ]*cycling\b", re.IGNORECASE)
 #: The rules text CR 702.29a gives the keyword.
 CYCLING_RULES_TEXT = "{cost}, Discard this card: Draw a card."
 
+#: "Plainscycling {2}", "Basic landcycling {1}{G}" — CR 702.29e's variant, the
+#: type glued to the front of the word. The type is captured lazily so the
+#: word "cycling" is never part of it; whether it *is* a type is the
+#: vocabulary's question (:func:`_typecycling_type`), not this pattern's.
+_TYPECYCLING_LINE = re.compile(
+    r"^(?P<type>[a-z][a-z' -]*?)cycling\s+(?P<cost>(?:\{[^{}]+\})+)$",
+    re.IGNORECASE,
+)
+
+#: The rules text CR 702.29e gives the variant, in the spelling the printed
+#: reminder text uses ("…, reveal it, put it into your hand, then shuffle.") —
+#: the CR's "…, and put it into your hand. Then shuffle your library." says the
+#: same thing in two sentences, and the one-sentence form is the one the
+#: grammar reads as one search.
+TYPECYCLING_RULES_TEXT = (
+    "{cost}, Discard this card: Search your library for {article} {type} card, "
+    "reveal it, put it into your hand, then shuffle."
+)
+
+
+def _printed_keyword_line(line: str) -> str:
+    """*line* with its reminder text and trailing full stop removed."""
+    return " ".join(_REMINDER.sub("", line or "").split()).strip().rstrip(".")
+
 
 def cycling_cost(line: str) -> str | None:
-    """The cost of a printed cycling keyword line, or None.
+    """The cost of a printed **plain** cycling keyword line, or None.
 
     None for a typecycling line (CR 702.29e) — its cost is readable but its
-    *effect* is a library search this rewrite does not produce, and returning
-    the cost would rewrite the card into one that draws.
+    *effect* is a library search, and a caller asking for the draw's cost must
+    not be handed one (:func:`typecycling_parts` is that line's reader).
     """
-    stripped = " ".join(_REMINDER.sub("", line or "").split()).strip().rstrip(".")
-    match = _CYCLING_LINE.match(stripped)
+    match = _CYCLING_LINE.match(_printed_keyword_line(line))
     return match.group("cost") if match is not None else None
+
+
+def _typecycling_type(printed: str) -> str | None:
+    """The type phrase of a typecycling keyword, spelled for the search
+    sentence, or None when a word of it is no type.
+
+    CR 702.29e: "any card type, subtype, supertype, or combination thereof".
+    Read word by word against the catalogs in ``data/vocabulary/`` — a
+    multiword subtype by the longest match, as the noun parser reads one — so
+    "basic land" is a supertype and a card type, "Plains" a land subtype and
+    "Sliver" a creature type, while a word in none of them returns None and the
+    line is left for the support gate to refuse. A supertype or card type is
+    spelled lowercase and a subtype with its capital, which is how a search
+    sentence prints each ("a basic land card", "a Plains card").
+    """
+    from .grammar.vocabulary import (CARD_TYPES, SUBTYPE_INDEX,
+                                     TYPE_LINE_SUPERTYPES, display_type_word,
+                                     match_longest)
+
+    words = tuple(printed.lower().split())
+    if not words:
+        return None
+    spelled: list[str] = []
+    index = 0
+    while index < len(words):
+        subtype = match_longest(words, index, SUBTYPE_INDEX)
+        if subtype is not None:
+            matched, consumed = subtype
+            spelled.append(display_type_word(matched))
+            index += consumed
+            continue
+        word = words[index]
+        if word not in TYPE_LINE_SUPERTYPES and word not in CARD_TYPES:
+            return None
+        spelled.append(word)
+        index += 1
+    return " ".join(spelled)
+
+
+def typecycling_parts(line: str) -> tuple[str, str] | None:
+    """``(type phrase, cost)`` of a printed typecycling line (CR 702.29e), or
+    None — for plain cycling, for anything that is not the keyword, and for a
+    type phrase no vocabulary catalog knows."""
+    printed = _printed_keyword_line(line)
+    if _CYCLING_LINE.match(printed):
+        return None
+    match = _TYPECYCLING_LINE.match(printed)
+    if match is None:
+        return None
+    type_phrase = _typecycling_type(match.group("type").strip())
+    if type_phrase is None:
+        return None
+    return type_phrase, match.group("cost")
 
 
 def is_cycling_line(line: str) -> bool:
@@ -86,9 +187,20 @@ def is_cycling_line(line: str) -> bool:
 
 
 def expand_cycling_line(line: str) -> str | None:
-    """The CR 702.29a rules text for one printed cycling line, or None."""
+    """The rules text for one printed cycling line, or None: CR 702.29a's
+    draw for "Cycling [cost]", CR 702.29e's search for "[Type]cycling
+    [cost]"."""
     cost = cycling_cost(line)
-    return None if cost is None else CYCLING_RULES_TEXT.format(cost=cost)
+    if cost is not None:
+        return CYCLING_RULES_TEXT.format(cost=cost)
+    typed = typecycling_parts(line)
+    if typed is None:
+        return None
+    type_phrase, cost = typed
+    return TYPECYCLING_RULES_TEXT.format(
+        cost=cost, type=type_phrase,
+        article="an" if type_phrase[:1].lower() in "aeiou" else "a",
+    )
 
 
 def expand_cycling_lines(oracle_text: str) -> str:
@@ -131,10 +243,10 @@ def is_cycling_ability(card, ability) -> bool:
     every cost reader here is written against.
 
     CR 702.29f makes typecycling a cycling ability too, and the derivation
-    gives that free wherever the expansion can read the line. Today it cannot
-    (``cycling_cost`` refuses a typecycling line and the card is reported
-    unsupported naming it), so no such ability compiles at all — and when one
-    does, this answers yes about it without being told.
+    gives that free: :func:`expand_cycling_line` reads "Plainscycling {2}" into
+    its search, so the search ability's ``source_line`` is that expansion and
+    this answers yes about it without being told — for the cycle trigger, the
+    cost modifiers and Stabilizer's ban alike.
     """
     wanted = (getattr(ability, "source_line", "") or "").strip()
     if not wanted:
@@ -149,8 +261,9 @@ def unread_cycling_line(oracle_text: str) -> str | None:
     """A printed cycling-shaped line this module cannot rewrite, or None.
 
     The support gate's question, asked of the text **after** the expansion has
-    run: a line still reading as cycling by then is one :func:`cycling_cost`
-    refused, and the card is unsupported naming it. Without this a typecycling
+    run: a line still reading as cycling by then is one
+    :func:`expand_cycling_line` declined — a typecycling line whose type no
+    catalog knows — and the card is unsupported naming it. Without this such an
     instant would report supported off its *other* line and silently drop the
     keyword — the population a refusal census cannot reach, which is exactly
     what the fourteen already-"supported" cycling cards in Urza's Saga were
@@ -162,12 +275,56 @@ def unread_cycling_line(oracle_text: str) -> str | None:
     return None
 
 
+#: "Players can't cycle cards." (Stabilizer.) The sentence names every player,
+#: so it binds its own controller as thoroughly as anybody — the shape of
+#: ``cast_bans``' board-wide sentences, read the same way.
+_CYCLING_BAN = re.compile(r"^players can't cycle cards$")
+
+#: The claim name the support gate, the grammar's registry and the parse
+#: census give the line — its own, for ``cast_bans.COMBAT_PLAY_BAN_CLAIM``'s
+#: reason: it is the whole of what the permanent does.
+CYCLING_BAN_CLAIM = "cycling_ban"
+
+
+def cycling_ban_line(line: str) -> bool:
+    """Whether *line* is "Players can't cycle cards."
+
+    One reader, three callers, as every board-wide ban has: the grammar's
+    registry and the support gate ask it so the line is *claimed*, and
+    :func:`cycling_ban` asks it so the line is *enforced* — a claim that
+    outlives its enforcement is an artifact reporting supported while every
+    seat keeps cycling.
+    """
+    normalized = (line or "").strip().lower().rstrip(".").replace("’", "'")
+    return _CYCLING_BAN.match(normalized) is not None
+
+
+def cycling_ban(game) -> str | None:
+    """The name of a permanent saying players can't cycle cards, or None.
+
+    Every battlefield and no seat comparison. Read off ``effective_card`` for
+    the reason ``activation_restrictions.global_activation_ban`` reads it: a
+    text change (CR 613 layer 3) or a lost ability is the board's question,
+    and this table should not have to know text can change.
+    """
+    for _seat, permanent in game.permanents_with_controller():
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            if cycling_ban_line(raw_line):
+                return permanent.card.name
+    return None
+
+
 __all__ = [
+    "CYCLING_BAN_CLAIM",
     "CYCLING_RULES_TEXT",
+    "TYPECYCLING_RULES_TEXT",
+    "cycling_ban",
+    "cycling_ban_line",
     "cycling_cost",
     "expand_cycling_line",
     "expand_cycling_lines",
     "is_cycling_ability",
     "is_cycling_line",
+    "typecycling_parts",
     "unread_cycling_line",
 ]

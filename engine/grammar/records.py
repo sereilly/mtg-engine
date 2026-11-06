@@ -238,6 +238,15 @@ _THIS_WAY_COUNTS: dict[tuple[str, str], str] = {
     # twenty-fourth spelling of the idea rather than a consolidation of the
     # other twenty-three. That consolidation is its own change.
     ("enchantment", "destroyed"): "destroyed_this_way",
+    # "Destroy all creatures. They can't be regenerated. Draw a card **for
+    # each creature destroyed this way**." (Decree of Pain.) The same record
+    # one noun over: the participle a card prints about a creature is
+    # "destroyed" as often as "died" (CR 700.4 gives "dies" the graveyard half
+    # of it, and a sweep's record is what actually died — a regenerated or
+    # indestructible creature is not counted, CR 701.8c). Like the row above,
+    # the noun is a restatement of what the sweep in front of it destroyed,
+    # which is a creature sweep on the one card that prints it.
+    ("creature", "destroyed"): "destroyed_this_way",
 }
 
 

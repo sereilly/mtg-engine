@@ -289,25 +289,46 @@ def test_113_6j_an_ordinary_battlefield_ability_is_not_activatable_from_hand():
 
 
 # ---------------------------------------------------------------------------
-# CR 702.29e — typecycling is refused rather than read as a draw
+# CR 702.29e — typecycling is the search, never the draw
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.cr("702.29e", "702.29f")
-def test_702_29e_typecycling_is_refused_naming_the_line():
-    """"[Type]cycling [cost]" searches a library; it does not draw. CR 702.29f
-    makes it a cycling ability for every other purpose, so a card printing one
-    must be reported unsupported naming the line rather than quietly rewritten
-    into the draw — and rather than slipping past as an unclaimed line on an
-    instant whose *other* line compiles, which is what the fourteen already
-    "supported" cycling cards in Urza's Saga were doing."""
-    assert expand_cycling_line("Plainscycling {2}") is None
+def test_702_29e_typecycling_is_rewritten_into_its_search_not_the_draw():
+    """"[Type]cycling [cost]" searches a library; it does not draw. Until
+    Scourge the rewrite refused the line (and the card with it) rather than
+    read it as the draw; now it reads it as CR 702.29e's search, and the
+    draw's own reader still declines it — ``cycling_cost`` is the plain
+    keyword's cost and nothing else. The behaviour is in
+    ``tests/rules/test_scg_w1g2_typecycling.py``."""
+    assert cycling_cost("Plainscycling {2}") is None
+    assert expand_cycling_line("Plainscycling {2}") == (
+        "{2}, Discard this card: Search your library for a Plains card, "
+        "reveal it, put it into your hand, then shuffle."
+    )
     assert is_cycling_line("Plainscycling {2}") is True
 
     card = _cycler("Searcher", keyword="Plainscycling")
     program = compile_card_oracle(card)
+    assert program.supported is True, program.reason
+    assert [a.instruction.kind for a in usable_activated_abilities(program, zone=HAND)] == [
+        "search_library"
+    ]
+
+
+@pytest.mark.cr("702.29e")
+def test_702_29e_a_type_no_catalog_knows_is_still_refused_naming_the_line():
+    """The type is read against ``data/vocabulary/``, so a word that is no
+    card type, subtype or supertype leaves the line unrewritten — and the
+    support gate refuses the card naming it rather than searching for a type
+    nothing defines."""
+    assert expand_cycling_line("Fooscycling {2}") is None
+    assert is_cycling_line("Fooscycling {2}") is True
+
+    card = _cycler("Searcher", keyword="Fooscycling")
+    program = compile_card_oracle(card)
     assert program.supported is False
-    assert "Plainscycling {2}" in program.reason
+    assert "Fooscycling {2}" in program.reason
 
 
 @pytest.mark.cr("702.29e")

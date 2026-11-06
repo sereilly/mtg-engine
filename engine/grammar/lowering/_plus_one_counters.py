@@ -216,6 +216,28 @@ def lower_plus_one_placement(
                 {"power": 1, "toughness": 1, "count": node.count.value},
             ),
         )
+    if (
+        isinstance(node.count, ast.Fixed) and node.count.value > 1
+        and _is_target(node.subject)
+        and not _names_several_targets(node.subject)
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier not in PAIR_ORDINALS
+        and not getattr(node.subject.filter, "their_choice", False)
+        and not node.then_double
+    ):
+        # "When you cycle this card, you may put **four** +1/+1 counters on
+        # target creature." (Decree of Savagery.) A printed number on one
+        # chosen creature: ``add_counter_to_target`` has read ``count`` for
+        # its single-target placement since Living Armor's "X +0/+1
+        # counters", and only this gate refused a printed one. Only the
+        # plain single target, which is the branch of the handler that reads
+        # it — the several-target, pair-member and "of their choice" readings
+        # below place one counter each and keep their refusal of a number.
+        payload: dict[str, object] = {
+            "power": 1, "toughness": 1, "count": node.count.value,
+        }
+        _describe_targets(payload, node.subject)
+        return (OracleInstruction("add_counter_to_target", "", payload),)
     if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
         raise LoweringError("variable counter counts have no handler", node=node)
     if _is_source(node.subject):

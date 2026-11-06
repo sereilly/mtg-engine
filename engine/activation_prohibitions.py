@@ -226,8 +226,26 @@ def _tap_abilities_shut_off(game, seat, source, ability):
     return None
 
 
+def _cycling_ban(game, seat, source, ability):
+    # "Players can't cycle cards." (Stabilizer.) CR 702.29f: "Any effect that
+    # stops players from cycling cards will stop players from activating
+    # cards' typecycling abilities" — so the row asks the one predicate that
+    # knows both are cycling (``cycling.is_cycling_ability``), never the word
+    # on the line. The board is read first: it is the cheap half, and on
+    # almost every table there is no such sentence to find.
+    from .cycling import cycling_ban, is_cycling_ability
+
+    banned_by = cycling_ban(game)
+    if banned_by is None or not is_cycling_ability(source, ability):
+        return None
+    return f"{_name(source)} can't be cycled ({banned_by})"
+
+
 _ON_THE_BATTLEFIELD = frozenset({PERMANENT})
 _ANYWHERE = frozenset({PERMANENT, CARD})
+#: A cycling ability functions only while its card is in a hand (CR 702.29a),
+#: so the only source it is ever activated from is a card.
+_IN_A_HAND = frozenset({CARD})
 
 #: Every CR 602.5 prohibition the engine enforces, **in the order the
 #: activation path asks them**. Adding one is adding a row: the activation
@@ -246,6 +264,7 @@ ACTIVATION_PROHIBITIONS: tuple[ProhibitionRow, ...] = (
     ProhibitionRow("aura_nonmana_shut_off", _ON_THE_BATTLEFIELD, _aura_nonmana_shut_off),
     ProhibitionRow("aura_all_shut_off", _ON_THE_BATTLEFIELD, _aura_all_shut_off),
     ProhibitionRow("tap_abilities_shut_off", _ON_THE_BATTLEFIELD, _tap_abilities_shut_off),
+    ProhibitionRow("cycling_ban", _IN_A_HAND, _cycling_ban),
 )
 
 

@@ -45,6 +45,7 @@ from engine.cast_bans import (most_permanents_play_ban_sentence,  # noqa: E402
                               last_cast_color_ban_line,
                               spell_cap_line)
 from engine.combat_assignment import defender_assigns_line  # noqa: E402
+from engine.cycling import cycling_ban_line  # noqa: E402
 from engine.counter_conditions import (uncounterable_class_line,  # noqa: E402
                                        uncounterable_line)
 from engine.resolution_overrides import resolution_override_sentence  # noqa: E402
@@ -407,6 +408,11 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # and the activation half would survive the removal of either gate.
     ("cast_bans.py (board-wide combat window)",
      lambda s: combat_play_ban_line(s) is not None),
+    # "Players can't cycle cards." (Stabilizer.) CR 702.29f's ban, enforced by
+    # the cycling row of `activation_prohibitions` at every activation door —
+    # its own channel, asking the reader that row asks.
+    ("cycling.py (board-wide cycling ban)",
+     lambda s: cycling_ban_line(s)),
     # CR 601.3a read the other way round: "Any player may cast creature spells
     # with mana value 3 or less without paying their mana costs and as though
     # they had flash." (Aluren.) Three permissions in one sentence — who, at

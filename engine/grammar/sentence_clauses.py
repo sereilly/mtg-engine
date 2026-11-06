@@ -378,6 +378,17 @@ def _parse_leading_recorded_count(
     counted = _parse_for_each_this_way(stream)
     if counted is None:
         return None
+    if counted.source == "destroyed_this_way":
+        # "Destroy all creatures. … **For each creature destroyed this way,**
+        # its controller creates a 1/1 white Spirit creature token with
+        # flying." (March of Souls.) In the leading position the destroy
+        # record names the *set* — one turn per permanent, each with its own
+        # controller — which is the loop's reading
+        # (:func:`_parse_leading_for_each`'s ``DiedThisWay``), not a rate.
+        # The trailing printing ("Draw a card for each creature destroyed this
+        # way", Decree of Pain) is the count, and is read where it is printed.
+        stream.reset(mark)
+        return None
     if not stream.accept_punct(","):
         stream.reset(mark)
         return None
