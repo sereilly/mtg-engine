@@ -39,7 +39,6 @@ from dataclasses import dataclass, replace
 
 from .ai_weighed_cast import cast_weighed
 from .cost_modifiers import (
-    CostReduction,
     cost_reduction_for_cast,
     keyword_cost_modifiers,
     reduce_cost,
@@ -436,14 +435,19 @@ def _cost_for(
     # AI prices a spell to decide whether it can cast it — priced without the
     # pip it proposes a cast the rules then refuse, every turn, forever.
     pips, _pip_names = spell_symbol_tax(game, seat, card)
-    reduction, _reducers = cost_reduction_for_cast(game, seat, card)
+    # With the X being priced: a reduction narrowed by the spell's mana value
+    # (Krosan Drover) counts it, as the cast path does once X is announced
+    # (CR 202.3e).
+    reduction, _reducers = cost_reduction_for_cast(
+        game, seat, card, x_value=x_value,
+    )
     # "Flashback costs you pay cost {2} less." (Catalyst Stone.) CR 601.2f
     # over the keyword's cost, through the reader the cast path charges with;
     # nothing for a cost that is the price of no keyword.
     more, less, _by = keyword_cost_modifiers(game, seat, keyword)
     if more or less:
         tax += more
-        reduction = CostReduction(reduction.generic + less, reduction.colored)
+        reduction = reduction.plus_generic(less)
     # The best split of X among the colours the card allows, which is the one
     # the cast path will try first (`pool_payment._x_color_allocations`). The AI is
     # sizing the cost, so it wants the payment that will actually be attempted;

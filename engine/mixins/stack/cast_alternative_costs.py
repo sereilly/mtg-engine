@@ -766,7 +766,7 @@ class AlternativeCastCostsMixin:
                 extra_generic=max(0, extra_generic) + tax + more,
                 extra_pips=pips,
             ),
-            CostReduction(reduction.generic + less, reduction.colored),
+            reduction.plus_generic(less),
         )
 
     def _mana_still_owed_refusal(

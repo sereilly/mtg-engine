@@ -259,7 +259,9 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # unenforced.
     from .cast_restrictions import cast_timing_claims_line
 
-    if cast_timing_claims_line(normalized):
+    # With the name: "You can't cast **Rock Jockey** if you've played a land
+    # this turn" spells its own cast by the card's name (CR 201.5).
+    if cast_timing_claims_line(normalized, card_name):
         return True
     # "This spell can't be countered." (Scragnoth.) CR 113.6g: a static ability
     # of the object *on the stack*, so it produces no instruction for a

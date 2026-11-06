@@ -49,6 +49,7 @@ from engine.special_actions import (available_permanent_special_actions,
 from engine.activation_prohibitions import activation_prohibition
 from engine.board_payment import board_can_pay
 from engine.cast_prohibitions import cast_prohibition
+from engine.cast_restrictions import check_cast_timing
 from engine.cast_timing import casts_at_instant_speed
 from engine.classifier import classify_card
 from engine.faces import castable_faces, face_cards
@@ -374,23 +375,15 @@ def _card_castable_now(
         if player_index != window.current_turn or not window.is_main_phase or not window.stack_empty:
             return False
 
-    # Card-specific timing restriction
-    if "cast this spell only during your declare attackers step" in card.oracle_text.lower():
-        if game.current_step != "declare_attackers" or game.active_player_index != player_index:
-            return False
-
-    # Blaze of Glory: only during combat before blockers are declared.
-    if "cast this spell only during combat before blockers are declared" in card.oracle_text.lower():
-        if game.current_phase != "combat" or game.current_step not in (
-            "beginning_of_combat",
-            "declare_attackers",
-        ):
-            return False
-
-    # False Orders / similar: only during the declare blockers step.
-    if "cast this spell only during the declare blockers step" in card.oracle_text.lower():
-        if game.current_phase != "combat" or game.current_step != "declare_blockers":
-            return False
+    # The card's own "Cast this spell only …" clause (CR 601.3), through the
+    # table the cast path refuses with (`cast_restrictions.check_cast_timing`).
+    # Three of its phrases stood here as literals with their own step tests,
+    # and every other row — Festival's opponent's upkeep, Blizzard's snow land,
+    # Skyshroud Condor's earlier spell, Siren's Call, Reset, Teleport and eight
+    # more — glowed in a hand whose click the cast path then refused (fifteen
+    # shipped cards on an ordinary own-main-phase board).
+    if check_cast_timing(game, player_index, (card.oracle_text or "").lower()):
+        return False
 
     # Target validation (aura enchant targets, removal targets, counter targets, etc.)
     if "Aura" in card.type_line:

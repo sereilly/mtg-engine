@@ -35,7 +35,7 @@ from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
                                       cast_damage_source_line,
                                       cast_opponent_cast_line,
-                                      cast_own_cast_line)
+                                      cast_own_cast_line, self_cast_ban_line)
 from engine.cast_bans import (combat_play_ban_line,  # noqa: E402
                               chosen_name_ban_line,
                               same_name_as_permanent_ban_line,
@@ -924,6 +924,15 @@ CARD_CHANNELS: tuple[tuple[str, object], ...] = (
         # say that the name in the clause is its own.
         "activation_restrictions.py (self-named)",
         lambda card, s: activation_restriction_line(s, card.name),
+    ),
+    (
+        # "You can't cast **Rock Jockey** if you've played a land this turn."
+        # CR 601.3's prohibition on the card's own cast, spelled with its own
+        # name (CR 201.5) — a card channel for `stack_statics`' reason above:
+        # only the card can say the name in the clause is its own. Enforced by
+        # `cast_prohibitions`' `self_cast_ban` row through the same reader.
+        "cast_restrictions.py (self cast ban)",
+        lambda card, s: self_cast_ban_line(s, card.name) is not None,
     ),
     (
         # Gaze of Pain: "you may … . **If you do**, it assigns no combat damage

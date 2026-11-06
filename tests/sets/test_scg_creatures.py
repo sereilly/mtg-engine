@@ -244,6 +244,574 @@ def test_w1g2_the_wire_labels_a_typecycling_button_with_its_printed_line(set_poo
 
 # ==== W1G3 ==========================================================
 # W1G3's tests go between this line and the "end W1G3" line.
+#
+# Cost reductions keyed by what the spell is (CR 601.2f): the five creature-
+# type Warchiefs, Krosan Drover's mana value, Mistform Warchief's shared type,
+# Edgewalker's coloured reduction that does not spill (CR 118.7b/c switched
+# off), and Rock Jockey's two prohibitions. Every cast below is a real cast
+# with mana enforced and exactly the reduced price floating, so "it worked" is
+# the pool emptying and the card on the board; the table's own readings of
+# invented sentences are tests/rules/test_scg_w1g3_cost_reductions.py.
+import pytest as _w1g3_pytest
+
+from engine import Game as _W1G3Game
+from engine import ai_cast_gates as _w1g3_ai_cast_gates
+from engine import ai_casts as _w1g3_ai_casts
+from engine.ai_payment import _cost_for as _w1g3_cost_for
+from engine.ai_payment import tap_planned_lands as _w1g3_tap_planned_lands
+from engine.models import Permanent as _W1G3Permanent
+from engine.models import PlayerState as _W1G3PlayerState
+from engine.oracle import compile_card_oracle as _w1g3_compile
+from engine.targeting import derive_activation_spec as _w1g3_activation_spec
+from tests.helpers import resolve_stack as _w1g3_resolve_stack
+
+
+def _w1g3_table(catalog_by_name, *, interactive=False):
+    """Seat 0 active in its precombat main phase with mana enforced."""
+    library = [catalog_by_name["Grizzly Bears"]] * 10
+    game = _W1G3Game(players=[
+        _W1G3PlayerState(name="Alice", library=list(library)),
+        _W1G3PlayerState(name="Bob", library=list(library)),
+    ])
+    game.enforce_mana_costs = True
+    game.interactive_seats = {0} if interactive else set()
+    game.turn = 3
+    game.active_player_index = 0
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    game.start_priority_window(0)
+    return game
+
+
+def _w1g3_put(game, seat, card):
+    permanent = _W1G3Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w1g3_cast(game, card, mana, *, seat=0, **announce):
+    """Cast *card* from *seat*'s hand with exactly *mana* floating; the result
+    and what is left of the pool."""
+    player = game.players[seat]
+    player.hand.append(card)
+    player.mana_pool.clear()
+    player.mana_pool.update(mana)
+    result = game.cast_from_hand(seat, card.name, **announce)
+    return result, {k: v for k, v in player.mana_pool.items() if v}
+
+
+def _w1g3_on_board(game, name, seat=0):
+    return [p for p in game.controlled_by(seat) if p.card.name == name]
+
+
+def _w1g3_slot(game, permanent, seat=0):
+    """*permanent*'s battlefield slot, by identity — what a combat declaration
+    names."""
+    return next(
+        i for i, perm in enumerate(game.players[seat].battlefield) if perm is permanent
+    )
+
+
+#: (reducer, discount, a spell of its type and the mana that pays it reduced,
+#: a spell of another type at the same discount).
+_W1G3_TYPED = [
+    ("Daru Warchief", "Glory Seeker", {"W": 1}, "Grizzly Bears", {"G": 1}),
+    ("Goblin Warchief", "Goblin Hero", {"R": 1, "C": 1}, "Grizzly Bears", {"G": 1}),
+    ("Krosan Warchief", "Garruk's Gorehorn", {"G": 1, "C": 3}, "Grizzly Bears", {"G": 1}),
+    ("Undead Warchief", "Scathe Zombies", {"B": 1, "C": 1}, "Grizzly Bears", {"G": 1}),
+    ("Dragonspeaker Shaman", "Shivan Dragon", {"R": 2, "C": 2}, "Craw Wurm", {"G": 2, "C": 2}),
+]
+
+
+@_w1g3_pytest.mark.parametrize("reducer,typed,typed_mana,other,other_mana", _W1G3_TYPED)
+def test_w1g3_a_type_warchief_discounts_its_type_and_nothing_else(
+    set_pool, catalog_by_name, reducer, typed, typed_mana, other, other_mana,
+):
+    """"Goblin spells you cast cost {1} less to cast." The spell of the type
+    resolves off the reduced price with nothing left over; a spell of any
+    other type at the same discount is refused with the pool untouched; and an
+    opponent's copy discounts nothing ("you cast", CR 109.5). Before this round
+    the sentence read as "spells you cast" — every spell discounted — and only
+    the card's being unsupported kept that off a board."""
+    scg = set_pool("SCG")
+    assert _w1g3_compile(scg[reducer]).supported
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, scg[reducer])
+
+    result, left = _w1g3_cast(game, catalog_by_name[typed], typed_mana)
+    assert result.supported, result.details
+    assert left == {}
+    assert f"{typed} costs less to cast ({reducer})" in game.log
+    _w1g3_resolve_stack(game)
+    assert _w1g3_on_board(game, typed)
+
+    refused, left = _w1g3_cast(game, catalog_by_name[other], other_mana)
+    assert not refused.supported and "insufficient mana" in refused.details
+    assert left == other_mana
+    assert catalog_by_name[other] in game.players[0].hand
+
+    theirs = _w1g3_table(catalog_by_name)
+    _w1g3_put(theirs, 1, scg[reducer])
+    refused, left = _w1g3_cast(theirs, catalog_by_name[typed], typed_mana)
+    assert not refused.supported and left == typed_mana
+
+
+def test_w1g3_the_warchiefs_lords_ride_beside_their_reductions(set_pool, catalog_by_name):
+    """Each Warchief's second line compiles and plays: Daru Warchief's Soldiers
+    get +1/+2, Undead Warchief's Zombies +2/+1, Goblin Warchief's Goblins have
+    haste — and a creature of another type is untouched by all three."""
+    scg = set_pool("SCG")
+    game = _w1g3_table(catalog_by_name)
+    for name in ("Daru Warchief", "Undead Warchief", "Goblin Warchief"):
+        _w1g3_put(game, 0, scg[name])
+    seeker = _w1g3_put(game, 0, catalog_by_name["Glory Seeker"])
+    zombies = _w1g3_put(game, 0, catalog_by_name["Scathe Zombies"])
+    hero = _w1g3_put(game, 0, catalog_by_name["Goblin Hero"])
+    bears = _w1g3_put(game, 0, catalog_by_name["Grizzly Bears"])
+    game._recompute_continuous_effects()
+    assert (seeker.effective_power, seeker.effective_toughness) == (3, 4)
+    assert (zombies.effective_power, zombies.effective_toughness) == (4, 3)
+    assert game._has_keyword(hero, "haste")
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+    assert not game._has_keyword(bears, "haste")
+
+
+def test_w1g3_goblin_warchief_takes_only_generic_mana_off(set_pool, catalog_by_name):
+    """Goblin Warchief's ruling (2018-04-27): "reduces only generic mana in the
+    cost of Goblin spells you cast. For example, it doesn't reduce the cost of
+    Skirk Prospector below {R}." (CR 118.7a.) A {R} Goblin is refused with an
+    empty pool and cast for its {R}; and the Goblin cast this turn has haste and
+    attacks."""
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, set_pool("SCG")["Goblin Warchief"])
+    raiders = catalog_by_name["Mons's Goblin Raiders"]
+    refused, _left = _w1g3_cast(game, raiders, {})
+    assert not refused.supported
+    result, left = _w1g3_cast(game, raiders, {"R": 1})
+    assert result.supported and left == {}
+    _w1g3_resolve_stack(game)
+    (fresh,) = _w1g3_on_board(game, "Mons's Goblin Raiders")
+    game._set_phase_and_step("combat", "declare_attackers")
+    slot = _w1g3_slot(game, fresh)
+    ok, why = game.declare_attackers(0, [slot], defending_player_index=1)
+    assert ok, why
+
+
+def test_w1g3_a_face_down_goblin_is_no_goblin_but_the_three_is_still_reduced(
+    set_pool, catalog_by_name,
+):
+    """CR 708.4 / 702.37c: a card cast face down is a 2/2 with no subtypes
+    before it is put on the stack, and "any effects … that would apply to
+    casting an object with these characteristics … are applied" — so Goblin
+    Warchief does not discount a face-down Skirk Marauder ({3}: two floating is
+    refused, three pays it), while a reduction that names a face-down spell
+    (Dream Chisel) applies to the {3} alternative cost (CR 601.2f, 118.9d)
+    beside the Warchief that does not."""
+    marauder = catalog_by_name["Skirk Marauder"]
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, set_pool("SCG")["Goblin Warchief"])
+    refused, left = _w1g3_cast(game, marauder, {"C": 2}, alternative_cost=True)
+    assert not refused.supported and left == {"C": 2}
+    result, left = _w1g3_cast(game, marauder, {"C": 3}, alternative_cost=True)
+    assert result.supported, result.details
+    assert left == {}
+    assert not any("(Goblin Warchief)" in line for line in game.log)
+
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, set_pool("SCG")["Goblin Warchief"])
+    _w1g3_put(game, 0, catalog_by_name["Dream Chisel"])
+    result, left = _w1g3_cast(game, marauder, {"C": 2}, alternative_cost=True)
+    assert result.supported, result.details
+    assert left == {}
+    assert "Face-down creature costs less to cast (Dream Chisel)" in game.log
+
+
+def test_w1g3_krosan_drover_reads_the_mana_value_on_the_stack(set_pool, catalog_by_name):
+    """"Creature spells you cast with mana value 6 or greater cost {2} less to
+    cast." Craw Wurm (6) pays {2}{G}{G}; Durkwood Boars (5) and Pyramids (an
+    artifact of 6) are refused at the price the discount would have made.
+    Krakilin ({X}{G}{G}) has mana value X + 2 on the stack (CR 202.3e):
+    announced at X=4 it is discounted and enters with four counters, and the
+    AI's price for the same announcement agrees."""
+    drover = set_pool("SCG")["Krosan Drover"]
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, drover)
+    result, left = _w1g3_cast(game, catalog_by_name["Craw Wurm"], {"G": 2, "C": 2})
+    assert result.supported and left == {}
+    _w1g3_resolve_stack(game)
+    assert _w1g3_on_board(game, "Craw Wurm")
+    for name, mana in (("Durkwood Boars", {"G": 1, "C": 2}), ("Pyramids", {"C": 4})):
+        refused, left = _w1g3_cast(game, catalog_by_name[name], mana)
+        assert not refused.supported and "insufficient mana" in refused.details, name
+        assert left == mana, name
+
+    krakilin = catalog_by_name["Krakilin"]
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, drover)
+    assert _w1g3_cost_for(game, game.players[0], krakilin, 4)["generic"] == 2
+    assert _w1g3_cost_for(game, game.players[0], krakilin, 3)["generic"] == 3
+    result, left = _w1g3_cast(game, krakilin, {"G": 2, "C": 2}, x_value=4)
+    assert result.supported, result.details
+    assert left == {}
+    assert "Krakilin costs less to cast at X=4 (Krosan Drover)" in game.log
+    _w1g3_resolve_stack(game)
+    (beast,) = _w1g3_on_board(game, "Krakilin")
+    assert (beast.effective_power, beast.effective_toughness) == (4, 4)
+
+    # X=3 is mana value 5: no discount, so {3}{G}{G} is owed and four is short.
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, drover)
+    refused, left = _w1g3_cast(game, krakilin, {"G": 2, "C": 2}, x_value=3)
+    assert not refused.supported and left == {"G": 2, "C": 2}
+
+
+def test_w1g3_mistform_warchief_shares_through_the_layers(set_pool, catalog_by_name):
+    """"Creature spells you cast that share a creature type with this creature
+    cost {1} less to cast." An Illusion spell is discounted and a Goblin is not;
+    after "{T}: This creature becomes the creature type of your choice until
+    end of turn" names Goblin (answered as an interactive seat), the Goblin is
+    and the Illusion no longer is — the type is *set* (CR 205.1a). Mistform
+    Ultimus is every creature type in every zone (CR 604.3) and shares either
+    way."""
+    lgn = set_pool("LGN")
+    game = _w1g3_table(catalog_by_name, interactive=True)
+    _w1g3_put(game, 0, set_pool("SCG")["Mistform Warchief"])
+    forces, hero = catalog_by_name["Phantasmal Forces"], catalog_by_name["Goblin Hero"]
+    result, left = _w1g3_cast(game, forces, {"U": 1, "C": 2})
+    assert result.supported and left == {}
+    refused, _left = _w1g3_cast(game, hero, {"R": 1, "C": 1})
+    assert not refused.supported
+    game.players[0].hand.clear()
+
+    used = game.activate_permanent_ability(0, "Mistform Warchief")
+    assert used.supported, used.details
+    assert [choice.kind for choice in game.pending_choices] == ["creature_type_choice"]
+    assert game.confirm_creature_type_choice(0, "goblin")
+    _w1g3_resolve_stack(game)
+
+    result, left = _w1g3_cast(game, hero, {"R": 1, "C": 1})
+    assert result.supported and left == {}
+    refused, _left = _w1g3_cast(game, forces, {"U": 1, "C": 2})
+    assert not refused.supported
+    game.players[0].hand.clear()
+    result, left = _w1g3_cast(game, lgn["Mistform Ultimus"], {"U": 1, "C": 2})
+    assert result.supported and left == {}
+
+
+def test_w1g3_mistform_warchief_default_answer_and_discount_agree(set_pool, catalog_by_name):
+    """The same activation for a seat nobody asks: whatever type the default
+    names, a Goblin spell is discounted exactly when the Warchief became one."""
+    game = _w1g3_table(catalog_by_name)
+    warchief = _w1g3_put(game, 0, set_pool("SCG")["Mistform Warchief"])
+    assert game.activate_permanent_ability(0, "Mistform Warchief").supported
+    _w1g3_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    became_goblin = warchief.has_type("goblin")
+    result, _left = _w1g3_cast(game, catalog_by_name["Goblin Hero"], {"R": 1, "C": 1})
+    assert result.supported == became_goblin
+
+
+def test_w1g3_edgewalker_takes_only_coloured_mana_off(set_pool, catalog_by_name):
+    """"Cleric spells you cast cost {W}{B} less to cast. This effect reduces
+    only the amount of colored mana you pay." The printed example — a {1}{W}
+    Cleric costs {1} — is Samite Healer; Keepers of the Faith ({1}{W}{W}) pays
+    {1}{W}; Marble Priest ({5}, a Cleric with no coloured pip) still pays all
+    five, where CR 118.7b would have spilled {2} onto generic; a Bear is not a
+    Cleric. Two Edgewalkers are cumulative (2004-10-04): Keepers then pays {1},
+    and a third Edgewalker ({1}{W}{B}, a Cleric) pays {1}."""
+    edgewalker = set_pool("SCG")["Edgewalker"]
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, edgewalker)
+    for name, mana in (("Samite Healer", {"C": 1}),
+                       ("Keepers of the Faith", {"W": 1, "C": 1}),
+                       ("Marble Priest", {"C": 5})):
+        result, left = _w1g3_cast(game, catalog_by_name[name], mana)
+        assert result.supported, (name, result.details)
+        assert left == {}, name
+    for name, mana in (("Marble Priest", {"C": 3}), ("Grizzly Bears", {"C": 1})):
+        refused, left = _w1g3_cast(game, catalog_by_name[name], mana)
+        assert not refused.supported and left == mana, name
+        game.players[0].hand.clear()
+
+    _w1g3_put(game, 0, edgewalker)
+    for card, mana in ((catalog_by_name["Keepers of the Faith"], {"C": 1}),
+                       (edgewalker, {"C": 1})):
+        result, left = _w1g3_cast(game, card, mana)
+        assert result.supported, (card.name, result.details)
+        assert left == {}
+
+
+def test_w1g3_a_reduced_goblin_is_proposed_and_paid_by_the_ai_from_lands(
+    set_pool, catalog_by_name,
+):
+    """The AI's price is the reduced one (``ai_payment._cost_for``, the cast
+    path's three readers): with Goblin Warchief out and two Mountains, Goblin
+    Hero ({2}{R}) is proposed, and the cast it proposes taps both Mountains."""
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, set_pool("SCG")["Goblin Warchief"])
+    mountains = [_w1g3_put(game, 0, catalog_by_name["Mountain"]) for _ in range(2)]
+    hero = catalog_by_name["Goblin Hero"]
+    game.players[0].hand.append(hero)
+    assert _w1g3_cost_for(game, game.players[0], hero, None) == {
+        "W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 0, "generic": 1,
+    }
+    assert _w1g3_ai_cast_gates._can_cast_with_targets(game, 0, hero)
+    action = _w1g3_ai_casts._cast_candidate(game, 0, hero, 0)
+    assert action is not None
+    _w1g3_tap_planned_lands(game, 0, action)
+    assert all(m.tapped for m in mountains)
+    assert game.cast_from_hand(0, "Goblin Hero").supported
+    _w1g3_resolve_stack(game)
+    assert _w1g3_on_board(game, "Goblin Hero")
+    assert not any(game.players[0].mana_pool.values())
+
+    # Without the Warchief the same two Mountains do not pay for it.
+    bare = _w1g3_table(catalog_by_name)
+    for _ in range(2):
+        _w1g3_put(bare, 0, catalog_by_name["Mountain"])
+    bare.players[0].hand.append(hero)
+    assert _w1g3_ai_casts._cast_candidate(bare, 0, hero, 0) is None
+
+
+def test_w1g3_the_castable_highlight_glows_at_the_reduced_price(set_pool, catalog_by_name):
+    """The web's castable highlight prices a cast through the same readers
+    (``state_view._card_castable_now`` → ``cost_reduction_for_cast`` →
+    ``board_can_pay``): two Mountains glow Goblin Hero under Goblin Warchief
+    and Craw Wurm's {4}{G}{G} glows on four Forests under Krosan Drover; neither
+    glows without its reducer."""
+    from fastapi.testclient import TestClient
+
+    from web.app import app, store
+    from web.state_view import _compute_playable_hand_indices
+
+    client = TestClient(app)
+    sid = client.post("/api/sessions", json={
+        "mode": "human_vs_human", "host_name": "Host", "guest_name": "Guest",
+        "host_colors": 2, "guest_colors": 2, "seed": 4243,
+    }).json()["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    session = store.get(sid)
+    scg = set_pool("SCG")
+    for reducer, land, spell in (
+        ("Goblin Warchief", "Mountain", "Goblin Hero"),
+        ("Krosan Drover", "Forest", "Craw Wurm"),
+    ):
+        glows = {}
+        for with_reducer in (True, False):
+            game = _w1g3_table(catalog_by_name)
+            if with_reducer:
+                _w1g3_put(game, 0, scg[reducer])
+            count = 2 if land == "Mountain" else 4
+            for _ in range(count):
+                _w1g3_put(game, 0, catalog_by_name[land])
+            game.players[0].hand.append(catalog_by_name[spell])
+            session.game = game
+            session.current_turn = 0
+            glows[with_reducer] = 0 in _compute_playable_hand_indices(session, 0)
+        assert glows == {True: True, False: False}, (reducer, spell)
+
+
+def test_w1g3_rock_jockey_cannot_be_cast_after_a_land(set_pool, catalog_by_name):
+    """"You can't cast Rock Jockey if you've played a land this turn." (CR
+    601.3.) Played, not put: a land drop this turn refuses the cast with
+    nothing spent and the AI does not propose it; with no land played it is
+    cast. The ruling (2004-10-04) confines it to the card where it could be
+    cast from, which a prohibition asked of the card being cast is."""
+    jockey = set_pool("SCG")["Rock Jockey"]
+    game = _w1g3_table(catalog_by_name)
+    game.players[0].hand.append(catalog_by_name["Mountain"])
+    assert game.cast_from_hand(0, "Mountain").supported
+    refused, left = _w1g3_cast(game, jockey, {"R": 1, "C": 2})
+    assert not refused.supported
+    assert refused.details == "can't cast Rock Jockey: you've played a land this turn"
+    assert left == {"R": 1, "C": 2} and jockey in game.players[0].hand
+    assert not _w1g3_ai_cast_gates._can_cast_with_targets(game, 0, jockey)
+
+    # A land an effect put onto the battlefield was not played.
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, catalog_by_name["Mountain"])
+    result, left = _w1g3_cast(game, jockey, {"R": 1, "C": 2})
+    assert result.supported and left == {}
+
+
+def test_w1g3_rock_jockey_cast_this_turn_stops_its_controllers_land_drop(
+    set_pool, catalog_by_name,
+):
+    """"You can't play lands if this creature was cast this turn." The Jockey
+    cast this turn refuses its controller's land drop and nobody else's; next
+    turn the land is played. A Jockey that was put onto the battlefield, not
+    cast (CR 701.5a's distinction), takes nothing away."""
+    jockey = set_pool("SCG")["Rock Jockey"]
+    game = _w1g3_table(catalog_by_name)
+    result, _left = _w1g3_cast(game, jockey, {"R": 1, "C": 2})
+    assert result.supported
+    _w1g3_resolve_stack(game)
+    assert _w1g3_on_board(game, "Rock Jockey")
+    game.players[0].hand.append(catalog_by_name["Mountain"])
+    refused = game.cast_from_hand(0, "Mountain")
+    assert not refused.supported
+    assert refused.details == "can't play lands: Rock Jockey was cast this turn"
+    assert not game._may_play_another_land(0)
+    assert game._may_play_another_land(1), "its controller alone"
+
+    game.turn += 1
+    assert game._may_play_another_land(0), "this turn alone"
+
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, jockey)
+    assert game._may_play_another_land(0), "put, not cast"
+
+
+def test_w1g3_krosan_warchief_regenerates_a_beast_and_offers_only_beasts(
+    set_pool, catalog_by_name,
+):
+    """"{1}{G}: Regenerate target Beast." The picker offers Beasts alone; the
+    Warchief — a Beast itself — shields itself and survives a Lightning Bolt
+    tapped (CR 701.19), while the unshielded Beast beside it does not."""
+    warchief_card = set_pool("SCG")["Krosan Warchief"]
+    (ability,) = _w1g3_compile(warchief_card).activated_abilities
+    spec = _w1g3_activation_spec(ability)
+    assert spec["kind"] == "creature" and spec.get("filter") == {"subtype_filter": "beast"}
+
+    game = _w1g3_table(catalog_by_name)
+    warchief = _w1g3_put(game, 0, warchief_card)
+    gorehorn = _w1g3_put(game, 0, catalog_by_name["Garruk's Gorehorn"])
+    game.players[0].mana_pool.update({"G": 1, "C": 1})
+    used = game.activate_permanent_ability(
+        0, "Krosan Warchief", target_permanent_ids=[warchief.permanent_id],
+        target_player_index=0,
+    )
+    assert used.supported, used.details
+    _w1g3_resolve_stack(game)
+    bolt = catalog_by_name["Lightning Bolt"]
+    for target in (warchief, gorehorn):
+        result, _left = _w1g3_cast(
+            game, bolt, {"R": 1}, target_permanent_ids=[target.permanent_id],
+            target_player_index=0,
+        )
+        assert result.supported, result.details
+        _w1g3_resolve_stack(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Krosan Warchief"]
+    assert warchief.tapped
+
+
+# --- supported on arrival: the family's cards, driven ----------------------
+
+
+def test_w1g3_siege_gang_commander_under_goblin_warchief(set_pool, catalog_by_name):
+    """Siege-Gang Commander ({3}{R}{R}) costs {2}{R}{R} under Goblin Warchief.
+    Its three Goblin tokens are made, not cast — no discount is involved —
+    and they have haste from the Warchief. "{1}{R}, Sacrifice a Goblin: This
+    creature deals 2 damage to any target" sacrifices a token and deals 2."""
+    scg = set_pool("SCG")
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, scg["Goblin Warchief"])
+    result, left = _w1g3_cast(game, scg["Siege-Gang Commander"], {"R": 2, "C": 2})
+    assert result.supported and left == {}
+    _w1g3_resolve_stack(game)
+    tokens = [p for p in game.controlled_by(0) if p.metadata.get("is_token")]
+    assert len(tokens) == 3
+    assert all(t.has_type("goblin") and game._has_keyword(t, "haste") for t in tokens)
+
+    game.players[0].mana_pool.update({"R": 1, "C": 1})
+    used = game.activate_permanent_ability(
+        0, "Siege-Gang Commander", target_player_index=1,
+        cost_permanent_ids=[tokens[0].permanent_id],
+    )
+    assert used.supported, used.details
+    _w1g3_resolve_stack(game)
+    assert game.players[1].life == 18
+    assert len([p for p in game.controlled_by(0) if p.metadata.get("is_token")]) == 2
+
+
+def test_w1g3_goblin_brigand_with_haste_must_attack_the_turn_it_arrives(
+    set_pool, catalog_by_name,
+):
+    """Goblin Brigand: "This creature attacks each combat if able." Under Goblin
+    Warchief it has haste, so it is able the turn it is cast (CR 508.1d): a
+    declaration leaving it home is refused, one sending it is accepted."""
+    scg = set_pool("SCG")
+    game = _w1g3_table(catalog_by_name)
+    warchief = _w1g3_put(game, 0, scg["Goblin Warchief"])
+    result, left = _w1g3_cast(game, scg["Goblin Brigand"], {"R": 1})
+    assert result.supported and left == {}
+    _w1g3_resolve_stack(game)
+    (brigand,) = _w1g3_on_board(game, "Goblin Brigand")
+    assert game._has_keyword(brigand, "haste")
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, _why = game.declare_attackers(
+        0, [_w1g3_slot(game, warchief)], defending_player_index=1,
+    )
+    assert not ok, "the Brigand must attack"
+    ok, why = game.declare_attackers(
+        0, [_w1g3_slot(game, brigand)], defending_player_index=1,
+    )
+    assert ok, why
+
+
+def test_w1g3_wirewood_symbiote_returns_an_elf_to_untap_once_a_turn(
+    set_pool, catalog_by_name,
+):
+    """"Return an Elf you control to its owner's hand: Untap target creature.
+    Activate only once each turn." The Elf goes home and the target untaps; a
+    second activation the same turn is refused."""
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, set_pool("SCG")["Wirewood Symbiote"])
+    elves = [_w1g3_put(game, 0, catalog_by_name["Llanowar Elves"]) for _ in range(2)]
+    tapped = _w1g3_put(game, 0, catalog_by_name["Grizzly Bears"])
+    tapped.tapped = True
+    used = game.activate_permanent_ability(
+        0, "Wirewood Symbiote", target_permanent_ids=[tapped.permanent_id],
+        target_player_index=0, cost_permanent_ids=[elves[0].permanent_id],
+    )
+    assert used.supported, used.details
+    _w1g3_resolve_stack(game)
+    assert not tapped.tapped
+    assert [c.name for c in game.players[0].hand] == ["Llanowar Elves"]
+    tapped.tapped = True
+    again = game.activate_permanent_ability(
+        0, "Wirewood Symbiote", target_permanent_ids=[tapped.permanent_id],
+        target_player_index=0, cost_permanent_ids=[elves[1].permanent_id],
+    )
+    assert not again.supported
+    assert tapped.tapped and elves[1] in game.controlled_by(0)
+
+
+def test_w1g3_cabal_interrogator_makes_a_revealed_card_discarded(set_pool, catalog_by_name):
+    """"{X}{B}, {T}: Target player reveals X cards from their hand and you choose
+    one of them. That player discards that card. Activate only as a sorcery."
+    At X=2 the opponent discards one card, at sorcery speed only."""
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, set_pool("SCG")["Cabal Interrogator"])
+    game.players[1].hand.extend(
+        [catalog_by_name["Lightning Bolt"], catalog_by_name["Grizzly Bears"],
+         catalog_by_name["Forest"]]
+    )
+    game.players[0].mana_pool.update({"B": 1, "C": 2})
+    used = game.activate_permanent_ability(
+        0, "Cabal Interrogator", target_player_index=1, x_value=2,
+    )
+    assert used.supported, used.details
+    _w1g3_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g3_resolve_stack(game)
+    assert len(game.players[1].hand) == 2
+    assert len(game.players[1].graveyard) == 1
+    assert game.players[1].graveyard[0].name in ("Lightning Bolt", "Grizzly Bears", "Forest")
+
+    # Sorcery speed: on the opponent's turn the ability is refused.
+    game = _w1g3_table(catalog_by_name)
+    _w1g3_put(game, 0, set_pool("SCG")["Cabal Interrogator"])
+    game.players[1].hand.append(catalog_by_name["Forest"])
+    game.active_player_index = 1
+    game.start_priority_window(0)
+    game.players[0].mana_pool.update({"B": 1, "C": 1})
+    refused = game.activate_permanent_ability(
+        0, "Cabal Interrogator", target_player_index=1, x_value=1,
+    )
+    assert not refused.supported
 
 # ==== end W1G3 ======================================================
 

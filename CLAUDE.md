@@ -731,9 +731,10 @@ entries, not editing dispatch**.
   is an ability that works more often than the card allows — nothing crashes.
 - `engine/cost_modifiers.py` (with `cost_modifier_lines.py` and
   `self_cost_modifiers.py`) — text-keyed cost taxes and reductions (CR 601.2f).
-  Both directions are live; a reduction touches only generic mana and spills an
-  excess coloured reduction onto generic (CR 118.7a–d) — `reduce_cost`, in one
-  place.
+  Both directions are live; a generic reduction touches only generic mana, a
+  coloured one spills its excess onto generic (CR 118.7a–d), and one that
+  "reduces only the amount of colored mana you pay" (Edgewalker,
+  `CostReduction.colored_only`) never spills — `reduce_cost`, in one place.
 
 **Targets**
 

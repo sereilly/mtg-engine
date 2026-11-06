@@ -35,7 +35,8 @@ from ..cast_restrictions import (CAST_RESTRICTIONS,
                                  cast_condition_line,
                                  cast_damage_source_line,
                                  cast_opponent_cast_line,
-                                 cast_own_cast_line)
+                                 cast_own_cast_line,
+                                 self_cast_ban_line)
 from ..cast_bans import (COMBAT_PLAY_BAN_CLAIM,
                          combat_play_ban_line,
                          chosen_name_ban_line,
@@ -157,6 +158,14 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # this turn." (Skyshroud Condor.) Its own row and its own scan, claimed
     # through the reader that enforces it, so the claim cannot outlive the row.
     if cast_own_cast_line(normalized) is not None:
+        return "cast_restrictions"
+
+    # engine/cast_restrictions.py — the negative spelling, about the card's own
+    # cast and naming it: "You can't cast Rock Jockey if you've played a land
+    # this turn." Enforced as `cast_prohibitions`' `self_cast_ban` row, which
+    # all three readers ask; claimed through the reader that row asks, with
+    # the card's name for the self-reference.
+    if self_cast_ban_line(normalized, card_name) is not None:
         return "cast_restrictions"
 
     # engine/counter_conditions.py -- "This spell can't be countered."
