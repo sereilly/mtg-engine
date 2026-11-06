@@ -859,15 +859,20 @@ entries, not editing dispatch**.
 
 - `engine/pending_choices.py` — every other decision a seat owes part-way
   through a spell, an ability or a step: one `PendingChoice` queue on
-  `Game.pending_choices` and one `ChoiceSpec` per kind, registered in
-  `engine/mixins/stack/choices/table.py`, in an order that is behaviour (how it is answered, what a
-  non-interactive seat does, which action answers it, how the web renders and
-  gates it). **Adding a prompt is one `register_choice` row + its answer in the family
-  module of `engine/mixins/stack/choices/` (an entry-time prompt's, beside
-  `entry_exile`'s and `entry_reveal`'s, in `engine/mixins/entry_choices.py`)
-  + one renderer in
-  `web/prompt_cards.py`, `prompt_board.py` or `prompt_values.py` (by what the
-  prompt is answered with) + the code that arms it + a scenario in
+  `Game.pending_choices` and one `ChoiceSpec` per kind (how it is answered,
+  what a non-interactive seat does, which action answers it, how the web
+  renders and gates it), defined beside its resolver in its family's module
+  and registered by `engine/mixins/stack/choices/table.py`'s one
+  `register_choices(...)` list, in an order that is behaviour.
+  **Adding a prompt is its `<KIND>_SPEC` row and its answer, together in the
+  family module of `engine/mixins/stack/choices/` (an entry-time prompt's,
+  beside `entry_exile`'s and `entry_reveal`'s, in
+  `engine/mixins/entry_choices.py`) + its name appended at the bottom of
+  `table.py`'s list + one renderer in `web/prompt_cards.py`,
+  `prompt_board.py` or `prompt_values.py` (by what the prompt is answered
+  with) and its `@action_handler` in the matching
+  `web/action_prompt_cards.py`, `action_prompt_board.py` or
+  `action_prompt_values.py` + the code that arms it + a scenario in
   `tests/regressions/test_kg_prompts_answered_choice_leaves_queue.py`** — never a
   new `Game` field. The queue closes an accepted answer itself
   (`_close_answered_choice`, in both answer funnels).
@@ -1119,7 +1124,7 @@ and a module may import only from an earlier one
 | `state_view.py` | the whole-state payload a client polls |
 | `debug_actions.py` | Debug-Menu board manipulation, raw-state injection |
 | `payment_plan.py` | the auto-tap: which permanents pay for an action, planned and tapped by the server |
-| `action_helpers.py`, `action_*.py` | the shared cast plumbing, then one module of registered handlers per group of `ActionKind`s |
+| `action_helpers.py`, `action_*.py` | the shared cast plumbing, then one module of registered handlers per group of `ActionKind`s; a prompt's answer in `action_prompt_cards.py`, `action_prompt_board.py` or `action_prompt_values.py`, split as the renderers are |
 | `actions.py` | the one dispatch over `ActionKind` |
 | `prompt_registry.py` | `PromptContext` and the renderer table |
 | `prompt_cards.py`, `prompt_board.py`, `prompt_values.py` | one renderer per prompt kind, by what the prompt is answered with (cards; permanents, players or spells; a value) |
