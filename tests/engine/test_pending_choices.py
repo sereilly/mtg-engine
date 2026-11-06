@@ -339,6 +339,11 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # what is left of it. Run ahead of the answer, the seat behind this
         # one would be offered a card that has already been taken.
         "exiled_pile_claim",
+        # "…that player returns one of the exiled cards they own to the
+        # battlefield." (Dimensional Breach.) The steps behind the pick — an
+        # Aura's host, the move — read which record was chosen, so they wait
+        # for it.
+        "exiled_card_return",
         # "If it's a creature card, that player discards it **unless they pay
         # 3 life**." (Breathstealer's Crypt.) The answer decides whether the
         # card that was just drawn stays in the hand, and the step behind it is

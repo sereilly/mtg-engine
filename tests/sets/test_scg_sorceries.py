@@ -724,6 +724,420 @@ def test_w1g4_final_punishment_on_a_player_dealt_nothing_does_nothing(set_pool):
 
 # ==== W2G1 ==========================================================
 # W2G1's tests go between this line and the "end W2G1" line.
+#
+# Dimensional Breach: "Exile all permanents. For as long as any of those cards
+# remain exiled, at the beginning of each player's upkeep, that player returns
+# one of the exiled cards they own to the battlefield." Rulings (2004-10-04):
+# each player chooses which of their own exiled cards; a returned creature has
+# just come under its controller's control; a card that can't legally be
+# returned can't be chosen.
+
+import pytest as _w2g1_pytest
+
+from engine import Game as _w2g1_Game
+from engine import PlayerState as _w2g1_PlayerState
+from engine.delayed_triggers import WHILE_EXILED_THIS_WAY as _w2g1_WHILE_EXILED
+from engine.models import Permanent as _w2g1_Permanent
+from engine.targeting import derive_cast_spec as _w2g1_derive_cast_spec
+from tests.helpers import _nosick as _w2g1_nosick
+from tests.helpers import resolve_stack as _w2g1_resolve_stack
+
+
+def _w2g1_card(set_pool, name):
+    """A card by name, from Scourge first and Alpha for the fillers."""
+    scg = set_pool("SCG")
+    return scg[name] if name in scg else set_pool("LEA")[name]
+
+
+def _w2g1_breached(set_pool, boards, *, seats=2, interactive=(), before=None):
+    """Seat 0 casts Dimensional Breach over *boards* (card names per seat, all
+    past summoning sickness) on turn 1, and it resolves. *interactive* seats
+    are set after the cast, so the exile itself asks nobody anything;
+    *before* is called with the game just before the cast."""
+    card = lambda name: _w2g1_card(set_pool, name)  # noqa: E731
+    players = [
+        _w2g1_PlayerState(f"P{seat}", library=[card("Plains")] * 10)
+        for seat in range(seats)
+    ]
+    players[0].hand.append(card("Dimensional Breach"))
+    game = _w2g1_Game(players=players)
+    game.enforce_mana_costs = False
+    for seat, names in enumerate(boards):
+        for name in names:
+            game.players[seat].battlefield.append(
+                _w2g1_nosick(_w2g1_Permanent(card=card(name)))
+            )
+    game._recompute_continuous_effects()
+    if before is not None:
+        before(game)
+    game.start_turn(0)
+    assert game.cast_from_hand(0, "Dimensional Breach").supported
+    _w2g1_resolve_stack(game)
+    game.interactive_seats = set(interactive)
+    return game
+
+
+def _w2g1_to_upkeep(game, seat):
+    """Begin *seat*'s turn and stop in its upkeep, with what triggered there
+    still on the stack (the step's priority window deferred)."""
+    game.turn += 1
+    game.begin_turn_bookkeeping(seat)
+    game.resolve_untap_step(seat)
+    game.resolve_upkeep(seat, defer_priority=True)
+
+
+def _w2g1_breach_triggers(game):
+    return [
+        item for item in game.stack
+        if getattr(item.card, "name", None) == "Dimensional Breach"
+    ]
+
+
+def _w2g1_names(game, seat):
+    return sorted(perm.card.name for perm in game.controlled_by(seat))
+
+
+def _w2g1_exiled(game, seat):
+    return sorted(card.name for card in game.players[seat].exile)
+
+
+def test_w2g1_dimensional_breach_compiles_one_effect_and_names_no_target(set_pool):
+    """The whole card is the spell's effect — the exile and the delayed
+    ability behind it — and it targets nothing, so the picker offers a bare
+    cast."""
+    from engine.oracle import compile_card_oracle
+
+    breach = set_pool("SCG")["Dimensional Breach"]
+    program = compile_card_oracle(breach)
+    assert program.supported
+    (sequence,) = program.instructions
+    exile, delay = sequence.payload["steps"]
+    assert exile.kind == "exile_all_matching"
+    assert delay.payload["event"] == "each_players_upkeep"
+    assert delay.payload["duration"] == _w2g1_WHILE_EXILED
+    assert delay.payload["once"] is False
+    spec = _w2g1_derive_cast_spec(breach, program)
+    assert spec is None or not spec.get("targets")
+
+
+def test_w2g1_breach_exiles_every_permanent_to_its_owners_exile(set_pool):
+    """"Exile all permanents": lands, Auras and tokens too, each card to its
+    owner's exile (CR 400.3) — the Holy Strength on seat 0's Angel is seat 1's
+    card — and a token to nowhere (CR 111.7)."""
+    from engine.aura_attachment import attach_aura
+    from engine.tokens import make_token_card
+
+    def enchant_and_add_a_token(game):
+        angel = next(p for p in game.controlled_by(0) if p.card.name == "Serra Angel")
+        aura = _w2g1_Permanent(card=_w2g1_card(set_pool, "Holy Strength"))
+        game.players[1].battlefield.append(aura)
+        attach_aura(aura, angel)
+        token = _w2g1_Permanent(card=make_token_card(
+            "Soldier", 1, 1, "Token Creature — Soldier", colors=("W",),
+        ))
+        token.metadata["is_token"] = True
+        game.players[0].battlefield.append(token)
+        game._recompute_continuous_effects()
+
+    game = _w2g1_breached(set_pool, [
+        ["Plains", "Serra Angel"], ["Swamp", "Hill Giant"],
+    ], before=enchant_and_add_a_token)
+    assert list(game.all_permanents()) == []
+    assert _w2g1_exiled(game, 0) == ["Plains", "Serra Angel"]
+    assert _w2g1_exiled(game, 1) == ["Hill Giant", "Holy Strength", "Swamp"]
+    # One exile record per card that went there, none for the token.
+    assert len(game.exiled_records) == 5
+    (entry,) = game.delayed_triggers
+    assert entry.event == "each_players_upkeep"
+    assert entry.duration == _w2g1_WHILE_EXILED
+
+
+def test_w2g1_each_upkeep_its_player_returns_one_of_their_own_cards(set_pool):
+    """Every player's upkeep, whoever cast it, returns one card **that player
+    owns** under their control — never an opponent's — until none of the
+    exiled cards remain, and then the ability is gone."""
+    game = _w2g1_breached(set_pool, [
+        ["Plains", "Serra Angel"], ["Swamp", "Hill Giant"],
+    ])
+    seen = []
+    for seat in (1, 0, 1, 0):
+        _w2g1_to_upkeep(game, seat)
+        assert len(_w2g1_breach_triggers(game)) == 1
+        _w2g1_resolve_stack(game)
+        seen.append((seat, _w2g1_names(game, 0), _w2g1_names(game, 1)))
+    # The biggest permanent first (the default), each seat its own.
+    assert seen == [
+        (1, [], ["Hill Giant"]),
+        (0, ["Serra Angel"], ["Hill Giant"]),
+        (1, ["Serra Angel"], ["Hill Giant", "Swamp"]),
+        (0, ["Plains", "Serra Angel"], ["Hill Giant", "Swamp"]),
+    ]
+    assert game.players[0].exile == [] and game.players[1].exile == []
+    # The last card back ends the ability (CR 603.7b, 611.2b): the next upkeep
+    # triggers nothing.
+    assert game.delayed_triggers == []
+    assert any("none of the exiled cards remain exiled" in line for line in game.log)
+    _w2g1_to_upkeep(game, 1)
+    assert _w2g1_breach_triggers(game) == []
+
+
+def test_w2g1_a_returned_creature_has_just_come_under_its_controllers_control(set_pool):
+    """2004-10-04: "Remember that the returned creature just came under your
+    control, so it can't attack until you start a turn with it under your
+    control." Returned in its own controller's upkeep, it is summoning sick
+    for that whole turn (CR 302.6) and fit to attack on the next."""
+    game = _w2g1_breached(set_pool, [["Grizzly Bears"], []])
+    _w2g1_to_upkeep(game, 0)
+    _w2g1_resolve_stack(game)
+    (bears,) = game.controlled_by(0)
+    assert bears.card.name == "Grizzly Bears"
+    assert game._is_summoning_sick(bears)
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, _why = game.declare_attackers(
+        0, [game.battlefield_index_of(bears)], defending_player_index=1,
+    )
+    assert not ok
+    game.start_next_turn()
+    game.start_next_turn()
+    assert game.active_player_index == 0
+    assert not game._is_summoning_sick(bears)
+
+
+def test_w2g1_a_card_that_leaves_exile_another_way_stops_counting(set_pool):
+    """A card taken out of exile by anything else is gone from the pile, and
+    the same card exiled again is a new object (CR 400.7, 406.7) that is not
+    "one of those cards": seat 1 is offered nothing and it stays in exile."""
+    game = _w2g1_breached(set_pool, [["Plains"], ["Hill Giant"]])
+    giant = game.players[1].exile[0]
+    assert game.take_card_from_exile(game.players[1], giant)
+    game.players[1].exile.append(giant)
+    _w2g1_to_upkeep(game, 1)
+    _w2g1_resolve_stack(game)
+    assert _w2g1_names(game, 1) == []
+    assert _w2g1_exiled(game, 1) == ["Hill Giant"]
+    assert any("P1 has no exiled card to return" in line for line in game.log)
+    # Seat 0's Plains still counts, so the ability lasts.
+    assert len(game.delayed_triggers) == 1
+
+
+def test_w2g1_the_ability_ends_the_moment_its_last_card_leaves_exile(set_pool):
+    """The duration is a state, ended where it stops holding: the last of the
+    cards leaving exile by another route ends the ability on the spot, not at
+    the next upkeep."""
+    game = _w2g1_breached(set_pool, [["Plains"], []])
+    assert len(game.delayed_triggers) == 1
+    assert game.take_card_from_exile(game.players[0], game.players[0].exile[0])
+    assert game.delayed_triggers == []
+    _w2g1_to_upkeep(game, 1)
+    assert _w2g1_breach_triggers(game) == []
+
+
+def test_w2g1_a_breach_that_exiles_no_card_creates_no_ability(set_pool):
+    """CR 611.2b: "If the 'for as long as' duration never starts, the effect
+    does nothing." An empty battlefield exiles nothing, so nothing waits."""
+    game = _w2g1_breached(set_pool, [[], []])
+    assert game.delayed_triggers == []
+    assert any("exiled no cards" in line for line in game.log)
+
+
+def test_w2g1_an_interactive_seat_chooses_which_of_its_cards(set_pool):
+    """Each player chooses which one (2004-10-04). The prompt offers the
+    seat's own exiled cards only — not seat 0's — refuses an answer outside
+    that list, and returns the one chosen."""
+    game = _w2g1_breached(
+        set_pool, [["Serra Angel"], ["Swamp", "Hill Giant", "Grizzly Bears"]],
+        interactive={1},
+    )
+    _w2g1_to_upkeep(game, 1)
+    # The ability runs and stops to ask: it stays on the stack, held, until
+    # the seat answers (CR 608.2, 117.3b).
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert len(_w2g1_breach_triggers(game)) == 1
+    choice = game.pending_choice_of("exiled_card_return", 1)
+    assert choice is not None
+    records = choice.data["_records"]
+    offered = sorted(
+        records[i].card.name for i in game.live_exiled_card_return_choices(choice)
+    )
+    assert offered == ["Grizzly Bears", "Hill Giant", "Swamp"]
+    angel = next(i for i, r in enumerate(records) if r.card.name == "Serra Angel")
+    assert not game.confirm_exiled_card_return(1, angel)
+    swamp = next(i for i, r in enumerate(records) if r.card.name == "Swamp")
+    assert game.confirm_exiled_card_return(1, swamp)
+    assert game.stack == [] and game.pending_choices == []
+    assert _w2g1_names(game, 1) == ["Swamp"]
+    assert _w2g1_exiled(game, 1) == ["Grizzly Bears", "Hill Giant"]
+
+
+def test_w2g1_a_seat_with_nothing_of_its_own_exiled_is_asked_nothing(set_pool):
+    """The ability triggers at every upkeep while any card remains exiled, and
+    resolves for a seat that owns none of them by doing nothing — no prompt,
+    even for a person."""
+    game = _w2g1_breached(set_pool, [["Grizzly Bears", "Plains"], []], interactive={1})
+    _w2g1_to_upkeep(game, 1)
+    assert len(_w2g1_breach_triggers(game)) == 1
+    assert game.resolve_top_of_stack(pause_for_choices=True) is True
+    assert game.pending_choices == []
+    assert _w2g1_exiled(game, 0) == ["Grizzly Bears", "Plains"]
+    assert any("P1 has no exiled card to return" in line for line in game.log)
+
+
+def test_w2g1_an_aura_chooses_its_host_as_it_returns(set_pool):
+    """CR 303.4f: an Aura put onto the battlefield by an effect that names no
+    host is attached to what its controller chooses as it enters — here a
+    person with two creatures to choose from, who is asked."""
+    game = _w2g1_breached(
+        set_pool, [["Grizzly Bears", "Hill Giant"], ["Holy Strength"]],
+        interactive={1},
+    )
+    for _ in range(2):
+        _w2g1_to_upkeep(game, 0)
+        _w2g1_resolve_stack(game)
+    assert _w2g1_names(game, 0) == ["Grizzly Bears", "Hill Giant"]
+    bears = next(p for p in game.controlled_by(0) if p.card.name == "Grizzly Bears")
+    _w2g1_to_upkeep(game, 1)
+    # The ability runs and stops to ask: it stays on the stack, held, until
+    # the seat answers (CR 608.2, 117.3b).
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert len(_w2g1_breach_triggers(game)) == 1
+    host = game.pending_choice_of("permanent_choice", 1)
+    assert host is not None
+    assert game.confirm_permanent_choice(1, bears.permanent_id)
+    _w2g1_resolve_stack(game)
+    (pacifism,) = game.controlled_by(1)
+    assert pacifism.card.name == "Holy Strength"
+    assert pacifism.metadata.get("attached_to") is bears
+    # …and it works: +1/+2 on the Bears, which seat 1 chose over the Giant.
+    assert (bears.effective_power, bears.effective_toughness) == (3, 4)
+
+
+def test_w2g1_an_aura_with_nothing_to_enchant_cannot_be_chosen(set_pool):
+    """2004-10-04: "You can't pick a card that can't legally be returned to
+    the battlefield." With no creature on the battlefield Holy Strength is not
+    offered — the Swamp comes back — and with only Holy Strength left nothing
+    does, while the ability waits for it."""
+    game = _w2g1_breached(set_pool, [[], ["Holy Strength", "Swamp"]], interactive={1})
+    _w2g1_to_upkeep(game, 1)
+    _w2g1_resolve_stack(game)
+    assert game.pending_choices == []
+    assert _w2g1_names(game, 1) == ["Swamp"]
+    _w2g1_to_upkeep(game, 1)
+    _w2g1_resolve_stack(game)
+    assert _w2g1_names(game, 1) == ["Swamp"]
+    assert _w2g1_exiled(game, 1) == ["Holy Strength"]
+    assert len(game.delayed_triggers) == 1
+
+
+def test_w2g1_four_seats_each_return_their_own_at_their_own_upkeep(set_pool):
+    """Three opponents and the caster: each upkeep belongs to one player, and
+    "that player" is whoever's upkeep it is — not the controller, and not the
+    seat across the table."""
+    boards = [["Plains"], ["Swamp"], ["Island"], ["Forest"]]
+    game = _w2g1_breached(set_pool, boards, seats=4)
+    back: set[int] = set()
+    for seat in (1, 2, 3, 0):
+        _w2g1_to_upkeep(game, seat)
+        (trigger,) = _w2g1_breach_triggers(game)
+        assert trigger.about_player_index == seat
+        _w2g1_resolve_stack(game)
+        back.add(seat)
+        assert [_w2g1_names(game, other) for other in range(4)] == [
+            boards[other] if other in back else [] for other in range(4)
+        ]
+    assert game.delayed_triggers == []
+
+
+def test_w2g1_the_upkeep_trigger_can_be_stifled_and_the_ability_lasts(set_pool):
+    """The upkeep trigger is a triggered ability on the stack (CR 603.7), so
+    Stifle counters it: that upkeep returns nothing — but the delayed ability
+    itself is not on the stack and keeps waiting, so the next upkeep does."""
+    game = _w2g1_breached(set_pool, [["Plains"], ["Hill Giant"]])
+    game.players[0].hand.append(set_pool("SCG")["Stifle"])
+    _w2g1_to_upkeep(game, 1)
+    (trigger,) = _w2g1_breach_triggers(game)
+    index = next(i for i, item in enumerate(game.stack) if item is trigger)
+    assert game.queue_from_hand(0, "Stifle", target_stack_index=index).supported
+    _w2g1_resolve_stack(game)
+    assert any("Stifle countered Dimensional Breach" in line for line in game.log)
+    assert _w2g1_names(game, 1) == []
+    assert len(game.delayed_triggers) == 1
+    _w2g1_to_upkeep(game, 1)
+    _w2g1_resolve_stack(game)
+    assert _w2g1_names(game, 1) == ["Hill Giant"]
+
+
+def test_w2g1_a_card_gone_from_exile_in_response_is_not_returned(set_pool):
+    """The pile is read as the ability resolves (CR 603.7c, 608.2b): the card
+    seat 1 would have taken leaves exile with the trigger on the stack, and
+    the other one comes back instead."""
+    game = _w2g1_breached(set_pool, [[], ["Swamp", "Hill Giant"]])
+    _w2g1_to_upkeep(game, 1)
+    assert len(_w2g1_breach_triggers(game)) == 1
+    giant = next(c for c in game.players[1].exile if c.name == "Hill Giant")
+    assert game.take_card_from_exile(game.players[1], giant)
+    game.players[1].graveyard.append(giant)
+    _w2g1_resolve_stack(game)
+    assert _w2g1_names(game, 1) == ["Swamp"]
+    assert game.delayed_triggers == []
+
+
+def test_w2g1_a_swept_creatures_own_upkeep_trigger_does_not_fire_from_exile(set_pool):
+    """The cards wait in the exile register, and a register card's upkeep
+    trigger fires only if it functions from exile (CR 113.6k). Juzám Djinn's
+    "deals 1 damage to you" is a battlefield ability: exiled by the Breach, it
+    deals nothing at its owner's upkeep — and does once it is back."""
+    card = lambda name: _w2g1_card(set_pool, name)  # noqa: E731
+    players = [
+        _w2g1_PlayerState(
+            "P0", hand=[card("Dimensional Breach")], library=[card("Plains")] * 10,
+        ),
+        _w2g1_PlayerState("P1", library=[card("Plains")] * 10),
+    ]
+    game = _w2g1_Game(players=players)
+    game.enforce_mana_costs = False
+    for name in ("Swamp", "Plains"):
+        game.players[1].battlefield.append(_w2g1_nosick(_w2g1_Permanent(card=card(name))))
+    game.players[1].battlefield.append(
+        _w2g1_nosick(_w2g1_Permanent(card=set_pool("ARN")["Juzám Djinn"]))
+    )
+    game._recompute_continuous_effects()
+    game.start_turn(0)
+    assert game.cast_from_hand(0, "Dimensional Breach").supported
+    _w2g1_resolve_stack(game)
+    # Seat 1's first upkeep with the Djinn still exiled: it deals nothing
+    # (the Djinn is the most valuable card, so it is the one that comes back).
+    _w2g1_to_upkeep(game, 1)
+    _w2g1_resolve_stack(game)
+    assert game.players[1].life == 20
+    assert _w2g1_names(game, 1) == ["Juzám Djinn"]
+    # Back on the battlefield its own trigger works again.
+    _w2g1_to_upkeep(game, 1)
+    _w2g1_resolve_stack(game)
+    assert game.players[1].life == 19
+
+
+@_w2g1_pytest.mark.full
+def test_w2g1_the_seeded_games_cast_the_breach_and_hand_cards_back(set_pool):
+    """The AI simulator over Scourge with Dimensional Breach pinned: it is
+    cast, the upkeeps after it hand cards back to their owners, and the
+    ability ends once the last one is home (floors, never counts)."""
+    from engine.ai_simulator import run_ai_simulation
+    from engine.card_loader import manifest_set_path
+
+    report = run_ai_simulation(
+        manifest_set_path("SCG", include_measured=True), games=4, seed=7,
+        max_turns=18, required_cards=["Dimensional Breach"],
+    )
+    assert report.games_completed == 4
+    assert not report.rehearsals_raised
+    assert not report.issues
+    lines = report.log_lines
+    assert any("cast Dimensional Breach" in line for line in lines)
+    assert any("exiled" in line and "Dimensional Breach" in line for line in lines)
+    assert any(
+        "returned" in line and "(Dimensional Breach)" in line for line in lines
+    )
+    assert any("none of the exiled cards remain exiled" in line for line in lines)
 
 # ==== end W2G1 ======================================================
 

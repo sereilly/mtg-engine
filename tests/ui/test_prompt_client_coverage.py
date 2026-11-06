@@ -62,6 +62,17 @@ _AWAITING_CLIENT: dict[str, str] = {
     # ``counter_distribution_confirm`` with ``divided_targets`` — one
     # ``{seat, id, amount}`` per creature given one or more.
     "counter_distribution": "counter_distribution_confirm",
+    # Scourge W2G1, Dimensional Breach: "…at the beginning of each player's
+    # upkeep, that player returns one of the exiled cards they own to the
+    # battlefield." The client reads ``state.exiled_card_return``
+    # (``web/prompt_cards._exiled_card_return``: ``player_seat``,
+    # ``card_name``, ``zone``, ``choices: [{entry_index, name, card}]``),
+    # shows the cards face up (exile is public, CR 400.2) and answers
+    # ``{"action": "exiled_card_return_confirm", "exile_entry_index": N}``
+    # with one ``entry_index`` — mandatory, so no Decline. Gustha's
+    # Scepter's ``linked_exile_return`` picker is the shape to copy (same
+    # field, same mandatory one-card pick).
+    "exiled_card_return": "exiled_card_return_confirm",
 }
 
 

@@ -242,6 +242,13 @@ def _return_record_to_battlefield(
                 f"{owner.name}'s exile"
             )
             return
+    # Logged as it happens, ahead of the departure: the seam may end the
+    # delayed ability as this last card leaves, and that line follows this one.
+    game.log.append(
+        f"{game.players[seat].name} returned {card.name} to the battlefield"
+        + (f" enchanting {host.card.name}" if host is not None else "")
+        + f" ({card_name})"
+    )
     game.take_card_from_exile(owner, card, record=record)
     arrival = Permanent(card=card)
     if seat != record.owner_index:
@@ -257,8 +264,3 @@ def _return_record_to_battlefield(
         game._recompute_continuous_effects()
 
     game._put_permanent_onto_battlefield(seat, arrival, None, then=arrived)
-    game.log.append(
-        f"{game.players[seat].name} returned {card.name} to the battlefield"
-        + (f" enchanting {host.card.name}" if host is not None else "")
-        + f" ({card_name})"
-    )

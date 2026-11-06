@@ -1632,6 +1632,48 @@ def _parallel_thoughts():
     return _draw_one(game)
 
 
+def _breach_record_of(game: Game, name: str) -> int:
+    """The prompt's record position for *name* (Dimensional Breach)."""
+    choice = next(c for c in game.pending_choices if c.kind == "exiled_card_return")
+    return next(
+        index for index, record in enumerate(choice.data["_records"])
+        if record.card.name == name
+    )
+
+
+@scenario(
+    "exiled_card_return", "Dimensional Breach",
+    answer=lambda g, c: {"record_index": _breach_record_of(g, "Hill Giant")},
+    wire=lambda g, c: {"exile_entry_index": _breach_record_of(g, "Hill Giant")},
+    then=lambda g: _assert(
+        [p.card.name for p in g.controlled_by(0)] == ["Hill Giant"]
+        and sorted(names(g.players[0].exile)) == ["Grizzly Bears"]
+    ),
+)
+def _dimensional_breach():
+    """Scourge, still under ``measured`` when this row was written: the card is
+    read off its own set file. Cast and resolved, then its delayed ability is
+    announced for seat 0's upkeep through the fire site's own call — the
+    seat owns two exiled cards, so it is asked which."""
+    from engine.card_loader import load_cards, manifest_set_path
+    from engine.delayed_triggers import fire_delayed_triggers
+
+    breach = next(
+        c for c in load_cards(manifest_set_path("SCG", include_measured=True))
+        if c.name == "Dimensional Breach"
+    )
+    game = duel(boards=(("Grizzly Bears", "Hill Giant"), ("Forest",)))
+    game.players[0].hand.append(breach)
+    game.cast_from_hand(0, "Dimensional Breach")
+    resolve_until_owed(game)
+    fire_delayed_triggers(
+        game, "each_players_upkeep", about_player_index=0,
+        trigger_context={"event_subject_player": 0},
+    )
+    resolve_until_owed(game, "exiled_card_return")
+    return game
+
+
 @scenario(
     "reveal_until_kind_draw", "Abundance",
     answer=lambda g, c: {"option": _option(c, "land")},

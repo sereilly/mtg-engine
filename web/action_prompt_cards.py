@@ -576,6 +576,25 @@ def _action_linked_exile_return_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
 
+@action_handler("exiled_card_return_confirm")
+def _action_exiled_card_return_confirm(session, req, seat_type):
+    # Dimensional Breach: the upkeep's player picks which of their own exiled
+    # cards returns to the battlefield. ``exile_entry_index`` is a position in
+    # the prompt's exile-record list; the engine re-checks it against the same
+    # rule the prompt was drawn from, and there is no decline.
+    pending = next(
+        (c for c in session.game.pending_choices_of("exiled_card_return")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no exiled card return pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.exile_entry_index is None:
+        raise HTTPException(status_code=400, detail="exile_entry_index is required")
+    if not session.game.confirm_exiled_card_return(req.seat, req.exile_entry_index):
+        raise HTTPException(status_code=400, detail="invalid card choice")
+
+
 @action_handler("library_end_confirm")
 def _action_library_end_confirm(session, req, seat_type):
     # Ether Well: top or bottom. `to_bottom` is the field Dream Cache's answer

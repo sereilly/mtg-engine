@@ -76,6 +76,7 @@ _DEFAULTS: dict[str, str] = {
     "exile_from_hand_choice": "worth",    # least mana value
     "exile_hand_pile_choice": "stated",   # the whole offer
     "exiled_pile_claim": "worth",         # greatest mana value
+    "exiled_card_return": "worth",        # greatest ``permanent_worth`` (Dimensional Breach)
     "face_down_cast": "position",         # Illusionary Mask: the first creature
     "face_down_look": "stated",           # a dismissal
     "flip_again": "stated",               # no
