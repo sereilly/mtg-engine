@@ -36,6 +36,7 @@ from .ai_target_sides import (
     announced_roles_loop_side,
     best_counted_target_seat,
     entry_trigger_target_side,
+    host_effect_side,
     role_target_sides,
     several_target_slot_sides,
     spell_denies_its_own_target,
@@ -272,7 +273,25 @@ def _aura_harms_its_host(card: CardDefinition) -> bool:
     return (
         _HARMFUL_AURA_MARKER_WORDS.search(text) is not None
         or _HARMFUL_AURA_PATTERN.search(text) is not None
+        or _host_abilities_harm_it(card)
     )
+
+
+def _host_abilities_harm_it(card: CardDefinition) -> bool:
+    """Whether every one of *card*'s activated abilities that reads as one
+    side's or the other's on its host (``ai_target_sides.host_effect_side``)
+    reads as the opponent's: "{1}{B}: Put a -1/-1 counter on enchanted
+    creature." (Torture.) The Aura's controller pays for those, so its host is
+    the creature they are meant to hurt. No marker above reads a counter, and
+    the AI cast Torture on its own creature — the host-ability census's one
+    finding past Pemmin's Aura (SCG Phase 5). Read off the compiled program,
+    so it names no card; an Aura with no such ability is left to the text."""
+    sides = {
+        host_effect_side(ability.instruction)
+        for ability in compile_card_oracle(card).activated_abilities
+        if ability.instruction is not None
+    } - {None}
+    return sides == {"opponent"}
 
 
 def choose_returning_aura_host(game: Game, seat: int, card: CardDefinition, legal: list):
