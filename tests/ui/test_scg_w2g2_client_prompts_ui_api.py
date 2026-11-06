@@ -20,10 +20,14 @@ client builds:
 
 from __future__ import annotations
 
+import shutil
+
+import pytest
+
 from engine.card_loader import load_cards, manifest_set_path
 from engine.models import Permanent
 from engine.named_counters import counters_on
-from tests.helpers import client, seat_plays_first
+from tests.helpers import client, run_app_js, seat_plays_first
 from web.app import store
 
 
@@ -267,3 +271,105 @@ def test_parallel_thoughts_pile_offer_is_answered_by_option_index():
     hand_before = len(me.hand)
     assert _act(session_id, seat=0, action="pile_top_draw_confirm", option_index=1).status_code == 200
     assert len(me.hand) == hand_before + 1 and len(me.exile) == 6
+
+
+# ---- the client's own branches, run in node on the payload the server sent --
+
+_needs_node = pytest.mark.skipif(
+    shutil.which("node") is None,
+    reason="node is not on PATH; the client half cannot run",
+)
+
+_STUBS = (
+    "let seat = 0; let currentState = INPUT.state; let pendingPermanentCost = null;"
+    " let specialActionXFor = null; let specialActionXFields = {};"
+    " let pendingCastCost = null; const SENT = [];"
+    " const sendAction = async (body) => { SENT.push(body); return body; };"
+    " function renderActivationPrompt() {} function updateActionHint() {}"
+    " function renderSpecialActions() {}"
+)
+
+
+@_needs_node
+def test_the_turn_face_up_picker_sends_the_bird_the_player_chose(set_pool):
+    """Raven Guild Initiate's "Morph—Return a Bird you control to its owner's
+    hand" with two Birds: the offer opens the set picker over its own
+    candidates (no send yet), and the confirm sends the one picked on
+    ``cost_permanent_ids`` — which the route then honours."""
+    from engine.face_down import face_down_card
+
+    scg = set_pool("SCG")
+    session_id, game, placed = _session([], mine=["Island"])
+    game.enforce_mana_costs = True
+    initiate = Permanent(card=face_down_card(scg["Raven Guild Initiate"]))
+    game._put_permanent_onto_battlefield(0, initiate, None)
+    farseer, liberator = Permanent(card=scg["Aven Farseer"]), Permanent(card=scg["Aven Liberator"])
+    for bird in (farseer, liberator):
+        game._put_permanent_onto_battlefield(0, bird, None)
+    game._recompute_continuous_effects()
+    state = _state(session_id, 0)
+    (entry,) = [e for e in state["special_actions"] if e["kind"] == "turn_face_up"]
+
+    out = run_app_js(
+        ["takeMorphOffer", "morphCostSteps", "morphStepFields", "openMorphCostStep",
+         "turnFaceUpHiddenName", "permanentCostVerbLabel", "confirmPermanentCost",
+         "sendSpecialAction"],
+        "takeMorphOffer(INPUT.entry);"
+        " const opened = { options: pendingPermanentCost.options.map((o) => o.id),"
+        " verb: pendingPermanentCost.verb, count: pendingPermanentCost.count,"
+        " sentence: pendingPermanentCost.costSentence, sentBefore: SENT.length };"
+        " pendingPermanentCost.picked = [INPUT.pick]; confirmPermanentCost();"
+        " return { opened, sent: SENT };",
+        {"state": state, "entry": entry, "pick": liberator.permanent_id},
+        prelude=_STUBS,
+    )
+    assert out["opened"] == {
+        "options": [farseer.permanent_id, liberator.permanent_id], "verb": "return",
+        "count": 1, "sentence": "Morph—Return a Bird you control to its owner's hand",
+        "sentBefore": 0,
+    }
+    (body,) = out["sent"]
+    assert body["cost_permanent_ids"] == [liberator.permanent_id]
+    assert body["special_action_kind"] == "turn_face_up"
+    assert _act(session_id, **body).status_code == 200
+    assert [card.name for card in game.players[0].hand] == ["Aven Liberator"]
+    assert initiate.card.name == "Raven Guild Initiate"
+
+
+@_needs_node
+def test_the_cast_graveyard_cost_picker_announces_its_x_and_goes_on_to_the_target():
+    """Chill Haunting from the hand: the cost stage opens the graveyard set
+    picker (not the battlefield one), and confirming two cards writes the
+    slots and X = 2 onto the cast, then runs the target cascade."""
+    session_id, game, _ = _session(
+        ["Chill Haunting"], theirs=["Hill Giant"],
+        graveyard=["Grizzly Bears", "Swamp", "Craw Wurm"],
+    )
+    state = _state(session_id, 0)
+    card = next(c for c in state["players"][0]["hand"] if c["name"] == "Chill Haunting")
+    out = run_app_js(
+        ["startCastCostPrompt", "startCastGraveyardCostPrompt", "castCostSpec", "specIsACost",
+         "castCostIsSeparate", "targetSpecOf", "graveyardCardNoun", "costNounPlural",
+         "confirmPermanentCost", "continueCastAfterCost"],
+        "const opened = startCastCostPrompt(INPUT.card);"
+        " const pending = pendingPermanentCost;"
+        " const offered = pending.options.map((o) => o.id);"
+        " pending.picked = [0, 2]; confirmPermanentCost();"
+        " return { opened, zone: pending.zone, offered, announcesX: pending.announcesX,"
+        " cost: pendingCastCost, cascaded: CASCADE };",
+        {"state": state, "card": card},
+        prelude=_STUBS + (
+            " let pendingCastCreatureType = null; let CASCADE = null;"
+            " const EMPTY_TARGET_SPEC = { kind: 'none', requires_target: false, valid_targets: [] };"
+            " const ACTIVATION_COST_FLAGS = ['sacrifice_cost', 'discard_cost', 'exile_cost',"
+            " 'tap_cost', 'return_cost', 'untap_cost', 'put_counter_cost',"
+            " 'remove_counter_cost', 'library_top_cost', 'library_bottom_cost'];"
+            " function startCastCreatureTypePrompt() { return false; }"
+            " function normalizeCardName(card) { return card.name; }"
+            " function startCastTargetCascade(card) { CASCADE = card.name; return true; }"
+        ),
+    )
+    assert out["opened"] is True and out["zone"] == "graveyard" and out["announcesX"] is True
+    assert out["offered"] == [0, 2]  # the Swamp is no creature card
+    assert out["cost"] == {"cost_graveyard_indices": [0, 2], "x_value": 2}
+    assert out["cascaded"] == "Chill Haunting"
