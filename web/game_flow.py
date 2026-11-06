@@ -107,26 +107,96 @@ def _auto_resolve_ai_pending(session: Session) -> None:
     auto_resolve_ai_prompts(session.game, lambda seat: _seat_type(session, seat))
 
 
+def _person_besides(session: Session, seat: int) -> bool:
+    """Whether a person sits at the table beside *seat* — the table at which
+    an object *seat* puts on the stack is answered by a priority round rather
+    than resolved on the spot."""
+    return any(
+        _seat_type(session, s) == "human"
+        for s in range(len(session.game.players))
+        if s != seat
+    )
+
+
+def _ai_holds_priority(game, seat: int) -> bool:
+    """Whether *seat* may cast or activate now: CR 117.1a lets a player do
+    either only while holding priority.
+
+    A seat another one is recorded holding priority for does not. Nobody
+    recorded is the active player's window in a step that gives one — except
+    where the step's turn-based action is still owed: CR 117.3a gives priority
+    in a step "after any turn-based actions … have been dealt with", and in
+    the declare attackers and declare blockers steps that action is the
+    declaration itself (CR 508.1, 509.1), so until it is made nobody holds
+    priority. ``_ai_step`` asked only "does another seat hold it?", so an AI
+    in its own declare blockers step, waiting on a person's blocks, activated
+    Pemmin's Aura and cycled Shoreline Ranger before a single blocker was
+    declared (SCG Phase 5, smoke game 1, turn 11).
+    """
+    holder = game.priority_player_index
+    if holder is not None:
+        return holder == seat
+    if seat != game.active_player_index or not game._receives_priority(game.current_step):
+        return False
+    if game.current_turn_phase == "combat":
+        if game.current_step == "declare_attackers" and not game.combat_attackers_locked:
+            return False
+        if game.current_step == "declare_blockers" and not game.combat_blockers_locked:
+            return False
+    return True
+
+
+def _hand_priority_round(session: Session, seat: int, result) -> bool:
+    """After *seat* acted with priority: when the act put an object on the
+    stack, give priority round the table (CR 117.3c: the actor receives it
+    again, and passes it on; CR 117.4: the object resolves only once every
+    player has passed in succession). True when the round was handed on — the
+    AI's step is paused and a person may respond.
+
+    The AI's prompts the announcement owes (a mode, a target) are answered
+    first, so the object is whole before anybody is asked about it.
+    """
+    game = session.game
+    _auto_resolve_ai_pending(session)
+    if not getattr(result, "supported", False) or not game.stack:
+        return False
+    game.note_priority_action_taken(seat)
+    _run_priority_exchange(session, seat)
+    return True
+
+
 def _ai_step(session: Session) -> bool:
     """Run one AI action for the current turn.
 
     Returns True when the AI has nothing more to do this turn (caller should end
-    the turn).  Returns False when the AI queued a spell and passed priority to a
-    human opponent — the turn must NOT be ended yet; the human must act first.
+    the turn).  Returns False when the AI put an object on the stack and passed
+    priority to a human opponent — the turn must NOT be ended yet; the human
+    must act first.
+
+    **Every door that puts an object on the stack hands priority round** at a
+    table with a person (``_hand_priority_round``): the cast, an ability of a
+    permanent (its own or another seat's), of a card in hand (cycling), of a
+    card in the graveyard, and a special action whose consequence triggered
+    (turning a face-down creature face up). The cast alone did, through
+    ``queue_from_hand``; the four activation doors called the engine and
+    settled at once, so Pemmin's Aura's untap, Gilded Light's and Eternal
+    Dragon's cycling resolved on the AI's turn with nobody passing
+    (CR 117.3c, 117.4).
     """
     seat = session.current_turn
     game = session.game
 
     _auto_resolve_ai_pending(session)
 
-    has_human_opponent = any(
-        _seat_type(session, s) == "human"
-        for s in range(len(game.players))
-        if s != seat
-    )
+    has_human_opponent = _person_besides(session, seat)
 
     if game.priority_player_index is not None and game.priority_player_index != seat:
         return False
+    # Nobody holds priority while a declaration is owed (CR 117.3a, 508.1,
+    # 509.1): nothing to do in this request; the caller's advance makes the
+    # declaration or waits for the person who owes it.
+    if not _ai_holds_priority(game, seat):
+        return True
 
     # **The seat's own upkeep is a priority window it answers**, for an
     # ability of a card in its graveyard ("Activate only during your
@@ -136,6 +206,22 @@ def _ai_step(session: Session) -> bool:
     # played here; with nothing done, the step is left.
     if game.current_turn_phase == "beginning" and game.current_step == "upkeep":
         return not _ai_answer_priority(session, seat)
+
+    # **An object on the stack and the AI holding priority over it** — its own
+    # trigger, or what a resolution left: the seat answers priority as the
+    # exchange answers it (`engine.ai_priority.act_at_priority`, which lets
+    # the seat's own object resolve) and passes, so the person beside it is
+    # asked before anything resolves (CR 117.3d, 117.4). Nothing a main phase
+    # plays is played over a stack; the step's advance used to drain it.
+    if game.stack and has_human_opponent:
+        if game.priority_player_index is None:
+            game.start_priority_window(seat)
+        act = act_at_priority(game, seat)
+        if act is not None and act.supported:
+            game.note_priority_action_taken(seat)
+        _auto_resolve_ai_pending(session)
+        _run_priority_exchange(session, seat)
+        return False
 
     # choose_cast_action covers sorcery-speed plays (enchantments, sorceries,
     # creatures, artifacts, lands), which are legal only during the active player's
@@ -193,10 +279,20 @@ def _ai_step(session: Session) -> bool:
             )
             _auto_resolve_ai_pending(session)
 
+    # The activation doors below take the engine's **queue** form at a table
+    # with a person — the object stays on the stack and priority goes round
+    # (`_hand_priority_round`) — and the settling form at a table of AI seats
+    # alone, which nobody is asked at. `activate_from_hand` and
+    # `activate_from_graveyard` are queue forms at every table.
+    activate = (
+        game.queue_permanent_ability if has_human_opponent
+        else game.activate_permanent_ability
+    )
+
     activation_action = choose_activation_action(game, seat)
     if activation_action is not None:
         activation_action = tap_planned_lands(game, seat, activation_action)
-        game.activate_permanent_ability(
+        result = activate(
             seat,
             activation_action.permanent_name,
             target_player_index=activation_action.target_player_index,
@@ -213,6 +309,8 @@ def _ai_step(session: Session) -> bool:
             # The X an "{X}…:" cost announces, when the policy sized one.
             x_value=activation_action.x_value,
         )
+        if has_human_opponent and _hand_priority_round(session, seat, result):
+            return False
         _auto_resolve_ai_pending(session)
 
     # An ability activated from the seat's **hand** (CR 113.6j) — cycling. The
@@ -222,12 +320,14 @@ def _ai_step(session: Session) -> bool:
     hand_activation = choose_hand_activation_action(game, seat)
     if hand_activation is not None:
         hand_activation = tap_planned_lands(game, seat, hand_activation)
-        game.activate_from_hand(
+        result = game.activate_from_hand(
             seat,
             hand_activation.card_name,
             ability_index=hand_activation.ability_index,
             hand_index=hand_activation.hand_index,
         )
+        if has_human_opponent and _hand_priority_round(session, seat, result):
+            return False
         _auto_resolve_ai_pending(session)
 
     # An ability activated from the seat's **graveyard** (CR 113.6b/m) — the
@@ -237,7 +337,9 @@ def _ai_step(session: Session) -> bool:
     # stayed there.
     graveyard_activation = choose_graveyard_activation_action(game, seat)
     if graveyard_activation is not None:
-        activate_chosen_graveyard_ability(game, seat, graveyard_activation)
+        result = activate_chosen_graveyard_ability(game, seat, graveyard_activation)
+        if has_human_opponent and _hand_priority_round(session, seat, result):
+            return False
         _auto_resolve_ai_pending(session)
 
     # An ability on a permanent **another seat controls** that this one may
@@ -249,7 +351,7 @@ def _ai_step(session: Session) -> bool:
     foreign_activation = choose_foreign_activation_action(game, seat)
     if foreign_activation is not None:
         foreign_activation = tap_planned_lands(game, seat, foreign_activation)
-        game.activate_permanent_ability(
+        result = activate(
             seat,
             foreign_activation.permanent_name,
             target_player_index=foreign_activation.target_player_index,
@@ -258,14 +360,27 @@ def _ai_step(session: Session) -> bool:
             ability_index=foreign_activation.ability_index,
             source_controller_index=foreign_activation.source_controller_index,
         )
+        if has_human_opponent and _hand_priority_round(session, seat, result):
+            return False
         _auto_resolve_ai_pending(session)
 
     # A CR 116.2d offer that buys one of the seat's creatures its attack this
-    # turn (Volrath's Curse, Lost in Thought) — a special action, taken with
-    # priority and before combat, through the chooser and the executor the
-    # simulator shares (`engine.ai_special_actions`). The chooser asks only
-    # in the seat's own main phase with its combat ahead.
-    if special_action_before_combat(game, seat) is not None:
+    # turn (Volrath's Curse, Lost in Thought), or turning a face-down creature
+    # face up (CR 116.2b) — a special action, taken with priority and before
+    # combat, through the chooser and the executor the simulator shares
+    # (`engine.ai_special_actions`). The chooser asks only in the seat's own
+    # main phase with its combat ahead. A special action uses no stack
+    # (CR 116.1), but what it sets off does ("When this creature is turned
+    # face up", CR 702.37e): CR 116.3 gives the seat priority again, and the
+    # trigger is answered by a round like any other object.
+    taken = special_action_before_combat(game, seat)
+    if taken is not None:
+        _choice, refusal = taken
+        if has_human_opponent and refusal is None and game.stack:
+            _auto_resolve_ai_pending(session)
+            game.note_priority_action_taken(seat)
+            _run_priority_exchange(session, seat)
+            return False
         _auto_resolve_ai_pending(session)
 
     return True
@@ -306,6 +421,45 @@ def _ai_answer_priority(session: Session, seat: int) -> bool:
     session.game.note_priority_action_taken(seat)
     _run_priority_exchange(session, seat)
     return True
+
+
+def _round_over_ai_objects(session: Session, seat: int) -> bool:
+    """After the AI seat *seat*'s turn-based action (its attack declaration)
+    set off its triggers at a table with a person: priority to *seat*
+    (CR 508.2), which passes it on, so the person is asked over the objects
+    before they resolve (CR 117.4). True when the round was handed on — the
+    caller stops, and the step is left once every player has passed with the
+    stack empty (CR 500.2)."""
+    game = session.game
+    if _seat_type(session, seat) != "ai" or not _person_besides(session, seat):
+        return False
+    _auto_resolve_ai_pending(session)
+    if not game.stack:
+        return False
+    if game.priority_player_index is None:
+        game.start_priority_window(seat)
+    if game.priority_player_index != seat:
+        return False
+    _run_priority_exchange(session, seat)
+    return True
+
+
+def _round_from_the_active_player(session: Session) -> None:
+    """Start the priority round of a step whose declaration has just been
+    made, with the active player (CR 509.2): a person holding it is asked by
+    their client; an AI answers it as every AI seat handed priority does and
+    passes it on (`_run_priority_exchange`)."""
+    game = session.game
+    active = game.active_player_index
+    _auto_resolve_ai_pending(session)
+    if game.priority_player_index is None:
+        game.start_priority_window(active)
+    if _seat_type(session, active) != "ai" or not game.has_priority(active):
+        return
+    act = act_at_priority(game, active)
+    if act is not None and act.supported:
+        game.note_priority_action_taken(active)
+    _run_priority_exchange(session, active)
 
 
 def _auto_advance_after_all_passed(session: Session, pass_result: str | None) -> None:
@@ -512,6 +666,12 @@ def _advance_phase(session: Session) -> None:
             game.resolve_all_combat_damage(game.active_player_index, attacker_damage=auto)
         if step == "declare_attackers" and not game.combat_attackers_locked:
             _ai_declare_attackers(session)
+            # The AI's declaration set off its attack triggers: CR 508.2
+            # gives the active player priority, and the objects resolve only
+            # once every player has passed (CR 117.4) — so the person is
+            # asked over them rather than the step's window draining them.
+            if _round_over_ai_objects(session, game.active_player_index):
+                return
         if step == "declare_blockers":
             combat_state = game.get_combat_state()
             # CR 802.4: with 2+ defending players (FFA), each declares in APNAP
@@ -558,6 +718,24 @@ def _advance_phase(session: Session) -> None:
                         choose_combat_instant_cast_action(game, defender_index)
                         if _seat_type(session, defender_index) == "ai" else None
                     )
+                    # **At a table with a person, the defender's trick and
+                    # its block triggers wait for priority.** CR 509.2 gives
+                    # the *active* player priority once blockers are
+                    # declared; the defender casts when it is handed
+                    # priority in turn (CR 117.3d), and a block trigger
+                    # resolves once every player has passed (CR 117.4). The
+                    # instant was cast here through ``cast_from_hand`` — a
+                    # settling cast, by a seat that did not hold priority —
+                    # and the triggers were drained by the step's window:
+                    # neither ever gave the person a pass. Now the round
+                    # starts with the active player, and the defender's
+                    # answer is the one every AI seat gives when handed
+                    # priority (``_ai_respond_to_priority``).
+                    if (instant_action is not None or game.stack) and _person_besides(
+                        session, defender_index
+                    ):
+                        _round_from_the_active_player(session)
+                        return
                     if instant_action is not None:
                         card_to_cast = spell_being_cast(
                             zone_being_cast_from(
