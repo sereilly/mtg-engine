@@ -450,7 +450,7 @@ def choose_instant_speed_activation(
     (``ai_rehearsal.blocks_owed``, an attack trigger on the stack) it is read
     with that combat fought, which the copy owes once its stack resolves.
     """
-    set_aside: set[int] = set(_ACTIVATIONS_SET_ASIDE.get())
+    set_aside: set[tuple] = set(_ACTIVATIONS_SET_ASIDE.get())
     before_blocks = blocks_still_to_come(game)
     responding_before_blocks = not before_blocks and blocks_owed(game)
     with deliberating():
@@ -485,7 +485,9 @@ def choose_instant_speed_activation(
             permanent = game.permanent_at(player_index, action.permanent_index)
             if permanent is None:
                 return None
-            set_aside.add(permanent.permanent_id)
+            # The ability turned down, not its permanent: a creature's
+            # regeneration behind its pump is the next one asked (kg4).
+            set_aside.add((permanent.permanent_id, action.ability_index))
     return None
 
 

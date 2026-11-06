@@ -145,16 +145,19 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             held = permanent.tapped or game._is_summoning_sick(permanent)
             if held and not at_instant_speed:
                 continue
-            # One the instant-speed chooser has rehearsed and turned down this
-            # time it was asked (`ai_policy.choose_instant_speed_activation`),
-            # so the next-best is the one proposed.
-            if permanent.permanent_id in set_aside:
-                continue
             # Stripped of its abilities (CR 305.7): the engine refuses each.
             if game.lost_abilities_refusal(permanent) is not None:
                 continue
             for ability_index, ability in _abilities_weighed(game, permanent):
                 if held and ability.cost.requires_tap:
+                    continue
+                # One the instant-speed chooser has rehearsed and turned down
+                # this time it was asked (`ai_policy.
+                # choose_instant_speed_activation`), so the next-best is the
+                # one proposed — **that ability**, not its permanent: the set
+                # held permanents, so a regeneration shield behind a turned-down
+                # pump on the same creature was never asked.
+                if (permanent.permanent_id, ability_index) in set_aside:
                     continue
                 candidate = _activation_candidate(
                     game, player_index, permanent_index, permanent,
@@ -189,27 +192,39 @@ def _abilities_weighed(game: Game, permanent) -> list:
     every main phase and the engine ran it — a free repeatable draw for a card
     that was never discarded, on eight of Urza's Saga's creatures.
 
-    For anything but a land, the **first** ability, unindexed (the action
+    For anything but a land, the **first** ability unindexed (the action
     names none and the engine takes the first it can pay for), as it always
-    has been. For a land, **every ability that is not a mana ability**, each
-    by its index — CR 605.1a asked of the engine's own predicate
+    has been — and **every later ability that is not a mana ability**, each by
+    its index. This read the first alone, so a permanent's second ability was
+    never activated by an AI seat in either window: Pemmin's Aura's flying
+    behind its untap, a Kjeldoran Knight's "+0/+2" in front of a burn spell
+    behind its "+1/+0", the Jungle Troll's second regeneration (179
+    permanents in the shipped pool print two or more non-mana abilities,
+    kg4). A later ability is proposed only where a rehearsal of it says it
+    pays (``_land_ability_worth``, asked of every indexed ability), so
+    a permanent whose first ability was what it always did keeps doing it.
+
+    For a land, **every ability that is not a mana ability**, each by its
+    index — CR 605.1a asked of the engine's own predicate
     (``mana_payment.is_mana_ability``), which reads a painland's "Add {W} or
     {U}. This land deals 1 damage to you." as the mana ability it is.
     """
     from .mana_payment import is_mana_ability as is_cr_mana_ability
 
     usable = game.usable_abilities_of(permanent)
+    later = [
+        (index, ability)
+        for index, ability in enumerate(usable)
+        if ability.instruction is not None and not is_cr_mana_ability(ability)
+    ]
     # A land now (CR 613 layer 4), as every other reader of a permanent's
     # type here asks: a Mishra's Factory animated is still a land, and a
     # land is what the payment planner taps for mana.
     if not permanent.has_type("land"):
         first = next(iter(usable), None)
-        return [] if first is None else [(None, first)]
-    return [
-        (index, ability)
-        for index, ability in enumerate(usable)
-        if ability.instruction is not None and not is_cr_mana_ability(ability)
-    ]
+        head = [] if first is None else [(None, first)]
+        return head + [(index, ability) for index, ability in later if index > 0]
+    return later
 
 
 def _activation_candidate(
@@ -240,8 +255,21 @@ def _activation_candidate(
     # Volrath's Dungeon): a drawback printed for an opponent to pay for (CR
     # 602.1b), skipped (`ai_valuation.harms_its_own_source`). A **hamper** that
     # leaves it in play (Swooping Talon shedding flying) is rehearsed below.
+    #
+    # **Except at instant speed**, where the same effect is a **rescue**: a
+    # Quicksilver Wall returned to its owner's hand in front of the Terror
+    # aimed at it, an Ivory Gargoyle exiled out of it, a Fleeting Image
+    # bounced off a lethal block. Only a rehearsal of what is coming tells
+    # the rescue from the self-inflicted loss — the same bounce with nothing
+    # coming is a permanent traded for a card — and every instant-speed
+    # proposal is rehearsed (``ai_policy.choose_instant_speed_activation``),
+    # so it is proposed there and the rehearsal disposes.
     hampers = hampers_its_own_source(ability.instruction)
-    if harms_its_own_source(ability.instruction) and not hampers:
+    rescue = (
+        harms_its_own_source(ability.instruction) and not hampers
+        and _AT_INSTANT_SPEED.get()
+    )
+    if harms_its_own_source(ability.instruction) and not hampers and not rescue:
         return None
     # An effect that lands on **the permanent its source is attached to**
     # ("Enchanted creature …"): whose that permanent is, against the side the
@@ -506,7 +534,7 @@ def _activation_candidate(
         for word in _keyword_walk_order(game, ability):
             target_role_refs = _choose_activation_role_targets(
                 game, player_index, permanent_index, side=side,
-                chosen_keyword=word,
+                ability_index=spec_index, chosen_keyword=word,
             )
             if target_role_refs is not None:
                 chosen_keyword = word
@@ -848,8 +876,12 @@ def _activation_candidate(
     # activator (Shepherd of Rot, `reaches_both_sides`), a 1 -> 1 rewrite
     # (Riptide Mangler, `_OWN_REWRITE_KINDS`) and a shield (LGN C2: Deftblade
     # Elite in both main phases, `ai_valuation.shields_only`).
+    #
+    # And (kg4) every ability named by its index: a land's, and a non-land's
+    # later ability (`_abilities_weighed`), which nothing had ever weighed —
+    # and a rescue at instant speed (above).
     if (
-        ability_index is not None or hampers
+        ability_index is not None or hampers or rescue
         or _sets_only_what_its_source_is(ability.instruction)
         or waits_on_a_later_draw(ability.instruction) or shields_only(ability.instruction)
         or (
@@ -1177,9 +1209,10 @@ def _sized_x_activation(
     return best
 
 
-#: Permanents `choose_activation_action` passes over, by ``permanent_id``:
-#: the ones `ai_policy.choose_instant_speed_activation` has rehearsed and turned down in
-#: the one decision it is making.
+#: Abilities `choose_activation_action` passes over, as ``(permanent_id,
+#: ability_index)`` (the index as `_abilities_weighed` gives it, None for a
+#: non-land's first): the ones `ai_policy.choose_instant_speed_activation` has
+#: rehearsed and turned down in the one decision it is making.
 _ACTIVATIONS_SET_ASIDE: ContextVar[frozenset] = ContextVar(
     "ai_activations_set_aside", default=frozenset(),
 )
@@ -1363,12 +1396,14 @@ def _choose_activation_role_targets(
     # The permanent as it **is** (``effective_card``), which is the card the
     # picker three lines up compiled: read off the printed one, a Clone of a
     # Splicer was offered the Splicer's two roles and given a side for neither.
+    #
+    # **The ability at *ability_index***, the one the picker above was asked
+    # about: this read the first, which every ability this walk was asked for
+    # was until a permanent's later abilities were weighed (kg4).
     source = game.permanent_at(player_index, permanent_index)
     said = source.effective_card if source is not None else None
-    ability = (
-        next(iter(usable_activated_abilities(compile_card_oracle(said))), None)
-        if said is not None else None
-    )
+    usable = usable_activated_abilities(compile_card_oracle(said)) if said is not None else []
+    ability = usable[ability_index] if 0 <= ability_index < len(usable) else None
     sides = ability_role_target_sides(said, ability) if ability is not None else ()
 
     def ref_of(pick: dict) -> "dict | None":
