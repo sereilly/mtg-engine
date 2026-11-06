@@ -53,7 +53,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | LGN | 145 | 235 | 71.9% | 71.9% | 47.7% | 108 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| SCG *(measured)* | 143 | 262 | 77.9% | 75.6% | 48.5% | 106 |
+| SCG *(measured)* | 143 | 262 | 78.6% | 78.2% | 51.1% | 110 |
 | **All (shipped)** | **8507** | **12662** | **89.9%** | **89.4%** | **62.1%** | **6671** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -67,7 +67,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 821 | 427 | expected a subject |  |
-| 181 | 94 | unrecognized effect verb |  |
+| 180 | 93 | unrecognized effect verb |  |
 | 135 | 71 | unconsumed text |  |
 | 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
 | 35 | 8 | expected what this creature can't block, or a duration |  |
@@ -233,6 +233,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target creature. It can't be regenerated. Its controller creates a 1/1 white Spirit creature token with flying.`
 - **Aftershock**
   - `Destroy target artifact, creature, or land. Aftershock deals 3 damage to you.`
+- **Ageless Sentinels**
+  - `When this creature blocks, it becomes a Bird Giant, and it loses defender. (It's no longer a Wall. This effect lasts indefinitely.)`
 - **Agent of Shauku**
   - `{1}{B}, Sacrifice a land: Target creature gets +2/+0 until end of turn.`
 - **Agent of Stromgald**
@@ -336,6 +338,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ambush**
   - `Blocking creatures gain first strike until end of turn.`
 - **Ambush Commander**
+  - `Forests you control are 1/1 green Elf creatures that are still lands.`
   - `{1}{G}, Sacrifice an Elf: Target creature gets +3/+3 until end of turn.`
 - **Amnesia**
   - `Target player reveals their hand and discards all nonland cards.`
@@ -3757,6 +3760,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Faceless Butcher**
   - `When this creature enters, exile another target creature.`
   - `When this creature leaves the battlefield, return the exiled card to the battlefield under its owner's control.`
+- **Faces of the Past**
+  - `Whenever a creature dies, tap all untapped creatures that share a creature type with it or untap all tapped creatures that share a creature type with it.`
 - **Fact or Fiction**
   - `Reveal the top five cards of your library. An opponent separates those cards into two piles. Put one pile into your hand and the other into your graveyard.`
 - **Fade Away**
@@ -4240,6 +4245,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target player discards two cards, then draws as many cards as they discarded this way.`
 - **Forgotten Ancient**
   - `Whenever a player casts a spell, you may put a +1/+1 counter on this creature.`
+  - `At the beginning of your upkeep, you may move any number of +1/+1 counters from this creature onto other creatures.`
 - **Forgotten Cave**
   - `{T}: Add {R}.`
 - **Forgotten Harvest**
@@ -6975,6 +6981,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you control no Islands, sacrifice this creature.`
 - **Merchant of Secrets**
   - `When this creature enters, draw a card.`
+- **Mercurial Kite**
+  - `Whenever this creature deals combat damage to a creature, tap that creature. That creature doesn't untap during its controller's next untap step.`
 - **Merfolk Assassin**
   - `{T}: Destroy target creature with islandwalk.`
 - **Merfolk Looter**
@@ -8511,6 +8519,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each player draws X cards.`
 - **Protective Sphere**
   - `{1}, Pay 1 life: Prevent all damage that would be dealt to you this turn by a source of your choice that shares a color with the mana spent on this activation cost. (Colorless mana prevents no damage.)`
+- **Proteus Machine**
+  - `When this creature is turned face up, it becomes the creature type of your choice. (This effect lasts indefinitely.)`
 - **Provoke**
   - `Untap target creature you don't control. That creature blocks this turn if able.`
   - `Draw a card.`
@@ -11635,6 +11645,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Thunderclap**
   - `Thunderclap deals 3 damage to target creature.`
 - **Thundercloud Elemental**
+  - `{3}{U}: Tap all creatures with toughness 2 or less.`
   - `{3}{U}: All other creatures lose flying until end of turn.`
 - **Thundermare**
   - `When this creature enters, tap all other creatures.`

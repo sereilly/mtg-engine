@@ -747,10 +747,10 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 5857 |
+| parse rule | 5852 |
 | activation cost | 2537 |
 | trigger table | 1782 |
-| static-line table | 1393 |
+| static-line table | 1398 |
 | keyword table | 1256 |
 | aura enchant noun (oracle_instructions attach) | 375 |
 | activation_restrictions.py | 166 |
