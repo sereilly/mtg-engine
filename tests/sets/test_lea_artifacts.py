@@ -11,7 +11,7 @@ from engine.hand_size import maximum_hand_size
 from engine.models import CardDefinition, Permanent
 import json
 from web.app import app, store
-from tests.helpers import (
+from tests.helpers import (stock_libraries, 
     _mk_card,
     _mk_creature_card,
     _pass_priority,
@@ -1185,6 +1185,7 @@ def _vault_game(cards):
     vault = Permanent(card=cards["Mana Vault"])
     p1 = PlayerState(name="P1", battlefield=[vault], library=[])
     game = Game(players=[p1, PlayerState(name="P2")])
+    stock_libraries(game)
     game.enforce_mana_costs = False
     # CR 103.8a's first-turn skip is a skip of the *draw*, not of the step, but
     # the step still has to be reached on a turn the engine does not shortcut.

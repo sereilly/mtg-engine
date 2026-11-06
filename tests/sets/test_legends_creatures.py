@@ -5,6 +5,8 @@ See tests/sets/README.md for the convention.
 
 from __future__ import annotations
 
+from tests.helpers import stock_libraries
+
 import pytest
 
 from engine import Game, PlayerState
@@ -1084,6 +1086,7 @@ def test_giant_turtle_rests_for_exactly_one_of_its_controllers_turns(set_pool):
     p1 = PlayerState(name="P1", battlefield=[turtle])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
+    stock_libraries(game)
     game.start_turn(0)
     game._close_current_priority_step()
     game.advance_combat_phase()
@@ -1146,6 +1149,7 @@ def test_wall_of_dust_holds_its_victim_home_for_one_turn(set_pool):
     p1 = PlayerState(name="P1", battlefield=[bear])
     p2 = PlayerState(name="P2", battlefield=[wall])
     game = Game(players=[p1, p2])
+    stock_libraries(game)
     game.start_turn(0)
     game._close_current_priority_step()
     game.advance_combat_phase()
@@ -1175,6 +1179,7 @@ def test_wall_of_dust_restriction_does_not_leak_onto_a_bystander(set_pool):
     p1 = PlayerState(name="P1", battlefield=[blocked, free])
     p2 = PlayerState(name="P2", battlefield=[wall])
     game = Game(players=[p1, p2])
+    stock_libraries(game)
     game.start_turn(0)
     game._close_current_priority_step()
     game.advance_combat_phase()

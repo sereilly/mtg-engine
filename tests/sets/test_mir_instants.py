@@ -1064,6 +1064,7 @@ def _w1g2_fortune_duel(set_pool, copies=2):
         ),
         PlayerState(name="P2", life=20),
     ])
+    stock_libraries(game)
     game.enforce_mana_costs = False
     game.interactive_seats = set()
     game.start_turn(0)
@@ -1440,7 +1441,7 @@ from engine.grammar import compile_line
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 
-from tests.helpers import _mk_card
+from tests.helpers import _mk_card, stock_libraries
 
 
 def _w2g5_jabari_board(set_pool):

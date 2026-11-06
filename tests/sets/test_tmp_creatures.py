@@ -591,7 +591,7 @@ def test_unstable_shapeshifter_compiles_to_one_bound_copy_instruction(set_pool):
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick, resolve_stack
+from tests.helpers import _nosick, resolve_stack, stock_libraries
 
 
 def _w2g4_card(name, type_line, text="", colors=(), power=None, toughness=None):
@@ -1819,6 +1819,7 @@ def _w4g1_board(set_pool, victim_names=("Horned Turtle", "Trained Armodon",
         _W4G1PlayerState(name="P1", life=20, battlefield=[oracle]),
         _W4G1PlayerState(name="P2", life=20, battlefield=victims),
     ])
+    stock_libraries(game)
     game.enforce_mana_costs = False
     game.interactive_seats = {1}
     game._sync_control()

@@ -48,11 +48,11 @@ def pool():
     return cards
 
 
-def _table(pool, path: str) -> Game:
+def _table(pool, path: str, life: int = 20) -> Game:
     forest = pool["Forest"]
     game = Game(players=[
-        PlayerState("P0", library=[forest] * 10, life=20),
-        PlayerState("P1", library=[forest] * 10, life=20),
+        PlayerState("P0", library=[forest] * 10, life=life),
+        PlayerState("P1", library=[forest] * 10, life=life),
     ])
     game.enforce_mana_costs = False
     game.active_player_index = 0
@@ -109,7 +109,16 @@ def _left_waiting_when_the_upkeep_ended(pool, card, trig, path) -> "bool | None"
     resolves. True when the step ended with the state trigger still waiting —
     on the stack, or not announced at all; None when this trigger is not one
     that reaches the stack this way."""
-    game = _table(pool, path)
+    # The state must not already hold as the card arrives: Transcendence's
+    # "when you have 20 or more life, you lose the game" at the table's 20
+    # resolved during the setup, the game was over (CR 104.1) and no upkeep
+    # followed it to make anything true. Seated with less, rather than set
+    # after, so no life was lost ("whenever you lose life", its third line).
+    game = _table(
+        pool, path,
+        life=int(trig.condition.payload["life_count"]) - 1
+        if trig.condition.kind == "life_at_least" else 20,
+    )
     for seat in (0, 1):
         _put(game, seat, pool["Forest"])
         _put(game, seat, pool["Grizzly Bears"])

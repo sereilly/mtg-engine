@@ -23,7 +23,7 @@ Covers:
 import pytest
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
-from tests.helpers import _damage_dealt
+from tests.helpers import _damage_dealt, stock_libraries
 
 
 # ---------------------------------------------------------------------------
@@ -746,6 +746,7 @@ def test_614_10a_two_skip_effects_mean_two_turns_skipped():
     p1 = PlayerState(name="P1")
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
+    stock_libraries(game)
 
     # Two separate skip-turn effects on P2
     game.skip_next_turn(1, count=1)

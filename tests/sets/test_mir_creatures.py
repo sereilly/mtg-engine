@@ -30,6 +30,8 @@ cannot be appended mechanically.
 
 from __future__ import annotations
 
+from tests.helpers import stock_libraries
+
 
 # --- Round 1: flanking (CR 702.25) ---
 
@@ -1998,6 +2000,7 @@ def _w1g2_board(set_pool, name, *, mine=(), theirs=()):
             battlefield=[Permanent(card=_w1g2_vanilla(n)) for n in theirs],
         ),
     ])
+    stock_libraries(game)
     game.enforce_mana_costs = False
     game.interactive_seats = set()
     game.start_turn(0)
@@ -2291,6 +2294,7 @@ def _w2g1_combat(*seats) -> Game:
         PlayerState(name=f"P{i + 1}", battlefield=list(board))
         for i, board in enumerate(seats)
     ])
+    stock_libraries(game)
     game.enforce_mana_costs = False
     game.interactive_seats = set()
     game.start_turn(0)

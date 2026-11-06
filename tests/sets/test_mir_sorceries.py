@@ -2100,15 +2100,18 @@ def test_w4g1_a_caster_who_cannot_pay_the_surcharge_is_refused(set_pool):
 def test_w4g1_the_same_caster_may_still_purge_one_creature(set_pool):
     """The other end of the same gate: a surcharge that refused every cast would
     pass a test that only checks it refuses. Three life buys exactly one
-    target."""
-    game, _theirs = _w4g1s_purge_game(set_pool, victims=2, life=3)
+    target. Four life, so the caster is still in the game once it is paid:
+    paid down to 0 they lose before the spell resolves (CR 704.5a — the check
+    is made as they would receive priority, CR 117.5), and an ended game
+    resolves nothing (CR 104.1)."""
+    game, _theirs = _w4g1s_purge_game(set_pool, victims=2, life=4)
 
     result = game.cast_from_hand(
         0, "Phyrexian Purge", target_player_index=1, target_permanent_index=[0],
     )
 
     assert result.supported is True, result.details
-    assert game.players[0].life == 0, game.log
+    assert game.players[0].life == 1, game.log
     assert len(list(game.controlled_by(1))) == 1, game.log
 
 

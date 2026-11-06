@@ -1576,6 +1576,10 @@ def _w2g1_counter_scene(*, opp_life=20, opp_lands=2):
     for _ in range(opp_lands):
         p2.battlefield.append(_W2G1Permanent(card=_W2G1_LEA2["Forest"]))
     p2.life = opp_life
+    if opp_life <= 0:
+        # At 0 life a player has lost (CR 704.5a) and the game is over (CR 104.1);
+        # Lich ("You don't lose the game for having 0 or less life") keeps them in it.
+        p2.battlefield.append(_W2G1Permanent(card=_W2G1_LEA2["Lich"]))
     game.queue_from_hand(1, "Giant Growth")
     return game, p2
 

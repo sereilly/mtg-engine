@@ -23,6 +23,8 @@ and reads the board, the zones and the log.
 
 from __future__ import annotations
 
+from tests.helpers import stock_libraries
+
 import pytest
 
 from engine import Game, PlayerState
@@ -33,6 +35,7 @@ from tests.helpers import resolve_stack
 
 def _duel(*, interactive=()):
     game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    stock_libraries(game)
     game.enforce_mana_costs = False
     game.interactive_seats = set(interactive)
     game.active_player_index = 0

@@ -8,6 +8,8 @@ adds a file cannot lose an import or reorder an ``elif`` chain.
 
 from __future__ import annotations
 
+from tests.helpers import stock_libraries
+
 import pytest
 
 from engine import Game, PlayerState
@@ -29,6 +31,7 @@ def _duel(mine=(), theirs=()):
     p0 = PlayerState(name="P0", life=20, battlefield=[Permanent(card=c) for c in mine])
     p1 = PlayerState(name="P1", life=20, battlefield=[Permanent(card=c) for c in theirs])
     game = Game(players=[p0, p1])
+    stock_libraries(game)
     game.enforce_mana_costs = False
     game._settle()
     return game, p0, p1
