@@ -231,7 +231,27 @@ def seat_standing(game, seat: int, *, now: bool = True) -> float:
     worth -= max(0, lands - LANDS_WORTH_KEEPING) * (
         PERMANENT_WORTH + LAND_WORTH - SPARE_LAND_WORTH
     )
+    # ...and so is a land **card in hand** beyond them (:func:`spare_lands_held`):
+    # it is a land drop nobody needs, not a card. Priced as a card, a cycle
+    # that traded a held spell for one read as a card out and a card in —
+    # nothing — so a seat with ten lands paid {3}{W}{W} in its upkeep to
+    # return Eternal Dragon from its graveyard and plainscycled it for a
+    # Plains with what was left, three turns running (SCG W2, seed 11; kg4).
+    worth -= spare_lands_held(game, seat, lands) * (CARD_WORTH - SPARE_LAND_WORTH)
     return worth
+
+
+def spare_lands_held(game, seat: int, lands_controlled: "int | None" = None) -> int:
+    """How many of the land cards in *seat*'s hand are beyond the
+    ``LANDS_WORTH_KEEPING`` lands a seat is counted as needing, the lands it
+    controls counted first (*lands_controlled*, or read here). A card in hand
+    is read as printed: it is a card, not a permanent (CR 109.2)."""
+    if lands_controlled is None:
+        lands_controlled = sum(
+            1 for permanent in game.controlled_by(seat) if permanent.has_type("land")
+        )
+    held = sum(1 for card in game.players[seat].hand if card.primary_type == "land")
+    return min(held, max(0, lands_controlled + held - LANDS_WORTH_KEEPING))
 
 
 def permanent_loss(game, seat: int, permanent) -> float:
