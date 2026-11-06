@@ -144,7 +144,9 @@ def test_seeded_logs_carry_none_of_the_wording_classes(step_spy):
                 or players.search(line) or _TOKEN_NAME.search(line)
             ):
                 hits.append("a line naming no card and no player")
-            gone = re.match(r"(.+) was exiled instead of dying$", line)
+            gone = re.match(
+                r"(.+?) was (?:destroyed \(.*\) and )?exiled instead of dying$", line
+            )
             if gone and any(
                 later.startswith(f"{gone.group(1)} died") for later in lines[index + 1:index + 4]
             ):

@@ -237,8 +237,8 @@ def spell_mana_value(card, x_value: int | None = None) -> int:
     on the stack" — so Krakilin cast for X=4 has mana value 6, and a caller
     that has no X yet (the castable highlight, a price asked before the
     announcement) gets the X = 0 answer, which is CR 202.3e's off the stack.
-    ``targeting.stack_object_mana_value`` is the same arithmetic for an object
-    already on the stack; this is it for the card the cast path is pricing.
+    ``targeting.stack_object_mana_value`` asks this for an object already on
+    the stack, with the X announced for it: one arithmetic, two holders.
     A face-down spell has no mana cost and mana value 0 (CR 708.2a).
     """
     base = int(getattr(card, "cmc", 0) or 0)

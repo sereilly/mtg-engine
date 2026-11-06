@@ -796,10 +796,23 @@ class GameEndingMixin:
 
             for player in self.players:
                 def _on_destroy_5g(perm: Permanent, died: bool, player=player) -> None:
+                    name = perm.card.name
+                    why = " (704.5g: lethal damage)"
+                    if not died and self.log and str(self.log[-1]).startswith(
+                        f"{name} "
+                    ) and str(self.log[-1]).endswith(" instead of dying"):
+                        # One event, one line (CR 614.1a: the replacement
+                        # changes how the destruction's move happens). The
+                        # move wrote where it went ("Grizzly Bears was exiled
+                        # instead of dying", Carbonize) before this sweep could
+                        # say why, and the two lines read as a creature exiled
+                        # and *then* destroyed.
+                        went = str(self.log[-1])[len(name) + 1:]
+                        went = went[len("was "):] if went.startswith("was ") else went
+                        self.log[-1] = f"{name} was destroyed{why} and {went}"
+                        return
                     self.log.append(
-                        f"{perm.card.name} "
-                        + ("died" if died else "was destroyed")
-                        + " (704.5g: lethal damage)"
+                        f"{name} " + ("died" if died else "was destroyed") + why
                     )
 
                 if self._destroy_swept_permanents(

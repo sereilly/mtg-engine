@@ -500,9 +500,13 @@ class PileChoicesMixin:
             self.put_card_into_library(player, card)
         random.shuffle(player.library)
         self.discard_pending_choice(choice)
+        # A search of a pile its divider saw and its searcher alone searched:
+        # which card went to the hand is the searcher's to know (CR 400.2;
+        # ``find_is_public``'s rule for a find nothing reveals), and
+        # ``game.log`` is every seat's — the divider's included.
         self.log.append(
-            (f"{player.name} took {found.name} " if found is not None
-             else f"{player.name} found nothing and ")
+            (f"{player.name} took a card " if found is not None
+             else f"{player.name} found nothing ")
             + f"and shuffled {len(pile)} card(s) back into their library"
         )
         return True

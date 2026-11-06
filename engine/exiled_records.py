@@ -231,6 +231,52 @@ def record_exiled_card(
     return record
 
 
+#: The intervening-if conditions that say their source is in exile ("if this
+#: card is exiled …" — Ertai's Meddling's delay; "… with a scream counter on
+#: it", All Hallow's Eve; ``handlers/_conditions``): a trigger condition that
+#: cannot be met from the battlefield functions from the zone it can be met in
+#: (CR 113.6k), and from nowhere else — so a card in this register for some
+#: other reason (face down under Three Wishes, a Dimensional Breach's pile)
+#: triggers nothing from here. Two Scourge rounds wrote this reader at once;
+#: the merge kept this one, which also walks a nested gate and reads the
+#: ``functions_from: "exile"`` stamp.
+EXILE_ZONE_CONDITIONS = frozenset({"source_exiled", "source_exiled_with_counter"})
+
+
+def functions_in_exile(trigger) -> bool:
+    """Whether *trigger* — one of an exiled card's own triggered abilities —
+    works while the card is in exile.
+
+    CR 113.6: an object's abilities function only on the battlefield unless
+    the ability says otherwise. All Hallow's Eve does ("At the beginning of
+    your upkeep, **if this card is exiled** with a scream counter on it, …",
+    CR 113.6k), as does an ability stamped to function from exile. A card
+    exiled by Three Wishes or Ertai's Meddling with an ordinary upkeep trigger
+    of its own (Juzám Djinn's "deals 1 damage to you") does not: that trigger
+    fired from exile once a record held the card, dealing damage and naming a
+    card nobody may see.
+
+    Duck-typed over the instruction tree (``.payload`` dicts, nested lists) so
+    this module keeps its rule of importing nothing from the engine.
+    """
+    def walk(value) -> bool:
+        payload = getattr(value, "payload", None)
+        if isinstance(payload, dict):
+            if payload.get("functions_from") == "exile":
+                return True
+            gate = payload.get("intervening_if")
+            if isinstance(gate, dict) and gate.get("kind") in EXILE_ZONE_CONDITIONS:
+                return True
+            return walk(payload)
+        if isinstance(value, dict):
+            return any(walk(inner) for inner in value.values())
+        if isinstance(value, (list, tuple)):
+            return any(walk(inner) for inner in value)
+        return False
+
+    return walk(getattr(trigger, "instruction", None))
+
+
 def is_live(game, record: ExiledRecord) -> bool:
     """Whether *record* still speaks for a card in its owner's exile.
 
@@ -259,26 +305,6 @@ def is_live(game, record: ExiledRecord) -> bool:
 #: from the engine, so the handler layer and the delayed registry can both name
 #: it.
 EXILED_THIS_WAY_RECORDS = "exiled_this_way_records"
-
-
-#: The intervening-if kinds that say a triggered ability is about its card
-#: **in exile** — "if this card is exiled" (Ertai's Meddling's delay), "… with a
-#: scream counter on it" (All Hallow's Eve). CR 113.6k: a trigger condition
-#: that can't trigger from the battlefield functions in the zones it can
-#: trigger from; every other ability of a permanent card functions on the
-#: battlefield alone (CR 113.6), so a card in this register for some other
-#: reason (face down, a Dimensional Breach's pile) triggers nothing from here.
-EXILE_ZONE_CONDITIONS: frozenset[str] = frozenset({
-    "source_exiled", "source_exiled_with_counter",
-})
-
-
-def functions_from_exile(instruction) -> bool:
-    """Whether a triggered ability's *instruction* is one that functions from
-    exile (:data:`EXILE_ZONE_CONDITIONS`), read off its intervening "if"."""
-    payload = getattr(instruction, "payload", None) or {}
-    gate = payload.get("intervening_if")
-    return isinstance(gate, dict) and gate.get("kind") in EXILE_ZONE_CONDITIONS
 
 
 def still_exiled(game, record) -> bool:

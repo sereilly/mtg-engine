@@ -682,7 +682,7 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
         # the one a seat nobody asks names is the first written on the target —
         # its type line before its rules text — the one word sure to change
         # something; ``None`` when nothing is written there.
-        default = _first_creature_type_written_on_target(game, context, excluded)
+        default = _first_creature_type_written_on_target(game, context, excluded, seat)
     context.results[key] = default
     game.arm_creature_type_choice(
         seat, card_name=card_name, result_key=key, context=context,
@@ -716,23 +716,39 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
 
 def _first_creature_type_written_on_target(
     game: Game, context: OracleExecutionContext, excluded: tuple[str, ...],
+    seat: int,
 ) -> str | None:
     """The first creature type written on the permanent — or the spell on the
     stack — this resolution targeted (``text_changes.creature_types_written``,
-    read off its current text), skipping *excluded*; None with no such object
-    or word.
+    read off its current text **as *seat* sees it**), skipping *excluded*;
+    None with no such object or word.
 
     A spell is the target where the announcement named one ("target **spell**
     or permanent", Artificial Evolution): the stack object in the context,
     whose words are its folded text (``spell_text_card``) — the board holds
     nothing that is that spell, and reading a permanent there would offer a
     word from a bystander.
+
+    **A face-down target** has no text (CR 708.2a), yet a text change on it
+    changes the card it hides (CR 708.8; Putrid Raptor's ruling: Artificial
+    Evolution on the face-down Raptor changes the Zombie its morph cost
+    discards). Any creature type may still be named — the prompt offers the
+    whole catalog either way — and the default is read through
+    ``text_changes.text_seen_by``: the hidden card's face-up words to the seat
+    CR 708.5 lets look at it (its controller), and nothing to anybody else,
+    whose default must not be a word only the hidden card could tell it.
     """
-    from ..text_changes import creature_types_written, spell_text_card
+    from ..face_down import is_face_down
+    from ..text_changes import (creature_types_written, spell_text_card,
+                                text_seen_by)
     from ._targets import resolve_target_permanent
 
     if context.stack_target is not None:
-        written = creature_types_written(spell_text_card(context.stack_target))
+        item = context.stack_target
+        written = creature_types_written(
+            text_seen_by(game, item, seat) if is_face_down(item)
+            else spell_text_card(item)
+        )
     else:
         target = resolve_target_permanent(
             game, context, predicate=lambda perm: True,
@@ -740,7 +756,7 @@ def _first_creature_type_written_on_target(
         )
         if target is None:
             return None
-        written = creature_types_written(target.effective_card)
+        written = creature_types_written(text_seen_by(game, target, seat))
     return next((word for word in written if word not in excluded), None)
 
 

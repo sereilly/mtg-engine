@@ -12,7 +12,7 @@ library dealt its owner 1 damage from exile at the next upkeep. CR 113.6: a
 permanent card's abilities function on the battlefield unless they say
 otherwise; CR 113.6k: a trigger condition that can't trigger from the
 battlefield ("if this card is exiled") functions where it can. The scan now
-asks ``exiled_records.functions_from_exile``.
+asks ``exiled_records.functions_in_exile``.
 
 **A held record came back to life.** CR 400.7 makes a card that leaves exile
 and returns a new object, and the departure seam retires its record — but
@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_path
-from engine.exiled_records import (EXILE_ZONE_CONDITIONS, functions_from_exile,
+from engine.exiled_records import (EXILE_ZONE_CONDITIONS, functions_in_exile,
                                    is_live, record_exiled_card)
 from engine.faces import compilation_units
 from engine.oracle import compile_card_oracle
@@ -95,7 +95,7 @@ def test_every_exile_scanned_upkeep_trigger_in_the_pool_says_it_works_from_exile
                 line = (trig.source_line or "").lower()
                 if "if this card is exiled" in line or "if it's exiled" in line:
                     printed_exiled.add(unit.name)
-                if functions_from_exile(trig.instruction):
+                if functions_in_exile(trig):
                     admitted[unit.name] = line
     assert "All Hallow's Eve" in admitted
     assert printed_exiled <= set(admitted)

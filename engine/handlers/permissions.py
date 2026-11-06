@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..exiled_records import records_for_cards
-from ..linked_exile import linked_entries
+from ..linked_exile import exiled_cards_for_the_log, linked_entries
 from ..search_filters import card_has_type
 from ._targets import frozen_that_player_seat
 from .registry import effect_handler
@@ -71,10 +71,13 @@ def grant_look_at_exiled_cards(game: Game, instruction: OracleInstruction, conte
         for record in records_for_cards(game, exiled):
             if record.looker_index is None:
                 record.looker_index = seat
-                granted.append(record.card.name)
+                granted.append(record.card)
         if granted:
+            # The look is one seat's; ``game.log`` is every seat's, so the
+            # line counts the face-down cards it now lets that seat read.
             game.log.append(
-                f"{game.players[seat].name} may look at {', '.join(granted)} "
+                f"{game.players[seat].name} may look at "
+                f"{exiled_cards_for_the_log(game, granted)} "
                 "for as long as it remains exiled"
             )
         return True, "resolved"
@@ -88,12 +91,13 @@ def grant_look_at_exiled_cards(game: Game, instruction: OracleInstruction, conte
         for position, card in enumerate(remaining):
             if entry["card"] is card:
                 entry["looker_index"] = seat
-                granted.append(card.name)
+                granted.append(card)
                 del remaining[position]
                 break
     if granted:
         game.log.append(
-            f"{game.players[seat].name} may look at {', '.join(granted)} "
+            f"{game.players[seat].name} may look at "
+            f"{exiled_cards_for_the_log(game, granted)} "
             "for as long as it remains exiled"
         )
     return True, "resolved"
@@ -237,9 +241,12 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
                 source_permanent_id=game.permanent_id_of(context.source_permanent),
                 zone_player_index=zone_seat,
             )
+        # "Until your next turn, you may play those cards." (Three Wishes,
+        # about cards it exiled face down): a face-down card is counted, not
+        # named — the permission is the grantee's, the log the table's.
         game.log.append(
             f"{grantee.name} may {payload.get('mode', 'cast')} "
-            f"{', '.join(card.name for card in cards)} from exile"
+            f"{exiled_cards_for_the_log(game, cards)} from exile"
             + _PERMISSION_DURATION_WORDS.get(duration, "")
         )
         return True, "resolved"

@@ -20,6 +20,7 @@ the pile was offered by.
 from __future__ import annotations
 
 import random
+from ....exiled_records import record_exiled_card
 from ....linked_exile import link_exiled_card
 from ....models import Permanent
 from ....grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
@@ -368,8 +369,13 @@ class HandChoicesMixin:
             if not self.take_card_from_hand(victim, card):
                 return False
             self.put_card_into_library(victim, card, position="top")
+            # "Look at target player's hand and choose a card from it. You put
+            # that card on top of its owner's library." (Painful Memories.) A
+            # look is not a reveal (CR 701.20e): the chooser and the owner know
+            # the card, a third seat and a spectator do not, and ``game.log``
+            # is all of theirs.
             self.log.append(
-                f"{card.name} went on top of {victim.name}'s library"
+                f"a card from {victim.name}'s hand went on top of their library"
             )
             return True
         if fate == "exile":
@@ -760,10 +766,19 @@ class HandChoicesMixin:
                 source, card, choice.player_index,
                 face_down=bool(payload.get("face_down")),
             )
+        elif payload.get("face_down"):
+            # CR 406.3 needs a record somebody can still find, and with no
+            # permanent to hold it the game's register does — the arrangement
+            # ``exile_hand_slots`` keeps for Suppress.
+            record_exiled_card(self, card, choice.player_index, face_down=True)
         context = choice.data.get("_context")
         if context is not None:
             context.results.setdefault("exiled_cards", []).append(card)
-        self.log.append(f"{player.name} exiled {card.name} from their hand ({name})")
+        # "Exile a card from your hand **face down**." (Gustha's Scepter.) Its
+        # name is nobody's to read (CR 406.3, 400.2) and ``game.log`` is every
+        # seat's: the line says that a card went, not which.
+        what = "a card face down" if payload.get("face_down") else card.name
+        self.log.append(f"{player.name} exiled {what} from their hand ({name})")
         self.discard_pending_choice(choice)
         return True
 
@@ -1194,11 +1209,13 @@ class HandChoicesMixin:
         name = choice.data.get("card_name", "Effect")
         payload = choice.data.get("_payload") or {}
         verb = "revealed" if payload.get("reveal") else "chose"
-        if payload.get("hidden"):
-            # CR 101.4a: a card chosen out of a hand may stay face down as it
-            # is chosen (Stronghold Gambit). The log is public, so naming the
-            # card here would show every seat still choosing what this one
-            # hid; the sentence that reveals it is what names it.
+        if not payload.get("reveal"):
+            # A card chosen out of a hand stays in a hidden zone (CR 400.2)
+            # until a sentence shows it: "choose two cards in your hand drawn
+            # this turn" (Sylvan Library) reveals nothing, and CR 101.4a lets
+            # a chosen card stay face down (Stronghold Gambit). The log is
+            # public, so the line counts; the sentence that reveals, discards
+            # or puts a card onto the battlefield is the one that names it.
             chosen = f"{len(cards)} card(s)" if cards else "no cards"
         else:
             chosen = ", ".join(c.name for c in cards) or "no cards"

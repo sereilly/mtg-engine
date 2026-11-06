@@ -382,9 +382,10 @@ def _reselect_at_random(
     the list the object's own picker reads — and the draw is the engine's
     seeded RNG, so a seeded game reproduces it.
 
-    A target that moves is announced as every CR 115.7 change here is
-    (``change_target_spell_target``): the new target "becomes the target"
-    (CR 603.2), and the change is made for this ability's controller. A shape
+    A target that moves "becomes the target" (CR 603.2), as every CR 115.7
+    change here does (``change_target_spell_target``) — but it is announced
+    ``at_random``, never as a player's choice of targets: no player chose it
+    (CR 115.7's changes are a player's), so Psychic Battle does not trigger. A shape
     ``change_slots`` refuses (a modal spell, an object printing "target" twice)
     keeps its target, which is the direction a change must fail in.
     """
@@ -417,8 +418,12 @@ def _reselect_at_random(
         f"{card_name}: {item.card.name}'s target is reselected at random, "
         f"from {before} to {target_label(game, pick)}"
     )
+    # The new target becomes the target (CR 603.2), but nobody chose it: a
+    # draw at random is no player's choice of targets, so Psychic Battle
+    # ("whenever a player chooses one or more targets") does not hear it.
     game.announce_targets_chosen(
         item, chooser=game.seat_index(context.caster), newly_targeted=True,
+        at_random=True,
     )
     return True, "resolved"
 

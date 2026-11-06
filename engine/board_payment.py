@@ -549,6 +549,29 @@ def land_tap_yields(game: "Game", land: "Permanent", purpose=None) -> list[TapYi
     return yields
 
 
+def conditioned_tap_pays_now(game: "Game", land: "Permanent") -> bool:
+    """Whether *land*, whose **only** tap-alone mana ability prints a board
+    condition, would make mana if tapped for it now.
+
+    "{T}: Add {C}{C}. Activate only if you control five or more lands."
+    (Temple of the False God.) ``mana_payment.taps_for_payment`` is pure — it
+    asks no board — so it cannot answer a clause that is a fact about the board
+    (CR 602.5b) and leaves such a land out, which is right for a reader with no
+    game. A payer with one asks here: the seam's own reading
+    (:func:`land_tap_yields`, which runs ``land_mana_tap_refusal`` with each
+    ability's index and so the printed clause, ``activation_restrictions``'s
+    threshold row) — asked again each time ``Game._pay_planned_cost`` plans
+    again after a tap, so a clause that stops holding part-way stops counting
+    the land.
+    """
+    if land.tapped or not land.has_type("land"):
+        return False
+    free, priced = game._land_mana_abilities(land)
+    if free is not None or not priced:
+        return False
+    return bool(land_tap_yields(game, land))
+
+
 def land_payment_units(game: "Game", land: "Permanent") -> "tuple[frozenset[str], ...] | None":
     """The mana one tap of *land* adds, unit by unit, where that is **more
     than one** unit and each is its own — Ancient Tomb's {C}{C}, a karoo's

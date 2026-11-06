@@ -821,8 +821,10 @@ def put_iterated_card_on_library(game: Game, instruction: OracleInstruction, con
     game.take_card_from_hand(player, card)
     position = "bottom" if str(instruction.payload.get("position", "top")) == "bottom" else "top"
     game.put_card_into_library(player, card, position)
+    # From one hidden zone to another (CR 400.2): which card went back is its
+    # owner's to know, and ``game.log`` is every seat's.
     game.log.append(
-        f"{context.card.name}: {player.name} put {card.name} on "
+        f"{context.card.name}: {player.name} put a card from their hand on "
         f"{'the bottom' if position == 'bottom' else 'top'} of their library"
     )
     return True, "resolved"

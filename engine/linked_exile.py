@@ -8,7 +8,8 @@ the objects the first one moved, and to nothing else.
 
 **One record, one writer, one reader.**  The record is a list of entries under
 ``RECORD_KEY`` in the exiling permanent's ``metadata``; :func:`link_exiled_card`
-is the only thing that appends to it and :func:`linked_entries` /
+(and :func:`put_back_linked_entry`, for an entry a sweep drained and kept)
+are the only things that append to it and :func:`linked_entries` /
 :func:`take_linked_entries` are the only things that read or drain it.  It lives
 on the *permanent* rather than on the game for two reasons: a record on the
 permanent goes wherever the permanent does, and — the reason the whole file is
@@ -151,6 +152,22 @@ def link_exiled_card(
     return entry
 
 
+def put_back_linked_entry(source: "Permanent", entry: dict[str, Any]) -> None:
+    """Return a drained *entry* to *source*'s record, **as it was**.
+
+    A sweep that drains the pile and keeps part of it ("Return each creature
+    card exiled with this artifact", Cold Storage; "all other cards you own",
+    Duplicity) puts the rest back. Rebuilt through :func:`link_exiled_card`,
+    each kept entry lost whatever that call was not handed — a Cold Storage
+    pile's face-down flag, a look permission, its destination — and a card
+    exiled face down came back to the record face up. The same dict goes back
+    instead, so every fact on it survives.
+    """
+    held = list(source.metadata.get(RECORD_KEY) or ())
+    held.append(entry)
+    source.metadata[RECORD_KEY] = held
+
+
 def shuffle_linked_pile(source: "Permanent", shuffler) -> None:
     """Randomise the order of everything exiled with *source* (Mangara's Tome:
     "…exile them in a face-down pile, **and shuffle that pile**").
@@ -274,10 +291,10 @@ def face_down_exiled_cards(
     in exile has no identity of its own to hang a flag on: two copies of one
     card in a deck are the *same* ``CardDefinition`` object, so the only sound
     key for "this exiled card is face down" is the record of the exiling.  The
-    scan is over permanents on the battlefield; a card exiled face down by a
-    permanent that has since left is face up to the reader for the window
-    between the permanent leaving and its linked trigger resolving, which is
-    the one place this derivation is looser than the record.
+    scan is over permanents on the battlefield; a permanent that leaves (or
+    phases out) hands its face-down entries to the game's register as it goes
+    (:func:`keep_face_down_after_departure`), so a card exiled face down stays
+    face down after its exiler is gone — CR 406.3 has no ending.
 
     **Two registers, one question.** A *spell* that exiles face down (Three
     Wishes) never becomes a permanent, so its record lives on the game
@@ -289,7 +306,7 @@ def face_down_exiled_cards(
     hidden: list["CardDefinition"] = []
     for permanent in game.all_permanents():
         for entry in linked_entries(permanent):
-            if not entry.get("face_down"):
+            if not entry.get("face_down") or entry.get(HANDED_TO_REGISTER):
                 continue
             if int(entry.get("owner_index", -1)) != owner_index:
                 continue
@@ -306,3 +323,104 @@ def face_down_exiled_cards(
             continue
         hidden.append(record.card)
     return hidden
+
+
+#: Stamped on a face-down entry whose fact the game's register now holds
+#: (:func:`keep_face_down_after_departure`), so a source that phases back in —
+#: or an entry read again — is not a second record of one hidden card.
+HANDED_TO_REGISTER = "face_down_registered"
+
+
+def keep_face_down_after_departure(game, permanent: "Permanent") -> None:
+    """A permanent leaving the battlefield, or phasing out, keeps what it
+    exiled face down hidden (CR 406.3).
+
+    "Exile the top card of your library face down" (Necropotence) and "exile
+    them in a face-down pile" (Mangara's Tome) record the fact on the exiling
+    permanent, which is the only object that can tell one copy of a card from
+    another. :func:`face_down_exiled_cards` scans the battlefield, so the moment
+    the permanent left — sacrificed to Kyren Archive's own cost, destroyed with
+    Necropotence's card still waiting for the end step, or phased out — every
+    one of its face-down cards read face up to every viewer, for the rest of
+    the game. Nothing in the rules turns them up: a card exiled face down stays
+    so until an instruction says otherwise.
+
+    So each such entry whose card is still in its owner's exile goes on the
+    game's register (``engine/exiled_records.py``, the record Three Wishes and
+    Memory Jar already keep), with the seat that may look at it, and the entry
+    is stamped :data:`HANDED_TO_REGISTER`. The entry itself stays where it is:
+    the linked abilities that read it after the permanent is gone (Knowledge
+    Vault's sacrifice, then "put all cards exiled with it") still drain it, and
+    the card's departure from exile retires the record
+    (``Game.take_card_from_exile``).
+    """
+    from .exiled_records import record_exiled_card
+
+    for entry in linked_entries(permanent):
+        if not entry.get("face_down") or entry.get(HANDED_TO_REGISTER):
+            continue
+        owner_index = int(entry.get("owner_index", -1))
+        if not 0 <= owner_index < len(game.players):
+            continue
+        card = entry["card"]
+        if not any(held is card for held in game.players[owner_index].exile):
+            continue
+        record_exiled_card(
+            game, card, owner_index, face_down=True,
+            looker_index=entry.get("looker_index"),
+        )
+        entry[HANDED_TO_REGISTER] = True
+
+
+#: The zones only their owner may look into (CR 400.2: a library and a hand are
+#: hidden zones). A card going into one of them from a face-down exile was never
+#: shown to anybody on its way.
+HIDDEN_ZONES = frozenset({"hand", "library"})
+
+
+def is_exiled_face_down(game, card) -> bool:
+    """Whether *card* — the object, never a look-alike — is in some seat's exile
+    face down (CR 406.3), to anybody at all.
+
+    Fail-closed for a card two entries share: a deck repeats one immutable
+    ``CardDefinition`` per copy, so a face-up copy beside a face-down one is
+    the same object, and the answer that cannot give the hidden one away is
+    "face down".
+    """
+    return any(
+        held is card
+        for seat in range(len(game.players))
+        for held in face_down_exiled_cards(game, seat)
+    )
+
+
+def exiled_cards_for_the_log(game, cards) -> str:
+    """*cards*, each in exile, as ``game.log`` may name them: every face-up one
+    by name and the face-down ones counted (CR 406.3).
+
+    ``game.log`` is one list served whole to every seat and every spectator
+    (``engine/refusals.py``), so a line in it is an announcement — and a card
+    exiled face down is one no player may examine, its owner included, unless
+    an instruction lets one look (Three Wishes, Gustha's Scepter). A permission
+    to look is one seat's view, never the table's, so it changes nothing here.
+    """
+    shown: list[str] = []
+    hidden = 0
+    for card in cards:
+        if is_exiled_face_down(game, card):
+            hidden += 1
+        else:
+            shown.append(card.name)
+    if hidden:
+        shown.append(f"{hidden} face-down card(s)")
+    return ", ".join(shown)
+
+
+def entry_name_for_the_log(entry: dict[str, Any], zone: str) -> str:
+    """How ``game.log`` names a linked entry's card as it goes to *zone*: by
+    name, unless it was exiled face down and goes where nobody sees it (a
+    hand, a library — CR 406.3, 400.2). A face-down card going anywhere public
+    is seen arriving, so its name is the table's then."""
+    if entry.get("face_down") and zone in HIDDEN_ZONES:
+        return "a face-down card"
+    return entry["card"].name

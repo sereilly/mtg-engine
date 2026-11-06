@@ -718,8 +718,6 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
         "you may have it block an attacking creature of your choice",
         "creatures it was blocking that had become blocked by only that creature this combat become unblocked",
     ),
-    # handlers/spell_copies copy_top_stack_spell + the UI retarget flow (Fork).
-    "copy_top_stack_spell": ("you may choose new targets for the copy",),
     # Natural Selection's confirm flow carries the shuffle flag.
     "reorder_target_library_top": ("you may have that player shuffle",),
     # Nettling Imp / Siren's Call handler arms must-attack + delayed destroy.

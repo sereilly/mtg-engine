@@ -1170,6 +1170,26 @@ class SpellCastingMixin:
                 if restated == cost_reduction:
                     break
                 cost_reduction, reducing_names = restated, restated_names
+                if x_value is None:
+                    # Inferred again under the larger reduction — which also
+                    # comes off X itself where the rest of the cost is too
+                    # small to take it (``_x_reduction_credit``) — before the
+                    # price is said, so the line names the X that is cast.
+                    x_settled = self._resolved_cast_x(
+                        card=card, caster=caster, caster_index=caster_index,
+                        chosen_alternative=chosen_alternative,
+                        classification=classification,
+                        cost_reduction=cost_reduction,
+                        extra_generic_tax=extra_generic_tax,
+                        extra_pip_tax=extra_pip_tax, mode_index=mode_index,
+                        target_permanent_ids=target_permanent_ids,
+                        target_permanent_index=target_permanent_index,
+                        target_player_index=target_player_index,
+                        target_stack_item=target_stack_item, x_value=x_value,
+                    )
+                    if isinstance(x_settled, SimulationResult):
+                        return x_settled
+                    announced_x, resolved_x_value, x_colors, x_mana_spent = x_settled
                 self.log.append(
                     f"{card.name} costs less to cast at X={resolved_x_value} "
                     f"({', '.join(reducing_names)})"
@@ -1180,21 +1200,6 @@ class SpellCastingMixin:
                 )
                 if x_value is not None:
                     break
-                x_settled = self._resolved_cast_x(
-                    card=card, caster=caster, caster_index=caster_index,
-                    chosen_alternative=chosen_alternative,
-                    classification=classification,
-                    cost_reduction=cost_reduction,
-                    extra_generic_tax=extra_generic_tax,
-                    extra_pip_tax=extra_pip_tax, mode_index=mode_index,
-                    target_permanent_ids=target_permanent_ids,
-                    target_permanent_index=target_permanent_index,
-                    target_player_index=target_player_index,
-                    target_stack_item=target_stack_item, x_value=x_value,
-                )
-                if isinstance(x_settled, SimulationResult):
-                    return x_settled
-                announced_x, resolved_x_value, x_colors, x_mana_spent = x_settled
 
         # CR 601.2c–d, X now a number: the target count and the division.
         divided = self._settled_cast_division(

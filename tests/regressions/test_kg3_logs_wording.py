@@ -268,8 +268,16 @@ def test_a_creature_exiled_instead_of_dying_is_not_said_to_have_died():
     )
 
     assert [card.name for card in game.players[1].exile] == ["Birds of Paradise"]
-    assert "Birds of Paradise was exiled instead of dying" in game.log, game.log[-6:]
-    assert "Birds of Paradise was destroyed (704.5g: lethal damage)" in game.log, game.log[-6:]
+    # One event, one line (SCG W2G4): destroyed, and exiled instead of dying —
+    # never "exiled" and then "destroyed" as two.
+    assert (
+        "Birds of Paradise was destroyed (704.5g: lethal damage) and exiled "
+        "instead of dying"
+    ) in game.log, game.log[-6:]
+    assert not any(
+        line == "Birds of Paradise was destroyed (704.5g: lethal damage)"
+        for line in game.log
+    ), game.log[-6:]
     assert not any(line.startswith("Birds of Paradise died") for line in game.log)
 
 

@@ -85,7 +85,17 @@ class PoolPaymentMixin:
         directly — and in that case the direct answer is 0 and the cost cannot
         be paid without the grant at all.
         """
-        direct = self._infer_x_from_pool(
+        # X itself is generic mana (CR 107.3, 202.1), so a generic reduction
+        # the rest of the cost is too small to take comes off X (CR 601.2f
+        # applies reductions to the total cost) — and the X the pool pays for
+        # is that much larger. Krakilin ({X}{G}{G}) with six mana under Krosan
+        # Drover's {2} is X=6: {6}{G}{G} less {2} is six. Measured against the
+        # non-X cost alone, the reduction was spent on nothing and X was 4,
+        # two mana left floating.
+        credit = self._x_reduction_credit(
+            mana_cost, extra_generic, reduction, extra_pips
+        )
+        direct = credit + self._infer_x_from_pool(
             player, mana_cost, extra_generic, x_colors, reduction, extra_pips,
         )
         grant = next(
@@ -109,7 +119,36 @@ class PoolPaymentMixin:
             fungible_types_headroom(pool, required) if grant.get("any_type")
             else fungible_colors_headroom(pool, required)
         )
-        return direct if headroom is None else max(direct, headroom)
+        return direct if headroom is None else max(direct, headroom + credit)
+
+    def _x_reduction_credit(
+        self, mana_cost: str, extra_generic: int,
+        reduction: CostReduction | None, extra_pips: dict[str, int] | None,
+    ) -> int:
+        """How much of *reduction*'s generic reach the cost without X leaves
+        unused — what it takes off X instead.
+
+        Read through ``reduce_cost`` (CR 118.7, the one reduction) twice: over
+        the cost with X at 0, and over the same cost with generic to spare, so
+        a coloured reduction's spill onto generic (CR 118.7b–c) is counted the
+        way the payment will count it. Zero with no reduction, and zero
+        wherever the printed generic already absorbs it — every cast this was
+        right for before.
+        """
+        if reduction is None:
+            return 0
+        base = self._parse_mana_cost(
+            mana_cost, x_value=0, extra_generic=extra_generic,
+            extra_pips=extra_pips,
+        )
+        used = base.get("generic", 0) - reduce_cost(base, reduction).get("generic", 0)
+        spare = dict(base)
+        room = sum(int(amount) for _symbol, amount in reduction.colored) + int(
+            reduction.generic
+        )
+        spare["generic"] = spare.get("generic", 0) + room
+        reach = spare["generic"] - reduce_cost(spare, reduction).get("generic", 0)
+        return max(0, reach - used)
 
     def _x_inference_cost(
         self, mana_cost: str, extra_generic: int,

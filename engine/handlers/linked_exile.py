@@ -26,6 +26,8 @@ from ..linked_exile import (LEAVES, UNTAPPED, link_exiled_card,
 # Which exiled cards are face down (CR 406.3) — its own line, so the import
 # above, which rounds append to, cannot collide with it.
 from ..linked_exile import face_down_exiled_cards
+# How the public log names a card leaving a face-down pile (CR 406.3).
+from ..linked_exile import entry_name_for_the_log, is_exiled_face_down
 from ..models import Permanent
 from ..oracle_types import EXILED_BY_SEAT, PUT_INTO_HAND_THIS_WAY
 from ..resumption import run_resumable
@@ -426,7 +428,7 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
             entry = take_linked_entry_at(source, random.choice(live))
             game.leave_linked_exile(entry, zone)
             game.log.append(
-                f"{entry['card'].name}, chosen at random from the cards exiled "
+                f"{entry_name_for_the_log(entry, zone)}, chosen at random from the cards exiled "
                 f"with {name}, goes to its owner's {zone}"
             )
             return True, "resolved"
@@ -484,16 +486,12 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
                 wanted.append(entry)
         entries = wanted
         if excluded:
-            from ..linked_exile import link_exiled_card
+            from ..linked_exile import put_back_linked_entry
 
             for entry in excluded:
-                link_exiled_card(
-                    source, entry["card"], int(entry["owner_index"]),
-                    ends_on=tuple(entry.get("ends_on") or ()),
-                    face_down=bool(entry.get("face_down")),
-                )
+                put_back_linked_entry(source, entry)
     if wanted_type is not None:
-        from ..linked_exile import link_exiled_card
+        from ..linked_exile import put_back_linked_entry
 
         # Through the one card-in-a-zone matcher (_card_matches_filter),
         # never primary_type: CR 205.2a gives a card every type printed on
@@ -510,10 +508,7 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
         kept = [e for e in entries if not _answers(e)]
         entries = [e for e in entries if _answers(e)]
         for entry in kept:
-            link_exiled_card(
-                source, entry["card"], int(entry["owner_index"]),
-                ends_on=tuple(entry.get("ends_on") or ()),
-            )
+            put_back_linked_entry(source, entry)
     if not entries:
         name = context.card.name if context.card is not None else "that permanent"
         game.log.append(f"nothing is exiled with {name}")
@@ -550,7 +545,11 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
             onto_battlefield |= game.leave_linked_exile(
                 entry, zone, controller_index=controller_index
             ) is not None
-            moved.append(entry["card"].name)
+            # "Put all cards exiled with Kyren Archive into their owner's
+            # hand": a card exiled face down that goes to a hand was never
+            # shown to anybody (CR 406.3, 400.2), and ``game.log`` is every
+            # seat's.
+            moved.append(entry_name_for_the_log(entry, zone))
     if moved:
         # "…under **your** control" is not the owner's zone, so the line has to
         # say whose it is or the log describes a different effect.
@@ -966,6 +965,11 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
     # "…return those cards to the battlefield" (Planar Guide) is one event:
     # every card it returns enters together (CR 603.6a; its ruling, 2004-10-04:
     # "All 'enters' abilities trigger as normal").
+    # Which of them are face down (CR 406.3), asked before any moves: the
+    # answer is derived from the exile record, which retires as each leaves.
+    # Necropotence's card goes from a face-down exile to its controller's hand
+    # at the end step, and ``game.log`` is every seat's.
+    face_down = [card for card in cards if is_exiled_face_down(game, card)]
     with game.entering_together():
         for card in cards:
             for owner in seats:
@@ -1030,7 +1034,14 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
             # this step put there, for a stopping clause to ask about — see
             # ``oracle_types.PUT_INTO_HAND_THIS_WAY``.
             context.results[PUT_INTO_HAND_THIS_WAY] = list(moved)
-        names = ", ".join(card.name for card in moved)
+        hidden = [
+            card for card in moved
+            if destination == "hand" and any(card is held for held in face_down)
+        ]
+        names = ", ".join(
+            [card.name for card in moved if not any(card is h for h in hidden)]
+            + ([f"{len(hidden)} face-down card(s)"] if hidden else [])
+        )
         # "…return it to its **owner's** hand" (Psychic Theft, Planeswalker's
         # Mischief) lands in the hand of the seat whose exile held it, which is
         # not the caster's — and the line said the caster had put it into
