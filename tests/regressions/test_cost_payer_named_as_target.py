@@ -17,6 +17,17 @@ tree before the fix.
 
 Two ends, both asserted pool-wide: the gate leaves a cost-only spell alone, and
 the policy does not name a payment as a target.
+
+**The payer is wherever the cost takes it from.** "As an additional cost to
+cast this spell, exile X cards from your graveyard" (Skeletal Scrying) is the
+same shape one zone over: since SCG W2G2 its picker describes the graveyard
+cards that pay (``cost_pickers``' ``exile_graveyard_filter`` arm), so it joined
+the population — and the battlefield rig held nothing it could pay with. The
+target channel names a graveyard card by seat and slot, as it names a graveyard
+target, and a payer named there has left for exile by the time the spell is on
+the stack — CR 608.2b's question again. So the rig has a graveyard
+(``_GRAVEYARD_RIG``) and a graveyard payer is announced on both channels as a
+permanent one is.
 """
 from __future__ import annotations
 
@@ -45,6 +56,10 @@ _RIG = (
     "Grizzly Bears", "Forest", "Swamp", "Mountain", "Island", "Plains",
     "Sol Ring", "Goblin Balloon Brigade", "Wall of Wood",
 )
+
+#: What the rig puts in the caster's graveyard: a creature card and a
+#: noncreature card, for "exile X creature cards" and "exile X cards".
+_GRAVEYARD_RIG = ("Grizzly Bears", "Lightning Bolt")
 
 #: How many spells the sweep must reach. Fourteen at Planeshift's wave 1; a
 #: floor rather than the number, so a new one is covered without an edit and a
@@ -78,6 +93,7 @@ def _table(name: str):
         PlayerState(
             "Caster", library=[forest] * 10,
             hand=[_POOL[name].face_of or _POOL[name]],
+            graveyard=[_POOL[rigged] for rigged in _GRAVEYARD_RIG],
         ),
         PlayerState("Bystander", library=[forest] * 10),
     ])
@@ -102,37 +118,55 @@ def test_a_cost_only_spell_resolves_with_its_payer_named_on_the_target_channel(n
     resolves — it has no target to have lost."""
     card = _POOL[name]
     game = _table(name)
+    spec = game.cast_target_spec(0, card)
+    in_graveyard = spec.get("kind") == "graveyard_creature"
     payers = [
-        entry for entry in game.cast_target_spec(0, card).get("valid_targets") or ()
-        if entry.get("kind") == "permanent"
+        entry for entry in spec.get("valid_targets") or ()
+        if entry.get("kind") == ("graveyard" if in_graveyard else "permanent")
     ]
     assert payers, f"the rig holds nothing that pays for {name}"
-    payer = game.permanent_at(payers[0]["seat"], payers[0]["index"])
     # A counted cost names as many payers as it takes ("sacrifice five lands",
     # Gaea's Balance - the first cost-only spell in the pool to count, and a
     # named list shorter than the price is refused since CR 601.2h's "partial
     # payments are not allowed" was held to a named payer). The count is the
     # picker's own; the first payer is still the one on the target channel.
-    owed = int(game.cast_target_spec(0, card).get("count") or 1)
+    owed = int(spec.get("count") or 1)
     assert len(payers) >= owed, f"the rig holds {len(payers)} of {owed} payers for {name}"
-    paying = [
-        game.permanent_at(entry["seat"], entry["index"]) for entry in payers[:owed]
-    ]
+    x_value = 1 if "{X}" in (card.mana_cost or "") else None
 
-    result = game.cast_from_hand(
-        0, name, target_player_index=0,
-        target_permanent_index=payers[0]["index"],
-        target_permanent_ids=[payer.permanent_id],
-        cost_permanent_index=payers[0]["index"],
-        cost_permanent_ids=[permanent.permanent_id for permanent in paying],
-        x_value=1 if "{X}" in (card.mana_cost or "") else None,
-    )
-    assert result.supported, result.details
-    resolve_stack(game)
-
-    assert not any(game.is_on_battlefield(permanent) for permanent in paying), (
-        "the cost was paid"
-    )
+    if in_graveyard:
+        # "Exile X cards": the X is the cost's, announced (CR 601.2b) at one.
+        x_value = 1 if spec.get("announces_x") else x_value
+        # The graveyard card that pays, on the target channel by seat and slot
+        # (a graveyard target's spelling) and on the cost channel by slot.
+        exiled_before = len(game.players[0].exile)
+        result = game.cast_from_hand(
+            0, name, target_player_index=payers[0]["seat"],
+            target_permanent_index=payers[0]["index"],
+            cost_graveyard_indices=[entry["index"] for entry in payers[:owed]],
+            x_value=x_value,
+        )
+        assert result.supported, result.details
+        resolve_stack(game)
+        assert len(game.players[0].exile) == exiled_before + owed, "the cost was paid"
+    else:
+        payer = game.permanent_at(payers[0]["seat"], payers[0]["index"])
+        paying = [
+            game.permanent_at(entry["seat"], entry["index"]) for entry in payers[:owed]
+        ]
+        result = game.cast_from_hand(
+            0, name, target_player_index=0,
+            target_permanent_index=payers[0]["index"],
+            target_permanent_ids=[payer.permanent_id],
+            cost_permanent_index=payers[0]["index"],
+            cost_permanent_ids=[permanent.permanent_id for permanent in paying],
+            x_value=x_value,
+        )
+        assert result.supported, result.details
+        resolve_stack(game)
+        assert not any(game.is_on_battlefield(permanent) for permanent in paying), (
+            "the cost was paid"
+        )
     assert not any("every target is illegal" in line for line in game.log), [
         line for line in game.log if name in line
     ]
