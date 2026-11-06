@@ -1385,7 +1385,7 @@ function hasBlockingPromptForAutoPass(state = currentState) {
   // auto-pass sent a pass the server refused (and, crossing the answer on the
   // wire, one it then accepted on the empty stack that followed).
   if (state?.waiting_on_prompt) return true;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getExiledCardReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -4196,6 +4196,18 @@ function getLinkedExileReturnInfo(state = currentState) {
   return info;
 }
 
+// Dimensional Breach: "…at the beginning of each player's upkeep, that player
+// returns one of the exiled cards they own to the battlefield"
+// (`web/prompt_cards._exiled_card_return`). The seat's own pick, mandatory:
+// Gustha's Scepter's shape with the cards shown face up.
+function getExiledCardReturnInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.exiled_card_return;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.choices) || info.choices.length === 0) return null;
+  return info;
+}
+
 // Eureka: the offered seat picks a card in its hand to put onto the battlefield.
 function getPutFromHandInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -4951,6 +4963,7 @@ function isAnyPromptActive(state = currentState) {
   if (getPileSearchInfo(state)) return true;
   if (getLibraryCycleInfo(state)) return true;
   if (getLinkedExileReturnInfo(state)) return true;
+  if (getExiledCardReturnInfo(state)) return true;
   if (getPutFromHandInfo(state)) return true;
   if (getChooseCardsInHandInfo(state)) return true;
   if (getTimeVaultInfo(state)) return true;
@@ -4970,7 +4983,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state) || getTargetGroupOrderInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getExiledCardReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state) || getTargetGroupOrderInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -10658,6 +10671,75 @@ function applyLinkedExileReturnPrompt(info) {
   });
 }
 
+// Dimensional Breach's upkeep return: one of the seat's own exiled cards onto
+// the battlefield. Exile is public (CR 400.2), so each choice is the card face
+// up — its art beside its name and type, and the full card on hover — rather
+// than a name alone. Mandatory: no Decline and no Cancel, because the sentence
+// is not an offer; an exile holding one such card is answered by the engine
+// without asking, and none arms nothing. The answer names the exile record
+// (`entry_index`), never a pile position — two copies of one card are the same
+// object there.
+function applyExiledCardReturnPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = `${info.card_name || "Dimensional Breach"} — return an exiled card`;
+  body.textContent =
+    `Return one of your exiled cards to the ${info.zone || "battlefield"}. ` +
+    "You must choose one.";
+  const seen = {};
+  steps.innerHTML =
+    '<div class="prompt-choice-column exiled-card-return-choices">' +
+    info.choices
+      .map((c) => {
+        const card = c.card && typeof c.card === "object" ? c.card : { name: c.name };
+        seen[c.name] = (seen[c.name] || 0) + 1;
+        const twins = info.choices.filter((other) => other.name === c.name).length;
+        const label = twins > 1 ? `${c.name} #${seen[c.name]}` : c.name;
+        const art = card.art_crop || card.image_uri || "";
+        return (
+          `<button type="button" class="prompt-choice-btn exiled-card-return-choice" data-ecr-entry="${c.entry_index}">` +
+          (art ? `<img class="exiled-card-return-art" src="${escapeHtml(art)}" alt="" loading="lazy" />` : "") +
+          `<span class="exiled-card-return-text"><strong>${escapeHtml(label)}</strong>` +
+          (card.type ? `<small>${escapeHtml(card.type)}</small>` : "") +
+          "</span></button>"
+        );
+      })
+      .join("") +
+    "</div>";
+  steps.querySelectorAll("[data-ecr-entry]").forEach((btn) => {
+    const entry = info.choices.find((c) => String(c.entry_index) === btn.dataset.ecrEntry);
+    if (entry?.card && typeof entry.card === "object") {
+      btn.addEventListener("mouseenter", () => showCardPreview(entry.card));
+    }
+    btn.addEventListener("click", async () => {
+      try {
+        await sendAction({
+          seat,
+          action: "exiled_card_return_confirm",
+          exile_entry_index: Number(btn.dataset.ecrEntry),
+        });
+        // "Chose", not "Returned": an Aura still asks what it enchants.
+        updateActionHint(`Chose ${entry?.name || "the card"} to return.`);
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
+  });
+}
+
 function applyPutFromHandPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -13962,6 +14044,12 @@ function renderActivationPrompt() {
   const linkedExileReturnInfo = getLinkedExileReturnInfo();
   if (linkedExileReturnInfo) {
     applyLinkedExileReturnPrompt(linkedExileReturnInfo);
+    return;
+  }
+
+  const exiledCardReturnInfo = getExiledCardReturnInfo();
+  if (exiledCardReturnInfo) {
+    applyExiledCardReturnPrompt(exiledCardReturnInfo);
     return;
   }
 
