@@ -74,42 +74,13 @@ _PICKERLESS_ACTIVATION_COSTS: set[tuple[str, int]] = set()
 # cost no picker has ever described. Pinned rather than fixed, each with what
 # it would take:
 _PICKERLESS_CAST_COSTS: dict[str, str] = {
-    # "As an additional cost to cast this spell, exile X creature cards from
-    # your graveyard." **Half of this closed at ODY W2G1**: the cast path and
-    # the cast route take ``cost_graveyard_indices`` and hold a named set to
-    # the cost (CR 601.2h; ``tests/regressions/test_ody_w2g1_graveyard_cast_
-    # cost.py``), so the choice is the caster's the moment something names it.
-    # What is still missing is what this guard asks about — the *spec*: no
-    # ``_cost_picker_spec`` arm describes a cast-side ``exile_graveyard_filter``
-    # counted by X, because the client asks X after any cost stage (Infernal
-    # Harvest's reason below) and a set of X has nowhere to learn its size
-    # from. A seat that names no set still pays with the top of the pile.
-    "Haunting Misery": "wire field exists; no cast-side X-sized graveyard set spec or client picker",
-    # "As an additional cost to cast this spell, exile X cards from your
-    # graveyard." (Odyssey.) Haunting Misery's cost with the type left off,
-    # charged by the same branch and missing the same thing. In a set whose
-    # graveyard is a resource the choice matters more than it did — which X
-    # cards go decides what threshold and flashback have left — so it is
-    # pinned beside the card it shares the gap with rather than papered over
-    # by a spec no client surface reads.
-    "Skeletal Scrying": "wire field exists; no cast-side X-sized graveyard set spec or client picker",
-    # "As an additional cost to cast this spell, exile X creature cards from
-    # your graveyard. Target creature gets -X/-X until end of turn."
-    # (Scourge.) Haunting Misery's cost word for word, beside a creature
-    # target. Pinned with its two siblings at SCG W1G1 rather than given the
-    # spec alone, because the spec alone is a browser regression for all
-    # three: ``startCastCostPrompt`` (web/static/app.js) has no branch for a
-    # cast-side graveyard cost, so a ``cost_spec`` of kind
-    # ``graveyard_creature`` with ``exile_cost`` falls through to
-    # ``startCastCostPermanentPrompt`` — a battlefield picker over graveyard
-    # options, which reports "nothing it can exile" and blocks the cast. Today
-    # the three cast and pay with the top of the pile. The engine half
-    # (``cost_pickers._cost_picker_specs`` reading ``exile_graveyard_filter``
-    # with ``announces_x``) and the client half (the zone-cast set picker,
-    # ``x_value = picked.length``, ``cost_graveyard_indices``) land together.
-    # The cast route already takes the slots: ``tests/sets/test_scg_instants.py``
-    # drives Chill Haunting's cast through it.
-    "Chill Haunting": "wire field exists; no cast-side X-sized graveyard set spec or client picker",
+    # Haunting Misery, Skeletal Scrying and Chill Haunting's "exile X (creature)
+    # cards from your graveyard" left this list at SCG W2G2: the spec
+    # (``cost_pickers._cost_picker_specs``' ``exile_graveyard_filter`` arm, with
+    # ``announces_x``) and the client's set picker
+    # (``startCastGraveyardCostPrompt``, ``x_value`` = the number picked, on
+    # ``cost_graveyard_indices``) landed together, as this entry said they must.
+    #
     # "As an additional cost to cast this spell, return X Swamps you control to
     # their owner's hand." The charger already honours ``cost_permanent_ids``
     # (cast_additional_costs.py's return branch); what is missing is the whole announcement:

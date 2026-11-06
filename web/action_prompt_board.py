@@ -168,6 +168,10 @@ def _action_copy_spell_target_confirm(session, req, seat_type):
     "Any target" is a player *or* a permanent (CR 115.4), so this answer carries
     either — and both are checked back against the list the prompt offered, so a
     client that invents a candidate is refused rather than obeyed.
+
+    ``accept: false`` declines the offer (CR 707.10c's "may"): the copy keeps
+    the original's target, whatever it is — the one answer a click on a
+    candidate cannot give when that target is no longer legal.
     """
     pending = next(
         (c for c in session.game.pending_choices_of("copy_spell_target")),
@@ -177,6 +181,10 @@ def _action_copy_spell_target_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="no copy target pending")
     if req.seat != pending.player_index:
         raise HTTPException(status_code=400, detail="not your choice")
+    if req.accept is False:
+        if not session.game.confirm_copy_spell_target(req.seat, keep=True):
+            raise HTTPException(status_code=400, detail="invalid target")
+        return
     if req.target_permanent_id is None and req.target_seat is None:
         raise HTTPException(
             status_code=400, detail="target_permanent_id or target_seat is required"

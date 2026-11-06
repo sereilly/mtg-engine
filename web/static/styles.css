@@ -2167,6 +2167,29 @@ h2.targeting-valid {
   cursor: not-allowed;
 }
 
+/* Forgotten Ancient's "move any number of +1/+1 counters": one row per
+   creature — its name, then − and + around the amount it gets — rather than
+   the column's full-width buttons, which stacked each control on its own
+   line. */
+.prompt-choice-column .counter-distribution-row {
+  flex-wrap: nowrap;
+}
+
+.counter-distribution-row .counter-distribution-name {
+  flex: 1 1 auto;
+}
+
+.prompt-choice-column .counter-distribution-row .prompt-choice-btn {
+  width: auto;
+  flex: 0 0 auto;
+  text-align: center;
+}
+
+.counter-distribution-amount {
+  min-width: 1.5em;
+  text-align: center;
+}
+
 /* Planeswalker loyalty menu: one row per loyalty ability, the cost symbol as
    the button on the left (the card's own layout) and the ability beside it. A
    row whose cost can't be paid greys the whole row, not just its button — the

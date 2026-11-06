@@ -247,22 +247,37 @@ def _copy_spell_target(ctx: PromptContext, choices: list) -> dict:
     cast the spell. The candidates were enumerated when the copy was created and
     are replayed here, players and permanents alike, because "any target" is
     both (CR 115.4).
+
+    ``current_target`` is the candidate the copy is aimed at now (the
+    original's target) — what the "keep" answer (``accept: false``) leaves it
+    on — and ``copy_number`` / ``copy_count`` say which of a storm's copies
+    this is (2022-12-08: "You can make different choices for each copy").
+    Each is sent only when there is one to send.
     """
     choice = choices[0]
-    return {
+
+    def entry(target: dict) -> dict:
+        return {
+            "kind": target.get("kind"),
+            "seat": target.get("seat"),
+            "index": target.get("index"),
+            "id": target.get("permanent_id"),
+            "name": target.get("name"),
+        }
+
+    payload = {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
-        "candidates": [
-            {
-                "kind": target.get("kind"),
-                "seat": target.get("seat"),
-                "index": target.get("index"),
-                "id": target.get("permanent_id"),
-                "name": target.get("name"),
-            }
-            for target in choice.data.get("targets") or ()
-        ],
+        "candidates": [entry(target) for target in choice.data.get("targets") or ()],
+        "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
     }
+    current = ctx.game.copy_spell_target_current(choice)
+    if current is not None:
+        payload["current_target"] = entry(current)
+    if choice.data.get("copy_count"):
+        payload["copy_number"] = int(choice.data["copy_number"])
+        payload["copy_count"] = int(choice.data["copy_count"])
+    return payload
 
 
 @prompt_renderer("tap_any_number")

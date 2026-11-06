@@ -3373,6 +3373,16 @@ function getSkipDrawInfo(state = currentState) {
   return info;
 }
 
+// Parallel Thoughts: the draw, or the top card of the face-down pile instead
+// (`web/prompt_values._pile_top_draw`). One offer per replaced draw.
+function getPileTopDrawInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.pile_top_draw;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
 // Mox Diamond: "you may discard a land card instead" of the permanent
 // entering. The offered hand slots are the ones the printed phrase admits, so
 // the picker never shows a card the answer path would refuse.
@@ -3982,6 +3992,15 @@ function getCopySpellTargetInfo(state = currentState) {
   const info = state.copy_spell_target;
   if (!info || info.player_seat !== seat) return null;
   if (!Array.isArray(info.candidates) || info.candidates.length === 0) return null;
+  return info;
+}
+
+// Forgotten Ancient: "…you may move any number of +1/+1 counters from this
+// creature onto other creatures" (`web/prompt_board._counter_distribution`).
+function getCounterDistributionInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.counter_distribution;
+  if (!info || info.player_seat !== seat) return null;
   return info;
 }
 
@@ -5965,6 +5984,80 @@ function applySkipDrawPrompt(info) {
         option_index: index,
       });
       updateActionHint(index === 1 ? "You skipped the draw." : "You drew the card.");
+    });
+  });
+}
+
+// Parallel Thoughts: "If you would draw a card, you may instead put the top
+// card of the pile you exiled into your hand." Obstinate Familiar's offer one
+// option over: 0 draws, 1 takes the pile's top card — and from an empty pile,
+// the draw is simply skipped (the ruling the server's option label says). The
+// pile is face down and nobody may look at it (ruling 2004-10-04), so the
+// prompt says how many cards it holds and never what they are.
+function applyPileTopDrawPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const customOkBtn = q("promptCustomOkBtn");
+  if (!panel || !title || !body || !steps) return;
+  panel.classList.remove("hidden");
+  q("promptOkBtn")?.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  customOkBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const sourceName = info.source_name || "Parallel Thoughts";
+  const options = Array.isArray(info.options) ? info.options : [];
+  const remaining = Number(info.remaining || 1);
+  const pileSize = Math.max(0, Number(info.pile_size) || 0);
+  const librarySize = Number(info.library_size);
+  const pileNote = pileSize === 0
+    ? ` The pile is empty: taking from it puts nothing into your hand, and you draw nothing.`
+    : ` The pile holds ${pileSize} face-down card${pileSize === 1 ? "" : "s"}; you can't look at them.`;
+  const libraryNote = Number.isFinite(librarySize)
+    ? librarySize === 0
+      ? " Your library is empty: drawing from it loses the game."
+      : ` Your library has ${librarySize} card${librarySize === 1 ? "" : "s"}.`
+    : "";
+  title.textContent = "Draw, or take from the pile?";
+  body.textContent =
+    `You would draw a card. ${sourceName} lets you put the top card of the pile it exiled ` +
+    `into your hand instead.` + pileNote + libraryNote +
+    (remaining > 1 ? ` (${remaining} draws to answer)` : "");
+
+  steps.innerHTML =
+    `<div class="prompt-choice-row">` +
+    options
+      .map((label, index) => {
+        const text = String(label);
+        return (
+          `<button type="button" class="prompt-choice-btn" ` +
+          `data-pile-top-draw="${index}">${escapeHtml(text.charAt(0).toUpperCase() + text.slice(1))}</button>`
+        );
+      })
+      .join("") +
+    `</div>`;
+
+  steps.querySelectorAll("[data-pile-top-draw]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const index = Number(btn.dataset.pileTopDraw);
+      try {
+        await sendAction({
+          seat,
+          action: "pile_top_draw_confirm",
+          option_index: index,
+        });
+        updateActionHint(
+          index === 1
+            ? (pileSize === 0 ? "The pile was empty: you skipped the draw." : "You took the pile's top card.")
+            : "You drew the card.",
+        );
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
     });
   });
 }
@@ -8769,12 +8862,146 @@ function applyCopySpellTargetPrompt(info) {
   q("promptCancelBtn").classList.add("hidden");
   q("promptCancelBtn").disabled = true;
   q("promptCustomOkBtn").disabled = true;
-  q("promptTitle").textContent = "Choose a target for the copy";
+  // Storm makes several copies and asks about each in turn (2022-12-08 ruling:
+  // "You can make different choices for each copy"): which one this is, and
+  // what it is aimed at now — the original's target, which keeping leaves it
+  // on (CR 707.10c's offer declined).
+  const count = Number(info.copy_count) || 0;
+  const number = Number(info.copy_number) || 0;
+  const which = count > 1 && number > 0 ? `copy ${number} of ${count}` : "the copy";
+  const current = info.current_target || null;
+  const currentName = current
+    ? (current.kind === "player" && current.seat === seat ? "you" : current.name || "its target")
+    : "";
+  q("promptTitle").textContent = count > 1 && number > 0
+    ? `Choose a target for copy ${number} of ${count}`
+    : "Choose a target for the copy";
   q("promptBody").textContent =
-    `${info.card_name || "The spell"}: you may choose a new target for the copy.`;
+    `${info.card_name || "The spell"}: you may choose a new target for ${which}.` +
+    (currentName ? ` It is aimed at ${currentName} now.` : "");
   q("promptSteps").innerHTML =
-    "<div>Action: click a highlighted permanent or player. Click the copy's " +
-    "current target to leave it where it is.</div>";
+    "<div>Action: click a highlighted permanent or player to aim it there.</div>" +
+    `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" data-copy-target-keep="1">` +
+    `${escapeHtml(currentName ? `Keep it on ${currentName}` : "Keep the original's target")}</button></div>`;
+  q("promptSteps").querySelector("[data-copy-target-keep]")?.addEventListener("click", () => {
+    submitPromptAction({ seat, action: "copy_spell_target_confirm", accept: false });
+  });
+}
+
+// Forgotten Ancient's distribution: how many counters each candidate gets, by
+// its stable id, and the prompt those amounts were chosen for (its source and
+// candidate ids) — a new offer starts from nothing rather than inheriting the
+// last one's split.
+let counterDistributionAmounts = {};
+let counterDistributionFor = "";
+
+function counterDistributionKey(info) {
+  const ids = (info?.candidates || []).map((c) => c.id).join(",");
+  return `${info?.source_id ?? ""}|${info?.maximum ?? ""}|${ids}`;
+}
+
+// One whole number of counters per candidate, the running total held at the
+// server's `maximum` (what the source still has): a "+" that would pass it is
+// dead. None at all is a legal answer ("any number"), so the confirm is never
+// disabled. The answer is the divided-announcement shape the action reads
+// (`divided_targets: [{seat, id, amount}]`), listing only creatures given one
+// or more; the engine re-checks every id and the total.
+function applyCounterDistributionPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  if (!panel || !title || !body || !steps) return;
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const key = counterDistributionKey(info);
+  if (key !== counterDistributionFor) {
+    counterDistributionFor = key;
+    counterDistributionAmounts = {};
+  }
+  const candidates = Array.isArray(info.candidates) ? info.candidates : [];
+  const maximum = Math.max(0, Number(info.maximum) || 0);
+  const counter = info.counter || "+1/+1";
+  const sourceName = info.card_name || "This creature";
+  const amountOf = (id) => Math.max(0, Number(counterDistributionAmounts[id]) || 0);
+  const total = candidates.reduce((sum, c) => sum + amountOf(c.id), 0);
+  const left = maximum - total;
+
+  title.textContent = `Move ${counter} counters?`;
+  body.textContent =
+    `${sourceName} has ${maximum} ${counter} counter${maximum === 1 ? "" : "s"}. ` +
+    `You may move any number of them onto the creatures below — or none.`;
+
+  const seen = {};
+  const rows = candidates.map((c) => {
+    seen[c.name] = (seen[c.name] || 0) + 1;
+    const twins = candidates.filter((other) => other.name === c.name).length;
+    const owner = c.seat === seat ? "" : ` (${currentState?.players?.[c.seat]?.name || "opponent"})`;
+    const label = (twins > 1 ? `${c.name} #${seen[c.name]}` : c.name) + owner;
+    const amount = amountOf(c.id);
+    return (
+      `<div class="prompt-choice-row counter-distribution-row" data-counter-row="${c.id}">` +
+      `<span class="counter-distribution-name">${escapeHtml(label)}</span>` +
+      `<button type="button" class="prompt-choice-btn" data-counter-less="${c.id}"${amount > 0 ? "" : " disabled"}>−</button>` +
+      `<strong class="counter-distribution-amount" data-counter-amount="${c.id}">${amount}</strong>` +
+      `<button type="button" class="prompt-choice-btn" data-counter-more="${c.id}"${left > 0 ? "" : " disabled"}>+</button>` +
+      `</div>`
+    );
+  });
+  const confirmLabel = total === 0
+    ? "Move none"
+    : `Move ${total} counter${total === 1 ? "" : "s"}`;
+  steps.innerHTML = [
+    candidates.length
+      ? `<div>${left} of ${maximum} left to move.</div>`
+      : "<div>There is no creature to move them onto.</div>",
+    `<div class="prompt-choice-column">${rows.join("")}</div>`,
+    `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" data-counter-distribution-confirm="1">${confirmLabel}</button></div>`,
+  ].join("");
+
+  steps.querySelectorAll("[data-counter-more]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = Number(btn.dataset.counterMore);
+      const now = candidates.reduce((sum, c) => sum + amountOf(c.id), 0);
+      if (now >= maximum) return;
+      counterDistributionAmounts[id] = amountOf(id) + 1;
+      applyCounterDistributionPrompt(info);
+    });
+  });
+  steps.querySelectorAll("[data-counter-less]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = Number(btn.dataset.counterLess);
+      counterDistributionAmounts[id] = Math.max(0, amountOf(id) - 1);
+      applyCounterDistributionPrompt(info);
+    });
+  });
+  steps.querySelector("[data-counter-distribution-confirm]")?.addEventListener("click", async () => {
+    const divided = candidates
+      .filter((c) => amountOf(c.id) > 0)
+      .map((c) => ({ seat: c.seat, id: c.id, amount: amountOf(c.id) }));
+    try {
+      await sendAction({
+        seat,
+        action: "counter_distribution_confirm",
+        divided_targets: divided,
+      });
+      counterDistributionAmounts = {};
+      counterDistributionFor = "";
+      const moved = divided.reduce((sum, entry) => sum + entry.amount, 0);
+      updateActionHint(moved ? `Moved ${moved} ${counter} counter${moved === 1 ? "" : "s"}.` : "Moved no counters.");
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  });
 }
 
 // Siege Striker: toggle creatures on the board, read the count back here, confirm.
@@ -10882,8 +11109,29 @@ const SEARCH_DESTINATION_WORDS = {
 };
 const SEARCH_DESTINATION_FALLBACK = { into: "", button: "Confirm" };
 
-function searchDestinationWords(destination, entersTapped, ownerName = null) {
-  let words = SEARCH_DESTINATION_WORDS[destination] || SEARCH_DESTINATION_FALLBACK;
+// "…then shuffle and put that card **third from the top**." (Long-Term Plans.)
+// A place in the library counted from the top (`library_from_top`, with the
+// prompt's `from_top` depth): the find goes under the cards above it, so the
+// sentence names the depth rather than "on top". Ordinals the way the card
+// prints them, a number past the tenth.
+const LIBRARY_DEPTH_ORDINALS = [
+  "", "first", "second", "third", "fourth", "fifth",
+  "sixth", "seventh", "eighth", "ninth", "tenth",
+];
+
+function libraryDepthWords(fromTop) {
+  const depth = Math.max(1, Number(fromTop) || 1);
+  const ordinal = LIBRARY_DEPTH_ORDINALS[depth] || `${depth}th`;
+  const title = ordinal.charAt(0).toUpperCase() + ordinal.slice(1);
+  return depth === 1
+    ? SEARCH_DESTINATION_WORDS.library_top
+    : { into: `${ordinal} from the top of your library`, button: `Put ${title} from Top` };
+}
+
+function searchDestinationWords(destination, entersTapped, ownerName = null, fromTop = null) {
+  let words = destination === "library_from_top"
+    ? libraryDepthWords(fromTop)
+    : SEARCH_DESTINATION_WORDS[destination] || SEARCH_DESTINATION_FALLBACK;
   // *Whose* hand. A card found in somebody else's library goes to its owner's
   // hand or graveyard (CR 400.3), not the chooser's: Guided Passage's opponent
   // was told the three cards they picked for the caster were going "into your
@@ -11097,7 +11345,7 @@ function renderSearchLibraryModal(info) {
   const oneDestination = multi
     ? (dests.length && dests.every((d) => d === dests[0]) ? dests[0] : null)
     : (info.destination || "hand");
-  const words = searchDestinationWords(oneDestination, info.enters_tapped, zoneOwnerName);
+  const words = searchDestinationWords(oneDestination, info.enters_tapped, zoneOwnerName, info.from_top);
   const subtitle = document.getElementById("searchLibrarySubtitle");
   if (subtitle) {
     if (slots.length) {
@@ -12490,6 +12738,26 @@ function renderSearchExileModal(info) {
   }
 
   modal.classList.remove("hidden");
+  // Which zones the search looks in (`zones`): Chandra, Heart of Fire's −9
+  // looks in two, Parallel Thoughts' "search your library for seven cards"
+  // in the library alone — which this modal titled "Search Graveyard and
+  // Library", with an empty Graveyard section, for a graveyard it never
+  // searched. A payload without the key is the two-zone search it was built
+  // for.
+  const zones = Array.isArray(info.zones) && info.zones.length ? info.zones : ["graveyard", "library"];
+  const looksIn = (zone) => zones.includes(zone);
+  const title = document.getElementById("searchExileTitle");
+  if (title) {
+    title.textContent = looksIn("graveyard") && looksIn("library")
+      ? "Search Graveyard and Library"
+      : looksIn("graveyard") ? "Search Graveyard" : "Search Library";
+  }
+  for (const [zone, ids] of [
+    ["graveyard", ["searchExileGraveyardTitle", "searchExileGraveyardGrid"]],
+    ["library", ["searchExileLibraryTitle", "searchExileLibraryGrid"]],
+  ]) {
+    for (const id of ids) document.getElementById(id)?.classList.toggle("hidden", !looksIn(zone));
+  }
   const subtitle = document.getElementById("searchExileSubtitle");
   if (subtitle) {
     const what = [
@@ -13274,6 +13542,12 @@ function renderActivationPrompt() {
     return;
   }
 
+  const pileTopDrawInfo = getPileTopDrawInfo();
+  if (pileTopDrawInfo) {
+    applyPileTopDrawPrompt(pileTopDrawInfo);
+    return;
+  }
+
   const entryDiscardTollInfo = getEntryDiscardTollInfo();
   if (entryDiscardTollInfo) {
     applyEntryDiscardTollPrompt(entryDiscardTollInfo);
@@ -13526,6 +13800,12 @@ function renderActivationPrompt() {
   const tapAnyNumberInfo = getTapAnyNumberInfo();
   if (tapAnyNumberInfo) {
     applyTapAnyNumberPrompt(tapAnyNumberInfo);
+    return;
+  }
+
+  const counterDistributionInfo = getCounterDistributionInfo();
+  if (counterDistributionInfo) {
+    applyCounterDistributionPrompt(counterDistributionInfo);
     return;
   }
 
@@ -13936,7 +14216,8 @@ function renderActivationPrompt() {
         // A tapped permanent says so: "Sacrifice X Mountains" (Firecat Blitz)
         // is best paid with the Mountains already tapped for its {R}{R}, and
         // "Mountain #1" alone did not say which those were.
-        const tapped = !fromGraveyard && (currentState?.players || []).some(
+        // A card in hand is named by its position, which is no permanent id.
+        const tapped = !fromGraveyard && pending.zone !== "hand" && (currentState?.players || []).some(
           (player) => (player?.battlefield || []).some(
             (perm) => perm && perm.id === option.id && perm.tapped,
           ),
@@ -16556,6 +16837,10 @@ function permanentCostVerbLabel(pending) {
     case "untap": return "Untap";
     case "put_counter": return `Put a ${counter} counter on`;
     case "remove_counter": return `Remove a ${counter} counter from`;
+    // A card in hand paying a morph cost ("Morph—Discard a Zombie card",
+    // Putrid Raptor), or exiled from it.
+    case "discard": return "Discard";
+    case "exile": return "Exile";
     default: return "Sacrifice";
   }
 }
@@ -16764,6 +17049,20 @@ function confirmPermanentCost() {
     sendGraveyardAbility(pending.graveyardAbility, costFields);
     return;
   }
+  if (pending.castGraveyard) {
+    // A cast's "exile X cards from your graveyard" (CR 601.2b): the slots
+    // and, where the cost is X, the X they announce, onto `pendingCastCost`;
+    // then the target still owed (Chill Haunting's creature), or the cast
+    // itself for a spell whose cost is all it announces (Skeletal Scrying) —
+    // its spec is the cost picker, which the target cascade would read as a
+    // graveyard target.
+    const announced = { cost_graveyard_indices: picked };
+    if (pending.announcesX) announced.x_value = picked.length;
+    pendingCastCost = { ...(pendingCastCost || {}), ...announced };
+    const castAction = pending.castGraveyard.castAction || "cast";
+    continueCastAfterCost(pending.card, castAction, { targets: pending.castGraveyard.thenTarget });
+    return;
+  }
   if (pending.zoneCast) {
     // The price is announced (CR 601.2b) and rides `pendingCastCost` into the
     // cast body; "X Mountains" / "X blue cards" announce X by how many.
@@ -16774,6 +17073,13 @@ function confirmPermanentCost() {
     pendingCastCost = { ...(pendingCastCost || {}), ...announced };
     if (startCastCostPrompt(pending.card)) return;
     continueCastAfterCost(pending.card);
+    return;
+  }
+  if (pending.morph) {
+    // A morph cost's choice (CR 702.37e): this step's answer joins the ones
+    // before it, and the offer goes on to its next choice, its X, or the send.
+    const { entry, step, rest, fields } = pending.morph;
+    takeMorphOffer(entry, { ...fields, ...morphStepFields(step, picked) }, rest);
     return;
   }
   if (pending.specialAction) {
@@ -17769,6 +18075,17 @@ function startCastCostPrompt(card, castAction = "cast") {
   const costSpec = castCostSpec(card);
   if (!costSpec) return false;
   if (costSpec.discard_cost) return startCastDiscardCostPrompt(card, castAction);
+  // "As an additional cost to cast this spell, exile X creature cards from
+  // your graveyard" (Chill Haunting, Haunting Misery), "…exile X cards…"
+  // (Skeletal Scrying): a set out of the caster's own pile, by slot on
+  // `cost_graveyard_indices`, whose size *is* the X announced. Before the
+  // cost-beside-a-target check below, because for Skeletal Scrying the cost is
+  // the whole spec — and never through the battlefield picker under it, which
+  // found nothing it could exile on the board and stopped the cast.
+  if (costSpec.kind === "graveyard_creature" && costSpec.exile_cost) {
+    if ((pendingCastCost || {}).cost_graveyard_indices) return false;
+    return startCastGraveyardCostPrompt(card, castAction, costSpec);
+  }
   // "As an additional cost to cast this spell, sacrifice **two** creatures"
   // (Phyrexian Tribute): a set, which the one-click canvas picker below cannot
   // collect — it answered the first creature and the default ate the second.
@@ -17823,6 +18140,53 @@ function startCastPermanentSetCostPrompt(card, castAction, costSpec) {
   return true;
 }
 
+// A cast's graveyard exile cost (`engine/cost_pickers`' `exile_graveyard_filter`
+// arm): the set picker over the caster's own pile, each option a graveyard
+// slot. An X the cost announces is how many are picked (CR 107.3a), none
+// included; a printed count is that many exactly. Returns true when it opened.
+function startCastGraveyardCostPrompt(card, castAction, costSpec) {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return false;
+  const options = (costSpec.valid_targets || [])
+    .filter((option) => option?.kind === "graveyard" && Number.isInteger(option.index)
+      && (option.seat ?? seat) === seat)
+    .map((option) => ({ id: option.index, name: option.name }));
+  const announcesX = !!costSpec.announces_x;
+  const count = announcesX ? 0 : Math.max(1, Number(costSpec.count || 1));
+  if (!announcesX && options.length < count) {
+    // CR 601.2h: the engine refuses the cast and says why.
+    return false;
+  }
+  const noun = graveyardCardNoun(costSpec);
+  const howMany = announcesX ? "X" : count === 1 ? (/^[aeiou]/i.test(noun) ? "an" : "a") : String(count);
+  pendingPermanentCost = {
+    card,
+    cardName,
+    verb: "exile",
+    zone: "graveyard",
+    pileSeat: seat,
+    noun,
+    count,
+    anyNumber: false,
+    announcesX,
+    options,
+    picked: [],
+    purpose: "cast",
+    costSentence: `As an additional cost to cast ${cardName}, exile ${howMany} `
+      + `${howMany === "X" || count > 1 ? costNounPlural(noun) : noun} from your graveyard`,
+    castGraveyard: { castAction, thenTarget: castCostIsSeparate(card) },
+    remaining: [],
+    chosen: [],
+  };
+  renderActivationPrompt();
+  updateActionHint(
+    announcesX
+      ? `Choose the cards ${cardName} will exile from your graveyard; X is how many you choose.`
+      : `Choose what ${cardName} will exile from your graveyard to pay its cost.`,
+  );
+  return true;
+}
+
 // The battlefield picker for a "sacrifice a Goblin" / "exile a creature you
 // control" cost that is announced beside a target. The cost's own enumerated
 // candidates, never the target's: they are two lists from two questions, and
@@ -17851,8 +18215,10 @@ function startCastCostPermanentPrompt(card, castAction, costSpec) {
 // The rest of a cast whose additional cost has just been paid: the target
 // cascade when the spell targets, the plain cast when it does not. The payment
 // itself is already on `pendingCastCost` and rides whichever body is sent.
-function continueCastAfterCost(card, castAction = "cast") {
-  if (startCastTargetCascade(card, castAction)) return;
+function continueCastAfterCost(card, castAction = "cast", { targets = true } = {}) {
+  // `targets: false` — the cost just paid was the whole announcement (a spec
+  // that *is* the cost picker), so there is no target to ask for.
+  if (targets && startCastTargetCascade(card, castAction)) return;
   const cardName = normalizeCardName(card);
   const actionBody = {
     seat,
@@ -26489,11 +26855,148 @@ const SPECIAL_ACTION_LABELS = {
 // offer is only ever listed for the controller, who is sent it). The price is
 // the server's `morph_cost` (CR 702.37e), never re-read from the card text.
 function turnFaceUpActionLabel(entry) {
+  const hidden = turnFaceUpHiddenName(entry);
+  const price = morphPriceText(entry);
+  return price ? `Turn ${hidden} face up — ${price}` : `Turn ${hidden} face up`;
+}
+
+// The printed morph cost (CR 702.37e), as the card says it: "Morph {2}{W}{W}"
+// for mana, "Morph—Pay 5 life" / "Morph—Return a Bird you control to its
+// owner's hand" for a cost that is not (Scourge). Where the board changes it
+// (`morph_cost_modifier`: +2 under an Exiled Doomsayer, CR 601.2f through
+// 702.37e) the change is said beside it, so the button shows what the action
+// will charge rather than what the card prints.
+function morphPriceText(entry) {
   const own = currentState?.players?.[seat]?.battlefield || [];
   const permanent = own.find((perm) => perm?.id === entry?.permanent_id) || null;
+  const cost = String(entry?.morph_cost || permanent?.hidden_card?.morph_cost || "").trim();
+  if (!cost) return "";
+  const manaOnly = /^(\{[^}]+\})+$/.test(cost);
+  let text = manaOnly ? `Morph ${cost}` : `Morph—${cost}`;
+  const modifier = Number(entry?.morph_cost_modifier) || 0;
+  if (modifier > 0) text += ` +{${modifier}}`;
+  else if (modifier < 0) text += ` −{${-modifier}}`;
+  return text;
+}
+
+// What a modified morph cost comes to in all, for the button's tooltip: a mana
+// cost with the change folded into its generic part ("{U}" +2 is "{2}{U}"), a
+// cost with no mana in it with the mana beside it ("Pay 5 life" +2 is "Pay 5
+// life and {2}", the 2004-10-04 Exiled Doomsayer ruling's mixed cost).
+function morphPriceInAll(entry) {
+  const modifier = Number(entry?.morph_cost_modifier) || 0;
+  const cost = String(entry?.morph_cost || "").trim();
+  if (!modifier || !cost) return "";
+  if (/^(\{[^}]+\})+$/.test(cost)) {
+    const symbols = cost.match(/\{[^}]+\}/g) || [];
+    let generic = 0;
+    const rest = [];
+    for (const symbol of symbols) {
+      const inner = symbol.slice(1, -1);
+      if (/^\d+$/.test(inner)) generic += Number(inner);
+      else rest.push(symbol);
+    }
+    generic = Math.max(0, generic + modifier);
+    return (generic || !rest.length ? `{${generic}}` : "") + rest.join("");
+  }
+  const said = cost.charAt(0).toLowerCase() + cost.slice(1);
+  return modifier > 0 ? `${said} and {${modifier}}` : said;
+}
+
+// The choices a morph cost that is not only mana hands its payer (W1G5's offer
+// fields): which permanents pay its sacrifice, return or tap
+// (`cost_permanents {verb, count, choices}`, answered by id on
+// `cost_permanent_ids`) and which card in hand pays its discard or exile
+// (`cost_hand_choices`, by hand position on `cost_hand_index`). In the order
+// the server lists them; a step with no real choice — exactly as many
+// candidates as it takes — is answered without asking.
+function morphCostSteps(entry) {
+  const steps = [];
+  const permanents = entry?.cost_permanents;
+  if (permanents && Array.isArray(permanents.choices)) {
+    steps.push({
+      zone: "battlefield",
+      verb: permanents.verb || "sacrifice",
+      count: Math.max(1, Number(permanents.count) || 1),
+      choices: permanents.choices
+        .filter((choice) => Number.isInteger(choice?.permanent_id))
+        .map((choice) => ({ id: choice.permanent_id, name: choice.name })),
+    });
+  }
+  if (Array.isArray(entry?.cost_hand_choices)) {
+    steps.push({
+      zone: "hand",
+      verb: entry.cost_hand_verb || "discard",
+      count: 1,
+      choices: entry.cost_hand_choices
+        .filter((choice) => Number.isInteger(choice?.hand_index))
+        .map((choice) => ({ id: choice.hand_index, name: choice.name })),
+    });
+  }
+  return steps;
+}
+
+// One step's answer, on the field the special action reads it from.
+function morphStepFields(step, picked) {
+  return step.zone === "hand"
+    ? { cost_hand_index: picked[0] }
+    : { cost_permanent_ids: picked.slice() };
+}
+
+// Take a turn-face-up offer: ask each choice its cost hands the payer, then the
+// X (CR 107.3d) if it prints one, then send — every answer riding the one
+// action, since a special action is taken and paid at once (CR 116.2b).
+function takeMorphOffer(entry, fields = {}, steps = morphCostSteps(entry)) {
+  let answered = { ...fields };
+  let queue = steps.slice();
+  while (queue.length) {
+    const [step, ...rest] = queue;
+    if (step.choices.length > step.count) {
+      openMorphCostStep(entry, step, rest, answered);
+      return;
+    }
+    // No real choice: every candidate pays. Fewer than it takes is the
+    // server's refusal to make, with the reason in its words.
+    answered = { ...answered, ...morphStepFields(step, step.choices.map((choice) => choice.id)) };
+    queue = rest;
+  }
+  if (Number(entry.x_symbols) > 0) {
+    specialActionXFor = entry.permanent_id;
+    specialActionXFields = answered;
+    renderSpecialActions(currentState, true);
+    return;
+  }
+  sendSpecialAction(entry, answered).catch((e) => updateActionHint(e.message, true));
+}
+
+// The set picker every other named cost is chosen on, over the morph cost's
+// own candidates (by id for a permanent, by hand position for a card).
+function openMorphCostStep(entry, step, rest, fields) {
   const hidden = turnFaceUpHiddenName(entry);
-  const cost = entry?.morph_cost || permanent?.hidden_card?.morph_cost || "";
-  return cost ? `Turn ${hidden} face up — Morph ${cost}` : `Turn ${hidden} face up`;
+  pendingPermanentCost = {
+    card: null,
+    cardName: hidden,
+    verb: step.verb,
+    zone: step.zone === "hand" ? "hand" : undefined,
+    noun: step.zone === "hand" ? "card" : "permanent",
+    count: step.count,
+    anyNumber: false,
+    announcesX: false,
+    options: step.choices,
+    picked: [],
+    purposeText: `turn ${hidden} face up`,
+    costSentence: `Morph—${entry.morph_cost || ""}`,
+    morph: { entry, step, rest, fields },
+    remaining: [],
+    chosen: [],
+  };
+  renderActivationPrompt();
+  const verb = permanentCostVerbLabel(pendingPermanentCost).toLowerCase();
+  updateActionHint(
+    step.zone === "hand"
+      ? `Choose the card to ${verb} to turn ${hidden} face up.`
+      : `Choose what to ${verb} to turn ${hidden} face up.`,
+  );
 }
 
 // The card a turn-face-up offer's permanent hides, as its controller is told
@@ -26575,6 +27078,9 @@ function sendSpecialAction(entry, fields = {}) {
 // values rather than sending at once. Which offer is open, by its permanent
 // id — the host is rebuilt on every state, and the row has to survive that.
 let specialActionXFor = null;
+// What that offer's earlier steps already chose (a morph cost's permanents or
+// card, `takeMorphOffer`), sent beside the X.
+let specialActionXFields = {};
 
 // A printed cost with X fixed: every {X} becomes X generic mana and joins the
 // cost's own generic part ("{X}{X}{R}" at X = 2 is "{4}{R}").
@@ -26614,8 +27120,10 @@ function renderSpecialActionXRow(host, entry) {
     button.innerHTML = renderSymbolsInline(`X = ${value} · ${morphCostWithX(entry.morph_cost, value)}`);
     button.dataset.specialActionXValue = String(value);
     button.addEventListener("click", () => {
+      const fields = { ...specialActionXFields, x_value: value };
       specialActionXFor = null;
-      sendSpecialAction(entry, { x_value: value }).catch((e) => updateActionHint(e.message, true));
+      specialActionXFields = {};
+      sendSpecialAction(entry, fields).catch((e) => updateActionHint(e.message, true));
     });
     row.appendChild(button);
   }
@@ -26625,6 +27133,7 @@ function renderSpecialActionXRow(host, entry) {
   cancel.textContent = "Cancel";
   cancel.addEventListener("click", () => {
     specialActionXFor = null;
+    specialActionXFields = {};
     renderSpecialActions(currentState, true);
   });
   row.appendChild(cancel);
@@ -26639,6 +27148,7 @@ function renderSpecialActions(state, hasPriority) {
   host.classList.toggle("hidden", entries.length === 0);
   if (!entries.some((entry) => entry.permanent_id === specialActionXFor && entry.kind === "turn_face_up")) {
     specialActionXFor = null;
+    specialActionXFields = {};
   }
   for (const entry of entries) {
     const label = SPECIAL_ACTION_LABELS[entry.kind];
@@ -26654,6 +27164,16 @@ function renderSpecialActions(state, hasPriority) {
     // a morph cost reads as mana symbols.
     button.innerHTML = renderSymbolsInline(label(entry.name, entry));
     button.title = "A special action (CR 116): it does not use the stack.";
+    if (entry.kind === "turn_face_up") {
+      // Said in full on hover: the whole price and, where the board changes
+      // it (Exiled Doomsayer's "All morph costs cost {2} more"), what it
+      // comes to in all.
+      const inAll = morphPriceInAll(entry);
+      button.dataset.morphPrice = morphPriceText(entry);
+      button.title = `Turn it face up for its morph cost (CR 702.37e, a special action: it does not use the stack).`
+        + (entry.cost_text ? ` Cost: ${entry.cost_text}.` : "")
+        + (inAll ? ` Morph costs are changed right now: you pay ${inAll} in all.` : "");
+    }
     button.addEventListener("click", () => {
       // Whichever address the entry carries: a hand slot for CR 116.2e and a
       // permanent id for 116.2c/116.2d. The server decides from the same two
@@ -26661,11 +27181,11 @@ function renderSpecialActions(state, hasPriority) {
       // price the taker chooses (CR 116.2d's graveyard cards or sacrifice) is
       // asked first, and the action goes out from that picker's Confirm.
       if (startSpecialActionCostPrompt(entry)) return;
-      // An X in the morph cost is announced first (CR 107.3d): the row of
-      // values takes this button's place, bounded by what can be paid.
-      if (entry.kind === "turn_face_up" && Number(entry.x_symbols) > 0) {
-        specialActionXFor = entry.permanent_id;
-        renderSpecialActions(currentState, true);
+      // A morph cost's own choices (which Bird, which two Mountains, which
+      // Zombie card), then an X in it (CR 107.3d: the row of values takes
+      // this button's place, bounded by what can be paid), then the action.
+      if (entry.kind === "turn_face_up") {
+        takeMorphOffer(entry);
         return;
       }
       sendSpecialAction(entry).catch((e) => updateActionHint(e.message, true));
