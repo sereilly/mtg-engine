@@ -197,3 +197,95 @@ def test_every_search_in_the_pool_may_fail_to_find_exactly_when_the_rules_say(
     assert searches >= _MIN_SEARCHES, searches
     assert len(unqualified) >= _MIN_UNQUALIFIED, unqualified
     assert not wrong, wrong
+
+
+# -- The exile search (SCG W2G2c) ---------------------------------------------
+#
+# ``search_and_exile_matching`` (prompt ``search_exile_cards``) is the same
+# sentence into an exile pile: "for three cards" (Foresight, Manipulate Fate),
+# "for five cards" (Mangara's Tome), "for seven cards" (Parallel Thoughts) name
+# no quality and must find that many; "any number of <quality> cards" (Mana
+# Severance, Skyship Weatherlight, Chandra, Heart of Fire) may find none. On
+# the day the arm was added all four bare quantities accepted the empty answer
+# (validated backwards against the floor switched off: the census names those
+# four and no other).
+
+#: Floors, because a sweep that reaches nothing passes: 7 distinct exile
+#: searches on the day, 4 of them a bare quantity.
+_MIN_EXILE_SEARCHES = 7
+_MIN_EXILE_UNQUALIFIED = 4
+
+
+def _armed_exile_searches(catalog_by_name):
+    """``(card name, game, choice)`` for every ``search_and_exile_matching``
+    step in the pool, both manifest roles, armed for an interactive seat."""
+    pool = load_cards(manifest_set_paths(include_measured=True))
+    deck = [
+        catalog_by_name[name]
+        for name in ("Forest", "Grizzly Bears", "Sol Ring", "Lightning Bolt",
+                     "Island", "Disenchant")
+    ] * 2
+    seen: set[tuple[str, str]] = set()
+    for unit in compilation_units(pool):
+        program = compile_card_oracle(unit)
+        if not program.supported:
+            continue
+        roots = list(program.instructions)
+        roots += [ability.instruction for ability in program.activated_abilities]
+        roots += [trigger.instruction for trigger in program.triggered_abilities]
+        for root in roots:
+            for step in _walk(root):
+                if step.kind != "search_and_exile_matching" or (unit.name, repr(step)) in seen:
+                    continue
+                seen.add((unit.name, repr(step)))
+                game, me, you = _duel(catalog_by_name, library=deck)
+                source = None
+                type_line = (unit.type_line or "").lower()
+                if "instant" not in type_line and "sorcery" not in type_line:
+                    source = Permanent(card=unit)
+                    me.battlefield.append(source)
+                game._execute_oracle_instruction(step, OracleExecutionContext(
+                    caster=me, target=you, card=unit,
+                    source_permanent=source, trigger_context={},
+                ))
+                for choice in game.pending_choices_of("search_exile_cards")[:1]:
+                    yield unit.name, game, choice
+
+
+@pytest.mark.cr("701.23d", "701.23b")
+def test_every_exile_search_in_the_pool_may_take_nothing_exactly_when_the_rules_say(
+    catalog_by_name,
+):
+    pool = load_cards(manifest_set_paths(include_measured=True))
+    searches = 0
+    unqualified: list[str] = []
+    wrong: list[str] = []
+    for name, game, choice in _armed_exile_searches(catalog_by_name):
+        searches += 1
+        data = choice.data
+        quality = game._exile_search_names_a_quality(data)
+        counted = data.get("maximum") is not None
+        if not quality:
+            # "Names no quality" and "admits every card" are one fact for this
+            # search's matcher too.
+            refused = [
+                card.name for card in pool
+                if not game._exile_search_matches(
+                    card, data, game=game, owner=choice.player_index,
+                )
+            ]
+            assert not refused, (name, refused[:3])
+            if counted:
+                unqualified.append(name)
+        took_nothing = game.confirm_search_exile(choice.player_index, [])
+        must_find = not quality and counted
+        if took_nothing == must_find:
+            wrong.append(
+                f"{name}: {'no quality' if not quality else 'a stated quality'}"
+                f"{', counted' if counted else ''} — the empty answer "
+                f"{'accepted' if took_nothing else 'refused'}"
+            )
+
+    assert searches >= _MIN_EXILE_SEARCHES, searches
+    assert len(unqualified) >= _MIN_EXILE_UNQUALIFIED, unqualified
+    assert not wrong, wrong
