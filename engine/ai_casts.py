@@ -51,6 +51,7 @@ from .ai_valuation import (
 )
 from .cast_costs import additional_costs, cast_announces_x
 from .cast_restrictions import check_cast_timing
+from .face_down import cast_announces_morph
 from .game import Game
 from .mixins.stack import aura_enchant_noun
 from .models import CardDefinition
@@ -75,6 +76,8 @@ from .ai_actions import (
 )
 from .ai_scoring import (
     _LIFE_X_ASKED,
+    _arrives_to_stay,
+    body_needs_the_board,
     _rehearse_announcement,
     _names_an_unweighed_seat,
     _worth_proposing,
@@ -1256,6 +1259,20 @@ def _cast_candidate_announcing(
                 _HELD_AS_FLEETING.set(True)
             return None
         if rehearsal is None and _names_an_unweighed_seat(game, player_index, card):
+            return None
+    elif body_needs_the_board(card) and not cast_announces_morph(
+        game, player_index, card, action,
+    ):
+        # ...and for a creature whose toughness a characteristic-defining
+        # ability fills in (CR 604.3), whether it **survives its arrival**:
+        # the board sizes it, and an empty one makes Ancient Ooze a 0/0 that
+        # dies as it enters (CR 704.5f) — cast so twice in seed 4242 (W1G4),
+        # because a permanent's score is what it is and nothing asked what
+        # the board would make of it. Not asked of a face-down cast, whose
+        # body is the 2/2 (CR 708.2a).
+        if not _arrives_to_stay(_rehearse_announcement(
+            game, player_index, card, cast_announcement(action), planned=action,
+        )):
             return None
     score = _score_cast(game, player_index, card, target, x_value, rehearsal)
     if from_zone == "command":
