@@ -42,7 +42,17 @@ def _client_reads(js: str, key: str) -> bool:
 #: ``outside_game_pick`` (W1G6, the Wishes), whose client is
 #: ``renderOutsideGamePickModal``, and Torment's ``madness_cast`` (W1G1),
 #: whose client is ``applyMadnessCastPrompt``.
-_AWAITING_CLIENT: dict[str, str] = {}
+_AWAITING_CLIENT: dict[str, str] = {
+    # Scourge W1G9, Forgotten Ancient's "you may move any number of +1/+1
+    # counters from this creature onto other creatures". The client reads
+    # ``state.counter_distribution`` ({card_name, counter, source_id, maximum,
+    # candidates: [{seat, index, id, name}]}), lets the seat give each
+    # candidate a whole number of counters with a running total held at
+    # ``maximum`` (none at all is legal), and sends
+    # ``counter_distribution_confirm`` with ``divided_targets`` — one
+    # ``{seat, id, amount}`` per creature given one or more.
+    "counter_distribution": "counter_distribution_confirm",
+}
 
 
 def test_every_prompt_has_a_client_renderer():
