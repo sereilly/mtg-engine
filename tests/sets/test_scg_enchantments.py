@@ -479,6 +479,136 @@ def test_w1g6_day_of_the_dragons_makes_a_dragon_for_each_creature_it_exiled(set_
     ]
     assert not game.players[0].exile
 
+
+# --- The drive list: Auras supported on arrival -----------------------------
+
+
+def _w1g6_attach(game, set_pool, seat, aura, host):
+    """Put *aura* onto the battlefield under *seat* attached to *host*."""
+    from engine.aura_attachment import attach_aura as _w1g6_attach_aura
+
+    permanent = _W1G6Permanent(card=_w1g6_card(set_pool, aura))
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    _w1g6_attach_aura(permanent, host)
+    game._recompute_continuous_effects()
+    return permanent
+
+
+def test_w1g6_extra_arms_has_the_attacker_deal_two_to_any_target(set_pool):
+    """"Whenever enchanted creature attacks, it deals 2 damage to any target."
+    The creature is the source, not the Aura."""
+    game = _w1g6_table(set_pool)
+    bears = _w1g6_enter(game, set_pool, 0, "Grizzly Bears")
+    _w1g6_attach(game, set_pool, 0, "Extra Arms", bears)
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, why = game.declare_attackers(0, [0], defending_player_index=1)
+    assert ok, why
+    assert [item.card.name for item in game.stack] == ["Extra Arms"]
+    _w1g6_settle(game)
+    assert game.players[1].life == 18
+    assert any("Grizzly Bears dealt 2 damage" in line for line in game.log)
+
+
+def test_w1g6_frozen_solid_keeps_its_host_tapped_and_destroys_it_when_dealt_damage(set_pool):
+    """It doesn't untap in its controller's untap step, and a Shock that
+    leaves a Hill Giant alive destroys it all the same."""
+    game = _w1g6_table(set_pool, hand=["Shock"])
+    giant = _w1g6_enter(game, set_pool, 0, "Hill Giant")
+    _w1g6_attach(game, set_pool, 1, "Frozen Solid", giant)
+    giant.tapped = True
+    game.start_turn(0)
+    assert giant.tapped
+    _w1g6_settle(game)
+    game._close_current_priority_step()
+    assert game.queue_from_hand(
+        0, "Shock", target_permanent_ids=[giant.permanent_id]
+    ).supported
+    _w1g6_settle(game)
+    assert not game.is_on_battlefield(giant)
+    assert "Frozen Solid destroyed Hill Giant" in game.log
+
+
+def test_w1g6_guilty_conscience_deals_its_host_what_it_dealt(set_pool):
+    """"Whenever enchanted creature deals damage, this Aura deals that much
+    damage to that creature." Unblocked, a Grizzly Bears deals 2 to the
+    defending player and is dealt 2 back — and dies."""
+    from tests.helpers import declare_attack as _w1g6_declare_attack
+
+    game = _w1g6_table(set_pool)
+    bears = _w1g6_enter(game, set_pool, 0, "Grizzly Bears")
+    _w1g6_attach(game, set_pool, 1, "Guilty Conscience", bears)
+    _w1g6_declare_attack(game, 0)
+    game.advance_combat_phase()
+    _w1g6_settle(game)
+    game.check_state_based_actions()
+    assert game.players[1].life == 18
+    assert not game.is_on_battlefield(bears)
+
+
+def test_w1g6_lingering_death_sacrifices_at_its_hosts_controllers_end_step(set_pool):
+    """At the end step of the enchanted creature's controller — not the Aura's
+    controller's — that player sacrifices it."""
+    game = _w1g6_table(set_pool)
+    bears = _w1g6_enter(game, set_pool, 1, "Grizzly Bears")
+    _w1g6_attach(game, set_pool, 0, "Lingering Death", bears)
+    game.resolve_end_step(0)
+    _w1g6_settle(game)
+    assert game.is_on_battlefield(bears)
+    game.resolve_end_step(1)
+    _w1g6_settle(game)
+    assert not game.is_on_battlefield(bears)
+    assert _w1g6_graveyard(game, 1) == ["Grizzly Bears"]
+
+
+def test_w1g6_one_with_nature_fetches_a_basic_land_tapped_on_combat_damage(set_pool):
+    """Combat damage to a player: the may searches for a basic land card and
+    puts it onto the battlefield tapped — never the Grizzly Bears beside it."""
+    from tests.helpers import declare_attack as _w1g6_declare_attack
+
+    game = _w1g6_table(set_pool)
+    game.players[0].library = [
+        _w1g6_card(set_pool, "Grizzly Bears"), _w1g6_card(set_pool, "Forest"),
+    ]
+    bears = _w1g6_enter(game, set_pool, 0, "Grizzly Bears")
+    _w1g6_attach(game, set_pool, 0, "One with Nature", bears)
+    _w1g6_declare_attack(game, 0)
+    game.advance_combat_phase()
+    _w1g6_settle(game)
+    (forest,) = [p for p in game.controlled_by(0) if p.card.name == "Forest"]
+    assert forest.tapped
+    assert [c.name for c in game.players[0].library] == ["Grizzly Bears"]
+
+
+def test_w1g6_form_of_the_dragon_sets_life_burns_and_grounds_attackers(set_pool):
+    """Each end step — anyone's (ruling 2004-10-04) — its controller's life
+    becomes 5, up or down; its upkeep deals 5 to any target; creatures without
+    flying can't attack its controller."""
+    game = _w1g6_table(set_pool)
+    _w1g6_enter(game, set_pool, 0, "Form of the Dragon")
+    bears = _w1g6_enter(game, set_pool, 1, "Grizzly Bears")
+    djinn = _w1g6_enter(game, set_pool, 1, "Mahamoti Djinn")
+    game.players[0].life = 12
+    game.resolve_end_step(1)
+    _w1g6_settle(game)
+    assert game.players[0].life == 5
+    game.players[0].life = 2
+    game.resolve_end_step(0)
+    _w1g6_settle(game)
+    assert game.players[0].life == 5
+    game.start_turn(0)
+    _w1g6_settle(game)
+    assert game.players[1].life == 15
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    # Seat 1's battlefield is the Bears (slot 0) and the Djinn (slot 1).
+    assert game.players[1].battlefield[0] is bears
+    ok, _why = game.declare_attackers(1, [0], defending_player_index=0)
+    assert not ok
+    assert game.players[1].battlefield[1] is djinn
+    ok, why = game.declare_attackers(1, [1], defending_player_index=0)
+    assert ok, why
+
 # ==== end W1G6 ======================================================
 
 

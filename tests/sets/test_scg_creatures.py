@@ -226,6 +226,78 @@ def test_w1g6_bladewing_the_risen_pumps_dragon_creatures(set_pool):
     game.resolve_cleanup_step(0)
     assert (theirs.effective_power, theirs.effective_toughness) == (5, 5)
 
+
+# --- The drive list: Dragons supported on arrival ---------------------------
+
+
+def test_w1g6_dragon_tyrant_is_kept_for_four_red_and_sacrificed_without(set_pool):
+    """"At the beginning of your upkeep, sacrifice this creature unless you
+    pay {R}{R}{R}{R}": four Mountains pay it, none cannot. It has flying,
+    trample and double strike, and "{R}: +1/+0" pumps it."""
+    for mountains in (4, 0):
+        game = _w1g6_table(set_pool)
+        tyrant = _w1g6_enter(game, set_pool, 0, "Dragon Tyrant")
+        lands = [_w1g6_enter(game, set_pool, 0, "Mountain") for _ in range(mountains)]
+        game.enforce_mana_costs = True
+        game.start_turn(0)
+        _w1g6_settle(game)
+        assert game.is_on_battlefield(tyrant) is bool(mountains)
+        assert all(land.tapped for land in lands)
+    game = _w1g6_table(set_pool)
+    tyrant = _w1g6_enter(game, set_pool, 0, "Dragon Tyrant")
+    assert all(
+        game._has_keyword(tyrant, word)
+        for word in ("flying", "trample", "double strike")
+    )
+    assert game.activate_permanent_ability(0, "Dragon Tyrant").supported
+    _w1g6_resolve_stack(game)
+    assert tyrant.effective_power == 7
+
+
+def test_w1g6_dragon_mage_wheels_both_hands_on_combat_damage(set_pool):
+    """"Whenever this creature deals combat damage to a player, each player
+    discards their hand, then draws seven cards." """
+    from tests.helpers import declare_attack as _w1g6_declare_attack
+
+    game = _w1g6_table(set_pool, hand=["Lightning Bolt", "Swamp"])
+    game.players[1].hand = [_w1g6_card(set_pool, "Forest")]
+    _w1g6_enter(game, set_pool, 0, "Dragon Mage")
+    _w1g6_declare_attack(game, 0)
+    game.advance_combat_phase()
+    _w1g6_settle(game)
+    assert game.players[1].life == 15
+    assert len(game.players[0].hand) == 7 and len(game.players[1].hand) == 7
+    assert sorted(c.name for c in game.players[0].graveyard) == ["Lightning Bolt", "Swamp"]
+    assert [c.name for c in game.players[1].graveyard] == ["Forest"]
+
+
+def test_w1g6_dragonstalker_blocks_a_dragon_unharmed_and_dragons_cannot_block_it(set_pool):
+    """"Protection from Dragons" (CR 702.16): blocking a Shivan Dragon it is
+    dealt nothing and deals its 3, and a Dragon cannot block it."""
+    game = _w1g6_table(set_pool)
+    stalker = _w1g6_enter(game, set_pool, 1, "Dragonstalker")
+    dragon = _w1g6_enter(game, set_pool, 0, "Shivan Dragon")
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.advance_combat_phase()
+    _w1g6_settle(game)
+    assert game.is_on_battlefield(stalker) and stalker.damage_marked == 0
+    assert dragon.damage_marked == 3
+
+    game = _w1g6_table(set_pool)
+    _w1g6_enter(game, set_pool, 0, "Dragonstalker")
+    _w1g6_enter(game, set_pool, 1, "Shivan Dragon")
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game.advance_combat_phase()
+    ok, why = game.declare_blockers(1, {0: 0})
+    assert not ok
+    assert "cannot block" in why
+
 # ==== end W1G6 ======================================================
 
 
