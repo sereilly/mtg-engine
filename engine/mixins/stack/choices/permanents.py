@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from ....handlers._common import apply_temp_pt_boost
 from ....handlers._filters import permanent_matches_filter
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 from ....mana_payment import plan_payment
 from ....subject_filters import subject_matches
 
@@ -992,3 +992,174 @@ class PermanentChoicesMixin:
     def _dismiss_face_down_look(self, choice: PendingChoice) -> bool:
         self.discard_pending_choice(choice)
         return True
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+TAP_ANY_NUMBER_SPEC = ChoiceSpec(
+    "tap_any_number",
+    resolve=lambda game, choice, r: game._resolve_tap_any_number(
+        choice, r.get("permanent_ids") or []
+    ),
+    default=lambda game, choice: game._default_tap_any_number(choice),
+    action="tap_any_number_confirm",
+    prompt_key="tap_any_number",
+    blocked_detail="choose which permanents to tap before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # "For each creature tapped this way, that player chooses…" (Raiding Party)
+    # is a later step of the same resolution, and what it walks is exactly what
+    # this prompt records — so the loop it is a step of has to stop until every
+    # seat has answered (CR 608.2, CR 608.2e).
+    #
+    # Siege Striker, the other card that arms this, needs neither: its boost is
+    # applied by this choice's own resolver, which is why the two printed
+    # sentences fuse into one instruction there. Suspending costs it nothing —
+    # the prompt is the last step of what armed it — and one prompt shared by
+    # both cards is cheaper than two that differ by a flag.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish
+    # before the sentence behind it can read what was tapped, and the stated
+    # default is taken where the effect stands.
+    default_at_arm=True,
+)
+
+UNTAP_UP_TO_SPEC = ChoiceSpec(
+    "untap_up_to",
+    resolve=lambda game, choice, r: game._resolve_untap_up_to(choice, r.get("permanent_ids") or []),
+    default=lambda game, choice: game._default_untap_up_to(choice),
+    action="untap_up_to_confirm",
+    prompt_key="untap_up_to",
+    blocked_detail="choose which permanents to untap before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # Deliberately not suspending: the untap is the last step of the effect
+    # that armed it, so nothing later in the same resolution reads the answer.
+)
+
+FACE_DOWN_LOOK_SPEC = ChoiceSpec(
+    "face_down_look",
+    resolve=lambda game, choice, r: game._dismiss_face_down_look(choice),
+    default=lambda game, choice: game._dismiss_face_down_look(choice),
+    action="dismiss_face_down_look",
+    prompt_key="face_down_look",
+    # "Look at target face-down creature" (Aven Soulgazer, Spy Network): a
+    # notification like ``hand_reveal`` — nothing waits on it. Unlike
+    # it, never shown to a seatless viewer: what a face-down permanent is
+    # belongs to its controller and to this looker alone (CR 708.5).
+    blocked_detail=None,
+)
+
+PLAYER_CHOICE_SPEC = ChoiceSpec(
+    "player_choice",
+    resolve=lambda game, choice, r: game._resolve_player_choice(choice, r.get("seat")),
+    default=lambda game, choice: game._default_player_choice(choice),
+    action="player_choice_confirm",
+    prompt_key="player_choice",
+    blocked_detail="choose a player for the resolving spell before other actions",
+    # The steps behind this one in the same sentence read the answer - the pick
+    # of "one of those spells" is narrowed by it, and the damage lands on the
+    # seat it names - so the loop they are part of has to stop until it exists.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands. That is also what
+    # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    # Who cast what this turn is public information (no CR 400.2 hidden zone is
+    # involved), so a seatless viewer may see the question.
+    spectator_visible=True,
+)
+
+CAST_CHOICE_SPEC = ChoiceSpec(
+    "cast_choice",
+    resolve=lambda game, choice, r: game._resolve_cast_choice(choice, r.get("cast_index")),
+    default=lambda game, choice: game._default_cast_choice(choice),
+    action="cast_choice_confirm",
+    prompt_key="cast_choice",
+    blocked_detail="choose one of those spells before other actions",
+    # Armed by the *answer* to the player choice above, and read by the damage
+    # step behind it - the chain of decisions that stays one resolution.
+    suspends=True,
+    default_at_arm=True,
+    spectator_visible=True,
+)
+
+PERMANENT_CHOICE_SPEC = ChoiceSpec(
+    "permanent_choice",
+    resolve=lambda game, choice, r: game._resolve_permanent_choice(choice, r["permanent_id"]),
+    default=lambda game, choice: game._default_permanent_choice(choice),
+    action="permanent_choice_confirm",
+    prompt_key="permanent_choice",
+    blocked_detail="choose a permanent for the resolving spell before other actions",
+    # The steps behind this one in the same sentence are what read the answer
+    # (Enchantment Alteration's attach), so the loop they are part of has to
+    # stop until it exists.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands. That is also what
+    # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    spectator_visible=True,
+)
+
+PERMANENT_SET_CHOICE_SPEC = ChoiceSpec(
+    "permanent_set_choice",
+    resolve=lambda game, choice, r: game._resolve_permanent_set_choice(
+        choice, r.get("permanent_ids") or []
+    ),
+    default=lambda game, choice: game._default_permanent_set_choice(choice),
+    action="permanent_set_choice_confirm",
+    prompt_key="permanent_set_choice",
+    blocked_detail="choose the permanents for the resolving effect before other actions",
+    # "Then destroy all Plains that weren't chosen this way by any player" is a
+    # later step of the same resolution and reads exactly what this records, so
+    # nothing may run past it (CR 608.2). The iteration behind it arms the next
+    # one, which is how a chain of decisions stays one resolution.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    spectator_visible=True,
+)
+
+OPPONENT_DAMAGE_SPEC = ChoiceSpec(
+    "opponent_damage",
+    resolve=lambda game, choice, r: game._resolve_opponent_damage_choice(
+        choice, r["target_seat"], r["target_permanent_index"],
+        r.get("permanent_id"),
+    ),
+    default=lambda game, choice: game._default_opponent_damage_choice(choice),
+    action="opponent_damage_choose",
+    prompt_key="opponent_damage_choice",
+    blocked_detail="choose a target for the opponent-choice damage before other actions",
+    default_at_arm=True,
+    # The answer deals the second half of the sentence's one dealing
+    # (``handlers/damage.deal_damage_and_opponent_choice``), whose finish is the
+    # loop's later step: it waits for the answer rather than closing the
+    # dealing before the opponent's half is dealt.
+    suspends=True,
+)
+
+LOYALTY_RECIPIENT_SPEC = ChoiceSpec(
+    "loyalty_recipient",
+    resolve=lambda game, choice, r: game._resolve_loyalty_recipient(
+        choice, r["permanent_id"]
+    ),
+    default=lambda game, choice: game._default_loyalty_recipient(choice),
+    action="loyalty_recipient_confirm",
+    prompt_key="loyalty_recipient",
+    blocked_detail="choose which planeswalker gets the loyalty counter before other actions",
+    # The trigger that armed this has to finish resolving, so a non-interactive
+    # seat never queues it — it takes the stated default where it stands.
+    default_at_arm=True,
+    # Nothing later in the same resolution reads the answer: the counter is the
+    # last thing the ability does.
+)

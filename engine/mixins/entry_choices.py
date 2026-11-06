@@ -18,6 +18,10 @@ one line of it:
 ``_default_cast_creature_type`` is the one default asked at a cast (CR
 601.2b) rather than an entry. It is here because it reads the same
 creature-type counts the entry default does.
+
+The prompt-table rows of the entry prompts answered here (``entry_exile``,
+``body_choice``, ``entry_reveal``) are at the foot, beside the methods they
+name, and ``mixins/stack/choices/table.py`` registers them in its order.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from __future__ import annotations
 from ..entry_choices import CHOSEN_COLOR_KEY
 from ..keywords import grant_keyword
 from ..models import Permanent, PlayerState
+from ..pending_choices import ChoiceSpec
 from ..pt import add_pt_counters, pt_counter_deltas, set_base_pt
 from ..static_bonuses import BASIC_LAND_WORDS
 
@@ -858,3 +863,69 @@ class EntryChoicesMixin:
                 ):
                     total += 1
         return total
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means).
+# ``stack/choices/table.py`` registers them, in the one list
+# ``Game.iter_pending_prompts`` reads.
+
+ENTRY_EXILE_SPEC = ChoiceSpec(
+    "entry_exile",
+    resolve=lambda game, choice, r: game._resolve_entry_exile(choice, r.get("picks")),
+    default=lambda game, choice: game._default_entry_exile(choice),
+    action="entry_exile_confirm",
+    prompt_key="entry_exile",
+    blocked_detail="exile the entering permanent's cards before other actions",
+    # The resolution that armed this has to finish, so a non-interactive seat
+    # never queues it: the stated default is taken where the entry stands, which
+    # is also what keeps AI and headless play from waiting on a prompt nobody
+    # will answer.
+    default_at_arm=True,
+    # A graveyard is a public zone (CR 400.2), so there is nothing here a
+    # seatless viewer may not already see - unlike `put_from_hand_choice` and
+    # `choose_cards_in_hand`, whose candidates would publish a hand.
+    spectator_visible=True,
+)
+
+BODY_CHOICE_SPEC = ChoiceSpec(
+    "body_choice",
+    resolve=lambda game, choice, r: game._resolve_body_choice(choice, r["option_index"]),
+    # Primal Clay's first printed body is applied as it enters for a seat
+    # nobody asks, so the default is already in place; a person has none
+    # applied until they answer (CR 614.12a), and the default applies it.
+    default=lambda game, choice: game._default_body_choice(choice),
+    action="body_choice_confirm",
+    prompt_key="body_choice",
+    blocked_detail="choose the entering creature's body before other actions",
+    default_at_arm=True,
+)
+
+ENTRY_REVEAL_SPEC = ChoiceSpec(
+    # "Amplify N" (CR 702.38a): "As this object enters, reveal any number of
+    # cards from your hand that share a creature type with it. This permanent
+    # enters with N +1/+1 counters on it for each card revealed this way." A
+    # choice of hand slots made as the permanent enters (CR 614.1c), answered
+    # with the slots to reveal (`hand_indices`), none included. The entry
+    # exile's arrangement with the hand where that has a graveyard: the
+    # permanent has not finished entering until it is answered, so the
+    # state-based sweep leaves a 0/0 Ghastly Remains alone meanwhile.
+    "entry_reveal",
+    resolve=lambda game, choice, r: game._resolve_entry_reveal(
+        choice, r.get("hand_indices")
+    ),
+    default=lambda game, choice: game._default_entry_reveal(choice),
+    action="entry_reveal_confirm",
+    prompt_key="entry_reveal",
+    blocked_detail="choose which cards to reveal for the entering creature's amplify before other actions",
+    # The resolution that put the permanent onto the battlefield has to finish,
+    # so a seat nobody asks takes the stated default where the entry stands.
+    default_at_arm=True,
+    # Deliberately *not* spectator_visible, for `choose_cards_in_hand`'s
+    # reason: the candidates are cards in a hand (CR 400.2, a hidden zone),
+    # and only the ones the seat chooses become public.
+)

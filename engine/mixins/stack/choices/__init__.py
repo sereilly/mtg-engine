@@ -7,15 +7,18 @@ finish through the one registered resolver, so there is a single completion
 path to keep correct rather than an inline branch and a ``confirm_`` method
 that must agree forever.
 
-``table.py`` is the index of every prompt in the engine: what answers it, what
-a non-interactive seat does instead, and how the web layer renders, gates and
-refuses around it. See ``engine/pending_choices.py`` for what each field means
-and why the table exists. ``tests/engine/test_pending_choices.py`` fails if a
-kind is armed with no spec, or registered with a part missing.
+Each kind's row of the prompt table — what answers it, what a non-interactive
+seat does instead, and how the web layer renders, gates and refuses around it
+— is a ``ChoiceSpec`` at the foot of its family's module, beside the methods
+it names, and ``table.py`` is the index of every prompt in the engine: the one
+list that registers them all. See ``engine/pending_choices.py`` for what each
+field means and why the table exists. ``tests/engine/test_pending_choices.py``
+fails if a kind is armed with no spec, registered with a part missing, or
+defined as a row and left out of the list.
 
 This package was one 13,312-line module, ``choices.py``. The queue the prompts
 wait on is one mixin; every family of prompt is a mixin of its own, holding
-its kinds' arm / ``confirm_*`` / resolver / default methods:
+its kinds' arm / ``confirm_*`` / resolver / default methods and their rows:
 
     queue          PendingChoicesMixin        arming, waiting, answering, defaults
     replacements   ReplacementChoicesMixin    CR 614 offers answered; CR 616.1e's order
@@ -38,14 +41,16 @@ where the one class they came out of sat. They are disjoint — no method is
 defined twice and none calls ``super()`` — so their order among themselves
 carries no meaning; methods of one family call another's through ``self``.
 
-**The table is one table in one module, and that is behaviour rather than
-tidiness.** ``iter_pending_prompts`` walks the registry in registration order,
-so the order of the rows decides which owed prompt an AI seat answers first
-(``web/prompts.auto_resolve_ai_prompts``), which one ``waiting_prompt`` says the
-game is waiting on, and which one ``blocking_prompt`` refuses an action with.
-Moving each family's rows into its module would make that order an accident of
-which module imports first. A new prompt is a row appended to ``table.py`` plus
-its methods in the family it belongs to.
+**The table's order is one list in one module, and that is behaviour rather
+than tidiness.** ``iter_pending_prompts`` walks the registry in registration
+order, so the order of the rows decides which owed prompt an AI seat answers
+first (``web/prompts.auto_resolve_ai_prompts``), which one ``waiting_prompt``
+says the game is waiting on, and which one ``blocking_prompt`` refuses an
+action with. A family registering its own rows would make that order an
+accident of which module imports first, so a family only *defines* its rows
+and ``table.py`` registers every one, in one list. A new prompt is its row and
+its methods in the family it belongs to, and the row's name appended at the
+bottom of ``table.py``'s list.
 """
 
 from .queue import PendingChoicesMixin
@@ -63,7 +68,7 @@ from .optional_pay import OptionalPayChoicesMixin
 from .triggers import TriggerChoicesMixin
 from .spells import SpellChoicesMixin
 from .sacrifice import SacrificeChoicesMixin
-# Imported last and for its side effect: every ``register_choice`` row, in
+# Imported last and for its side effect: every family's rows registered, in
 # the one order ``iter_pending_prompts`` reads them in.
 from . import table  # noqa: F401
 

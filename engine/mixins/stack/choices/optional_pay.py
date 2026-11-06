@@ -15,7 +15,7 @@ a card just drawn into a hand.
 from __future__ import annotations
 
 from dataclasses import replace
-from ....pending_choices import PendingChoice, optional_pay_options
+from ....pending_choices import ChoiceSpec, PendingChoice, optional_pay_options
 from ....resumption import run_resumable
 from ....mana_payment import plan_payment
 from ....oracle_types import OracleInstruction
@@ -1138,3 +1138,95 @@ def _compelled_block_declined(game, player_index: int, entry: dict) -> bool:
     from ....ai_compelled_blocks import compelled_block_declined
 
     return compelled_block_declined(game, player_index, entry)
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+PAY_LIFE_TO_SAVE_SPEC = ChoiceSpec(
+    "pay_life_to_save",
+    resolve=lambda game, choice, r: game._resolve_pay_life_to_save(choice, r["accept"]),
+    default=lambda game, choice: game._default_pay_life_to_save(choice),
+    action="pay_life_to_save_confirm",
+    prompt_key="pay_life_to_save",
+    blocked_detail="answer the pay-to-save offer before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The answer decides what the *next* step of the same resolution does with
+    # this permanent — and, one step later, whether the seat behind you is
+    # asked about it at all — so the loop genuinely stops here.
+    suspends=True,
+    # A non-interactive seat never queues it: the sweep has to finish, and the
+    # stated default is taken where the offer stands. That is also what keeps
+    # AI and headless play free of the suspension above.
+    default_at_arm=True,
+)
+
+OPTIONAL_PAY_SPEC = ChoiceSpec(
+    "optional_pay",
+    resolve=lambda game, choice, r: game._resolve_optional_pay(
+        choice, r["accept"], r.get("option"), asked=True,
+    ),
+    default=lambda game, choice: game._default_optional_pay(choice),
+    action="resolve_optional_pay",
+    prompt_key="optional_pay",
+    # The kind outgrew its first card: it now carries any optional cost or
+    # action, on a trigger or on a whole spell (Twiddle, Rebirth), so the
+    # message names the offer rather than the one card it was written for.
+    blocked_detail="answer the optional-cost offer before other actions",
+    # An offer priced in mana is paid by tapping for it, and the engine taps
+    # only free land abilities on a payer's behalf — so the seat's own mana
+    # abilities answer the offer as much as the yes does (CR 605.3a), exactly
+    # as they do for ``mana_payment``. The web layer admits a *mana*
+    # ability and nothing else while one of these is owed
+    # (``web/actions.py``): nobody has priority in the middle of a resolution.
+    also_answers=("tap", "activate"),
+    # **An offer is a step of the resolution that makes it** (CR 608.2c: the
+    # instructions are followed in the order written), so the steps behind it
+    # wait for the answer. It did not suspend, on the argument that only a
+    # step *reading* the answer needs to wait and that one could be folded
+    # into the offer's branch (``lowering/sequences._fold_into_offer``) — and
+    # every other step behind an offer ran before an interactive seat had
+    # answered: Grip of Amnesia drew its card before the counter was decided,
+    # Twitch drew before the caster chose whether to tap, Death Wish took the
+    # life before the wish was made. The census is
+    # ``tests/regressions/test_jud_w2g2_offer_tail_census.py``.
+    suspends=True,
+)
+
+REFLEXIVE_TARGET_SPEC = ChoiceSpec(
+    "reflexive_target",
+    resolve=lambda game, choice, r: game._resolve_reflexive_target(
+        choice, r["permanent_id"]
+    ),
+    default=lambda game, choice: game._default_reflexive_target(choice),
+    action="reflexive_target_confirm",
+    prompt_key="reflexive_target",
+    blocked_detail="choose the reflexive trigger's target before other actions",
+)
+
+DISCARD_UNLESS_PAY_LIFE_SPEC = ChoiceSpec(
+    "discard_unless_pay_life",
+    resolve=lambda game, choice, r: game._resolve_discard_unless_pay_life(
+        choice, r["accept"]
+    ),
+    default=lambda game, choice: game._default_discard_unless_pay_life(choice),
+    action="discard_unless_pay_life_confirm",
+    prompt_key="discard_unless_pay_life",
+    blocked_detail="answer the pay-or-discard offer before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The offer is armed from inside a CR 614 draw replacement, which may be
+    # replacing a draw that is itself one step of a resolution. Nothing of that
+    # resolution may run until this is answered (CR 608.2).
+    suspends=True,
+    # A non-interactive seat never queues it: a draw replacement has to finish
+    # where it stands, and the stated default is taken at once. That is also
+    # what keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+)

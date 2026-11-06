@@ -13,7 +13,7 @@ import random
 from ....faces import castable_faces, has_name, is_multi_face
 from ....grammar.phrases import BASIC_LAND_WORDS
 from ....models import Permanent
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 
 
 class CardNameChoicesMixin:
@@ -388,3 +388,69 @@ class CardNameChoicesMixin:
             choice, choice.data.get("default_name", "")
         ):
             self.discard_pending_choice(choice)
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+NAME_AND_STRIP_SPEC = ChoiceSpec(
+    "name_and_strip",
+    resolve=lambda game, choice, r: game._resolve_name_and_strip(choice, r["card_name"]),
+    default=lambda game, choice: game._default_name_and_strip(choice),
+    action="name_and_strip_confirm",
+    prompt_key="name_and_strip",
+    blocked_detail="name a card for the search before other actions",
+)
+
+CHOOSE_CARD_NAME_SPEC = ChoiceSpec(
+    "choose_card_name",
+    resolve=lambda game, choice, r: game._resolve_choose_card_name(
+        choice, r["card_name"]
+    ),
+    default=lambda game, choice: game._default_choose_card_name(choice),
+    action="choose_card_name_confirm",
+    prompt_key="choose_card_name",
+    blocked_detail="name a card before other actions",
+    # The sentences behind this read the name, and one of them mills: a seat
+    # that saw the milled card before naming would be choosing with information
+    # the card does not give them (CR 608.2, CR 117.3b).
+    suspends=True,
+)
+
+NAME_THEN_REVEAL_TOP_SPEC = ChoiceSpec(
+    "name_then_reveal_top",
+    resolve=lambda game, choice, r: game._resolve_name_then_reveal_top(
+        choice, r["card_name"]
+    ),
+    default=lambda game, choice: game._default_name_then_reveal_top(choice),
+    action="name_then_reveal_top_confirm",
+    prompt_key="name_then_reveal_top",
+    blocked_detail="name a card before other actions",
+)
+
+NAME_THEN_CONSULT_SPEC = ChoiceSpec(
+    "name_then_consult",
+    resolve=lambda game, choice, r: game._resolve_name_then_consult(
+        choice, r["card_name"]
+    ),
+    default=lambda game, choice: game._default_name_then_consult(choice),
+    action="name_then_consult_confirm",
+    prompt_key="name_then_consult",
+    blocked_detail="name a card for the consultation before other actions",
+)
+
+NAME_AND_RANDOM_REVEAL_SPEC = ChoiceSpec(
+    "name_and_random_reveal",
+    resolve=lambda game, choice, r: game._resolve_name_and_random_reveal(
+        choice, r["card_name"]
+    ),
+    default=lambda game, choice: game._default_name_and_random_reveal(choice),
+    action="name_and_random_reveal_confirm",
+    prompt_key="name_and_random_reveal",
+    blocked_detail="name a card for the reveal before other actions",
+)

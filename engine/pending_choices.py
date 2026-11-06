@@ -32,9 +32,11 @@ They are one table now. A choice is a :class:`PendingChoice` on
 ``Game.pending_choices``; a :class:`ChoiceSpec` registered here says how to
 answer it, what a non-interactive seat does instead, and how the web layer
 treats it. The three cascades in ``web/prompts.py`` loop over the queue instead of
-naming each kind, so adding an interactive choice is one ``register_choice``
-call plus the code that arms it — and
-``tests/engine/test_pending_choices.py`` fails if any part is missing.
+naming each kind, so adding an interactive choice is one ``ChoiceSpec`` row
+(beside its resolver, in its family's module, and named in the one
+``register_choices`` list in ``mixins/stack/choices/table.py``) plus the code
+that arms it — and ``tests/engine/test_pending_choices.py`` fails if any part
+is missing.
 
 ``engine/replacement_choices.py`` holds the same shape for replacement effects
 (CR 614) that suspend on a decision. Its ``ReplacementChoice`` carries the same
@@ -140,47 +142,21 @@ class ChoiceSpec:
 CHOICE_SPECS: dict[str, ChoiceSpec] = {}
 
 
-def register_choice(
-    kind: str,
-    *,
-    resolve: Resolver,
-    default: Defaulter,
-    action: str,
-    prompt_key: str,
-    also_answers: tuple[str, ...] = (),
-    blocked_detail: str | None = None,
-    default_at_arm: bool = False,
-    blocks_every_seat: bool = False,
-    spectator_visible: bool = False,
-    hidden_for_ai: bool = True,
-    is_open: Callable[[Any, PendingChoice], bool] | None = None,
-    suspends: bool = False,
-) -> ChoiceSpec:
-    """Register the one spec for a kind of pending choice.
+def register_choices(*specs: ChoiceSpec) -> None:
+    """Register the one spec for each kind of pending choice, in the order given.
 
-    A duplicate kind raises at import, matching ``@parse_rule`` and
-    ``@replacement_choice``: two specs for one kind would make which resolver
-    runs depend on import order, and the loser would fail silently.
+    The order is behaviour — ``Game.iter_pending_prompts`` yields owed prompts
+    in it — so it is given once, by the one caller,
+    ``mixins/stack/choices/table.py``; each row is a ``ChoiceSpec`` its family
+    module defines. A duplicate kind raises at import, matching
+    ``@parse_rule`` and ``@replacement_choice``: two specs for one kind would
+    make which resolver runs depend on import order, and the loser would fail
+    silently.
     """
-    if kind in CHOICE_SPECS:
-        raise ValueError(f"pending choice {kind!r} is already registered")
-    spec = ChoiceSpec(
-        kind=kind,
-        resolve=resolve,
-        default=default,
-        action=action,
-        prompt_key=prompt_key,
-        also_answers=also_answers,
-        blocked_detail=blocked_detail,
-        default_at_arm=default_at_arm,
-        blocks_every_seat=blocks_every_seat,
-        spectator_visible=spectator_visible,
-        hidden_for_ai=hidden_for_ai,
-        is_open=is_open,
-        suspends=suspends,
-    )
-    CHOICE_SPECS[kind] = spec
-    return spec
+    for spec in specs:
+        if spec.kind in CHOICE_SPECS:
+            raise ValueError(f"pending choice {spec.kind!r} is already registered")
+        CHOICE_SPECS[spec.kind] = spec
 
 
 def spec_for(kind: str) -> ChoiceSpec:

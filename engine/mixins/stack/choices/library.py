@@ -11,7 +11,7 @@ other player may buy into a graveyard.
 from __future__ import annotations
 
 import random
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 
 
 class LibraryChoicesMixin:
@@ -911,3 +911,119 @@ class LibraryChoicesMixin:
             self._draw_with_replacements(
                 player, queued_draws, exclude_sources=queued_exclude_sources
             )
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+LOOK_TOP_PICK_SPEC = ChoiceSpec(
+    "look_top_pick",
+    resolve=lambda game, choice, r: game._resolve_look_top_pick(choice, r.get("keep_index", -1)),
+    default=lambda game, choice: game._default_look_top_pick(choice),
+    action="look_top_pick_confirm",
+    prompt_key="look_top_pick",
+    blocked_detail="choose a card to keep before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The answer reshapes the library, and CR 608.2n's move to the graveyard
+    # is a later step of the same resolution — the scry discipline exactly.
+    suspends=True,
+)
+
+REORDER_LIBRARY_SPEC = ChoiceSpec(
+    "reorder_library",
+    resolve=lambda game, choice, r: game._resolve_reorder_library(choice, r["new_order"], r["shuffle"]),
+    default=lambda game, choice: game._default_reorder_library(choice),
+    action="reorder_library_confirm",
+    prompt_key="reorder_library",
+    blocked_detail="complete library reorder before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    # Same reason as scry: the answer *is* what the next card off the library
+    # will be.
+    suspends=True,
+)
+
+SCRY_SPEC = ChoiceSpec(
+    "scry",
+    resolve=lambda game, choice, r: game._resolve_scry(choice, r["card_order"], r["bottom_count"]),
+    default=lambda game, choice: game._default_scry(choice),
+    action="scry_confirm",
+    prompt_key="scry",
+    blocked_detail="complete scry before other actions",
+    # Same treatment as reorder_library: the scry suspends a resolution, so the
+    # whole game waits and a spectator sees that it is waiting. An AI seat stays
+    # queued and is drained by the auto-resolver, which keeps ordering
+    # deterministic per seed.
+    blocks_every_seat=True,
+    spectator_visible=True,
+    # "Scry 1. Draw a card." is the shape this field exists for: the draw is a
+    # later step of the same resolution and must see the library the scry
+    # arranged, not the one it was handed.
+    suspends=True,
+)
+
+REVEALED_DRAW_BUYOUT_SPEC = ChoiceSpec(
+    "revealed_draw_buyout",
+    resolve=lambda game, choice, r: game._resolve_revealed_draw_buyout(
+        choice, r["accept"]
+    ),
+    default=lambda game, choice: game._default_revealed_draw_buyout(choice),
+    action="revealed_draw_buyout_confirm",
+    prompt_key="revealed_draw_buyout",
+    blocked_detail="answer the revealed-card offer before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The answer decides what happens to the card the drawing player is about to
+    # draw -- and whether the seat behind you is asked at all -- so the replaced
+    # draw genuinely stops here.
+    suspends=True,
+    # A non-interactive seat never queues it: the draw it replaced has to
+    # finish, so the stated default is taken where the offer stands.
+    default_at_arm=True,
+)
+
+LIBRARY_CYCLE_OFFER_SPEC = ChoiceSpec(
+    "library_cycle_offer",
+    resolve=lambda game, choice, r: game._resolve_library_cycle_offer(
+        choice, bool(r.get("accept"))
+    ),
+    default=lambda game, choice: game._default_library_cycle_offer(choice),
+    action="library_cycle_confirm",
+    prompt_key="library_cycle_offer",
+    blocked_detail="answer the library cycle before other actions",
+    # Answering arms either the next round or the shuffle that ends the card,
+    # so nothing after it may run until it is answered (CR 608.2).
+    suspends=True,
+    # …and a non-interactive seat therefore takes its default the moment the
+    # offer is armed, or the resolution would stop on a prompt nobody answers.
+    default_at_arm=True,
+)
+
+LIBRARY_END_CHOICE_SPEC = ChoiceSpec(
+    "library_end_choice",
+    resolve=lambda game, choice, r: game._resolve_library_end_choice(
+        choice, bool(r.get("to_bottom"))
+    ),
+    default=lambda game, choice: game._default_library_end_choice(choice),
+    action="library_end_confirm",
+    prompt_key="library_end_choice",
+    blocked_detail="choose which end of the library before other actions",
+    # **Not** ``suspends``: the move *is* the answer and it is the last step of
+    # the sentence, so nothing behind it reads the record — which is the whole
+    # of what that field claims. ``blocked_detail`` is what makes the game wait
+    # (CR 608.2), and the permanent is still on the battlefield until the answer
+    # arrives, which is why no action may run in between.
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    # Which end of a library a card went to is public (both ends of CR 401.1's
+    # ordered zone are announced), so a seatless viewer may see the question.
+    spectator_visible=True,
+)

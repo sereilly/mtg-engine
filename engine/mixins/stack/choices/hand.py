@@ -23,7 +23,7 @@ import random
 from ....linked_exile import link_exiled_card
 from ....models import Permanent
 from ....grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 from ....search_filters import search_matches
 
 
@@ -1248,3 +1248,207 @@ class HandChoicesMixin:
     def _dismiss_hand_reveal(self, choice: PendingChoice) -> bool:
         self.discard_pending_choice(choice)
         return True
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+HAND_TO_LIBRARY_SPEC = ChoiceSpec(
+    "hand_to_library",
+    resolve=lambda game, choice, r: game._resolve_hand_to_library(
+        choice, r["hand_indices"], bool(r.get("to_bottom")),
+    ),
+    default=lambda game, choice: game._default_hand_to_library(choice),
+    action="hand_to_library_confirm",
+    prompt_key="hand_to_library",
+    blocked_detail="choose which cards go back on top of your library",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # Brainstorm draws three and then puts two back, and the two are steps of
+    # one resolution: nothing after the prompt may read a hand the answer has
+    # not reshaped yet (CR 608.2, CR 117.3b).
+    suspends=True,
+)
+
+REVEALED_HAND_PICK_SPEC = ChoiceSpec(
+    "revealed_hand_pick",
+    # ``.get``, not ``[...]``: an answer with **no** index is the chooser
+    # declining, which "choose **up to** X cards from it" (Discordant Dirge)
+    # permits and every earlier printing does not. The resolver is what decides
+    # whether the words were printed; a subscript here would make the decline a
+    # KeyError before it could be judged.
+    resolve=lambda game, choice, r: game._resolve_revealed_hand_pick(
+        choice, r.get("hand_index")
+    ),
+    default=lambda game, choice: game._default_revealed_hand_pick(choice),
+    action="revealed_hand_pick_confirm",
+    prompt_key="revealed_hand_pick",
+    blocked_detail="choose a card from the revealed hand before other actions",
+    # "…then you choose a card … from it. **Search that player's graveyard,
+    # hand, and library for all cards with the same name as the chosen card**…"
+    # (Lobotomy.) The step behind the pick reads what it chose, so it must not
+    # run while the choice is still owed (CR 608.2, CR 117.3b) — the same reason
+    # ``search_library`` suspends, and inert for every printing that has
+    # nothing behind the pick.
+    suspends=True,
+    # The revealed hand is public from the moment it is revealed (CR 701.20),
+    # so a spectator sees the prompt exactly as the choosing seat does.
+    spectator_visible=True,
+)
+
+DISCARD_SPEC = ChoiceSpec(
+    "discard",
+    resolve=lambda game, choice, r: game._resolve_discard(choice, r["hand_indices"], r["to_library"]),
+    default=lambda game, choice: game._default_discard(choice),
+    action="discard_confirm",
+    prompt_key="discard_select",
+    blocked_detail="complete discard before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    # "Discard X cards, then <do something for each card discarded this way>"
+    # (Recall) is the shape: the step behind the discard has to see the cards
+    # that were actually discarded, not the hand as it stood when the prompt was
+    # armed. CR 608.2 / CR 117.3b — nothing else in the resolution happens until
+    # the last of its prompts is answered.
+    suspends=True,
+)
+
+HAND_REVEAL_SPEC = ChoiceSpec(
+    "hand_reveal",
+    resolve=lambda game, choice, r: game._dismiss_hand_reveal(choice),
+    default=lambda game, choice: game._dismiss_hand_reveal(choice),
+    action="dismiss_hand_reveal",
+    prompt_key="hand_reveal",
+    # Not a decision — the viewer has already seen the hand. Nothing waits on it.
+    blocked_detail=None,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+EXILE_FROM_HAND_CHOICE_SPEC = ChoiceSpec(
+    "exile_from_hand_choice",
+    resolve=lambda game, choice, r: game._resolve_exile_from_hand_choice(
+        choice, r.get("hand_index")
+    ),
+    default=lambda game, choice: game._default_exile_from_hand_choice(choice),
+    action="exile_from_hand_confirm",
+    prompt_key="exile_from_hand_choice",
+    blocked_detail="choose a card to exile before other actions",
+    # The sentence behind this one reads what was exiled ("you may cast that
+    # card for as long as it remains exiled"), so nothing after it may run
+    # until it is answered (CR 608.2).
+    suspends=True,
+    # …and a non-interactive seat therefore never queues it: the rest of the
+    # activation — the charge counter and the mana note — has to finish, which
+    # is the same reason `cast_choice` and `pay_life_to_save` take their default
+    # where the offer stands.
+    default_at_arm=True,
+    # A hand is hidden (CR 400.2), so the options are the chooser's alone.
+    hidden_for_ai=False,
+)
+
+EXILE_HAND_PILE_CHOICE_SPEC = ChoiceSpec(
+    "exile_hand_pile_choice",
+    resolve=lambda game, choice, r: game._resolve_exile_hand_pile(
+        choice, r.get("hand_indices") or []
+    ),
+    default=lambda game, choice: game._default_exile_hand_pile(choice),
+    action="exile_hand_pile_confirm",
+    prompt_key="exile_hand_pile_choice",
+    blocked_detail="choose which cards to exile before other actions",
+    # "Put **that many** cards from the top of your library into your hand" is
+    # the next step of the same resolution and reads what this exiled, so
+    # nothing after it may run until it is answered (CR 608.2).
+    suspends=True,
+    # A hand is hidden (CR 400.2), so the options are the chooser's alone.
+    hidden_for_ai=False,
+)
+
+PUT_FROM_HAND_CHOICE_SPEC = ChoiceSpec(
+    "put_from_hand_choice",
+    resolve=lambda game, choice, r: game._resolve_put_from_hand_choice(
+        choice, r.get("hand_index")
+    ),
+    default=lambda game, choice: game._default_put_from_hand_choice(choice),
+    action="put_from_hand_confirm",
+    prompt_key="put_from_hand_choice",
+    blocked_detail="choose a card to put onto the battlefield before other actions",
+    # The round this is a step of counts the answers to decide whether it
+    # happens again (Eureka), so the loop genuinely stops here.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands. That is also what
+    # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    # Deliberately *not* spectator_visible, unlike ``permanent_choice``: the
+    # candidates are cards in a hand (CR 400.2, a hidden zone), so rendering them
+    # to a seatless viewer would publish the hand. Only the seat that owes the
+    # decision is shown it.
+)
+
+CHOOSE_CARDS_IN_HAND_SPEC = ChoiceSpec(
+    "choose_cards_in_hand",
+    resolve=lambda game, choice, r: game._resolve_choose_cards_in_hand(
+        choice, r.get("hand_indices")
+    ),
+    default=lambda game, choice: game._default_choose_cards_in_hand(choice),
+    action="choose_cards_in_hand_confirm",
+    prompt_key="choose_cards_in_hand",
+    blocked_detail="choose the cards in your hand before other actions",
+    blocks_every_seat=True,
+    # The pick is what the next step of the same resolution repeats over, so
+    # that step must not run before the answer exists.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands. That is also what
+    # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    # Deliberately *not* spectator_visible, for ``put_from_hand_choice``'s
+    # reason: the candidates are cards in a hand (CR 400.2, a hidden zone), so
+    # rendering them to a seatless viewer would publish the hand.
+)
+
+OUTSIDE_GAME_PICK_SPEC = ChoiceSpec(
+    # "You may reveal a sorcery card you own from outside the game and put it
+    # into your hand." (The Judgment Wishes.) CR 400.11b's card brought into
+    # the game: a position in the seat's own sideboard, checked against the
+    # printed phrase the pick was armed with.
+    #
+    # Not Ring of Ma'rûf's ``outside_game_draw`` with a type narrowing. That
+    # one is a CR 614 replacement choice, answered inside the draw it replaced
+    # and resolving the draws queued behind it (CR 121.2); this is a step of a
+    # resolving spell, held on ``pending_choices`` with the stack object until
+    # it is answered (CR 608.2). The two share the reader of what may come in
+    # (``Game._outside_game_choices``) and the mover (``Game.
+    # bring_card_from_outside_game``), not a queue.
+    "outside_game_pick",
+    resolve=lambda game, choice, r: game._resolve_outside_game_pick(
+        choice, r.get("sideboard_index")
+    ),
+    default=lambda game, choice: game._default_outside_game_pick(choice),
+    action="outside_game_pick_confirm",
+    prompt_key="outside_game_pick",
+    blocked_detail=(
+        "choose a card you own from outside the game before other actions"
+    ),
+    # **Not** ``suspends``: the move *is* the answer, and nothing printed
+    # behind it reads the card it brings in — the Wishes' "Exile <this>" and
+    # Death Wish's life loss stand behind the "you may" offer, which does not
+    # suspend either, and Ring of Ma'rûf's pick is a replacement's whole
+    # effect. ``blocked_detail`` is what makes the game wait (CR 608.2). A card
+    # printing a step that reads the brought-in card is the one that makes
+    # this a suspending kind (and a row in ``tests/engine/
+    # test_pending_choices.py``'s ratchet).
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    # Deliberately *not* spectator_visible: the candidates are the seat's
+    # sideboard, which ``web/serialization`` keeps private like a hand — so
+    # only the seat that owes the decision is shown them.
+)

@@ -25,7 +25,7 @@ applies first (CR 616.1e, armed by ``engine/effect_ordering.py``).
 
 from __future__ import annotations
 
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 from ....replacement_choices import pending_choices_for, resolve_choice
 from ....resumption import resume_after_answer
 
@@ -359,3 +359,207 @@ class ReplacementChoicesMixin:
         default order). Reached when a seat stops being interactive with the
         prompt still queued."""
         self._resolve_effect_order(choice, 0)
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+EFFECT_ORDER_SPEC = ChoiceSpec(
+    "effect_order",
+    resolve=lambda game, choice, r: game._resolve_effect_order(choice, r["option_index"]),
+    default=lambda game, choice: game._default_effect_order(choice),
+    action="effect_order_confirm",
+    prompt_key="effect_order",
+    blocked_detail="choose which effect applies first before other actions",
+    # The event this interrupts has not happened yet — a draw that is waiting on
+    # the answer has not drawn, damage waiting on it has not been dealt — so no
+    # seat should be acting on a board that is mid-event.
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The one kind that has always suspended: CR 616.1e stops an event dead, and
+    # the loop that event was a step of has to stop with it. The flag it used to
+    # set by hand in engine/replacements/ is this field.
+    suspends=True,
+)
+
+# Replacement effects that suspend on a decision (CR 614) keep their own queue —
+# see engine/replacement_choices.py — but they are prompts like any other, so
+# they are described here too and the web layer treats both queues alike.
+# ``ReplacementChoice`` carries the same kind / player_index / data attributes,
+# which is why no adapter is needed.
+
+def _resolve_replacement(game, choice, response) -> bool:
+    return bool(game.resolve_replacement_choice(
+        choice.player_index, response["option"], kind=choice.kind
+    ))
+
+
+def _default_replacement(game, choice) -> None:
+    game.resolve_replacement_choice(
+        choice.player_index, choice.default_option, kind=choice.kind
+    )
+
+
+COMMANDER_ZONE_CHANGE_SPEC = ChoiceSpec(
+    "commander_zone_change",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="commander_zone_change_confirm",
+    prompt_key="commander_zone_change",
+    blocked_detail="choose whether your commander goes to the command zone before other actions",
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+LENG_DISCARD_SPEC = ChoiceSpec(
+    "leng_discard",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="leng_discard_confirm",
+    prompt_key="leng_discard",
+    blocked_detail="choose where the discarded card goes (Library of Leng) before other actions",
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+OPTIONAL_DAMAGE_REDIRECT_SPEC = ChoiceSpec(
+    "optional_damage_redirect",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="optional_damage_redirect_confirm",
+    prompt_key="optional_damage_redirect",
+    blocked_detail=(
+        "choose whether you take the damage headed for that creature before "
+        "other actions"
+    ),
+    # The damage event that armed this is over — it was consumed so that both
+    # answers could run through one resolver — so nothing is waiting on the
+    # answer to carry on. A non-interactive seat takes the stated policy where
+    # it stands, exactly as the three offers above do.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+ENTRY_DISCARD_TOLL_SPEC = ChoiceSpec(
+    "entry_discard_toll",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="entry_discard_toll_confirm",
+    prompt_key="entry_discard_toll",
+    blocked_detail=(
+        "choose whether to discard a card to put that permanent onto the "
+        "battlefield (Mox Diamond) before other actions"
+    ),
+    # The entry that armed this was consumed so that both answers run through
+    # one resolver - the permanent is put onto the battlefield by the resolver
+    # itself - so nothing is waiting on the answer to carry on.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+DRAW_BECOMES_COUNTER_SPEC = ChoiceSpec(
+    "draw_becomes_counter",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="draw_becomes_counter_confirm",
+    prompt_key="draw_becomes_counter",
+    blocked_detail=(
+        "choose whether to take the counter instead of the draw (Pursuit of "
+        "Knowledge) before other actions"
+    ),
+    # The draw that armed this was consumed so that both the answer and the
+    # default run through one resolver, and the draw a decline remakes is the
+    # resolver's own business - so nothing is waiting on the answer to carry
+    # on, exactly as for the offers around it.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+REVEAL_UNTIL_KIND_DRAW_SPEC = ChoiceSpec(
+    "reveal_until_kind_draw",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="reveal_until_kind_draw_confirm",
+    prompt_key="reveal_until_kind_draw",
+    blocked_detail=(
+        "choose whether to reveal until a land or nonland card (Abundance) "
+        "before other actions"
+    ),
+    # The draw that armed this was consumed so that every answer - both kinds
+    # and the decline - runs through one resolver, and the draw a decline
+    # remakes is the resolver's own business. So nothing inside the resolution
+    # is waiting on the answer, exactly as for the offers around it.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+SKIP_DRAW_SPEC = ChoiceSpec(
+    # "If you would draw a card, you may skip that draw instead." (Obstinate
+    # Familiar.) The third optional replacement of one draw, registered the
+    # way the two above are and for their reasons: the draw that armed it was
+    # consumed, both answers run through one resolver, and a non-interactive
+    # seat takes the stated default where it stands.
+    "skip_draw",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="skip_draw_confirm",
+    prompt_key="skip_draw",
+    blocked_detail=(
+        "choose whether to skip that draw (Obstinate Familiar) before other "
+        "actions"
+    ),
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+LAMP_DRAW_SPEC = ChoiceSpec(
+    "lamp_draw",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="lamp_draw_confirm",
+    prompt_key="lamp_draw",
+    blocked_detail="choose a card for Aladdin's Lamp before other actions",
+    default_at_arm=True,
+)
+
+OUTSIDE_GAME_DRAW_SPEC = ChoiceSpec(
+    "outside_game_draw",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="outside_game_draw_confirm",
+    prompt_key="outside_game_draw",
+    blocked_detail="choose a card from outside the game before other actions",
+    default_at_arm=True,
+)
+
+RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_SPEC = ChoiceSpec(
+    "return_from_graveyard_instead_of_draw",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="graveyard_return_draw_confirm",
+    prompt_key="return_from_graveyard_instead_of_draw",
+    blocked_detail=(
+        "choose which card comes back from your graveyard (Forbidden Crypt) "
+        "before other actions"
+    ),
+    # The draw that armed this was consumed so that both the answer and the
+    # default run through one resolver, and the draws queued behind it are the
+    # resolver's own business - so nothing is waiting on the answer to carry on,
+    # exactly as for the four offers above.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
