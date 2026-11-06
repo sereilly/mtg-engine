@@ -1000,6 +1000,49 @@ SEAT_FILTER_KEYS = frozenset({
     "played_by", "cast_by_you_this_turn",
 })
 
+#: The payload key ``all`` means **two different things**, by kind, and the
+#: payload cannot say which. In the global pumps below it is the seat word:
+#: ``all: True`` is "**All** creatures get -1/-0" (Bone Flute), "Red creatures
+#: get +1/+1" (Goblin Soothsayer) — every player's creatures — and ``all:
+#: False`` is "creatures **you control**" (``grammar/lowering/characteristics``
+#: writes ``filt.controller != "you"``; ``handlers/pump.global_buff_affected``
+#: walks every seat or the caster's). Everywhere else it is the *quantity*:
+#: "sacrifice **all** creatures you control" (Day of the Dragons,
+#: ``sacrifice_matching_permanent``), "put **all** land cards from your hand
+#: onto the battlefield" (Manabond) — every matching object of one seat's. So
+#: the kinds that read it as a seat are named, and every kind in the pool
+#: whose payload carries ``all`` is held to one reading or the other by
+#: ``tests/ai/test_kg4_aivalue_both_sides_pumps.py``.
+#:
+#: A pump in one of these kinds that carries ``all`` and no seat of its own
+#: (``opponents_only``: "Creatures your opponents control", Massacre Wurm;
+#: a ``controller`` key: "Creatures target player controls", Day) lands on
+#: both sides of the table (:func:`reaches_both_sides`).
+ALL_MEANS_EVERY_SEAT_KINDS = frozenset({
+    "buff_creatures_global", "buff_creatures_global_while_source_tapped",
+})
+#: …and the kinds whose ``all`` is the quantity, one seat's every match.
+ALL_MEANS_EVERY_MATCH_KINDS = frozenset({
+    "sacrifice_matching_permanent", "put_cards_from_hand_onto_battlefield",
+})
+#: The keys that put a seat in a global pump's payload beside ``all``.
+_GLOBAL_PUMP_SEAT_KEYS = SEAT_FILTER_KEYS | {"opponents_only"}
+
+
+def pumps_every_seat(step: OracleInstruction) -> bool:
+    """Whether *step* is a global pump over **every player's** creatures —
+    ``all`` read as the seat word it is in :data:`ALL_MEANS_EVERY_SEAT_KINDS`,
+    with no seat narrowing beside it. "All creatures get -1/-0 until end of
+    turn" (Bone Flute), "Dragon creatures get +1/+1 until end of turn"
+    (Bladewing the Risen), "All creatures get +2/+2 for as long as this
+    artifact remains tapped" (Thran Weaponry)."""
+    payload = getattr(step, "payload", None) or {}
+    return (
+        getattr(step, "kind", None) in ALL_MEANS_EVERY_SEAT_KINDS
+        and payload.get("all") is True
+        and not _GLOBAL_PUMP_SEAT_KEYS & set(payload)
+    )
+
 
 def swept_filter(payload: dict) -> "dict | None":
     """The noun phrase a step's effect sweeps — every permanent it names, not
@@ -1070,12 +1113,22 @@ def reaches_both_sides(instruction: OracleInstruction | None) -> bool:
     less" tapped its own controller's Mercurial Kite in the main phase, and
     Kill Switch, Aboshan, Pernicious Deed and Powder Keg were scored as if
     their sweep stopped at the table's edge.
+
+    …and a **global pump** over every player's creatures
+    (:func:`pumps_every_seat`), whose ``all`` is its seat word and no filter
+    at all, so the sweep reader cannot see it. Read as aimed until kg4: Bone
+    Flute's and Fyndhorn Pollen's "-1/-0", Thran Weaponry's "+2/+2",
+    Bladewing the Risen's and Nemata's tribal "+1/+1" were each activated in
+    their controller's main phase with every creature they reached on the
+    other side of the table.
     """
     if instruction is None:
         return False
     for step in _effect_steps(instruction):
         payload = getattr(step, "payload", None) or {}
         if any(value == EVERY_PLAYER for value in payload.values()):
+            return True
+        if pumps_every_seat(step):
             return True
         described = swept_filter(payload)
         if described is not None and not SEAT_FILTER_KEYS & set(described):
@@ -1327,6 +1380,8 @@ def library_top_setups(card: CardDefinition, x_value: "int | None" = None) -> tu
 
 
 __all__ = [
+    "ALL_MEANS_EVERY_MATCH_KINDS",
+    "ALL_MEANS_EVERY_SEAT_KINDS",
     "DRAW_REPLACEMENT_ARMINGS",
     "EVERY_PLAYER",
     "MANA_ABILITY_KINDS",
@@ -1354,6 +1409,7 @@ __all__ = [
     "hand_pick_entry_consumer",
     "offer_buys_a_drawback_to_its_source",
     "planned_mana_yield",
+    "pumps_every_seat",
     "reaches_both_sides",
     "returns_creature_to_hand",
     "source_toughness_change",
