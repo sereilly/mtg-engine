@@ -87,15 +87,6 @@ _STORM_PART = "storm"
 #: than a set, read by :func:`copies_for_each` and by nothing else.
 SPELLS_CAST_BEFORE_IT = "other_spell_cast_before_it_this_turn"
 
-#: What one instance of storm says, in the CR's words (702.40a) rather than the
-#: reminder text's: the reminder says "for each spell cast before it", and the
-#: rule says "each **other** spell that was cast before it". The rule wins.
-STORM_RULES_TEXT = (
-    "When you cast this spell, copy it for each other spell that was cast "
-    "before it this turn. If the spell has any targets, you may choose new "
-    "targets for any of the copies."
-)
-
 #: The spell types storm is carried out on. A copy of anything else is a copy
 #: of a permanent spell (CR 707.10f), which the stack does not yet build.
 _STORM_SPELL_TYPES = frozenset({"instant", "sorcery"})
@@ -205,7 +196,6 @@ def copies_for_each(game, counted: str, copied) -> int | None:
 __all__ = [
     "SPELLS_CAST_BEFORE_IT",
     "STORM_LABEL",
-    "STORM_RULES_TEXT",
     "copies_for_each",
     "is_storm",
     "spells_cast_before",

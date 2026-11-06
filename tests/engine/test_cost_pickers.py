@@ -93,6 +93,23 @@ _PICKERLESS_CAST_COSTS: dict[str, str] = {
     # pinned beside the card it shares the gap with rather than papered over
     # by a spec no client surface reads.
     "Skeletal Scrying": "wire field exists; no cast-side X-sized graveyard set spec or client picker",
+    # "As an additional cost to cast this spell, exile X creature cards from
+    # your graveyard. Target creature gets -X/-X until end of turn."
+    # (Scourge.) Haunting Misery's cost word for word, beside a creature
+    # target. Pinned with its two siblings at SCG W1G1 rather than given the
+    # spec alone, because the spec alone is a browser regression for all
+    # three: ``startCastCostPrompt`` (web/static/app.js) has no branch for a
+    # cast-side graveyard cost, so a ``cost_spec`` of kind
+    # ``graveyard_creature`` with ``exile_cost`` falls through to
+    # ``startCastCostPermanentPrompt`` — a battlefield picker over graveyard
+    # options, which reports "nothing it can exile" and blocks the cast. Today
+    # the three cast and pay with the top of the pile. The engine half
+    # (``cost_pickers._cost_picker_specs`` reading ``exile_graveyard_filter``
+    # with ``announces_x``) and the client half (the zone-cast set picker,
+    # ``x_value = picked.length``, ``cost_graveyard_indices``) land together.
+    # The cast route already takes the slots: ``tests/sets/test_scg_instants.py``
+    # drives Chill Haunting's cast through it.
+    "Chill Haunting": "wire field exists; no cast-side X-sized graveyard set spec or client picker",
     # "As an additional cost to cast this spell, return X Swamps you control to
     # their owner's hand." The charger already honours ``cost_permanent_ids``
     # (cast_additional_costs.py's return branch); what is missing is the whole announcement:

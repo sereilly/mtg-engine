@@ -19,7 +19,8 @@ it"), where Fork's had left a graveyard target and a second chosen mode
 behind.
 
 Census, both manifest roles: one card compiles to Fork's kind
-(``copy_top_stack_spell``), two to the trigger's (``copy_triggering_spell``);
+(``copy_top_stack_spell``), two to the trigger's (``copy_triggering_spell``),
+and Scourge's twelve storm cards to the trigger's with a count (CR 702.40a);
 see ``test_every_spell_copier_...`` below.
 """
 from __future__ import annotations
@@ -246,6 +247,19 @@ def test_every_spell_copier_asks_a_person_who_named_no_new_target(catalog_by_nam
                     if "instant" not in (unit.type_line or "").lower():
                         source = Permanent(card=unit)
                         game._put_permanent_onto_battlefield(0, source, None)
+                    if step.payload.get("for_each"):
+                        # A copy counted by the turn's casts (storm, CR
+                        # 702.40a: one per spell cast before it). The Bolt is
+                        # recorded as the turn's second cast, so the step
+                        # makes exactly one copy to ask about.
+                        from engine.damage_ledger import record_cast
+
+                        record_cast(game, StackItem(
+                            card=catalog_by_name["Lightning Bolt"], caster_index=1,
+                            target_player_index=0, target_permanent_index=None,
+                            x_value=None,
+                        ))
+                        record_cast(game, bolt)
                     game._execute_oracle_instruction(step, OracleExecutionContext(
                         caster=me, target=you, card=unit, source_permanent=source,
                         stack_target=bolt,
