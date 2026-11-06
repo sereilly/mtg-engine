@@ -12,20 +12,20 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**47 of 5993 supported cards (0.8%)** carry at least one name-keyed entry, across **52 entries** in 6 registries. The pool is 5993 cards, 100.0% supported.
+**46 of 5993 supported cards (0.8%)** carry at least one name-keyed entry, across **51 entries** in 6 registries. The pool is 5993 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **227 hand-written entries** covering **205 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **222 hand-written entries** covering **200 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 26 (9.0%) | 388 | 24 (6.2%) | 29 | 10.0 |
-| LEB | 292 | 292 (100.0%) | 26 (8.9%) | 389 | 24 (6.2%) | 29 | 9.9 |
-| 2ED | 292 | 292 (100.0%) | 26 (8.9%) | 389 | 24 (6.2%) | 29 | 9.9 |
+| LEA | 290 | 290 (100.0%) | 25 (8.6%) | 388 | 23 (5.9%) | 28 | 9.7 |
+| LEB | 292 | 292 (100.0%) | 25 (8.6%) | 389 | 23 (5.9%) | 28 | 9.6 |
+| 2ED | 292 | 292 (100.0%) | 25 (8.6%) | 389 | 23 (5.9%) | 28 | 9.6 |
 | ARN | 78 | 78 (100.0%) | 15 (19.2%) | 107 | 13 (12.1%) | 17 | 21.8 |
 | ATQ | 85 | 85 (100.0%) | 3 (3.5%) | 120 | 3 (2.5%) | 3 | 3.5 |
-| 3ED | 296 | 296 (100.0%) | 21 (7.1%) | 389 | 20 (5.1%) | 23 | 7.8 |
+| 3ED | 296 | 296 (100.0%) | 20 (6.8%) | 389 | 19 (4.9%) | 22 | 7.4 |
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
 | DRK | 119 | 119 (100.0%) | 1 (0.8%) | 167 | 1 (0.6%) | 1 | 0.8 |
 | FEM | 102 | 102 (100.0%) | 0 (0.0%) | 190 | 0 (0.0%) | 0 | 0.0 |
@@ -57,8 +57,8 @@ Held at this rate, supporting the 26,113-card release line would need about **22
 | ONS | 335 | 335 (100.0%) | 0 (0.0%) | 545 | 0 (0.0%) | 0 | 0.0 |
 | LGN | 145 | 145 (100.0%) | 0 (0.0%) | 235 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| SCG *(measured)* | 143 | 88 (61.5%) | 0 (0.0%) | 165 | 0 (0.0%) | 0 | 0.0 |
-| **Whole pool (shipped, deduped)** | **5993** | **5993 (100.0%)** | **47 (0.8%)** | **9401** | **43 (0.5%)** | **52** | **0.9** |
+| SCG *(measured)* | 143 | 98 (68.5%) | 0 (0.0%) | 180 | 0 (0.0%) | 0 | 0.0 |
+| **Whole pool (shipped, deduped)** | **5993** | **5993 (100.0%)** | **46 (0.8%)** | **9401** | **42 (0.4%)** | **51** | **0.9** |
 
 *(measured)* — SCG are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -68,7 +68,7 @@ Held at this rate, supporting the 26,113-card release line would need about **22
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 42 | 43 |
+| `CARD_LINE_INSTRUCTIONS` | 41 | 42 |
 | `ON_LEAVE_BATTLEFIELD` | 5 | 5 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ON_SELF_RESOLVED` | 1 | 1 |
@@ -97,7 +97,6 @@ Held at this rate, supporting the 26,113-card release line would need about **22
 - **False Orders** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Farmstead** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Forcefield** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Fork** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Guardian Angel** (`CARD_LINE_INSTRUCTIONS`, `ON_SELF_RESOLVED`) — 1 line
 - **Guardian Beast** (`UNTAPPED_ARTIFACT_PROTECTORS`)
 - **Hurkyl's Recall** (`CARD_LINE_INSTRUCTIONS`) — 1 line

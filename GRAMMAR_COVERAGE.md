@@ -16,12 +16,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 89.2% | 87.6% | 50.5% | 177 |
-| LEB | 292 | 389 | 89.2% | 87.7% | 50.6% | 178 |
-| 2ED | 292 | 389 | 89.2% | 87.7% | 50.6% | 178 |
+| LEA | 290 | 388 | 89.4% | 87.9% | 50.8% | 178 |
+| LEB | 292 | 389 | 89.5% | 87.9% | 50.9% | 179 |
+| 2ED | 292 | 389 | 89.5% | 87.9% | 50.9% | 179 |
 | ARN | 78 | 108 | 83.3% | 79.6% | 57.4% | 51 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
-| 3ED | 296 | 389 | 90.7% | 88.7% | 52.4% | 183 |
+| 3ED | 296 | 389 | 91.0% | 88.9% | 52.7% | 184 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
@@ -53,8 +53,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | LGN | 145 | 235 | 71.9% | 71.9% | 47.7% | 108 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| SCG *(measured)* | 143 | 262 | 69.5% | 64.9% | 42.7% | 93 |
-| **All (shipped)** | **8507** | **12662** | **89.9%** | **89.4%** | **62.1%** | **6667** |
+| SCG *(measured)* | 143 | 262 | 71.4% | 66.8% | 44.7% | 97 |
+| **All (shipped)** | **8507** | **12662** | **89.9%** | **89.4%** | **62.1%** | **6671** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -66,7 +66,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 831 | 437 | expected a subject |  |
+| 827 | 433 | expected a subject |  |
 | 188 | 101 | unrecognized effect verb |  |
 | 136 | 72 | unconsumed text |  |
 | 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -78,7 +78,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
-| 5 | 2 | expected 'that' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
@@ -91,10 +90,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 | 2 | 2 | expected a keyword ability |  |
+| 2 | 2 | 'it' with nothing in this effect that revealed a card |  |
 
 ## Cards executing through the grammar
 
-6667 cards, 7864 lines.
+6671 cards, 7868 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -499,6 +499,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature is turned face up, target creature gets -3/-3 until end of turn.`
 - **Aphetto Grifter**
   - `Tap two untapped Wizards you control: Tap target permanent.`
+- **Aphetto Runecaster**
+  - `Whenever a permanent is turned face up, you may draw a card.`
 - **Aphetto Vulture**
   - `When this creature dies, you may put target Zombie card from your graveyard on top of your library.`
 - **Apocalypse**
@@ -722,6 +724,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Other Soldier creatures get +1/+1.`
 - **Aven Cloudchaser**
   - `When this creature enters, destroy target enchantment.`
+- **Aven Farseer**
+  - `Whenever a permanent is turned face up, put a +1/+1 counter on this creature.`
 - **Aven Fateshaper**
   - `When this creature enters, look at the top four cards of your library, then put them back in any order.`
   - `{4}{U}: Look at the top four cards of your library, then put them back in any order.`
@@ -1264,6 +1268,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{B}: Regenerate target Zombie.`
 - **Boneshard Slasher**
   - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +2/+2 and has "When this creature becomes the target of a spell or ability, sacrifice it."`
+- **Bonethorn Valesk**
+  - `Whenever a permanent is turned face up, this creature deals 1 damage to any target.`
 - **Booby Trap**
   - `When the chosen player draws a card with the chosen name, sacrifice this artifact. If you do, this artifact deals 10 damage to that player.`
 - **Book Burning**
@@ -3817,6 +3823,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target creature that was dealt damage this turn. It can't be regenerated.`
 - **Fatal Lore**
   - `• You draw three cards.`
+- **Fatal Mutation**
+  - `When enchanted creature is turned face up, destroy it. It can't be regenerated.`
 - **Fatigue**
   - `Target player skips their next draw step.`
 - **Fault Line**
@@ -4236,6 +4244,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, you may exile a land card from your graveyard. If you do, put a +1/+1 counter on target creature.`
 - **Forgotten Lore**
   - `Target opponent chooses a card in your graveyard. You may pay {G}. If you do, repeat this process except that opponent can't choose a card already chosen for Forgotten Lore. Then put the last chosen card into your hand.`
+- **Fork**
+  - `Copy target instant or sorcery spell, except that the copy is red. You may choose new targets for the copy.`
+  - `Copy target instant or sorcery spell, except that the copy is red. You may choose new targets for the copy.`
+  - `Copy target instant or sorcery spell, except that the copy is red. You may choose new targets for the copy.`
+  - `Copy target instant or sorcery spell, except that the copy is red. You may choose new targets for the copy.`
 - **Form of the Dragon**
   - `At the beginning of your upkeep, this enchantment deals 5 damage to any target.`
   - `At the beginning of each end step, your life total becomes 5.`
@@ -7131,6 +7144,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Pay 1 life: Regenerate this creature.`
 - **Mischievous Quanar**
   - `{3}{U}{U}: Turn this creature face down.`
+  - `When this creature is turned face up, copy target instant or sorcery spell. You may choose new targets for that copy.`
 - **Misdirection**
   - `Change the target of target spell with a single target.`
 - **Misers' Cage**
