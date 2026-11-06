@@ -12752,11 +12752,16 @@ function renderSearchExileModal(info) {
       ? "Search Graveyard and Library"
       : looksIn("graveyard") ? "Search Graveyard" : "Search Library";
   }
+  // Inline, not the `hidden` class: `.library-card-grid`'s `display: grid`
+  // comes later in the stylesheet and wins over `.hidden` at equal weight.
   for (const [zone, ids] of [
     ["graveyard", ["searchExileGraveyardTitle", "searchExileGraveyardGrid"]],
     ["library", ["searchExileLibraryTitle", "searchExileLibraryGrid"]],
   ]) {
-    for (const id of ids) document.getElementById(id)?.classList.toggle("hidden", !looksIn(zone));
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = looksIn(zone) ? "" : "none";
+    }
   }
   const subtitle = document.getElementById("searchExileSubtitle");
   if (subtitle) {
