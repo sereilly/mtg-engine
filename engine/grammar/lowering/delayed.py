@@ -180,7 +180,9 @@ def _lower_create_delayed_trigger(
     effect that lowered to nothing would leave one firing into nothing.
     """
     from ...delayed_triggers import (DELAYED_EVENTS,
-                                     EVENTS_SEATED_BY_BOUND_PLAYER)
+                                     EVENTS_SEATED_BY_BOUND_PLAYER,
+                                     WHILE_EXILED_THIS_WAY)
+    from ...oracle_types import EXILED_CARDS_WITH_OWNERS
 
     from ._events import EXTRA_TURN_GRANTED, _EVENT_SUBJECT_OBJECTS
 
@@ -210,6 +212,18 @@ def _lower_create_delayed_trigger(
         # that fires once where it prints "whenever". Refusing leaves the line's
         # refusal instead.
         raise LoweringError("this delayed ability states no duration", node=node)
+    if node.duration == WHILE_EXILED_THIS_WAY and (
+        EXILED_CARDS_WITH_OWNERS not in produced
+    ):
+        # "For as long as any of **those cards** remain exiled, …" (Dimensional
+        # Breach.) A back-reference, and refused without its producer as every
+        # one here is: the arming handler registers one exile record per card
+        # the earlier step put into exile, by seat, and with no such step the
+        # duration would never start (CR 611.2b) while the card compiled clean.
+        raise LoweringError(
+            "\"those cards remain exiled\" needs an earlier step of this effect "
+            "that exiled cards", node=node,
+        )
     # Several sentences behind one delay are one ability's effect, so they
     # compose the way every other multi-step effect does (CR 608.2) rather than
     # becoming several abilities.

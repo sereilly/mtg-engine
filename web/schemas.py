@@ -157,6 +157,11 @@ ActionKind = Literal[
     # other creatures" (Forgotten Ancient): ``divided_targets``, one entry per
     # receiving creature by ``id`` with its ``amount``; an empty list moves none.
     "counter_distribution_confirm",
+    # "…that player returns one of the exiled cards they own to the
+    # battlefield" (Dimensional Breach): ``exile_entry_index``, a position in
+    # the prompt's exile-record list, the same field Gustha's Scepter's
+    # linked-exile pick answers with.
+    "exiled_card_return_confirm",
     "mode_choice_confirm",
     "opponent_mode_choice_confirm",
     "modal_mode_targets_confirm",
@@ -490,7 +495,9 @@ class GameActionRequest(BaseModel):
     # (CR 610.3) the seat is taking back. Its own field rather than an index
     # into the exile *pile*, because two copies of one card in a deck are the
     # same object there — the record is the only thing that can tell one
-    # exiled card from another.
+    # exiled card from another. Dimensional Breach's one-card return answers
+    # with it too: a position in that prompt's exile-record list
+    # (``engine/exiled_records.py``), for the same reason.
     exile_entry_index: int | None = Field(default=None, ge=0)
     # Phyrexian Portal: which of the ten looked-at cards go into the first of
     # the two face-down piles (everything else goes into the second), and then

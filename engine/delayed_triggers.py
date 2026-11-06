@@ -268,6 +268,17 @@ DELAYED_EVENTS: dict[str, str] = {
     # seats here by construction: the ability belongs to whoever cast Ertai's
     # Meddling and the upkeep belongs to whoever cast the spell it exiled.
     "bound_players_upkeep": "the upkeep step",
+    # "For as long as any of those cards remain exiled, at the beginning of
+    # **each player's upkeep**, that player returns one of the exiled cards
+    # they own to the battlefield." (Dimensional Breach.) The fifth upkeep row
+    # and the repeating, **unseated** one: every player's upkeep, whoever's
+    # turn it is, for as long as the stated duration lasts (CR 603.7b) — so it
+    # is announced for every upkeep rather than narrowed to a seat, and the
+    # upkeep's own player rides the firing as the seat it is about
+    # (``StackItem.about_player_index``, ``event_subject_player``), which is
+    # what "that player" names. The static trigger's ``upkeep_each`` freezes
+    # the same seat under the same key.
+    "each_players_upkeep": "the upkeep step",
     # "…at the beginning of **the next cleanup step**" (Thawing Glaciers,
     # Bounty of the Hunt). CR 514.3a names this ability shape in the rule
     # itself — the cleanup step's own exception to "no player receives
@@ -384,6 +395,23 @@ WHILE_SOURCE_TAPPED = "while_source_tapped"
 #: gate is enforced (``handlers/_conditions``' ``source_exiled``). A repeating
 #: entry with no such gate would go on acting after its subject was gone.
 WHILE_THE_GAME_LASTS = "while_the_game_lasts"
+#: "**For as long as any of those cards remain exiled,** at the beginning of
+#: each player's upkeep, …" (Dimensional Breach.) CR 603.7b's stated duration
+#: as a state about **cards** — the ones the creating effect exiled — where
+#: :data:`WHILE_SOURCE_TAPPED` is one about the permanent that created it.
+#:
+#: Each of those cards is an :class:`~engine.exiled_records.ExiledRecord`,
+#: registered as the ability is created and frozen into its ``captured``
+#: under :data:`~engine.exiled_records.EXILED_THIS_WAY_RECORDS`: CR 400.7
+#: makes a card that leaves exile and comes back a new object, and two copies
+#: of a card are one ``CardDefinition``, so only the record's identity says
+#: whether "one of those cards" is still there. The ability is ended where the
+#: condition can stop holding — the one departure seam,
+#: ``Game.take_card_from_exile``, through :func:`end_exhausted_exile_delays` —
+#: for :data:`WHILE_SOURCE_TAPPED`'s reason: CR 611.2b makes the duration the
+#: whole of the ability's life, and once the last card has gone nothing brings
+#: it back (an exiled card that returns is a new object, CR 400.7).
+WHILE_EXILED_THIS_WAY = "while_exiled_this_way"
 
 #: Events whose printed words name a turn **after** the one the ability was
 #: created in, so an entry must not answer to the announcement made in its own
@@ -631,10 +659,17 @@ class DelayedTrigger:
         source_permanent: "Permanent | None" = None,
         trigger_context: dict | None = None,
         game: "Game | None" = None,
+        about_player_index: int | None = None,
     ) -> dict:
         """The ``_enqueue_triggered_ability`` kwargs for one firing of this
         ability. One builder for every site, so a delayed trigger reaches the
         stack the same way wherever it was announced.
+
+        *about_player_index* is the seat the **firing event** is about, for an
+        event whose seat varies per firing (``each_players_upkeep``: whose
+        upkeep this is). It wins over :attr:`bound_player_index`, which is the
+        seat the *creating* effect froze — an entry has one or the other, and
+        the fire site is the only place a per-firing seat exists.
 
         :attr:`bound_as_target` hands the bound object over as the one the
         ability is **about** (``StackItem.about_permanent_id``), which the
@@ -649,7 +684,8 @@ class DelayedTrigger:
         *game* is unused and kept for the callers' signature: the bound
         permanent's controller is read as the ability resolves, off the id.
         """
-        about_player_index = self.bound_player_index
+        if about_player_index is None:
+            about_player_index = self.bound_player_index
         about_permanent_id = (
             self.bound_permanent_id if self.bound_as_target else None
         )
@@ -836,9 +872,14 @@ def fire_delayed_triggers(
     source_permanent: "Permanent | None" = None,
     trigger_context: dict | None = None,
     occurrence: str | None = None,
+    about_player_index: int | None = None,
 ) -> int:
     """Announce *event*, putting every delayed ability waiting for it onto the
     stack (CR 603.3). Returns how many fired.
+
+    *about_player_index* is the seat this firing is about where the event
+    names one that varies per firing (whose upkeep), handed to every entry
+    as :meth:`DelayedTrigger.trigger_event`'s.
 
     Not every event reaches the stack: CR 605.4a exempts a triggered mana
     ability, and the tap-for-mana seam resolves its entries inline through
@@ -882,6 +923,7 @@ def fire_delayed_triggers(
             ),
             trigger_context=trigger_context,
             game=game,
+            about_player_index=about_player_index,
         )
         for entry in fired
     ])
@@ -934,6 +976,41 @@ def end_source_tapped_delayed_triggers(game: "Game", permanent: "Permanent") -> 
         entry for entry in game.delayed_triggers
         if not any(entry is done for done in ending)
     ]
+    return len(ending)
+
+
+def end_exhausted_exile_delays(game: "Game") -> int:
+    """CR 603.7b's stated duration for :data:`WHILE_EXILED_THIS_WAY`: end every
+    ability whose cards have **all** left exile. Returns how many were dropped.
+
+    Called from ``Game.take_card_from_exile``, the one transition out of the
+    zone (``tests/engine/test_exile_removal_seam.py``), after it retires the
+    departing card's record — which is the only moment "any of those cards
+    remain exiled" can stop being true. Ended rather than skipped at the fire
+    site for :func:`end_source_tapped_delayed_triggers`' reason: CR 611.2b makes
+    the duration the ability's whole life, and nothing re-creates it.
+    """
+    from .exiled_records import EXILED_THIS_WAY_RECORDS, still_exiled
+
+    ending = [
+        entry for entry in game.delayed_triggers
+        if entry.duration == WHILE_EXILED_THIS_WAY
+        and not any(
+            still_exiled(game, record)
+            for record in entry.captured.get(EXILED_THIS_WAY_RECORDS) or ()
+        )
+    ]
+    if not ending:
+        return 0
+    game.delayed_triggers = [
+        entry for entry in game.delayed_triggers
+        if not any(entry is done for done in ending)
+    ]
+    for entry in ending:
+        game.log.append(
+            f"{entry.source_name}: none of the exiled cards remain exiled, so "
+            "its delayed ability ends"
+        )
     return len(ending)
 
 

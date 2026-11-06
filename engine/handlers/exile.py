@@ -25,8 +25,9 @@ from ..faces import whole_card
 from ..game_types import first_target_id
 from ..linked_exile import link_exiled_card
 from ..models import Permanent
-from ..oracle_types import (EXILED_BY_SEAT, EXILED_THIS_WAY,
-                            EXILED_THIS_WAY_OBJECTS, LAST_TARGET_CONTROLLER,
+from ..oracle_types import (EXILED_BY_SEAT, EXILED_CARDS_WITH_OWNERS,
+                            EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
+                            LAST_TARGET_CONTROLLER,
                             LAST_TARGET_NAME, LAST_TARGET_OWNER,
                             PER_OBJECT_SEAT_RECORDS,
                             SWEPT_OWNER_SEATS)
@@ -1220,6 +1221,10 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
     # these by identity and not whatever else has reached the zone since. No
     # token: CR 111.8 ends it as it leaves, and there is no card to give back.
     exiled_cards: list = []
+    # …and which seat's exile each of those went to, beside them (see
+    # ``oracle_types.EXILED_CARDS_WITH_OWNERS``): "those cards" behind a sweep
+    # (Dimensional Breach) are the cards in the zone, by seat.
+    with_owners: list[tuple[int, object]] = []
     for perm in victims:
         owner_idx = game.owner_index_of(perm)
         if owner_idx is not None:
@@ -1235,6 +1240,13 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
             card = whole_card(revealed_as_it_moves(game, perm.card, perm))
             owner.exile.append(card)
             exiled_cards.append(card)
+            # By identity: a ``PlayerState`` compares by value.
+            with_owners.append((
+                owner_idx if owner_idx is not None else next(
+                    i for i, seated in enumerate(game.players) if seated is owner
+                ),
+                card,
+            ))
             # Recorded as exiled **with** the ability's source when there is one
             # (CR 610.3), exactly as ``exile_top_of_library`` records its pile
             # and for that handler's stated reason: nothing ends the link on its
@@ -1251,6 +1263,7 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
     context.results[EXILED_THIS_WAY_OBJECTS] = victims
     context.results[EXILED_THIS_WAY] = len(victims)
     context.results["exiled_cards"] = exiled_cards
+    context.results[EXILED_CARDS_WITH_OWNERS] = with_owners
     context.results[PER_OBJECT_SEAT_RECORDS["controller"]] = controllers
     context.results[SWEPT_OWNER_SEATS] = owners
     game.log.append(f"{context.card.name} exiled {len(victims)} permanent(s)")

@@ -219,6 +219,7 @@ from .exile import (
 from .linked_exile import (
     _fused_exile_event_subject_until_source_leaves,
     _lower_each_player_claims_exiled_card,
+    _lower_return_one_exiled_card,
     _lower_exile_graveyard_until_leaves,
     _lower_put_exiled_pile_top_into_hand,
     _lower_exile_top_of_library,
@@ -617,6 +618,7 @@ __all__ = [
     "_EXILED_CREATURE",
     "_lower_exile",
     "_lower_each_player_claims_exiled_card",
+    "_lower_return_one_exiled_card",
     "_lower_exile_cards_from_hand",
     "_lower_exile_cost_sacrifices",
     "_lower_for_each_exiled",

@@ -578,6 +578,63 @@ def _lower_each_player_claims_exiled_card(
     )
 
 
+def _lower_return_one_exiled_card(
+    node: "ast.ReturnOneExiledCard", event: str | None,
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"…at the beginning of each player's upkeep, **that player returns one of
+    the exiled cards they own to the battlefield**." (Dimensional Breach.)
+
+    :func:`_lower_each_player_claims_exiled_card`'s neighbour by subject: one
+    seat picks one card out of a pile an earlier step of this same effect
+    exiled. Two back-references, so both places are asked —
+
+    * **the pile** is the sweep's cards by seat
+      (``oracle_types.EXILED_CARDS_WITH_OWNERS``): "the exiled cards they own"
+      asks whose exile each card is in, and with no step writing that the words
+      name nothing and the card would compile and return nothing;
+    * **"that player"** is the seat the firing event froze, so it is admitted
+      only under an event in ``_EVENT_SUBJECT_PLAYERS`` (the upkeep's player);
+      a bare imperative's chooser is the ability's controller.
+
+    The battlefield is the one destination with a handler: the card enters
+    under the chooser's control (CR 110.2a) — its owner's, when "they own"
+    narrowed the pile — and an Aura chooses its host as it enters (CR 303.4f).
+    """
+    from ...oracle_types import EXILED_CARDS_WITH_OWNERS
+
+    if EXILED_CARDS_WITH_OWNERS not in produced:
+        raise LoweringError(
+            "'one of the exiled cards' names the cards an earlier step of "
+            "this effect exiled, and no step of it records them by seat",
+            node=node,
+        )
+    if node.zone.name != "battlefield" or node.zone.owner is not None:
+        raise LoweringError(
+            f"no handler returns one exiled card to {node.zone.name}", node=node,
+        )
+    actor = node.actor
+    if actor is None or actor.kind == "you":
+        chooser = "you"
+    elif actor.kind == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+        chooser = "that_player"
+    else:
+        raise LoweringError(
+            "the one-card return out of the exiled pile is made by the "
+            "ability's controller or by the seat its event froze", node=node,
+        )
+    return (
+        OracleInstruction(
+            "return_one_exiled_card", "",
+            {
+                "zone": "battlefield",
+                "chooser": chooser,
+                "owned_by_chooser": bool(node.owned_by_actor),
+            },
+        ),
+    )
+
+
 def _fused_exile_event_subject_until_source_leaves(
     steps: tuple, event: str | None = None
 ) -> tuple[OracleInstruction, ...] | None:

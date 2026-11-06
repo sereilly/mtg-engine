@@ -629,6 +629,13 @@ LINKED_WHILE_SOURCE_TAPPED = "while_source_tapped"
 #: about what it is called.
 LINKED_WHILE_REVEALED_CARD_ON_TOP = WHILE_REVEALED_CARD_ON_TOP
 
+#: "**For as long as any of those cards remain exiled,** at the beginning of
+#: each player's upkeep, …" (Dimensional Breach.) The third clause, and a state
+#: about the cards an earlier sentence of the same effect exiled — spelled as
+#: ``engine/delayed_triggers.WHILE_EXILED_THIS_WAY``, the one reader that
+#: answers it, under the name every clause in this file carries.
+LINKED_WHILE_EXILED_THIS_WAY = "while_exiled_this_way"
+
 
 def _link_leading_duration(
     statement: "ast.Statement",
@@ -821,6 +828,31 @@ def _parse_leading_linked_duration(
                 granted, stream, LINKED_WHILE_REVEALED_CARD_ON_TOP
             )
     stream.reset(top_of_library)
+    # "…**any of those cards remain exiled**, at the beginning of each player's
+    # upkeep, that player returns one of the exiled cards they own to the
+    # battlefield." (Dimensional Breach.) The third clause: a state about the
+    # cards an earlier sentence exiled, and it governs a **delayed ability**
+    # alone — CR 603.7b's stated duration, which is the one field the clause
+    # can be. Any other body behind it refuses here rather than being handed a
+    # duration it has no reader for ("…remain exiled, you may play them" would
+    # be a permission over the cards, a different sentence).
+    #
+    # Once the clause has matched, the body's own refusal stands: the words in
+    # front are consumed and nothing else reads them.
+    those_exiled = stream.mark()
+    if stream.accept_phrase(
+        "any", "of", "those", "cards", "remain", "exiled"
+    ) and stream.accept_punct(","):
+        body = parse_body(stream)
+        if not isinstance(body, ast.CreateDelayedTrigger):
+            raise stream.error(
+                "\"for as long as any of those cards remain exiled\" governs "
+                "a delayed triggered ability"
+            )
+        return _link_leading_duration(
+            body, stream, LINKED_WHILE_EXILED_THIS_WAY
+        )
+    stream.reset(those_exiled)
     if not (
         _accept_self_reference(stream)
         and stream.accept_phrase("remains", "tapped")

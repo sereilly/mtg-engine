@@ -39,6 +39,7 @@ from ..cast_permissions import end_while_exiled_grants
 from ..continuous import next_timestamp
 from ..control import set_base_controller
 from ..enter_effects import CAST_THIS_TURN_STAMP
+from ..delayed_triggers import end_exhausted_exile_delays
 from ..entry_awaiting import (EntryInProgress, entered_together,
                               entry_in_progress, entry_is_awaited)
 from ..exiled_records import (forget_record, newest_record_for,
@@ -170,9 +171,14 @@ class ZoneFunnelsMixin:
                 # (CR 611.2b), for the record's own reason one line up: a grant
                 # left behind is a memory CR 400.7 says the card does not have.
                 end_while_exiled_grants(self, seat, card)
+                # …and a delayed ability lasting "for as long as any of those
+                # cards remain exiled" (Dimensional Breach), whose last card
+                # this may have been (CR 603.7b, CR 611.2b).
+                end_exhausted_exile_delays(self)
                 return True
         if record is not None:
             forget_record(self, record)
+            end_exhausted_exile_delays(self)
         return False
 
     def put_card_into_hand(self, owner, card, *, from_battlefield=None) -> bool:

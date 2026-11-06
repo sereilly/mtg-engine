@@ -144,5 +144,6 @@ register_choices(
     spells.TARGET_GROUP_ORDER_SPEC,
     replacements.PILE_TOP_DRAW_SPEC,
     permanents.COUNTER_DISTRIBUTION_SPEC,
+    pile_picks.EXILED_CARD_RETURN_SPEC,
     # Append a new kind here, at the bottom.
 )

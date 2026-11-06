@@ -1046,6 +1046,36 @@ def _linked_exile_return(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("exiled_card_return")
+def _exiled_card_return(ctx: PromptContext, choices: list) -> dict:
+    """Dimensional Breach: which of this seat's exiled cards returns to the
+    battlefield this upkeep.
+
+    The candidates are the engine's own rule (``live_exiled_card_return_choices``
+    — still exiled, the seat's own, and legally returnable), so the list offered
+    and the list an answer is checked against are one. ``entry_index`` is a
+    position in the prompt's exile-record list rather than in the exile pile,
+    because two copies of one card in a deck are the same object there; the
+    answer sends it back as ``exile_entry_index``. Mandatory: no Decline.
+    """
+    choice = choices[0]
+    records = list(choice.data.get("_records") or ())
+    owner = ctx.game.players[choice.player_index]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "zone": "battlefield",
+        "choices": [
+            {
+                "entry_index": index,
+                "name": records[index].card.name,
+                "card": ctx.owned_card(records[index].card, owner),
+            }
+            for index in ctx.game.live_exiled_card_return_choices(choice)
+        ],
+    }
+
+
 @prompt_renderer("put_from_hand_choice")
 def _put_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     """Eureka: which card in this seat's hand goes onto the battlefield.

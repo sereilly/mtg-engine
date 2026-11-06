@@ -711,6 +711,21 @@ CLAIMABLE_EXILED_CARDS = "claimable_exiled_cards"
 #: sentence that names an owner's zone into the per-object-record branch.
 SWEPT_OWNER_SEATS = "swept_owner_seats"
 
+#: The **cards** an exile sweep put into exile, each with the seat whose exile
+#: it went to — a sequence of ``(owner_seat, card)`` pairs, the shape
+#: :data:`CLAIMABLE_EXILED_CARDS` settled for the reason it gives (several
+#: decks share one ``CardDefinition``, so the seat is carried rather than
+#: re-derived by an identity scan of the exile zones).
+#:
+#: The card, not the permanent: a face-down permanent goes to exile as the card
+#: it hid (CR 708.9), and a token goes nowhere (CR 111.7), so neither
+#: :data:`EXILED_THIS_WAY_OBJECTS` nor :data:`SWEPT_OWNER_SEATS` names what is
+#: actually sitting in the zone. "For as long as any of **those cards** remain
+#: exiled, … that player returns one of the exiled cards they own …"
+#: (Dimensional Breach) asks about exactly that, and its delayed ability
+#: registers one exile record per pair as it is created.
+EXILED_CARDS_WITH_OWNERS = "exiled_cards_with_owners"
+
 #: The same step's record **per seat** — ``{seat: [card, …]}`` — for a sentence
 #: whose exile and whose read-back are both distributed over the table: "Each
 #: player exiles all creature cards from their graveyard, then … then puts all

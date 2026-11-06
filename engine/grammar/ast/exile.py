@@ -163,6 +163,32 @@ class PutExiledThisWay:
 
 
 @dataclass(frozen=True)
+class ReturnOneExiledCard:
+    """``that player returns one of the exiled cards they own to the
+    battlefield`` (Dimensional Breach.)
+
+    One card out of a pile an **earlier sentence of the same effect** exiled,
+    picked by the actor — Thieves' Auction's "one of the exiled cards" with
+    two differences that make it its own node rather than a flag on
+    :class:`EachPlayerClaimsExiledCard`: one named seat picks rather than every
+    seat in turn, and "**they own**" narrows the pile to that seat's own cards
+    (CR 108.3), so what arrives arrives under its owner's control. Read only
+    as a bound reference, for that node's reason: no description of the exile
+    zone is this set, because a player's exile holds everything else that ever
+    went there too.
+
+    ``owned_by_actor`` is the printed narrowing, carried rather than assumed:
+    without it the actor would pick out of the whole table's pile and the card
+    would be a different one. ``zone`` is where the card goes, and which zones
+    have a handler is the lowering's question.
+    """
+
+    zone: Zone
+    actor: PlayerRef | None = None
+    owned_by_actor: bool = False
+
+
+@dataclass(frozen=True)
 class ExileGraveyardArrivalsThisTurn:
     """``If a card would be put into your graveyard from anywhere this turn,
     exile that card instead.`` (Yawgmoth's Will.)

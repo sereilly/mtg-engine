@@ -15,7 +15,8 @@ import re
 
 from ..auras import aura_enchants
 from ..delayed_triggers import fire_delayed_triggers
-from ..exiled_records import EXILE_RECORD_KEY, live_records
+from ..exiled_records import (EXILE_RECORD_KEY, functions_from_exile,
+                              live_records)
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords,
                         clear_removed_ability_keywords,
@@ -1504,11 +1505,22 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # record afterwards. The intervening-if is *not* pre-checked here — CR
         # 603.4 checks it at both ends, the fire site and the resolution, and
         # the resolution end is already armed in ``_run_stack_item_resolution``.
+        #
+        # **Only a trigger that functions from exile** (CR 113.6: a
+        # permanent card's abilities function on the battlefield unless they
+        # say otherwise; CR 113.6k: a trigger condition that can't trigger from
+        # the battlefield — "if this card is exiled" — functions where it can).
+        # The register holds cards for other reasons too — a face-down exile
+        # (Three Wishes, Suppress), the cards a Dimensional Breach will hand
+        # back — and an ordinary "at the beginning of your upkeep, this
+        # creature deals 1 damage to you" (Juzám Djinn) fired from there.
         for record in live_records(self):
             if record.controller_index != player_index:
                 continue
             for trig in matching_triggers(record.card, condition_kinds={"upkeep_self"}):
                 if trig.instruction.kind not in EFFECT_HANDLERS:
+                    continue
+                if not functions_from_exile(trig.instruction):
                     continue
                 upkeep_events.append({
                     "controller_index": record.controller_index,
@@ -1698,6 +1710,15 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # what makes it stay on the waiting list rather than the fire site
         # knowing anything about it.
         fire_delayed_triggers(self, "bound_players_upkeep", seat=player_index)
+        # "…at the beginning of **each player's upkeep**, that player …"
+        # (Dimensional Breach.) Unseated — every upkeep — with the upkeep's
+        # player frozen as the seat the firing is about, under the key the
+        # static ``upkeep_each`` trigger freezes it by.
+        fire_delayed_triggers(
+            self, "each_players_upkeep",
+            about_player_index=player_index,
+            trigger_context={"event_subject_player": player_index},
+        )
 
         # Put the collected non-interactive upkeep triggers on the stack in APNAP
         # order; they resolve through the upkeep priority window opened below.

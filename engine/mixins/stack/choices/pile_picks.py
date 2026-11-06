@@ -645,6 +645,105 @@ class PileChoicesMixin:
             return
         self.discard_pending_choice(choice)
 
+    # -- One of the cards an earlier effect exiled, by its record ------------
+
+    def arm_exiled_card_return(
+        self, player_index: int, *, card_name: str, result_key: str,
+        records, owned: bool, context,
+    ) -> PendingChoice | None:
+        """Queue "<player> returns one of the exiled cards [they own]"
+        (Dimensional Breach) for *player_index*.
+
+        The whole frozen record list travels, not the cards the seat may take
+        now, for ``arm_permanent_choice``'s reason: it is the rule the offer
+        came from, and re-running it is what keeps the list offered and the
+        list an answer is checked against from drifting. The answer is a
+        position **into that list** — stable while the prompt waits, where a
+        position into the live pile would name a different card the moment
+        another one left exile.
+        """
+        return self.arm_pending_choice(
+            "exiled_card_return", player_index,
+            card_name=card_name,
+            result_key=result_key,
+            owned_by_chooser=bool(owned),
+            _records=tuple(records),
+            _context=context,
+        )
+
+    def live_exiled_card_return_choices(self, choice: PendingChoice) -> list[int]:
+        """The positions in the prompt's record list the seat may return now —
+        ``handlers.exiled_returns.returnable_exiled_records``, the one answer
+        to "which of those cards can this seat put onto the battlefield"."""
+        from ....handlers.exiled_returns import returnable_exiled_records
+
+        records = list(choice.data.get("_records") or ())
+        returnable = returnable_exiled_records(
+            self, records, choice.player_index,
+            owned=bool(choice.data.get("owned_by_chooser")),
+        )
+        return [
+            index for index, record in enumerate(records)
+            if any(record is live for live in returnable)
+        ]
+
+    def confirm_exiled_card_return(self, player_index: int, record_index) -> bool:
+        """Answer the pick with a position from
+        :meth:`live_exiled_card_return_choices`. There is no decline: the
+        sentence says the player returns one."""
+        return self.resolve_pending_choice(
+            "exiled_card_return", player_index, record_index=record_index,
+        )
+
+    def _resolve_exiled_card_return(self, choice: PendingChoice, record_index) -> bool:
+        """Record the chosen record where the return's next step reads it.
+
+        A position the live list does not hold is refused, and the prompt
+        stays — unless nothing at all is returnable any more (every card left
+        exile while the seat thought), when the return goes on with nothing
+        chosen rather than staying owed a prompt nobody can answer.
+        """
+        live = self.live_exiled_card_return_choices(choice)
+        records = list(choice.data.get("_records") or ())
+        results = choice.data["_context"].results
+        if not live:
+            results[choice.data["result_key"]] = None
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{choice.data.get('card_name', 'Effect')}: no exiled card is "
+                "left to return"
+            )
+            return True
+        if not isinstance(record_index, int) or record_index not in live:
+            return False
+        record = records[record_index]
+        results[choice.data["result_key"]] = record
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{self.players[choice.player_index].name} chose {record.card.name} "
+            f"to return ({choice.data.get('card_name', 'Effect')})"
+        )
+        return True
+
+    def _default_exiled_card_return(self, choice: PendingChoice) -> None:
+        """A seat nobody asks returns the **most valuable** card it can
+        (``ai_prompts.choose_exiled_card_to_return``): it gets one card back
+        per upkeep, so the order is the whole decision and the biggest
+        permanent first is the plain reading. Ties keep the record order, which
+        is what keeps a seeded game reproducible."""
+        from ....ai_prompts import choose_exiled_card_to_return
+
+        live = self.live_exiled_card_return_choices(choice)
+        records = list(choice.data.get("_records") or ())
+        if not live:
+            self._resolve_exiled_card_return(choice, None)
+            return
+        best = choose_exiled_card_to_return(
+            self, choice.player_index, [(index, records[index].card) for index in live],
+        )
+        if not self._resolve_exiled_card_return(choice, best):
+            self.discard_pending_choice(choice)
+
     # -- Exiling cards out of a named player's graveyard ---------------------
 
     def arm_graveyard_exile_pick(
@@ -1209,4 +1308,24 @@ GRAVEYARD_PICK_FOR_PRICE_SPEC = ChoiceSpec(
     # the whole set of them: nothing behind this prompt may run until it is
     # answered (CR 608.2).
     suspends=True,
+)
+
+EXILED_CARD_RETURN_SPEC = ChoiceSpec(
+    "exiled_card_return",
+    resolve=lambda game, choice, r: game._resolve_exiled_card_return(
+        choice, r.get("record_index")
+    ),
+    default=lambda game, choice: game._default_exiled_card_return(choice),
+    action="exiled_card_return_confirm",
+    prompt_key="exiled_card_return",
+    blocked_detail="choose an exiled card to return before other actions",
+    # The pick is what the return's next steps (an Aura's host, the move) read,
+    # so the loop they are part of waits for it (CR 608.2).
+    suspends=True,
+    # A non-interactive seat takes the default where the effect stands, as
+    # ``permanent_choice`` does — the resolution has to finish, and that keeps
+    # AI and headless play free of the suspension above.
+    default_at_arm=True,
+    # Exile is a public zone (CR 400.2) and these cards went there face up.
+    spectator_visible=True,
 )
