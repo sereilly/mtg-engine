@@ -159,6 +159,14 @@ class Session:
     # Debug toggle: when True, the AI declares every legal attacker each combat
     # instead of its normal risk-weighted choice. Set via the in-game Debug Menu.
     force_ai_attack_all: bool = False
+    # Which of ``game_flow._ai_step``'s activation doors the AI seat has
+    # already gone through in the step it is in: ``(turn, phase, step)`` and
+    # the doors' names. The simulator asks each door once per main phase
+    # (``ai_simulator._play_activations``); the web's doors did too, because
+    # the step was left after them. A door that hands priority round now
+    # pauses the step instead (SCG Phase 5, W1), and the next ``ai_step`` in
+    # the same step skips what this records, so the AI's turn still moves on.
+    ai_doors_spent: tuple = ()
     # Engine step names a human wants to stop at on the opponent's (AI's) turn,
     # set from the phase-rail hold-priority toggles. The AI hands the human
     # priority at these steps instead of advancing past them.

@@ -165,6 +165,16 @@ def _hand_priority_round(session: Session, seat: int, result) -> bool:
     return True
 
 
+def _doors_spent(session: Session) -> set:
+    """The activation doors ``_ai_step`` has gone through in the step the
+    game is in (``Session.ai_doors_spent``), reset as the step changes."""
+    game = session.game
+    where = (game.turn, game.current_turn_phase, game.current_step)
+    if not session.ai_doors_spent or session.ai_doors_spent[0] != where:
+        session.ai_doors_spent = (where, set())
+    return session.ai_doors_spent[1]
+
+
 def _ai_step(session: Session) -> bool:
     """Run one AI action for the current turn.
 
@@ -289,8 +299,15 @@ def _ai_step(session: Session) -> bool:
         else game.activate_permanent_ability
     )
 
-    activation_action = choose_activation_action(game, seat)
+    # Each door once in a step (`_doors_spent`): a door that paused for the
+    # round is not asked again when the next `ai_step` comes back to this one.
+    spent = _doors_spent(session)
+
+    activation_action = (
+        choose_activation_action(game, seat) if "battlefield" not in spent else None
+    )
     if activation_action is not None:
+        spent.add("battlefield")
         activation_action = tap_planned_lands(game, seat, activation_action)
         result = activate(
             seat,
@@ -317,8 +334,11 @@ def _ai_step(session: Session) -> bool:
     # engine's other activation entry point, so it is a second pass rather than
     # a branch in the one above; after it, so the lands the payment is planned
     # against are the ones the cast and the battlefield activation left alone.
-    hand_activation = choose_hand_activation_action(game, seat)
+    hand_activation = (
+        choose_hand_activation_action(game, seat) if "hand" not in spent else None
+    )
     if hand_activation is not None:
+        spent.add("hand")
         hand_activation = tap_planned_lands(game, seat, hand_activation)
         result = game.activate_from_hand(
             seat,
@@ -335,8 +355,11 @@ def _ai_step(session: Session) -> bool:
     # the simulator shares (`engine.ai_graveyard_activations`). Until the kg3
     # round no AI seat used one: a Whiteout or a Glory in an AI's graveyard
     # stayed there.
-    graveyard_activation = choose_graveyard_activation_action(game, seat)
+    graveyard_activation = (
+        choose_graveyard_activation_action(game, seat) if "graveyard" not in spent else None
+    )
     if graveyard_activation is not None:
+        spent.add("graveyard")
         result = activate_chosen_graveyard_ability(game, seat, graveyard_activation)
         if has_human_opponent and _hand_priority_round(session, seat, result):
             return False
@@ -348,8 +371,11 @@ def _ai_step(session: Session) -> bool:
     # only mana the seat's own plays left. The permanent is counted into its
     # controller's battlefield (`source_controller_index`); the lands are the
     # activator's.
-    foreign_activation = choose_foreign_activation_action(game, seat)
+    foreign_activation = (
+        choose_foreign_activation_action(game, seat) if "foreign" not in spent else None
+    )
     if foreign_activation is not None:
+        spent.add("foreign")
         foreign_activation = tap_planned_lands(game, seat, foreign_activation)
         result = activate(
             seat,
@@ -373,8 +399,9 @@ def _ai_step(session: Session) -> bool:
     # (CR 116.1), but what it sets off does ("When this creature is turned
     # face up", CR 702.37e): CR 116.3 gives the seat priority again, and the
     # trigger is answered by a round like any other object.
-    taken = special_action_before_combat(game, seat)
+    taken = special_action_before_combat(game, seat) if "special" not in spent else None
     if taken is not None:
+        spent.add("special")
         _choice, refusal = taken
         if has_human_opponent and refusal is None and game.stack:
             _auto_resolve_ai_pending(session)
