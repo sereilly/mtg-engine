@@ -1132,6 +1132,20 @@ def test_next_phase_ai_defender_casts_instant_after_declaring_blockers():
     payload = ai_block_and_cast.json()
     assert payload["current_step"] == "declare_blockers"
     assert payload["combat"]["blockers_locked"] is True
+    # CR 509.2: the blocks declared, the **active** player — the person —
+    # receives priority first; the defender's trick waits for its turn at it
+    # (SCG Phase 5: it was cast here, by a seat without priority, and
+    # resolved with nobody passing). The person passes, the AI casts, and the
+    # person is asked over the Bolt before it resolves.
+    assert payload["priority_player"] == 0 and payload["stack"] == []
+    passed = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"})
+    assert passed.status_code == 200
+    over_the_bolt = passed.json()
+    assert [item["card"]["name"] for item in over_the_bolt["stack"]] == ["Lightning Bolt"]
+    assert over_the_bolt["priority_player"] == 0
+    resolved = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"})
+    assert resolved.status_code == 200
+    payload = resolved.json()
     # The Bolt goes where it does most: the 3/3 attacker its 2/2 has blocked,
     # which dies before it deals damage and leaves the blocker alive. It went
     # to the attacking player's face (20 -> 17) while "any target" was aimed

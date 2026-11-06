@@ -1,3 +1,5 @@
+
+from tests.helpers import stock_libraries
 import pytest
 
 from engine import Game
@@ -71,6 +73,7 @@ def test_extra_turn_queue_is_lifo():
     p1 = PlayerState(name="P1")
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
+    stock_libraries(game)
     game.active_player_index = 0
 
     game.add_extra_turn(0)
@@ -88,6 +91,7 @@ def test_extra_turn_for_opponent_is_inserted_not_substituted():
     p1 = PlayerState(name="P1")
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
+    stock_libraries(game)
     game.active_player_index = 0
 
     game.add_extra_turn(1)
@@ -105,6 +109,7 @@ def test_extra_turn_does_not_disturb_normal_rotation():
     p1 = PlayerState(name="P1")
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
+    stock_libraries(game)
     game.active_player_index = 0
 
     game.add_extra_turn(0)

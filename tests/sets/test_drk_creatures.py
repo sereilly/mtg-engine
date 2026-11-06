@@ -10,7 +10,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.models import CardDefinition, Permanent
 import random
-from tests.helpers import _damage_dealt, _mk_creature_card, _nosick, resolve_stack
+from tests.helpers import _damage_dealt, _mk_creature_card, _nosick, resolve_stack, stock_libraries
 
 
 # --- G2: auras and land statics (The Dark) ---
@@ -37,6 +37,7 @@ def test_goblin_rock_sled_rests_for_exactly_one_of_its_controllers_untap_steps(s
         PlayerState(name="P1", battlefield=[sled]),
         PlayerState(name="P2", battlefield=[Permanent(card=set_pool("LEA")["Mountain"])]),
     ])
+    stock_libraries(game)
     game.start_turn(0)
     _attack_with(game, 0, 0)
     assert sled.tapped, "attacking taps it (CR 508.1f)"

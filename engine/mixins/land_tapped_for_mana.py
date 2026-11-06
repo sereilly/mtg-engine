@@ -217,6 +217,12 @@ class LandTappedForManaMixin:
         # snapshot of the pool alone let it escape every swap — Mishra's
         # Workshop under Contamination made {C}{C}{C}, not one {B}.
         pool_before = production_snapshot(player)
+        # The tap first, then what it made: the tap is the mana ability's cost
+        # (CR 106.12, 602.2b's payment) and its production comes after it, so
+        # the log says so in that order. "Temple of the False God produced
+        # {C}{C}" was written by the ability as it ran, before this line, and
+        # read as mana that came before the tap (SCG Phase 5).
+        self.log.append(f"{player.name} tapped {land_name} for mana")
         mana_symbol = produce()
 
         if swapped_to:
@@ -243,7 +249,6 @@ class LandTappedForManaMixin:
             if moved or not colors_only:
                 mana_symbol = swapped_to
 
-        self.log.append(f"{player.name} tapped {land_name} for mana")
 
         # What the land really made, across every bucket (CR 106.6: restricted
         # mana is still mana). Nothing made, nothing to announce — CR 106.12a.

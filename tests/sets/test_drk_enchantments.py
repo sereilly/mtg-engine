@@ -10,7 +10,7 @@ from engine.aura_attachment import attach_aura
 from engine.models import Permanent
 from engine.named_counters import counters_on
 from engine.models import CardDefinition, Permanent
-from tests.helpers import resolve_stack
+from tests.helpers import resolve_stack, stock_libraries
 
 
 # --- G2: auras and land statics (The Dark) ---
@@ -151,6 +151,7 @@ def test_tangle_kelp_taps_on_entry_and_holds_a_creature_that_attacked(set_pool):
     p1 = PlayerState(name="P1", battlefield=[bear])
     p2 = PlayerState(name="P2", hand=[pool["Tangle Kelp"]])
     game = Game(players=[p1, p2])
+    stock_libraries(game)
     game.enforce_mana_costs = False
     game.start_turn(0)
     game._close_current_priority_step()
@@ -532,6 +533,10 @@ def _eroded(set_pool, *, life: int = 20, tapped: bool = False):
     aura = Permanent(card=set_pool("DRK")["Erosion"])
     p1 = PlayerState(name="P1", battlefield=[aura])
     p2 = PlayerState(name="P2", battlefield=[forest], life=life)
+    if life <= 0:
+        # At 0 life a player has lost (CR 704.5a) and the game is over (CR 104.1);
+        # Lich ("You don't lose the game for having 0 or less life") keeps them in it.
+        p2.battlefield.append(Permanent(card=set_pool("LEA")["Lich"]))
     game = Game(players=[p1, p2])
     game._sync_control()
     attach_aura(aura, forest)

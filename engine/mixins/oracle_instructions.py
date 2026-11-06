@@ -278,6 +278,7 @@ class OracleInstructionsMixin:
                 # A spell's targets are its announcement's (CR 601.2c): the
                 # resolver has nobody to find that the cast did not name.
                 announced=True,
+                text_card=program_card,
             ),
         )
         state_machine.run(instruction)

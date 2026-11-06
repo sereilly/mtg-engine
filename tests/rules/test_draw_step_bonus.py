@@ -1,3 +1,5 @@
+
+from tests.helpers import stock_libraries
 """Tests for Magic: The Gathering Comprehensive Rules Section 504.
 
 Covers:
@@ -93,6 +95,7 @@ def _two_seat_game(*permanents_for_seat_zero: Permanent) -> tuple[Game, PlayerSt
     p1 = PlayerState(name="P1", battlefield=list(permanents_for_seat_zero), library=[])
     p2 = PlayerState(name="P2", library=[])
     game = Game(players=[p1, p2])
+    stock_libraries(game)
     game.enforce_mana_costs = False
     game.turn = 3  # past CR 103.8a's first-turn draw skip
     game._sync_control()

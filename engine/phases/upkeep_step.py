@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..game_over_guard import goes_no_further
+
 """Upkeep step (CR 503).
 
 "At the beginning of upkeep" triggered abilities are put on the stack here, plus
@@ -1091,6 +1093,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # has to sacrifice something — fall back to the first land.
         return self._force_sacrifice_first_land(controller, source) if chosen is not None else None
 
+    @goes_no_further()
     def resolve_upkeep(self, player_index: int, human_choices: dict[int | str, bool] | None = None, optional_choices: dict[int | str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[int | str, int] | None = None, sacrifice_choices: dict[int | str, int] | None = None, trigger_targets: dict[int | str, int] | None = None) -> None:
         """Run this seat's upkeep step, carrying out the prompt answers in hand.
 

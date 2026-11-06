@@ -16,7 +16,7 @@ from engine import Game, PlayerState
 from engine.combat_restrictions import combat_restriction_for
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle, normalize_creature_line
-from tests.helpers import _nosick
+from tests.helpers import _nosick, stock_libraries
 
 
 def _fish(land_type: str) -> CardDefinition:
@@ -537,6 +537,7 @@ def test_508_1c_the_last_turn_record_is_the_seats_own_ordinal_not_turn_parity():
     game = Game(players=[
         PlayerState(name="P1", battlefield=[turtle]), PlayerState(name="P2"),
     ])
+    stock_libraries(game)
     game.start_turn(0)
     game._close_current_priority_step()
     game.advance_combat_phase()

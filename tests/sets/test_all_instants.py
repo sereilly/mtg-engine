@@ -24,6 +24,8 @@ branch whose block cannot be appended mechanically.
 
 from __future__ import annotations
 
+from tests.helpers import stock_libraries
+
 
 # --- W1G4: alternative and repeated costs ---
 #
@@ -215,6 +217,7 @@ def _w1g5_lea(name: str):
 
 def _w1g5_duel():
     game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    stock_libraries(game)
     game.active_player_index = 0
     return game, game.players[0], game.players[1]
 
@@ -362,7 +365,7 @@ def test_w1g5_lat_nams_legacy_shuffles_a_chosen_card_and_cantrips_next_upkeep(se
     bear = _w1g5_lea("Grizzly Bears")
     forest = _w1g5_lea("Forest")
     p1.hand.extend([bear, forest])
-    p1.library.extend([forest] * 6)
+    p1.library[:] = [forest] * 6  # this library is the subject; P2 keeps its stock to draw
 
     game._apply_spell_text(p1, p2, legacy)
     game._settle()
@@ -1295,6 +1298,10 @@ def _w3g3i_vault(set_pool, deck=_W3G3I_DECK, interactive=True, life=20):
     game.interactive_seats = {0, 1} if interactive else set()
     game._settle()
     game.players[0].life = life
+    if life <= 0:
+        # At 0 life a player has lost (CR 704.5a) and the game is over (CR 104.1);
+        # Lich ("You don't lose the game for having 0 or less life") keeps them in it.
+        game._put_permanent_onto_battlefield(0, Permanent(card=_W3G3I_LEA["Lich"]), None)
     game.players[0].library = [_W3G3I_LEA[name] for name in deck]
     game.players[0].hand = [set_pool("ALL")["Lim-D\u00fbl's Vault"]]
     game.cast_from_hand(0, "Lim-D\u00fbl's Vault")

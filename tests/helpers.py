@@ -31,6 +31,20 @@ def _game(p1: PlayerState, p2: PlayerState) -> Game:
     return game
 
 
+def stock_libraries(game: Game, count: int = 30) -> Game:
+    """Give every player whose library is empty *count* Islands to draw.
+
+    For a test that steps whole turns and is about something else: a draw
+    from an empty library loses the game (CR 704.5b), and once the game is
+    over the engine's stepping goes no further (CR 104.1,
+    ``engine/game_over_guard.py``) — so a test that decked a player on its
+    second turn and played on was asserting about a game that had ended."""
+    for player in game.players:
+        if not player.library:
+            player.library = [CARDS_BY_NAME["Island"]] * count
+    return game
+
+
 def _nosick(perm: Permanent) -> Permanent:
     """Clear summoning sickness so the permanent can attack/tap immediately."""
     perm.metadata["summoning_sickness_turn"] = -99

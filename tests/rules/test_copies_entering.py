@@ -112,7 +112,7 @@ def test_707_5_a_creature_entering_uncopied_fires_its_trigger_once(set_pool):
     resolve_stack(game)
 
     assert len(game.players[0].library) == library - 1
-    assert game.log.count("Wall of Blossoms drew 1 card") == 1
+    assert sum(line.endswith("drew 1 card(s) (Wall of Blossoms)") for line in game.log) == 1
 
 
 @pytest.mark.cr("707.5", "603.6a", "111.1")

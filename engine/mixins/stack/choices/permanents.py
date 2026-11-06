@@ -1222,7 +1222,7 @@ PLAYER_CHOICE_SPEC = ChoiceSpec(
     default=lambda game, choice: game._default_player_choice(choice),
     action="player_choice_confirm",
     prompt_key="player_choice",
-    blocked_detail="choose a player for the resolving spell before other actions",
+    blocked_detail="choose a player for the resolving spell or ability before other actions",
     # The steps behind this one in the same sentence read the answer - the pick
     # of "one of those spells" is narrowed by it, and the damage lands on the
     # seat it names - so the loop they are part of has to stop until it exists.
@@ -1256,7 +1256,7 @@ PERMANENT_CHOICE_SPEC = ChoiceSpec(
     default=lambda game, choice: game._default_permanent_choice(choice),
     action="permanent_choice_confirm",
     prompt_key="permanent_choice",
-    blocked_detail="choose a permanent for the resolving spell before other actions",
+    blocked_detail="choose a permanent for the resolving spell or ability before other actions",
     # The steps behind this one in the same sentence are what read the answer
     # (Enchantment Alteration's attach), so the loop they are part of has to
     # stop until it exists.

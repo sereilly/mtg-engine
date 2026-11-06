@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..game_over_guard import goes_no_further
+
 """Draw step (CR 504).
 
 The active player draws a card as a turn-based action. Bonus draws granted to
@@ -185,6 +187,7 @@ class DrawStepMixin:
             for perm in self.controlled_by(player_index)
         )
 
+    @goes_no_further(0)
     def resolve_draw_step(
         self,
         player_index: int,

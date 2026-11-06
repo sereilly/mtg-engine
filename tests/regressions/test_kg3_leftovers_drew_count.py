@@ -162,8 +162,8 @@ def test_read_the_runes_counts_the_draws_an_interactive_familiar_let_through(ski
     # everything in the graveyard but the spell itself.
     given_up = [card.name for card in caster.graveyard if card.name != "Read the Runes"]
     assert len(given_up) == drawn, (given_up, game.log)
-    assert f"Read the Runes drew {drawn} card" in game.log
-    assert "Read the Runes drew 0 card" not in game.log or drawn == 0
+    assert any(line.endswith(f"drew {drawn} card(s) (Read the Runes)") for line in game.log)
+    assert not any(line.endswith("drew 0 card(s) (Read the Runes)") for line in game.log) or drawn == 0
 
 
 def test_read_the_runes_under_a_familiar_nobody_is_asked_about():
@@ -197,7 +197,7 @@ def test_malignant_growth_deals_what_an_interactive_familiar_let_through(skips, 
     assert _answer(game, skips) == ["skip_draw", "skip_draw"]
     assert len(victim.cards_drawn_this_turn) == drawn
     assert victim.life == 20 - drawn, game.log
-    assert f"P1 drew {drawn} cards" in game.log
+    assert f"P1 drew {drawn} card(s)" in game.log
 
 
 def test_malignant_growth_under_a_familiar_nobody_is_asked_about():
@@ -262,5 +262,5 @@ def test_each_player_draws_reports_what_arrived_and_in_turn_order():
     ]
     assert game.resolve_replacement_choice(1, 1, kind="skip_draw")
     assert (len(p0.cards_drawn_this_turn), len(p1.cards_drawn_this_turn)) == (1, 0)
-    reports = [line for line in game.log if line.endswith(" cards") and " drew " in line]
-    assert reports == ["P0 drew 1 cards", "P1 drew 0 cards"], game.log
+    reports = [line for line in game.log if line.endswith(" card(s)") and " drew " in line]
+    assert reports == ["P0 drew 1 card(s)", "P1 drew 0 card(s)"], game.log

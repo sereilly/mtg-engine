@@ -10,7 +10,7 @@ from engine.models import Permanent
 from engine.game_types import OracleExecutionContext
 from engine.models import CardDefinition, Permanent
 from engine.pt import add_pt_counters
-from tests.helpers import _damage_dealt, _nosick, resolve_stack
+from tests.helpers import _damage_dealt, _nosick, resolve_stack, stock_libraries
 from engine import Game as _W1G4Game
 from engine import PlayerState as _W1G4PlayerState
 from engine.models import CardDefinition as _W1G4CardDefinition
@@ -878,6 +878,7 @@ def _w2g4_board(mine, theirs):
     p0 = _W2G4PlayerState(name="P0", life=20, battlefield=list(mine))
     p1 = _W2G4PlayerState(name="P1", life=20, battlefield=list(theirs))
     game = _W2G4Game(players=[p0, p1])
+    stock_libraries(game)
     game.enforce_mana_costs = False
     game._settle()
     game.start_turn(0)
@@ -1087,6 +1088,10 @@ def _w2g1c_scene(set_pool, *, opp_life=20, opp_lands=2):
     for _ in range(opp_lands):
         p2.battlefield.append(_W2G1cPermanent(card=_W2G1C_LEA["Forest"]))
     p2.life = opp_life
+    if opp_life <= 0:
+        # At 0 life a player has lost (CR 704.5a) and the game is over (CR 104.1);
+        # Lich ("You don't lose the game for having 0 or less life") keeps them in it.
+        p2.battlefield.append(_W2G1cPermanent(card=_W2G1C_LEA["Lich"]))
     game.queue_from_hand(1, "Giant Growth")
     return game, p1, p2
 def test_mundungu_charges_both_halves_of_one_offer(set_pool):

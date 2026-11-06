@@ -704,7 +704,7 @@ def test_w1g4_allied_strategies_counts_the_targets_lands_not_the_casters(set_poo
     assert cast.supported, cast.details
     _w1g4_resolve(game)
     assert [len(player.hand) for player in game.players] == [0, 3]
-    assert "W1G4-B drew 3 cards" in game.log
+    assert "W1G4-B drew 3 card(s)" in game.log
 
 
 def test_w1g4_allied_strategies_aimed_at_its_caster_draws_their_domain(set_pool):

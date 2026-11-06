@@ -1027,6 +1027,42 @@ def reduce_cost(required: dict[str, int], reduction: CostReduction) -> dict[str,
     return cost
 
 
+def cast_mana_charge(
+    game, caster_index: int, card, *, extra_generic: int = 0,
+) -> dict[str, int]:
+    """The mana a cast of *card* for its own mana cost is charged before X
+    is announced (X = 0): CR 601.2f's total — the mana cost, then the
+    increases (generic and coloured, :func:`spell_cost_tax`,
+    :func:`spell_symbol_tax`), then the reductions (the board's and the
+    card's own, :func:`cost_reduction_for_cast`) through CR 118.7's one
+    arithmetic (:func:`reduce_cost`).
+
+    *extra_generic* is what the zone adds that no modifier states (CR 903.8's
+    commander tax).
+
+    **One reader for every price a client is shown**, because the client
+    drew three and only one of them was right: the castable highlight and a
+    zone cast's ``ways`` price asked all three readers, and the hand card's
+    cost badge (``web/serialization._serialize_card``) asked the increases
+    alone — Goblin Brigand read ``{1}{R}`` under Goblin Warchief while the
+    payment asked for ``{R}`` (SCG Phase 5, C3). An alternative cost's price
+    is :meth:`Game.alternative_cost_mana`, the same arithmetic over the cost
+    paid in the mana cost's place (CR 118.9d).
+    """
+    tax, _taxing = spell_cost_tax(game, caster_index, card)
+    pips, _pip_taxing = spell_symbol_tax(game, caster_index, card)
+    reduction, _reducing = cost_reduction_for_cast(game, caster_index, card)
+    return reduce_cost(
+        game._parse_mana_cost(
+            card.mana_cost,
+            x_value=0,
+            extra_generic=max(0, extra_generic) + tax,
+            extra_pips=pips,
+        ),
+        reduction,
+    )
+
+
 def keyword_cost_modifiers(
     game, payer_index: int, keyword: str | None,
 ) -> tuple[int, int, list[str]]:

@@ -145,7 +145,7 @@ def ante_self_then_clear_ante_and_draw(game: Game, instruction: OracleInstructio
             "from the ante into their graveyard"
         )
     drawn = game._draw_with_replacements(caster, 1)
-    game.log.append(f"{card.name} drew {drawn} card")
+    game.log.append(f"{caster.name} drew {drawn} card(s) ({card.name})")
     return True, "resolved"
 
 

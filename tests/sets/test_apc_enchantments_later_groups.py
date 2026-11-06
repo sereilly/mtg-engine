@@ -1026,7 +1026,8 @@ def test_w1g9_quicksilver_dagger_grants_both_sentences_of_its_ability(set_pool):
     assert game.players[1].life == 19
     assert len(game.players[0].hand) == hand + 1
     assert any(line.startswith("Host dealt 1 damage to ") for line in game.log), game.log[-6:]
-    assert "Host drew 1 card" in game.log
+    # The player draws (CR 121.1); the line names them and the card.
+    assert f"{game.players[0].name} drew 1 card(s) (Host)" in game.log, game.log[-6:]
 
 
 def test_w1g9_quicksilver_dagger_belongs_to_whoever_controls_the_creature(set_pool):

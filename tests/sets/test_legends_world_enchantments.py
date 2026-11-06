@@ -14,7 +14,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_path
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _nosick, stock_libraries
 
 
 @pytest.fixture(scope="module")
@@ -196,6 +196,7 @@ def _arboria_board(set_pool):
     p1 = PlayerState(name="P1", battlefield=[bear])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=set_pool("LEG")["Arboria"])])
     game = Game(players=[p1, p2])
+    stock_libraries(game)
     game.start_turn(0)
     return game, bear
 

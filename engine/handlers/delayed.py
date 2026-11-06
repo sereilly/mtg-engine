@@ -17,7 +17,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..delayed_triggers import (END_OF_TURN, WHILE_EXILED_THIS_WAY,
-                                DelayedTrigger, arm_delayed_trigger)
+                                DelayedTrigger, arm_delayed_trigger,
+                                delayed_ability_text)
+from ..text_changes import spell_text_card
 from ..tokens import CREATED_TOKEN_RESULT_KEY
 from ._chosen import (COLOR_CHOSEN_THIS_WAY_KEY,
                       resolve_color_chosen_in_resolution)
@@ -28,6 +30,24 @@ if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
     from ..oracle import OracleInstruction
+
+
+def _creating_words(game: Game, context: OracleExecutionContext) -> str:
+    """What the object creating a delayed trigger **says** — the words the
+    delayed ability's own sentence is read from: a resolving spell's with
+    its text changes (``OracleExecutionContext.text_card``, CR 612), an
+    ability's own printed line (``ability_text``), else its source
+    permanent's text through the layers (CR 613.1c). Empty when none is
+    known, and the stack item then keeps its card's name."""
+    if context.text_card is not None:
+        return context.text_card.oracle_text or ""
+    if context.ability_text:
+        return context.ability_text
+    if context.source_permanent is not None:
+        return context.source_permanent.effective_card.oracle_text or ""
+    if game.resolving_stack_item is not None:
+        return spell_text_card(game.resolving_stack_item).oracle_text or ""
+    return ""
 
 
 @effect_handler("create_delayed_trigger")
@@ -345,6 +365,7 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         instruction=payload.get("instruction"),
         source_name=context.card.name,
         card=context.card,
+        ability_text=delayed_ability_text(_creating_words(game, context)),
         bound_permanent_id=bound_id,
         bound_as_target=bool(payload.get("bound_as_target")),
         watched_permanent_id=watched_id,

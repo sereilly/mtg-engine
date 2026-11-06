@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..game_over_guard import goes_no_further
+
 """Beginning phase (CR 501).
 
 The beginning phase contains, in order, the untap step, the upkeep step and the
@@ -77,6 +79,7 @@ class BeginningPhaseMixin:
         self.log.append(f"{player.name} skipped their turn to untap {permanent_name}")
         return True
 
+    @goes_no_further(True)
     def close_beginning_step(self) -> bool:
         """Close a deferred upkeep/draw step (counterpart to close_end_step);
         True when it ended.

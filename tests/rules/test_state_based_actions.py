@@ -1165,7 +1165,7 @@ def test_704_4_a_transient_zero_toughness_inside_a_resolution_kills_nothing(cata
     # The empty hand really happened inside the resolution: the discard is
     # logged, and the draws that refilled the hand are logged after it.
     discarded = next(i for i, line in enumerate(game.log) if "discarded their hand" in line)
-    drew = next(i for i, line in enumerate(game.log) if "drew 7 cards" in line)
+    drew = next(i for i, line in enumerate(game.log) if "drew 7 card" in line)
     assert discarded < drew, game.log
 
     assert game.is_on_battlefield(maro), game.log

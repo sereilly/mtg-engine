@@ -616,16 +616,18 @@ def test_infernal_darkness_unaffordable_life_pays_nothing_at_all(set_pool):
     """A player with the mana and not the life pays neither: CR 702.24a's last
     sentence, asked about the whole cost rather than one half of it."""
     darkness = Permanent(card=set_pool("ICE")["Infernal Darkness"])
+    # Two life, so the first payment leaves the player in the game: paid down
+    # to 0 they would have lost (CR 704.5a), and an ended game has no second
+    # upkeep (CR 104.1).
     p1 = PlayerState(
-        name="P1", battlefield=[darkness], mana_pool={"B": 3}, life=1
+        name="P1", battlefield=[darkness], mana_pool={"B": 3}, life=2
     )
     game = Game(players=[p1, PlayerState(name="P2", life=20)])
 
     game.resolve_upkeep(0)  # 1 life, affordable
     assert darkness in p1.battlefield
-    assert p1.life == 0
+    assert p1.life == 1
 
-    p1.life = 1
     p1.mana_pool["B"] = 3
     game.resolve_upkeep(0)  # 2 life, not affordable
 

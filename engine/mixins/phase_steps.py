@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from ..game_over_guard import goes_no_further
+
 from ._constants import _PHASE_STEPS, phases_after
 
 class PhaseStepsMixin:
+    @goes_no_further()
     def _resolve_priority_window(self) -> None:
         """Drain the stack for a step nobody is holding priority through.
 
@@ -48,6 +51,10 @@ class PhaseStepsMixin:
         # a driver's table took the branch above).
         pause_for_choices = self.holds_for_answers()
         for _ in range(self.MAX_SETTLE_ITERS):
+            # CR 104.1: a resolution that ended the game ends the window —
+            # nothing beneath it resolves (``resolve_next_object`` is guarded).
+            if self.is_game_over():
+                return
             # One object at a time, with the state-based check a player would
             # make before receiving priority between them (CR 704.3, 117.5) —
             # inside the resolution's trigger window, so what it set off
@@ -403,6 +410,7 @@ class PhaseStepsMixin:
         # Defensive: every player has left (is_game_over() should already be true).
         return player_index
 
+    @goes_no_further("game_over")
     def pass_priority(self, player_index: int) -> str:
         if self.priority_player_index is None:
             raise ValueError("no active priority window")
@@ -571,6 +579,7 @@ class PhaseStepsMixin:
         remaining.insert(position, phase_name)
         return True
 
+    @goes_no_further()
     def enter_turn_phase(self, phase: str) -> None:
         """Begin *phase*, whichever of CR 500.1's phases it is.
 
@@ -607,6 +616,7 @@ class PhaseStepsMixin:
             return
         raise ValueError(f"no entry point for turn phase {phase!r}")
 
+    @goes_no_further()
     def enter_next_turn_phase(self, after: str | None = None) -> str | None:
         """Enter whatever follows *after* (default: the phase in progress).
 
@@ -872,6 +882,7 @@ class PhaseStepsMixin:
             break
         return candidate
 
+    @goes_no_further(True)
     def _close_current_priority_step(self) -> bool:
         """Drain the current step's window and end the step; True when it ended.
 

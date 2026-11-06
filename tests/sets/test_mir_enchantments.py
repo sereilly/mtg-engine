@@ -28,6 +28,8 @@ cannot be appended mechanically.
 
 from __future__ import annotations
 
+from tests.helpers import stock_libraries
+
 
 # --- Round 1: flanking (CR 702.25) ---
 
@@ -705,6 +707,7 @@ def _w1g2_binding_board(set_pool):
         PlayerState(name="P1", battlefield=[binding], life=20),
         PlayerState(name="P2", battlefield=[drake], life=20),
     ])
+    stock_libraries(game)
     game.enforce_mana_costs = False
     game.interactive_seats = set()
     game.start_turn(0)
@@ -1029,6 +1032,7 @@ def _w1g2_wellspring(set_pool):
         PlayerState(name="P1", hand=[set_pool("MIR")["Wellspring"]], life=20),
         PlayerState(name="P2", battlefield=[forest], life=20),
     ])
+    stock_libraries(game)
     game.enforce_mana_costs = False
     game.interactive_seats = set()
     game.start_turn(0)

@@ -263,7 +263,7 @@ def test_grip_of_amnesia_draws_only_after_the_counter_is_decided(accept):
     ]
     # Asked, and nothing behind the question has happened yet.
     assert caster.hand == []
-    assert "Grip of Amnesia drew 1 card" not in game.log
+    assert f"{caster.name} drew 1 card(s) (Grip of Amnesia)" not in game.log
 
     assert game.confirm_optional_pay(1, accept=accept)
     resolve_stack(game)
@@ -271,7 +271,7 @@ def test_grip_of_amnesia_draws_only_after_the_counter_is_decided(accept):
     assert len(caster.hand) == 1
     assert game.resume_stack == [] and not game.effect_suspended
     log = game.log
-    drew = log.index("Grip of Amnesia drew 1 card")
+    drew = log.index(f"{caster.name} drew 1 card(s) (Grip of Amnesia)")
     binned = log.index("Grip of Amnesia resolved and moved to graveyard")
     finished = log.index("Grip of Amnesia finished resolving")
     # CR 608.2c then CR 608.2n: the draw, then the card to the graveyard, and

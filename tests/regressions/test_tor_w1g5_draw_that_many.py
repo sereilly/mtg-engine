@@ -113,4 +113,4 @@ def test_tolarian_winds_draws_as_many_cards_as_it_discarded(set_pool):
     assert [card.name for card in game.players[0].hand] == [
         "Library 0", "Library 1", "Library 2",
     ]
-    assert "Tolarian Winds drew 3 card" in game.log
+    assert any(line.endswith("drew 3 card(s) (Tolarian Winds)") for line in game.log)

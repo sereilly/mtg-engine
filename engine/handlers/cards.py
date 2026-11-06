@@ -119,7 +119,7 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
                 game._draw_with_replacements(drawer, wanted)
                 return
             drawn = _drew_since(drawer, drew_before.get(seat, 0))
-            game.log.append(f"{drawer.name} drew {drawn} cards")
+            game.log.append(f"{drawer.name} drew {drawn} card(s)")
 
         run_resumable(
             game,
@@ -178,7 +178,7 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
     # suspends the draw and the cards arrive with its answer.
     _draw_and_record(
         game, context, target, count,
-        report=lambda drawn: f"{target.name} drew {drawn} cards",
+        report=lambda drawn: f"{target.name} drew {drawn} card(s)",
     )
     return True, "resolved"
 
@@ -239,7 +239,10 @@ def draw_controller_cards(game: Game, instruction: OracleInstruction, context: O
     # controller's own; declared in ``lowering/_records._PRODUCES``.
     _draw_and_record(
         game, context, caster, count,
-        report=lambda drawn: f"{card.name} drew {drawn} card",
+        # The player draws (CR 121.1), not the card: the line names the
+        # drawer and says which card made them ("Riptide Survivor drew 3
+        # card" read as a creature drawing, in the singular).
+        report=lambda drawn: f"{caster.name} drew {drawn} card(s) ({card.name})",
     )
     return True, "resolved"
 

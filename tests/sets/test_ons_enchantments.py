@@ -1848,7 +1848,7 @@ def test_w1g11_a_cycled_cards_draw_meets_a_word(set_pool):
 
     assert alice.hand == [] and [c.name for c in alice.graveyard] == ["Renewed Faith"]
     assert any("gained 5 life from Words of Worship" in line for line in game.log)
-    assert any("Renewed Faith drew 0 card" in line for line in game.log)
+    assert any("drew 0 card(s) (Renewed Faith)" in line for line in game.log)
     assert game.armed_draw_replacements == []
 
 
