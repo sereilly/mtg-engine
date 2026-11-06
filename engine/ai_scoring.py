@@ -45,6 +45,7 @@ from .ai_rehearsal import (
     Rehearsal,
     deliberating,
     priced_by_the_fight,
+    public_counts,
     rehearse,
     rehearsing,
 )
@@ -569,9 +570,13 @@ def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> 
     measures on this board; it was the cast scorer's probes on the card's
     text, which went when the cast scorer stopped reading text.
     """
+    # The position by what can be counted on it and which permanents are on
+    # it — never by the log's length, which a line reworded, added or merged
+    # moves: a search asked one line later than before weighed its cards
+    # again, or did not, as the log's wording said (kg4).
     stamp = (
-        id(game), len(game.log), game.turn,
-        tuple((seat.life, len(seat.hand), len(seat.battlefield)) for seat in game.players),
+        id(game), public_counts(game),
+        tuple(sorted(permanent.permanent_id for permanent in game.all_permanents())),
     )
     if _TUTOR_SCORES.get("at") != stamp:
         _TUTOR_SCORES.clear()
