@@ -46,6 +46,9 @@ from web.app import app, store
 client = TestClient(app)
 
 _CARDS = ("Haunting Misery", "Skeletal Scrying")
+#: Cards that charge the same cost and arrived after this file was written;
+#: the population test counts them, the payment tests below do not.
+_ARRIVED = ("Chill Haunting",)
 #: Slots:       0                1         2               3                4           5
 _PILE = ("Grizzly Bears", "Forest", "Black Knight", "Grizzly Bears", "Mind Rot", "Black Knight")
 #: What a cast naming no set gives up for X = 2: the top of the pile down,
@@ -298,14 +301,23 @@ def test_the_cast_route_forwards_the_graveyard_set(name):
 
 
 def test_these_are_the_pools_graveyard_exile_cast_costs():
-    """The floor: the two cards above are every card in either manifest role
-    that charges a graveyard exile to be cast — a third arrives here first."""
+    """The floor: the two cards above, and the arrivals below, are every card
+    in either manifest role that charges a graveyard exile to be cast — the
+    next one arrives here first.
+
+    Scourge added one: Chill Haunting ("As an additional cost to cast this
+    spell, exile X creature cards from your graveyard. Target creature gets
+    -X/-X until end of turn.") prints Haunting Misery's cost beside a creature
+    target. It is not in ``_CARDS``, whose payment tests are built around a
+    player target and a fixed pile; its own payment and picker are tested
+    where its card is (``tests/engine/test_cost_pickers.py`` read its picker
+    red on arrival)."""
     found = sorted(
         unit.name for unit in compilation_units(_pool().values())
         if compile_card_oracle(unit).supported
         and any(cost.exile_graveyard_filter is not None for cost in additional_costs(unit))
     )
-    assert found == sorted(_CARDS), found
+    assert found == sorted(_CARDS + _ARRIVED), found
 
 
 @pytest.mark.parametrize("name", _CARDS)
