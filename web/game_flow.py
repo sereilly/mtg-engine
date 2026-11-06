@@ -243,6 +243,27 @@ def _ai_step(session: Session) -> bool:
         and game.current_step in ("precombat_main", "postcombat_main")
         and not game.stack
     )
+    # **Anywhere but the seat's own main phase with an empty stack, the AI
+    # answers priority the way every AI seat handed priority does**
+    # (`engine.ai_priority.act_at_priority`: an instant or a flash spell, an
+    # ability at instant speed, an ability of a card in its graveyard — each
+    # in the moments `instant_speed_window` names), and an object it puts on
+    # the stack goes round the table like any other. The main phase's doors
+    # below are the main phase's: asked in combat, their battlefield chooser
+    # passed over every tapped permanent, so the AI's blocked attacker never
+    # regenerated (Krosan Warchief, smoke game 2), and nothing cast the active
+    # AI's combat trick after a person's blocks (CR 509.2 gives it priority
+    # first). This is the simulator's answer in the same windows.
+    if not sorcery_speed_ok:
+        act = act_at_priority(game, seat)
+        if act is not None and act.supported:
+            game.note_priority_action_taken(seat)
+            _auto_resolve_ai_pending(session)
+            if has_human_opponent and game.stack:
+                _run_priority_exchange(session, seat)
+                return False
+        return True
+
     cast_action = choose_cast_action(game, seat) if sorcery_speed_ok else None
     if cast_action is not None:
         # `hand_index` indexes the zone `from_zone` names — the hand, the

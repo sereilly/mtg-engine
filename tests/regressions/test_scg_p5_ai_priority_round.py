@@ -335,3 +335,46 @@ def test_the_ais_block_trigger_waits_for_the_attackers_priority():
     if not seen["states"] and not any("declared 1 blocker" in line for line in game.log):
         pytest.skip("the AI did not block")
     _assert_round(seen, game)
+
+
+def test_the_active_ais_trick_after_the_persons_blocks_waits_for_the_pass():
+    """The AI attacks with Grizzly Bears (the Debug Menu's attack-everything,
+    so the attack is certain) into the person's Grizzly Bears, holding Giant
+    Growth over a Forest. The person blocks; CR 509.2 gives the AI — the active
+    player — priority, and it answers as every AI seat handed priority does
+    (`ai_priority.act_at_priority`): the trick goes on the stack and the person
+    is asked over it. The AI step asked the main phase's choosers here, which
+    cast nothing in combat."""
+    sid, session = _session(first=1)
+    game = session.game
+    session.force_ai_attack_all = True
+    (attacker,) = _put(game, 1, ["Grizzly Bears"])
+    _put(game, 1, ["Forest"])
+    (blocker,) = _put(game, 0, ["Grizzly Bears"])
+    game.players[1].hand = [_CARDS["Giant Growth"]]
+    blocked = False
+    seen = {"with_priority": False, "states": []}
+    for _ in range(60):
+        state = _state(sid)
+        if state["current_turn"] == 0 or state["status"] == "finished":
+            break
+        labels = [item["label"] for item in state["stack"]]
+        if any("Giant Growth" in entry for entry in labels):
+            seen["states"].append((state["current_step"], state["priority_player"], labels))
+            seen["with_priority"] |= state["priority_player"] == 0
+        combat = state.get("combat") or {}
+        if (
+            state["current_step"] == "declare_blockers" and not blocked
+            and combat.get("attackers") and not combat.get("blockers_locked")
+        ):
+            _act(sid, action="declare_blockers", target_seat=0, blocker_pairs_by_id={
+                str(blocker.permanent_id): [attacker.permanent_id],
+            })
+            blocked = True
+        elif state["priority_player"] == 0:
+            _act(sid, action="pass_priority")
+        else:
+            _act(sid, action="ai_step")
+    assert blocked, game.log[-15:]
+    assert any(card.name == "Giant Growth" for card in game.players[1].graveyard), game.log[-15:]
+    _assert_round(seen, game)
