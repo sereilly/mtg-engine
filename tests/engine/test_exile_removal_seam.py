@@ -14,8 +14,10 @@ moment the *same* ``CardDefinition`` is exiled by something else, still saying
 "face down", still carrying somebody else's counters.
 
 So the departure needs a seam, and the two sides of this zone are nowhere near
-the same size: **52** sites under ``engine/`` and ``web/`` append to
-``player.exile`` and none of them has to know the register exists, while only
+the same size: **52** sites under ``engine/`` and ``web/`` appended to
+``player.exile`` and none of them had to know the register exists (the
+arrivals have their own seam since, ``put_card_into_exile``, held by
+``tests/engine/test_exile_arrival_seam.py``), while only
 **thirteen** take a card back out. Thirteen places to forget something is the
 shape ``remove_from_battlefield`` had at 41 and ``take_card_from_hand`` had at
 five, and this file is the same guard those two have.

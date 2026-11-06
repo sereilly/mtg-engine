@@ -200,10 +200,10 @@ class ZoneFunnelsMixin:
         Removing by index is what makes it exactly one, and **identity** is what
         picks the index. ``list.remove``/``list.index`` compare by value, and
         four of the sites this replaced spelled it that way: two printings of
-        one card are equal-looking objects, and the same ``CardDefinition`` can
-        sit in two seats' exiles at once (a deck repeats one immutable
-        definition per copy and the catalog is shared), so the value spelling
-        reaches a look-alike. That is the bug class
+        one card are equal-looking objects, and the value spelling reaches a
+        look-alike. (One object at two exile positions is what
+        :meth:`put_card_into_exile` exists to prevent; identity is what lets
+        that guarantee mean anything here.) That is the bug class
         ``tests/engine/test_control_reads.py`` was written for, one zone over.
 
         *record* is the :class:`~engine.exiled_records.ExiledRecord` the caller

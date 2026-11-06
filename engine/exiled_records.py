@@ -37,13 +37,23 @@ and then **comes back to life the moment the same card is exiled by something
 else**, still saying "face down", still carrying somebody else's scream
 counters. That is precisely the memory the rule forbids. So the departure needs
 a seam after all, and it is affordable because the two sides of this zone are
-nothing like the same size: 52 sites in ``engine/`` and ``web/`` *append* to
-``player.exile`` and none of them has to know about this file, while only
+nothing like the same size: 52 sites in ``engine/`` and ``web/`` appended to
+``player.exile`` and none of them had to know about this file, while only
 thirteen take a card back out. ``Game.take_card_from_exile`` is that
 transition, and ``tests/engine/test_exile_removal_seam.py`` is what keeps it
 the only one — the same arrangement ``remove_from_battlefield`` and
 ``take_card_from_hand`` already have, for the same reason each of those was
 written.
+
+**The arrivals got their seam too** (SCG Phase 5), for a reason this file's
+own opening argument makes from the other side: a record keyed on the exiled
+object is sound only while no exile holds that object twice, and a deck
+repeats one definition per copy. ``Game.put_card_into_exile`` is every
+arrival (``tests/engine/test_exile_arrival_seam.py``) and returns the object
+the pile holds — :func:`distinct_exile_object`'s new, equal one when some
+exile already held it — which is what every record is then written with. A
+record written before its card lands is :attr:`ExiledRecord.awaiting_arrival`
+until :func:`bind_awaiting_records` binds it.
 
 The record carries a ``metadata`` dict under the *same* key spelling
 ``engine/named_counters.py`` uses on a permanent, so ``counters_on`` /
@@ -381,14 +391,14 @@ def newest_record_for(game, owner_index: int, card) -> ExiledRecord | None:
     exists for the departure seam: when one copy of a card leaves a pile that
     holds two, exactly one record has to stop speaking, and the two records are
     not interchangeable — one may be face down with counters and the other
-    neither. Which of the two the departing copy "was" is unanswerable (they are
-    the same ``CardDefinition`` object), so this picks the newest, which is the
-    rule :func:`records_for_cards` already uses; one rule beats two.
+    neither. Since ``Game.put_card_into_exile`` no exile holds one object twice,
+    so two live records for one object are two records of *one* exiled card (a
+    card exiled again where it lies, CR 406.7) and the newest is the one
+    speaking; a pile written directly (a test, the Debug Menu) can still share
+    an object, and the newest is then the rule :func:`records_for_cards` uses.
 
-    Scoped to the seat because the same object can sit in two players' exiles at
-    once — a deck repeats one immutable definition per copy and the catalog is
-    shared between seats — so a game-wide identity match would retire the wrong
-    player's record.
+    Scoped to the seat for that direct write's sake, where the same object can
+    sit in two players' exiles; through the seam it cannot.
 
     Must be asked **before** the card is removed: liveness is derived from the
     pile, so a record read afterwards answers None when the last copy has gone,
