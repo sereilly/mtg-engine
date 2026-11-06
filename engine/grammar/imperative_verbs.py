@@ -69,6 +69,7 @@ from .effects import (
     _parse_change_target,
     _parse_change_text,
     _parse_choose_cards_in_hand,
+    _parse_copy_target_spell,
     _parse_copy_that_spell,
     _parse_copy_this_spell,
     _parse_counter,
@@ -652,6 +653,12 @@ def parse_imperative_verb(
         this_spell = _parse_copy_this_spell(stream)
         if this_spell is not None:
             return this_spell
+        # "Copy **target** instant or sorcery spell …" (Mischievous Quanar,
+        # Fork) — the spell the ability targets, non-consuming on refusal for
+        # the same reason.
+        target_spell = _parse_copy_target_spell(stream)
+        if target_spell is not None:
+            return target_spell
         return _parse_copy_that_spell(stream)
     # A token maker with a **recipient** printed in front of it — "Each
     # opponent creates …" (Pursued Whale), "Target opponent creates …"

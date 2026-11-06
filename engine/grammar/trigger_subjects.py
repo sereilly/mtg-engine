@@ -184,6 +184,14 @@ _ATTACHED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
         (("becomes", "the", "target", "of") + obj, "self_becomes_target")
         for obj in _BECOMES_TARGET_OBJECTS
     ),
+    # "When enchanted creature **is turned face up**, destroy it. It can't be
+    # regenerated." (Fatal Mutation.) CR 708.8's event about the Aura's host
+    # (CR 708.8 again: a face-down creature can be enchanted, and the Aura
+    # stays on as it turns), under the board-wide kind
+    # ``trigger_subjects``' subject-led neighbour reads "a permanent is turned
+    # face up" as — the attachment is the narrowing, as it is for every row
+    # here, and ``engine/trigger_conditions.py`` records it (``turned_attached``).
+    (("is", "turned", "face", "up"), "permanent_turned_face_up"),
 )
 
 

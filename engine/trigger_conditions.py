@@ -72,6 +72,19 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # spelling of the row above. The source only; "whenever a permanent you
     # control is turned face up" (Legions' Ixidor's-cycle relatives) is a
     # quantified subject and is not this row's, which the lookahead keeps.
+    #
+    # "When **enchanted creature** is turned face up, destroy it." (Fatal
+    # Mutation, Scourge.) The same event watched by an Aura on the permanent
+    # turned up rather than by the permanent itself — so it is the board-wide
+    # kind the whenever table gives "a permanent is turned face up", with
+    # ``turned_attached`` saying whose ability is watching
+    # (``event_filters._turned_face_up_filter``), the arrangement
+    # ``tapped_attached`` makes for the tap. **Above** the self row, whose
+    # ``.+?`` claimed "enchanted creature" as the source and read the Aura as
+    # watching itself turn face up — which no Aura ever is.
+    ("permanent_turned_face_up",
+     r"when(?:ever)? (?:equipped|enchanted) (?P<turned_attached>creature|permanent)"
+     r" is turned face up"),
     ("turned_face_up",
      r"when (?!(?:a|an|another) )(?:this|.+?) is turned face up"),
     # "When **the token** leaves the battlefield, sacrifice this enchantment."

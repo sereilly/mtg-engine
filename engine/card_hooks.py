@@ -244,14 +244,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "damage to you this turn, prevent all but 1 of that damage":
             _line("grant_forcefield_shield", "activated_prevent"),
     },
-    # `copy_top_stack_spell` copies the top of the stack rather than the named
-    # target, and the two riders ("except that the copy is red", the optional
-    # retarget) are the handler's own. All three are Fork's, not a shape.
-    'Fork': {
-        "copy target instant or sorcery spell, except that the copy is red. you "
-        "may choose new targets for the copy":
-            _line("copy_top_stack_spell", "spell_pattern"),
-    },
     # The first sentence is an ordinary numeric shield the grammar can read; the
     # rest of the line grants an activatable emblem, which is ON_SELF_RESOLVED
     # above. Claiming only the shield would drop the emblem silently, so the

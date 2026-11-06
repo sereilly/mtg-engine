@@ -499,6 +499,43 @@ _KEYWORD_COST_MODIFIER = re.compile(
 #: produces no modifier, is claimed by no line and reports unsupported.
 _MODIFIABLE_COST_KEYWORDS = frozenset({"flashback"})
 
+#: "**All morph costs cost {2} more.** (This doesn't affect the cost to cast
+#: creature spells face down.)" (Exiled Doomsayer.) The keyword-cost row above
+#: with nobody named as payer — every player's — and a cost that is the price
+#: of a **special action** rather than of a cast: CR 702.37e's turn face up,
+#: whose price is made by ``face_down._morph_offer``. Its own pattern because
+#: the sentence is spelled the other way round ("all … costs cost", no "you
+#: pay"), and its own keyword table because what it names is not an
+#: alternative cost: ``applies_to`` is the special action's kind, which is what
+#: keeps the {3} face-down cast — ``AlternativeCost.keyword`` "morph", which
+#: the cast path asks ``keyword_cost_modifiers`` about — out of its reach, as
+#: the reminder text says.
+_ALL_KEYWORD_COSTS_MODIFIER = re.compile(
+    r"all (?P<keyword>[a-z]+) costs cost \{(?P<amount>\d+)\} (?P<direction>less|more)"
+)
+
+#: The keyword :data:`_ALL_KEYWORD_COSTS_MODIFIER` may name, and the cost kind
+#: it modifies: "morph" is the price of the ``turn_face_up`` special action
+#: (``face_down.TURN_FACE_UP``). Any other keyword matches the pattern, produces
+#: no modifier and leaves its card unsupported naming the line.
+_ALL_KEYWORD_COST_KINDS = {"morph": "turn_face_up"}
+
+
+def _all_keyword_costs_modifier(match: "re.Match[str]") -> CostModifier | None:
+    """The modifier :data:`_ALL_KEYWORD_COSTS_MODIFIER` matched, or None when
+    the keyword is one no price is made for — split out for
+    :func:`_keyword_cost_modifier`'s reason (the claim and the reading ask
+    one question). ``controller`` None is CR 102's every player."""
+    kind = _ALL_KEYWORD_COST_KINDS.get(match.group("keyword"))
+    if kind is None:
+        return None
+    return CostModifier(
+        amount=int(match.group("amount")),
+        applies_to=kind,
+        reduces=match.group("direction") == "less",
+        controller=None,
+    )
+
 #: The ability keywords :data:`_KEYWORD_ABILITY_REDUCTION` may name. One entry,
 #: and the set is what makes the refusal loud: a card naming any other keyword
 #: matches the pattern, produces no modifier, is claimed by no line and is
@@ -528,6 +565,10 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
         # Stone.) The same early exit asked of a single line: its sentence
         # ends at "more" with no "to <verb>" behind it either.
         and "pay cost" not in text
+        # "All morph costs cost {2} more." (Exiled Doomsayer.) Ends at "more"
+        # with no "to <verb>" behind it, and pays nothing: its own word here
+        # for the two rows above's reason.
+        and "costs cost" not in text
     ):
         return ()
     modifiers: list[CostModifier] = []
@@ -592,6 +633,10 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
         )
     for match in _KEYWORD_COST_MODIFIER.finditer(text):
         modifier = _keyword_cost_modifier(match)
+        if modifier is not None:
+            modifiers.append(modifier)
+    for match in _ALL_KEYWORD_COSTS_MODIFIER.finditer(text):
+        modifier = _all_keyword_costs_modifier(match)
         if modifier is not None:
             modifiers.append(modifier)
     for match in _SACRIFICE_SYMBOL_TAX.finditer(text):

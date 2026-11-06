@@ -1210,3 +1210,37 @@ def _permanent_destroyed_filter(
     return destroyed_trigger_applies(
         game, permanent, game.controller_index_of(permanent), trig, event,
     )
+
+
+@event_filter("permanent_turned_face_up")
+def _turned_face_up_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever **a permanent** is turned face up" (Aphetto Runecaster) /
+    "When **enchanted creature** is turned face up" (Fatal Mutation).
+
+    CR 708.8's event, announced once per permanent turned up by
+    ``face_down.turn_face_up`` — on every road up: the morph special action
+    (CR 702.37e), an effect (CR 708.7), Illusionary Mask's replacement. Two
+    scopes, and the condition's payload says which:
+
+    * ``turned_attached`` — the Aura's own host, by identity (two copies of a
+      permanent compare equal by value and the Aura is on exactly one of
+      them), asked of ``attached_to`` as the tap and damage events ask it;
+    * ``turned_filter`` — the printed noun phrase, through the one reader of
+      what a phrase means, observed by the watcher's controller (CR 109.5).
+      "A permanent" is the empty filter: any permanent, any player's (the
+      cards' 2007-05-01 ruling).
+
+    Asked after the turn, so the subject's characteristics are its face-up
+    ones — a "creature" filter sees what the permanent now is.
+    """
+    turned = event.subject
+    if turned is None:
+        return False
+    if trig.condition.payload.get("turned_attached"):
+        return permanent.metadata.get("attached_to") is turned
+    return trigger_subject_matches(
+        game, trig, "turned", turned,
+        observer=game.controller_index_of(permanent), source=permanent,
+    )

@@ -1702,6 +1702,10 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # CR 702.37e / 708.8's turning face up, which is neither an entry nor a
     # cast — the permanent was on the battlefield all along.
     ("turned_face_up", "may"): "triggered_face_up",
+    # Scourge: the same moment watched from anywhere on the board ("Whenever
+    # a permanent is turned face up, you may draw a card", Aphetto
+    # Runecaster) — the same bucket, because it is the same event.
+    ("permanent_turned_face_up", "may"): "triggered_face_up",
 }
 
 

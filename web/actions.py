@@ -1048,9 +1048,18 @@ def _action_special_action(session, req, seat_type):
         # immediately before paying (CR 107.3d), on the channel a cast's X
         # already travels on. The engine refuses a non-zero X for a price that
         # prints none, and None is X = 0.
+        # "Morph—Return a Bird you control to its owner's hand" / "Morph—
+        # Discard a Zombie card" (Scourge): what pays a price's clauses that
+        # are not mana, on the channels an activation's cost already travels
+        # on — the permanents by id (``cost_permanent_ids``), the hand card by
+        # position (``cost_hand_index``) — out of the entry's
+        # ``cost_permanents`` / ``cost_hand_choices``. None is the engine's
+        # deterministic pick, as everywhere else.
         refusal = take_permanent_special_action(
             session.game, req.seat, permanent, kind, sacrificed=sacrificed,
             exiled_slots=req.cost_graveyard_indices, x_value=req.x_value,
+            cost_permanent_ids=req.cost_permanent_ids,
+            cost_hand_index=req.cost_hand_index,
         )
         if refusal is not None:
             raise HTTPException(status_code=400, detail=refusal)
