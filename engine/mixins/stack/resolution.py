@@ -166,7 +166,7 @@ class StackResolutionMixin:
             )
             return
         if exile_instead:
-            owner.exile.append(leaving)
+            self.put_card_into_exile(owner, leaving)
             self.log.append(f"{card.name} {verb} and was exiled instead of going to the graveyard")
         elif self.put_card_into_graveyard(owner, leaving):
             self.log.append(f"{card.name} {verb} and moved to graveyard")
@@ -244,7 +244,7 @@ class StackResolutionMixin:
 
         def to_exile(game, event: dict) -> None:
             event["settled"] = True
-            owner.exile.append(leaving)
+            game.put_card_into_exile(owner, leaving)
             game.log.append(
                 f"{card.name} {verb} and was exiled instead of going to the graveyard"
             )

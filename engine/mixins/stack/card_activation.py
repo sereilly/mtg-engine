@@ -329,7 +329,7 @@ class CardActivationMixin:
             # Guide.) The other cost that names a hand, and not a discard: the
             # card goes to exile, so nothing watching a discard sees one and
             # nothing can bring it back from a graveyard.
-            controller.exile.append(card)
+            self.put_card_into_exile(controller, card)
             self.log.append(
                 f"{controller.name} exiled {card.name} from their hand to "
                 "activate its ability"

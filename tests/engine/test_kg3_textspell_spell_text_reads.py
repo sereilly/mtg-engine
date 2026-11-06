@@ -92,8 +92,6 @@ PRINTED_CARD_READS: dict[tuple[str, str], str] = {
         "an exile record's object, not a stack object",
     ("engine/handlers/stack.py", "_redirect_countered_card"):
         "the countered card moved to another zone (CR 701.6a, a zone move)",
-    ("engine/handlers/stack.py", "counter_top_stack_spell"):
-        "the countered card's record of where it went (identity)",
     ("engine/legality_stack.py", "_enumerate_stack_ability_targets"):
         "an ability's source name for the picker",
     ("engine/mana_payment.py", "spell_mana_cost"):
@@ -121,7 +119,7 @@ PRINTED_CARD_READS: dict[tuple[str, str], str] = {
         "stamped as the object is put on the stack, before any effect can change it",
     ("engine/mixins/target_announcements.py", "_stack_push"):
         "asked as the object is put on the stack, before any effect can change it",
-    ("engine/mixins/target_announcements.py", "_announce_targeting"):
+    ("engine/mixins/target_announcements.py", "_announce_targeting_now"):
         "the announcing object as the event's subject (identity)",
     ("engine/mixins/target_announcements.py", "_announce_targeted_player"):
         "the announcing object as the event's subject (identity)",

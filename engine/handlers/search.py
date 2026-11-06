@@ -534,7 +534,7 @@ def strip_cards_with_chosen_name(game: Game, instruction: OracleInstruction, con
         found = [card for card in cards if has_name(card, named)]
         if found:
             cards[:] = kept
-            target.exile.extend(found)
+            game.put_cards_into_exile(target, found)
             taken.extend(card.name for card in found)
     if "library" in zones:
         random.shuffle(target.library)
@@ -598,8 +598,7 @@ def _strip_by_recorded_cards(
         cards[:] = [
             card for index, card in enumerate(cards) if index not in set(slots)
         ]
-        target.exile.extend(found)
-        taken.extend(found)
+        taken.extend(game.put_cards_into_exile(target, found))
     if "library" in zones:
         random.shuffle(target.library)
     game.log.append(

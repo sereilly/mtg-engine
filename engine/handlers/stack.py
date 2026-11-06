@@ -131,13 +131,13 @@ def exile_target_spell(game: Game, instruction: OracleInstruction, context: Orac
         str(name): resolve_amount(count, context.x_value)
         for name, count in (instruction.payload.get("counters") or {}).items()
     }
-    game._bin_spell_card(
-        owner, target.card, exile_instead=True,
-        verb=f"was exiled by {context.card.name}",
-    )
     record = record_exiled_card(
-        # The card as exile holds it (CR 709.4): ``_bin_spell_card`` put the
-        # *whole* card there, and the register is keyed on that object.
+        # The card as exile will hold it (CR 709.4): ``_bin_spell_card`` puts
+        # the *whole* card there. Written before it lands and bound to the
+        # object the pile holds as it does (``awaiting_arrival``): when the
+        # pile already holds another copy of the card, that object is a new
+        # one (``Game.put_card_into_exile``), and a record naming the card on
+        # the stack would speak for the other copy.
         game, whole_card(target.card), owner_index,
         # CR 108.4 gives a card in exile no controller, so its own abilities
         # belong to its owner. The printed possessive ("**that player's**
@@ -146,6 +146,11 @@ def exile_target_spell(game: Game, instruction: OracleInstruction, context: Orac
         controller_index=owner_index,
         counters=counters,
         announcement=_stack_announcement(target),
+        awaiting_arrival=True,
+    )
+    game._bin_spell_card(
+        owner, target.card, exile_instead=True,
+        verb=f"was exiled by {context.card.name}",
     )
     # The record goes into the resolution scratchpad under the key
     # ``record_in_context`` reads: ``create_delayed_trigger`` freezes the whole
@@ -1061,8 +1066,15 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             # card something diverted is in no exile and permits nothing.
             if destination == "exile":
                 owner = game.players[countered.owner_index]
-                exiled = any(held is countered.card for held in owner.exile)
-                context.results["exiled_cards"] = [countered.card] if exiled else []
+                # The object the pile holds, which is the **newest** arrival:
+                # a new one when that exile already held another copy of the
+                # card (``Game.put_card_into_exile``), and the card itself
+                # otherwise.
+                landed = owner.exile[-1] if owner.exile else None
+                exiled = landed is not None and (
+                    landed is countered.card or landed == countered.card
+                )
+                context.results["exiled_cards"] = [landed] if exiled else []
         else:
             # CR 701.6a: "its **owner's** graveyard" (CR 108.3).
             game._bin_spell_card(

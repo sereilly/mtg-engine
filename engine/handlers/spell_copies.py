@@ -99,12 +99,15 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
         # The answer to the copy before this one, if it was asked through the
         # prompt that suspends (a card in a graveyard, a spell), exactly once.
         _apply_copy_new_target(game, context, made, caster_index)
+        _settle_unasked_copies(game, made, caster_index)
         if position is None:
             return
         copy = _copy_of_spell(copied, caster_index)
         # CR 707.10: a copy has the original's targets (or the ones the
-        # copying effect changed them to). It does not choose again.
-        game._stack_push(targets_already_chosen=True, item=copy)
+        # copying effect changed them to). It does not choose again — and
+        # it is announced once its controller has decided whether to change
+        # them (CR 707.10c, ``announce=False``).
+        game._stack_push(targets_already_chosen=True, item=copy, announce=False)
         made.append(copy)
         game.log.append(f"{context.card.name} copied {copied.card.name}")
         # "**You may choose new targets for the copy.**" (CR 707.10c.) The
@@ -127,6 +130,22 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
 #: Where a ``retarget_choice`` armed for a copy writes its answer, in the
 #: resolution's records, for the next step of the copy loop to read.
 _COPY_NEW_TARGET = "_copy_new_target"
+
+
+def _settle_unasked_copies(game: Game, made: list, seat: int) -> None:
+    """Announce every copy in *made* whose offer is settled and that still
+    owes its announcements (``StackItem.announcement_owed``): one no prompt
+    holds — the ``copy_spell_target`` offer it was armed with has been
+    answered, or none was armed. The offer's own answer announces the copy it
+    moved; this is the catch for every way an offer ends without one."""
+    for copy in made:
+        if not copy.announcement_owed:
+            continue
+        if any(
+            choice.data.get("_copy") is copy for choice in game.pending_choices
+        ):
+            continue
+        game.announce_copy_put_onto_stack(copy, chooser=seat)
 
 
 def _offer_copy_new_target(
@@ -160,9 +179,11 @@ def _offer_copy_new_target(
     words ("copy 2 of 4"); it changes nothing about what is offered.
     """
     if _copy_reaim_is_one_slot(game, copy):
-        game.arm_copy_spell_target(
+        if not game.arm_copy_spell_target(
             seat, copy, copy_number=copy_number, copy_count=copy_count,
-        )
+        ):
+            # Nothing to change to: the copy keeps the original's targets.
+            game.announce_copy_put_onto_stack(copy, chooser=seat)
         return
     from ..stack_targets import (apply_target_change, change_options, change_slots,
                                  target_label)
@@ -170,19 +191,23 @@ def _offer_copy_new_target(
 
     slots = change_slots(game, copy)
     if isinstance(slots, str) or len(slots) != 1:
+        game.announce_copy_put_onto_stack(copy, chooser=seat)
         return
     if slots[0].current.kind not in ("graveyard", "stack"):
+        game.announce_copy_put_onto_stack(copy, chooser=seat)
         return
     options = change_options(slots, [])
     if not options:
+        game.announce_copy_put_onto_stack(copy, chooser=seat)
         return
     if seat not in game.interactive_seats:
         from ..ai_prompts import choose_copy_retarget
 
         pick = choose_copy_retarget(game, seat, copy, slots, options)
-        if pick is not None and apply_target_change(game, copy, slots, [pick]):
+        moved = pick is not None and apply_target_change(game, copy, slots, [pick])
+        if moved:
             game.log.append(f"{copy.card.name} (copy) targets {target_label(game, pick)}")
-            game.announce_targets_chosen(copy, chooser=seat, newly_targeted=True)
+        game.announce_copy_put_onto_stack(copy, chooser=seat, chose=moved)
         return
     name = copy.card.name
     which = (
@@ -221,16 +246,18 @@ def _apply_copy_new_target(
 
     answer = context.results.pop(_COPY_NEW_TARGET)
     slots = context.results.pop(f"{_COPY_NEW_TARGET}_slots", None)
-    if not made or not slots or not isinstance(answer, dict):
-        return
-    pick = answer.get("_target")
-    if pick is None:
+    if not made:
         return
     copy = made[-1]
-    if not apply_target_change(game, copy, slots, [pick]):
-        return
-    game.log.append(f"{copy.card.name} (copy) targets {target_label(game, pick)}")
-    game.announce_targets_chosen(copy, chooser=seat, newly_targeted=True)
+    pick = answer.get("_target") if isinstance(answer, dict) else None
+    moved = bool(slots) and pick is not None and apply_target_change(
+        game, copy, slots, [pick],
+    )
+    if moved:
+        game.log.append(f"{copy.card.name} (copy) targets {target_label(game, pick)}")
+    # Announced once, now its controller has answered (CR 707.10c) — kept or
+    # moved.
+    game.announce_copy_put_onto_stack(copy, chooser=seat, chose=moved)
 
 
 def _copy_of_spell(copied: StackItem, controller_index: int) -> StackItem:
@@ -374,9 +401,11 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
 
     game._stack_push(
         # CR 707.10: a copy has the original's targets (or the ones the
-        # copying effect changed them to). It does not choose again.
+        # copying effect changed them to). It does not choose again — and it
+        # is announced once its targets are decided (CR 707.10c), below.
         targets_already_chosen=True,
         item=copy,
+        announce=False,
     )
     # The copy keeps none of the colour an *effect* gave the original (a
     # Lace's record rides ``choices``, which is copied whole): CR 707.2 copies
@@ -394,12 +423,9 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
     game.log.append(f"{card.name} copied {copied.card.name} (copy put on the stack)")
     if named_on_the_cast:
         # CR 707.10c: "You may choose new targets for the copy" — and this
-        # caster did. A copy that kept the original's targets chose nothing,
-        # which is why ``_stack_push`` announces no copy on its own.
-        #
-        # No ``newly_targeted``: this copy was *pushed* with its new target,
-        # so ``_stack_push_object`` has already announced it.
-        game.announce_targets_chosen(game.stack[-1], chooser=caster_index)
+        # caster did, on the cast: the copy is put onto the stack with them,
+        # announced once (the colour above already its own, CR 707.9b).
+        game.announce_copy_put_onto_stack(copy, chooser=caster_index, chose=True)
     elif caster_index in game.interactive_seats and _copy_reaim_is_one_slot(
         game, game.stack[-1]
     ):
@@ -419,7 +445,11 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         # the original's target — unlike the trigger's copies, whose prompt
         # is armed for every seat and whose default for a seat nobody asks is
         # measured (``ai_prompts.choose_copy_target``, SCG W2G3).
-        game.arm_copy_spell_target(caster_index, game.stack[-1])
+        if not game.arm_copy_spell_target(caster_index, copy):
+            game.announce_copy_put_onto_stack(copy, chooser=caster_index)
+    else:
+        # The original's targets, kept (CR 707.10c's "may" not taken).
+        game.announce_copy_put_onto_stack(copy, chooser=caster_index)
     return True, "resolved"
 
 
@@ -502,12 +532,16 @@ def copy_this_spell(game: Game, instruction: OracleInstruction, context: OracleE
     )
     # CR 707.2: not what an effect did to the original's colour.
     forget_spell_color_change(copy)
-    game._stack_push(item=copy, targets_already_chosen=True)
+    # Announced once its targets are decided (CR 707.10c), below.
+    game._stack_push(item=copy, targets_already_chosen=True, announce=False)
     game.log.append(
         f"{game.players[seat].name} copied {context.card.name} (copy put on the stack)"
     )
-    if instruction.payload.get("may_choose_new_target"):
-        game.arm_copy_spell_target(seat, copy)
+    if not (
+        instruction.payload.get("may_choose_new_target")
+        and game.arm_copy_spell_target(seat, copy)
+    ):
+        game.announce_copy_put_onto_stack(copy, chooser=seat)
     return True, "resolved"
 
 
@@ -568,8 +602,16 @@ def copy_spell_for_each_other_target(game: Game, instruction: OracleInstruction,
             label = perm.card.name
         else:
             continue
-        game._stack_push(targets_already_chosen=True, item=copy)
-        game.announce_targets_chosen(copy, chooser=seat, newly_targeted=True)
+        # CR 707.10d: "The copies are put onto the stack with those targets"
+        # — the effect names each copy's target, so it is put there with it
+        # and announced once: it becomes the target, and is put onto the
+        # stack. No player chose it (Psychic Battle's "a player chooses one
+        # or more targets" does not hear a target the effect assigned, the
+        # reading ``announce_targets_chosen``'s ``at_random`` gives Grip of
+        # Chaos's draw). This made two announcements of "becomes the target"
+        # per copy — one by the push, one beside the choice.
+        game._stack_push(targets_already_chosen=True, item=copy, announce=False)
+        game.announce_copy_put_onto_stack(copy, chooser=seat)
         game.log.append(f"{card.name} copied {copied.card.name} targeting {label}")
         made += 1
     if not made:

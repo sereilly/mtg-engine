@@ -140,7 +140,7 @@ class PileChoicesMixin:
         elif to_zone == "hand":
             self.put_card_into_hand(owner, card)
         elif to_zone == "exile":
-            owner.exile.append(card)
+            self.put_card_into_exile(owner, card)
         elif to_zone == "battlefield":
             # "Put that card onto the battlefield …" (Animal Magnetism.) Under
             # its owner's control — the revealer, whose library it was and who
@@ -437,8 +437,7 @@ class PileChoicesMixin:
         exiled = piles[int(pile_index)]
         kept = piles[1 - int(pile_index)]
         source = choice.data.get("_source_permanent")
-        for card in exiled:
-            owner.exile.append(card)
+        for card in self.put_cards_into_exile(owner, exiled):
             if source is not None:
                 link_exiled_card(
                     source, card, int(choice.data["owner_index"]), face_down=True
@@ -876,8 +875,13 @@ class PileChoicesMixin:
         taken = [owner.graveyard[index] for index in picks]
         if choice.data.get("destination") == GRAVEYARD_PICK_TO_LIBRARY_BOTTOM:
             return self._bottom_graveyard_pick(choice, owner, picks)
-        for index in sorted(picks, reverse=True):
-            owner.exile.append(owner.graveyard.pop(index))
+        # As the pile holds them (``Game.put_card_into_exile``), in the order
+        # they were picked: what the link and the record below name.
+        landed = {
+            index: self.put_card_into_exile(owner, owner.graveyard.pop(index))
+            for index in sorted(picks, reverse=True)
+        }
+        taken = [landed[index] for index in picks]
         # "When this creature enters, exile up to two target cards from a
         # single graveyard. When this creature leaves the battlefield, return
         # **the exiled cards** to their owner's graveyard." (Gravegouger.)

@@ -115,7 +115,7 @@ def _exile_instead_of_entering(game, payload: dict) -> ReplacementOutcome | None
     permanent = payload["permanent"]
     owner_index = game.owner_index_of(permanent)
     owner = game.players[owner_index if owner_index is not None else payload["controller_index"]]
-    owner.exile.append(permanent.card)
+    game.put_card_into_exile(owner, permanent.card)
     game.log.append(
         f"{permanent.card.name} was exiled instead of entering the battlefield"
     )

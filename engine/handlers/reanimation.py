@@ -1122,7 +1122,7 @@ def move_random_graveyard_card(game: Game, instruction: OracleInstruction, conte
         )
         game.log.append(f"{context.card.name} put {card.name} onto the battlefield")
     else:
-        caster.exile.append(card)
+        game.put_card_into_exile(caster, card)
         game.log.append(f"{context.card.name} exiled {card.name}")
     return True, "resolved"
 

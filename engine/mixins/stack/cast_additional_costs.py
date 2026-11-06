@@ -978,7 +978,7 @@ class AdditionalCastCostsMixin:
                     for slot in sorted(named, reverse=True):
                         caster.graveyard.pop(slot)
                     for slot in named:
-                        caster.exile.append(cards_by_slot[slot])
+                        self.put_card_into_exile(caster, cards_by_slot[slot])
                         self.log.append(
                             f"{caster.name} exiled {cards_by_slot[slot].name} "
                             f"from their graveyard to cast {card.name}"
@@ -1002,8 +1002,7 @@ class AdditionalCastCostsMixin:
                         index = graveyard_price_order(
                             self, caster_index, list(reversed(candidates)),
                         )[0]
-                    paid = caster.graveyard.pop(index)
-                    caster.exile.append(paid)
+                    paid = self.put_card_into_exile(caster, caster.graveyard.pop(index))
                     self.log.append(
                         f"{caster.name} exiled {paid.name} from their graveyard "
                         f"to cast {card.name}"
@@ -1024,9 +1023,10 @@ class AdditionalCastCostsMixin:
                     owner_index = self.owner_index_of(chosen)
                     exiled_card = chosen.card
                     self.remove_from_battlefield(chosen)
-                    self.players[
-                        owner_index if owner_index is not None else caster_index
-                    ].exile.append(exiled_card)
+                    self.put_card_into_exile(
+                        owner_index if owner_index is not None else caster_index,
+                        exiled_card,
+                    )
                     exiled = chosen
                     self.log.append(
                         f"{caster.name} exiled {exiled_card.name} to cast {card.name}"

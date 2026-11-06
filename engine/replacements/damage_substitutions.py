@@ -250,8 +250,9 @@ def _damage_becomes_library_exile(game, payload: dict) -> ReplacementOutcome | N
     recipient = payload["recipient"]
     amount = int(payload["amount"])
     taken = min(amount, len(recipient.library))
-    exiled = [recipient.library.pop(0) for _ in range(taken)]
-    recipient.exile.extend(exiled)
+    exiled = game.put_cards_into_exile(
+        recipient, [recipient.library.pop(0) for _ in range(taken)],
+    )
     game.log.append(
         f"{permanent.card.name}: {amount} damage to {recipient.name} becomes "
         + (

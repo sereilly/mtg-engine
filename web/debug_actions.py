@@ -180,9 +180,16 @@ def _apply_raw_state(session: Session, raw: dict) -> None:
         if not built["hand_hidden"]:
             player.hand = built["hand"]
         player.graveyard = built["graveyard"]
-        player.exile = built["exile"]
+        player.exile = []
         player.ante = built["ante"]
         player.battlefield = built["battlefield"]
+
+    # Exile arrives through its one transition, once every seat's pile is empty:
+    # a paste naming two copies of a card names two objects (no exile holds one
+    # object twice, CR 400.7 — `Game.put_card_into_exile`), as a real exiling
+    # would have made them. Built from names, both would be the catalog's one.
+    for seat, built in enumerate(rebuilt):
+        game.put_cards_into_exile(seat, built["exile"])
 
     # Second pass: reconnect aura attachments now that every permanent exists.
     for seat, player in enumerate(game.players):

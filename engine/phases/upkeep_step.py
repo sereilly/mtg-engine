@@ -33,7 +33,8 @@ from ..phasing_locks import expire_phase_out_locks
 from ..pt import BASE_PT_UPKEEP_START_REVERT_KEY, clear_base_pt
 from ..replacements.damage_substitutions import DAMAGE_TO_COUNTER_REMOVAL_RECORD
 from ..oracle import OracleInstruction, compile_card_oracle
-from ..trigger_utils import iter_triggered_abilities, matching_triggers
+from ..trigger_utils import (battlefield_triggers, iter_triggered_abilities,
+                             matching_triggers)
 from ..turn_state import record_controllers_upkeep
 from ..mixins._constants import _UPKEEP_PAY_KINDS
 from ..cumulative_upkeep import upcoming_cost
@@ -382,7 +383,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 player.library.pop(0)
                 for _ in range(cost.exile_top_of_library)
             ]
-            player.exile.extend(taken)
+            taken = self.put_cards_into_exile(player, taken)
             self.log.append(
                 f"{player.name} exiled "
                 + ", ".join(card.name for card in taken)
@@ -1032,7 +1033,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         controller = self.players[player_index]
         for perm in self.controlled_by(player_index):
             program = compile_card_oracle(perm.effective_card)
-            for trig in program.triggered_abilities:
+            for trig in battlefield_triggers(program.triggered_abilities):
                 if trig.instruction is None or trig.condition.kind != "upkeep_self":
                     continue
                 entry = targeted_kinds.get(trig.instruction.kind)
@@ -1248,7 +1249,10 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         for controller_seat, permanent in self.permanents_with_controller():
             controller = self.players[controller_seat]
             program = compile_card_oracle(permanent.effective_card)
-            for trig in program.triggered_abilities:
+            # CR 113.6m: "return this card from your graveyard" (Squee,
+            # Goblin Nabob, Ghastly Remains) is the graveyard scan's below,
+            # never this one's.
+            for trig in battlefield_triggers(program.triggered_abilities):
                 if trig.instruction is None:
                     continue
                 kind = trig.instruction.kind
@@ -1520,7 +1524,9 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         for record in live_records(self):
             if record.controller_index != player_index:
                 continue
-            for trig in matching_triggers(record.card, condition_kinds={"upkeep_self"}):
+            for trig in matching_triggers(
+                record.card, condition_kinds={"upkeep_self"}, zone="exile",
+            ):
                 if trig.instruction.kind not in EFFECT_HANDLERS:
                     continue
                 # Only an ability that says it works from exile (CR 113.6):

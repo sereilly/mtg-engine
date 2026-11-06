@@ -174,7 +174,7 @@ def take_ownership_of_exiled(game: Game, instruction: OracleInstruction, context
         # is what the departure seam does, and why the move is spelled as a
         # departure followed by an arrival rather than a list edit.
         game.take_card_from_exile(from_seat, card)
-        game.players[to_seat].exile.append(card)
+        card = game.put_card_into_exile(to_seat, card)
         game.log.append(
             f"{game.players[to_seat].name} now owns {card.name}"
         )
@@ -191,8 +191,11 @@ def return_exiled_source_to_graveyard(game: Game, instruction: OracleInstruction
     if not swap:
         return True, "resolved"
     context.results["ownership_exchange"] = None
-    for from_seat, _to_seat, card in swap:
-        if card is not context.card:
+    # The Tablet's own entry is the first (``exchange_ownership_unless_paid``):
+    # read by position, because the object exile holds is a new one when that
+    # exile already held another copy of the card (``put_card_into_exile``).
+    for position, (from_seat, _to_seat, card) in enumerate(swap):
+        if position != 0:
             continue
         holder = game.players[from_seat]
         game.take_card_from_exile(from_seat, card)
@@ -242,15 +245,17 @@ def exchange_ownership_unless_paid(game: Game, instruction: OracleInstruction, c
     if victim_seat is None:
         return True, "resolved"
     game.remove_all_from_battlefield([source, victim])
-    game.players[caster_index].exile.append(source.card)
-    game.players[victim_seat].exile.append(victim.card)
+    exiled_source = game.put_card_into_exile(caster_index, source.card)
+    exiled_victim = game.put_card_into_exile(victim_seat, victim.card)
     game.log.append(
         f"{context.card.name} exiled itself and {victim.card.name}"
     )
-    # (holder seat, new owner seat, card) — what the two branches below read.
+    # (holder seat, new owner seat, card) — what the two branches below read:
+    # the cards as the two piles hold them (``Game.put_card_into_exile``), the
+    # Tablet's own first.
     context.results["ownership_exchange"] = [
-        (caster_index, victim_seat, source.card),
-        (victim_seat, caster_index, victim.card),
+        (caster_index, victim_seat, exiled_source),
+        (victim_seat, caster_index, exiled_victim),
     ]
     game.arm_pending_choice(
         "optional_pay", victim_seat,

@@ -613,7 +613,7 @@ class SpellChoicesMixin:
     def arm_copy_spell_target(
         self, player_index: int, copy_item, *,
         copy_number: int | None = None, copy_count: int | None = None,
-    ) -> None:
+    ) -> bool:
         """Offer the copy's controller the re-aiming CR 707.10 gives them.
 
         *copy_number* of *copy_count* says which copy is being asked about when
@@ -630,7 +630,10 @@ class SpellChoicesMixin:
         Nothing is armed when there is nothing to change to: a card with no
         derivable target spec, or a board offering a single candidate, is a
         choice with one answer, and a prompt with one answer is a stall rather
-        than a decision.
+        than a decision. True when the offer was armed (and so is answered by
+        :meth:`_resolve_copy_spell_target`, which announces the copy); False
+        when the caller keeps the original's targets and announces it itself
+        (``announce_copy_put_onto_stack``, CR 707.10c).
         """
         from ....legality import cast_spec_of
 
@@ -638,7 +641,7 @@ class SpellChoicesMixin:
         # helper — so the copy is offered exactly the targets the original was.
         spec = cast_spec_of(copy_item.card)
         if spec.get("kind") in (None, "none"):
-            return
+            return False
         offered: list[dict] = []
         for candidate in self._enumerate_targets(
             player_index, copy_item.card, spec, for_cast=True
@@ -675,7 +678,7 @@ class SpellChoicesMixin:
         if len(offered) < 2 and not (
             offered and not self._copy_already_holds(copy_item, offered[0])
         ):
-            return
+            return False
         numbering = (
             {"copy_number": int(copy_number), "copy_count": int(copy_count)}
             if copy_count is not None and copy_number is not None and copy_count > 1
@@ -688,6 +691,7 @@ class SpellChoicesMixin:
             _copy=copy_item,
             **numbering,
         )
+        return True
 
     def copy_spell_target_current(self, choice: PendingChoice) -> "dict | None":
         """The offered candidate the waiting copy is aimed at **now** — the
@@ -760,7 +764,15 @@ class SpellChoicesMixin:
         # CR 707.10c: "you may choose new targets for the copy". Keeping the
         # original's target is declining the offer — nothing was chosen — so
         # only an answer that moved the copy announces a choice.
-        if chosen_targets(self, copy_item) != before:
+        moved = chosen_targets(self, copy_item) != before
+        if copy_item.announcement_owed:
+            # "Once the player has decided what the copy's targets will be,
+            # the copy is put onto the stack with those targets": everything
+            # it owes, once, for the targets it now has.
+            self.announce_copy_put_onto_stack(
+                copy_item, chooser=choice.player_index, chose=moved,
+            )
+        elif moved:
             self.announce_targets_chosen(
                 copy_item, chooser=choice.player_index, newly_targeted=True,
             )
@@ -786,6 +798,7 @@ class SpellChoicesMixin:
         targets = list(choice.data.get("targets") or ())
         if copy_item is None or not targets:
             self.discard_pending_choice(choice)
+            self.announce_copy_put_onto_stack(copy_item, chooser=choice.player_index)
             return
         from ....stack_targets import chosen_targets
 
@@ -825,6 +838,8 @@ class SpellChoicesMixin:
                 return
         if not self._resolve_copy_spell_target(choice, current):
             self.discard_pending_choice(choice)
+            # The offer ends with the original's targets kept (CR 707.10c).
+            self.announce_copy_put_onto_stack(copy_item, chooser=choice.player_index)
 
     # -- The order of a spell's targets within one player's group -----------
 

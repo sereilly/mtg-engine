@@ -37,13 +37,23 @@ and then **comes back to life the moment the same card is exiled by something
 else**, still saying "face down", still carrying somebody else's scream
 counters. That is precisely the memory the rule forbids. So the departure needs
 a seam after all, and it is affordable because the two sides of this zone are
-nothing like the same size: 52 sites in ``engine/`` and ``web/`` *append* to
-``player.exile`` and none of them has to know about this file, while only
+nothing like the same size: 52 sites in ``engine/`` and ``web/`` appended to
+``player.exile`` and none of them had to know about this file, while only
 thirteen take a card back out. ``Game.take_card_from_exile`` is that
 transition, and ``tests/engine/test_exile_removal_seam.py`` is what keeps it
 the only one — the same arrangement ``remove_from_battlefield`` and
 ``take_card_from_hand`` already have, for the same reason each of those was
 written.
+
+**The arrivals got their seam too** (SCG Phase 5), for a reason this file's
+own opening argument makes from the other side: a record keyed on the exiled
+object is sound only while no exile holds that object twice, and a deck
+repeats one definition per copy. ``Game.put_card_into_exile`` is every
+arrival (``tests/engine/test_exile_arrival_seam.py``) and returns the object
+the pile holds — :func:`distinct_exile_object`'s new, equal one when some
+exile already held it — which is what every record is then written with. A
+record written before its card lands is :attr:`ExiledRecord.awaiting_arrival`
+until :func:`bind_awaiting_records` binds it.
 
 The record carries a ``metadata`` dict under the *same* key spelling
 ``engine/named_counters.py`` uses on a permanent, so ``counters_on`` /
@@ -169,6 +179,15 @@ class ExiledRecord:
     #: rather than guessing at targets nobody chose.
     announcement: "StackAnnouncement | None" = None
     metadata: dict = field(default_factory=dict)
+    #: Written for a card that has not landed yet: a spell exiling itself is
+    #: binned at the very end of its own resolution (CR 608.2n), after the
+    #: instruction that decided the exile wrote this. Not live until
+    #: ``Game.put_card_into_exile`` lands the card and binds :attr:`card` to
+    #: the object the pile holds — which, when the pile already held that
+    #: object, is a new one (:func:`distinct_exile_object`). Read as live
+    #: before then, a record for a card still on the stack spoke for any copy
+    #: of it already in exile.
+    awaiting_arrival: bool = False
 
 
 #: The register's attribute on ``Game``.
@@ -203,6 +222,7 @@ def record_exiled_card(
     face_down: bool = False,
     looker_index: int | None = None,
     announcement: "StackAnnouncement | None" = None,
+    awaiting_arrival: bool = False,
 ) -> ExiledRecord:
     """Register *card* as exiled, and return its record.
 
@@ -224,6 +244,7 @@ def record_exiled_card(
         face_down=bool(face_down),
         looker_index=None if looker_index is None else int(looker_index),
         announcement=announcement,
+        awaiting_arrival=bool(awaiting_arrival),
     )
     for kind, count in (counters or {}).items():
         add_counters(record, kind, int(count))
@@ -290,6 +311,8 @@ def is_live(game, record: ExiledRecord) -> bool:
     is the one place the seam can say so.
     """
     if not 0 <= record.owner_index < len(game.players):
+        return False
+    if record.awaiting_arrival:
         return False
     if not any(held is record for held in getattr(game, RECORDS_ATTR, ()) or ()):
         return False
@@ -368,14 +391,14 @@ def newest_record_for(game, owner_index: int, card) -> ExiledRecord | None:
     exists for the departure seam: when one copy of a card leaves a pile that
     holds two, exactly one record has to stop speaking, and the two records are
     not interchangeable — one may be face down with counters and the other
-    neither. Which of the two the departing copy "was" is unanswerable (they are
-    the same ``CardDefinition`` object), so this picks the newest, which is the
-    rule :func:`records_for_cards` already uses; one rule beats two.
+    neither. Since ``Game.put_card_into_exile`` no exile holds one object twice,
+    so two live records for one object are two records of *one* exiled card (a
+    card exiled again where it lies, CR 406.7) and the newest is the one
+    speaking; a pile written directly (a test, the Debug Menu) can still share
+    an object, and the newest is then the rule :func:`records_for_cards` uses.
 
-    Scoped to the seat because the same object can sit in two players' exiles at
-    once — a deck repeats one immutable definition per copy and the catalog is
-    shared between seats — so a game-wide identity match would retire the wrong
-    player's record.
+    Scoped to the seat for that direct write's sake, where the same object can
+    sit in two players' exiles; through the seam it cannot.
 
     Must be asked **before** the card is removed: liveness is derived from the
     pile, so a record read afterwards answers None when the last copy has gone,
@@ -413,3 +436,34 @@ def records_for_cards(game, cards) -> list[ExiledRecord]:
                 matched.append(record)
                 break
     return matched
+
+
+def distinct_exile_object(card):
+    """A new object equal to *card*, for a copy arriving in an exile that
+    already holds *card* itself (``Game.put_card_into_exile``; CR 400.7, 406.7).
+
+    ``dataclasses.replace`` with nothing replaced: every field the same, so
+    the card compares equal, compiles to the same program and hits every fold
+    memo keyed by ``copies.card_identity`` — and is a different object, which
+    is what every record about an exiled card is keyed by. Stdlib only, for
+    this module's rule of importing nothing from the engine.
+    """
+    from dataclasses import replace
+
+    return replace(card)
+
+
+def bind_awaiting_records(game, owner_index: int, card, landed) -> None:
+    """Bind the oldest record written for *card* before it landed in seat
+    *owner_index*'s exile (:attr:`ExiledRecord.awaiting_arrival`) to *landed*,
+    the object the pile now holds. One record per arrival: two copies of one
+    card binned one after the other are two arrivals."""
+    for record in getattr(game, RECORDS_ATTR, ()) or ():
+        if (
+            record.awaiting_arrival
+            and record.owner_index == owner_index
+            and record.card is card
+        ):
+            record.card = landed
+            record.awaiting_arrival = False
+            return

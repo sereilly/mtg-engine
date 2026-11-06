@@ -17,20 +17,78 @@ if TYPE_CHECKING:
     from .oracle_types import OracleInstruction, ParsedTriggeredAbility
 
 
+#: The zone an ability functions in when it states none (CR 113.6).
+BATTLEFIELD = "battlefield"
+
+
+def trigger_functions_from(trig) -> str:
+    """The zone the triggered ability *trig* functions in (CR 113.6).
+
+    The battlefield unless the ability says otherwise, and two things say so:
+    the zone the lowering stamps on an instruction that moves its own source
+    out of a zone (CR 113.6m, ``functions_from`` — "return this card from your
+    graveyard", the Dragon Auras, Squee, Goblin Nabob) and the exile register's
+    reading of an ability that can only be met from exile (CR 113.6k,
+    ``exiled_records.functions_in_exile`` — All Hallow's Eve). The same two
+    readings the graveyard and exile scans fire by, so a scan of the
+    battlefield and a scan of the zone the ability names cannot both answer
+    yes.
+    """
+    from .exiled_records import functions_in_exile
+
+    instruction = getattr(trig, "instruction", None)
+    stated = (getattr(instruction, "payload", None) or {}).get("functions_from")
+    if stated:
+        return str(stated)
+    if functions_in_exile(trig):
+        return "exile"
+    return BATTLEFIELD
+
+
+def battlefield_triggers(triggers) -> list:
+    """*triggers* (a program's ``triggered_abilities``) less every one that
+    states it functions somewhere other than the battlefield
+    (:func:`trigger_functions_from`, CR 113.6m).
+
+    For the fire sites that read a permanent's compiled triggers themselves
+    rather than through :func:`matching_triggers` — the upkeep step's scans,
+    the state-trigger sweeps, the death and discard observers. Each is a scan
+    of the battlefield, and Squee, Goblin Nabob on the battlefield fired its
+    "return this card from your graveyard" upkeep trigger through one of them
+    (``tests/engine/test_scg_p5_trigger_zone_census.py``).
+    """
+    return [trig for trig in triggers if trigger_functions_from(trig) == BATTLEFIELD]
+
+
 def matching_triggers(
     card: CardDefinition,
     *,
     condition_kinds: Container[str],
     instruction_kinds: Container[str] | None = None,
+    zone: str | None = BATTLEFIELD,
 ) -> Iterator[ParsedTriggeredAbility]:
     """The card's triggered abilities (with a parsed instruction) whose
-    condition — and optionally instruction — kind matches."""
+    condition — and optionally instruction — kind matches.
+
+    *zone* is where the card is being scanned. An ability that states it
+    functions somewhere else (:func:`trigger_functions_from`) is never yielded
+    there: CR 113.6m's "return this card from your graveyard" works from the
+    graveyard and only from there, and every battlefield scan reached it
+    through here — Dragon Wings, attached to a creature, offered its return
+    whenever a six-drop entered. An ability that states no zone is yielded
+    to every scan, which is each caller's own question (a cycling trigger in a
+    hand, a cast trigger on the stack). ``None`` asks nothing of the zone, for
+    a scan whose own reader settles it (the exile register's upkeep scan asks
+    ``functions_in_exile`` itself).
+    """
     for trig in compile_card_oracle(card).triggered_abilities:
         if trig.instruction is None:
             continue
         if trig.condition.kind not in condition_kinds:
             continue
         if instruction_kinds is not None and trig.instruction.kind not in instruction_kinds:
+            continue
+        if zone is not None and trigger_functions_from(trig) not in (BATTLEFIELD, zone):
             continue
         yield trig
 

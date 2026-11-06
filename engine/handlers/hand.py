@@ -875,7 +875,7 @@ def exile_random_card_from_hand(game: Game, instruction: OracleInstruction, cont
     index = random.randrange(len(victim.hand))
     card = victim.hand[index]
     victim.hand.pop(index)
-    victim.exile.append(card)
+    card = game.put_card_into_exile(victim, card)
     context.results["exiled_cards"] = [card]
     game.log.append(
         f"{victim.name} exiled {card.name} at random from their hand"

@@ -562,7 +562,7 @@ def _graveyard_fates(game, session: PileSession, chosen_fate: str, other_fate) -
                 card = player.graveyard[index]
                 if fate == "exile":
                     del player.graveyard[index]
-                    player.exile.append(card)
+                    card = game.put_card_into_exile(player, card)
                     exiled.append(card.name)
                 elif fate == "battlefield":
                     # "Return the other to the battlefield" — under its owner's

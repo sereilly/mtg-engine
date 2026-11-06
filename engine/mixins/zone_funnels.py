@@ -119,6 +119,63 @@ class ZoneFunnelsMixin:
                 return True
         return False
 
+    def put_card_into_exile(self, owner, card):
+        """Put *card* into *owner*'s exile and return **the object the pile
+        now holds** — which every caller writes down instead of *card*.
+
+        Arriving in exile is one transition, for the reason leaving it is
+        (``take_card_from_exile``): something has to happen at the door. A deck
+        repeats one immutable ``CardDefinition`` per copy and the catalog is
+        shared between seats, so the copy arriving can be **the same Python
+        object** as a copy already exiled — and every record about an exiled
+        card names its object: a linked-exile entry (``engine/linked_exile.py``),
+        an ``ExiledRecord``, a while-exiled grant, a cast permission, the cards
+        a Dimensional Breach's "as long as any of those cards remain exiled"
+        counts. Each reader maps the object back to the *first* position
+        holding it. With a Breach's face-up Temple and a Parallel Thoughts
+        pile's face-down Temple in one exile, the Breach's showed ``<hidden>``,
+        the pile's showed by name, and taking the pile's top card took the
+        Breach's (Scourge's post-promotion session).
+
+        So **no exile ever holds one object twice**: a card arriving as an
+        object some seat's exile already holds arrives as a new, equal object
+        (CR 400.7: a card that changes zones becomes a new object; CR 406.7 the
+        same for one exiled again). Equal by value — its name, its compile,
+        every fold memo (``copies.card_identity``) are the card's — and its own
+        by identity, which is the only key every record already uses. Only on a
+        collision, so a card exiled alone stays the object everything else
+        holds: a commander's designation (CR 903.3, by object) and a caller
+        that kept the card it moved still find it. When the copy made is a
+        designated commander's, the designation moves to it.
+
+        A record written for the card **before** it lands (an ``ExiledRecord``
+        marked ``awaiting_arrival`` — a spell exiling itself is binned at the
+        end of its own resolution, CR 608.2n) is bound to the object as it
+        lands.
+        """
+        from ..exiled_records import bind_awaiting_records, distinct_exile_object
+
+        seat = self._owner_seat(owner)
+        player = self.players[seat]
+        landed = card
+        if any(
+            held is card for seated in self.players for held in seated.exile
+        ):
+            landed = distinct_exile_object(card)
+            commanders = getattr(player, "commanders", None) or []
+            for index, commander in enumerate(commanders):
+                if commander is card:
+                    commanders[index] = landed
+                    break
+        bind_awaiting_records(self, seat, card, landed)
+        player.exile.append(landed)
+        return landed
+
+    def put_cards_into_exile(self, owner, cards) -> list:
+        """:meth:`put_card_into_exile` for each of *cards*, in order; the list
+        of objects the pile now holds."""
+        return [self.put_card_into_exile(owner, card) for card in cards]
+
     def take_card_from_exile(self, owner, card, *, record=None) -> bool:
         """Remove **one** copy of *card* from *owner*'s exile. True if it was there.
 
@@ -143,10 +200,10 @@ class ZoneFunnelsMixin:
         Removing by index is what makes it exactly one, and **identity** is what
         picks the index. ``list.remove``/``list.index`` compare by value, and
         four of the sites this replaced spelled it that way: two printings of
-        one card are equal-looking objects, and the same ``CardDefinition`` can
-        sit in two seats' exiles at once (a deck repeats one immutable
-        definition per copy and the catalog is shared), so the value spelling
-        reaches a look-alike. That is the bug class
+        one card are equal-looking objects, and the value spelling reaches a
+        look-alike. (One object at two exile positions is what
+        :meth:`put_card_into_exile` exists to prevent; identity is what lets
+        that guarantee mean anything here.) That is the bug class
         ``tests/engine/test_control_reads.py`` was written for, one zone over.
 
         *record* is the :class:`~engine.exiled_records.ExiledRecord` the caller
@@ -508,7 +565,7 @@ class ZoneFunnelsMixin:
             # per copy, so every copy of a card in a hand is the same Python
             # object and this removes exactly one of them.
             self.take_card_from_hand(player, card)
-            player.exile.append(card)
+            card = self.put_card_into_exile(player, card)
             taken.append(card)
             if source is not None:
                 entries.append(

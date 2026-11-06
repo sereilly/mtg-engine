@@ -876,7 +876,7 @@ class AlternativeCastCostsMixin:
             for slot in sorted(named, reverse=True):
                 caster.graveyard.pop(slot)
             for slot in named:
-                caster.exile.append(cards_by_slot[slot])
+                self.put_card_into_exile(caster, cards_by_slot[slot])
                 self.log.append(
                     f"{caster.name} exiled {cards_by_slot[slot].name} from "
                     f"their graveyard to cast {card.name}"
@@ -891,8 +891,7 @@ class AlternativeCastCostsMixin:
                 index = graveyard_price_order(
                     self, caster_index, list(reversed(candidates)),
                 )[0]
-            paid = caster.graveyard.pop(index)
-            caster.exile.append(paid)
+            paid = self.put_card_into_exile(caster, caster.graveyard.pop(index))
             self.log.append(
                 f"{caster.name} exiled {paid.name} from their graveyard to "
                 f"cast {card.name}"
@@ -1092,7 +1091,7 @@ class AlternativeCastCostsMixin:
             # effect handler use.
             for index in sorted(taken, reverse=True):
                 del caster.graveyard[index]
-            caster.exile.extend(paid)
+            paid = self.put_cards_into_exile(caster, paid)
             if paid:
                 self.log.append(
                     f"{caster.name} exiled "
@@ -1158,7 +1157,7 @@ class AlternativeCastCostsMixin:
         if paying is None:
             return  # gated above; a hand that changed since is a no-op
         self.take_card_from_hand(caster, paying)
-        caster.exile.append(paying)
+        self.put_card_into_exile(caster, paying)
         self.log.append(
             f"{caster.name} exiled {paying.name} to {why}"
         )

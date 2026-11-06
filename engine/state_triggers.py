@@ -129,13 +129,16 @@ def announce_watched_counter_thresholds(game: "Game") -> bool:
     from .named_counters import counters_on
     from .oracle import compile_card_oracle
     from .subject_filters import subject_matches
+    from .trigger_utils import battlefield_triggers
 
     events: list[dict] = []
     for source in list(game.all_permanents()):
         observer = game.controller_index_of(source)
         if observer is None:
             continue
-        for trig in compile_card_oracle(source.effective_card).triggered_abilities:
+        for trig in battlefield_triggers(
+            compile_card_oracle(source.effective_card).triggered_abilities
+        ):
             if trig.condition.kind != WATCHED_COUNTER_THRESHOLD:
                 continue
             payload = trig.condition.payload

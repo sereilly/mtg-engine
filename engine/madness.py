@@ -252,7 +252,7 @@ def exile_madness_card(game, player, card) -> bool:
     seat = _seat_of(game, player)
     if seat is None:
         return False
-    player.exile.append(card)
+    card = game.put_card_into_exile(player, card)
     game.log.append(
         f"{player.name} discarded {card.name} into exile (madness)"
     )

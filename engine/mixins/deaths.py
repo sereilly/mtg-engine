@@ -34,7 +34,8 @@ from ..oracle import compile_card_oracle
 from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN
 from ..replacements import apply_replacements
 from ..regeneration import regeneration_replaces_destruction
-from ..trigger_utils import make_trigger_event, matching_triggers
+from ..trigger_utils import (battlefield_triggers, make_trigger_event,
+                             matching_triggers)
 
 
 # The dies-triggers ``_permanent_to_graveyard`` carries out **inline** rather
@@ -950,7 +951,7 @@ class DeathsMixin:
                     ))
             if observer is dead_permanent:
                 continue
-            for trig in program.triggered_abilities:
+            for trig in battlefield_triggers(program.triggered_abilities):
                 # Sengir Vampire: "Whenever a creature dealt damage by this
                 # creature this turn dies, put a +1/+1 counter on this creature."
                 # Axelrod Gunnarson prints the same condition with a different

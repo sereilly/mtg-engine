@@ -286,7 +286,7 @@ class LibrarySearchChoicesMixin:
             # CR 400.3: the card goes to its owner's exile, and its owner is the
             # player whose library it came out of — which is `caster` here, the
             # *searched* seat rather than the searching one.
-            caster.exile.append(card)
+            card = self.put_card_into_exile(caster, card)
             self._record_search_exile(choice.data, card)
         else:
             self.put_card_into_hand(caster, card)
@@ -628,7 +628,7 @@ class LibrarySearchChoicesMixin:
         for zone_name in zones:
             pile = search_zone_cards(searched, zone_name)
             moved += len(pile)
-            searched.exile.extend(pile)
+            self.put_cards_into_exile(searched, pile)
             pile.clear()
         self.log.append(
             f"{searched.name} exiled the rest of their "
@@ -742,7 +742,7 @@ class LibrarySearchChoicesMixin:
                 seat, _Permanent(card=card, tapped=tapped), None
             )
         elif destination == "exile":
-            caster.exile.append(card)
+            card = self.put_card_into_exile(caster, card)
             if data is not None:
                 self._record_search_exile(data, card)
         elif destination == "held":
@@ -1052,8 +1052,7 @@ class LibrarySearchChoicesMixin:
                 (pick for pick in cleaned if pick[0] == zone),
                 key=lambda pick: -pick[1],
             ):
-                card = source.pop(index)
-                caster.exile.append(card)
+                card = self.put_card_into_exile(caster, source.pop(index))
                 exiled.append(card)
         # The library was searched whether or not anything was taken from it,
         # and the printed "then shuffle" applies to the search, not the find.

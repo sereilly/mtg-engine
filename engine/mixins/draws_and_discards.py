@@ -33,8 +33,8 @@ from ..replacement_choices import DRAW_OF
 from ..replacements import apply_replacements
 from ..replacements.zone_changes import TOP_OF_LIBRARY_DISCARD_TEXT
 from ..oracle import compile_card_oracle
-from ..trigger_utils import (bound_event_seat, make_trigger_event,
-                             matching_triggers)
+from ..trigger_utils import (battlefield_triggers, bound_event_seat,
+                             make_trigger_event, matching_triggers)
 
 
 class _DrawPromptAnswer:
@@ -684,9 +684,9 @@ class DrawsAndDiscardsMixin:
         # of the condition's other half — asked once, here, rather than a second
         # time per observer.
         for observer in self.controlled_by(seat):
-            for trig in compile_card_oracle(
+            for trig in battlefield_triggers(compile_card_oracle(
                 observer.effective_card
-            ).triggered_abilities:
+            ).triggered_abilities):
                 if trig.condition.kind != "discarded_by_opponent_effect":
                     continue
                 if not trig.condition.payload.get("discarded_any_card"):
