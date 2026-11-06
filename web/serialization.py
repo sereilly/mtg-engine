@@ -1461,15 +1461,9 @@ def _exile_payload(
     pile written directly (a test, the Debug Menu's state injection), where it
     is the best a shared object allows.
     """
-    from engine.linked_exile import face_down_exiled_cards
-
-    owed: dict[int, int] = {}
-    for card in face_down_exiled_cards(game, seat, viewer_seat):
-        owed[id(card)] = owed.get(id(card), 0) + 1
     payload: list = []
-    for card in player.exile:
-        if owed.get(id(card), 0) > 0:
-            owed[id(card)] -= 1
+    for card, hidden in zip(player.exile, exile_hidden_flags(game, player, viewer_seat, seat)):
+        if hidden:
             payload.append("<hidden>")
             continue
         payload.append(
@@ -1477,6 +1471,32 @@ def _exile_payload(
             else _serialize_card(card, game, owner_seat=seat)
         )
     return payload
+
+
+def exile_hidden_flags(
+    game: Game, player: PlayerState, viewer_seat: int | None, seat: int
+) -> list[bool]:
+    """Per position of *player*'s exile, whether *viewer_seat* is shown it as
+    ``<hidden>`` (:func:`_exile_payload`'s reading, CR 406.3).
+
+    Its own function because two readers need the same answer by position: the
+    payload, and the Debug Menu's paste (``web/debug_actions``), which reads a
+    pasted ``<hidden>`` as "the object this viewer was shown a card back for"
+    and keeps it — the text names no card, and a paste that rebuilt the pile
+    from names deleted every face-down card in it.
+    """
+    from engine.linked_exile import face_down_exiled_cards
+
+    owed: dict[int, int] = {}
+    for card in face_down_exiled_cards(game, seat, viewer_seat):
+        owed[id(card)] = owed.get(id(card), 0) + 1
+    flags: list[bool] = []
+    for card in player.exile:
+        hidden = owed.get(id(card), 0) > 0
+        if hidden:
+            owed[id(card)] -= 1
+        flags.append(hidden)
+    return flags
 
 
 def _serialize_arriving(game: Game, seat: int) -> list[dict]:

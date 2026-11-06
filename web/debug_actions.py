@@ -109,8 +109,115 @@ def _cards_from_raw(entries) -> list:
     return cards
 
 
-def _permanent_from_raw(raw: dict) -> Permanent:
-    card = _lookup_card_for_raw_state(raw["name"])
+def _pasted_exile(game, seat: int, entries, viewer_seat: int | None) -> list[tuple]:
+    """The objects a pasted exile names for *seat*, in its order, each as
+    ``(card, kept)`` — *kept* when it is an object the pile holds now.
+
+    A ``<hidden>`` entry names no card: it is the card back the pasting viewer
+    was shown (``serialization.exile_hidden_flags``), so it is **that object**,
+    kept — the next one of the pile's hidden objects, in pile order. Read as
+    "nothing" (it used to be), a paste of a board with a card face down in
+    exile deleted the card. A placeholder past the last hidden object names
+    nothing and is dropped.
+
+    A named entry is likewise the pile's own next visible object of that name
+    when there is one, else the catalog's card: every record about an exiled
+    card names its object (``Game.put_card_into_exile``), so a paste that
+    leaves an exiled card where it was leaves what is known about it too —
+    which is what the paste promises for anything its text cannot describe.
+    """
+    from .serialization import exile_hidden_flags
+
+    player = game.players[seat]
+    flags = exile_hidden_flags(game, player, viewer_seat, seat)
+    hidden = [card for card, flag in zip(player.exile, flags) if flag]
+    visible: dict[str, list] = {}
+    for card, flag in zip(player.exile, flags):
+        if not flag:
+            visible.setdefault(card.name.casefold(), []).append(card)
+    planned: list[tuple] = []
+    for entry in entries or []:
+        if isinstance(entry, str):
+            if entry == "<hidden>" and hidden:
+                planned.append((hidden.pop(0), True))
+            continue
+        if isinstance(entry, dict) and entry.get("name"):
+            held = visible.get(str(entry["name"]).strip().casefold())
+            if held:
+                planned.append((held.pop(0), True))
+            else:
+                planned.append((_lookup_card_for_raw_state(entry["name"]), False))
+    return planned
+
+
+def _retire_dropped_exiles(game, plans: list[list[tuple]]) -> None:
+    """A card the paste no longer names **leaves** its exile, through the seam
+    (``take_card_from_exile``): its records and while-exiled grants end with it
+    (CR 400.7), so the next effect to exile that object finds nothing stale."""
+    kept = {id(card) for plan in plans for card, was_kept in plan if was_kept}
+    for seat, player in enumerate(game.players):
+        for card in [held for held in player.exile if id(held) not in kept]:
+            game.take_card_from_exile(seat, card)
+
+
+def _restore_exiles(game, plans: list[list[tuple]]) -> None:
+    """Put every planned card into its seat's exile, once every pile is empty,
+    through ``put_card_into_exile`` — so a paste naming two copies of a card
+    names two objects (CR 400.7).
+
+    A card built from a name that *is* a kept object still to be put back (a
+    deck repeats one object per copy, so a face-up Forest named beside a
+    face-down one is the same object) arrives as a new, equal one, so the kept
+    object keeps its identity and with it the record that says it is face
+    down. Without that the named copy would land first as the object and the
+    face-down one after it as the copy, and the record would hide the wrong
+    card.
+    """
+    from engine.exiled_records import distinct_exile_object
+
+    pending = {id(card) for plan in plans for card, kept in plan if kept}
+    for seat, plan in enumerate(plans):
+        for card, kept in plan:
+            if kept:
+                pending.discard(id(card))
+            elif id(card) in pending:
+                card = distinct_exile_object(card)
+            game.put_card_into_exile(seat, card)
+
+
+def _card_for_raw_permanent(game, raw: dict):
+    """The card a pasted permanent is: its name's, or — for a face-down one
+    (CR 708.2), whose payload names the blank 2/2 — the face-down object of
+    the card it hides.
+
+    Which card that is the paste says when its viewer controls it
+    (``hidden_card``, CR 708.5); otherwise it is the hidden object of the
+    face-down permanent the payload's ``id`` names, still on the battlefield.
+    "Face-down creature" is no card, so a paste of any board holding a morph
+    was refused whole, as an unknown card.
+    """
+    from engine.face_down import face_down_card, hidden_card_of
+
+    if not raw.get("face_down"):
+        return _lookup_card_for_raw_state(raw["name"])
+    named = raw.get("hidden_card")
+    if isinstance(named, dict) and named.get("name"):
+        return face_down_card(_lookup_card_for_raw_state(named["name"]))
+    current = game.permanent_by_id(raw.get("id")) if isinstance(raw.get("id"), int) else None
+    real = hidden_card_of(current) if current is not None else None
+    if real is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "a face-down permanent the paste does not name: give its card as "
+                '"hidden_card": {"name": ...}'
+            ),
+        )
+    return face_down_card(real)
+
+
+def _permanent_from_raw(raw: dict, game) -> Permanent:
+    card = _card_for_raw_permanent(game, raw)
     perm = Permanent(card=card)
     perm.tapped = bool(raw.get("tapped", False))
     perm.damage_marked = int(raw.get("damage_marked") or 0)
@@ -132,16 +239,23 @@ def _permanent_from_raw(raw: dict) -> Permanent:
     return perm
 
 
-def _apply_raw_state(session: Session, raw: dict) -> None:
+def _apply_raw_state(session: Session, raw: dict, viewer_seat: int | None = None) -> None:
     """Overwrite the live game's visible state from a pasted raw-state object.
 
     Rebuilds every visible zone (hands, graveyards, exile, battlefields) and
     per-permanent flags, plus life totals, mana pools and turn/phase tracking.
-    Hidden information that the serialization omits — library contents and an
-    opponent's `<hidden>` hand — is left untouched, since the text cannot
-    describe it. Anything malformed raises HTTPException(400) before the live
-    game is mutated, so a bad paste never half-applies.
+    Hidden information that the serialization omits — library contents, an
+    opponent's `<hidden>` hand, a card face down in exile, the card behind a
+    face-down permanent — is left untouched, since the text cannot describe
+    it: a ``<hidden>`` exile entry keeps the object *viewer_seat* (the seat
+    that pasted, whose payload it was) was shown a card back for
+    (:func:`_pasted_exile`), and a face-down permanent keeps its card
+    (:func:`_card_for_raw_permanent`). Anything malformed raises
+    HTTPException(400) before the live game is mutated, so a bad paste never
+    half-applies.
     """
+    from engine.linked_exile import keep_face_down_after_departure
+
     game = session.game
     players_raw = raw.get("players")
     if not isinstance(players_raw, list) or len(players_raw) != len(game.players):
@@ -157,11 +271,20 @@ def _apply_raw_state(session: Session, raw: dict) -> None:
             "hand_hidden": any(c == "<hidden>" for c in (p_raw.get("hand") or [])),
             "hand": _cards_from_raw(p_raw.get("hand")),
             "graveyard": _cards_from_raw(p_raw.get("graveyard")),
-            "exile": _cards_from_raw(p_raw.get("exile")),
+            "exile": _pasted_exile(game, seat, p_raw.get("exile"), viewer_seat),
             "ante": _cards_from_raw(p_raw.get("ante")),
-            "battlefield": [_permanent_from_raw(pr) for pr in battlefield_raw],
+            "battlefield": [_permanent_from_raw(pr, game) for pr in battlefield_raw],
             "battlefield_raw": battlefield_raw,
         })
+
+    # Every permanent is replaced by a new one, so each is a departure as far
+    # as what it exiled face down is concerned (CR 406.3 has no ending): its
+    # face-down records go to the game's register, as a permanent leaving the
+    # battlefield hands them (``keep_face_down_after_departure``), and a card
+    # a rebuilt Knowledge Vault exiled stays a card back.
+    for perm in list(game.all_permanents()):
+        keep_face_down_after_departure(game, perm)
+    _retire_dropped_exiles(game, [built["exile"] for built in rebuilt])
 
     for seat, player in enumerate(game.players):
         p_raw = players_raw[seat]
@@ -188,8 +311,7 @@ def _apply_raw_state(session: Session, raw: dict) -> None:
     # a paste naming two copies of a card names two objects (no exile holds one
     # object twice, CR 400.7 — `Game.put_card_into_exile`), as a real exiling
     # would have made them. Built from names, both would be the catalog's one.
-    for seat, built in enumerate(rebuilt):
-        game.put_cards_into_exile(seat, built["exile"])
+    _restore_exiles(game, [built["exile"] for built in rebuilt])
 
     # Second pass: reconnect aura attachments now that every permanent exists.
     for seat, player in enumerate(game.players):
