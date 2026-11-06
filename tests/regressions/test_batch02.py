@@ -416,7 +416,10 @@ class TestChooseStackTarget:
         assert result.supported
         game.resolve_stack()
 
-        # Fork's copy dealt 3 to P1 and the original bolt dealt 3 more = 6.
-        assert p1.life == 20 - 6
+        # The copy is a Lightning Bolt's: a seat nobody asks aims it at the
+        # Bolt's caster (CR 707.10c, measured — kg4; it kept the original's
+        # target and dealt P1 its own 3), and the original dealt P1 its 3.
+        assert p1.life == 20 - 3
+        assert p2.life == 20 - 3
         # Giant Growth still resolved on the bears (2 -> 5).
         assert bears.effective_power == 5

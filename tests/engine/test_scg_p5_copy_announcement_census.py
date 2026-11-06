@@ -22,7 +22,8 @@ one (its measured default):
 * storm (``copy_triggering_spell`` with a count) — Scattershot, two copies;
 * the trigger copies (``copy_triggering_spell``) — Double Vision;
 * Fork with no target named on the cast, and with one named
-  (``copy_top_stack_spell``);
+  (``copy_top_stack_spell``) — headless, its measured default, as the
+  trigger copies' (kg4: it kept the original's);
 * Chain Lightning's copy (``copy_this_spell``);
 * Radiate (``copy_spell_for_each_other_target``), whose copies' targets the
   effect assigns (CR 707.10d).
@@ -256,10 +257,15 @@ def test_fork_with_no_target_named_announces_its_copy_once(reaim):
     _check(watch, copies, moved={id(copies[0]): reaim})
 
 
-def test_fork_headless_keeps_and_announces_once():
+def test_fork_headless_takes_the_measured_answer_and_announces_once():
+    """A seat nobody asks takes the measured answer (kg4): the copy of a Bolt
+    already aimed at one Bears is re-aimed at the other, and announced once,
+    for that target."""
     pool = _pool()
-    game, watch, _first, _other = _fork(pool, False)
-    _check(watch, _copies(game), moved={id(copy): False for copy in _copies(game)})
+    game, watch, _first, other = _fork(pool, False)
+    copies = _copies(game)
+    assert [_aim(copy)[1] for copy in copies] == [(other.permanent_id,)]
+    _check(watch, copies, moved={id(copies[0]): True})
 
 
 @pytest.mark.parametrize("interactive", (False, True))

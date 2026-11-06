@@ -233,8 +233,9 @@ def test_704_5e_countered_spell_copy_ceases_to_exist_instead_of_going_to_graveya
     # above the original Bolt Test.
     assert game.resolve_top_of_stack()
 
-    # Counterspell (defaults to the top of the stack) counters the copy before it resolves.
-    game.queue_from_hand(1, "Counterspell", target_player_index=0)
+    # Counterspell counters the copy (the top of the stack) before it resolves.
+    assert game.stack[-1].is_copy
+    game.queue_from_hand(1, "Counterspell", target_stack_index=len(game.stack) - 1)
     game.resolve_stack()
 
     # Only the original Bolt Test resolved — the countered copy dealt no damage and
