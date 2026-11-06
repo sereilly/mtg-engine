@@ -1084,9 +1084,10 @@ def test_next_phase_advances_through_combat_substeps_then_second_main():
     assert to_combat.status_code == 200
     assert to_combat.json()["current_step"] == "beginning_of_combat"
 
+    # Nobody attacks, so CR 508.8 skips the declare blockers and combat damage
+    # steps: declare attackers is followed by the end of combat.
     steps = [
         "declare_attackers",
-        "declare_blockers",
         "end_of_combat",
     ]
     for expected in steps:
@@ -1100,13 +1101,6 @@ def test_next_phase_advances_through_combat_substeps_then_second_main():
             declare = client.post(
                 f"/api/sessions/{sid}/action",
                 json=combat_ids(store.get(sid).game, {"seat": 0, "action": "declare_attackers", "attacker_indices": []}),
-            )
-            assert declare.status_code == 200
-        if expected == "declare_blockers":
-            session.game.priority_player_index = 1
-            declare = client.post(
-                f"/api/sessions/{sid}/action",
-                json=combat_ids(store.get(sid).game, {"seat": 1, "action": "declare_blockers", "blocker_pairs": {}}),
             )
             assert declare.status_code == 200
 
@@ -1185,10 +1179,8 @@ def test_next_phase_from_attackers_step_auto_advances_when_no_legal_attackers():
     session.current_turn = 0
     session.game.start_priority_window(0)
 
-    response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
-    assert response.status_code == 200
-    assert response.json()["current_step"] == "declare_blockers"
-
+    # Nothing can attack: CR 508.8 skips the declare blockers and combat
+    # damage steps, so the end of combat step is next.
     response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
     assert response.status_code == 200
     assert response.json()["current_step"] == "end_of_combat"
