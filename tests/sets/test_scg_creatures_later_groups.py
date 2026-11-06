@@ -1239,3 +1239,33 @@ def test_w1g9_the_seeded_games_exercise_the_ancient_and_the_faces(set_pool):
     assert any("Faces of the Past: chose" in line for line in report.log_lines)
 
 # ==== end W1G9 ======================================================
+
+
+# ==== W2G1 ==========================================================
+# W2G1's tests go between this line and the "end W2G1" line.
+
+# ==== end W2G1 ======================================================
+
+
+# ==== W2G2 ==========================================================
+# W2G2's tests go between this line and the "end W2G2" line.
+
+# ==== end W2G2 ======================================================
+
+
+# ==== W2G3 ==========================================================
+# W2G3's tests go between this line and the "end W2G3" line.
+
+# ==== end W2G3 ======================================================
+
+
+# ==== W2G4 ==========================================================
+# W2G4's tests go between this line and the "end W2G4" line.
+
+# ==== end W2G4 ======================================================
+
+
+# ==== W2G5 ==========================================================
+# W2G5's tests go between this line and the "end W2G5" line.
+
+# ==== end W2G5 ======================================================
