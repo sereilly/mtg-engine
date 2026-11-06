@@ -1426,6 +1426,40 @@ def named_counter_marks_for_harm(
     return False
 
 
+def _side_steps(instruction: OracleInstruction) -> tuple[OracleInstruction, ...]:
+    """*instruction*'s leaf steps (``_effect_steps``) with every ``choose_one``
+    **opened into its modes** ("loses flying, first strike, or trample",
+    Walking Sponge): whichever is chosen lands on the object, where the
+    wrapper itself names nothing and has no side."""
+    found: list[OracleInstruction] = []
+    for step in _effect_steps(instruction):
+        if step.kind == "choose_one":
+            modes = [
+                mode.get("instruction")
+                for mode in (step.payload or {}).get("modes") or ()
+                if isinstance(mode, dict) and mode.get("instruction") is not None
+            ]
+            if modes:
+                for mode in modes:
+                    found.extend(_side_steps(mode))
+                continue
+        found.append(step)
+    return tuple(found)
+
+
+def _pt_trade(step: OracleInstruction) -> bool:
+    """Whether *step* raises one half of a P/T and lowers the other by printed
+    numbers ("+1/-1"): a gift on a big body, removal on an X/1, so its sign
+    (:func:`_pt_delta_sign`, a sum) says neither."""
+    payload = step.payload or {}
+    power, toughness = payload.get("power"), payload.get("toughness")
+    return (
+        step.kind in _PT_DELTA_KINDS
+        and all(type(value) is int for value in (power, toughness))
+        and power * toughness < 0
+    )
+
+
 def ability_target_side(instruction: OracleInstruction | None) -> str | None:
     """Whose permanent an ability's object target should be — "you",
     "opponent", or None when no step answers — read step by step with the
@@ -1437,11 +1471,14 @@ def ability_target_side(instruction: OracleInstruction | None) -> str | None:
     is a colour choice and then a grant, and read as one instruction it has no
     side at all — so the chooser fell back to the biggest creature on either
     board and gave protection to an opponent's.
+
+    Nor a ``choose_one`` until kg4 (:func:`_side_steps`): Walking Sponge's
+    "loses flying, first strike, or trample" hit its own Serra Angel.
     """
     if instruction is None:
         return None
     steps = [
-        step for step in _effect_steps(instruction)
+        step for step in _side_steps(instruction)
         if isinstance((step.payload or {}).get("targets"), dict)
     ]
     sides = {instruction_target_side(step) for step in steps} - {None}
@@ -1464,7 +1501,7 @@ def ability_denies_its_target(instruction: OracleInstruction | None) -> bool:
     if instruction is None:
         return False
     steps = [
-        step for step in _effect_steps(instruction)
+        step for step in _side_steps(instruction)
         if isinstance((step.payload or {}).get("targets"), dict)
     ] or [instruction]
     return any(denies_its_target(step) for step in steps)
@@ -1526,14 +1563,15 @@ def host_effect_side(instruction: OracleInstruction | None) -> str | None:
     that names a target of its own ("Enchanted creature deals 1 damage to
     target creature with flying", Dizzying Gaze) is about that target, so an
     ability printing one has no host side here.
+
+    A ``choose_one`` is read through its modes (:func:`_side_steps`), and an
+    effect worth what the host's body makes it
+    (:func:`host_effect_by_the_moment`) has no side here.
     """
-    if instruction is None:
+    if instruction is None or host_effect_by_the_moment(instruction):
         return None
-    steps = [
-        step for step in _effect_steps(instruction)
-        if step.kind not in _HOST_CHOICE_KINDS
-    ]
-    if not steps or not all(_acts_on_the_host(step) for step in steps):
+    steps = _host_steps(instruction)
+    if steps is None:
         return None
     sides = {_effect_side(step) for step in steps} - {None}
     if "opponent" in sides:
@@ -1541,6 +1579,38 @@ def host_effect_side(instruction: OracleInstruction | None) -> str | None:
     if "you" in sides:
         return "you"
     return None
+
+
+def _host_steps(instruction: OracleInstruction) -> "tuple | None":
+    """*instruction*'s steps (modes opened, a type choice left out) when every
+    one acts on its source's host (:func:`_acts_on_the_host`), else None."""
+    steps = tuple(
+        step for step in _side_steps(instruction)
+        if step.kind not in _HOST_CHOICE_KINDS
+    )
+    if not steps or not all(_acts_on_the_host(step) for step in steps):
+        return None
+    return steps
+
+
+def host_effect_by_the_moment(instruction: OracleInstruction | None) -> bool:
+    """Whether an ability whose whole effect lands on its source's host is
+    worth activating on one host and not another **by what the host is** —
+    some step a P/T trade (:func:`_pt_trade`), or modes that read on
+    different sides. Pemmin's Aura's "+1/-1 or -1/+1" and Flowstone Blade's
+    "+1/-1" kill an opponent's X/1 and their controller's own; read as a
+    gift by its category, Flowstone Blade was refused on the first and
+    activated on its controller's Llanowar Elves, which it killed (kg4). The
+    activation chooser rehearses such an ability
+    (``ai_abilities._activation_candidate``)."""
+    if instruction is None:
+        return False
+    steps = _host_steps(instruction)
+    if steps is None:
+        return False
+    if any(_pt_trade(step) for step in steps):
+        return True
+    return len({_effect_side(step) for step in steps} - {None}) > 1
 
 
 #: The step that taps **or** untaps its target, which way being the state the
