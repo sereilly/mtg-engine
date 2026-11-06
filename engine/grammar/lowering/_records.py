@@ -66,7 +66,8 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              COUNTERED_SPELL_CONTROLLER, COUNTERED_SPELL_NAME,
                              COUNTERS_REMOVED, DISCARDED_BY_SEAT,
                              DISCARDED_CARDS_BY_SEAT, DREW_BY_SEAT,
-                             DREW_COUNT, EXILED_BY_SEAT, EXILED_THIS_WAY,
+                             DREW_COUNT, EXILED_BY_SEAT,
+                             EXILED_CARDS_WITH_OWNERS, EXILED_THIS_WAY,
                              EXILED_THIS_WAY_OBJECTS, HAND_CARDS_TO_LIBRARY,
                              LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
                              LAST_TARGET_OWNER, LIFE_LOST_THIS_WAY,
@@ -229,7 +230,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # …and the **cards** (Planar Guide's "return those cards to the
     # battlefield"), under the key every "that card" behind an exile reads —
     # the sweep's nontoken finds, revealed if face down.
-    "exile_all_matching": (EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS, "exiled_cards"),
+    #
+    # …and the cards **by seat** (``oracle_types.EXILED_CARDS_WITH_OWNERS``):
+    # "for as long as any of **those cards** remain exiled, … that player
+    # returns one of the exiled cards they own" (Dimensional Breach) asks whose
+    # exile each card is in, which the flat list cannot answer.
+    "exile_all_matching": (
+        EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS, "exiled_cards",
+        EXILED_CARDS_WITH_OWNERS,
+    ),
     # "…exile up to two target creature cards from defending player's
     # graveyard. If you do, you gain 1 life **for each card exiled this way**"
     # (Rysorian Badger). The same key the sweep above writes, because the

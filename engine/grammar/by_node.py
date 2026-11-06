@@ -176,6 +176,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_put_library_top_into_hand,
                        _lower_put_exiled_with_source,
                        _lower_each_player_claims_exiled_card,
+                       _lower_return_one_exiled_card,
                        _lower_separate_into_piles)
 
 
@@ -558,6 +559,10 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     # One node, two back-references, two places to look — the row moved here
     # from the event-only table above when the second arrived.
     ast.Discard: _lower_discard,
+    # "…, **that player** returns **one of the exiled cards** they own to the
+    # battlefield" (Dimensional Breach): the seat is the firing event's and
+    # the pile is a record an earlier step of this same effect wrote.
+    ast.ReturnOneExiledCard: _lower_return_one_exiled_card,
     # "…a card **with the same name as that creature**" (Remembrance) reads the
     # firing event's object; "…a card **with the same name as that card**"
     # (Assembly Hall) reads a card an earlier step of this same effect turned

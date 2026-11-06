@@ -741,3 +741,52 @@ def parse_claims_one_exiled_card(
         stream.reset(mark)
         return None
     return ast.EachPlayerClaimsExiledCard(chooser=chooser, tapped=tapped)
+
+
+def parse_returns_one_exiled_card(
+    stream: TokenStream, actor: "ast.PlayerRef | None",
+) -> "ast.ReturnOneExiledCard | None":
+    """``returns one of the exiled cards [they own] to <zone>`` — the verb and
+    its object, without the subject.
+
+    "…at the beginning of each player's upkeep, **that player returns one of
+    the exiled cards they own to the battlefield**." (Dimensional Breach.) The
+    sibling of :func:`parse_claims_one_exiled_card` with the verb "return"
+    and one seat picking: "one of the exiled cards" is the same bound
+    reference to a pile an earlier sentence made, read here for that
+    production's reason — the noun parser has no description of the set.
+
+    "They own" is read rather than skipped (CR 108.3): it narrows the pile to
+    the actor's own cards, which is the whole difference between handing each
+    player back their own permanents and letting one seat take the table's.
+    It agrees with a printed subject only — the bare imperative's seat is
+    "you", and "you own" is the spelling that would name it.
+
+    Non-consuming on refusal, like every arm of the "returns" dispatcher that
+    calls it, so an ordinary "that player returns …" keeps its own reading and
+    its own refusal site. Anything printed after the destination ("tapped",
+    "under your control") is a rider this node does not carry, so the sentence
+    must end there or the production declines.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("returns", "return"):
+        return None
+    if not stream.accept_phrase("one", "of", "the", "exiled", "cards"):
+        stream.reset(mark)
+        return None
+    owned = False
+    owner_word = "they" if actor is not None else "you"
+    if stream.accept_phrase(owner_word, "own"):
+        owned = True
+    if not stream.accept_word("to"):
+        stream.reset(mark)
+        return None
+    try:
+        zone = _parse_zone(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (stream.exhausted or stream.at_punct(".", ",")):
+        stream.reset(mark)
+        return None
+    return ast.ReturnOneExiledCard(zone=zone, actor=actor, owned_by_actor=owned)

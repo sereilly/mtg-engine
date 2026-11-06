@@ -91,6 +91,7 @@ from .effects import (
     _parse_skip_step,
     _parse_tap_untap,
     parse_claims_one_exiled_card,
+    parse_returns_one_exiled_card,
     parse_exile_random_card_from_hand,
     parse_player_exiles_cards_from_hand,
     parse_graveyard_top_opponent_chooses,
@@ -376,6 +377,14 @@ def parse_player_subject_verb(
         linked_pile = _parse_player_returns_exiled_with_source(stream, source_spec)
         if linked_pile is not None:
             return linked_pile
+        # "…, **that player returns one of the exiled cards they own to the
+        # battlefield**." (Dimensional Breach.) A third pile reading beside the
+        # two above, and for their reason: "one of the exiled cards" names a
+        # pile an earlier sentence made, which the shared return production
+        # refuses ("expected something to return"). Non-consuming on refusal.
+        one_exiled = parse_returns_one_exiled_card(stream, source_spec)
+        if one_exiled is not None:
+            return one_exiled
         return _parse_return(stream, source_spec)
     # "Target player **chooses a card name**, then reveals the top card of
     # their library…" (Petra Sphinx) — a paragraph, because the two

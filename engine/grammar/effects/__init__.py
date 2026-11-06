@@ -159,6 +159,7 @@ from .exile import (
 # fell.
 from .linked_exile import (
     parse_claims_one_exiled_card,
+    parse_returns_one_exiled_card,
     _parse_bin_unplayed_exiled_card,
     _parse_bin_unplayed_exiled_cards,
     _parse_put_exiled_card_into_hand,
@@ -414,6 +415,7 @@ __all__ = [
     "_parse_exile_bound_card",
     "_parse_counted_graveyard_cards",
     "parse_claims_one_exiled_card",
+    "parse_returns_one_exiled_card",
     "parse_exile_graveyard_arrivals_this_turn",
     "_parse_bin_unplayed_exiled_card",
     "_parse_bin_unplayed_exiled_cards",

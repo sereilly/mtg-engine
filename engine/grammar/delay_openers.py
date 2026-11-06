@@ -161,6 +161,20 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     (("at", "the", "beginning", "of", "each", "of", "that", "player", "'s",
       "upkeeps"),
      "bound_players_upkeep", False, "while_the_game_lasts", False),
+    # "For as long as any of those cards remain exiled, at the beginning of
+    # **each player's upkeep**, that player returns one of the exiled cards
+    # they own to the battlefield." (Dimensional Breach.) The repeating
+    # spelling with **no** possessive seat: every upkeep, whoever's — so the
+    # event is announced unseated and the upkeep's player rides each firing as
+    # the seat "that player" names. The static trigger printing the same words
+    # is ``upkeep_each``; this is that ability *created*.
+    #
+    # Its duration is **unstated**, Giant Oyster's draw-step row's shape: the
+    # window is printed once in front of the whole sentence, so the leading
+    # linked duration fills it in and a node that reaches the lowering still
+    # None refuses.
+    (("at", "the", "beginning", "of", "each", "player", "'s", "upkeep"),
+     "each_players_upkeep", False, None, False),
     # "…at the beginning of **the next cleanup step**" (Thawing Glaciers,
     # Bounty of the Hunt). Unseated for `next_end_step`'s reason — CR 514 gives
     # every turn one cleanup step and the ability names the next one there is —

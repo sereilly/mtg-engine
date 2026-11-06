@@ -243,6 +243,7 @@ from .exile import (
     ExileGraveyardArrivalsThisTurn,
     PutExiledCardIntoZone,
     PutExiledThisWay,
+    ReturnOneExiledCard,
     PutExiledPileTopIntoHand,
 )
 from .stack import (
@@ -370,7 +371,7 @@ Effect = Union[
     UpkeepCounterToll,
     UpkeepDamageUnlessCost,
     ExileBoundCard, ExileGraveyardArrivalsThisTurn,
-    PutExiledCardIntoZone, PutExiledThisWay, PutExiledPileTopIntoHand,
+    PutExiledCardIntoZone, PutExiledThisWay, ReturnOneExiledCard, PutExiledPileTopIntoHand,
     PutExiledPileOnLibrary,
     RepeatedGraveyardPick, NameThenConsult,
     SearchLibrary, SearchPlayerLibrary, SearchAndExile, TransmuteBySacrifice,

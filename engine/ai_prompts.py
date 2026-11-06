@@ -29,11 +29,11 @@ resolution paths import these from here, inside the function that asks.
 from __future__ import annotations
 
 from .ai_target_sides import ability_target_side, spell_target_side
-from .ai_rehearsal import deliberating, rehearse, rehearsing
+from .ai_rehearsal import deliberating, permanent_worth, rehearse, rehearsing
 from .ai_prompt_readers import offer_trade, TollLoss, toll_branch_loss
 from .ai_valuation import offer_buys_a_drawback_to_its_source
 from .game import Game
-from .models import CardDefinition
+from .models import CardDefinition, Permanent
 from .search_filters import search_matches, searched_seat
 from .ai_payment import _cost_for, _plan_land_taps
 from .ai_actions import hand_spells
@@ -234,6 +234,31 @@ def choose_outside_game_card(
             _score_tutor_choice(game, player_index, sideboard[index]), -index,
         ),
     )
+
+
+def choose_exiled_card_to_return(
+    game: Game, player_index: int, offered: list,
+) -> int | None:
+    """Which of *offered* — ``(position, card)`` pairs, the engine's own list
+    (``handlers.exiled_returns.returnable_exiled_records``) — a seat nobody
+    asks puts onto the battlefield (Dimensional Breach's "returns one of the
+    exiled cards they own"), as its position; None with nothing offered.
+
+    The card is going straight onto the battlefield, so it is weighed as the
+    permanent it will be (``ai_rehearsal.permanent_worth`` over the card as
+    printed, read for what lasts) rather than as a card to cast. One card
+    comes back per upkeep, so the order is the whole decision and the biggest
+    permanent first is the plain reading; the earliest position between equals,
+    so a seed reproduces the pick.
+    """
+    if not offered:
+        return None
+    best_position, best_worth = None, float("-inf")
+    for position, card in offered:
+        worth = permanent_worth(Permanent(card=card), now=False)
+        if worth > best_worth + 1e-9:
+            best_position, best_worth = position, worth
+    return best_position
 
 
 #: How many cards a seat nobody asks exiles into a pile that returns **one card

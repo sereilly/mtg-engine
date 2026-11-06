@@ -245,6 +245,12 @@ OPPONENT_CHOSE_MODE = "mode_chosen_by_opponent"
 
 _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     "upkeep_each",
+    # "…at the beginning of each player's upkeep, **that player** returns one
+    # of the exiled cards they own to the battlefield." (Dimensional Breach.)
+    # The row above as a *delayed* event: the same seat, frozen under the same
+    # key by the same upkeep step (``phases/upkeep_step``'s
+    # ``each_players_upkeep`` fire site), varying per firing.
+    "each_players_upkeep",
     # "Until end of turn, whenever a player gains life, **that player** loses
     # 2 life …" (False Cure.) The seat that gained the life, frozen by the
     # life-gain seam as it announces the delayed event — any seat's gain, so

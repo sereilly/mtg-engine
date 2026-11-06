@@ -339,6 +339,10 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # a time — two zones named, which is what puts it here rather than among
     # the kinds that act on an object where it stands.
     "claim_exiled_cards_in_turn": "zones",
+    # "…that player returns one of the exiled cards they own to the
+    # battlefield." (Dimensional Breach.) The row above's one-seat sibling:
+    # exile to the battlefield, one card, picked by one player.
+    "return_one_exiled_card": "zones",
     # "…then **the chosen permanents** phase out." (Equipoise.) The same zone
     # question as every other phase-out beside it — CR 702.26 is not a zone
     # change, and this table is where the family says so — with the set read

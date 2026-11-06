@@ -16,7 +16,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..delayed_triggers import END_OF_TURN, DelayedTrigger, arm_delayed_trigger
+from ..delayed_triggers import (END_OF_TURN, WHILE_EXILED_THIS_WAY,
+                                DelayedTrigger, arm_delayed_trigger)
 from ..tokens import CREATED_TOKEN_RESULT_KEY
 from ._chosen import (COLOR_CHOSEN_THIS_WAY_KEY,
                       resolve_color_chosen_in_resolution)
@@ -180,6 +181,22 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         bound_id = watched_id
     if watched_id is None:
         watched_id = bound_id
+    if payload.get("duration") == WHILE_EXILED_THIS_WAY:
+        # "**For as long as any of those cards remain exiled,** …" (Dimensional
+        # Breach.) The cards the step in front exiled, one exile record each —
+        # registered now, while this resolution still knows which cards and
+        # whose (CR 603.7c), and frozen into the scratchpad the capture below
+        # copies, so every firing asks the same records. CR 611.2b: with no
+        # card exiled the duration never starts and the ability does nothing,
+        # so none is created.
+        from .exiled_returns import exiled_this_way_records
+
+        if not exiled_this_way_records(game, context):
+            game.log.append(
+                f"{context.card.name} exiled no cards, so its delayed ability "
+                "is never created"
+            )
+            return True, "no cards"
     # CR 608.2h's last-known information, frozen at creation. The resolution
     # scratchpad *is* what
     # this effect's earlier steps knew — Mana Drain's countered spell and its

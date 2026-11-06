@@ -30,6 +30,7 @@ from . import (  # noqa: E402,F401
     destruction,
     discards,
     exile,
+    exiled_returns,
     face_down,
     fighting,
     hand,

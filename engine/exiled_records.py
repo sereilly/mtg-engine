@@ -232,10 +232,61 @@ def record_exiled_card(
 
 
 def is_live(game, record: ExiledRecord) -> bool:
-    """Whether *record*'s card is in its owner's exile right now."""
+    """Whether *record* still speaks for a card in its owner's exile.
+
+    Two halves, and the second is CR 400.7's. The card must be in the pile —
+    and the record must still be **registered**: the departure seam
+    (``Game.take_card_from_exile``) retires a record as its card leaves, and a
+    holder that kept the object (a trigger's context, a delayed ability's
+    ``captured``) would otherwise find it live again the moment the same
+    ``CardDefinition`` — any copy of it — is exiled by something else. That is
+    the "memory of its previous existence" the rule forbids, and the register
+    is the one place the seam can say so.
+    """
     if not 0 <= record.owner_index < len(game.players):
         return False
+    if not any(held is record for held in getattr(game, RECORDS_ATTR, ()) or ()):
+        return False
     return any(card is record.card for card in game.players[record.owner_index].exile)
+
+
+#: The records a delayed ability's "**those cards**" names — the cards the
+#: creating effect exiled, one :class:`ExiledRecord` per exiled object — frozen
+#: into the entry's ``captured`` as the ability is created (CR 603.7c) and read
+#: by its duration (``delayed_triggers.WHILE_EXILED_THIS_WAY``) and by the
+#: return that hands them back (``return_one_exiled_card``). Declared here, with
+#: :data:`EXILE_RECORD_KEY`, for that key's reason: this module imports nothing
+#: from the engine, so the handler layer and the delayed registry can both name
+#: it.
+EXILED_THIS_WAY_RECORDS = "exiled_this_way_records"
+
+
+#: The intervening-if kinds that say a triggered ability is about its card
+#: **in exile** — "if this card is exiled" (Ertai's Meddling's delay), "… with a
+#: scream counter on it" (All Hallow's Eve). CR 113.6k: a trigger condition
+#: that can't trigger from the battlefield functions in the zones it can
+#: trigger from; every other ability of a permanent card functions on the
+#: battlefield alone (CR 113.6), so a card in this register for some other
+#: reason (face down, a Dimensional Breach's pile) triggers nothing from here.
+EXILE_ZONE_CONDITIONS: frozenset[str] = frozenset({
+    "source_exiled", "source_exiled_with_counter",
+})
+
+
+def functions_from_exile(instruction) -> bool:
+    """Whether a triggered ability's *instruction* is one that functions from
+    exile (:data:`EXILE_ZONE_CONDITIONS`), read off its intervening "if"."""
+    payload = getattr(instruction, "payload", None) or {}
+    gate = payload.get("intervening_if")
+    return isinstance(gate, dict) and gate.get("kind") in EXILE_ZONE_CONDITIONS
+
+
+def still_exiled(game, record) -> bool:
+    """Whether *record* — a held :class:`ExiledRecord` — still speaks for a card
+    in exile. :func:`is_live` under the name the "for as long as … remain
+    exiled" readers ask it by, and fail-closed on anything that is not a
+    record."""
+    return isinstance(record, ExiledRecord) and is_live(game, record)
 
 
 def live_records(game) -> Iterator[ExiledRecord]:
