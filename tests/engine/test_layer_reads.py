@@ -556,8 +556,8 @@ _PRINTED_MANA_VALUE = re.compile(r"\.card\.cmc\b")
 
 #: module -> how many printed mana-value reads survive. Untriaged AI weights.
 PRINTED_MANA_VALUE_BASELINE: dict[str, int] = {
-    "ai_abilities.py": 2,
     "ai_cast_gates.py": 1,
+    "ai_foreign_activations.py": 2,
     "ai_scoring.py": 1,
 }
 

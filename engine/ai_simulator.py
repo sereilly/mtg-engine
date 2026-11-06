@@ -14,11 +14,9 @@ from .ai_policy import (
     choose_land_drop,
 )
 from .ai_actions import cast_announcement, spell_being_cast, zone_being_cast_from
-from .ai_abilities import (
-    choose_activation_action,
-    choose_foreign_activation_action,
-    choose_hand_activation_action,
-)
+from .ai_abilities import choose_activation_action
+from .ai_foreign_activations import choose_foreign_activation_action
+from .ai_hand_activations import choose_hand_activation_action
 from .ai_graveyard_activations import (
     activate_chosen_graveyard_ability,
     choose_graveyard_activation_action,
@@ -108,8 +106,8 @@ class SimulationReport:
     cleanup_discards: int = 0
     #: Abilities activated on a permanent another seat controls (CR 602.1b,
     #: "Any player may activate this ability"). Zero in every run before
-    #: `ai_abilities.choose_foreign_activation_action` existed, because every
-    #: chooser walked the seat's own battlefield.
+    #: `ai_foreign_activations.choose_foreign_activation_action` existed,
+    #: because every chooser walked the seat's own battlefield.
     foreign_activations: int = 0
     #: Lands played (CR 305.1), by the land-drop pass rather than as the
     #: turn's one cast. **Not** counted in ``interaction_count``: a land play is
@@ -415,7 +413,8 @@ def _execute_foreign_activation(
     game: Game, active: int, action, report: SimulationReport,
     game_index: int, turn: int,
 ) -> None:
-    """Carry out `ai_abilities.choose_foreign_activation_action`'s choice.
+    """Carry out `ai_foreign_activations.choose_foreign_activation_action`'s
+    choice.
 
     The activator pays (CR 602.1a) from its own lands, so the taps are on
     *active*'s board; the permanent is on ``action.source_controller_index``'s,

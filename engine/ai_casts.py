@@ -188,8 +188,9 @@ def _plan_spends_what_it_names(game: Game, seat: int, candidate: "CastAction") -
 #: number of times"). The lands bound it first; this bounds the search.
 OFFER_REPEAT_CAP = 6
 #: A buyback paid in life (Slaughter's 4) is taken only while the seat keeps
-#: this much — the reserve `ai_abilities.FOREIGN_ACTIVATION_LIFE_RESERVE` keeps, for the
-#: same reason: life is the one resource whose last points lose the game.
+#: this much — the reserve `ai_foreign_activations.FOREIGN_ACTIVATION_LIFE_RESERVE`
+#: keeps, for the same reason: life is the one resource whose last points
+#: lose the game.
 BUYBACK_LIFE_RESERVE = 10
 #: A buyback paid in permanents ("Buyback—Sacrifice a land") is taken only by
 #: a seat that still controls this many of them afterwards: enough lands to

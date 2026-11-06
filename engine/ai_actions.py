@@ -179,7 +179,8 @@ class ActivationAction:
     land_tap_colors: tuple[str, ...] = ()
     # Whose battlefield the permanent is on, when that is **not** the
     # activator's: "Any player may activate this ability" (CR 602.1b). None is
-    # the activator's own — every action but `ai_abilities.choose_foreign_activation_action`'s.
+    # the activator's own — every action but
+    # `ai_foreign_activations.choose_foreign_activation_action`'s.
     # `permanent_index` counts into this seat's battlefield, which is what
     # `activate_permanent_ability(source_controller_index=…)` reads it against.
     source_controller_index: int | None = None
