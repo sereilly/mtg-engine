@@ -109,6 +109,24 @@ class LandPlayProhibition:
 
     at_least: int = 0
     card_type: str = ""
+    #: "**You** can't play lands **if this creature was cast this turn**."
+    #: (Rock Jockey.) The same withdrawal scoped to the permanent's controller
+    #: (CR 109.5's "you") and conditioned on how the permanent itself got onto
+    #: the battlefield: cast as a spell this turn (CR 701.5a's distinction, the
+    #: ``enter_effects.CAST_THIS_TURN_STAMP`` the entry seam writes for a
+    #: resolving permanent spell and for nothing else). Both are facts
+    #: :func:`prohibition_holds` can answer only with the permanent and the
+    #: seat in hand, which is why it takes them. Its ruling (2004-10-04): "The
+    #: second ability applies only while this card is on the battlefield" —
+    #: which a permanent's static is by construction.
+    controller_only: bool = False
+    while_cast_this_turn: bool = False
+
+#: Rock Jockey's second line, anchored at both ends. The self-reference is the
+#: one this module reads everywhere (``_SELF_NOUN``).
+_OWN_LAND_PLAYS_IF_CAST = re.compile(
+    rf"^you can't play lands if {_SELF_NOUN} was cast this turn$"
+)
 
 _ADDITIONAL = re.compile(
     rf"^you may play (?:an|(?P<count>{_COUNT_WORD})) additional lands? "
@@ -163,6 +181,8 @@ def land_play_line(normalized_line: str) -> str | None:
         # here and enforced nowhere, which is the gate/dispatch split the
         # docstring above was written about.
         return "prohibition"
+    if _OWN_LAND_PLAYS_IF_CAST.match(line):
+        return "prohibition"
     if _DAMAGE_RIDER.match(line):
         return "damage_rider"
     return None
@@ -211,16 +231,25 @@ def land_play_prohibition(oracle_text: str) -> "LandPlayProhibition | None":
     if "play lands" not in lowered:
         return None
     for raw_line in lowered.splitlines():
-        match = _NO_LAND_PLAYS.match(raw_line.strip().rstrip("."))
+        line = raw_line.strip().rstrip(".")
+        match = _NO_LAND_PLAYS.match(line)
         if match is not None:
             found = _prohibition_from(match)
             if found is not None:
                 return found
+        if _OWN_LAND_PLAYS_IF_CAST.match(line):
+            return LandPlayProhibition(
+                controller_only=True, while_cast_this_turn=True,
+            )
     return None
 
 
-def prohibition_holds(game, prohibition: LandPlayProhibition) -> bool:
-    """Whether *prohibition*'s printed condition is met right now.
+def prohibition_holds(
+    game, prohibition: LandPlayProhibition, *, permanent=None,
+    seat: int | None = None,
+) -> bool:
+    """Whether *prohibition*'s printed condition is met right now, for *seat*
+    and the *permanent* printing it.
 
     An unconditional ban always holds (Worms of the Earth). A conditional one
     counts through the layer accessor rather than the printed type line, for
@@ -228,7 +257,24 @@ def prohibition_holds(game, prohibition: LandPlayProhibition) -> bool:
     and an animated land is still a land while a Blood Moon's Mountain is one
     too — a read of ``card.type_line`` would answer about the card as printed
     rather than about the permanent on the board.
+
+    A ban scoped to "you" (Rock Jockey) binds the permanent's controller alone,
+    asked through the control seam so a Jockey that changed hands binds its
+    new controller; and "if this creature was cast this turn" reads the
+    permanent's own entry stamp for this turn. A caller with no permanent or
+    no seat is answered no for either — the direction that takes no land drop
+    away on a guess.
     """
+    if prohibition.controller_only and (
+        permanent is None or seat is None or not game.controls(seat, permanent)
+    ):
+        return False
+    if prohibition.while_cast_this_turn:
+        from .enter_effects import CAST_THIS_TURN_STAMP
+
+        stamp = getattr(permanent, "metadata", {}).get(CAST_THIS_TURN_STAMP)
+        if not isinstance(stamp, dict) or stamp.get("turn") != game.turn:
+            return False
     if prohibition.at_least <= 0:
         return True
     return sum(

@@ -200,17 +200,84 @@ class CostModifier:
     #: up. Set only on a one-subject sentence: printed once, the adjective
     #: would be ambiguous over a list.
     face_down: bool = False
+    #: "**Goblin** spells you cast cost {1} less to cast." (Goblin Warchief and
+    #: Scourge's four other Warchiefs, Dragonspeaker Shaman, Edgewalker.) A
+    #: creature type in the subject slot (CR 205.3m): the taxed spell must
+    #: *have* that type, read through ``object_creature_types.creature_types``
+    #: with the caster's seat — so a Conspiracy's retyped spell is asked what it
+    #: is now, a kindred spell has its creature types (CR 308), and a face-down
+    #: spell has none (CR 708.2a). The word is the vocabulary's
+    #: (``data/vocabulary/``); a word that is not a creature type refuses the
+    #: whole sentence rather than reading as "spells".
+    #:
+    #: One subject only, for ``face_down``'s reason: the adjective is printed
+    #: once and ``alternative_subjects`` carries no slot for it.
+    creature_type: str | None = None
+    #: "Creature spells you cast **with mana value 6 or greater** cost {2} less
+    #: to cast." (Krosan Drover.) An ``{op, value}`` bound in the shape every
+    #: other mana-value narrowing in the engine rides (``_comparison_holds``),
+    #: tested against the spell's mana value **on the stack** — CR 202.3e: X is
+    #: the number announced for it there — by :func:`spell_mana_value`.
+    #:
+    #: Admitted on a *reduction* only, and only "or greater": the cast path
+    #: asks a reduction again once X is a number (``casting``'s CR 202.3e
+    #: restatement), and a monotone bound is what makes that second answer
+    #: final. A tax narrowed this way would be charged at X = 0 and a spell cast
+    #: for less than it prints; no card prints one, so the sentence refuses.
+    mana_value: dict | None = None
+    #: "Creature spells you cast **that share a creature type with this
+    #: creature** cost {1} less to cast." (Mistform Warchief.) A relation
+    #: between the taxed spell and the **taxing permanent** (CR 205.3m), so it
+    #: is answered where the permanent is in hand, through the layers on its
+    #: side — the Warchief's own "{T}: This creature becomes the creature type
+    #: of your choice until end of turn" changes what it shares — and through
+    #: ``object_creature_types.creature_types`` on the spell's. A reader with no
+    #: permanent (an object on the stack, ``cost_modifiers._stack_tax``) is
+    #: answered no.
+    shares_creature_type_with_source: bool = False
+    #: "Cleric spells you cast cost {W}{B} less to cast. **This effect reduces
+    #: only the amount of colored mana you pay.**" (Edgewalker.) A coloured
+    #: reduction from a permanent that CR 118.7b and 118.7c do **not** apply to:
+    #: a pip the cost does not carry comes off nothing, rather than off generic.
+    #: Carried to the cost as ``CostReduction.colored_only`` and nowhere else; a
+    #: coloured reduction printed *without* the rider is still refused, because
+    #: no card in the pool prints one and its arithmetic is a different card's.
+    colored_only: bool = False
 
 
 @dataclass(frozen=True)
 class CostReduction:
-    """How much comes off a cost, split the way CR 118.7 splits it."""
+    """How much comes off a cost, split the way CR 118.7 splits it.
+
+    ``colored_only`` is the coloured reduction that **does not spill** onto
+    generic (Edgewalker's "This effect reduces only the amount of colored mana
+    you pay"): CR 118.7b's and 118.7c's fallbacks are what that sentence
+    switches off, so it is its own field rather than more of ``colored``, which
+    :func:`cost_modifiers.reduce_cost` spills by rule.
+    """
 
     generic: int = 0
     colored: tuple[tuple[str, int], ...] = ()
+    colored_only: tuple[tuple[str, int], ...] = ()
 
     def __bool__(self) -> bool:
-        return bool(self.generic or self.colored)
+        return bool(self.generic or self.colored or self.colored_only)
+
+    def plus_generic(self, amount: int) -> "CostReduction":
+        """This reduction with *amount* more generic mana off it — the one way
+        a reader adds a keyword cost's own reduction (Catalyst Stone) without
+        rebuilding the value and dropping a field it did not know about."""
+        return CostReduction(
+            self.generic + int(amount), self.colored, self.colored_only,
+        )
+
+    def symbols(self) -> dict[str, int]:
+        """Everything this takes off, as a symbol dict, for a log line or a
+        price note — never for arithmetic, which is ``reduce_cost``'s."""
+        shown: dict[str, int] = {"generic": self.generic} if self.generic else {}
+        for symbol, amount in (*self.colored, *self.colored_only):
+            shown[symbol] = shown.get(symbol, 0) + amount
+        return shown
 
 
 # "<colour>? <type>? spells [with <keyword>] [you cast] cost {N} more/less to cast"
@@ -258,12 +325,30 @@ _CHOSEN_TYPE_TAIL = r"(?: of the chosen type)"
 # "**Face-down** creature spells …" (Dream Chisel). CR 708.4's status, printed
 # in front of the type word; see ``CostModifier.face_down``.
 _FACE_DOWN_SLOT = r"(?:face-down )"
+# "**Goblin** spells you cast …" (Goblin Warchief). One word in front of the
+# type list that is none of the words the other slots read — a card type, a
+# colour, "face-down" or the noun itself — captured here and held to the
+# creature-type vocabulary by ``_spell_tax_modifier``, which refuses the whole
+# sentence for a word that is not one (CR 205.3m).
+#
+# **Why a slot and not the old silence.** Without it the pattern, *searched*
+# over a card's text, began its match at "spells" and read "Soldier spells you
+# cast cost {1} less" as "spells you cast cost {1} less": the five Warchiefs
+# discounted every spell their controller cast, held off the board only by
+# reporting unsupported. A word this slot reads and the vocabulary refuses is
+# now a sentence nothing charges ("legendary spells", "kicked spells"), which
+# is the direction a cost must fail in. The vocabulary is asked at the call,
+# not spelled into the pattern: this module loads beneath the grammar package
+# that owns it.
+_NOT_A_TYPE_WORD = rf"(?!(?:{_TYPES}|{_SPELL_COLOURS}|face-down|spells?)\b)"
+_CREATURE_TYPE_SLOT = rf"(?:{_NOT_A_TYPE_WORD}[a-z][a-z'’-]* )"
 _SPELL_SUBJECT_TEXT = (
-    rf"(?:(?:{_SPELL_COLOURS}) )?{_FACE_DOWN_SLOT}?(?:(?:{_TYPE_LIST}) )?"
-    rf"spells?{_CHOSEN_TYPE_TAIL}?"
+    rf"(?:(?:{_SPELL_COLOURS}) )?{_FACE_DOWN_SLOT}?{_CREATURE_TYPE_SLOT}?"
+    rf"(?:(?:{_TYPE_LIST}) )?spells?{_CHOSEN_TYPE_TAIL}?"
 )
 _SPELL_SUBJECT = re.compile(
     rf"^(?:(?P<colour>{_SPELL_COLOURS}) )?(?P<face_down>{_FACE_DOWN_SLOT})?"
+    rf"(?:(?P<creature_type>{_NOT_A_TYPE_WORD}[a-z][a-z'’-]*) )?"
     rf"(?:(?P<type>{_TYPE_LIST}) )?"
     rf"spell(?P<plural>s)?(?P<chosen>{_CHOSEN_TYPE_TAIL})?$"
 )
@@ -289,7 +374,15 @@ _SPELL_TAX = re.compile(
     rf"(?<![a-z])(?P<each>each )?"
     rf"(?P<subjects>{_SPELL_SUBJECT_TEXT}(?: and {_SPELL_SUBJECT_TEXT})*)"
     r"(?: with (?P<keyword>[a-z]+))?"
-    r"(?:(?P<controller> you| your opponents) cast)? cost(?P<verb_s>s)? "
+    r"(?:(?P<controller> you| your opponents) cast)?"
+    # "…you cast **with mana value 6 or greater**…" (Krosan Drover), printed
+    # after the caster clause where Watcher of the Spheres prints its keyword
+    # before it; see ``CostModifier.mana_value``.
+    r"(?: with mana value (?P<mv_value>\d+) or (?P<mv_direction>greater|less))?"
+    # "…you cast **that share a creature type with this creature**…" (Mistform
+    # Warchief); see ``CostModifier.shares_creature_type_with_source``.
+    r"(?P<shares> that share a creature type with this (?:creature|permanent))?"
+    r" cost(?P<verb_s>s)? "
     r"(?P<amount>(?:\{(?:\d+|[wubrgc])\})+) (?P<direction>more|less) to cast"
     # "…**except during its controller's turn**." (Defense Grid.) A timing
     # condition on the tax, optional because every other card printing this
@@ -298,6 +391,13 @@ _SPELL_TAX = re.compile(
     # would leave the line unclaimed and the card unsupported while the tax it
     # narrows was charged on every turn.
     r"(?P<off_turn> except during its controller's turn)?"
+    # "…**. This effect reduces only the amount of colored mana you pay.**"
+    # (Edgewalker.) The second sentence of a two-sentence reduction, read with
+    # the first because neither means anything alone: it is what makes "{W}{B}
+    # less" a reduction that never spills onto generic (CR 118.7b/c). Read here
+    # for ``off_turn``'s reason: an unconsumed rider leaves the line unclaimed.
+    r"(?P<colored_only>\. this effect reduces only the amount of colored mana "
+    r"you pay)?"
 )
 
 #: Which seat a printed caster clause names. A table rather than a truth test on
@@ -710,14 +810,17 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
     clause claimed by a pattern that then produces no modifier is a card
     reporting supported with its whole sentence dropped.
 
-    Three readings are refused rather than approximated:
+    These readings are refused rather than approximated:
 
     * a symbol :func:`_tax_symbols` could not name -- charging the part it did
       read is a spell cast for less than it prints;
-    * a coloured *reduction* ("cost {B} less"), whose arithmetic is CR 118.7's
-      and lives in :func:`reduce_cost`. No card in the pool prints one from a
-      permanent, and admitting it here would discount a cost by a rule nothing
-      in this path applies;
+    * a coloured *reduction* ("cost {B} less") printed without Edgewalker's
+      rider, whose arithmetic would be CR 118.7b/c's spill. No card in the
+      pool prints one from a permanent; the one that prints the rider says
+      the spill does not apply, and is read with it (``colored_only``);
+    * a match that does not begin its sentence (:func:`_starts_its_sentence`),
+      whose unread beginning is a narrowing dropped;
+    * a word in the creature-type slot the vocabulary does not hold;
     * a conjunct the subject reader cannot read, which takes the **whole**
       clause with it (idiom 38) -- half a sentence enforced is the failure that
       refusal exists to prevent;
@@ -727,15 +830,28 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
       different rule, and reading it here would tax every spell in the game on
       the strength of a fragment.
     """
+    if not _starts_its_sentence(match):
+        return None
     generic, pips = _tax_symbols(match.group("amount"))
     if generic < 0:
         return None
-    if pips and match.group("direction") == "less":
+    reduces = match.group("direction") == "less"
+    colored_only = bool(match.group("colored_only"))
+    # A coloured *reduction* is admitted only beside the rider that says how
+    # it is applied (Edgewalker), and the rider only on a reduction made of
+    # coloured pips alone: "{1}{W} less … reduces only colored mana" says two
+    # contradictory things, and an increase has nothing to reduce.
+    if colored_only and (not reduces or not pips or generic):
         return None
+    if pips and reduces and not colored_only:
+        return None
+    from .grammar.vocabulary import CREATURE_TYPES
+
     subjects: list[tuple[str | None, tuple[str, ...]]] = []
     singular = False
     chosen_type = False
     face_down = False
+    creature_type: str | None = None
     for printed in _SUBJECT_SPLIT.split(match.group("subjects")):
         read = _SPELL_SUBJECT.match(printed.strip())
         if read is None:
@@ -743,6 +859,14 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
         singular = singular or not read.group("plural")
         chosen_type = chosen_type or bool(read.group("chosen"))
         face_down = face_down or bool(read.group("face_down"))
+        printed_type = read.group("creature_type")
+        if printed_type is not None:
+            # CR 205.3m's list and nothing else: a word the slot read that the
+            # vocabulary does not hold ("legendary", "kicked") is a narrowing
+            # nothing here can test, and dropping it is every spell discounted.
+            if printed_type.replace("’", "'") not in CREATURE_TYPES:
+                return None
+            creature_type = printed_type.replace("’", "'")
         printed_colour = read.group("colour") or ""
         subjects.append(
             (
@@ -787,10 +911,27 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
     # chosen type's reason directly above — the adjective is printed once.
     if face_down and len(subjects) > 1:
         return None
+    # "Goblin spells …" (the Warchiefs): one subject for the same reason, and
+    # never beside "face-down" — a face-down spell has no creature type
+    # (CR 708.2a), so the pair names nothing.
+    if creature_type is not None and (len(subjects) > 1 or face_down):
+        return None
+    mana_value = None
+    if match.group("mv_value") is not None:
+        # See ``CostModifier.mana_value``: a reduction, bounded below.
+        if not reduces or match.group("mv_direction") != "greater":
+            return None
+        mana_value = {"op": "ge", "value": int(match.group("mv_value"))}
+    shares = bool(match.group("shares"))
+    # "…that share a creature type with this creature": a creature spell's
+    # relation, printed after a subject that names one (CR 205.3d gives only
+    # a creature or a kindred a creature type), and one subject only.
+    if shares and (card_types != ("creature",) or len(subjects) > 1):
+        return None
     return CostModifier(
         amount=generic,
         applies_to="cast",
-        reduces=match.group("direction") == "less",
+        reduces=reduces,
         colour=colour,
         card_types=card_types,
         keyword=match.group("keyword"),
@@ -800,7 +941,27 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
         off_controllers_turn=bool(match.group("off_turn")),
         chosen_creature_type=chosen_type,
         face_down=face_down,
+        creature_type=creature_type,
+        mana_value=mana_value,
+        shares_creature_type_with_source=shares,
+        colored_only=colored_only,
     )
+
+
+def _starts_its_sentence(match: "re.Match[str]") -> bool:
+    """Whether *match* begins where a sentence does — the start of the text or
+    of a line, after a full stop, or after an ability word's dash.
+
+    :func:`cost_modifiers_for` **searches** a card's whole text, so a match can
+    begin part-way through a longer sentence, and whatever came before it is a
+    narrowing nothing read: "If you control a Wizard, Wizard spells you cast
+    cost {1} less" would discount without its condition, and a quoted grant
+    ('…have "Spells you cast cost {1} less to cast"') would be read as the
+    granting permanent's own static. Refused, which fails closed: the line is
+    also unclaimed (the claim is anchored), so its card reports unsupported.
+    """
+    before = match.string[: match.start()].rstrip(" ")
+    return not before or before.endswith(("\n", ".", "—"))
 
 
 def _sacrifice_symbol_modifier(match: "re.Match[str]") -> CostModifier | None:
@@ -861,22 +1022,34 @@ def _types_named(clause: str | None) -> tuple[str, ...]:
 
 
 def cost_modifier_reduction_sentences(oracle_text: str) -> tuple[str, ...]:
-    """The sentences :data:`_ABILITY_REDUCTION` reads, or empty.
+    """The sentences a two-sentence reduction reads, or empty:
+    :data:`_ABILITY_REDUCTION`'s amount and floor (Heartstone), and a spell
+    reduction with its colored-only rider (Edgewalker).
 
-    The reduction is **two sentences on one printed line** -- the amount and the
-    floor -- and neither means anything alone, so the reader matches them
-    joined. This names the pair for a caller that walks a card sentence by
-    sentence (``scripts/parse_coverage.py``), which would otherwise report the
-    floor as text nothing read. The same arrangement
+    Each reduction is **two sentences on one printed line** and neither means
+    anything alone, so the reader matches them joined. This names the pair for
+    a caller that walks a card sentence by sentence
+    (``scripts/parse_coverage.py``), which would otherwise report the second
+    as text nothing read. The same arrangement
     ``aura_grants.aura_cost_reduction_sentences`` makes for the identical rider
-    on an Aura.
+    on an Aura. Reminder text is not a sentence (CR 207.2) and is dropped
+    first, as every other reader of the line drops it.
     """
     found: list[str] = []
     for line in (oracle_text or "").split("\n"):
-        text = " ".join(line.strip().lower().split()).rstrip(".")
+        text = " ".join(
+            re.sub(r"\([^)]*\)", "", line).strip().lower().split()
+        ).rstrip(".")
         match = _ABILITY_REDUCTION.match(text)
         if match is None or match.end() != len(text):
-            continue
+            spell = _SPELL_TAX.match(text)
+            if (
+                spell is None
+                or spell.end() != len(text)
+                or not spell.group("colored_only")
+                or _spell_tax_modifier(spell) is None
+            ):
+                continue
         found.extend(
             sentence.strip() for sentence in text.split(". ") if sentence.strip()
         )

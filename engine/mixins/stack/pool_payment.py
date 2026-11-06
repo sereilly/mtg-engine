@@ -978,10 +978,7 @@ class PoolPaymentMixin:
                 paid = self._pay_cast_cost(
                     caster, card, resolved_x_value, x_colors,
                     extra_generic=extra_generic_tax + keyword_more,
-                    reduction=CostReduction(
-                        cost_reduction.generic + keyword_less,
-                        cost_reduction.colored,
-                    ),
+                    reduction=cost_reduction.plus_generic(keyword_less),
                     extra_pips=extra_pip_tax,
                     offer_x_colorings=offer_x_colorings,
                     mana_cost=alternative_mana or "",

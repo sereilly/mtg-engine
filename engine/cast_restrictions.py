@@ -719,6 +719,83 @@ def spells_cast_matching(game: "Game", seat: int, payload: dict) -> bool:
     )
 
 
+#: "**You can't cast Rock Jockey if** you've played a land this turn." (Rock
+#: Jockey.) The negative spelling of "Cast this spell only if …" — CR 601.3's
+#: "no rule or effect prohibits that player from casting it" — printed by the
+#: card about its own cast, with the card's name where the modern template
+#: prints "this spell" (CR 201.5): the reader collapses the self-reference
+#: before matching, so both spellings are one row.
+#:
+#: Enforced as a row of ``cast_prohibitions.CAST_PROHIBITIONS`` (``self_cast_ban``
+#: below) rather than by ``check_cast_timing``, because that table is the one
+#: all three readers ask — the cast path, the AI's gate and the castable
+#: highlight — and a prohibition asked by two of them glows a card the click
+#: then refuses. Its ruling (2004-10-04): "The first ability applies only while
+#: this card is in your hand (or someplace else you can cast it from)", which a
+#: gate asked only of a card being cast is by construction.
+_SELF_CAST_BAN_RE = re.compile(r"^you can't cast this spell if (?P<condition>.+)$")
+
+
+def _played_a_land_this_turn(game: "Game", caster_index: int) -> bool:
+    """Whether *caster_index* has **played** a land this turn (CR 305.1).
+
+    The per-seat tally the land-play path writes (``Game.lands_played_this_turn``,
+    cleared at the turn boundary) — the record Mercadian Atlas's "if you didn't
+    play a land this turn" reads — and never the board: a land an effect put
+    onto the battlefield was not played, and one played this turn is an
+    ordinary permanent by now.
+    """
+    return int(game.lands_played_this_turn.get(caster_index, 0) or 0) > 0
+
+
+#: The conditions :data:`_SELF_CAST_BAN_RE` may print, each with what answers
+#: it. Payload, so a card printing a second condition is a row here; a
+#: condition nobody can answer leaves the line unread and its card
+#: unsupported, rather than a prohibition admitted and never asked.
+_SELF_CAST_BAN_CONDITIONS: dict[str, TimingPredicate] = {
+    "you've played a land this turn": _played_a_land_this_turn,
+    "you’ve played a land this turn": _played_a_land_this_turn,
+    "you have played a land this turn": _played_a_land_this_turn,
+}
+
+
+@lru_cache(maxsize=None)
+def self_cast_ban_line(line: str, card_name: str | None = None) -> str | None:
+    """The printed condition of a "You can't cast this spell if …" line, or
+    None when *line* is not one or names a condition nothing answers.
+
+    *card_name* is the card's own, for the self-reference CR 201.5 lets the
+    sentence spell as the name ("You can't cast **Rock Jockey** if …").
+    """
+    from .self_reference import _collapse_self_references
+
+    normalized = " ".join(line.strip().lower().split()).rstrip(".")
+    match = _SELF_CAST_BAN_RE.match(
+        _collapse_self_references(normalized, card_name, "this spell")
+    )
+    if match is None:
+        return None
+    condition = match.group("condition")
+    return condition if condition in _SELF_CAST_BAN_CONDITIONS else None
+
+
+def self_cast_ban(game: "Game", caster_index: int, card) -> str | None:
+    """The condition forbidding *caster_index* to cast *card* now, or None.
+
+    Read off the card being cast — for a face-down cast that is the blank
+    (CR 708.4: "any effects or prohibitions that would apply to casting an
+    object with these characteristics … are applied"), which prints nothing.
+    Pure, for ``cast_prohibition``'s reason: it is asked on every poll.
+    """
+    for line in (getattr(card, "oracle_text", "") or "").splitlines():
+        condition = self_cast_ban_line(line, getattr(card, "name", None))
+        if condition is None:
+            continue
+        if _SELF_CAST_BAN_CONDITIONS[condition](game, caster_index):
+            return condition
+    return None
+
+
 def _an_opponent_cast(game: "Game", caster_index: int, payload: dict) -> bool:
     """Whether any opponent of *caster_index* has cast a spell the phrase names.
 
@@ -783,7 +860,7 @@ def _condition_holds(game: "Game", caster_index: int, payload: dict) -> bool:
     )
 
 
-def cast_timing_claims_line(line: str) -> bool:
+def cast_timing_claims_line(line: str, card_name: str | None = None) -> bool:
     """Whether this table reads *line* as a gate the casting card prints about
     itself (CR 601.3).
 
@@ -809,9 +886,14 @@ def cast_timing_claims_line(line: str) -> bool:
     A run of readers rather than a list of phrases, so a row added above is a
     row this answers for; the corpus-wide check that no printed "Cast this spell
     only …" escapes it lives in ``tests/rules/test_cast_restrictions.py``.
+
+    *card_name* reaches the one reader whose sentence may name the card itself
+    ("You can't cast **Rock Jockey** if …", :func:`self_cast_ban_line`).
     """
     normalized = line.strip().lower().rstrip(".")
     if any(restriction.phrase == normalized for restriction in CAST_RESTRICTIONS):
+        return True
+    if self_cast_ban_line(normalized, card_name) is not None:
         return True
     return any(
         reader(normalized) is not None

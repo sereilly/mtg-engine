@@ -230,7 +230,26 @@ def taxed_object_colors(game, obj, seat: int | None) -> tuple[str, ...]:
     return object_colors(game, obj, seat)
 
 
-def _matches(modifier: CostModifier, card, colors) -> bool:
+def spell_mana_value(card, x_value: int | None = None) -> int:
+    """The mana value of *card* as a spell being cast (CR 202.3).
+
+    CR 202.3e: "X is treated as the number chosen for it while the object is
+    on the stack" — so Krakilin cast for X=4 has mana value 6, and a caller
+    that has no X yet (the castable highlight, a price asked before the
+    announcement) gets the X = 0 answer, which is CR 202.3e's off the stack.
+    ``targeting.stack_object_mana_value`` is the same arithmetic for an object
+    already on the stack; this is it for the card the cast path is pricing.
+    A face-down spell has no mana cost and mana value 0 (CR 708.2a).
+    """
+    base = int(getattr(card, "cmc", 0) or 0)
+    x_symbols = (getattr(card, "mana_cost", "") or "").lower().count("{x}")
+    return base + x_symbols * max(0, int(x_value or 0))
+
+
+def _matches(
+    modifier: CostModifier, card, colors, *, game=None, seat=None,
+    source=None, x_value: int | None = None,
+) -> bool:
     """Whether *card* is taxed by *modifier*.
 
     The keyword narrows every subject -- it is printed after the list, so it is
@@ -238,6 +257,14 @@ def _matches(modifier: CostModifier, card, colors) -> bool:
     **disjunction**: "green enchantment spells and white enchantment spells" is
     one set described twice, and a spell in either half is taxed once
     (CR 601.2f).
+
+    The keyword arguments are what the narrowings beyond the noun phrase need,
+    asked here so **every** loop over the table asks them — a narrowing one
+    loop tests and another does not is a discount charged in generic mana and
+    not in pips. *seat* is the caster's (CR 109.5: whose Conspiracy retypes the
+    spell), *source* the taxing permanent (None for an object on the stack,
+    which no narrowing about "this creature" or "the chosen type" can be asked
+    of — answered no), and *x_value* the X announced for the spell, if any.
     """
     if modifier.keyword and modifier.keyword not in {
         word.lower() for word in (card.keywords or ())
@@ -248,13 +275,53 @@ def _matches(modifier: CostModifier, card, colors) -> bool:
     # does.
     if modifier.face_down and getattr(card, "face_down_of", None) is None:
         return False
-    return any(
+    if not any(
         _subject_matches(colour, card_types, card, colors)
         for colour, card_types in (
             (modifier.colour, modifier.card_types),
             *modifier.alternative_subjects,
         )
-    )
+    ):
+        return False
+    # "**Goblin** spells you cast …" (the Warchiefs). CR 205.3m through the one
+    # reader of a spell's creature types, with the caster's seat — a face-down
+    # spell (the blank, CR 708.2a) has none and is never discounted by it.
+    if modifier.creature_type is not None:
+        from .object_creature_types import creature_types
+
+        if modifier.creature_type not in creature_types(game, card, seat):
+            return False
+    # "…with mana value 6 or greater" (Krosan Drover), on the stack (CR 202.3e).
+    if modifier.mana_value is not None:
+        from .handlers._filters import _comparison_holds
+
+        if not _comparison_holds(
+            modifier.mana_value, spell_mana_value(card, x_value)
+        ):
+            return False
+    # "…that share a creature type with **this creature**" (Mistform
+    # Warchief): the permanent's side through the layers, the spell's through
+    # the same reader the Warchiefs use. No permanent, no relation.
+    if modifier.shares_creature_type_with_source:
+        if source is None:
+            return False
+        from .object_creature_types import creature_types, share_a_creature_type
+
+        if not share_a_creature_type(
+            creature_types(game, card, seat), creature_types(game, source),
+        ):
+            return False
+    # "…**of the chosen type**" (Urza's Incubator). The word was chosen as the
+    # taxing permanent entered (CR 614.1c) and recorded on it; no permanent —
+    # an object on the stack never entered anything — narrows to nothing,
+    # which is the safe direction: a dropped narrowing would take {2} off
+    # every creature spell in the game.
+    if modifier.chosen_creature_type and (
+        source is None
+        or not _chosen_type_holds(source, card, game=game, seat=seat)
+    ):
+        return False
+    return True
 
 
 def _chosen_type_holds(permanent, card, *, game=None, seat=None) -> bool:
@@ -329,13 +396,16 @@ def _names_a_permanent(modifier: CostModifier) -> bool:
         or modifier.card_types
         or modifier.keyword
         or modifier.alternative_subjects
+        or modifier.creature_type
+        or modifier.mana_value
+        or modifier.shares_creature_type_with_source
     )
 
 
 def _tax(
     game, card, applies_to: str, *, wanted: str,
     controller_index: int | None = None, targeted=(), ability=None,
-    on_battlefield: bool = True, subject=None,
+    on_battlefield: bool = True, subject=None, x_value: int | None = None,
 ) -> tuple[int, list[str]]:
     """The total *wanted* ("more" or "less") change to *card*'s cost from every
     permanent on any battlefield, and those permanents' names for the log.
@@ -347,7 +417,7 @@ def _tax(
     total, names, _floor = _tax_floored(
         game, card, applies_to, wanted=wanted,
         controller_index=controller_index, targeted=targeted, ability=ability,
-        on_battlefield=on_battlefield, subject=subject,
+        on_battlefield=on_battlefield, subject=subject, x_value=x_value,
     )
     return total, names
 
@@ -384,7 +454,7 @@ def _ability_subject_holds(modifier: CostModifier, card, ability) -> bool:
 def _tax_floored(
     game, card, applies_to: str, *, wanted: str,
     controller_index: int | None = None, targeted=(), ability=None,
-    on_battlefield: bool = True, subject=None,
+    on_battlefield: bool = True, subject=None, x_value: int | None = None,
 ) -> tuple[int, list[str], int]:
     """:func:`_tax` plus the highest floor any contributing modifier names.
 
@@ -440,21 +510,15 @@ def _tax_floored(
             # and a Gloom taxed a white enchantment nobody had cast.
             if not on_battlefield and _names_a_permanent(modifier):
                 continue
+            # The narrowings about the taxing permanent ("of the chosen type",
+            # Urza's Incubator; "that share a creature type with this
+            # creature", Mistform Warchief) are asked inside ``_matches`` with
+            # this permanent as *source*, so every loop over the table asks
+            # them — the chosen type used to be asked here alone, and the pip
+            # loop below never saw it.
             if modifier.applies_to != applies_to or not _matches(
-                modifier, card, colors
-            ):
-                continue
-            # "…**of the chosen type**" (Urza's Incubator). The word was chosen
-            # as this permanent entered (CR 614.1c) and recorded on it, so it is
-            # asked here rather than in ``_matches``: that function answers
-            # about the taxed card alone and has no permanent to read.
-            #
-            # The spell's creature types are asked of the caster's seat (see
-            # ``_chosen_type_holds``). No word recorded yet discounts nothing,
-            # which is the safe direction: a dropped narrowing would take {2}
-            # off every creature spell in the game.
-            if modifier.chosen_creature_type and not _chosen_type_holds(
-                permanent, card, game=game, seat=controller_index
+                modifier, card, colors, game=game, seat=controller_index,
+                source=permanent, x_value=x_value,
             ):
                 continue
             # "**Cycling** abilities you activate…" (Fluctuator) narrows by
@@ -521,14 +585,14 @@ def _stack_tax(
         seat = getattr(item, "caster_index", None)
         for modifier in modifiers:
             # "…of the chosen type": the word is recorded on a *permanent* as it
-            # enters (CR 614.1c), and a stack object never entered anything. No
-            # card in the pool prints both clauses on one line; refused rather
-            # than ignored, because ignoring would widen the subject to every
-            # creature spell — the direction ``_chosen_type_holds`` refuses in
-            # one loop over.
-            if modifier.chosen_creature_type:
-                continue
-            if not _matches(modifier, card, colors):
+            # enters (CR 614.1c), and a stack object never entered anything —
+            # nor is it "this creature" for a shared creature type. No card in
+            # the pool prints either clause there; ``_matches`` with no
+            # *source* refuses both rather than ignoring them, because ignoring
+            # would widen the subject to every creature spell.
+            if not _matches(
+                modifier, card, colors, game=game, seat=caster_index,
+            ):
                 continue
             if modifier.controller == "you" and seat != caster_index:
                 continue
@@ -607,15 +671,54 @@ def spell_symbol_tax(
     "**you** cast" charges only its own controller's spells and an opponent's
     black spell is untaxed.
     """
+    return _symbol_modifiers(
+        game, caster_index, card, reduces=False, targeted=targeted,
+    )
+
+
+def spell_symbol_reduction(
+    game, caster_index: int, card, *, x_value: int | None = None,
+) -> tuple[dict[str, int], list[str]]:
+    """The **coloured** mana a permanent takes off *card*'s cost without
+    spilling onto generic, and who is taking it.
+
+    "Cleric spells you cast cost {W}{B} less to cast. This effect reduces only
+    the amount of colored mana you pay." (Edgewalker.) :func:`spell_symbol_tax`
+    the other way round, over the same loop, and for its reason: a coloured pip
+    is its own resource, so it cannot ride the generic total — and the rider
+    says CR 118.7b/c's fallback onto generic does not apply, which is what
+    ``CostReduction.colored_only`` carries to :func:`reduce_cost`. Two
+    Edgewalkers take {W}{W}{B}{B} off (its ruling, 2004-10-04: "the cost
+    reduction is cumulative").
+    """
+    return _symbol_modifiers(
+        game, caster_index, card, reduces=True, x_value=x_value,
+    )
+
+
+def _symbol_modifiers(
+    game, caster_index: int, card, *, reduces: bool, targeted=(),
+    x_value: int | None = None,
+) -> tuple[dict[str, int], list[str]]:
+    """The coloured pips every permanent's spell modifier adds to (*reduces*
+    False) or takes off (True) *card*'s cost, and whose they are — the one loop
+    :func:`spell_symbol_tax` and :func:`spell_symbol_reduction` share, so a
+    narrowing one of them asks the other asks too."""
     colors = taxed_object_colors(game, card, caster_index)
     total: dict[str, int] = {}
     names: list[str] = []
     for seat, permanent in game.permanents_with_controller():
         for modifier in cost_modifiers_for(permanent.effective_card.oracle_text):
-            if not modifier.symbols or modifier.reduces:
+            if not modifier.symbols or modifier.reduces != reduces:
+                continue
+            # A reduction made of pips is admitted only with its rider
+            # (Edgewalker); one without it is refused when it is read, and
+            # asserted here so this loop cannot apply CR 118.7b/c by omission.
+            if reduces and not modifier.colored_only:
                 continue
             if modifier.applies_to != "cast" or not _matches(
-                modifier, card, colors
+                modifier, card, colors, game=game, seat=caster_index,
+                source=permanent, x_value=x_value,
             ):
                 continue
             if modifier.controller == "you" and seat != caster_index:
@@ -664,17 +767,32 @@ def spell_life_tax(game, caster_index: int, targeted) -> tuple[int, list[str]]:
     return total, names
 
 
-def spell_cost_reduction(game, caster_index: int, card) -> tuple[CostReduction, list[str]]:
+def spell_cost_reduction(
+    game, caster_index: int, card, *, x_value: int | None = None,
+) -> tuple[CostReduction, list[str]]:
     """What comes off *card*'s cost from permanents on the battlefield.
 
-    Generic only: a permanent's modifier is printed as ``{N}``, so the regex
-    reads a number. A coloured reduction from a permanent would be a new
-    spelling, and :func:`reduce_cost` already knows what to do with one.
+    Generic mana ("{1} less", the Medallions and the Warchiefs), and the
+    coloured mana a reduction takes off without spilling onto generic
+    (Edgewalker's "{W}{B} less … reduces only the amount of colored mana you
+    pay", :func:`spell_symbol_reduction`). A coloured reduction that *does*
+    spill (CR 118.7b/c) is printed by no permanent and is refused as it is
+    read.
+
+    *x_value* is the X announced for the spell, for a reduction narrowed by
+    mana value (Krosan Drover, CR 202.3e); None is X = 0.
     """
     generic, names = _tax(
-        game, card, "cast", wanted="less", controller_index=caster_index
+        game, card, "cast", wanted="less", controller_index=caster_index,
+        x_value=x_value,
     )
-    return CostReduction(generic), names
+    pips, pip_names = spell_symbol_reduction(
+        game, caster_index, card, x_value=x_value,
+    )
+    return (
+        CostReduction(generic, colored_only=tuple(sorted(pips.items()))),
+        names + [name for name in pip_names if name not in names],
+    )
 
 
 def _symbols_in(cost, symbol: str) -> int:
@@ -846,7 +964,7 @@ def ability_cost_reduction(
 
 
 def cost_reduction_for_cast(
-    game, caster_index: int, card
+    game, caster_index: int, card, *, x_value: int | None = None,
 ) -> tuple[CostReduction, list[str]]:
     """Everything that comes off *card*'s cost as *caster_index* casts it.
 
@@ -855,12 +973,19 @@ def cost_reduction_for_cast(
     function because two callers need the answer — the cast path and the AI's
     affordability read — and a discount only one of them can see is a spell the
     AI declines to cast or tries to cast and cannot.
+
+    *x_value* is the X announced for the spell (CR 202.3e: its mana value on
+    the stack counts it), for a reduction narrowed by mana value; a caller
+    with none asks at X = 0, and the cast path asks again once X is settled.
     """
-    board, names = spell_cost_reduction(game, caster_index, card)
+    board, names = spell_cost_reduction(
+        game, caster_index, card, x_value=x_value,
+    )
     own = self_cost_reduction_for_cast(game, caster_index, card)
     combined = CostReduction(
         board.generic + own.generic,
         tuple(sorted((dict(board.colored) | dict(own.colored)).items())),
+        board.colored_only,
     )
     if own and not names:
         names = [card.name]
@@ -879,8 +1004,19 @@ def reduce_cost(required: dict[str, int], reduction: CostReduction) -> dict[str,
     Nothing goes below zero (CR 601.2f). Written as one function because these
     four sentences are the whole of what a reduction *is*, and a caller doing
     the subtraction itself is a caller that will get 118.7b wrong.
+
+    ``colored_only`` is the coloured reduction those fallbacks do **not** apply
+    to (Edgewalker: "This effect reduces only the amount of colored mana you
+    pay"): it takes its colour's component towards nothing and the rest of it
+    comes off nothing. Applied first, because CR 601.2f lets the player order
+    the reductions and this order is never worse: a spilling reduction applied
+    first could take the pip this one needs and spill onto generic, where
+    applied second it spills what this one left.
     """
     cost = dict(required)
+    for symbol, amount in reduction.colored_only:
+        if symbol in cost:
+            cost[symbol] = max(0, cost[symbol] - amount)
     for symbol, amount in reduction.colored:
         paid = min(cost.get(symbol, 0), amount)
         cost[symbol] = cost.get(symbol, 0) - paid

@@ -65,6 +65,7 @@ from .cast_bans import (chosen_name_ban, combat_play_ban,
                         last_cast_color_ban, most_permanents_cast_ban,
                         own_cast_ban, same_name_as_permanent_ban,
                         spell_cap_ban)
+from .cast_restrictions import self_cast_ban
 from .search_filters import card_has_type
 from .spell_prohibitions import casting_forbidden_this_turn
 
@@ -283,6 +284,18 @@ def _same_name_as_permanent(game, seat, card, from_zone):
     return permanent, f"can't play {card.name}: {permanent}"
 
 
+def _self_cast_ban(game, seat, card, from_zone):
+    # "You can't cast Rock Jockey if you've played a land this turn." (Rock
+    # Jockey.) The card's own sentence about its own cast, read off the card
+    # being cast — so it binds the caster wherever the card is cast from (its
+    # ruling, 2004-10-04) and no board is scanned. Spells only: the card that
+    # prints it is a creature, and "cast" is the verb.
+    condition = self_cast_ban(game, seat, card)
+    if condition is None:
+        return None
+    return card.name, f"can't cast {card.name}: {condition}"
+
+
 _SPELLS = frozenset({SPELL})
 _BOTH = frozenset({SPELL, LAND})
 
@@ -306,6 +319,8 @@ CAST_PROHIBITIONS: tuple[ProhibitionRow, ...] = (
     ProhibitionRow("targeting_ban", _SPELLS, _targeting_ban),
     ProhibitionRow("chosen_name_ban", _BOTH, _chosen_name_ban),
     ProhibitionRow("same_name_as_permanent_ban", _BOTH, _same_name_as_permanent),
+    # Last, so a board where another ban stands names the one it always did.
+    ProhibitionRow("self_cast_ban", _SPELLS, _self_cast_ban),
 )
 
 
