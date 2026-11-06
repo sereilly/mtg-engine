@@ -33,31 +33,22 @@ def _client_reads(js: str, key: str) -> bool:
 #: each with what the client must do. Not a waiver: the test beside each one
 #: fails the moment the client reads the key, so the entry is deleted with the
 #: client change rather than left behind as a blanket.
-#: Empty since SCG W2G2: Scourge's two — W1G7's ``pile_top_draw`` (Parallel
-#: Thoughts), whose client is ``applyPileTopDrawPrompt``, and W1G9's
-#: ``counter_distribution`` (Forgotten Ancient), whose client is
-#: ``applyCounterDistributionPrompt``. Before them kg3/client2 emptied it of
-#: kg3/ai's ``target_group_order`` (Kaboom!'s within-group target order),
-#: whose client is ``applyTargetGroupOrderPrompt`` in ``app.js`` (the
-#: ``order_triggers`` widget, ``applyOrderListPrompt``, with moves kept
-#: inside one group); Onslaught's wave 2 ``face_down_look`` (W1G2, Aven
-#: Soulgazer and Spy Network), whose client is ``renderFaceDownLookModal``;
-#: Judgment's ``outside_game_pick`` (W1G6, the Wishes), whose client is
+#: Empty since SCG W2G2b: W2G1's ``exiled_card_return`` (Dimensional
+#: Breach's upkeep return), whose client is ``applyExiledCardReturnPrompt``.
+#: Before it SCG W2G2 emptied it of Scourge's two — W1G7's
+#: ``pile_top_draw`` (Parallel Thoughts), whose client is
+#: ``applyPileTopDrawPrompt``, and W1G9's ``counter_distribution``
+#: (Forgotten Ancient), whose client is ``applyCounterDistributionPrompt``.
+#: Before them kg3/client2 emptied it of kg3/ai's ``target_group_order``
+#: (Kaboom!'s within-group target order), whose client is
+#: ``applyTargetGroupOrderPrompt`` in ``app.js`` (the ``order_triggers``
+#: widget, ``applyOrderListPrompt``, with moves kept inside one group);
+#: Onslaught's wave 2 ``face_down_look`` (W1G2, Aven Soulgazer and Spy
+#: Network), whose client is ``renderFaceDownLookModal``; Judgment's
+#: ``outside_game_pick`` (W1G6, the Wishes), whose client is
 #: ``renderOutsideGamePickModal``, and Torment's ``madness_cast`` (W1G1),
 #: whose client is ``applyMadnessCastPrompt``.
-_AWAITING_CLIENT: dict[str, str] = {
-    # Scourge W2G1, Dimensional Breach: "…at the beginning of each player's
-    # upkeep, that player returns one of the exiled cards they own to the
-    # battlefield." The client reads ``state.exiled_card_return``
-    # (``web/prompt_cards._exiled_card_return``: ``player_seat``,
-    # ``card_name``, ``zone``, ``choices: [{entry_index, name, card}]``),
-    # shows the cards face up (exile is public, CR 400.2) and answers
-    # ``{"action": "exiled_card_return_confirm", "exile_entry_index": N}``
-    # with one ``entry_index`` — mandatory, so no Decline. Gustha's
-    # Scepter's ``linked_exile_return`` picker is the shape to copy (same
-    # field, same mandatory one-card pick).
-    "exiled_card_return": "exiled_card_return_confirm",
-}
+_AWAITING_CLIENT: dict[str, str] = {}
 
 
 def test_every_prompt_has_a_client_renderer():

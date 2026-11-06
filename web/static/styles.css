@@ -2190,6 +2190,32 @@ h2.targeting-valid {
   text-align: center;
 }
 
+/* Dimensional Breach's upkeep return: each exiled card face up (CR 400.2) —
+   its art, name and type in one button. */
+.prompt-choice-column .exiled-card-return-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.exiled-card-return-art {
+  width: 56px;
+  height: 41px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
+.exiled-card-return-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.exiled-card-return-text small {
+  opacity: 0.75;
+}
+
 /* Planeswalker loyalty menu: one row per loyalty ability, the cost symbol as
    the button on the left (the card's own layout) and the ability beside it. A
    row whose cost can't be paid greys the whole row, not just its button — the
