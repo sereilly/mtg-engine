@@ -934,6 +934,52 @@ def shields_only(instruction: OracleInstruction | None) -> bool:
 #: its player from (``recipient``, ``who``, ``players``, ``whose``, ``actor``).
 EVERY_PLAYER = "each_player"
 
+#: The keys a payload names **what kind of permanent** a noun phrase is with —
+#: its card type, subtype, colour, printing — when the payload *is* the
+#: phrase: "Tap all creatures with toughness 2 or less" lowers to
+#: ``tap_all_matching {"type_filter": "creature", "toughness": …}``, its
+#: filter flat beside nothing, where "Return all …" nests it under ``filter``.
+#: Only words no payload spends on anything else: ``power`` and ``toughness``
+#: are a pump's amounts as often as a sweep's narrowing, and ``nontoken`` is a
+#: delayed trigger's event as often as a sweep's.
+SWEEP_CLASS_KEYS = frozenset({
+    "type_filter", "type_filter_all", "subtype_filter", "subtype_filter_all",
+    "color_filter", "any_colors", "any_classes", "multicolored",
+    "colored_only", "original_expansion",
+})
+
+#: The keys a noun phrase's filter puts a **seat** in with ("… you control",
+#: "… your opponents own", "… you cast this turn"): a filter carrying one is
+#: aimed at a side, and one carrying none reaches every side.
+SEAT_FILTER_KEYS = frozenset({
+    "controller", "owner", "owner_or_controller", "controller_controls",
+    "played_by", "cast_by_you_this_turn",
+})
+
+
+def swept_filter(payload: dict) -> "dict | None":
+    """The noun phrase a step's effect sweeps — every permanent it names, not
+    one somebody chose — or None for a step that names none or targets.
+
+    Two spellings, one phrase: nested under ``filter`` ("Return all
+    Aurochs …"), or **flat**, the payload itself, where a sweep's lowering
+    writes its narrowing beside nothing else (``tap_all_matching``,
+    ``untap_all_matching``, ``destroy_all_matching``, ``exile_all_matching``
+    — read by their handlers as the filter they are). A flat payload is told
+    by a key of :data:`SWEEP_CLASS_KEYS` and no ``targets``. "Tap that
+    creature" after a targeted prevention (Samite Alchemist) is written the
+    same way and reads as a sweep too; what that costs is a rehearsal of an
+    effect the flat score would have guessed at.
+    """
+    if payload.get("targets"):
+        return None
+    described = payload.get("filter")
+    if isinstance(described, dict):
+        return described
+    if SWEEP_CLASS_KEYS & set(payload):
+        return payload
+    return None
+
 
 def reaches_both_sides(instruction: OracleInstruction | None) -> bool:
     """Whether some step of an ability's effect lands on **its activator's
@@ -952,8 +998,13 @@ def reaches_both_sides(instruction: OracleInstruction | None) -> bool:
     wins), and only a rehearsal of the position says which.
 
     Read off the payload's shape, never a kind list: a step addressed to
-    :data:`EVERY_PLAYER` under any key, or a **sweep** — a ``filter`` over
-    permanents with no ``controller`` in it and no ``targets`` beside it.
+    :data:`EVERY_PLAYER` under any key, or a **sweep** (:func:`swept_filter`)
+    whose filter puts no seat in it (:data:`SEAT_FILTER_KEYS`). A sweep
+    written flat — the payload its own filter — read as aimed until SCG:
+    Thundercloud Elemental's "{3}{U}: Tap all creatures with toughness 2 or
+    less" tapped its own controller's Mercurial Kite in the main phase, and
+    Kill Switch, Aboshan, Pernicious Deed and Powder Keg were scored as if
+    their sweep stopped at the table's edge.
     """
     if instruction is None:
         return False
@@ -961,12 +1012,8 @@ def reaches_both_sides(instruction: OracleInstruction | None) -> bool:
         payload = getattr(step, "payload", None) or {}
         if any(value == EVERY_PLAYER for value in payload.values()):
             return True
-        described = payload.get("filter")
-        if (
-            isinstance(described, dict)
-            and "controller" not in described
-            and not payload.get("targets")
-        ):
+        described = swept_filter(payload)
+        if described is not None and not SEAT_FILTER_KEYS & set(described):
             return True
     return False
 
@@ -1221,6 +1268,8 @@ __all__ = [
     "SOURCE_HAMPER_KINDS",
     "SOURCE_REMOVAL_KINDS",
     "SOURCE_RETURN_KINDS",
+    "SEAT_FILTER_KEYS",
+    "SWEEP_CLASS_KEYS",
     "CounterProfile",
     "ManaYield",
     "cards_drawn_by_controller",
@@ -1244,5 +1293,6 @@ __all__ = [
     "source_toughness_change",
     "spell_hand_pick_entries",
     "spell_hand_pick_entry_filters",
+    "swept_filter",
     "waits_on_a_later_draw",
 ]
