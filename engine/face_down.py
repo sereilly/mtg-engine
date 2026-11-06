@@ -59,7 +59,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .copies import FACE_DOWN_AS_IT_LEFT, face_up_copiable_card
+from .copies import FACE_DOWN_AS_IT_LEFT
 from .models import CardDefinition
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -416,11 +416,9 @@ def face_up_morph_cost(permanent) -> str | None:
         return None
     if getattr(permanent, "metadata", None) is None:
         return morph_cost(hidden_card_of(permanent))
-    from .text_changes import apply_text_changes, text_changes
+    from .text_changes import face_up_text_card
 
-    return morph_cost(apply_text_changes(
-        face_up_copiable_card(permanent), text_changes(permanent),
-    ))
+    return morph_cost(face_up_text_card(permanent))
 
 
 def morph_alternative_cost(card) -> "AlternativeCost | None":
