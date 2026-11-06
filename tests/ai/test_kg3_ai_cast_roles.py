@@ -37,8 +37,13 @@ _CARDS = {card.name: card for card in load_catalog()}
 
 #: Spells whose announcement no `CastAction` could carry before the field —
 #: each driven by a board below, or (Cultural Exchange) named with what is
-#: still missing.
-_DRIVEN = {"Cruel Revival", "Kaboom!", "Wheel and Deal"}
+#: still missing. Scourge's two "any number of target players each …" spells
+#: are driven in ``tests/ai/test_scg_w1g4_any_number_of_players.py`` and join
+#: this census when the set ships.
+_DRIVEN = {
+    "Cruel Revival", "Kaboom!", "Wheel and Deal",
+    "Reward the Faithful", "Cabal Conditioning",
+}
 #: "Choose any number of creatures target player controls. Choose the same
 #: number of creatures another target player controls." Both players are
 #: announced now (`test_cultural_exchange_names_both_players`), but the

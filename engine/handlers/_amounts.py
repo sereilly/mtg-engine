@@ -405,7 +405,15 @@ def count_from_payload(
         # ``controller`` key is relative to. Landing it on the "target" fallback
         # below would make the observer whichever player the spell happened to
         # point at, and the count would be of the wrong seat's opponents.
-        owner = context.caster
+        #
+        # CR 109.5's "you" is the ability's controller **whoever performs the
+        # step**: a loop over seats and an offer another seat takes both move
+        # ``caster`` onto that seat and keep the controller as
+        # ``ability_controller`` (``control_flow``'s two rebinds). "Any number
+        # of target players each gain life equal to the greatest mana value
+        # among permanents **you** control" (Reward the Faithful) counted each
+        # gaining player's own board before this read it.
+        owner = context.ability_controller or context.caster
     elif scope == "target_opponent":
         # "…the number of creatures **target opponent** controls" (Superior
         # Numbers). The spell names two targets of different kinds and the
@@ -575,6 +583,19 @@ def _damage_dealt_this_turn(game, context, query: dict) -> int:
             game.players.index(context.caster)
             if context.caster in game.players else None
         )
+        return max(0, base + damage_dealt_to_seat(game, seat))
+    if query.get("recipient") == "target_player":
+        # "Target player loses life equal to the damage already dealt **to
+        # that player** this turn." (Final Punishment.) The seat the sentence
+        # chose, through the resolution's target channel — the seat the loss
+        # beside it is taken from, so the two cannot be different players. No
+        # chosen seat is no history, and the base.
+        seat = (
+            game.players.index(context.target)
+            if context.target in game.players else None
+        )
+        if seat is None:
+            return base
         return max(0, base + damage_dealt_to_seat(game, seat))
     if query.get("recipient") == "target":
         # "…equal to the damage already dealt **to it** this turn"
@@ -1126,6 +1147,19 @@ def evaluate_count(
         )
         if aggregate == "greatest_power":
             return _scaled(max((perm.effective_power for perm in matched), default=0), spec)
+        if aggregate in _MANA_VALUE_AGGREGATES:
+            # "…the greatest mana value among permanents you control" (Rush of
+            # Knowledge and five more Scourge spells); "…the total mana value
+            # of other creatures you control" (Ancient Ooze, CR 604.3). CR
+            # 202.3's number for a *permanent*, read through layer 1 the way
+            # Animate Artifact's 7b reads it (``layer_bridge``): a copy has the
+            # copied card's mana cost, and a token's and a face-down
+            # permanent's is 0 (CR 111.4, 708.2) — Ancient Ooze's 2004-10-04
+            # ruling says so of both. An {X} in a permanent's cost counts 0
+            # (CR 202.3e; Rush of Knowledge's 2020-08-07 ruling), which is what
+            # the ingested ``cmc`` already holds.
+            values = [_permanent_mana_value(perm) for perm in matched]
+            return _scaled(_MANA_VALUE_AGGREGATES[aggregate](values), spec)
         if aggregate == "distinct_colors":
             # "for each color among permanents you control" (Chromatic Orrery).
             # Through the layer-aware accessor, because a permanent's colour is
@@ -1202,7 +1236,34 @@ def evaluate_count(
             ),
             spec,
         )
+    if aggregate in _MANA_VALUE_AGGREGATES:
+        # The same maximum and sum over cards in a zone, whose mana value is
+        # the printed one (CR 202.3; a card has no layers, CR 613.1) with {X}
+        # as 0 (CR 107.3g). No card prints it yet; answered rather than
+        # counted as cards, which is what falling through would do.
+        return _scaled(
+            _MANA_VALUE_AGGREGATES[aggregate](
+                [int(getattr(card, "cmc", 0) or 0) for card in matched_cards]
+            ),
+            spec,
+        )
     return _scaled(len(matched_cards), spec)
+
+
+#: The aggregates over a set's mana values, and how each folds them: the
+#: greatest (Scourge's six "greatest mana value among" spells) and the total
+#: (Ancient Ooze). An empty set is 0 for both.
+_MANA_VALUE_AGGREGATES = {
+    "greatest_mana_value": lambda values: max(values, default=0),
+    "total_mana_value": sum,
+}
+
+
+def _permanent_mana_value(perm) -> int:
+    """CR 202.3's mana value of a permanent: its mana cost through layer 1
+    (``effective_card``), so a copy reads the copied card and a face-down
+    permanent the blank 2/2 it is (CR 708.2)."""
+    return int(getattr(perm.effective_card, "cmc", 0) or 0)
 
 
 def _pile_seat(game, card, owner, spec) -> "int | None":

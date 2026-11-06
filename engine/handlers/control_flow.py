@@ -1384,6 +1384,15 @@ def _announced_target_seats(game: Game, context: OracleExecutionContext) -> list
     return [seat] if live(seat) else []
 
 
+#: The seat sets a loop walks **as the announcement named them** (CR 601.2c):
+#: "any number of target opponents" (Wheel and Deal) and "any number of target
+#: players" (Reward the Faithful, Cabal Conditioning) — the lowering's
+#: ``loops._ANNOUNCED_SEAT_ROLES`` keys.
+_ANNOUNCED_SEAT_SETS = frozenset({
+    "any_number_of_target_opponents", "any_number_of_target_players",
+})
+
+
 @effect_handler("for_each")
 def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"For each <objects>, <effect>." The matching set is snapshotted before
@@ -1488,12 +1497,14 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
             if seat is not None else 0
         )
         matched = [_A_REPETITION] * max(0, times)
-    elif seat_set == "any_number_of_target_opponents":
+    elif seat_set in _ANNOUNCED_SEAT_SETS:
         # "**Any number of target opponents** each discard their hands, then
         # draw seven cards." (Wheel and Deal.) The seats the announcement named
         # (CR 601.2c), in seat order — the roles' canonical order — and only
         # those still named after CR 608.2b's re-check blanked any slot that
         # went illegal. None named is a legal announcement and runs nothing.
+        # "Any number of target **players**" (Reward the Faithful) is the same
+        # walk over a chain that admits the caster.
         matched = [_Seat(index) for index in _announced_target_seats(game, context)]
     elif seat_set is not None:
         # Through the same reader every multi-seat offer uses, so "each player"
@@ -1573,10 +1584,21 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
             # a different player each time round. ``caster`` moves with it, for
             # that function's stated reason: a bare imperative inside the loop
             # means the seat the loop is on.
+            #
+            # **"You" does not move** (CR 109.5): "any number of target
+            # players each gain life equal to the greatest mana value among
+            # permanents **you** control" (Reward the Faithful) counts the
+            # spell's controller's board for every seat the loop is on. The
+            # seat leaving ``caster`` is kept as ``ability_controller``, the
+            # rebind ``_offer_to_seat`` already records, which is what a count
+            # scoped to "you" reads (``_amounts.count_from_payload``).
             seated = game.players[item.index]
             _run(
                 game, steps,
-                dataclasses.replace(context, target=seated, caster=seated),
+                dataclasses.replace(
+                    context, target=seated, caster=seated,
+                    ability_controller=context.ability_controller or context.caster,
+                ),
             )
             return
         context.iteration_target = item

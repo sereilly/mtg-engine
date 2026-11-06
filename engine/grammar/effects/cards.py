@@ -290,6 +290,18 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
                         ),
                     )
     stream.reset(fraction_mark)
+    # "…each discard **a number of cards equal to** the greatest mana value
+    # among permanents you control." (Cabal Conditioning.) The noun in front
+    # of the count, as "draw **cards equal to** …" prints it one verb over,
+    # with the discard's own "a number of" in front of the noun — read whole
+    # and reset when no "equal to" follows, so nothing is skipped: "a" is
+    # otherwise the number one, and "a number" no quantity at all.
+    counted_mark = stream.mark()
+    if stream.accept_phrase("a", "number", "of", "cards"):
+        counted = parse_equal_to(stream)
+        if counted is not None:
+            return ast.Discard(player, counted)
+    stream.reset(counted_mark)
     # "Discard **up to** two cards" (Kinetic Augur). Read before the amount, and
     # recorded rather than consumed: a ceiling read as an exact count is a card
     # that forces its controller to pitch two cards they were offered the choice

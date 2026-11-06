@@ -131,7 +131,8 @@ def _spell_cast_filter(
     # shape with the halves swapped: harmless while dead, and a second
     # opinion about what "an artifact spell" means the moment it was not.
     return _cast_narrowing_admits(
-        game, permanent, trig, card, event.payload.get("caster_index")
+        game, permanent, trig, card, event.payload.get("caster_index"),
+        item=event.payload.get("cast_item"),
     )
 
 
@@ -173,7 +174,7 @@ def _cast_colour_union_admits(printed: str | None, colors) -> bool:
 
 def _cast_narrowing_admits(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, card,
-    caster: int | None = None,
+    caster: int | None = None, item=None,
 ) -> bool:
     """Whether *card* answers this cast trigger's printed narrowing.
 
@@ -309,6 +310,35 @@ def _cast_narrowing_admits(
 
         if cast_subtype.lower() not in card_creature_types(game, card, caster):
             return False
+    # "…a creature spell **with mana value 6 or greater**" (Kurgadon); "…a
+    # spell **with mana value 3 or less**" (Pyrostatic Pillar). CR 202.3b: on
+    # the stack an {X} in the cost is the announced value, which
+    # ``targeting.stack_object_mana_value`` reads off the spell's own stack
+    # object (*item*) — the reader Prohibit's "if its mana value is 2 or less"
+    # asks. A face-down spell is the blank 2/2 and its mana value 0 (CR 708.4).
+    # A caller holding only the card (the ordinal count over the turn's record)
+    # reads the printed number.
+    bound = trig.condition.payload.get("cast_mana_value")
+    if bound is not None:
+        from .targeting import stack_object_mana_value
+
+        value = (
+            stack_object_mana_value(item) if item is not None
+            else int(getattr(card, "cmc", 0) or 0)
+        )
+        limit = int(bound)
+        direction = trig.condition.payload.get("cast_mana_value_bound")
+        if direction == "greater":
+            if value < limit:
+                return False
+        elif direction == "less":
+            if value > limit:
+                return False
+        else:
+            # A bound with no direction the table could have written: the
+            # trigger cannot say which spells it watches, and firing on every
+            # one is the widening a narrowing exists to prevent.
+            return False
     return True
 
 
@@ -332,7 +362,10 @@ def _controller_cast_filter(
     # rest, so a narrowing the table carried on this scope and the helper
     # alone read was dropped here in silence: "whenever you cast a
     # **multicolored** spell" fired on every spell its controller cast.
-    if not _cast_narrowing_admits(game, permanent, trig, card, caster_index):
+    if not _cast_narrowing_admits(
+        game, permanent, trig, card, caster_index,
+        item=event.payload.get("cast_item"),
+    ):
         return False
     # "…your **first** … spell each turn" (Double Vision). The ordinal is asked
     # of the caster's own record of what they have cast this turn, counting only
@@ -413,4 +446,7 @@ def _opponent_cast_filter(
                 return False
     # "…casts an **artifact** spell" (Citanul Druid), asked of the same helper
     # the other two cast kinds use.
-    return _cast_narrowing_admits(game, permanent, trig, card, caster_index)
+    return _cast_narrowing_admits(
+        game, permanent, trig, card, caster_index,
+        item=event.payload.get("cast_item"),
+    )

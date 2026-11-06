@@ -1130,6 +1130,14 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # spell in the game.
     ("spell_cast",
      r"whenever a player casts a spell of the chosen (?P<cast_chosen_color>)color"),
+    # "Whenever a player casts a spell **with mana value 3 or less**"
+    # (Pyrostatic Pillar). A bound on the spell's mana value on the stack
+    # (CR 202.3b), both numbers payload: the threshold and its direction.
+    # Before the bare row below, its strict prefix — matched there, the clause
+    # was left to the effect parser and the Pillar burned every caster.
+    ("spell_cast",
+     r"whenever a player casts a spell with mana value (?P<cast_mana_value>\d+) "
+     r"or (?P<cast_mana_value_bound>greater|less)"),
     ("spell_cast",                  r"whenever a player casts a spell"),
     # "Whenever a player **kicks** a spell" (Saproling Infestation). CR 702.33d:
     # a spell is kicked when "its controller declared the intention to pay" its
@@ -1245,6 +1253,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever you cast your first (?P<cast_type>noncreature|nonartifact|creature|artifact|instant|sorcery) spell each turn"),
     ("you_cast_spell",
      r"whenever you cast an (?P<cast_types>instant or sorcery) spell"),
+    # "Whenever you cast a creature spell **with mana value 6 or greater**"
+    # (Kurgadon). The type narrowing with a bound on the spell's mana value
+    # beside it — Pyrostatic Pillar's two payload keys, read by the one helper.
+    # Before the bare type row below, its strict prefix.
+    ("you_cast_spell",
+     r"whenever you cast a (?P<cast_type>noncreature|nonartifact|creature|artifact|instant|sorcery) spell"
+     r" with mana value (?P<cast_mana_value>\d+) or (?P<cast_mana_value_bound>greater|less)"),
     ("you_cast_spell",
      r"whenever you cast a (?P<cast_type>noncreature|nonartifact|creature|artifact|instant|sorcery) spell"),
     # "…a **Dog** spell" (Rin and Seri, Inseparable). A creature *subtype*

@@ -161,6 +161,201 @@ def test_w1g2_the_cycling_instants_cycle(set_pool):
 
 # ==== W1G4 ==========================================================
 # W1G4's tests go between this line and the "end W1G4" line.
+#
+# "The greatest mana value among permanents you control" as an amount
+# (Accelerated Mutation, Reward the Faithful) and as a comparison's bound
+# (Dispersal Shield): one aggregate (`ast.GreatestManaValueAmong`,
+# `evaluate_count`'s ``greatest_mana_value``), counted at resolution. Reward
+# the Faithful is also "any number of target players each …", the Wheel and
+# Deal seat loop with the caster admitted.
+import pytest as _w1g4_pytest
+
+from engine import Game as _W1G4Game
+from engine.models import Permanent as _W1G4Permanent
+from engine.models import PlayerState as _W1G4PlayerState
+from engine.oracle import compile_card_oracle as _w1g4_compile
+from engine.targeting import derive_cast_spec as _w1g4_cast_spec
+from engine.targeting import spec_roles as _w1g4_spec_roles
+from tests.helpers import resolve_stack as _w1g4_resolve_stack
+
+
+def _w1g4_table(set_pool, hand, *, players=2):
+    lea = set_pool("LEA")
+    seats = [
+        _W1G4PlayerState(
+            name=f"P{seat + 1}", library=[lea["Island"]] * 8,
+            hand=list(hand) if seat == 0 else [],
+        )
+        for seat in range(players)
+    ]
+    game = _W1G4Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    return game
+
+
+def _w1g4_put(game, seat, card):
+    permanent = _W1G4Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    _w1g4_resolve_stack(game)
+    return permanent
+
+
+def test_w1g4_accelerated_mutation_pumps_by_the_greatest_mana_value_you_control(set_pool):
+    """Shivan Dragon (6) is the greatest among the caster's permanents; the
+    opponent's Lord of the Pit (7) is not one "you control"."""
+    lea = set_pool("LEA")
+    game = _w1g4_table(set_pool, [set_pool("SCG")["Accelerated Mutation"]])
+    bears = _w1g4_put(game, 0, lea["Grizzly Bears"])
+    _w1g4_put(game, 0, lea["Shivan Dragon"])
+    _w1g4_put(game, 1, lea["Lord of the Pit"])
+    assert game.cast_from_hand(
+        0, "Accelerated Mutation", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g4_resolve_stack(game)
+    assert (bears.effective_power, bears.effective_toughness) == (8, 8), game.log
+
+
+def test_w1g4_the_greatest_mana_value_is_counted_as_the_spell_resolves(set_pool):
+    """CR 608.2: the count is taken at resolution, so a Shivan Dragon that
+    leaves in response leaves the Bears' own 2."""
+    lea = set_pool("LEA")
+    game = _w1g4_table(set_pool, [set_pool("SCG")["Accelerated Mutation"]])
+    bears = _w1g4_put(game, 0, lea["Grizzly Bears"])
+    dragon = _w1g4_put(game, 0, lea["Shivan Dragon"])
+    assert game.queue_from_hand(
+        0, "Accelerated Mutation", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    assert len(game.stack) == 1
+    game.remove_from_battlefield(dragon)
+    _w1g4_resolve_stack(game)
+    assert (bears.effective_power, bears.effective_toughness) == (4, 4), game.log
+
+
+def _w1g4_shield(set_pool, spell, *, x_value=None, mine=("Grizzly Bears",)):
+    """Seat 1 casts *spell* (at seat 0 where it targets a player); seat 0
+    answers with Dispersal Shield over a board of *mine*, with a Shivan Dragon
+    on seat 1's side that is not "you control"."""
+    lea = set_pool("LEA")
+    game = _w1g4_table(set_pool, [set_pool("SCG")["Dispersal Shield"]])
+    game.players[1].hand.append(lea[spell])
+    for name in mine:
+        _w1g4_put(game, 0, lea[name])
+    _w1g4_put(game, 1, lea["Shivan Dragon"])
+    announced = {} if "Creature" in lea[spell].type_line else {"target_player_index": 0}
+    if x_value is not None:
+        announced["x_value"] = x_value
+    assert game.queue_from_hand(1, spell, **announced).supported
+    assert game.queue_from_hand(0, "Dispersal Shield", target_stack_index=0).supported
+    _w1g4_resolve_stack(game)
+    return game
+
+
+@_w1g4_pytest.mark.parametrize("spell, x_value, mine, countered", [
+    ("Lightning Bolt", None, ("Grizzly Bears",), True),     # 1 <= 2
+    ("Hill Giant", None, ("Grizzly Bears",), False),        # 4 > 2
+    ("Hill Giant", None, ("Grizzly Bears", "Hill Giant"), True),  # 4 <= 4
+    # CR 202.3b: on the stack an X in the cost is the announced value.
+    ("Fireball", 1, ("Grizzly Bears",), True),              # {X}{R}, X=1: 2
+    ("Fireball", 2, ("Grizzly Bears",), False),             # X=2: 3
+    # Nothing controlled is a greatest of 0: even a one-drop is greater.
+    ("Lightning Bolt", None, (), False),
+])
+def test_w1g4_dispersal_shield_counters_by_the_two_mana_values(
+    set_pool, spell, x_value, mine, countered,
+):
+    """"Counter target spell if its mana value is less than or equal to the
+    greatest mana value among permanents you control." A condition on the
+    effect (CR 608.2c), not a targeting restriction: every row is a legal
+    announcement, and a row not countered resolves as if the Shield had not
+    been cast."""
+    game = _w1g4_shield(set_pool, spell, x_value=x_value, mine=mine)
+    their_graveyard = [card.name for card in game.players[1].graveyard]
+    if countered:
+        assert their_graveyard == [spell], game.log
+        assert game.players[0].life == 20
+        assert any("countered by Dispersal Shield" in line for line in game.log)
+    elif "Creature" in set_pool("LEA")[spell].type_line:
+        assert spell in [p.card.name for p in game.controlled_by(1)], game.log
+    else:
+        assert game.players[0].life == 20 - (x_value or 3), game.log
+
+
+def test_w1g4_dispersal_shield_offers_every_spell(set_pool):
+    """The clause does not narrow the target (CR 601.2c reads "target spell"):
+    a spell the Shield will not counter is still one the picker offers."""
+    lea = set_pool("LEA")
+    game = _w1g4_table(set_pool, [set_pool("SCG")["Dispersal Shield"]])
+    game.players[1].hand.append(lea["Craw Wurm"])
+    assert game.queue_from_hand(1, "Craw Wurm").supported
+    spec = game.cast_target_spec(0, set_pool("SCG")["Dispersal Shield"])
+    assert spec["requires_target"]
+    assert [entry["name"] for entry in spec["valid_targets"]] == ["Craw Wurm"]
+
+
+@_w1g4_pytest.mark.parametrize("named", [[0], [1], [0, 1], [1, 2], [0, 1, 2], []])
+def test_w1g4_reward_the_faithful_heals_exactly_the_named_players(set_pool, named):
+    """"Any number of target players each gain life equal to the greatest mana
+    value among permanents you control." The caster may be named (CR 115.1),
+    zero players is a legal announcement, and **every** named player gains the
+    *caster's* greatest — the third seat's Shivan Dragon (6) is not a
+    permanent "you" control, whoever the loop is on (CR 109.5)."""
+    lea = set_pool("LEA")
+    game = _w1g4_table(set_pool, [set_pool("SCG")["Reward the Faithful"]], players=3)
+    _w1g4_put(game, 0, lea["Hill Giant"])        # 4: the caster's greatest
+    _w1g4_put(game, 1, lea["Grizzly Bears"])
+    _w1g4_put(game, 2, lea["Shivan Dragon"])
+    assert game.cast_from_hand(
+        0, "Reward the Faithful", target_role_refs=[{"seat": seat} for seat in named],
+    ).supported
+    _w1g4_resolve_stack(game)
+    assert [player.life for player in game.players] == [
+        24 if seat in named else 20 for seat in range(3)
+    ], game.log
+
+
+@_w1g4_pytest.mark.parametrize("named", [[0, 0], [1, 0]])
+def test_w1g4_reward_the_faithful_names_each_player_once(set_pool, named):
+    """CR 115.3: one player once per printed "target"; and the set is announced
+    once, in seat order, rather than once per ordering."""
+    game = _w1g4_table(set_pool, [set_pool("SCG")["Reward the Faithful"]])
+    assert not game.cast_from_hand(
+        0, "Reward the Faithful", target_role_refs=[{"seat": seat} for seat in named],
+    ).supported
+    assert [card.name for card in game.players[0].hand] == ["Reward the Faithful"]
+
+
+def test_w1g4_reward_the_faithful_skips_a_player_that_became_illegal(
+    set_pool, catalog_by_name,
+):
+    """CR 608.2b: of two named players, the one that gained shroud is not
+    affected and the other still gains."""
+    lea = set_pool("LEA")
+    game = _w1g4_table(set_pool, [set_pool("SCG")["Reward the Faithful"]])
+    _w1g4_put(game, 0, lea["Grizzly Bears"])
+    assert game.queue_from_hand(
+        0, "Reward the Faithful", target_role_refs=[{"seat": 0}, {"seat": 1}],
+    ).supported
+    game._put_permanent_onto_battlefield(
+        1, _W1G4Permanent(card=catalog_by_name["Ivory Mask"]), None,
+    )
+    _w1g4_resolve_stack(game)
+    assert [player.life for player in game.players] == [22, 20], game.log
+
+
+def test_w1g4_reward_the_faithful_announces_a_chain_of_player_roles(set_pool):
+    """The picker offers a seat per role, the caster's included, each a later
+    seat than the last — what the client and the gates read."""
+    card = set_pool("SCG")["Reward the Faithful"]
+    roles = _w1g4_spec_roles(_w1g4_cast_spec(card, _w1g4_compile(card)))
+    assert roles and all(role.get("kind") == "player" for role in roles)
+    assert not any(role.get("opponents_only") for role in roles)
+    assert all(role.get("optional_role") for role in roles)
 
 # ==== end W1G4 ======================================================
 

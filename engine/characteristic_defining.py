@@ -315,10 +315,15 @@ def _counted_noun_phrase(match: re.Match) -> dict[str, object] | None:
     return payload
 
 
-def _counted_spec(counted: str, offset: int) -> dict[str, object] | None:
+def _counted_spec(
+    counted: str, offset: int, aggregate: str = "count",
+) -> dict[str, object] | None:
     """The count one printed noun phrase names (``lowering/_amounts.count_spec``),
     with *offset* as its printed constant — or None where the noun parser or the
-    count reader refuses it."""
+    count reader refuses it.
+
+    *aggregate* is what is taken over the set when it is not a count — Ancient
+    Ooze's ``total_mana_value``, the key ``evaluate_count`` answers."""
     from .grammar.errors import LoweringError
     from .grammar.lowering._amounts import count_spec
     from .grammar.phrases import parse_subject_filter
@@ -327,9 +332,31 @@ def _counted_spec(counted: str, offset: int) -> dict[str, object] | None:
     if filt is None:
         return None
     try:
-        return count_spec(filt, None, offset=offset)
+        return count_spec(filt, None, aggregate=aggregate, offset=offset)
     except LoweringError:
         return None
+
+
+def _total_mana_value(match: re.Match) -> dict[str, object] | None:
+    """"Ancient Ooze's power and toughness are each equal to **the total mana
+    value of other creatures you control**." (CR 604.3.)
+
+    A **sum** over a printed noun phrase rather than a count of it, so it is
+    the general row's reading with the aggregate changed: the noun phrase goes
+    to the same parser and the same ``count_spec``, and "other" is the
+    ``exclude_self`` key the CR 604.3 recompute already answers by handing the
+    permanent over as what to leave out. Each permanent's mana value is CR
+    202.3's through layer 1, so a token and a face-down creature add 0 (the
+    card's 2004-10-04 ruling) and a copy adds the copied card's.
+    """
+    spec = _counted_spec(match.group("counted"), 0, aggregate="total_mana_value")
+    if spec is None:
+        return None
+    payload: dict[str, object] = {"count_spec": spec}
+    half = _DEFINED_HALF[match.group("half")]
+    if half is not None:
+        payload["defines"] = half
+    return payload
 
 
 #: "twice"/"three times" in front of a count, as the multiplier ``_scaled``
@@ -752,6 +779,17 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             r"number of (?P<counted>.+)$"
         ),
         _counted_noun_phrase,
+    ),
+    (
+        # Ancient Ooze: "…are each equal to **the total mana value of** other
+        # creatures you control." A sum over a printed noun phrase; the general
+        # row above cannot claim it (its words are "the number of"), and the
+        # noun phrase is read by the same parser.
+        re.compile(
+            rf"^{_SUBJECT} (?P<half>power and toughness are each|power is|"
+            r"toughness is) equal to the total mana value of (?P<counted>.+)$"
+        ),
+        _total_mana_value,
     ),
     (
         # Serra Avatar. Not "the number of" anything — a life total is a number

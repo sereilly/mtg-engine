@@ -455,9 +455,11 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
         return recorded
     # Three aggregates over one noun phrase, and the words are what tell them
     # apart: "the number of" counts the objects, "the greatest power among"
-    # takes a maximum over them (Carrion Grub).
-    if stream.accept_phrase("greatest", "power", "among"):
-        return ast.GreatestPowerAmong(parse_object_filter(stream))
+    # takes a maximum over them (Carrion Grub), and so does "the greatest mana
+    # value among" (Accelerated Mutation) one characteristic over.
+    greatest = accept_greatest_among(stream)
+    if greatest is not None:
+        return greatest
     # "…the **total power of the creatures sacrificed this way**" (Sword of the
     # Ages). A fourth aggregate over a noun phrase, and the words are again what
     # tell it apart: a *sum* of powers, over the set the ability's own cost ate
@@ -524,6 +526,44 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
         _parse_duration(stream)
         return ast.CountOfDeaths(filt)
     return ast.CountOf(filt)
+
+
+#: The characteristics a "the greatest <characteristic> among <noun phrase>"
+#: maximum may name, as the printed words and the node each one builds. A table
+#: for ``_SUBJECT_CHARACTERISTICS``' reason: they differ in which accessor the
+#: evaluator reads and in nothing else.
+_GREATEST_AMONG: tuple[tuple[tuple[str, ...], type], ...] = (
+    (("power",), ast.GreatestPowerAmong),
+    (("mana", "value"), ast.GreatestManaValueAmong),
+)
+
+
+def accept_greatest_among(stream: TokenStream) -> "ast.Amount | None":
+    """``greatest <characteristic> among <noun phrase>`` once the article is
+    read, or None with nothing consumed.
+
+    One reader for the two front ends that print the maximum: the ", where X is
+    …" trailer (Carrion Grub's "the greatest power among creature cards in your
+    graveyard", Accelerated Mutation's "the greatest mana value among
+    permanents you control") and ``amounts.parse_equal_to``'s "equal to …"
+    (Torrent of Fire, Rush of Knowledge, Reward the Faithful, Cabal
+    Conditioning, and the bound of Dispersal Shield's comparison). The pump
+    alone could read a maximum until Scourge printed the same words behind
+    "equal to" five times; a second copy here would be the fork
+    ``parse_where_x_definition`` closed.
+
+    The noun phrase is required once the words are read: a maximum over nothing
+    the parser can name refuses the line rather than taking a maximum over the
+    board.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("greatest"):
+        return None
+    for words, node in _GREATEST_AMONG:
+        if stream.accept_phrase(*words, "among"):
+            return node(parse_object_filter(stream))
+    stream.reset(mark)
+    return None
 
 
 def accept_this_way_count(stream: TokenStream, filt) -> "ast.Amount | None":

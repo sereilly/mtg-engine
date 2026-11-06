@@ -44,7 +44,7 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
 from ...target_roles import (any_number_of_opponents_roles,
                              any_number_of_players_or_planeswalkers_roles,
-                             per_opponent_roles)
+                             any_number_of_players_roles, per_opponent_roles)
 from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload
@@ -86,7 +86,8 @@ def _lower_for_each_player(
     payload: dict[str, object] = {
         "iterator": {"players": node.iterator.kind}, "effect": inner,
     }
-    if node.iterator.kind == ANY_NUMBER_OF_TARGET_OPPONENTS:
+    announced_seats = _ANNOUNCED_SEAT_ROLES.get(node.iterator.kind)
+    if announced_seats is not None:
         # "**Any number of target opponents** each discard their hands, then
         # draw seven cards." (Wheel and Deal.) The set is the one the
         # announcement named (CR 601.2c), so the loop carries the
@@ -96,12 +97,16 @@ def _lower_for_each_player(
         # The body must announce nothing of its own — "that player" in it is
         # the loop's seat, and a second description would be a second
         # announcement the card does not print.
+        #
+        # "**Any number of target players** each gain life equal to …"
+        # (Reward the Faithful, Cabal Conditioning) is the same loop over the
+        # chain with the caster admitted (``any_number_of_players_roles``).
         if any("targets" in (step.payload or {}) for step in inner):
             raise LoweringError(
-                "a loop over announced opponents announces nothing else",
+                "a loop over announced players announces nothing else",
                 node=node,
             )
-        payload["targets"] = any_number_of_opponents_roles()
+        payload["targets"] = announced_seats()
     if node.iterator.kind == ANY_NUMBER_OF_TARGETS_LOOP:
         # "**Choose any number of target players or planeswalkers. For each of
         # them,** …" (Kaboom!.) The set is the announcement's (CR 601.2c), as
@@ -196,6 +201,16 @@ def _per_opponent_targets(
 #: set a loop walks when the announcement named it.
 ANY_NUMBER_OF_TARGET_OPPONENTS = "any_number_of_target_opponents"
 
+#: "**Any number of target players** each …" (Reward the Faithful, Cabal
+#: Conditioning) — the same announced seat set with the caster admitted.
+ANY_NUMBER_OF_TARGET_PLAYERS = "any_number_of_target_players"
+
+#: The announced seat sets, and the roles description each one's loop carries.
+_ANNOUNCED_SEAT_ROLES = {
+    ANY_NUMBER_OF_TARGET_OPPONENTS: any_number_of_opponents_roles,
+    ANY_NUMBER_OF_TARGET_PLAYERS: any_number_of_players_roles,
+}
+
 #: "Choose **any number of target players or planeswalkers**. For each of
 #: them, …" (Kaboom!) — the announced set a loop walks when its objects may be
 #: seats or permanents.
@@ -206,7 +221,7 @@ ANY_NUMBER_OF_TARGETS_LOOP = "any_number_of_target_players_or_planeswalkers"
 #: above, and deliberately no more: a reference naming one seat is not a loop.
 _LOOPED_SEAT_SETS = frozenset({
     "each_player", "each_opponent", ANY_NUMBER_OF_TARGET_OPPONENTS,
-    ANY_NUMBER_OF_TARGETS_LOOP,
+    ANY_NUMBER_OF_TARGET_PLAYERS, ANY_NUMBER_OF_TARGETS_LOOP,
 })
 
 

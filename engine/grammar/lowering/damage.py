@@ -23,7 +23,8 @@ from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import untestable_filter_keys
 from ...oracle_types import X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT
-from ._amounts import tapped_this_way_record, x_offset_amount
+from ._amounts import (maximum_amount_spec, tapped_this_way_record,
+                       x_offset_amount)
 from ._counted_damage import (
     _LOOPED_PLAYER_RECIPIENTS,
     _lower_board_count_damage,
@@ -35,6 +36,7 @@ from ._counted_damage import (
     _lower_counted_damage,
     lower_ledger_damage,
     lower_difference_damage,
+    lower_maximum_damage,
     lower_revealed_this_way_damage,
     lower_subtracted_damage,
 )
@@ -493,6 +495,14 @@ def _lower_damage_shape(
                 node, node.recipients[0], multiplier=multiplier
             )
         return _lower_counted_damage(node, event, multiplier=multiplier)
+    # "…equal to **the greatest mana value among permanents you control**"
+    # (Torrent of Fire). A maximum over a set rather than a count of it, so it
+    # is the floor's one reader of the aggregate and the shared counted-damage
+    # tail; a printed factor over it is not unwrapped above and falls to the
+    # refusal at the end of this function rather than losing the word.
+    maximum = maximum_amount_spec(node.amount, node, event=event)
+    if maximum is not None:
+        return lower_maximum_damage(node, maximum)
     # "…equal to the sacrificed creature's power" (Freyalise Supplicant, under
     # the half above). A characteristic of what the cost ate rather than a count
     # of anything on a board, so it sits beside the count rather than inside it.

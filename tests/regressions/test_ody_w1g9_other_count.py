@@ -65,14 +65,18 @@ def _other_counts(program):
             yield instruction, spec
 
 
-def _one_of(filt: dict):
-    """A card the count's noun phrase describes."""
+def _one_of(filt: dict, *, cost: str = ""):
+    """A card the count's noun phrase describes — of mana value 1 where a
+    *cost* is printed, for a total of mana values (Ancient Ooze) to sum."""
     keywords = "\n".join(str(k).capitalize() for k in filt.get("with_keywords") or ())
     if filt.get("type_filter") == "creature":
         subtype = str(filt.get("subtype_filter") or "bear").title()
-        return _mk_card("Counted", f"Creature - {subtype}", keywords)
+        return _mk_card(
+            name="Counted", mana_cost=cost, type_line=f"Creature - {subtype}",
+            oracle_text=keywords,
+        )
     assert filt.get("type_filter") == "enchantment", filt
-    return _mk_card("Counted", "Enchantment")
+    return _mk_card(name="Counted", mana_cost=cost, type_line="Enchantment")
 
 
 def _rate(amount) -> int:
@@ -95,10 +99,19 @@ def _measured(card, instruction, spec, others: int) -> tuple:
     else:
         game._put_permanent_onto_battlefield(0, permanent, None)
         subject = permanent
-        printed = (int(card.raw["power"]), int(card.raw["toughness"]))
+        # A characteristic-defining count prints "*" (Ancient Ooze); its
+        # expected size is the count below, not a printed body.
+        printed = (
+            None if instruction.kind == "dynamic_pt_count"
+            else (int(card.raw["power"]), int(card.raw["toughness"]))
+        )
+    # "…the **total mana value** of other creatures you control" (Ancient
+    # Ooze) sums the others rather than counting them: each is given mana
+    # value 1, so the sum is the count.
+    cost = "{1}" if spec.get("aggregate") == "total_mana_value" else ""
     for _ in range(others):
         game._put_permanent_onto_battlefield(
-            0, Permanent(card=_one_of(spec["filter"])), None
+            0, Permanent(card=_one_of(spec["filter"], cost=cost)), None
         )
     game._recompute_continuous_effects()
     if instruction.kind == "dynamic_pt_count":

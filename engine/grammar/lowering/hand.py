@@ -54,7 +54,7 @@ from __future__ import annotations
 from ...oracle_types import X_FROM_COUNT, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import per_card_count_spec
+from ._amounts import maximum_amount_spec, per_card_count_spec
 from ._common import (_amount_payload, _describe_targets, _is_you,
                       chargeable_card_filter)
 from ._discards import (controller_discard, discard_all_matching,
@@ -62,7 +62,7 @@ from ._discards import (controller_discard, discard_all_matching,
 from ._events import (_DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS,
                       EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER)
-from ._record_keys import CHOSEN_HAND_CARDS_RESULT
+from ._record_keys import CHOSEN_HAND_CARDS_RESULT, LOOP_BOUND_PLAYER
 
 
 def _lower_choose_cards_in_hand(
@@ -497,6 +497,31 @@ def _lower_discard(
     # and sized by the prompt's ``resolve_amount`` like a where-clause X. Only
     # the shape printed: a sample, a ceiling, a narrowing or a frozen seat
     # beside a count is a reading nothing here has checked, so it refuses.
+    # "Any number of target players each discard **a number of cards equal to
+    # the greatest mana value among permanents you control**." (Cabal
+    # Conditioning.) A maximum over a set, counted at resolution through the
+    # floor's one reader of the aggregate and sized by the chosen discard's
+    # ``resolve_amount`` like any X. Its seats are a targeted player's or the
+    # one a loop over announced seats binds (``LOOP_BOUND_PLAYER``, which
+    # rebinds the resolution's target to each iteration's seat, Wheel and
+    # Deal's branch above); every other seat, a sample, a ceiling and a
+    # narrowing are readings nothing here has checked.
+    maximum = maximum_amount_spec(node.count, node, event=event)
+    if maximum is not None:
+        looped = node.player.kind == "that_player" and LOOP_BOUND_PLAYER in produced
+        if (
+            node.at_random or node.up_to or node.filter is not None
+            or not (looped or node.player.kind in ("target_player", "target_opponent"))
+        ):
+            raise LoweringError(
+                "a discard sized by a maximum is a chosen, unnarrowed discard "
+                "by a targeted or looped seat",
+                node=node,
+            )
+        payload = {"amount": "x", X_FROM_COUNT: maximum}
+        if not looped:
+            _describe_targets(payload, node.player)
+        return (OracleInstruction("discard_target_cards", "", payload),)
     counted = per_card_count_spec(node.count, node, node.player)
     if counted is not None:
         if (

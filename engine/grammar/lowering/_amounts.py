@@ -556,8 +556,38 @@ def seat_scoped_count_spec(
 _SET_AGGREGATES: dict[type, str] = {
     ast.CountOf: "count",
     ast.GreatestPowerAmong: "greatest_power",
+    ast.GreatestManaValueAmong: "greatest_mana_value",
     ast.ColorsAmong: "distinct_colors",
 }
+
+#: The aggregates that take a **maximum** over a set rather than counting it —
+#: the two :func:`maximum_amount_spec` reads behind "equal to …".
+_SET_MAXIMA = frozenset({ast.GreatestPowerAmong, ast.GreatestManaValueAmong})
+
+
+def maximum_amount_spec(
+    amount: "ast.Amount", node, *, event: str | None = None
+) -> dict | None:
+    """The ``x_from_count`` spec of "… equal to **the greatest <characteristic>
+    among** <noun phrase>", or None when *amount* is no such maximum.
+
+    The spender's half of ``where_x.accept_greatest_among``: a damage (Torrent
+    of Fire), a draw (Rush of Knowledge), a life gain (Reward the Faithful), a
+    discard (Cabal Conditioning) and a characteristic gate's bound (Dispersal
+    Shield) each print the maximum behind "equal to", and each asks this one
+    reader for the spec — :func:`count_spec` with the aggregate the
+    where-clause's own reader writes for the same node, so the two printed
+    positions are one number (``handlers/_amounts.evaluate_count``).
+
+    A plain count is *not* answered here: every spender already has its own
+    branch for one, with its own seat rewrites, and a second reading of the
+    same node would be a second answer about whose board it counts.
+    """
+    if type(amount) not in _SET_MAXIMA:
+        return None
+    return count_spec(
+        amount.filter, node, aggregate=_SET_AGGREGATES[type(amount)], event=event,
+    )
 
 
 def counted_definition_spec(
