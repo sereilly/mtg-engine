@@ -795,6 +795,10 @@ class CombatPhaseMixin:
             if not attacker.is_creature:
                 continue
             valid_attackers[attacker_idx] = defending_idx
+        if len(valid_attackers) < len(self.combat_attackers):
+            # CR 702.22h: what blocked a departing band member goes on
+            # blocking the members staying (``_keep_band_blocks_past``).
+            self._keep_band_blocks_past(set(self.combat_attackers) - set(valid_attackers))
         self.combat_attackers = valid_attackers
 
         # An attacker that left combat takes its planeswalker target with it.

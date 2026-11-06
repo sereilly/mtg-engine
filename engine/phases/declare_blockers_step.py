@@ -812,6 +812,48 @@ class DeclareBlockersStepMixin:
                     self.combat_band_blocks[member] = extra
                 active.battlefield[member].blocked = True
 
+    def _keep_band_blocks_past(self, departing) -> None:
+        """CR 702.22h: "If an attacking creature becomes blocked by a creature,
+        each other creature in the same band as the attacking creature becomes
+        blocked by that same blocking creature." Before the attackers at the
+        slots in *departing* leave combat, each creature blocking one of them
+        keeps blocking the rest of its band.
+
+        A block is recorded as the declared pair (``combat_blockers``) and
+        spread across the band (``combat_band_blocks``) by recomputing from
+        those pairs, so a pair whose attacker left took the spread with it: a
+        Benalish Hero bolted after an Ogre blocked it left the Grizzly Bears
+        banded with it blocked by nobody, and the Ogre blocking nothing — the
+        two dealt each other no damage. Each such blocker is re-pointed, as a
+        declared pair, at the first member staying that its block was spread
+        onto, and the spread is recomputed from that pair as it was from the
+        first. Asked by every road an attacker leaves combat on: a removal
+        (``handlers/combat._take_permanent_out_of_combat``), leaving the
+        battlefield or changing controllers (``_renumber_combat_after_removal``)
+        and no longer being a creature (``_prune_combat_state``).
+        """
+        if not self.combat_bands:
+            return
+        departing = set(departing)
+        for attacker_idx in sorted(departing):
+            band = self._attacker_band(attacker_idx)
+            if not band:
+                continue
+            staying = [
+                member for member in band
+                if member not in departing and member in self.combat_attackers
+            ]
+            seat = self.combat_attackers.get(attacker_idx)
+            for blocker_idx, attackers in (self.combat_blockers.get(seat) or {}).items():
+                if attacker_idx not in attackers or any(m in attackers for m in staying):
+                    continue
+                spread = [
+                    member for member in staying
+                    if blocker_idx in self.combat_band_blocks.get(member, ())
+                ]
+                if spread:
+                    attackers.append(spread[0])
+
     def _remove_blocker_from_combat(
         self, defender_player_index: int, blocker_index: int,
         *, frees_blocked_attackers: bool = False,
@@ -839,7 +881,10 @@ class DeclareBlockersStepMixin:
             self.combat_blockers[defender_player_index] = own_blocker_map
         else:
             self.combat_blockers.pop(defender_player_index, None)
-        self.combat_band_blocks.pop(blocker_index, None)
+        # ``combat_band_blocks`` is keyed by *attacker*, so it is not popped
+        # by this blocker's slot (which named whichever attacker shared the
+        # number); it is rebuilt from ``combat_blockers`` at the end of this
+        # function, without the blocker removed here.
         # CR 506.4: it stops being a blocking creature, so the division of its
         # combat damage among the creatures it was blocking (CR 510.1a) is gone
         # with the block. Left behind, that map would divide the damage of
