@@ -29,6 +29,8 @@ Beside the seam, the three things it is the reason for:
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 from ..aura_attachment import auras_attached_to, detach_aura
 from ..control import (base_controller, change_control, control_changes,
                        end_control_change, last_controller,
@@ -831,6 +833,39 @@ class ControlSeamMixin:
             seat = item.caster_index
         return seat
 
+    @contextmanager
+    def leaving_together(self):
+        """One event taking permanents off the battlefield (CR 603.10a) — the
+        block around every removal it makes: one state-based check (CR 704.3:
+        "performs all applicable state-based actions simultaneously as a
+        single event"), one "destroy all creatures".
+
+        A leaves-the-battlefield ability looks back in time: "the game 'looks
+        back in time' to determine if those abilities trigger, using the
+        existence of those abilities and the appearance of objects immediately
+        prior to the event." So every permanent the event takes off the
+        battlefield is an observer of every other death in it, as it last
+        existed (``DeathsMixin._death_observers``) — whichever was removed
+        first. The engine performs such an event as several removals one after
+        another (a sweep per rule and per seat), and a Massacre Wurm taken by
+        the first never saw the opponent's creatures the next one took.
+
+        Re-entrant: a block opened inside an open one is the same event.
+        """
+        if self.departure_batch is not None:
+            yield
+            return
+        self.departure_batch = []
+        try:
+            yield
+        finally:
+            self.departure_batch = None
+
+    def departed_in_this_event(self) -> list:
+        """What the open departure event (``leaving_together``) has taken off
+        the battlefield so far — empty outside one."""
+        return list(self.departure_batch or ())
+
     def remove_from_battlefield(
         self, permanent: Permanent, *, zone_change: bool = True
     ) -> Permanent | None:
@@ -1107,6 +1142,11 @@ class ControlSeamMixin:
             player.battlefield = survivors
         if removed:
             self._renumber_combat_after_removal(vacated)
+            # One event's departures look back at each other (CR 603.10a):
+            # recorded while one is open (``leaving_together``) for the death
+            # scans of what leaves after them in it.
+            if zone_change and self.departure_batch is not None:
+                self.departure_batch.extend(removed)
         # Only for the permanents that were really there: `targets` is what the
         # caller asked about and `removed` is what left, and a trigger announced
         # for a permanent already off the battlefield would fire on nothing.

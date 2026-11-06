@@ -159,26 +159,29 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         )
         died: list[Permanent] = []
         controllers: dict[int, int] = {}
-        for role in targets_desc.get("roles") or ():
-            victim = resolve_role_permanent(
-                game, context, instruction.payload, role.get("role")
-            )
-            if victim is None or not game.is_on_battlefield(victim):
-                continue
-            if not subject_matches(
-                game, victim, role.get("filter") or {},
-                observer=observer, source=source_permanent,
-            ):
-                continue
-            seat = game.controller_index_of(victim)
-            if seat is None:
-                continue
-            controllers[victim.permanent_id] = seat
-            died.extend(game._destroy_swept_permanents(
-                game.players[seat],
-                lambda candidate, chosen=victim: candidate is chosen,
-                allow_regeneration=not instruction.payload.get("bypass_regeneration"),
-            ))
+        # One destruction (CR 603.10a): every victim looks back at the others
+        # (``Game.leaving_together``), and what they give back enters together.
+        with game.entering_together(), game.leaving_together():
+            for role in targets_desc.get("roles") or ():
+                victim = resolve_role_permanent(
+                    game, context, instruction.payload, role.get("role")
+                )
+                if victim is None or not game.is_on_battlefield(victim):
+                    continue
+                if not subject_matches(
+                    game, victim, role.get("filter") or {},
+                    observer=observer, source=source_permanent,
+                ):
+                    continue
+                seat = game.controller_index_of(victim)
+                if seat is None:
+                    continue
+                controllers[victim.permanent_id] = seat
+                died.extend(game._destroy_swept_permanents(
+                    game.players[seat],
+                    lambda candidate, chosen=victim: candidate is chosen,
+                    allow_regeneration=not instruction.payload.get("bypass_regeneration"),
+                ))
         _record_destroyed_this_way(context, died, controllers)
         game.log.append(
             f"{card.name} destroyed " + ", ".join(p.card.name for p in died)
@@ -228,16 +231,19 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         )
         died: list[Permanent] = []
         controllers: dict[int, int] = {}
-        for perm in chosen:
-            seat = game.controller_index_of(perm)
-            if seat is None:
-                continue
-            controllers[perm.permanent_id] = seat
-            died.extend(game._destroy_swept_permanents(
-                game.players[seat],
-                lambda candidate, victim=perm: candidate is victim,
-                allow_regeneration=not instruction.payload.get("bypass_regeneration"),
-            ))
+        # One destruction (CR 603.10a): every victim looks back at the others
+        # (``Game.leaving_together``), and what they give back enters together.
+        with game.entering_together(), game.leaving_together():
+            for perm in chosen:
+                seat = game.controller_index_of(perm)
+                if seat is None:
+                    continue
+                controllers[perm.permanent_id] = seat
+                died.extend(game._destroy_swept_permanents(
+                    game.players[seat],
+                    lambda candidate, victim=perm: candidate is victim,
+                    allow_regeneration=not instruction.payload.get("bypass_regeneration"),
+                ))
         # What a later sentence of the same spell counts. Recorded under the
         # key the sweep uses, because "the number of Mountains put into a
         # graveyard this way" is the same question whichever branch destroyed
@@ -456,18 +462,21 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
     # destroyed an indestructible permanent, destroyed a creature through its
     # regeneration shield (CR 702.12b, CR 701.8c), and nothing watching a
     # destruction heard of either.
-    for victim_player, victim_perm in chosen:
-        if game._destroy_swept_permanents(
-            victim_player, lambda perm, victim=victim_perm: perm is victim
-        ):
-            game.log.append(
-                f"{context.card.name}'s flip destroyed {victim_perm.card.name}"
-            )
-        else:
-            game.log.append(
-                f"{context.card.name}'s flip touched {victim_perm.card.name}, "
-                "which was not destroyed"
-            )
+    # One destruction (CR 603.10a): every victim looks back at the others
+    # (``Game.leaving_together``), and what they give back enters together.
+    with game.entering_together(), game.leaving_together():
+        for victim_player, victim_perm in chosen:
+            if game._destroy_swept_permanents(
+                victim_player, lambda perm, victim=victim_perm: perm is victim
+            ):
+                game.log.append(
+                    f"{context.card.name}'s flip destroyed {victim_perm.card.name}"
+                )
+            else:
+                game.log.append(
+                    f"{context.card.name}'s flip touched {victim_perm.card.name}, "
+                    "which was not destroyed"
+                )
     # "Then destroy this artifact."
     if source_permanent is not None:
         holder = game.controller_index_of(source_permanent)
@@ -723,20 +732,23 @@ def destroy_block_pair_partner(game: Game, instruction: OracleInstruction, conte
     doing as much as it can.
     """
     destroyed: list[str] = []
-    for victim in block_pair_permanents(game, context):
-        seat = game.controller_index_of(victim)
-        if seat is None:
-            continue
-        destroyed.extend(
-            perm.card.name
-            for perm in game._destroy_swept_permanents(
-                game.players[seat],
-                lambda candidate, victim=victim: candidate is victim,
-                allow_regeneration=not instruction.payload.get(
-                    "bypass_regeneration"
-                ),
+    # One destruction (CR 603.10a): every victim looks back at the others
+    # (``Game.leaving_together``), and what they give back enters together.
+    with game.entering_together(), game.leaving_together():
+        for victim in block_pair_permanents(game, context):
+            seat = game.controller_index_of(victim)
+            if seat is None:
+                continue
+            destroyed.extend(
+                perm.card.name
+                for perm in game._destroy_swept_permanents(
+                    game.players[seat],
+                    lambda candidate, victim=victim: candidate is victim,
+                    allow_regeneration=not instruction.payload.get(
+                        "bypass_regeneration"
+                    ),
+                )
             )
-        )
     if destroyed:
         game.log.append(
             f"{context.card.name} destroyed {', '.join(destroyed)}"

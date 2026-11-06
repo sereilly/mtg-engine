@@ -58,12 +58,13 @@ _REVIEWED = {
      "remove_all_from_battlefield"): (
         "phasing out (``zone_change=False``) gives back no linked exile."
     ),
-    ("mixins/game_ending.py", "_check_state_based_actions",
+    ("mixins/game_ending.py", "_state_based_pass",
      "remove_all_from_battlefield"): (
-        "each sweep's linked returns are one event inside "
-        "``remove_all_from_battlefield``; the sweeps of one pass are separate "
-        "calls — CR 704.3 makes one pass one event, a known gap (the pass "
-        "would have to be extracted to be wrapped)."
+        "one pass of the state-based check (CR 704.3: one event), extracted so "
+        "its one caller, ``_check_state_based_actions``, opens "
+        "``entering_together()`` around it: every sweep's linked returns enter "
+        "together (CR 610.3d) — held by "
+        "``test_kg4_together_departure_roads.test_one_state_based_pass_is_one_event``."
     ),
     ("mixins/stack/resolution.py", "resolve_stack", "resolve_top_of_stack"): (
         "each stack object resolves as its own event."

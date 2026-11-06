@@ -476,6 +476,12 @@ class Game(
     # object it opened under can close one its loop never came back for
     # (``close_entry_events_of``). Empty between events.
     open_entry_events: list = field(default_factory=list)
+    # CR 603.10a: what one event has taken off the battlefield so far, while
+    # it is open (``ControlSeamMixin.leaving_together``: one state-based
+    # check, one "destroy all") — each is an observer of every later death in
+    # it, as it last existed. None between events; never left set across a
+    # decision, so a ``vars()`` walker reads None before and after.
+    departure_batch: "list | None" = None
     # Seats controlled by a human, set by the web layer each action. Empty in
     # headless/AI play, so forced sacrifices there resolve inline without a prompt.
     interactive_seats: set[int] = field(default_factory=set)
