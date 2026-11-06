@@ -30,9 +30,10 @@ from .damage_substitutions import (DAMAGE_BECOMES_GRAVEYARD_EXILE_TEXT,
                                    damage_becomes_counters,
                                    damage_to_you_becomes_counters)
 from .draws import (DISCARD_INSTEAD_OF_DRAW_TEXT, DOUBLE_DRAW_TEXT,
-                    LIFE_GAIN_TO_DRAW_TEXT,
+                    LIFE_GAIN_TO_DRAW_TEXT, PILE_TOP_INSTEAD_OF_DRAW_TEXT,
                     RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_TEXT, SKIP_DRAW_TEXT,
                     draw_becomes_counter)
+from .life_gain import gains_no_life_instead_line
 from .permanents import (EXILE_UNCAST_CREATURE_TEXT, EXTRA_PLUS1_COUNTER_TEXT,
                          LANDS_CANT_ENTER_TEXT, LAND_EQUILIBRIUM_TEXT,
                          counters_instead_of_untap)
@@ -156,6 +157,10 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # _skip_instead_of_drawing (Obstinate Familiar): the phrase is the whole
     # line. The offer and both of its answers are the interceptor's.
     (SKIP_DRAW_TEXT, ""),
+    # _pile_top_instead_of_drawing (Parallel Thoughts): the phrase is the
+    # whole line. The offer and both of its answers are the interceptor's, and
+    # "the pile you exiled" is the linked record its entry trigger wrote.
+    (PILE_TOP_INSTEAD_OF_DRAW_TEXT, ""),
     # _damage_becomes_graveyard_exile (Nefarious Lich): the constant is both
     # printed sentences, because the interceptor performs both — the exile,
     # and CR 104.3e behind a graveyard that cannot pay.
@@ -216,6 +221,11 @@ def replacement_claims_line(line: str) -> bool:
     # of the same reader the interceptor uses, so a kind it cannot read leaves
     # the line unclaimed rather than admitted with no counters arriving.
     if damage_becomes_counters(normalized) is not None:
+        return True
+    # "If a player would gain life, that player gains no life instead."
+    # (Sulfuric Vortex.) Matched by shape because the seat scope is payload,
+    # through the reader the interceptor self-selects on.
+    if gains_no_life_instead_line(normalized) is not None:
         return True
     # "If damage would be dealt to you, put that many delay counters on this
     # enchantment instead." (Delaying Shield), the same arrangement: the

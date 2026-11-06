@@ -103,7 +103,23 @@ def _lower_named_source_redirect(
             "honour",
             node=node,
         )
-    protects = _REDIRECT_PROTECTED_SEATS.get(getattr(node.to, "kind", ""))
+    if node.to is None:
+        # "…the next time **it** would deal combat damage this turn, it deals
+        # that damage to you instead." (Goblin Psychopath.) No recipient
+        # printed: the record watches this source's damage to **anyone**
+        # (``DamageRedirect.any_recipient``), the shape Reflect Damage's
+        # chosen source already has. Only the one instance — a blanket "all
+        # damage it would deal" moves everything the creature ever deals, a
+        # sentence nothing prints, and refusing names it.
+        if not node.one_shot:
+            raise LoweringError(
+                "a named-source redirect with no recipient moves the next "
+                "instance only",
+                node=node,
+            )
+        protects = "any"
+    else:
+        protects = _REDIRECT_PROTECTED_SEATS.get(getattr(node.to, "kind", ""))
     if protects is None:
         raise LoweringError(
             "a named-source redirect watches its controller or their opponents",
@@ -118,6 +134,29 @@ def _lower_named_source_redirect(
             node=node,
         )
     recipient = node.new_recipient
+    payload: dict[str, object] = {
+        "protects": protects,
+        "combat_only": bool(node.combat_only),
+    }
+    if node.one_shot:
+        # "**The next time** …" — one instance. Absent is every instance for
+        # the duration, which is what ``uses=None`` already means on the record.
+        payload["uses"] = 1
+    if _is_you(recipient):
+        # "…it deals that damage **to you** instead." (Goblin Psychopath.) The
+        # ability's controller (CR 109.5), whom the handler already holds, so
+        # nothing is announced — its own kind for the reason the targeted
+        # taker's is one: ``engine/targeting.py`` keys the picker on the kind,
+        # and this one raises none. A redirect from "you" to "you" moves
+        # nothing and is refused rather than armed.
+        if protects == "you":
+            raise LoweringError(
+                "a redirect from its controller to its controller moves nothing",
+                node=node,
+            )
+        return (
+            OracleInstruction("redirect_source_damage_to_you_until_eot", "", payload),
+        )
     if (
         not isinstance(recipient, ast.TargetSpec)
         or recipient.quantifier != "target"
@@ -132,14 +171,6 @@ def _lower_named_source_redirect(
         raise LoweringError(
             "a redirect cannot test " + ", ".join(sorted(untestable)), node=node
         )
-    payload: dict[str, object] = {
-        "protects": protects,
-        "combat_only": bool(node.combat_only),
-    }
-    if node.one_shot:
-        # "**The next time** …" — one instance. Absent is every instance for
-        # the duration, which is what ``uses=None`` already means on the record.
-        payload["uses"] = 1
     _describe_targets(payload, recipient)
     return (
         OracleInstruction("redirect_source_damage_to_target_until_eot", "", payload),

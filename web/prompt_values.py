@@ -160,6 +160,35 @@ def _skip_draw(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("pile_top_draw")
+def _pile_top_draw(ctx: PromptContext, choices: list) -> dict:
+    """Parallel Thoughts: draw the card, or take the top card of the exiled
+    pile instead.
+
+    Obstinate Familiar's offer's shape, for its reasons: one offer at a time
+    with how many are queued behind it, the labels off the choice. The pile's
+    **size** rides along and nothing else about it — the cards are face down
+    and "you can't look at the face down cards" (ruling 2004-10-04) — together
+    with the library's, because an empty pile is the skip the ruling allows and
+    that matters when the library is empty too.
+    """
+    choice = choices[0]
+    source = ctx.game.permanent_by_id(int(choice.data["source_id"]))
+    held = choice.data.get("_source")
+    name = (
+        source.card.name if source is not None
+        else getattr(getattr(held, "card", None), "name", "")
+    )
+    return {
+        "player_seat": choice.player_index,
+        "source_name": name,
+        "options": list(choice.options),
+        "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
+        "pile_size": int(choice.data.get("pile_size", 0)),
+        "library_size": len(ctx.game.players[choice.player_index].library),
+    }
+
+
 _REMINDER_TEXT = re.compile(r"\([^)]*\)")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 _OFFER_WORD = re.compile(r"\b(?:unless|may)\b", re.IGNORECASE)

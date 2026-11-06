@@ -136,13 +136,6 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
         # below can name — read first, because every one of them reads
         # ``new_recipient`` and this sentence has none.
         return _lower_redirect_onto_dealer(node)
-    if node.to is None:
-        # "All damage that would be dealt this turn **by target sorcery spell**
-        # is dealt to that spell's controller instead." (Reverberation.) The one
-        # printed shape with no protected recipient: it names only the source,
-        # so it moves whatever that spell would deal, to whoever it would have
-        # damaged.
-        return _lower_spell_damage_redirect(node)
     if _is_source(node.dealt_by):
         # "The next time **this creature** would deal combat damage to an
         # opponent this turn…" (Soltari Guerrillas). The moved damage's source
@@ -151,7 +144,19 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
         # shape whose *protected* recipient is somebody other than the seat that
         # armed it. Both facts belong to one branch: the seats are known only
         # because the source is.
+        #
+        # Ahead of the recipient-less branch below, because "the next time
+        # **it** would deal combat damage this turn, it deals that damage to
+        # you instead" (Goblin Psychopath) names no recipient either — and
+        # what it does name is this permanent, not a spell.
         return _lower_named_source_redirect(node)
+    if node.to is None:
+        # "All damage that would be dealt this turn **by target sorcery spell**
+        # is dealt to that spell's controller instead." (Reverberation.) The one
+        # printed shape with no protected recipient: it names only the source,
+        # so it moves whatever that spell would deal, to whoever it would have
+        # damaged.
+        return _lower_spell_damage_redirect(node)
     if node.from_chosen_source and isinstance(node.to, ast.TargetSpec):
         if isinstance(node.new_recipient, ast.TargetSpec) and _is_target(
             node.new_recipient
@@ -183,10 +188,10 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
         # source's damage moves, which is what "all damage" says.
         return _lower_redirect_off_target(node)
     if (
-        node.one_shot
-        and _is_source(node.to)
+        _is_source(node.to)
         and node.dealt_by is None
         and not node.from_chosen_source
+        and (node.one_shot or not _is_source(node.new_recipient))
     ):
         # "{2}{R}{W}: **The next time damage would be dealt to this creature**
         # this turn, that damage is dealt to any target instead." (Mirrorwood
@@ -196,6 +201,13 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
         # prints CR 615.7's point pool — which is one lowering with the
         # quantity as payload, so it is handed to the function that already
         # reads the pool rather than given a second one here.
+        #
+        # "When this creature is turned face up, **all damage that would be
+        # dealt to it this turn** is dealt to target creature instead."
+        # (Karona's Zealot.) The same two ends with neither bound: every
+        # instance this turn, which is the third quantity the one record has
+        # always carried (``uses`` and ``amount`` both None), handed to the
+        # same function for the same reason.
         return _lower_next_damage_redirect_from_source(node)
     if not _is_you(node.to):
         raise LoweringError(

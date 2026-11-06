@@ -136,6 +136,25 @@ def _action_skip_draw_confirm(session, req, seat_type):
     if not session.game.confirm_skip_draw(req.seat, skip=option == 1):
         raise HTTPException(status_code=400, detail="invalid skip-the-draw choice")
 
+@action_handler("pile_top_draw_confirm")
+def _action_pile_top_draw_confirm(session, req, seat_type):
+    # Parallel Thoughts: "If you would draw a card, you may instead put the top
+    # card of the pile you exiled into your hand." Answered by index into the
+    # offered options, Obstinate Familiar's shape: 0 draws the card, 1 takes
+    # the pile's top card (from an empty pile, the skipped draw).
+    pending = [
+        e for e in session.game.pending_pile_top_draws if e["player_index"] == req.seat
+    ]
+    if not pending:
+        raise HTTPException(status_code=400, detail="no pile-instead-of-draw choice pending for you")
+    if req.option_index is None:
+        raise HTTPException(status_code=400, detail="option_index is required")
+    option = int(req.option_index)
+    if not 0 <= option < len(pending[0]["options"]):
+        raise HTTPException(status_code=400, detail="option_index is out of range")
+    if not session.game.confirm_pile_top_draw(req.seat, take_from_pile=option == 1):
+        raise HTTPException(status_code=400, detail="invalid pile-instead-of-draw choice")
+
 @action_handler("resolve_optional_pay")
 def _action_resolve_optional_pay(session, req, seat_type):
     # Color rods (Wooden Sphere, …): "you may pay {1}. If you do, gain life."

@@ -87,6 +87,7 @@ ActionKind = Literal[
     "draw_becomes_counter_confirm",
     "reveal_until_kind_draw_confirm",
     "skip_draw_confirm",
+    "pile_top_draw_confirm",
     "entry_discard_toll_confirm",
     "commander_zone_change_confirm",
     "balance_confirm",

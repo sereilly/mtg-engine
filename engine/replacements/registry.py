@@ -209,6 +209,13 @@ LIFE_FLOOR = 10  # Ali from Cairo
 # Kinds with a contention set of their own. Small numbers, spaced, no relation
 # to the damage space above.
 LIFE_GAIN_TO_DRAW = 10  # Lich
+# "If a player would gain life, that player gains no life instead." (Sulfuric
+# Vortex.) Behind Lich, and that is CR 616.1e's default for a seat nobody asks:
+# both consume the gain, the affected player chooses which applies, and the
+# player holding a Lich would take the cards over nothing — after which there is
+# no gain left for this to replace (CR 614.7). A replacement and not CR 119.7's
+# ban, which is why it contends here at all (``replacements/life_gain.py``).
+LIFE_GAIN_REPLACED_BY_NOTHING = 20  # Sulfuric Vortex
 EXILE_INSTEAD_OF_DYING = 10  # Disintegrate's "exile it instead"
 #: "If the creature would leave the battlefield, exile it instead of putting it
 #: anywhere else." (Dreams of the Dead.) Its own event kind rather than a wider
@@ -255,6 +262,14 @@ DRAW_LOOKING_AT_TOP = 20  # Aladdin's Lamp
 # matters less than for its mandatory neighbours: declining leaves the event for
 # whatever is behind it, exactly as Pursuit of Knowledge's does four slots on.
 DRAW_REVEALS_UNTIL_KIND = 21  # Abundance
+# "If you would draw a card, you may instead put the top card of the pile you
+# exiled into your hand." (Parallel Thoughts.) Abundance's reasoning exactly:
+# an optional replacement its own controller set up for their own benefit,
+# consuming the draw and handing a card back for it — so with the optional
+# consumers rather than the mandatory ones, and ahead of Pursuit of Knowledge,
+# which hands back a counter where this hands back a card. Declining leaves the
+# event for whatever is behind it.
+DRAW_FROM_EXILED_PILE = 23  # Parallel Thoughts
 # Last of the draw replacements, and deliberately so. CR 616.1e gives the choice
 # to the affected player and the lowest order is the default they are taken to
 # make; every effect above this one is something the player armed for their own

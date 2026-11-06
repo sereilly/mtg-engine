@@ -66,8 +66,13 @@ def put_exiled_pile_top_into_hand(game: Game, instruction: OracleInstruction, co
     # the departure seam, so the exile register retires with it.
     game.take_card_from_exile(owner, card)
     game.put_card_into_hand(owner, card)
+    # A **face-down** pile is hidden from every player (CR 406.3), and a card
+    # that goes from it into a hand never becomes public (CR 400.2): ``game.log``
+    # is served whole to every seat, so naming it here told the table what
+    # Mangara's Tome or Parallel Thoughts handed over. The owner sees it in hand.
+    what = "the top card" if entry.get("face_down") else card.name
     game.log.append(
-        f"{context.card.name}: {card.name} goes from the exiled pile to "
+        f"{context.card.name}: {what} goes from the exiled pile to "
         f"{owner.name}'s hand"
     )
     return True, "resolved"

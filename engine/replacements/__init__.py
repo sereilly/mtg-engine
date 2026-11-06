@@ -72,6 +72,7 @@ This package was one 5,549-line module, ``replacements.py``, until the
     damage_substitutions  damage replaced by an event that is not damage
     draws                 a draw replaced, the queue a suspended one holds, and
                           Lich's life gain drawn as cards
+    life_gain             a life gain replaced by nothing (Sulfuric Vortex)
     revealed_draws        a draw replaced by a look at or a reveal of the top
     permanents            a permanent entering, untapping, getting +1/+1
                           counters, or tapped for mana — replaced
@@ -95,6 +96,7 @@ from . import (  # noqa: F401  (each registers its interceptors)
     redirects,
     damage_substitutions,
     draws,
+    life_gain,
     revealed_draws,
     permanents,
     zone_changes,

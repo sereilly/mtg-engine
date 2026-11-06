@@ -998,9 +998,17 @@ class LibrarySearchChoicesMixin:
         if ctx is not None:
             ctx.results["exiled_cards"] = exiled
         self.discard_pending_choice(choice)
+        # "…exile them **in a face-down pile**" (Mangara's Tome, Parallel
+        # Thoughts): a face-down exiled card is hidden from every player
+        # (CR 406.3) and a library is hidden too, so nothing made these public —
+        # ``find_is_public``'s rule for a find. ``game.log`` is served whole to
+        # every seat, so the line says how many and not which.
+        if choice.data.get("face_down_pile") and exiled:
+            found = f"{len(exiled)} card(s) face down"
+        else:
+            found = ", ".join(card.name for card in exiled) if exiled else "nothing"
         self.log.append(
-            f"{caster.name} searched {' and '.join(zones)} and exiled "
-            + (", ".join(card.name for card in exiled) if exiled else "nothing")
+            f"{caster.name} searched {' and '.join(zones)} and exiled {found}"
         )
         return True
 

@@ -119,6 +119,7 @@ def _derived_static_claims(
     from .target_immunity import immunity_claims_line
     from .lethal_damage import CLAIM as LETHAL_DAMAGE_CLAIM
     from .lethal_damage import single_source_lethal_line
+    from .unspent_mana import unspent_mana_kept_line
     from .untap_restrictions import untap_restriction_for
 
     claims: list[str] = []
@@ -341,6 +342,15 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append("life_prohibitions")
+    # "Players don't lose unspent mana as steps and phases end." (Upwelling,
+    # CR 500.5.) The pool-emptying seam asks this same table as each step
+    # ends, so there is no instruction to produce — and the enchantment's whole
+    # text is the sentence. Its own claim name for the ban above's reason.
+    if any(
+        unspent_mana_kept_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("unspent_mana")
     # CR 603.2d extra triggers (Sanctum of All). The fire site reads the
     # permanent's own text, so there is no instruction — and without this claim
     # the card would be admitted with the sentence doing nothing, which for a

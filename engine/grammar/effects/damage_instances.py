@@ -265,6 +265,44 @@ def _finish_named_source_effect(
     )
 
 
+def _finish_unaddressed_named_source_redirect(
+    stream: TokenStream, source: "ast.TargetSpec", mark, combat_only: bool
+) -> "ast.RedirectDamage | None":
+    """The tail of "The next time <named source> would deal [combat] damage
+    <duration>, it deals that damage to <recipient> instead" — the sentence
+    :func:`_finish_named_source_effect` reads, printed with **no recipient**.
+
+    "Whenever this creature attacks or blocks, flip a coin. If you lose the
+    flip, the next time it would deal combat damage this turn, it deals that
+    damage to you instead." (Goblin Psychopath.) CR 615.8 defines the instance
+    by its source alone, so whatever the creature's next damage was headed for
+    — a blocker, the defending player — it moves.
+
+    **The redirect ending only.** "…the next time it would deal damage this
+    turn, prevent that damage" is Desperate Gambit's sentence, whose "it" is the
+    source the step in front of it chose (``_parse_chosen_source_next_damage``);
+    read here, it would become a shield on the spell's own card. And "deals
+    double that damage instead" is that production's too. Both refuse here with
+    the cursor where it was, and the production behind this one reads them.
+    """
+    duration = _parse_duration(stream)
+    stream.accept_punct(",")
+    tail = _accept_redirect_tail(stream)
+    if tail is None:
+        stream.reset(mark)
+        return None
+    new_recipient, chooser = tail
+    return ast.RedirectDamage(
+        to=None,
+        new_recipient=new_recipient,
+        dealt_by=source,
+        duration=duration,
+        one_shot=True,
+        chooser=chooser,
+        combat_only=combat_only,
+    )
+
+
 def _accept_reflexive_redirect_tail(
     stream: TokenStream, source: "ast.TargetSpec"
 ) -> bool:
@@ -425,9 +463,17 @@ def _parse_source_of_choice_effect(
         # honoured — the shield lowering refuses it, and one redirect lowering
         # implements it.
         combat_only = bool(stream.accept_word("combat"))
-        if not stream.accept_phrase("damage", "to"):
+        if not stream.accept_word("damage"):
             stream.reset(mark)
             return None
+        if not stream.accept_word("to"):
+            # "…the next time **it** would deal combat damage this turn, it
+            # deals that damage to you instead." (Goblin Psychopath.) The
+            # named source's next damage to **anyone** — no recipient printed,
+            # as Reflect Damage prints none one branch down.
+            return _finish_unaddressed_named_source_redirect(
+                stream, named, mark, combat_only
+            )
         return _finish_named_source_effect(stream, named, mark, combat_only)
     token = stream.peek()
     word = str(token.text).lower() if token is not None else ""
