@@ -482,6 +482,117 @@ def test_w1g5_fork_still_makes_its_copy_red(set_pool):
     copy = next(item for item in game.stack if item.is_copy)
     assert game._stack_item_colors(copy) == ("R",)
 
+# ---- the drive list: Scourge morphs supported on arrival -----------------
+
+_W1G5_DRIVE = {
+    # name: (land, how many, what turning it up leaves in the log)
+    "Aven Liberator": ("Plains", 4, "gains protection from"),
+    "Frontline Strategist": ("Plains", 1, "is prevented"),
+    "Riptide Survivor": ("Island", 3, "drew 3 card"),
+    "Root Elemental": ("Forest", 7, "onto the battlefield (Root Elemental)"),
+    "Woodcloaker": ("Forest", 4, "gains trample until end of turn"),
+    "Titanic Bulvox": ("Forest", 7, "it is Titanic Bulvox"),
+    "Scornful Egotist": ("Island", 1, "it is Scornful Egotist"),
+    "Raven Guild Master": ("Island", 4, "it is Raven Guild Master"),
+    "Soul Collector": ("Swamp", 3, "it is Soul Collector"),
+}
+
+
+@_w1g5_pytest.mark.parametrize("interactive", [False, True])
+@_w1g5_pytest.mark.parametrize("name", sorted(_W1G5_DRIVE))
+def test_w1g5_every_drive_list_morph_turns_up_through_the_special_action(
+    set_pool, name, interactive,
+):
+    land, count, evidence = _W1G5_DRIVE[name]
+    face_down = _w1g5_permanent(set_pool("SCG")[name], face_down=True)
+    game, p1, _p2 = _w1g5_game(
+        [face_down, _w1g5_permanent(_W1G5_CATALOG["Grizzly Bears"]),
+         *_w1g5_lands(land, count)],
+        [_w1g5_permanent(_W1G5_CATALOG["Hill Giant"])],
+        hand=[_W1G5_CATALOG["Island"], _W1G5_CATALOG["Grizzly Bears"],
+              _W1G5_CATALOG["Mountain"]],
+        interactive=(0,) if interactive else (),
+    )
+    assert _w1g5_take(game, 0, face_down, "turn_face_up") is None
+    assert face_down.card.name == name
+    for _ in range(6):
+        game.auto_resolve_pending_choices()
+        if not game.stack:
+            break
+        _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert any(evidence in line for line in game.log), game.log[-6:]
+
+
+def test_w1g5_soul_collector_takes_what_it_killed_in_combat_and_after(set_pool):
+    """"Whenever a creature dealt damage by this creature this turn dies,
+    return that card to the battlefield under your control." A combat kill,
+    and a creature it damaged in combat that a Shock finishes afterwards."""
+    from tests.helpers import declare_attack as _declare_attack
+
+    scg = set_pool("SCG")
+    collector = _w1g5_permanent(scg["Soul Collector"])
+    giant = _w1g5_permanent(_W1G5_CATALOG["Hill Giant"])
+    game, _p1, _p2 = _w1g5_game([collector], [giant])
+    _declare_attack(game, 1, blocks={0: 0})
+    while game.current_turn_phase == "combat":
+        game.advance_combat_phase()
+        _w1g5_resolve_stack(game)
+    assert "Hill Giant" in _w1g5_names(game, 0)
+
+    collector = _w1g5_permanent(scg["Soul Collector"])
+    spider = _w1g5_permanent(_W1G5_CATALOG["Giant Spider"])
+    game, p1, _p2 = _w1g5_game([collector], [spider], hand=[_W1G5_CATALOG["Shock"]])
+    _declare_attack(game, 1, blocks={0: 0})
+    while game.current_turn_phase == "combat":
+        game.advance_combat_phase()
+        _w1g5_resolve_stack(game)
+    assert spider.damage_marked == 3 and "Giant Spider" in _w1g5_names(game, 1)
+    game.start_priority_window(1)
+    game.priority_player_index = 0
+    p1.mana_pool["R"] = 1
+    assert game.queue_from_hand(0, "Shock", target_player_index=1,
+                                target_permanent_ids=[spider.permanent_id]).supported
+    _w1g5_resolve_stack(game)
+    game.check_state_based_actions()
+    _w1g5_resolve_stack(game)
+    assert "Giant Spider" in _w1g5_names(game, 0)
+
+
+def test_w1g5_a_face_down_soul_collector_takes_nothing(set_pool):
+    """The 2004-10-04 ruling: "The ability only triggers if this card is face
+    up at the time the creature is put into the graveyard."
+    """
+    from tests.helpers import declare_attack as _declare_attack
+
+    collector = _w1g5_permanent(set_pool("SCG")["Soul Collector"], face_down=True)
+    elves = _w1g5_permanent(_W1G5_CATALOG["Llanowar Elves"])
+    game, _p1, p2 = _w1g5_game([collector], [elves])
+    _declare_attack(game, 1, blocks={0: 0})
+    while game.current_turn_phase == "combat":
+        game.advance_combat_phase()
+        _w1g5_resolve_stack(game)
+    assert [card.name for card in p2.graveyard] == ["Llanowar Elves"]
+    assert _w1g5_names(game, 0) == ["Face-down creature"]
+
+
+def test_w1g5_frontline_strategist_prevents_non_soldier_combat_damage(set_pool):
+    """Turned up before combat: its Soldier self deals 1, the Bears' 2 is
+    prevented ("prevent all combat damage non-Soldier creatures would deal
+    this turn")."""
+    from tests.helpers import declare_attack as _declare_attack
+
+    strategist = _w1g5_permanent(set_pool("SCG")["Frontline Strategist"], face_down=True)
+    bears = _w1g5_permanent(_W1G5_CATALOG["Grizzly Bears"])
+    game, _p1, p2 = _w1g5_game([strategist, bears, *_w1g5_lands("Plains", 1)])
+    assert _w1g5_take(game, 0, strategist, "turn_face_up") is None
+    _w1g5_resolve_stack(game)
+    _declare_attack(game, 0)
+    while game.current_turn_phase == "combat":
+        game.advance_combat_phase()
+        _w1g5_resolve_stack(game)
+    assert p2.life == 19
+
 # ==== end W1G5 ======================================================
 
 
