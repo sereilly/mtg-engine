@@ -26513,6 +26513,17 @@ function initCardPreviewHover() {
     if (event.relatedTarget && event.relatedTarget.closest?.(".card")) return;
     scheduleHidePreview();
   });
+
+  // A drag ends the hover. HTML5 drag and drop sends no mouseover or mouseout
+  // while it lasts, and a drag-cast re-renders the hand, so the card the
+  // preview was showing is gone without ever being left: the preview stayed
+  // up over the seat's graveyard and exile piles until some other card was
+  // hovered (Scourge's Phase 5). Captured on the document, because the drop
+  // lands on the canvas and the dragged element may no longer be in the page
+  // to receive its own dragend.
+  for (const type of ["dragstart", "drop", "dragend"]) {
+    document.addEventListener(type, () => clearCardPreview(), true);
+  }
 }
 
 async function getState(skipStaleCheck = false) {
