@@ -47,6 +47,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine import destruction_events
+from engine.ai_rehearsal import rehearsing
 from engine import events as events_module
 from engine import faces
 from engine.aura_attachment import attach_aura
@@ -178,12 +179,23 @@ class _Recorder:
     """Watches one game: ``Game._permanent_to_graveyard`` with the Python frames
     above it (which seam, which state-based predicate, which caller), the
     instruction running at the time, and every ``permanent_destroyed`` event
-    the bus collected with the triggers it found."""
+    the bus collected with the triggers it found.
+
+    **One game, not its rehearsals.** The spies are on the class, so they also
+    see every scratch copy an AI choice made part-way through a resolution
+    carries out (``ai_rehearsal.rehearse``) — and a copy's permanents keep
+    their ids. Since SCG W2G3 a seat nobody asks weighs a spell copy's new
+    target that way (``ai_prompts.choose_copy_target``), and Chain of Acid's
+    copies read as 170 destructions "announced more than once": each the
+    same permanent destroyed on one rehearsal after another. What happens on
+    a rehearsal is not recorded (CLAUDE.md: guard a class-level spy with
+    ``rehearsing()``); ``self.rehearsed`` counts what was passed over."""
 
     def __init__(self) -> None:
         self.departures: list[dict] = []
         self.announced: list[tuple] = []
         self.fired: Counter = Counter()
+        self.rehearsed: Counter = Counter()
         self._kinds: list[str] = []
 
     def __enter__(self) -> "_Recorder":
@@ -193,6 +205,9 @@ class _Recorder:
         self._collect = events_module.collect
 
         def to_graveyard(game, player, permanent):
+            if rehearsing():
+                rec.rehearsed["departures"] += 1
+                return rec._ptg(game, player, permanent)
             via = predicate = site = None
             in_sba = False
             seat = game.controller_index_of(permanent)
@@ -229,6 +244,7 @@ class _Recorder:
                 "site": site,
                 "in_sba": in_sba,
                 "kind": rec._kinds[-1] if rec._kinds else None,
+                "driver": _driving_seat(game),
             })
             return rec._ptg(game, player, permanent)
 
@@ -241,6 +257,9 @@ class _Recorder:
 
         def collect(game, event):
             found = rec._collect(game, event)
+            if rehearsing():
+                rec.rehearsed["events"] += event.kind == PERMANENT_DESTROYED
+                return found
             if event.kind == PERMANENT_DESTROYED:
                 subject_id = getattr(event.subject, "permanent_id", None)
                 rec.announced.append((subject_id, event.payload.get("cause_seat")))
@@ -271,6 +290,19 @@ class _Recorder:
             }
             for departure in self.departures
         ]
+
+
+def _driving_seat(game) -> int:
+    """The seat whose object is destroying: seat 0, which every driven
+    object belongs to — unless what is resolving is a **copy** of a spell,
+    which is controlled by whoever the copying effect made it (CR 707.10):
+    "Then that permanent's controller may copy this spell" (Chain of Acid)
+    hands the copy, and the next destruction, to the other seat. Read off the
+    stack object resolving, never off the event the seam announced."""
+    item = game.resolving_items[-1] if game.resolving_items else None
+    if item is not None and getattr(item, "is_copy", False):
+        return item.caster_index
+    return 0
 
 
 def _classify(departure: dict) -> str:
@@ -496,20 +528,23 @@ def _faults(rows: list[dict]) -> dict[str, list]:
             (row["case"], row["name"]) for row in destroyed if len(row["causes"]) > 1
         ],
         # Every driven object is seat 0's, so CR 109.5's answer is seat 0 for
-        # whatever it destroys — and nobody, for what a state-based action did.
+        # whatever it destroys — or the seat a copy of it belongs to
+        # (``_driving_seat``) — and nobody, for what a state-based action did.
         "a destruction with the wrong cause": [
             (row["case"], row["name"], row["causes"]) for row in destroyed
             if row["causes"] and row["causes"] != (
-                [0] if row["class"] == "destroy" else [None]
+                [row["driver"]] if row["class"] == "destroy" else [None]
             )
         ],
         "an opponent's watcher that did not trigger exactly once": [
             (row["case"], row["name"], row["fired"]) for row in destroyed
-            if row["class"] == "destroy" and row["seat"] == 1 and row["fired"] != 1
+            if row["class"] == "destroy" and row["seat"] != row["driver"]
+            and row["fired"] != 1
         ],
         "a watcher that triggered for its own side's or nobody's destruction": [
             (row["case"], row["name"], row["fired"]) for row in destroyed
-            if (row["class"] == "destroy_sba" or row["seat"] == 0) and row["fired"]
+            if (row["class"] == "destroy_sba" or row["seat"] == row["driver"])
+            and row["fired"]
         ],
         "a move that is not a destruction, announced as one": [
             (row["case"], row["name"], row["class"]) for row in rows

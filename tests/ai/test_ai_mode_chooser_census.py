@@ -114,12 +114,24 @@ def pool() -> dict:
 
 POOL = pool()
 
+#: Where the population is drawn from: **both manifest roles**, so a measured
+#: set's modal spells are examined before its promotion and their rows below
+#: read the same on either side of it. ``POOL`` stays the shipped pool — the
+#: censuses that borrow it (``modes.POOL``) draw their own populations from it.
+#: Before SCG this read the shipped pool alone, and Recuperate's rows could be
+#: written only once it shipped: its promotion rehearsal was the first run to
+#: see it.
+_MODAL_POOL = {
+    card.name: card
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True)))
+}
+
 
 def population() -> list:
     """Every caster-chosen modal instant and sorcery, by name."""
     found = []
-    for name in sorted(POOL):
-        card = POOL[name]
+    for name in sorted(_MODAL_POOL):
+        card = _MODAL_POOL[name]
         if card.primary_type not in ("instant", "sorcery"):
             continue
         program = compile_card_oracle(card)
@@ -1412,6 +1424,11 @@ HELD = {
     ("Trickery Charm", 1): "a creature type for a turn, on a board where nothing reads one",
     # The board's creature is a Wall, which cannot attack (defender).
     ("Vitality Charm", 1): "+1/+1 and trample " + _NO_FIGHT,
+    # Scourge's. "Prevent the next 6 damage that would be dealt to target
+    # creature this turn" in a main phase with nothing coming; with a Lightning
+    # Bolt on the stack at the caster's creature it is the bullet the
+    # instant-speed chooser takes (SCG W2G3b's drive).
+    ("Recuperate", 1): "a shield on a creature with no damage coming",
 }
 
 #: Modes whose own board leaves a sibling worth casting too, and the sibling
@@ -1458,6 +1475,8 @@ SHADOWED = {
     # LGN W2G4: the defending seat no longer blocks a creature it cannot
     # kill, so neither bullet on the attacker starts a fight.
     ("Vitality Charm", 2): ([0], "a 1/1 Insect lasts; +1/+1 and trample is three damage and a regeneration shield two, unblocked: 4.0 against 3.0 and 2.0"),
+    # Scourge's.
+    ("Recuperate", 1): ([0], "six life lasts; a shield with no damage coming measures nothing"),
 }
 
 #: Boards on which the cast the policy made measures **less** than some

@@ -117,6 +117,13 @@ def test_copy_that_spell_copies_under_every_event_that_freezes_one(
         caster, "Lightning Bolt", target_player_index=1 - caster
     ).supported
     resolve_stack(game)
-    # The copy belongs to the shrine's controller and keeps the original's
-    # target (nobody was asked: neither seat is interactive).
-    assert game.players[1 - caster].life == 14
+    # The copy is made and resolves under every event that froze the spell:
+    # three from the original and three from the copy. Where the copy lands
+    # is its controller's to choose (CR 707.10c) — the shrine's controller,
+    # whom nobody asks here, so the measured default (SCG W2G3,
+    # ``ai_prompts.choose_copy_target``): it keeps a copy aimed at the
+    # opponent and re-aims the one an opponent's Bolt would have pointed at
+    # its own face. The original goes where it was cast.
+    assert any(line == "Lightning Bolt (copy) resolved" for line in game.log), game.log
+    assert sum(20 - player.life for player in game.players) == 6
+    assert game.players[1 - caster].life <= 17
