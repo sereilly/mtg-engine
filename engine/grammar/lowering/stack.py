@@ -18,6 +18,7 @@ from ...oracle_types import (BIDDING_WINNER, COUNTERED_ABILITY_SOURCE,
 from ...subject_filters import CARD_ONLY_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
+from ..vocabulary import COLOR_WORDS
 from ._amounts import count_spec, recorded_count_spec
 from .conditions import _lower_condition
 from ._common import (
@@ -866,3 +867,28 @@ def _lower_copy_spell_for_each_other_target(
         "card_types": list(node.card_types),
         "each_other": node.each_other,
     }),)
+
+
+def _lower_copy_target_spell(
+    node: ast.CopyTargetSpell,
+) -> tuple[OracleInstruction, ...]:
+    """"Copy target instant or sorcery spell[, except that the copy is red].
+    You may choose new targets for that copy." (Mischievous Quanar, Fork.)
+
+    One instruction, ``copy_top_stack_spell``: its target is the instruction
+    kind's own stack spec (``instruction_targets``: an instant or sorcery
+    spell, the copy re-aimed through the second prompt), so the one union the
+    handler and the picker can test is the one admitted — any other printed
+    type refuses here rather than being copied as an instant. CR 707.9b's
+    colour, when printed, is ``recolor`` (the mana symbol the handler sets on
+    the copy); absent, the copy keeps the copied spell's printed colour.
+    """
+    if sorted(node.card_types) != ["instant", "sorcery"]:
+        raise LoweringError(
+            "only a copy of target instant or sorcery spell is implemented",
+            node=node,
+        )
+    payload: dict = {"targets": {"quantifier": "target", "kind": "spell"}}
+    if node.copy_color is not None:
+        payload["recolor"] = COLOR_WORDS[node.copy_color]
+    return (OracleInstruction("copy_top_stack_spell", "", payload),)

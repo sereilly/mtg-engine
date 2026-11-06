@@ -429,6 +429,7 @@ from .stack import (
     CounterSpell,
     DestroyCounteredAbilitySource,
     CopySpellForEachOtherTarget,
+    CopyTargetSpell,
     ModalNode,
     NextSpellUncounterable,
     PutExiledCardOnStackAsCopy,
@@ -900,6 +901,7 @@ __all__ = [
     "CounterSpell",
     "NextSpellUncounterable",
     "CopySpellForEachOtherTarget",
+    "CopyTargetSpell",
     "ModalNode",
     # combat
     "CantBe",

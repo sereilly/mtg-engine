@@ -55,8 +55,10 @@ from .cost_modifier_lines import (
     _BUYBACK_REDUCTION,
     _KEYWORD_ABILITY_REDUCTION,
     _KEYWORD_COST_MODIFIER,
+    _ALL_KEYWORD_COSTS_MODIFIER,
     cost_modifiers_for,
     _keyword_cost_modifier,
+    _all_keyword_costs_modifier,
     _keyword_ability_reduction,
     _spell_tax_modifier,
     _sacrifice_symbol_modifier,
@@ -129,6 +131,16 @@ def cost_modifier_claims_line(line: str) -> bool:
         keyword_cost is not None
         and keyword_cost.end() == len(text)
         and _keyword_cost_modifier(keyword_cost) is not None
+    ):
+        return True
+    # "All morph costs cost {2} more." (Exiled Doomsayer) — the same claim
+    # rule: only a keyword whose price something makes (``face_down``'s turn
+    # face up) produces a modifier, and only then is the line claimed.
+    every_cost = _ALL_KEYWORD_COSTS_MODIFIER.match(text)
+    if (
+        every_cost is not None
+        and every_cost.end() == len(text)
+        and _all_keyword_costs_modifier(every_cost) is not None
     ):
         return True
     # Claimed only when the halves pair, for `_sacrifice_symbol_modifier`'s
@@ -905,6 +917,12 @@ def keyword_cost_modifiers(
     "**You** pay" is the permanent's controller (CR 109.5) and "your
     opponents pay" every seat that controller is not, asked of the control
     seam so a Stone that changes hands taxes its old controller.
+
+    *keyword* may also name a **special action's** price: ``"turn_face_up"``
+    (``face_down.TURN_FACE_UP``) is the morph cost CR 702.37e pays, which
+    "All morph costs cost {2} more" (Exiled Doomsayer) taxes for every payer
+    — asked by ``face_down._morph_offer`` and by nothing on the cast path, so
+    the {3} face-down cast ("morph") is untouched.
     """
     if not keyword:
         return 0, 0, []
@@ -914,7 +932,11 @@ def keyword_cost_modifiers(
         for modifier in cost_modifiers_for(permanent.effective_card.oracle_text):
             if modifier.applies_to != keyword:
                 continue
-            if (modifier.controller == "you") != (seat == payer_index):
+            # None is every payer's ("All morph costs cost {2} more",
+            # Exiled Doomsayer).
+            if modifier.controller is not None and (
+                (modifier.controller == "you") != (seat == payer_index)
+            ):
                 continue
             if modifier.reduces:
                 less += modifier.amount

@@ -471,8 +471,15 @@ class AlternativeCastCostsMixin:
         spell_hand_index: int | None,
         x_value: "int | None" = None,
         spell_graveyard_slot: "int | None" = None,
+        refused_as: "str | None" = None,
     ) -> str | None:
         """Why the announced alternative cost can't be paid, or None.
+
+        *refused_as* is how a refusal opens when the price is not a cast's —
+        "Zombie Cutthroat can't be turned face up" for a morph cost
+        (``special_actions``, CR 702.37e: the special action pays "that cost"
+        through this gate, its clauses read by the reader every printed
+        alternative cost goes through). None is a cast's wording, unchanged.
 
         *x_value* is CR 107.3a's announcement, for a cost that counts by it
         ("Sacrifice X Mountains", "Exile X blue cards from your graveyard"):
@@ -501,13 +508,15 @@ class AlternativeCastCostsMixin:
         # keyword (CR 702.34a) and the player is told so; a printed
         # alternative cost keeps the wording it always had.
         its_cost = (
-            f"its {cost.keyword} cost" if cost.keyword
+            "its cost" if refused_as is not None
+            else f"its {cost.keyword} cost" if cost.keyword
             else "its alternative cost"
         )
+        head = refused_as if refused_as is not None else f"{card.name} can't be cast"
         # CR 119.4: a player may pay life only down to 0.
         if cost.pay_life and caster.life < cost.pay_life:
             return (
-                f"{card.name} can't be cast: {caster.name} cannot pay "
+                f"{head}: {caster.name} cannot pay "
                 f"{cost.pay_life} life with {caster.life} remaining (CR 601.2h)"
             )
         if (
@@ -517,7 +526,7 @@ class AlternativeCastCostsMixin:
             caster_index, cost, spell_hand_index=spell_hand_index, spell=card,
         ):
             return (
-                f"{card.name} can't be cast: no card in hand answers "
+                f"{head}: no card in hand answers "
                 f"{its_cost}, {cost.describe()} (CR 601.2h)"
             )
         # "…discard an Island card **and another card**" (Foil). The Island
@@ -531,7 +540,7 @@ class AlternativeCastCostsMixin:
             )
         ) < cost.discard_others:
             return (
-                f"{card.name} can't be cast: not enough other cards in hand "
+                f"{head}: not enough other cards in hand "
                 f"for {its_cost}, {cost.describe()} (CR 601.2h)"
             )
         # "You may **sacrifice two Mountains** rather than pay this spell's
@@ -552,7 +561,7 @@ class AlternativeCastCostsMixin:
                 noun = filter_head_noun(cost.sacrifice_filter)
                 shortfall = f"no {noun}" if wanted == 1 else f"not enough {noun}s"
                 return (
-                    f"{card.name} can't be cast: {shortfall} to sacrifice for "
+                    f"{head}: {shortfall} to sacrifice for "
                     f"{its_cost} (CR 601.2h)"
                 )
         # "…, **exile X blue cards from your graveyard**." (Flash of Insight.)
@@ -567,7 +576,7 @@ class AlternativeCastCostsMixin:
             )
             if len(available) < wanted:
                 return (
-                    f"{card.name} can't be cast: {caster.name}'s graveyard "
+                    f"{head}: {caster.name}'s graveyard "
                     f"holds {len(available)} card(s) {its_cost} can "
                     f"take and it exiles {wanted} (CR 601.2h)"
                 )
@@ -594,7 +603,7 @@ class AlternativeCastCostsMixin:
                 noun = board_noun(cost.return_filter)
                 shortfall = f"no {noun}" if wanted == 1 else f"not enough {noun}s"
                 return (
-                    f"{card.name} can't be cast: {shortfall} to return for "
+                    f"{head}: {shortfall} to return for "
                     f"{its_cost} (CR 601.2h)"
                 )
         # "You may **tap an untapped creature you control** rather than pay this
@@ -614,7 +623,7 @@ class AlternativeCastCostsMixin:
                     else f"not enough untapped {noun}s"
                 )
                 return (
-                    f"{card.name} can't be cast: {shortfall} to tap for "
+                    f"{head}: {shortfall} to tap for "
                     f"{its_cost} (CR 601.2h)"
                 )
         # "…you may **have an opponent gain 3 life** rather than pay this
@@ -633,7 +642,7 @@ class AlternativeCastCostsMixin:
             caster_index
         ) is None:
             return (
-                f"{card.name} can't be cast: no opponent may gain life, so "
+                f"{head}: no opponent may gain life, so "
                 f"{its_cost} cannot be paid (CR 119.7)"
             )
         # "…you may **have each other player gain 6 life**." (Reverent
@@ -652,7 +661,7 @@ class AlternativeCastCostsMixin:
             ]
             if banned:
                 return (
-                    f"{card.name} can't be cast: {', '.join(banned)} can't gain "
+                    f"{head}: {', '.join(banned)} can't gain "
                     f"life, so {its_cost} cannot be paid (CR 119.7)"
                 )
         # "You may **exile the top three black cards of your graveyard** rather
@@ -674,7 +683,7 @@ class AlternativeCastCostsMixin:
                 game=self, owner=caster,
             ):
                 return (
-                    f"{card.name} can't be cast: {caster.name}'s graveyard "
+                    f"{head}: {caster.name}'s graveyard "
                     f"cannot pay {its_cost}, {cost.describe()} "
                     f"(CR 601.2h)"
                 )
@@ -900,8 +909,14 @@ class AlternativeCastCostsMixin:
         other_cards: "list[CardDefinition] | None" = None,
         x_value: "int | None" = None,
         graveyard_slots: "list[int] | None" = None,
+        paying_for: "str | None" = None,
     ) -> None:
         """Perform the announced alternative cost (CR 601.2h).
+
+        *paying_for* is what the log says the price bought when it is not a
+        cast — "turn a face-down creature face up" for a morph cost
+        (``special_actions``, CR 702.37e), which names no hidden card. None is
+        a cast's wording, "cast <card>", unchanged.
 
         *x_value* is the announced X a counted clause pays ("Sacrifice X
         Mountains", "Exile X blue cards from your graveyard"); *graveyard_slots*
@@ -932,6 +947,7 @@ class AlternativeCastCostsMixin:
             return
         caster = self.players[caster_index]
         named = list(named_permanents or ())
+        why = paying_for if paying_for is not None else f"cast {card.name}"
 
         def pick(candidates: "list[Permanent]") -> "Permanent":
             # The caster's own choice while one of theirs is still a candidate
@@ -952,7 +968,7 @@ class AlternativeCastCostsMixin:
         if cost.pay_life:
             caster.life -= cost.pay_life
             self.log.append(
-                f"{caster.name} paid {cost.pay_life} life to cast {card.name}"
+                f"{caster.name} paid {cost.pay_life} life to {why}"
             )
         if cost.sacrifice_filter is not None:
             # Re-enumerated per victim, never sliced off one list: each
@@ -977,7 +993,7 @@ class AlternativeCastCostsMixin:
                 name = victim.card.name
                 if self.sacrifice_permanent(victim) is not None:
                     self.log.append(
-                        f"{caster.name} sacrificed {name} to cast {card.name}"
+                        f"{caster.name} sacrificed {name} to {why}"
                     )
         if cost.return_filter is not None:
             # "…return **two Islands you control** to their owner's hand."
@@ -1000,7 +1016,7 @@ class AlternativeCastCostsMixin:
                 name = giving.card.name
                 return_permanent_to_owners_hand(self, giving, caster)
                 self.log.append(
-                    f"{caster.name} returned {name} to hand to cast {card.name}"
+                    f"{caster.name} returned {name} to hand to {why}"
                 )
         if cost.tap_count:
             # "…**tap an untapped creature you control**…" (Orim's Cure.)
@@ -1020,8 +1036,7 @@ class AlternativeCastCostsMixin:
                 tapping = pick(candidates)
                 self.become_tapped(tapping)
                 self.log.append(
-                    f"{caster.name} tapped {tapping.card.name} to cast "
-                    f"{card.name}"
+                    f"{caster.name} tapped {tapping.card.name} to {why}"
                 )
         if cost.reveal_hand:
             # "…**reveal your hand**…" (Land Grant.) The payment moves nothing;
@@ -1038,7 +1053,7 @@ class AlternativeCastCostsMixin:
             names = [held.name for held in caster.hand]
             self.record_reveal(caster_index, names)
             self.log.append(
-                f"{caster.name} revealed their hand to cast {card.name}: "
+                f"{caster.name} revealed their hand to {why}: "
                 + (", ".join(names) or "(empty)")
             )
         if cost.opponent_gains_life:
@@ -1082,7 +1097,7 @@ class AlternativeCastCostsMixin:
                 self.log.append(
                     f"{caster.name} exiled "
                     + ", ".join(held.name for held in paid)
-                    + f" from their graveyard to cast {card.name}"
+                    + f" from their graveyard to {why}"
                 )
         if cost.exile_graveyard_filter is not None:
             self._pay_alternative_graveyard_exile(
@@ -1109,7 +1124,7 @@ class AlternativeCastCostsMixin:
             # over goes through the same seam, for the same reason.
             self._discard_card(caster, paying, as_cost=True)
             self.log.append(
-                f"{caster.name} discarded {paying.name} to cast {card.name}"
+                f"{caster.name} discarded {paying.name} to {why}"
             )
             # "…**and another card**" (Foil). One card per entry and by
             # identity through the seam, which removes exactly one copy — so a
@@ -1121,7 +1136,7 @@ class AlternativeCastCostsMixin:
                 self.take_card_from_hand(caster, other)
                 self._discard_card(caster, other, as_cost=True)
                 self.log.append(
-                    f"{caster.name} discarded {other.name} to cast {card.name}"
+                    f"{caster.name} discarded {other.name} to {why}"
                 )
             return
         if cost.exile_from_hand is None:
@@ -1145,5 +1160,5 @@ class AlternativeCastCostsMixin:
         self.take_card_from_hand(caster, paying)
         caster.exile.append(paying)
         self.log.append(
-            f"{caster.name} exiled {paying.name} to cast {card.name}"
+            f"{caster.name} exiled {paying.name} to {why}"
         )

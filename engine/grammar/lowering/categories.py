@@ -716,6 +716,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "Copy that spell for each other permanent or player the spell could
     # target." (Radiate.) CR 707.10's copying, beside the copy kinds below.
     "copy_spell_for_each_other_target": "counterspells",
+    # "Copy target instant or sorcery spell. You may choose new targets for
+    # that copy." (Mischievous Quanar; Fork, whose line was a card hook until
+    # Quanar printed the shape a second time.) CR 707.10's copy of a targeted
+    # spell, beside Radiate's.
+    "copy_top_stack_spell": "counterspells",
     # An auction of life with a spell at stake (Mages' Contest). Beside the
     # counter it decides, for the reason Illicit Auction's sits beside the
     # steals: what the sentence is *about* is the spell, and the bidding is how

@@ -49,6 +49,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
+    from .alternative_costs import AlternativeCost
     from .game import Game
     from .models import CardDefinition, Permanent
 
@@ -333,12 +334,14 @@ class SpecialActionOffer:
     to the player it is punishing.
 
     ``mana``, ``sacrifice`` and ``exile_from_graveyard`` are the three prices
-    this pool prints — a mana cost (CR 116.2c, the Licids), one permanent of
-    the taker's choice described by a subject filter (CR 116.2d, Volrath's
-    Curse), and a number of cards of the taker's choice out of their own
-    graveyard (CR 116.2d, Lost in Thought). All are paid by the seam below
-    rather than by the offer's own ``take``, because a cost is a cost wherever
-    it appears: paying it is not part of what the action *does*.
+    the CR 116.2c/d offers print — a mana cost (CR 116.2c, the Licids), one
+    permanent of the taker's choice described by a subject filter (CR 116.2d,
+    Volrath's Curse), and a number of cards of the taker's choice out of their
+    own graveyard (CR 116.2d, Lost in Thought) — and ``clauses`` is a printed
+    cost's every other clause (a morph cost, CR 702.37e). All are paid by the
+    seam below rather than by the offer's own ``take``, because a cost is a
+    cost wherever it appears: paying it is not part of what the action
+    *does*.
 
     ``x_symbols`` is how many ``{X}`` the mana price prints beyond ``mana``
     (Legions' "Morph {X}{X}{R}", Warbreak Trumpeter). CR 107.3d: "the value
@@ -356,6 +359,21 @@ class SpecialActionOffer:
     sacrifice: "dict[str, object] | None" = None
     exile_from_graveyard: int = 0
     x_symbols: int = 0
+    #: A price's clauses that are **not** mana, as the record every printed
+    #: alternative cost is read into (``alternative_costs._read_cost_clauses``
+    #: through an :class:`~engine.alternative_costs.AlternativeCost`): "Pay 5
+    #: life", "Sacrifice two Mountains", "Return a Bird you control to its
+    #: owner's hand", "Discard a Zombie card" — Scourge's morph costs
+    #: (CR 702.37e: "pay that cost", whatever it is). Gated by the Game's
+    #: alternative-cost gate (``_unpayable_alternative_cost``) and paid by its
+    #: payer (``_pay_alternative_cost``), so what "sacrifice two Mountains"
+    #: charges is one answer whether Fireblast or Skirk Volcanist prints it.
+    #: None for every price without one.
+    clauses: "AlternativeCost | None" = None
+    #: What a refusal and a log line say the price is for, when it has
+    #: :attr:`clauses` — "turn a face-down creature face up" — worded so it
+    #: names no hidden card (CR 708.5). Empty for every other offer.
+    purpose: str = ""
 
 
 @dataclass(frozen=True)
@@ -602,7 +620,112 @@ def permanent_special_action_refusal(
             f"{game.players[seat].name} has fewer than "
             f"{offer.exile_from_graveyard} cards in their graveyard"
         )
+    if offer.clauses is not None:
+        # CR 601.2h's question asked of the clauses that are not mana (CR
+        # 118.3: a cost is paid only in full), by the gate every printed
+        # alternative cost is asked through — the payer's life against "Pay 5
+        # life", the Mountains they control against "Sacrifice two Mountains".
+        return game._unpayable_alternative_cost(
+            seat, permanent.card, offer.clauses, spell_hand_index=None,
+            refused_as=f"{game.players[seat].name} can't pay to {offer.purpose}",
+        )
     return None
+
+
+def _clause_payers(
+    game: "Game", seat: int, offer: "SpecialActionOffer",
+    cost_permanent_ids: "list[int] | None",
+    cost_hand_index: "int | None",
+) -> "tuple[list, CardDefinition | None] | str":
+    """Which permanents and which card in hand pay *offer*'s
+    :attr:`~SpecialActionOffer.clauses`: ``(permanents, card)``, or a refusal.
+
+    "Return **a Bird** you control", "Sacrifice **two Mountains**", "Discard
+    **a Zombie card**" are each a choice of the taker's, made as the price is
+    paid (CR 601.2h, through CR 702.37e's "pay that cost"). Named ones are
+    held to the price — by id for a permanent (CR 400.7), by hand position for
+    a card (two copies of a card in hand are one ``CardDefinition``) — out of
+    the very candidate lists the gate counted
+    (``Game._additional_cost_candidates``, ``Game._alternative_cost_payers``):
+    a named object that cannot pay, an id named twice, or fewer or more than
+    the price takes is refused with nothing spent, never slid onto a legal
+    neighbour (CR 601.2h: "Partial payments are not allowed"). Nothing named is
+    the deterministic pick every other cost's default makes.
+    """
+    clauses = offer.clauses
+    named: list = []
+    if cost_permanent_ids:
+        payment = game.alternative_cost_permanent_payment(clauses)
+        if payment is None:
+            return "that price names no permanent to choose"
+        verb, count = payment
+        if len(set(cost_permanent_ids)) != len(cost_permanent_ids) or (
+            len(cost_permanent_ids) != count
+        ):
+            return f"that price takes {count} permanent(s) to {verb}, each named once"
+        candidates = game._additional_cost_candidates(seat, clauses, giving_up=verb)
+        for permanent_id in cost_permanent_ids:
+            found = game.permanent_by_id(permanent_id)
+            if found is None or not any(found is held for held in candidates):
+                return f"the permanent named to {verb} cannot pay that price"
+            named.append(found)
+    chosen = None
+    takes_a_card = (
+        clauses.discard_from_hand is not None or clauses.exile_from_hand is not None
+    )
+    if cost_hand_index is not None and not takes_a_card:
+        return "that price takes no card from the hand"
+    if takes_a_card:
+        hand = game.players[seat].hand
+        payers = game._alternative_cost_payers(seat, clauses, spell_hand_index=None)
+        if cost_hand_index is None:
+            chosen = payers[0] if payers else None
+        elif not (0 <= cost_hand_index < len(hand)) or not any(
+            hand[cost_hand_index] is payer for payer in payers
+        ):
+            return f"the card at hand position {cost_hand_index} cannot pay that price"
+        else:
+            chosen = hand[cost_hand_index]
+    return named, chosen
+
+
+def _clause_entry(game: "Game", seat: int, offer: "SpecialActionOffer") -> dict:
+    """What a client needs to ask for *offer*'s clauses before it sends the
+    action: the life it costs, which permanents may pay its sacrifice /
+    return / tap and how many (by id), and which cards in hand may pay its
+    discard or exile (by hand position) — the lists :func:`_clause_payers`
+    holds a named answer to. Empty for a price with none."""
+    clauses = offer.clauses
+    if clauses is None:
+        return {}
+    extras: dict = {"cost_text": clauses.describe()}
+    if clauses.pay_life:
+        extras["pay_life"] = clauses.pay_life
+    payment = game.alternative_cost_permanent_payment(clauses)
+    if payment is not None:
+        verb, count = payment
+        extras["cost_permanents"] = {
+            "verb": verb,
+            "count": count,
+            "choices": [
+                {"permanent_id": held.permanent_id, "name": held.card.name}
+                for held in game._additional_cost_candidates(
+                    seat, clauses, giving_up=verb,
+                )
+            ],
+        }
+    if clauses.discard_from_hand is not None or clauses.exile_from_hand is not None:
+        hand = game.players[seat].hand
+        payers = game._alternative_cost_payers(seat, clauses, spell_hand_index=None)
+        extras["cost_hand_choices"] = [
+            {"hand_index": position, "name": held.name}
+            for position, held in enumerate(hand)
+            if any(held is payer for payer in payers)
+        ]
+        extras["cost_hand_verb"] = (
+            "discard" if clauses.discard_from_hand is not None else "exile"
+        )
+    return extras
 
 
 def _sacrificeable(game: "Game", seat: int, offer: "SpecialActionOffer") -> list:
@@ -662,8 +785,16 @@ def take_permanent_special_action(
     sacrificed: "Permanent | None" = None,
     exiled_slots: "list[int] | None" = None,
     x_value: "int | None" = None,
+    cost_permanent_ids: "list[int] | None" = None,
+    cost_hand_index: "int | None" = None,
 ) -> str | None:
     """Perform *kind* with *permanent* for *seat*; a refusal, or None on success.
+
+    *cost_permanent_ids* and *cost_hand_index* name what pays a price's
+    clauses that are not mana (:attr:`SpecialActionOffer.clauses` — "Return a
+    Bird you control …", "Discard a Zombie card", Scourge's morph costs): the
+    permanents by id, the card by hand position, held to the price by
+    :func:`_clause_payers`. None is the deterministic pick.
 
     *x_value* is the X the taker chooses for a price printing ``{X}`` — CR
     107.3d's "chosen by the player taking the special action immediately
@@ -712,6 +843,16 @@ def take_permanent_special_action(
             victim = sacrificed
         else:
             victim = game.default_sacrifice_pick(candidates)
+    clause_payers: "tuple[list, CardDefinition | None]" = ([], None)
+    if offer.clauses is not None:
+        resolved = _clause_payers(
+            game, seat, offer, cost_permanent_ids, cost_hand_index,
+        )
+        if isinstance(resolved, str):
+            return resolved
+        clause_payers = resolved
+    elif cost_permanent_ids or cost_hand_index is not None:
+        return "that price names nothing to choose"
     plan = _payment_plan(game, seat, price) if price else None
     if plan:
         # The planned lands are tapped for mana through the one payer
@@ -741,6 +882,17 @@ def take_permanent_special_action(
             f"{taker.name} exiled "
             + ", ".join(card.name for card in cards)
             + f" from their graveyard ({permanent.card.name}, CR 116.2d)"
+        )
+    if offer.clauses is not None:
+        # The rest of the price, at the moment the mana was paid (CR 601.2h
+        # pays every part at once), through the payer every printed
+        # alternative cost is paid by — the discard as a cost through
+        # ``_discard_card`` (CR 701.9a), the return through the bounce seam,
+        # the counted sacrifice re-enumerated per permanent.
+        named, chosen = clause_payers
+        game._pay_alternative_cost(
+            seat, permanent.card, offer.clauses, chosen,
+            named_permanents=named, paying_for=offer.purpose,
         )
     if offer.x_symbols:
         spec.take(game, seat, permanent, x_value=max(0, int(x_value or 0)))
@@ -803,6 +955,13 @@ def available_permanent_special_actions(game: "Game", seat: int) -> list[dict]:
                         {"permanent_id": candidate.permanent_id, "name": candidate.card.name}
                         for candidate in _sacrificeable(game, seat, offer)
                     ]
+                # …and a price's clauses that are not mana (a morph cost, CR
+                # 702.37e): the life, and which permanents and hand cards may
+                # pay it, so a client asks before it sends the action's
+                # ``cost_permanent_ids`` / ``cost_hand_index``. Only on such
+                # an offer: every other entry's shape is unchanged.
+                if offer is not None and offer.clauses is not None:
+                    entry.update(_clause_entry(game, seat, offer))
                 entries.append(entry)
     return entries
 

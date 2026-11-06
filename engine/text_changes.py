@@ -425,6 +425,22 @@ def carry_spell_text_changes(changes, perm: "Permanent") -> bool:
     return True
 
 
+def face_up_text_card(perm: Permanent) -> "CardDefinition":
+    """What a face-down *perm* would say **if it were face up** (CR 702.37e):
+    its face-up copiable values (``copies.face_up_copiable_card``, CR 708.10)
+    with the text changes applied to the permanent folded on (layer 3) — CR
+    708.8 keeps every effect applied to the face-down permanent applying once
+    it is face up. Putrid Raptor's 2004-10-04 ruling is the case: a creature-
+    type change made while it is face down changes the card its morph cost
+    discards. A face-up *perm* answers what it says now.
+    """
+    from .copies import face_up_copiable_card
+
+    if getattr(perm.card, "face_down_of", None) is None:
+        return perm.effective_card
+    return apply_text_changes(face_up_copiable_card(perm), text_changes(perm))
+
+
 def current_text_card(holder) -> "CardDefinition":
     """What *holder* — a permanent or a spell on the stack — says right now.
 
@@ -710,6 +726,7 @@ __all__ = [
     "TEXT_CHANGE_EFFECTS", "TEXT_CHANGE_NEW_CREATURE_TYPE",
     "TEXT_CHANGE_OLD_CREATURE_TYPE", "apply_text_changes",
     "carry_spell_text_changes", "change_color_word", "change_creature_word",
+    "face_up_text_card",
     "change_land_word", "changed_words", "creature_type_plural",
     "creature_types_written", "current_text_card", "has_text_changes",
     "one_pass", "spell_text_card", "spell_text_changes", "spell_text_of",

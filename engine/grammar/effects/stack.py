@@ -42,7 +42,7 @@ from ..phrases import (_accept_conjoined_life_cost, _accept_mana_alternatives,
 from ..readers import accept_spell_type_union
 from ..records import _parse_for_each_this_way
 from ..sacrifices import _parse_counted_sacrifice
-from ..vocabulary import NUMBER_WORDS
+from ..vocabulary import COLOR_WORDS, NUMBER_WORDS
 
 
 def _parse_unless_pays(stream: TokenStream) -> "tuple[ast.ManaCost | None, int]":
@@ -633,6 +633,48 @@ def _parse_copy_that_spell(stream: TokenStream) -> ast.Statement:
     ):
         stream.expect_word(word)
     return ast.CopyThatSpell()
+
+
+def _parse_copy_target_spell(stream: TokenStream) -> "ast.CopyTargetSpell | None":
+    """``Copy target <type>[ or <type>] spell[, except that the copy is
+    <colour>]. You may choose new targets for [the|that] copy.`` (Mischievous
+    Quanar; Fork.)
+
+    Both sentences, every word, or nothing — refused without consuming, so a
+    "Copy that spell" line still reaches its own production behind this one.
+    The type union is the one Radiate's and Overmaster's productions read
+    (``readers.accept_spell_type_union``); the CR 707.9b exception is a colour
+    word (``COLOR_WORDS``), and anything else after the comma leaves the line
+    unread rather than copied without its rider. The new-targets sentence is
+    required for :func:`_parse_copy_that_spell`'s reason, in either article.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("copy", "target"):
+        return None
+    card_types = accept_spell_type_union(stream, noun="spell")
+    if card_types is None:
+        stream.reset(mark)
+        return None
+    copy_color = None
+    if stream.accept_punct(","):
+        if not stream.accept_phrase("except", "that", "the", "copy", "is"):
+            stream.reset(mark)
+            return None
+        word = stream.peek_word()
+        if word is None or word not in COLOR_WORDS:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        copy_color = word
+    if not (
+        stream.accept_punct(".")
+        and stream.accept_phrase("you", "may", "choose", "new", "targets", "for")
+        and stream.accept_word("that", "the")
+        and stream.accept_word("copy")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.CopyTargetSpell(card_types, copy_color=copy_color)
 
 
 def _parse_copy_this_spell(stream: TokenStream) -> ast.Statement | None:

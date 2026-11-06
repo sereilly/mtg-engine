@@ -1184,6 +1184,23 @@ def _copy_for_each_other_target_spec(payload: dict) -> dict:
     return spec
 
 
+def _copy_target_spell_spec(payload: dict) -> dict:
+    """"Copy target instant or sorcery spell. You may choose new targets for
+    that copy." (Mischievous Quanar's face-up trigger; Fork.) The kind's own
+    stack picker (``instruction_targets``) whatever the payload carries: the
+    lowering writes a ``targets`` description — the record that the line said
+    "target", which a trigger's CR 603.3d announcement asks for
+    (``targeting.announces_a_target``) — and that description's generic
+    reading would drop ``copies_spell`` (the re-aim a cast's client runs) and
+    the instant-or-sorcery union ``stack_instant_sorcery_only`` reads, the one
+    union ``lowering.stack._lower_copy_target_spell`` admits."""
+    return {
+        "kind": "stack",
+        "copies_spell": True,
+        "stack_instant_sorcery_only": True,
+    }
+
+
 def _chosen_source_redirect_spec(payload: dict) -> dict:
     """Nova Pentacle's source picker, and General's Regalia's two announcements.
 
@@ -1244,6 +1261,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "redirect_damage_from_chosen_source_until_eot": _chosen_source_redirect_spec,
     "choose_new_spell_target": _retarget_spec,
     "copy_spell_for_each_other_target": _copy_for_each_other_target_spec,
+    "copy_top_stack_spell": _copy_target_spell_spec,
     "change_target_spell_target": _retarget_spec,
     "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,
     # "Target player shuffles up to three target cards from their graveyard

@@ -248,6 +248,7 @@ from .retargeting import _parse_change_event_targets, _parse_change_target
 from .stack import (
     _parse_bid_life_contest,
     _parse_put_exiled_card_on_stack_as_copy,
+    _parse_copy_target_spell,
     _parse_copy_that_spell,
     _parse_copy_this_spell,
     _parse_counter,
@@ -471,6 +472,7 @@ __all__ = [
     "_parse_change_event_targets",
     "_parse_change_target",
     "_parse_bid_life_contest",
+    "_parse_copy_target_spell",
     "_parse_copy_that_spell",
     "_parse_copy_this_spell",
     "_parse_counter",

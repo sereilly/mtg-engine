@@ -531,3 +531,24 @@ class CopySpellForEachOtherTarget:
 
     card_types: tuple[str, ...]
     each_other: str = "permanent_or_player"
+
+
+@dataclass(frozen=True)
+class CopyTargetSpell:
+    """"Copy target instant or sorcery spell. You may choose new targets for
+    that copy." (Mischievous Quanar's face-up trigger; Fork prints it with
+    ", except that the copy is red" before the full stop.)
+
+    CR 707.10's copy of a spell the ability **targets** — chosen as the spell
+    or ability is put on the stack (CR 601.2c / 603.3d), unlike
+    :class:`CopyThatSpell`'s spell a cast trigger fired on — with CR 707.10c's
+    offer of new targets, which the second sentence prints and the node
+    requires.
+
+    ``card_types`` is the printed union of the targeted spell ("instant",
+    "sorcery"); ``copy_color`` is the colour a CR 707.9b exception sets on the
+    copy ("red"), or None when the copy keeps the original's.
+    """
+
+    card_types: tuple[str, ...]
+    copy_color: str | None = None

@@ -1362,6 +1362,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("permanent_returned_to_hand",
      r"whenever (?P<returned_subject>(?:a|an|another) [^,]+?) is returned to "
      r"a player's hand"),
+    # "Whenever **a permanent** is turned face up, …" (Aphetto Runecaster,
+    # Aven Farseer, Bonethorn Valesk; Scourge). CR 708.8's event about any
+    # permanent, any player's ("any permanent, not just a creature", the
+    # three cards' 2007-05-01 ruling), announced by ``face_down.turn_face_up``
+    # on every road up. The noun phrase is delimited here and read by the noun
+    # parser, so "a creature you control" is the same row with a narrower
+    # filter (``event_filters._turned_face_up_filter``); an Aura's "enchanted
+    # creature" spelling is the WHEN table's row of the same kind.
+    ("permanent_turned_face_up",
+     r"whenever (?P<turned_subject>(?:a|an|another) [^,]+?) is turned face up"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
     # "Whenever one or more Cats you control deal combat damage to a player"
     # (Feline Sovereign). A **batched** trigger: however many creatures dealt

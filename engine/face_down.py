@@ -56,9 +56,10 @@ from __future__ import annotations
 
 import dataclasses
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .copies import FACE_DOWN_AS_IT_LEFT, face_up_copiable_card
+from .copies import FACE_DOWN_AS_IT_LEFT
 from .models import CardDefinition
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -78,6 +79,12 @@ TURN_FACE_UP = "turn_face_up"
 #: The trigger condition kind of "When this creature is turned face up"
 #: (Legions, Scourge), announced by :func:`turn_face_up` and by nothing else.
 TURNED_FACE_UP = "turned_face_up"
+
+#: The trigger condition kind of "Whenever a permanent is turned face up" and
+#: of an Aura's "When enchanted creature is turned face up" (Scourge): the
+#: same event watched from anywhere on the board, announced on the event bus by
+#: :func:`turn_face_up` beside :data:`TURNED_FACE_UP`.
+PERMANENT_TURNED_FACE_UP = "permanent_turned_face_up"
 
 #: Set on a permanent **Illusionary Mask** put face down: the record of which
 #: rule turns it face up (CR 708.6, 708.7) — the Mask's "if [it] would assign
@@ -198,6 +205,11 @@ _MORPH_PART = re.compile(r"^morph\s+(?P<cost>(?:\{[^{}]+\})+)$")
 #: white card", Legions). Megamorph is a different word and does not match.
 _MORPH_SHAPE = re.compile(r"^morph\s*(?:[—–-]|\{)", re.IGNORECASE)
 
+#: "Morph—Return a Bird you control to its owner's hand" — the dash a cost
+#: that is not only mana is printed behind (CR 702.37a's "[cost]"), the cost
+#: kept in its printed case.
+_MORPH_DASH_PART = re.compile(r"^morph\s*[—–-]\s*(?P<cost>.+)$", re.IGNORECASE)
+
 _REMINDER = re.compile(r"\([^)]*\)")
 
 #: CR 702.37a's alternative cost, in the rule's own words: what the cost's
@@ -217,16 +229,19 @@ def _stripped(line: str) -> str:
 
 
 def morph_cost_text(part: str) -> str | None:
-    """The morph cost one keyword-line *part* prints, as mana symbols in upper
-    case ("{1}{G}{G}"), or None when the part is not a morph this engine can
-    charge.
+    """The morph cost one keyword-line *part* prints — mana symbols in upper
+    case ("{1}{G}{G}"), or a cost behind a dash as printed ("Pay 5 life") —
+    or None when the part is not a morph this engine can charge.
 
     The keyword-line gate's admission test (``keyword_lines.
     _qualified_keyword_part``), for ``madness.madness_cost_text``'s reason:
     the reader that charges the cost is the one that admits the line
-    (:func:`morph_mana`). A hybrid or Phyrexian symbol refuses, and a non-mana
-    cost behind a dash refuses, so a card printing one stays unsupported
-    naming the line rather than turning face up for nothing.
+    (:func:`morph_mana`, :func:`morph_price`). A hybrid or Phyrexian symbol
+    refuses, and so does a cost behind a dash any clause of which the cost
+    reader cannot charge ("Morph—Reveal a white card"), so a card printing one
+    stays unsupported naming the line rather than turning face up for
+    nothing. Scourge's four ("Pay 5 life", "Sacrifice two Mountains", "Return
+    a Bird you control to its owner's hand", "Discard a Zombie card") read.
 
     An ``{X}`` is admitted (Legions: "Morph {X}{B}{B}", Bane of the Living;
     "Morph {X}{X}{R}", Warbreak Trumpeter): CR 107.3d has the player taking
@@ -236,13 +251,89 @@ def morph_cost_text(part: str) -> str | None:
     triggers, CR 702.37f's "other abilities of that permanent may also refer
     to X".
     """
-    match = _MORPH_PART.match(_stripped(part).lower())
-    if match is None:
+    stripped = _stripped(part)
+    match = _MORPH_PART.match(stripped.lower())
+    if match is not None:
+        cost = match.group("cost").upper()
+        if morph_mana(cost) is None:
+            return None
+        return cost
+    # "Morph—**Pay 5 life**." (Zombie Cutthroat; Scourge prints four such
+    # costs.) CR 702.37a's "[cost]" is any cost, and a cost that is not only
+    # mana is printed behind a dash. Returned as printed, first letter up —
+    # "Pay 5 life" — and admitted only when every clause of it reads
+    # (:func:`morph_price`), so "Morph—Reveal a white card" still refuses its
+    # line rather than turning face up for nothing.
+    dashed = _MORPH_DASH_PART.match(stripped)
+    if dashed is None:
         return None
-    cost = match.group("cost").upper()
-    if morph_mana(cost) is None:
+    cost = dashed.group("cost").strip()
+    cost = cost[:1].upper() + cost[1:]
+    return cost if morph_price(cost) is not None else None
+
+
+@dataclass(frozen=True)
+class MorphPrice:
+    """What paying one printed morph cost takes (CR 702.37e: "pay that cost"):
+    its mana with each ``{X}`` as 0 (``x_symbols`` says how many — CR 107.3d
+    has the taker choose X), and its clauses that are not mana, read into the
+    record every printed alternative cost is read into
+    (``alternative_costs._read_cost_clauses``), or None for a mana-only cost.
+    """
+
+    mana: "dict[str, int]"
+    x_symbols: int = 0
+    clauses: "AlternativeCost | None" = None
+
+
+#: The clause fields a morph cost cannot carry: each needs a spell being cast
+#: (a colour to share, an X the cast announces, a spell whose effect reads
+#: what its cost exiled), and the special action is none of those. A cost
+#: printing one refuses its line.
+_SPELL_ONLY_CLAUSES = (
+    "shares_color_with_spell", "sacrifice_count_x", "exile_graveyard_count_x",
+    "exile_graveyard_filter",
+)
+
+
+def morph_price(printed: str | None) -> "MorphPrice | None":
+    """The :class:`MorphPrice` of a printed morph cost — "{1}{U}{U}", "Pay 5
+    life", "{2}, Sacrifice two Mountains" — or None when any part of it is one
+    this engine cannot charge (an unread clause, a hybrid symbol, a clause
+    only a cast can pay).
+
+    Mana first, read as mana; whatever follows goes through
+    ``alternative_costs._read_cost_clauses``, flashback's arrangement
+    (``flashback._read_cost``): what "sacrifice two Mountains" charges is one
+    answer whether Fireblast's alternative cost, Lava Dart's flashback or
+    Skirk Volcanist's morph prints it, and the gate and payer behind those
+    fields already exist (``special_actions`` asks them).
+    """
+    if not printed:
         return None
-    return cost
+    from .alternative_costs import AlternativeCost, _read_cost_clauses
+    from .flashback import _COST_PARTS, _lowered_clauses
+
+    parts = _COST_PARTS.match(_lowered_clauses(printed.strip()))
+    if parts is None:
+        return None
+    mana_text, rest = parts.group("mana"), parts.group("rest")
+    if not mana_text and not rest:
+        return None
+    mana: "dict[str, int] | None" = {}
+    if mana_text:
+        mana = morph_mana(mana_text.upper())
+        if mana is None:
+            return None
+    clauses = None
+    if rest:
+        fields = _read_cost_clauses(rest.lower())
+        if fields is None or any(fields.get(name) for name in _SPELL_ONLY_CLAUSES):
+            return None
+        clauses = AlternativeCost(f"its morph cost, {printed}", **fields)
+    return MorphPrice(
+        mana=dict(mana or {}), x_symbols=morph_x_symbols(mana_text), clauses=clauses,
+    )
 
 
 def morph_x_symbols(printed: str | None) -> int:
@@ -311,12 +402,23 @@ def face_up_morph_cost(permanent) -> str | None:
     no morph, but face up it would be the creature it copied — morph and all.
     A face-down spell, or a permanent with no copy effect, answers off the
     hidden card exactly as before.
+
+    **And with the text changes applied to the permanent** (CR 612, layer 3;
+    CR 708.8: "Any effects that have been applied to the face-down permanent
+    still apply to the face-up permanent"). Putrid Raptor's ruling
+    (2004-10-04): "You can use a text-changing effect that changes creature
+    types on this card while is it face down to change Zombie to something
+    else. This will change the type of card you have to discard to turn it
+    face up." So "Discard a Zombie card" reads "Discard a Goblin card" under
+    an Artificial Evolution cast on the face-down creature.
     """
     if hidden_card_of(permanent) is None:
         return None
     if getattr(permanent, "metadata", None) is None:
         return morph_cost(hidden_card_of(permanent))
-    return morph_cost(face_up_copiable_card(permanent))
+    from .text_changes import face_up_text_card
+
+    return morph_cost(face_up_text_card(permanent))
 
 
 def morph_alternative_cost(card) -> "AlternativeCost | None":
@@ -475,11 +577,19 @@ def turn_face_up(
 def _announce_turned_face_up(
     game: "Game", permanent: "Permanent", controller, *, x_value: "int | None" = None,
 ) -> None:
-    """Put the just-turned permanent's own "When this creature is turned face
-    up" abilities on the stack (CR 603.3), in one CR 603.3b window. The
-    dispatcher of :data:`TURNED_FACE_UP`. *x_value* rides each one as the X
-    its text refers to (CR 702.37f), as an entry trigger carries its spell's
-    (CR 107.3m)."""
+    """Put the abilities the turn sets off on the stack (CR 603.3), in one
+    CR 603.3b window: the just-turned permanent's own "When this creature is
+    turned face up" (:data:`TURNED_FACE_UP`, dispatched here) and every
+    permanent's "Whenever a permanent is turned face up" — an Aura's "When
+    enchanted creature is turned face up" among them
+    (:data:`PERMANENT_TURNED_FACE_UP`, announced here on the event bus and
+    narrowed by ``event_filters._turned_face_up_filter``). One window, so the
+    two kinds are one batch in APNAP order with each seat ordering its own.
+
+    *x_value* rides each of the permanent's own as the X its text refers to
+    (CR 702.37f), as an entry trigger carries its spell's (CR 107.3m); another
+    permanent's ability has no X of the morph cost's to refer to."""
+    from .events import emit
     from .trigger_utils import matching_triggers
 
     if controller is None:
@@ -487,8 +597,6 @@ def _announce_turned_face_up(
     found = list(matching_triggers(
         permanent.effective_card, condition_kinds={TURNED_FACE_UP},
     ))
-    if not found:
-        return
     with game.putting_triggers_on_stack():
         for trig in found:
             game._enqueue_triggered_ability(
@@ -500,6 +608,16 @@ def _announce_turned_face_up(
                 x_value=x_value,
             )
             game.log.append(f"{permanent.card.name} triggered (turned face up)")
+        # The permanent turned up is the object the event is about, frozen by
+        # id (CR 400.7) for an effect that acts on it, and its controller for
+        # one that names them (CR 603.10).
+        emit(
+            game, PERMANENT_TURNED_FACE_UP,
+            subject=permanent,
+            about_permanent_id=permanent.permanent_id,
+            event_subject_permanent_id=permanent.permanent_id,
+            event_subject_controller=controller,
+        )
 
 
 def turn_face_down(game: "Game", permanent: "Permanent") -> bool:
@@ -597,18 +715,46 @@ def _morph_offer(game: "Game", permanent: "Permanent"):
 
     A morph cost printing ``{X}`` is offered at its fixed part, with the count
     of X symbols beside it (``SpecialActionOffer.x_symbols``): the seam adds X
-    generic per symbol once the taker has chosen X (CR 107.3d).
+    generic per symbol once the taker has chosen X (CR 107.3d). A cost that is
+    not only mana ("Pay 5 life", Scourge) offers its clauses beside the mana
+    (``SpecialActionOffer.clauses``), gated and paid by the seam.
+
+    **What the board adds to a morph cost** is applied here, where the price
+    is made: "All morph costs cost {2} more. (This doesn't affect the cost to
+    cast creature spells face down.)" (Exiled Doomsayer) — read under the
+    special action's own kind (:data:`TURN_FACE_UP`) by
+    ``cost_modifiers.keyword_cost_modifiers``, never under :data:`MORPH`, the
+    {3} face-down cast's, which the reminder text says it leaves alone. The
+    increase before the reduction and a reduction off the generic part alone
+    (CR 601.2f, 118.7a; ``reduce_cost``), the order the cast path keeps; a
+    non-mana cost taxed {2} is a mixed one (pay 5 life *and* {2}).
     """
+    from .cost_modifier_lines import CostReduction
+    from .cost_modifiers import keyword_cost_modifiers, reduce_cost
     from .special_actions import SpecialActionOffer
 
     printed = face_up_morph_cost(permanent)
     if printed is None:
         return None
+    price = morph_price(printed)
+    if price is None:
+        return None
     controller = game.controller_index_of(permanent)
     if controller is None:
         return None
+    mana = dict(price.mana)
+    more, less, _by = keyword_cost_modifiers(game, controller, TURN_FACE_UP)
+    if more:
+        mana["generic"] = int(mana.get("generic", 0)) + more
+    if less:
+        mana = {
+            symbol: amount
+            for symbol, amount in reduce_cost(mana, CostReduction(generic=less)).items()
+            if amount
+        }
     return SpecialActionOffer(
-        seat=controller, mana=morph_mana(printed), x_symbols=morph_x_symbols(printed),
+        seat=controller, mana=mana, x_symbols=price.x_symbols,
+        clauses=price.clauses, purpose="turn a face-down creature face up",
     )
 
 
@@ -626,9 +772,21 @@ def _take_morph(
 def _morph_entry_extras(game: "Game", permanent: "Permanent") -> dict:
     """What the client needs to show the offer: the price (CR 702.37e shows
     it to all players as the action is taken; before then the offer is the
-    controller's alone, which is who this entry is listed for)."""
+    controller's alone, which is who this entry is listed for) — and, where
+    the board changes it, by how much generic mana (``morph_cost_modifier``:
+    +2 under an Exiled Doomsayer), so the offer shows what the seam charges."""
+    from .cost_modifiers import keyword_cost_modifiers
+
     printed = face_up_morph_cost(permanent)
-    return {"morph_cost": printed} if printed else {}
+    if not printed:
+        return {}
+    extras: dict = {"morph_cost": printed}
+    controller = game.controller_index_of(permanent)
+    if controller is not None:
+        more, less, _by = keyword_cost_modifiers(game, controller, TURN_FACE_UP)
+        if more or less:
+            extras["morph_cost_modifier"] = more - less
+    return extras
 
 
 def _register() -> None:
@@ -652,6 +810,7 @@ __all__ = [
     "MASK_FACE_DOWN",
     "MORPH",
     "MORPH_CAST_COST",
+    "PERMANENT_TURNED_FACE_UP",
     "TURNED_FACE_UP",
     "TURN_FACE_UP",
     "announced_morph_cost",

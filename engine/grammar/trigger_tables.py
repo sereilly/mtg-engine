@@ -480,6 +480,12 @@ _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # read under the same kind `engine/trigger_conditions.py`'s table gives it.
     (("is", "returned", "to", "a", "player", "'s", "hand"),
      "permanent_returned_to_hand"),
+    # "Whenever **a permanent** is turned face up, …" (Aphetto Runecaster,
+    # Aven Farseer, Bonethorn Valesk.) CR 708.8's event about any permanent,
+    # the source's own "When this creature is turned face up" (``triggers.py``)
+    # widened to the board — subject-led for the rows above' reason, and read
+    # under the kind ``engine/trigger_conditions.py``'s table gives it.
+    (("is", "turned", "face", "up"), "permanent_turned_face_up"),
     # "Whenever **a creature** is dealt damage, destroy it." (Death Pits of
     # Rath.) The same event Fungusaur's "whenever **this** creature is dealt
     # damage" names and Binding Agony's "whenever **enchanted** creature is
