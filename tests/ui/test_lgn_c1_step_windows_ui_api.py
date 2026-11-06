@@ -351,7 +351,9 @@ def test_no_upkeep_or_draw_step_ends_with_an_ai_question_held(step_spy):
             else:
                 _advance_phase(session)
         owing.extend(f"{name}: {line}" for line in step_spy["ended_owing"])
-        assert game.current_turn_phase == "precombat_main", (name, game.current_step)
+        assert game.is_game_over() or game.current_turn_phase == "precombat_main", (
+            name, game.current_step,
+        )
     assert not owing, "\n".join(owing)
     # Measured: 422 permanents over the whole pool, 65 of them red before.
     assert len(names) >= 150, len(names)

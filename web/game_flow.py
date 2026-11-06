@@ -255,8 +255,17 @@ def _ai_step(session: Session) -> bool:
     # AI's combat trick after a person's blocks (CR 509.2 gives it priority
     # first). This is the simulator's answer in the same windows.
     if not sorcery_speed_ok:
+        # Bounded per step as the simulator bounds one round of priority
+        # (``Game.MAX_PRIORITY_ACTIONS``): each answer pauses for the round,
+        # and a seat whose abilities cost nothing it lacks (a pump with no
+        # mana enforced) would otherwise answer every time it is asked.
+        spent = _doors_spent(session)
+        answered = sum(1 for door in spent if door.startswith("priority"))
+        if answered >= game.MAX_PRIORITY_ACTIONS:
+            return True
         act = act_at_priority(game, seat)
         if act is not None and act.supported:
+            spent.add(f"priority:{answered}")
             game.note_priority_action_taken(seat)
             _auto_resolve_ai_pending(session)
             if has_human_opponent and game.stack:
