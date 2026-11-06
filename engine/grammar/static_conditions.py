@@ -35,7 +35,8 @@ from ..static_bonuses import RECIPIENT_SUBJECT
 from ..subject_filters import OBJECT_ONLY_FILTER_KEYS
 from . import ast
 from .errors import LoweringError
-from .lowering import _is_enchanted, _lower_condition, _lower_pump, _signed
+from .lowering import (_filter_payload, _is_enchanted, _lower_condition,
+                       _lower_pump, _signed)
 
 
 def _lower_anthem_condition_payload(
@@ -582,6 +583,15 @@ def _lower_self_conditional_static(
     # layers, and an Aura on a creature something has recoloured switches arms
     # by itself.
     colour = _attached_colour_condition(node.condition) if attached else None
+    # "…**as long as it's a Zombie**. Otherwise, it gets -3/-3." (Clutch of
+    # Undeath.) The same pronoun about the same subject, with a type where
+    # Phyrexian Boon has a colour: the parse reads "it's a <noun>" as a test on
+    # a revealed card, which an "as long as" clause about an Aura's host is
+    # not — nothing revealed anything — so it is answered here, as the host
+    # filter ``attached_matches`` asks through ``subject_matches`` (layer 4:
+    # an Aura on a creature something made a Zombie switches arms itself).
+    if colour is None and attached:
+        colour = _attached_type_condition(node.condition)
     # "…unless **it shares a color with the most common color** …" (Heroic
     # Defiance). The second pronoun-about-the-subject clause, unreadable by the
     # general lowering for the first one's reason: a static chooses no target.
@@ -736,6 +746,32 @@ def _add_otherwise_arm(
         )
     payload["otherwise_power"] = other_power
     payload["otherwise_toughness"] = other_toughness
+
+
+def _attached_type_condition(condition) -> dict | None:
+    """``as long as it's a <type>`` about an Aura's host, as a payload — the
+    type twin of :func:`_attached_colour_condition`, or None.
+
+    "Enchanted creature gets +3/+3 as long as it's a Zombie." (Clutch of
+    Undeath.) The noun phrase is a filter like every other, built by the one
+    builder (``_filter_payload``, which refuses a narrowing with no payload
+    form) and asked of the host by ``subject_matches``, so a key the matcher
+    cannot test sends the line back to the general lowering — which refuses
+    it by name — rather than admitting it with the word dropped. A negated
+    clause has no printing and ``attached_matches`` has no negation, so it is
+    None for the colour twin's reason.
+    """
+    from ..subject_filters import untestable_filter_keys
+
+    if not isinstance(condition, ast.RevealedCardIs) or condition.negated:
+        return None
+    try:
+        described = _filter_payload(condition.filter)
+    except LoweringError:
+        return None
+    if not described or untestable_filter_keys(described):
+        return None
+    return {"kind": "attached_matches", "filter": described}
 
 
 def _attached_colour_condition(condition) -> dict | None:

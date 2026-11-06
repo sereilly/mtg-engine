@@ -49,7 +49,8 @@ from __future__ import annotations
 from ...oracle_types import (BASE_PT_SET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              CONTROL_EXCHANGED_PERMANENTS,
                              COUNTERS_PLACED_THIS_WAY,
-                             COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
+                             COUNTERS_REMOVED, EXILED_THIS_WAY,
+                             HAND_CARDS_TO_LIBRARY,
                              LIFE_LOST_THIS_WAY,
                              PER_OBJECT_SEAT_RECORDS, SACRIFICED_COUNT,
                              SEARCHED_PERMANENTS)
@@ -257,6 +258,14 @@ _PRODUCED_QUANTITIES: frozenset[str] = frozenset({
     # resolves against, and admitting the list would let "that much" name a
     # pile.
     "exiled_count",
+    # How many permanents an exile sweep took (``exile_all_matching``, tokens
+    # included), which is what "exile all creatures you control. Then create
+    # **that many** 5/5 red Dragon creature tokens" reads (Day of the Dragons;
+    # its ruling of 2017-11-17: "Token creatures will count to determine how
+    # many Dragon tokens you create"). A count already — the list beside it is
+    # ``EXILED_THIS_WAY_OBJECTS``, which stays out for ``exiled_count``'s
+    # reason.
+    EXILED_THIS_WAY,
     # How many cards a "puts the cards from their hand on top of their library"
     # step moved (Jester's Mask), which is what the search behind it counts.
     HAND_CARDS_TO_LIBRARY,

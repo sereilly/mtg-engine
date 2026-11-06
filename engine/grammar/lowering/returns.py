@@ -806,6 +806,21 @@ def _lower_return_to_zone(
         and filt.mana_value is not None
     ):
         gated = dataclasses.replace(gated, mana_value=None)
+    # "Return target **Dragon** permanent card from your graveyard to the
+    # battlefield." (Bladewing the Risen.) The Griffin's subtype one zone over:
+    # it travels as ``graveyard_subtypes``, the key the reanimation's handler
+    # already reads for Iridescent Drake's "Aura card" and that the picker
+    # (``payload_target_specs._reanimation_spec``) and the CR 601.2c re-check
+    # ask through the one predicate (``graveyard_card_matches``). Scoped to the
+    # unattached reanimation, so the Aura one beside it keeps its own gate.
+    if (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "battlefield"
+        and node.attached_to is None
+        and filt.subtypes
+    ):
+        gated = dataclasses.replace(gated, subtypes=())
     # "…**attached to** <something>" on a *targeted* return. Exactly one pair of
     # zones below reads it (the Aura reanimation), and this is what keeps the
     # phrase from being dropped by any of the others: an Aura that arrived
@@ -984,6 +999,16 @@ def _lower_return_to_zone(
             # card, and `primary_type` says it is only a creature one.
             if filt.card_types[0] != "creature":
                 payload["card_type"] = filt.card_types[0]
+            # "target **Dragon** permanent card" (Bladewing the Risen), lifted
+            # out of the blanket refusal above. Emitted only when printed, so
+            # every reanimation before it keeps a byte-identical payload.
+            if filt.subtypes:
+                if filt.subtype_match != "any" and len(filt.subtypes) > 1:
+                    raise LoweringError(
+                        "the reanimation reads a subtype union, not a "
+                        "conjunction", node=node,
+                    )
+                payload["graveyard_subtypes"] = list(filt.subtypes)
             # "…**If the creature would leave the battlefield, exile it instead
             # of putting it anywhere else.**" (Dreams of the Dead.) Folded onto
             # the move by the parse, because the permanent it applies to does

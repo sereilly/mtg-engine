@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **5991**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **698**
+- With deletion-probe findings (ignored words): **695**
 
 ## Measured sets — reported, not gated
 
@@ -98,7 +98,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Battle Cry | `untap all white creatures you control` | all |
 | Battle-Rattle Shaman | `you may have target creature get +2/+0 until end of turn` | have |
 | Bend or Break | `each player separates all nontoken lands they control into two piles. ` | all all all |
-| Bifurcate | `search your library for a permanent card with the same name as target ` | permanent |
 | Blazing Effigy | `it deals x damage to target creature, where x is 3 plus the amount of ` | creature |
 | Blind Fury | `all creatures lose trample until end of turn. if a creature would deal` | all |
 | Blinding Light | `tap all nonwhite creatures` | all |
@@ -226,7 +225,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Erithizon | `put a +1/+1 counter on target creature of defending player's choice` | target |
 | Errant Minion | `that player may pay any amount of mana. this aura deals 2 damage to th` | aura |
 | Escape Routes | `return target white or black creature you control to its owner's hand` | or |
-| Eureka | `starting with you, each player may put a permanent card from their han` | permanent |
 | Evacuation | `return all creatures to their owners' hands` | all |
 | Evaporate | `evaporate deals 1 damage to each white and/or blue creature` | each and/or |
 | Everglove Courier | `target elf creature gets +2/+2 and has trample for as long as this cre` | creature |
@@ -256,7 +254,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Freyalise Supplicant | `this creature deals damage to any target equal to half the sacrificed ` | down |
 | Frightshroud Courier | `target zombie creature gets +2/+2 and has fear for as long as this cre` | creature |
 | Frost Breath | `tap up to two target creatures. those creatures don't untap during the` | controller's |
-| Fungal Rebirth | `return target permanent card from your graveyard to your hand. if a cr` | permanent |
 | Fyndhorn Pollen | `all creatures get -1/-0 until end of turn` | all |
 | Gabriel Angelfire | `choose flying, first strike, trample, or rampage 3. gabriel angelfire ` | or |
 | Gaea's Blessing | `target player shuffles up to three target cards from their graveyard i` | target |

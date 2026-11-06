@@ -347,13 +347,6 @@
   ]
  },
  {
-  "card": "Bifurcate",
-  "clause": "search your library for a permanent card with the same name as target nontoken creature, put that card onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
   "card": "Blazing Effigy",
   "clause": "it deals x damage to target creature, where x is 3 plus the amount of damage dealt to this creature this turn by other sources named blazing effigy",
   "ignored": [
@@ -1254,13 +1247,6 @@
   ]
  },
  {
-  "card": "Eureka",
-  "clause": "starting with you, each player may put a permanent card from their hand onto the battlefield. repeat this process until no one puts a card onto the battlefield",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
   "card": "Evacuation",
   "clause": "return all creatures to their owners' hands",
   "ignored": [
@@ -1466,13 +1452,6 @@
   "clause": "tap up to two target creatures. those creatures don't untap during their controller's next untap step",
   "ignored": [
    "controller's"
-  ]
- },
- {
-  "card": "Fungal Rebirth",
-  "clause": "return target permanent card from your graveyard to your hand. if a creature died this turn, create two 1/1 green saproling creature tokens",
-  "ignored": [
-   "permanent"
   ]
  },
  {

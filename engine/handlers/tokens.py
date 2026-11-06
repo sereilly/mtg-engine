@@ -460,6 +460,13 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     elif raw_count == "trigger_count":
         tctx = context.trigger_context or {}
         count = int(tctx.get("trigger_count", context.results.get("trigger_count", 0)))
+    elif isinstance(raw_count, dict) and "amount_from" in raw_count:
+        # "Exile all creatures you control. Then create **that many** …"
+        # (Day of the Dragons.) The number an earlier step of this same
+        # resolution recorded — the sweep's count, tokens included — read out of
+        # the scratchpad it wrote. No record is a step that took nothing:
+        # zero tokens, rather than a guess.
+        count = max(0, int(context.results.get(str(raw_count["amount_from"]), 0) or 0))
     elif isinstance(raw_count, dict) and "source_record" in raw_count:
         # "…for each time it regenerated this turn" (Spiny Starfish). A record
         # on the permanent whose ability this is, not a game-wide tally — so it

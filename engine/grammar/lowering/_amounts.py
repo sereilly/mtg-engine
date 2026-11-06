@@ -303,6 +303,17 @@ def count_spec(
             f"a {filt.zone} count cannot test {sorted(set(payload) - _CARD_ZONE_KEYS)}",
             node=node,
         )
+    # "…that shares a creature type with **it**" with nothing bound to the
+    # pronoun. The key is the parse's record that a relation was printed, for
+    # a lowering to lift onto the object it names (an Aura's host, a frozen
+    # event subject, a cost record); left as the bare word it is a key no
+    # matcher tests, and a count carrying it matched nothing — Alpha Status
+    # gave +0/+0 on every board before ``_counted_pumps`` bound it.
+    if payload.get("shares_creature_type_with") == "it":
+        raise LoweringError(
+            "'shares a creature type with it' names nothing this count can "
+            "measure against", node=node,
+        )
     uncountable = set(payload) & _UNCOUNTABLE_FILTER_KEYS
     if uncountable:
         raise LoweringError(

@@ -836,7 +836,8 @@ class OptionalPayChoicesMixin:
         # branch hurts (`ai_prompts.chained_toll_declined`).
         from ....ai_prompts import (chained_toll_declined,
                                     copy_offer_turns_on_its_taker,
-                                    offer_buys_own_drawback)
+                                    offer_buys_own_drawback,
+                                    returned_aura_lands_on_wrong_side)
 
         if floating is not None and chained_toll_declined(
             self, choice.player_index, entry
@@ -865,6 +866,17 @@ class OptionalPayChoicesMixin:
             self.log.append(
                 f"{player.name} declined {entry['card_name']} "
                 "(the copy would be aimed at them)"
+            )
+        # …and an Aura returned onto a host the effect names (the Dragon
+        # Auras), where that host is on the side the Aura works against
+        # (`ai_prompts.returned_aura_lands_on_wrong_side`).
+        elif floating is not None and returned_aura_lands_on_wrong_side(
+            self, choice.player_index, entry
+        ):
+            floating = None
+            self.log.append(
+                f"{player.name} declined {entry['card_name']} "
+                "(it would enchant the wrong side's creature)"
             )
         # …and a block the offer would compel (provoke, CR 702.39a): taken
         # only when the attacker gains from the fight

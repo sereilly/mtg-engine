@@ -1086,6 +1086,30 @@ def _lower_may(
         # above are what turn "that player" into the record the fire site froze
         # — a step told the printed word would ask a seat nobody wrote down.
         payload["action"] = tuple(_performed_by(step, actor) for step in action)
+        # "At the beginning of your upkeep, **you may return this card from
+        # your graveyard** to your hand." (Squee, Goblin Nabob; Bladewing's
+        # Thrall; the Scourge Dragon Auras.) CR 113.6m: an ability whose effect
+        # moves the object it is on out of a zone functions only in that zone,
+        # and when the offer's own action *is* that move the offer is the
+        # ability's effect. The key is lifted onto the offer because the
+        # graveyard scans (``events.graveyard_trigger_events`` and the upkeep
+        # and end-step scans beside it) ask the trigger's **top** instruction
+        # one question of one key — the reason ``lower.py`` stamps the
+        # intervening-if's zone there — and an offer wrapping the move hid it:
+        # both cards compiled supported and never once left a graveyard.
+        # Only ``action``: the offer's ``then`` runs after a price the
+        # intervening-if cards already state their zone for, and a delayed
+        # trigger's move is that trigger's, not this one's.
+        zone = next(
+            (
+                step.payload["functions_from"]
+                for step in action
+                if (step.payload or {}).get("functions_from")
+            ),
+            None,
+        )
+        if zone is not None:
+            payload["functions_from"] = zone
     if then:
         payload["then"] = then
         # Beside the branch rather than wrapped round it, so every reader of

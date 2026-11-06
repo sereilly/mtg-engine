@@ -87,7 +87,17 @@ def _measured(card, instruction, spec, others: int) -> tuple:
     game = Game(players=[PlayerState("A"), PlayerState("B")])
     permanent = Permanent(card=card)
     if instruction.payload.get("subject") == "attached":
-        subject = Permanent(card=_mk_card("Host", "Creature - Host"))
+        # "…for each other creature on the battlefield **that shares a
+        # creature type with it**" (Alpha Status): "it" is the enchanted
+        # creature, so the host is given the counted creatures' type. A
+        # "Host" (no creature type at all, CR 205.3m) shares nothing with a
+        # Bear, and the census read the card's correct (2, 2) as a miscount —
+        # the red on Scourge's base — while the engine, which then really did
+        # read +0/+0, was wrong for a reason the census could not see.
+        shares = spec["filter"].get("shares_creature_type_with_attached_host")
+        subject = Permanent(
+            card=_mk_card("Host", "Creature - Bear" if shares else "Creature - Host")
+        )
         game._put_permanent_onto_battlefield(0, subject, None)
         game._put_permanent_onto_battlefield(0, permanent, None)
         attach_aura(permanent, subject)

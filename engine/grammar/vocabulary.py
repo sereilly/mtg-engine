@@ -314,6 +314,18 @@ __all__ = [
 #: "card", "spell", "source", "target". Here rather than in `nouns` because the
 #: singularizer below needs them and both are word lookup, not parsing: a module
 #: *under* `nouns` in the layer order (`abilities`) can reach them only here.
+#: CR 110.4a: "The term 'permanent card' is used to refer to a card that could
+#: be put onto the battlefield. Specifically, it means an artifact, battle,
+#: creature, enchantment, land, or planeswalker card." A rule rather than a
+#: vocabulary list, so it is spelled here once — the parse records it on a
+#: bare "permanent card" (``nouns.parse_object_filter``) and the from-hand put
+#: falls back to it (``lowering/zones.py``) — and held to the type catalog.
+PERMANENT_CARD_TYPES: tuple[str, ...] = (
+    "artifact", "battle", "creature", "enchantment", "land", "planeswalker",
+)
+assert set(PERMANENT_CARD_TYPES) <= CARD_TYPES, "a permanent type left the catalog"
+
+
 GENERIC_NOUNS = frozenset({
     "permanent", "permanents", "card", "cards", "spell", "spells",
     "source", "sources", "target", "targets",

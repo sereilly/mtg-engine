@@ -925,11 +925,10 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
     # it is a new object (CR 400.7) and is not looked for anywhere else.
     zone = "exile" if instruction.payload.get("from") == "exile" else "graveyard"
     pile = caster.exile if zone == "exile" else caster.graveyard
-    for index, held in enumerate(pile):
-        if held is card:
-            pile.pop(index)
-            break
-    else:
+    found = next(
+        (index for index, held in enumerate(pile) if held is card), None
+    )
+    if found is None:
         # CR 603.6: the ability looks for the object in the zone it moves it out
         # of. Gone (exiled in response, shuffled away) means the ability does
         # nothing, rather than conjuring a second copy of the card.
@@ -938,6 +937,35 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
             + ("exile" if zone == "exile" else "the graveyard")
         )
         return True, "resolved"
+    # "…to the battlefield **attached to that creature**." (The Scourge Dragon
+    # Auras.) The host is the object the firing event was about, frozen by id
+    # at the entry seam — never re-found on the board, because a creature that
+    # left and came back is a new object (CR 400.7). Asked **before** the card
+    # moves: CR 303.4i says an Aura an effect would put onto the battlefield
+    # attached to something it can't legally enchant, or to something
+    # undefined, "remains in its current zone". The question is the one every
+    # host chooser asks (``enchant_card_refusal``: the enchant ability, "can't
+    # be enchanted", protection), under the seat it would enter under; it is
+    # not a target (CR 115.1), so shroud is no bar.
+    host = None
+    if instruction.payload.get("attached_to") == "event_subject":
+        from ..aura_attachment import enchant_card_refusal
+
+        host = game.permanent_by_id(
+            (context.trigger_context or {}).get("event_subject_permanent_id")
+        )
+        refusal = (
+            "that creature has left the battlefield"
+            if host is None or not game.is_on_battlefield(host)
+            else enchant_card_refusal(game, card, game.seat_index(caster), host)
+        )
+        if refusal is not None:
+            game.log.append(
+                f"{card.name} cannot be attached and stays in the {zone} "
+                f"({refusal})"
+            )
+            return True, "resolved"
+    pile.pop(found)
     # "…to your **hand**." (Whiteout.) The destination is payload rather than a
     # second handler, because everything above it — the object is the ability's
     # own source, found by identity in the graveyard the ability functions from
@@ -975,9 +1003,25 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
             else:
                 game.place_pt_counters(arrived, str(kind), int(count))
             game.log.append(f"{card.name} enters with {count} {kind} counter(s)")
+        if host is not None:
+            from ..aura_attachment import attach_aura, aura_attach_refusal
+
+            # CR 303.4i asked once more of the permanent itself, for the host
+            # that may have stopped being legal while the entry waited on an
+            # "as it enters" answer (CR 614.12a); the CR 704.5m sweep would
+            # bin an Aura that arrived attached to nothing, so it is asked now
+            # rather than at the next one.
+            refusal = aura_attach_refusal(game, arrived, host)
+            if refusal is None:
+                attach_aura(arrived, host)
+                game.log.append(f"{card.name} attached to {host.card.name}")
+            else:
+                game.log.append(f"{card.name} could not attach: {refusal}")
+            game.check_state_based_actions()
 
     game._put_permanent_onto_battlefield(
-        game.players.index(caster), arrived, None, then=returned,
+        game.players.index(caster), arrived, None, from_zone=zone,
+        then=returned,
     )
     return True, "resolved"
 

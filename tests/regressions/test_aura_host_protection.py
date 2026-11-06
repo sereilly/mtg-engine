@@ -191,6 +191,26 @@ def test_an_aura_exempt_from_its_own_protection_stays_but_another_cannot_join(by
     assert enchant_card_refusal(game, by_name["Unholy Strength"], 0, bears) is None
 
 
+def test_a_dragon_aura_stays_in_the_graveyard_for_a_host_protected_from_it(by_name, set_pool):
+    """Scourge's Dragon Auras: "…return this card from your graveyard to the
+    battlefield attached to that creature." The effect names the host
+    (CR 303.4i), so an Ivory Guardians — protection from red, mana value 6 —
+    cannot be enchanted by Dragon Breath and the card remains in the
+    graveyard; the same entry returns the green Dragon Fangs onto it."""
+    scourge = set_pool("SCG")
+    breath, fangs = scourge["Dragon Breath"], scourge["Dragon Fangs"]
+    game = _game([], [])
+    game.players[0].graveyard.extend([breath, fangs])
+    guardians = Permanent(card=by_name["Ivory Guardians"])
+    game._put_permanent_onto_battlefield(0, guardians, None)
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    resolve_stack(game)
+    assert game.players[0].graveyard == [breath], game.log
+    assert [aura.card.name for aura in auras_attached_to(guardians)] == ["Dragon Fangs"]
+    assert any("protection" in line for line in game.log)
+
+
 # --- the census: every caller is one of the doors above ---------------------
 
 #: Every function in ``engine/`` that asks the host predicate, with the door it
@@ -235,6 +255,11 @@ _CALLERS = {
     # it adds no door of its own.
     ("engine/aura_attachment.py", "returning_aura_hosts"),
     ("engine/handlers/reanimation.py", "_return_planned_cards"),
+    # The Scourge Dragon Auras' return attached to the creature that entered
+    # (CR 303.4i): asked before the card leaves the graveyard, and once more of
+    # the permanent as it arrives (the entry's ``then``)
+    ("engine/handlers/reanimation.py", "return_self_from_graveyard"),
+    ("engine/handlers/reanimation.py", "returned"),
     # Tempting Wurm (Onslaught): the host each opponent chose for an Aura they
     # put onto the battlefield from hand, asked once more as the Aura enters
     # (CR 303.4f/g) — Replenish's re-check, for a put from a hand

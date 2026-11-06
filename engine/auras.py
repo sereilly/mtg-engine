@@ -962,6 +962,22 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
             "the cycle trigger (CR 702.29) — "
             "mixins/stack/card_activation._announce_cycle"
         )
+    if cond == "matching_permanent_enters" and kind in EFFECT_HANDLERS:
+        # "When a creature with mana value 6 or greater enters, you may return
+        # this card from your graveyard to the battlefield attached to that
+        # creature." (The Scourge Dragon Auras.) CR 603.6a's announcement, made
+        # from the one entry seam every road onto the battlefield passes
+        # through (``mixins/zone_funnels._announce_entry``) and collected by the
+        # event bus from every battlefield **and every graveyard** — the
+        # graveyard half (``events.graveyard_trigger_events``) for an ability
+        # whose effect moves its own card out of one (CR 113.6m), with the
+        # trigger's own noun phrase asked of the entering permanent. Its own row
+        # for the rows above' reason: each names one condition and the site
+        # firing it.
+        return (
+            "the entry announcement (CR 603.6a) — "
+            "mixins/zone_funnels._announce_entry"
+        )
     from .phases.upkeep_effects import UPKEEP_EFFECTS
 
     if (cond, kind) in UPKEEP_EFFECTS:

@@ -86,7 +86,37 @@ def _parse_gets(
             raise stream.error("a player cannot get a power/toughness counter")
         stream.expect_word("counter", "counters")
         return ast.PlayerGetsCounters(subject, token.text, count)
+    first_pt = stream.peek()
     power, power_negative, toughness, toughness_negative = expect_pt(stream)
+    # "{1}: Enchanted creature gets **+1/-1 or -1/+1** until end of turn."
+    # (Pemmin's Aura.) Two pumps, the controller choosing which as the ability
+    # resolves (CR 608.2d) — Urborg's "loses first strike or swampwalk" with
+    # P/T where the keyword is, and so the same node (``ast.OneOf``, lowered
+    # onto the ``choose_one`` handler and its ``mode_choice`` prompt). The
+    # duration is printed once, after both, and is each one's. A bare pair and
+    # a duration only: any rider behind it would have to say which of the two
+    # it rides, so the line refuses.
+    alternative_mark = stream.mark()
+    if stream.accept_word("or") and stream.at_kind(PT):
+        second_pt = stream.peek()
+        alternative = expect_pt(stream)
+        alt_duration = _parse_duration(stream)
+        if not (stream.exhausted or stream.at_punct(".")):
+            raise stream.error("a choice of two pumps carries no rider")
+        return ast.OneOf(
+            (
+                ast.Pump(
+                    subject, power, toughness, alt_duration,
+                    power_negative, toughness_negative,
+                ),
+                ast.Pump(
+                    subject, alternative[0], alternative[2], alt_duration,
+                    alternative[1], alternative[3],
+                ),
+            ),
+            labels=(first_pt.text, second_pt.text),
+        )
+    stream.reset(alternative_mark)
     duration = _parse_duration(stream)
 
     # "gets -X/-X until end of turn, where X is the number of cards in your
