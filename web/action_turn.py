@@ -25,6 +25,7 @@ from .turn_steps import (
     _consume_draw_step_life_loss,
     _end_turn,
     _optional_trigger_pending,
+    _pause_beginning_phase,
     _resolve_upkeep_step,
     _start_next_turn,
     _untap_land_selection_requirement,
@@ -468,6 +469,11 @@ def _action_island_sanctuary_skip(session, req, seat_type):
         sanctuary_choice=skip,
         pay_life_loss=_consume_draw_step_life_loss(session),
     )
+    # The draw step's window may stop on a question (CR 608.2): the main
+    # phase waits for the answer rather than inheriting the object, as every
+    # other road out of the draw step does (`turn_steps._pause_beginning_phase`).
+    if _pause_beginning_phase(session, "main_phase", session.current_turn):
+        return
     session.game.enter_next_turn_phase("beginning")
 
 @action_handler("ai_step")

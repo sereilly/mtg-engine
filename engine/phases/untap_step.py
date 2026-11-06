@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..game_over_guard import goes_no_further
+
 """Untap step (CR 502).
 
 The active player untaps their permanents as a turn-based action. No player
@@ -551,6 +553,7 @@ class UntapStepMixin:
             )
         ]
 
+    @goes_no_further(0)
     def resolve_untap_step(
         self,
         player_index: int,

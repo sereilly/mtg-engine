@@ -44,7 +44,7 @@ from .seats import (
 from .turn_steps import (
     _cleanup_discard_requirement,
     _clear_cleanup_selection,
-    _has_island_sanctuary,
+    _finish_beginning_phase,
     _leave_step,
     _resume_deferred_upkeep,
     _start_next_turn,
@@ -603,25 +603,16 @@ def _advance_phase(session: Session) -> None:
         # holding again at the draw step if the human flagged it.
         if not _leave_step(session, game.close_beginning_step):
             return
-        # Island Sanctuary: the human must choose whether to skip their draw before
-        # the draw step resolves (CR 504 replacement choice). Pause for the prompt
-        # instead of drawing through it.
-        if (
-            step == "upkeep"
-            and _seat_type(session, session.current_turn) == "human"
-            and _has_island_sanctuary(game, session.current_turn)
-        ):
-            session.island_sanctuary_pending = True
-            return
-        if step == "upkeep" and _ai_should_hold(session, "draw"):
-            game.resolve_draw_step(session.current_turn, defer_priority=True)
-            _hold_priority_for_human(session)
-            return
-        if step == "upkeep" and _self_should_hold(session, "draw"):
-            game.resolve_draw_step(session.current_turn, defer_priority=True)
-            return
+        # The draw step, through the one function that runs it for every
+        # road (`turn_steps._finish_beginning_phase`): Island Sanctuary's
+        # question, Nafs Asp's answers, the phase-rail holds — and **the draw
+        # step's own window**, which can stop on a question (a draw trigger's
+        # "you may", CR 608.2). This branch was a copy of that function
+        # without its last check, so a draw-step trigger still owed its
+        # answer was carried into the main phase on the stack (CR 500.2).
         if step == "upkeep":
-            game.resolve_draw_step(session.current_turn)
+            _finish_beginning_phase(session, session.current_turn)
+            return
         game.enter_next_turn_phase("beginning")
         return
 

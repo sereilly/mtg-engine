@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..game_over_guard import goes_no_further
+
 """Cleanup step (CR 514).
 
 The active player discards down to maximum hand size, then all damage is removed
@@ -72,6 +74,7 @@ def _turn_expired(entries: list, game=None) -> list:
 
 
 class CleanupStepMixin:
+    @goes_no_further(True)
     def resolve_cleanup_step(
         self,
         player_index: int,

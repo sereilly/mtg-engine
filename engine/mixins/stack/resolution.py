@@ -13,6 +13,8 @@ composed onto ``Game`` directly after this one.
 
 from __future__ import annotations
 
+from ...game_over_guard import goes_no_further
+
 from ...bare_announcements import resolving_slots
 from ...auras import aura_enchant_clause
 from ...cast_costs import (CAST_COST_DISCARD_MANA_VALUE, KICKED,
@@ -530,6 +532,7 @@ class StackResolutionMixin:
                     f"_settle aborted after {self.MAX_SETTLE_ITERS} iterations (possible loop)"
                 )
                 break
+    @goes_no_further(False)
     def resolve_next_object(self, *, pause_for_choices: bool) -> bool:
         """Resolve the top object **as one unit of play**: its resolution and
         the state-based check after it, in one trigger window. True when an

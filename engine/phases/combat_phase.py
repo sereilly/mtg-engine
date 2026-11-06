@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..game_over_guard import goes_no_further
+
 """Combat phase (CR 506–511).
 
 This module holds the phase-level combat machinery shared across the five combat
@@ -346,6 +348,7 @@ class CombatPhaseMixin:
                     return True
         return False
 
+    @goes_no_further()
     def advance_combat_phase(self, allow_damage_skip: bool = True) -> None:
         # allow_damage_skip: when a player has flagged the combat-damage step on the
         # phase rail (hold priority), the caller passes False so the engine enters
@@ -360,11 +363,9 @@ class CombatPhaseMixin:
         # as long as it holds the window.
         if self.awaits_an_answer():
             return
-        # CR 104.1: once the game has ended nothing further happens — no
-        # step is left or entered. (A multiplayer game that lost one player
-        # goes on, CR 800.4a; ``is_game_over`` is the one answer to which.)
-        if self.is_game_over():
-            return
+        # CR 104.1 — once the game has ended no step is left or entered — is
+        # the decorator's (``engine/game_over_guard.py``), as it is for every
+        # other stepping entry point.
         combat_steps = list(self._phase_steps("combat"))
         if self.current_turn_phase != "combat":
             self._enter_combat_step(combat_steps[0])

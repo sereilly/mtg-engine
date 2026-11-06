@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..game_over_guard import goes_no_further
+
 """End of combat step (CR 511).
 
 Fires "at end of combat" triggered abilities (Clockwork Beast counter removal,
@@ -28,6 +30,7 @@ from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
 
 class EndOfCombatStepMixin:
+    @goes_no_further(True)
     def end_combat(
         self, step_already_started: bool = False, resuming: bool = False
     ) -> bool:

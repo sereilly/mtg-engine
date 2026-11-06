@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..game_over_guard import goes_no_further
+
 """End step (CR 513).
 
 "At the beginning of the end step" triggered abilities are put on the stack here:
@@ -99,6 +101,7 @@ END_STEP_INTERVENING_IF = "intervening_if"
 
 
 class EndStepMixin:
+    @goes_no_further()
     def resolve_end_step(self, player_index: int) -> None:
         """Begin the end step: its delayed sweeps, then everything "at the
         beginning of the end step" sets off, as one window for CR 603.3b
@@ -433,6 +436,7 @@ class EndStepMixin:
         if self._receives_priority(step):
             self.start_priority_window(self.active_player_index)
 
+    @goes_no_further(True)
     def close_end_step(self) -> bool:
         """End the end step; True when it ended.
 

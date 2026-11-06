@@ -21,6 +21,8 @@ the tap raises is ``land_tapped_for_mana.py``.
 
 from __future__ import annotations
 
+from ..game_over_guard import goes_no_further
+
 import random
 
 from ..cast_permissions import expire_at_turn_start as expire_turn_permissions
@@ -246,6 +248,7 @@ class TurnManagementMixin:
         )
         return True
 
+    @goes_no_further()
     def begin_turn_bookkeeping(self, player_index: int) -> None:
         """Per-turn state resets that must run whenever a new turn begins —
         both the headless ``start_turn`` flow and the web layer's step-by-step
@@ -376,6 +379,7 @@ class TurnManagementMixin:
         self._recalculate_lord_buffs()
         self._refresh_dynamic_creatures()
 
+    @goes_no_further()
     def start_turn(self, player_index: int) -> None:
         self.begin_turn_bookkeeping(player_index)
         self.resolve_untap_step(player_index)
@@ -386,6 +390,7 @@ class TurnManagementMixin:
         # main phase, exactly as this line used to say outright.
         self.enter_next_turn_phase("beginning")
 
+    @goes_no_further(lambda game: game.active_player_index)
     def start_next_turn(self) -> int:
         self.turn += 1
         next_player = self._compute_next_active_player()

@@ -614,6 +614,12 @@ def _finish_beginning_phase(session: Session, player_index: int) -> bool:
     honoring Island Sanctuary and the phase-rail draw-step holds. Shared by
     _begin_turn and the post-sacrifice (Lord of the Pit) resume."""
     game = session.game
+    # CR 104.1: a game the upkeep ended (Sulfuric Vortex's 2 damage to a
+    # player at 2) has no draw step and no main phase. The engine's stepping
+    # refuses both (``engine/game_over_guard.py``); this stops the web half —
+    # Island Sanctuary's question — from being asked of an ended game.
+    if game.is_game_over():
+        return True
     if _seat_type(session, player_index) == "human" and _has_island_sanctuary(game, player_index):
         session.island_sanctuary_pending = True
         return False
@@ -640,6 +646,10 @@ def _finish_beginning_phase(session: Session, player_index: int) -> bool:
 
 
 def _start_next_turn(session: Session) -> None:
+    # CR 104.1: no next turn after the game has ended — the turn counter and
+    # the active seat are this function's own writes, not the engine's.
+    if session.game.is_game_over():
+        return
     _clear_cleanup_selection(session)
     _clear_untap_selection(session)
     _clear_upkeep_pay_choices(session)
