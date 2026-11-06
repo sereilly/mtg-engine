@@ -912,21 +912,65 @@ SHIELD_KINDS = frozenset({
     "shield_target_land_from_destruction",
 })
 
+#: The steps that arm a **CR 614 replacement of a damage event** for the rest
+#: of the turn and do nothing else: a redirect (CR 614.9 — "The next 1 damage
+#: that would be dealt to this creature this turn is dealt to target creature
+#: instead", Zealous Inquisitor; the en-Kor; Shield Dancer) and the two that
+#: change the amount instead (Blind Fury's double, Desperate Gambit's). The
+#: shields' twin one category over — ``damage``, because the damage is still
+#: dealt (``grammar/lowering/categories.py``) — and the same in what it is
+#: worth: nothing until some damage comes, which only a rehearsal of what is
+#: coming can say. Every replacement kind of that category must be here
+#: (`tests/ai/test_scg_p5_shield_census.py`).
+DAMAGE_REPLACEMENT_KINDS = frozenset({
+    "arm_turn_damage_replacement",
+    "double_next_damage_from_chosen_source",
+    "redirect_chosen_source_damage_between_targets_until_eot",
+    "redirect_chosen_source_damage_off_target_until_eot",
+    "redirect_damage_from_chosen_source_until_eot",
+    "redirect_damage_from_target_spell_until_eot",
+    "redirect_damage_from_target_until_eot",
+    "redirect_damage_off_target_until_eot",
+    "redirect_matching_damage_to_you_until_eot",
+    "redirect_next_damage_between_targets_until_eot",
+    "redirect_next_damage_from_source_until_eot",
+    "redirect_next_damage_to_source_until_eot",
+    "redirect_source_class_damage_until_eot",
+    "redirect_source_damage_to_target_until_eot",
+    "redirect_source_damage_to_you_until_eot",
+})
+
+#: A step that only picks the object a shield or redirect after it reads, and
+#: does nothing to the board: "…is dealt to target creature **of an
+#: opponent's choice** instead" (Nova Pentacle).
+_SHIELD_CHOICE_KINDS = frozenset({"choose_permanent"})
+
 
 def shields_only(instruction: OracleInstruction | None) -> bool:
     """Whether every step of an ability's effect is a shield
-    (:data:`SHIELD_KINDS`): "{1}{W}: Prevent all combat damage that would be
-    dealt to and dealt by this creature this turn." (Deftblade Elite), "{B}:
-    Regenerate this creature." (Drudge Skeletons), a Circle of Protection.
+    (:data:`SHIELD_KINDS`) or a damage replacement armed for the turn
+    (:data:`DAMAGE_REPLACEMENT_KINDS`): "{1}{W}: Prevent all combat damage
+    that would be dealt to and dealt by this creature this turn." (Deftblade
+    Elite), "{B}: Regenerate this creature." (Drudge Skeletons), a Circle of
+    Protection, "{1}{W}: The next 1 damage that would be dealt to this
+    creature this turn is dealt to target creature instead." (Zealous
+    Inquisitor).
 
     Worth what it stops, and only a rehearsal of what is coming says what
     that is: the same shield is a creature saved in front of a burn spell or
     a lethal blocker, and nothing at all in a main phase with nothing on the
     stack and no fight it could be in. The flat score an activation is ranked
     by (`ai_scoring._score_activation`) rated it 2.5 either way, so an AI seat
-    spent its mana on it in both main phases every turn (LGN Phase 5)."""
-    steps = _effect_steps(instruction) if instruction is not None else ()
-    return bool(steps) and all(step.kind in SHIELD_KINDS for step in steps)
+    spent its mana on it in both main phases every turn (LGN Phase 5) — and,
+    with the redirects left out, on Zealous Inquisitor in a main phase with
+    nothing coming (SCG Phase 5)."""
+    steps = [
+        step for step in (_effect_steps(instruction) if instruction is not None else ())
+        if step.kind not in _SHIELD_CHOICE_KINDS
+    ]
+    return bool(steps) and all(
+        step.kind in SHIELD_KINDS or step.kind in DAMAGE_REPLACEMENT_KINDS for step in steps
+    )
 
 
 #: How a step's payload addresses **every player at once** ("Each player loses
