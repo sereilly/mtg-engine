@@ -386,8 +386,10 @@ def test_radha_shows_the_top_card_to_its_owner_alone_and_snoop_reveals_it(set_po
 @needs_node
 def test_the_morph_offer_owes_its_three_once(set_pool):
     """The hand card's offer is "cast it face down … for {3}" with ``mana_owed``
-    "{3}": the whole price, so the note says it as the whole, never "plus
-    {3}" — which read as a {6} face-down cast."""
+    "{3}": the whole price, so the note never says "plus {3}" — which read as
+    a {6} face-down cast. And since SCG Phase 5 it says nothing at all: the
+    label already names the {3}, and "for {3} — {3} in mana in all" said it
+    twice. The note is CR 118.9d's, for a tax (``test_scg_p5c_client_js``)."""
     ons = set_pool("ONS")
     _sid, session, game = _table(seed=707)
     _lands(game, 0, "Forest", 3)
@@ -398,12 +400,12 @@ def test_the_morph_offer_owes_its_three_once(set_pool):
     ]
     assert (offer["label"], offer["mana_owed"]) == ("cast it face down as a 2/2 creature for {3}", "{3}")
     note = run_app_js(
-        ["alternativeOfferOwedNote"],
+        ["alternativeOfferOwedNote", "manaSymbolTallyKey"],
         "return alternativeOfferOwedNote(INPUT.offer);",
         {"offer": offer},
         prelude="const renderSymbolsInline = (text) => text;",
     )
-    assert "plus" not in note and "{3} in mana in all" in note
+    assert note == ""
 
 
 # ---------------------------------------------------------------------------

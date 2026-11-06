@@ -123,6 +123,9 @@ function snapStateRefetchBackoff() {}
 function castManaSplitFor() { return null; }
 function startCastDividedPrompt(card) { shown.push({ kind: "divided", seat: pendingAnnouncedSeat }); }
 async function postJson(_url, body) { sent.push(body); return {}; }
+// The payment preview every paying action asks first (SCG P5; its own test is
+// test_scg_p5c_client_js): here the pool pays, so the cast is sent.
+async function previewPayingAction() { return null; }
 function renderState() {}
 '''
 

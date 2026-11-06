@@ -3006,8 +3006,10 @@ function getMaxAffordableX(manaPool, manaCost, card = null) {
 //
 // A card glows when its seat *could* pay for it (the server's
 // `playable_hand_indices`: the pool plus what a tap would add — lands, a Sol
-// Ring, a Llanowar Elves). Clicking one sends the cast; a pool that cannot pay
-// is refused "insufficient mana" and this dialog offers to do the tapping.
+// Ring, a Llanowar Elves). Clicking one asks the server's preview first
+// (`previewPayingAction`, in `sendAction`): a pool that pays sends the cast, and
+// a pool that cannot is raised as the "insufficient mana" refusal locally —
+// never fetched as a 400 — and this dialog offers to do the tapping.
 //
 // It used to plan that tapping itself: lands only, one mana a land, the colour
 // read off `produced_mana`, the printed cost — so a card that glowed on a Sol
@@ -3215,24 +3217,19 @@ function withPermanentId(body, field, seatIndex, permanentIndex, state = current
 function getCleanupDiscardInfo(state = currentState) {
   if (!state || seat === null) return null;
   if (state.current_phase !== "cleanup") return null;
-  if (state.current_turn !== seat) return null; // CR 514.1: only the active player discards — the fallback below read the viewer's own hand on another seat's turn
+  if (state.current_turn !== seat) return null; // CR 514.1: only the active player discards
+  // What the server says is owed, and nothing else (`cleanup_discard`, sent to
+  // the active seat while it owes CR 514.1's discard, counted against
+  // `engine.hand_size.maximum_hand_size`). This used to fall back to counting
+  // the viewer's own hand against a literal seven when the field was empty —
+  // which drew "Cleanup discard required" on the other seat's turn (SCG Phase
+  // 5) and would on a turn with no maximum hand size (CR 402.2): a decision
+  // inferred from the viewer's zones rather than read from the payload.
   const info = state.cleanup_discard;
   if (info && Number(info.required_count || 0) > 0) {
     return info;
   }
-
-  // Fallback for stale/partial state payloads: infer cleanup requirement locally.
-  const me = state.players?.[seat];
-  const hand = Array.isArray(me?.hand) ? me.hand : [];
-  const requiredCount = Math.max(0, hand.length - 7);
-  if (requiredCount <= 0) return null;
-
-  return {
-    required_count: requiredCount,
-    selected_indices: [],
-    selected_count: 0,
-    inferred: true,
-  };
+  return null;
 }
 
 function getUntapLandSelectionInfo(state = currentState) {
@@ -7569,30 +7566,62 @@ function applyCreatureTypeChoicePrompt(info) {
   body.textContent = wording.body;
   // A select rather than the button column the card-type prompt uses: that one
   // offers the four the card printed, this one offers CR 205.3m's whole
-  // catalog.
-  const selected = info.default_creature_type || "";
-  const options = info.creature_types
-    .map((type) => {
-      const label = escapeHtml(type.charAt(0).toUpperCase() + type.slice(1));
-      const value = escapeHtml(type);
-      const mark = type === selected ? " selected" : "";
-      return `<option value="${value}"${mark}>${label}</option>`;
-    })
-    .join("");
+  // catalog. It opens on no choice: `default_creature_type` is what an AI
+  // seat takes, and a select that opened on it made one click on Choose a
+  // choice the person never made (SCG Phase 5: Proteus Machine opened on
+  // Goblin). The pick survives the panel's redraws (`creatureTypeChoiceDraft`).
+  const key = creatureTypeChoiceKey(info);
+  if (creatureTypeChoiceDraft.key !== key) creatureTypeChoiceDraft = { key, value: "" };
+  const selected = info.creature_types.includes(creatureTypeChoiceDraft.value)
+    ? creatureTypeChoiceDraft.value
+    : "";
   steps.innerHTML =
     `<div class="prompt-choice-column">` +
-    `<select id="creatureTypeChoiceSelect">${options}</select>` +
-    `<button type="button" class="prompt-choice-btn" id="creatureTypeChoiceOk">Choose</button>` +
+    `<select id="creatureTypeChoiceSelect">${typeChoiceOptionsHtml(info.creature_types, selected)}</select>` +
+    `<button type="button" class="prompt-choice-btn" id="creatureTypeChoiceOk"${selected ? "" : " disabled"}>Choose</button>` +
     `</div>`;
 
   const picker = steps.querySelector("#creatureTypeChoiceSelect");
-  steps.querySelector("#creatureTypeChoiceOk").addEventListener("click", async () => {
+  const chooseBtn = steps.querySelector("#creatureTypeChoiceOk");
+  picker.addEventListener("change", () => {
+    creatureTypeChoiceDraft = { key, value: picker.value };
+    chooseBtn.disabled = !picker.value;
+  });
+  chooseBtn.addEventListener("click", async () => {
+    if (!picker.value) return;
     await sendAction({
       seat,
       action: "creature_type_choice_confirm",
       creature_type: picker.value,
     });
   });
+}
+
+// The type picked in the open creature-type prompt, keyed to that prompt: a
+// redraw keeps it, the next prompt (Artificial Evolution's second word, an
+// each-player round's next seat) starts empty.
+let creatureTypeChoiceDraft = { key: null, value: "" };
+
+function creatureTypeChoiceKey(info) {
+  return JSON.stringify([
+    info.card_name, info.player_index, info.word_role || null,
+    info.chosen_so_far || null, info.excluded || null,
+  ]);
+}
+
+// A creature-type select's options: a disabled "Choose…" first, selected
+// until a type is picked, then one option per type. Shared by the resolving
+// prompt and the cast announcement (Aphetto Dredging), neither of which
+// opens on a type the person did not pick.
+function typeChoiceOptionsHtml(types, selected) {
+  const placeholder = `<option value="" disabled${selected ? "" : " selected"}>Choose…</option>`;
+  return placeholder + types
+    .map((type) => {
+      const label = escapeHtml(type.charAt(0).toUpperCase() + type.slice(1));
+      const mark = type === selected ? " selected" : "";
+      return `<option value="${escapeHtml(type)}"${mark}>${label}</option>`;
+    })
+    .join("");
 }
 
 const COLOR_CHOICE_WORDS = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
@@ -7623,11 +7652,13 @@ function applyColorChoicePrompt(info) {
     `<div class="prompt-choice-column">` +
     info.colors
       .map((symbol) => {
+        // No "(default)" beside the colour `default_color` names: that is what
+        // an AI seat takes, and on a person's button it read as a choice
+        // already made (SCG Phase 5's census of provisional defaults).
         const label = COLOR_CHOICE_WORDS[symbol] || symbol;
-        const mark = symbol === info.default_color ? " (default)" : "";
         return (
           `<button type="button" class="prompt-choice-btn" data-choice-color="${escapeHtml(symbol)}">` +
-          `${escapeHtml(label + mark)}</button>`
+          `${escapeHtml(label)}</button>`
         );
       })
       .join("") +
@@ -9190,7 +9221,11 @@ function applyNameAndStripPrompt(info) {
   customOkBtn.disabled = true;
 
   const suggestions = info.suggestions || [];
-  if (nameAndStripDraft === null) nameAndStripDraft = info.default_name || suggestions[0] || "";
+  // Opens empty: `default_name` (the commonest name in their public zones) is
+  // what an AI seat names, and an input that opened on it made one click on
+  // Name It a name the person never chose (SCG Phase 5). The chips below
+  // still offer it, one click away.
+  if (nameAndStripDraft === null) nameAndStripDraft = "";
   const opponent = currentState?.players?.[info.target_seat]?.name || "that player";
 
   title.textContent = "Name a card";
@@ -9203,7 +9238,7 @@ function applyNameAndStripPrompt(info) {
     )
     .join("");
   steps.innerHTML = [
-    `<div class="name-strip-row"><input id="nameAndStripInput" type="text" list="nameAndStripSuggestions" placeholder="Card name" value="${escapeHtml(nameAndStripDraft)}" autocomplete="off" /><button type="button" class="prompt-choice-btn" data-name-confirm="1">Name It</button></div>`,
+    `<div class="name-strip-row"><input id="nameAndStripInput" type="text" list="nameAndStripSuggestions" placeholder="Card name" value="${escapeHtml(nameAndStripDraft)}" autocomplete="off" /><button type="button" class="prompt-choice-btn" data-name-confirm="1"${nameAndStripDraft.trim() ? "" : " disabled"}>Name It</button></div>`,
     `<datalist id="nameAndStripSuggestions">${suggestions.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("")}</datalist>`,
     suggestions.length
       ? `<div class="prompt-subnote">Seen in their public zones (graveyard, exile, battlefield):</div><div class="prompt-choice-row name-chip-row">${chips}</div>`
@@ -9224,8 +9259,10 @@ function applyNameAndStripPrompt(info) {
       updateActionHint(e.message, true);
     }
   };
+  const confirmBtn = steps.querySelector("[data-name-confirm]");
   input?.addEventListener("input", () => {
     nameAndStripDraft = input.value;
+    if (confirmBtn) confirmBtn.disabled = !input.value.trim();
   });
   input?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") submit();
@@ -9235,6 +9272,7 @@ function applyNameAndStripPrompt(info) {
     btn.addEventListener("click", () => {
       nameAndStripDraft = btn.dataset.nameChip;
       if (input) input.value = nameAndStripDraft;
+      if (confirmBtn) confirmBtn.disabled = !nameAndStripDraft.trim();
       steps.querySelectorAll(".name-chip").forEach((c) => c.classList.toggle("selected", c === btn));
     });
   });
@@ -12187,7 +12225,7 @@ function renderUntapUpToModal(info) {
       .map((entry) => {
         const selectedClass = untapUpToSelected.has(entry.id) ? " selected" : "";
         const state = entry.tapped ? "tapped" : "untapped";
-        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${escapeHtml(state)}${entry.seat !== seat ? " (opponent's)" : ""}</div></div>`;
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}">${candidatePermanentTileFace(entry, entry.name)}<div class="library-card-choice-name">${escapeHtml(state)}${entry.seat !== seat ? " (opponent's)" : ""}</div></div>`;
       })
       .join("") || `<div class="modal-empty-note">Nothing to untap.</div>`;
     list.querySelectorAll(".library-card-choice").forEach((el) => {
@@ -12258,7 +12296,7 @@ function renderPermanentSetChoiceModal(info) {
         // tapped asked the player to remember the board behind the modal.
         const tapped = (currentState?.players?.[entry.seat]?.battlefield || [])
           .some((perm) => perm && perm.id === entry.id && perm.tapped);
-        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${owner}${tapped ? " · tapped" : ""}</div></div>`;
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}">${candidatePermanentTileFace(entry, entry.name)}<div class="library-card-choice-name">${owner}${tapped ? " · tapped" : ""}</div></div>`;
       })
       .join("") || `<div class="modal-empty-note">Nothing to choose.</div>`;
     list.querySelectorAll(".library-card-choice").forEach((el) => {
@@ -12409,7 +12447,7 @@ function renderKeepPermanentsModal(info) {
         // than one noun, so Limited Resources' tiles read as they did.
         const fills = (entry.fills || []).map((slotIndex) => (slotList[slotIndex] || {}).type).filter(Boolean);
         const standsFor = slotList.length > 1 && fills.length ? ` as ${fills.join(" / ")}` : "";
-        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${pickLabel}${escapeHtml(standsFor)}</div></div>`;
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}">${candidatePermanentTileFace(entry, entry.name)}<div class="library-card-choice-name">${pickLabel}${escapeHtml(standsFor)}</div></div>`;
       })
       .join("") || `<div class="modal-empty-note">Nothing to ${pickLabel}.</div>`;
     list.querySelectorAll(".library-card-choice").forEach((el) => {
@@ -12576,7 +12614,7 @@ function resplitSeveralTargetsShares(prompt) {
   if (prompt.divisionTotal === null || prompt.divisionTotal === undefined) return;
   const ids = [...modalModeTargetsSelected];
   if (!ids.length) return;
-  const shares = evenStartingDivision(prompt.divisionTotal, ids.length);
+  const shares = ruleStartingDivision(prompt.divisionTotal, ids.length);
   ids.forEach((id, position) => severalTargetsShares.set(id, shares[position]));
 }
 
@@ -12663,7 +12701,7 @@ function renderSeveralTargetsModal(prompt) {
       .map((entry) => {
         const selectedClass = modalModeTargetsSelected.has(entry.id) ? " selected" : "";
         const owner = candidateOwnerLabel(entry.seat);
-        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(candidatePermanentName(entry))}</div><div class="library-card-choice-name">${escapeHtml(owner)}</div></div>`;
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}">${candidatePermanentTileFace(entry, candidatePermanentName(entry))}<div class="library-card-choice-name">${escapeHtml(owner)}</div></div>`;
       })
       .join("") || `<div class="modal-empty-note">Nothing to choose.</div>`;
     list.querySelectorAll(".library-card-choice").forEach((el) => {
@@ -12673,7 +12711,8 @@ function renderSeveralTargetsModal(prompt) {
         else if (modalModeTargetsSelected.size < limit) modalModeTargetsSelected.add(id);
         else return;
         el.classList.toggle("selected");
-        // The targets changed, so the division starts again from an even split.
+        // The targets changed, so the division starts again from the rule's
+        // minimum (`ruleStartingDivision`).
         resplitSeveralTargetsShares(prompt);
         renderSeveralTargetsDivision(prompt, syncConfirm);
         syncConfirm();
@@ -12722,6 +12761,36 @@ let severalTargetsRolePicks = [];
 // the blank 2/2's ("Face-down creature", CR 708.2); its controller is sent the
 // card it hides on their own battlefield payload (`hidden_card`, CR 708.5), so
 // two of them in one list are told apart by that — and nobody else is told.
+// A permanent's tile in a modal list (a several-target dialog, the roles
+// dialog, untap-up-to, a permanent-set choice, the keep modal): the card's
+// art, read off the board the payload's candidate names by id — the
+// candidates carry a name and an id, and every one of these tiles was a name
+// in a blank box (SCG Phase 5: Skirk Volcanist's division). A face-down
+// permanent, or one the board does not show, keeps the name (CR 708.2: the
+// blank 2/2 has no art to show, and its hidden card is not the tile's to
+// reveal).
+function candidatePermanentTileFace(entry, label, state = currentState) {
+  const art = candidatePermanentImage(entry, state);
+  return art
+    ? `<img src="${escapeHtml(art)}" alt="${escapeHtml(label)}" title="${escapeHtml(label)}" loading="lazy" />`
+    : `<div class="library-card-text-placeholder">${escapeHtml(label)}</div>`;
+}
+
+// The image of the permanent a candidate names, by its id on the board — on
+// its seat's battlefield when the candidate says whose it is, on any seat's
+// otherwise (the keep modal's candidates are the chooser's own and carry no
+// seat). Null for a face-down permanent and for one the board does not show.
+function candidatePermanentImage(entry, state = currentState) {
+  if (!Number.isInteger(entry?.id)) return null;
+  const players = Array.isArray(state?.players) ? state.players : [];
+  const seats = Number.isInteger(entry?.seat) ? [entry.seat] : players.map((_, index) => index);
+  for (const index of seats) {
+    const permanent = (players[index]?.battlefield || []).find((perm) => perm && perm.id === entry.id);
+    if (permanent) return permanent.face_down ? null : (permanent.image_uri || null);
+  }
+  return null;
+}
+
 function candidatePermanentName(entry, state = currentState) {
   const name = entry?.name || "a permanent";
   if (Number(entry?.seat) !== seat || !Number.isInteger(entry?.id)) return name;
@@ -12765,8 +12834,7 @@ function renderRoleTargetsModal(prompt, modal) {
           .map((entry) => {
             const selected = severalTargetsRolePicks[position] === entry.id ? " selected" : "";
             return `<div class="library-card-choice${selected}" data-role-position="${position}" `
-              + `data-id="${entry.id}"><div class="library-card-text-placeholder">`
-              + `${escapeHtml(candidatePermanentName(entry))}</div>`
+              + `data-id="${entry.id}">${candidatePermanentTileFace(entry, candidatePermanentName(entry))}`
               + `<div class="library-card-choice-name">${escapeHtml(candidateOwnerLabel(entry.seat))}</div></div>`;
           })
           .join("");
@@ -13484,6 +13552,41 @@ function applyPriorityPromptStyle(panel, state = currentState) {
   }
 }
 
+// The prompts a modal dialog answers, each by the getter that says one is
+// open for this seat (the same getter `renderState` hands its modal). While
+// one is open the panel is hidden: the dialog says everything there is to
+// say, and the panel had fallen through to the step's own prompt — "Main
+// Phase … press OK to pass priority" stood behind every library search, a
+// pass the server refuses while the search is owed (SCG Phase 5). Not here:
+// the notifications (a revealed hand, a face-down look), which owe nothing,
+// so the panel behind them is current; and the several-target dialog, whose
+// panel line says where the answer is ("choose them in the dialog").
+const MODAL_OWNED_PROMPTS = [
+  ["revealed_hand_pick", getRevealedHandPickInfo],
+  ["graveyard_exile_pick", getGraveyardExilePickInfo],
+  ["search_library", getSearchLibraryInfo],
+  ["search_destination", getSearchDestinationInfo],
+  ["search_exile", getSearchExileInfo],
+  ["untap_up_to", getUntapUpToInfo],
+  ["permanent_set_choice", getPermanentSetChoiceInfo],
+  ["keep_permanents", getKeepPermanentsInfo],
+  ["look_top_pick", getLookTopPickInfo],
+  ["reorder_library", getReorderLibraryInfo],
+  ["scry", getScryInfo],
+  ["lamp_draw", getLampDrawInfo],
+  ["outside_game_draw", getOutsideGameDrawInfo],
+  ["outside_game_pick", getOutsideGamePickInfo],
+  ["return_from_graveyard_instead_of_draw", getGraveyardReturnDrawInfo],
+];
+
+// The key of the modal-owned prompt open for this seat, or null.
+function modalOwnedPrompt(state = currentState) {
+  for (const [key, getter] of MODAL_OWNED_PROMPTS) {
+    if (getter(state)) return key;
+  }
+  return null;
+}
+
 function renderActivationPrompt() {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -13978,15 +14081,11 @@ function renderActivationPrompt() {
     return;
   }
 
-  // The revealed-hand pick has its own card-grid modal
-  // (renderRevealedHandPickModal); it claims the slot without a panel.
-  if (getRevealedHandPickInfo()) {
-    panel.classList.add("hidden");
-    return;
-  }
-
-  // The graveyard exile pick does the same (renderGraveyardExileModal).
-  if (getGraveyardExilePickInfo()) {
+  // A prompt a modal dialog owns claims the slot without a panel
+  // (`modalOwnedPrompt`): the revealed-hand pick and the graveyard exile pick
+  // always did; every search, scry and pick dialog fell through to the step's
+  // own prompt behind it.
+  if (modalOwnedPrompt()) {
     panel.classList.add("hidden");
     return;
   }
@@ -14399,20 +14498,20 @@ function renderActivationPrompt() {
     body.textContent = castTargetsFollowChosenType(pending.card, null)
       ? "Choose a creature type first: the targets you choose next must be of that type."
       : "As an additional cost, choose a creature type.";
-    const options = pending.types
-      .map((type) => {
-        const label = escapeHtml(type.charAt(0).toUpperCase() + type.slice(1));
-        const mark = type === pending.selected ? " selected" : "";
-        return `<option value="${escapeHtml(type)}"${mark}>${label}</option>`;
-      })
-      .join("");
+    const selected = pending.types.includes(pending.selected) ? pending.selected : "";
     steps.innerHTML =
       `<div class="prompt-choice-column">`
-      + `<select id="castCreatureTypeSelect">${options}</select>`
-      + `<button type="button" class="prompt-choice-btn" id="castCreatureTypeOk">Choose</button>`
+      + `<select id="castCreatureTypeSelect">${typeChoiceOptionsHtml(pending.types, selected)}</select>`
+      + `<button type="button" class="prompt-choice-btn" id="castCreatureTypeOk"${selected ? "" : " disabled"}>Choose</button>`
       + `</div>`;
     const picker = steps.querySelector("#castCreatureTypeSelect");
-    steps.querySelector("#castCreatureTypeOk").addEventListener("click", () => {
+    const chooseBtn = steps.querySelector("#castCreatureTypeOk");
+    picker.addEventListener("change", () => {
+      pending.selected = picker.value || null;
+      chooseBtn.disabled = !picker.value;
+    });
+    chooseBtn.addEventListener("click", () => {
+      if (!picker.value) return;
       confirmCastCreatureType(picker.value);
     });
     return;
@@ -15018,7 +15117,8 @@ function renderActivationPrompt() {
   if (pendingCastDivision) {
     // CR 601.2d: "the player announces the division. Each of these targets must
     // receive at least one of whatever is being divided." A number per target,
-    // starting from the even split, with the remaining total shown live — a
+    // starting from that minimum (`ruleStartingDivision`), with the remaining
+    // total shown live and the confirm held until it is all placed — a
     // prompt rather than a silent even split, which is what four cards printing
     // "as you choose" were played as.
     panel.classList.remove("hidden");
@@ -17874,10 +17974,30 @@ function castOffersAreLive(offers) {
 // a morph's "cast it face down … for {3}" owes {3}, and "plus {3}" read as a
 // second {3} on top (a {6} face-down cast). For a cost with no mana of its own
 // (Force of Will's life and card) it is exactly the tax, and "in all" is still
-// true. Empty when nothing is owed.
+// true. Empty when nothing is owed — and empty when what is owed is the mana
+// the offer's own label already names: the clause exists for CR 118.9d's
+// increases, and "for {3} — {3} in mana in all" said the morph's {3} twice
+// (SCG Phase 5).
 function alternativeOfferOwedNote(offer) {
   if (!offer?.mana_owed) return "";
+  if (manaSymbolTallyKey(offer.mana_owed) === manaSymbolTallyKey(offer.label || "")) return "";
   return ` — ${renderSymbolsInline(offer.mana_owed)} in mana in all (cost increases apply to it, CR 118.9d)`;
+}
+
+// The mana symbols written in a text, as one comparable key: generic summed,
+// every other symbol counted ({2}{W} and {1}{1}{W} are the same mana). Empty
+// for a text that names no mana.
+function manaSymbolTallyKey(text) {
+  const tally = new Map();
+  let generic = 0;
+  for (const token of String(text || "").toUpperCase().match(/\{([^}]+)\}/g) || []) {
+    const symbol = token.slice(1, -1).trim();
+    if (/^\d+$/.test(symbol)) generic += Number(symbol);
+    else if (symbol) tally.set(symbol, (tally.get(symbol) || 0) + 1);
+  }
+  const parts = [...tally.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([s, n]) => `${s}x${n}`);
+  if (generic) parts.unshift(`generic${generic}`);
+  return parts.join(",");
 }
 
 // An alternative offer's position among the card's alternatives
@@ -18109,13 +18229,15 @@ function startCastCreatureTypePrompt(card, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return false;
   const types = spec.creature_types;
-  const fallback = spec.default_creature_type;
   pendingCastCreatureType = {
     card,
     cardName,
     castAction,
     types,
-    selected: types.includes(fallback) ? fallback : types[0],
+    // Nothing picked: the spec's `default_creature_type` is what an AI seat
+    // announces, and a select that opened on it (or on the first type) made
+    // one click a choice the person never made (SCG Phase 5).
+    selected: null,
   };
   renderActivationPrompt();
   updateActionHint(`Choose a creature type to cast ${cardName}.`);
@@ -19562,12 +19684,15 @@ function dividedTargetLabel(entry, validTargets) {
 /** The even split, as the starting point the caster edits (CR 601.2d needs at
  * least 1 each, so the remainder goes to the earliest targets rather than
  * leaving a target on zero). */
-function evenStartingDivision(total, count) {
-  const base = Math.floor(total / count);
-  const shares = new Array(count).fill(base);
-  let left = total - base * count;
-  for (let i = 0; left > 0 && i < count; i += 1, left -= 1) shares[i] += 1;
-  return shares;
+// Where a division's shares start: what CR 601.2d itself settles and nothing
+// more — "each of these targets must receive at least one", so 1 apiece (and
+// a lone target the whole total). The rest is the caster's to place: the
+// dialog used to start from an even split, already "Fully assigned", so one
+// click on Confirm announced a division the person never made (SCG Phase 5:
+// Skirk Volcanist's 3 opened as 2 and 1).
+function ruleStartingDivision(total, count) {
+  if (count === 1) return [total];
+  return new Array(count).fill(1);
 }
 
 function startCastDivisionPrompt(
@@ -19588,7 +19713,7 @@ function startCastDivisionPrompt(
       ...entry,
       label: dividedTargetLabel(entry, validTargets),
     })),
-    shares: evenStartingDivision(total, dividedPayload.length),
+    shares: ruleStartingDivision(total, dividedPayload.length),
   };
   renderActivationPrompt();
   updateActionHint(`Divide ${total} damage among ${dividedPayload.length} target(s) for ${cardName}.`);
@@ -24061,12 +24186,10 @@ function renderDividedAssignmentSection(group, groups, mode, result, cardThumb) 
     btn.textContent = label;
     btn.addEventListener("click", () => {
       draft.answer = value;
-      // Dividing starts from the plainest legal division — all of it to the
-      // defending player — so there is something to adjust rather than a
-      // row of zeroes.
-      if (value === "divide" && Object.values(draft.shares).every((v) => !(Number(v) > 0))) {
-        draft.shares = { player: group.power };
-      }
+      // Dividing starts from nothing placed: the answer is the person's, and
+      // a dialog that opened on "all of it to the defending player" made one
+      // click on Confirm a division nobody chose (SCG Phase 5's census of
+      // provisional defaults). The readout says what is left to divide.
       renderCombatDamageDialogBody(groups, mode);
     });
     return btn;
@@ -27719,8 +27842,58 @@ async function sendAction(actionBody) {
     actionBody.mana_combination = chosen;
   }
   carryMadnessAnswer(body);
+  // A paying action whose preview says the pool cannot pay it is not sent:
+  // the refusal it would draw ("insufficient mana") is what every caller
+  // opens the auto-tap dialog on, so it is raised here instead of fetched.
+  const shortPlan = await previewPayingAction(body);
+  if (shortPlan) {
+    const refusal = new Error(
+      isManaRefusal(shortPlan.reason) ? shortPlan.reason : "insufficient mana",
+    );
+    refusal.paymentPlan = shortPlan;
+    throw refusal;
+  }
   const payload = await postJson(`/api/sessions/${sessionId}/action`, body);
   renderState(payload);
+}
+
+// The action kinds whose handler pays mana and reads `auto_tap`
+// (`web/payment_plan.PAYING_ACTIONS`): the ones `POST …/payment_plan` previews.
+const PREVIEWED_PAYING_ACTIONS = new Set([
+  "cast", "activate", "activate_hand", "activate_graveyard", "activate_emblem",
+]);
+
+// What a payment preview (`POST …/payment_plan`, web/actions.preview_payment)
+// says about sending the action as it stands: "short" when the pool alone
+// does not pay it — the plan taps something (the board pays where the pool
+// does not), or nothing the seat could tap pays it either (refused for mana
+// on the copy) — and "send" otherwise. A preview refused for anything else
+// ("a resolution is in progress", a target) decides nothing: the action is
+// sent and the server's own refusal is read, as it always was.
+function paymentPreviewVerdict(plan) {
+  if (!plan || typeof plan !== "object") return "send";
+  if (Array.isArray(plan.taps) && plan.taps.length > 0) return "short";
+  if (plan.payable === false && isManaRefusal(plan.reason)) return "short";
+  return "send";
+}
+
+// Ask the server whether this paying action goes through on the pool alone,
+// before sending it. Clicking a castable card used to send the cast and read
+// the 400 "insufficient mana" it drew as the cue for the auto-tap dialog — a
+// failed request in the console on every cast paid by tapping (SCG Phase 5).
+// The preview answers the same question as a read. Returns the plan when the
+// pool is short (the caller raises the refusal without fetching it), else
+// null; an action the preview does not cover, an auto-tap payment, or a
+// preview that could not be made sends the action as before.
+async function previewPayingAction(body) {
+  if (!sessionId || !body || body.auto_tap || !PREVIEWED_PAYING_ACTIONS.has(body.action)) return null;
+  let plan;
+  try {
+    plan = await postJson(`/api/sessions/${sessionId}/payment_plan`, body);
+  } catch {
+    return null;
+  }
+  return paymentPreviewVerdict(plan) === "short" ? plan : null;
 }
 
 // A cast body built by the ordinary cast chain, while that chain is the answer

@@ -222,8 +222,10 @@ _DIALOG = [
     # A tile's name, with the card a face-down permanent hides for its
     # controller (CR 708.5), and the roles branch the renderer hands off to.
     "candidatePermanentName", "renderRoleTargetsModal",
+    # A tile's face: the permanent's art, read off the board by id (SCG P5).
+    "candidatePermanentTileFace", "candidatePermanentImage",
     # A divided trigger's shares (Shambling Swarm).
-    "evenStartingDivision", "severalTargetsDivisionValid", "resplitSeveralTargetsShares",
+    "ruleStartingDivision", "severalTargetsDivisionValid", "resplitSeveralTargetsShares",
     "renderSeveralTargetsDivision",
 ]
 
@@ -478,9 +480,11 @@ def _put(game, seat, name):
 
 @needs_node
 def test_a_divided_trigger_is_answered_with_its_shares():
-    """The dialog takes a share per chosen target, starts from an even split,
-    holds its confirm while the shares do not total three, and sends
-    ``divided_targets`` — a 1 and 2 split the id list could not say."""
+    """The dialog takes a share per chosen target, starts from CR 601.2d's
+    minimum (one each — the base opened on an even 2 and 1, a division the
+    person never made, SCG Phase 5), holds its confirm while the shares do not
+    total three, and sends ``divided_targets`` — a 1 and 2 split the id list
+    could not say."""
     sid, game = _session()
     swarm = _put(game, 0, "Shambling Swarm")
     bears = _put(game, 1, "Grizzly Bears")
@@ -499,7 +503,8 @@ def test_a_divided_trigger_is_answered_with_its_shares():
         const box = nodes.modalModeTargetsDivision;
         nodes.modalModeTargetsList.tiles[0].click();
         nodes.modalModeTargetsList.tiles[1].click();
-        const even = box.inputs.map((input) => input.value);
+        const start = box.inputs.map((input) => input.value);
+        const opened = nodes.modalModeTargetsConfirmBtn.disabled;
         box.inputs[0].set(1);
         const short = nodes.modalModeTargetsConfirmBtn.disabled;
         box.inputs[1].set(2);
@@ -508,7 +513,7 @@ def test_a_divided_trigger_is_answered_with_its_shares():
         show();
         const kept = box.inputs.map((input) => input.value);
         await nodes.modalModeTargetsConfirmBtn.onclick();
-        return { subtitle, even, short, whole, kept, sent };
+        return { subtitle, start, opened, short, whole, kept, sent };
         """,
         {"state": state},
         prelude=_DOM,
@@ -518,8 +523,8 @@ def test_a_divided_trigger_is_answered_with_its_shares():
         "Shambling Swarm: its triggered ability names 1 to 3 targets. "
         "Divide 3 among the targets you choose; each gets at least 1."
     )
-    assert out["even"] == ["2", "1"]
-    assert (out["short"], out["whole"]) == (True, False)
+    assert out["start"] == ["1", "1"]
+    assert (out["opened"], out["short"], out["whole"]) == (True, True, False)
     assert out["kept"] == ["1", "2"]
     assert out["sent"] == [{
         "seat": 0, "action": "trigger_target_confirm",
