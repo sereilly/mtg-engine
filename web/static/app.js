@@ -25538,14 +25538,35 @@ function playHandArrivalFlights(flights, state, viewerSeat) {
   });
 }
 
+// Whether *incoming* is older than the state on screen, so rendering it would
+// step the board back: a slow HTTP response arriving after a faster
+// SSE-prompted fetch has already shown something newer.
+//
+// By the server's `revision` (web/events: one more at every change a route
+// announces) when both carry one and they differ. The log's length was the
+// only version this had, and it is not one across games: a rematch, a
+// restart and an undo each start a shorter log. Each of those was let
+// through only by the event that named it (`rematch_start`, `undo`), so a
+// seat that missed that event — its stream reconnecting, or the next event
+// replacing it in the server's one-slot queue — discarded the new game at
+// every fetch and sat on the finished game's Defeat screen, "Waiting for
+// opponent…", while the new game waited on it (driven at kg4). Between two
+// payloads of one revision (a fetch that only settled what the game owed)
+// the log's length still decides.
+function stateIsStale(incoming, current) {
+  if (!incoming || !current) return false;
+  const newer = incoming.revision;
+  const shown = current.revision;
+  if (Number.isInteger(newer) && Number.isInteger(shown) && newer !== shown) return newer < shown;
+  const incomingLogLen = Array.isArray(incoming.log) ? incoming.log.length : -1;
+  const currentLogLen = Array.isArray(current.log) ? current.log.length : -1;
+  return incomingLogLen < currentLogLen;
+}
+
 function renderState(state, { skipStaleCheck = false } = {}) {
-  // Discard stale responses: when a slow HTTP response arrives after a faster SSE+getState
-  // has already applied newer state, log length is monotonically increasing so we can use
-  // it as a version guard to avoid regressing currentState.
-  // (skipStaleCheck is set for undo, which intentionally produces a shorter log.)
-  const incomingLogLen = Array.isArray(state?.log) ? state.log.length : -1;
-  const currentLogLen = Array.isArray(currentState?.log) ? currentState.log.length : -1;
-  if (!skipStaleCheck && incomingLogLen < currentLogLen) return;
+  // Discard stale responses (`stateIsStale`). skipStaleCheck is set where the
+  // caller knows its state is the newest: its own undo or rematch response.
+  if (!skipStaleCheck && stateIsStale(state, currentState)) return;
   // The re-ask back-off (`retryAutoAdvanceAfterFlight`) counts unchanged renders.
   noteStateForRefetchBackoff(state);
   // Kicked from a still-open lobby: our seat is no longer joined (we lost the

@@ -71,6 +71,7 @@ from .prompts import (PromptContext, blocking_prompt, owed_entry, prompt_owed_by
                       render_prompts)
 from .session_store import Session
 
+from .events import session_revision
 from .presence import seat_is_connected
 from .runtime import store
 from .seats import _build_rematch_info, _seat_type, _winner
@@ -1453,6 +1454,10 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         ],
         "combat": combat_state,
         "log": session.game.log,
+        # Which change of the session this payload shows (``events.
+        # session_revision``): the client keeps the newest by this, not by
+        # the log's length, which a rematch, a restart and an undo shorten.
+        "revision": session_revision(session.id),
         # Cards revealed to all players (CR 701.20) — an event feed the client
         # diffs by id to float the revealed faces over the board.
         "reveal_events": _serialize_reveal_events(session.game),

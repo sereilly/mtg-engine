@@ -15,8 +15,26 @@ from collections import defaultdict
 
 _session_event_queues: dict[str, set[asyncio.Queue[dict[str, str]]]] = defaultdict(set)
 
+#: How many changes each session has announced: one more at every
+#: :func:`_notify_session_change`, whoever is listening. Served on every state
+#: payload as ``revision`` (``state_view``), so a client can tell a newer state
+#: from an older one without reading the log: the log's length is not a
+#: version across games — a rematch or a restart starts a new, shorter one,
+#: and so does an undo — and the client's stale-response guard, which
+#: compared lengths, discarded the new game for any seat that missed the
+#: event naming the reset (a stream reconnecting, or the one-slot queue below
+#: replacing that event with the next one). That seat sat on the finished
+#: game's Defeat screen, fetching a discarded state at every event.
+_session_revisions: dict[str, int] = defaultdict(int)
+
+
+def session_revision(session_id: str) -> int:
+    """How many changes *session_id* has announced (:data:`_session_revisions`)."""
+    return _session_revisions.get(session_id, 0)
+
 
 def _notify_session_change(session_id: str, reason: str) -> None:
+    _session_revisions[session_id] += 1
     queues = _session_event_queues.get(session_id)
     if not queues:
         return
