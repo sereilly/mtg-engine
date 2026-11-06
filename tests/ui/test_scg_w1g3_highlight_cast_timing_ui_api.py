@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.cast_restrictions import cast_timing_claims_line, check_cast_timing
+from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import resolve_stack
@@ -72,8 +73,11 @@ def _board(session, card):
 
 def test_no_card_glows_that_its_own_cast_clause_refuses():
     session = _session()
+    # Through `compilation_units`, so a split card is read by its halves'
+    # text; no half prints such a clause today, and one that did would be
+    # asked about a card this board cannot hold whole, so the census says so.
     candidates = [
-        card for card in _POOL.values()
+        card for card in compilation_units(_POOL.values())
         if card.primary_type != "land"
         and any(
             cast_timing_claims_line(line, card.name)
@@ -81,6 +85,7 @@ def test_no_card_glows_that_its_own_cast_clause_refuses():
         )
         and compile_card_oracle(card).supported
     ]
+    assert not [card.name for card in candidates if card.face_of is not None]
     refused = 0
     glowing = []
     for card in candidates:
