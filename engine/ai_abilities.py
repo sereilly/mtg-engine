@@ -173,16 +173,18 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
     return best
 
 
-#: The steps a seat's sorcery-speed actions are taken in (CR 307.1, 505.6a).
-_MAIN_STEPS = frozenset({"precombat_main", "postcombat_main"})
+#: The phases a seat's sorcery-speed actions are taken in (CR 307.1, 505.6a).
+_MAIN_PHASES = frozenset({"precombat_main", "postcombat_main"})
 
 
 def _at_sorcery_speed(game: Game, seat: int) -> bool:
     """Whether *seat* is the active player in a main phase of its turn with
-    the stack empty — the moment the flat main-phase score is a reading of."""
+    the stack empty — the moment the flat main-phase score is a reading of.
+    The phase, not the step: a main phase has no steps (CR 500.1), and a table
+    may name it with the step left empty."""
     return (
         game.active_player_index == seat
-        and game.current_step in _MAIN_STEPS
+        and game.current_turn_phase in _MAIN_PHASES
         and not game.stack
     )
 

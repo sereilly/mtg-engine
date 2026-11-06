@@ -328,6 +328,12 @@ def test_the_sweep_names_a_reader_with_a_list_of_its_own(session, monkeypatch):
 
     monkeypatch.setattr(ai_abilities, "activation_prohibition", lambda *args: None)
     monkeypatch.setattr(web.serialization, "activation_prohibition", lambda *args: None)
+    # …and the chooser answering every situation by its own gates, as it
+    # did then. Since SCG Phase 5 it answers off its main phase as the
+    # instant-speed chooser (`ai_abilities._at_sorcery_speed`), whose
+    # rehearsal has the engine refuse the activation on its copy — a second
+    # layer this backwards reading of the first is not about.
+    monkeypatch.setattr(ai_abilities, "_at_sorcery_speed", lambda game, seat: True)
 
     _counts, disagreements = _sweep(session)
 
