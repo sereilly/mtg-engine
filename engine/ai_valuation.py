@@ -1105,7 +1105,7 @@ def reaches_both_sides(instruction: OracleInstruction | None) -> bool:
     and not from others (Shepherd's life loss is a race only the seat ahead
     wins), and only a rehearsal of the position says which.
 
-    Read off the payload's shape, never a kind list: a step addressed to
+    Read off the payload's shape, never a card list: a step addressed to
     :data:`EVERY_PLAYER` under any key, or a **sweep** (:func:`swept_filter`)
     whose filter puts no seat in it (:data:`SEAT_FILTER_KEYS`). A sweep
     written flat — the payload its own filter — read as aimed until SCG:
