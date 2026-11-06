@@ -181,10 +181,19 @@ class DrawStepMixin:
         name — which is a second copy of the registry in a package the engine's
         name guard does not walk.
         """
-        return any(
-            (modifier := DRAW_STEP_MODIFIERS.get(perm.card.name)) is not None
-            and modifier.optional_skip_grants_protection
-            for perm in self.controlled_by(player_index)
+        return self._draw_skip_protection_offer(player_index) is not None
+
+    def _draw_skip_protection_offer(self, player_index: int):
+        """The permanent whose draw-step hook offers the skip that buys
+        protection, or None — what :meth:`may_skip_draw_for_protection`
+        answers about, and what the skip's log line names."""
+        return next(
+            (
+                perm for perm in self.controlled_by(player_index)
+                if (modifier := DRAW_STEP_MODIFIERS.get(perm.card.name)) is not None
+                and modifier.optional_skip_grants_protection
+            ),
+            None,
         )
 
     @goes_no_further(0)
@@ -294,17 +303,10 @@ class DrawStepMixin:
         has_sanctuary = self.may_skip_draw_for_protection(player_index)
         if has_sanctuary and sanctuary_choice is not False:
             player.island_sanctuary_protected = True
-            offering = next(
-                (
-                    perm.card.name for perm in self.controlled_by(player_index)
-                    if (modifier := DRAW_STEP_MODIFIERS.get(perm.card.name)) is not None
-                    and modifier.optional_skip_grants_protection
-                ),
-                None,
-            )
+            offering = self._draw_skip_protection_offer(player_index)
             self.log.append(
                 f"{player.name} skipped draw"
-                + (f" ({offering} active)" if offering else "")
+                + (f" ({offering.card.name} active)" if offering is not None else "")
             )
             self._close_or_defer_step(phase, step, defer_priority)
             return 0

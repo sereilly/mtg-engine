@@ -225,8 +225,7 @@ class GameEndingMixin:
                         if code is not None:
                             banned_set_codes.add(code)
                         banner_perm_ids.add(id(_perm))
-                        if _perm.card.name not in banner_names:
-                            banner_names.append(_perm.card.name)
+                        banner_names.append(_perm.card.name)
         while changed:
             changed = False
 
@@ -545,7 +544,8 @@ class GameEndingMixin:
                         ):
                             self.sacrifice_permanent(perm)
                             self.log.append(
-                                f"{perm.card.name} sacrificed ({', '.join(banner_names)})"
+                                f"{perm.card.name} sacrificed "
+                                f"({', '.join(dict.fromkeys(banner_names))})"
                             )
                             changed = True
 

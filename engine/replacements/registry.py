@@ -425,7 +425,8 @@ def replacement_effect(
     first; :func:`replacement_candidates`, given the event, makes one CR 616.1
     candidate of each, so CR 616.1e's ``effect_order`` prompt offers them
     apart — each the registration's label with its own source beside it.
-    Each instance's ``apply`` calls the interceptor with ``instance=<key>``. The keys must be stable while the event is suspended
+    Each instance's ``apply`` calls the interceptor with ``instance=<key>``.
+    The keys must be stable while the event is suspended
     on the prompt — nothing happens in between — and equal effects should be
     one instance, so the prompt never asks between two identical options. The
     default for a seat nobody asks is the first, for ``choose_effect``'s tie

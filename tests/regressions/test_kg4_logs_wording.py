@@ -21,7 +21,6 @@ real entry points:
 from __future__ import annotations
 
 import ast
-import json
 import re
 from pathlib import Path
 
@@ -155,10 +154,8 @@ def test_the_formatter_follows_the_pools_own_convention():
     is signed — read off the card data, so the convention the formatter keeps
     is the one the cards keep."""
     printed: set[str] = set()
-    for path in sorted((ROOT / "cards").glob("*.json")):
-        if path.name == "manifest.json":
-            continue
-        text = path.read_text(encoding="utf-8").replace("−", "-")
+    for card in load_catalog():
+        text = (card.oracle_text or "").replace("−", "-")
         printed.update(re.findall(r"[+-]\d+/[+-]\d+", text))
     assert len(printed) >= 20
     for written in printed:
@@ -347,8 +344,3 @@ def test_two_spells_of_one_name_and_one_controller_say_where_each_is():
     ]
     assert _trigger_target is not None  # the renderer that calls it
 
-
-def test_the_census_saw_the_card_data():
-    """A floor on the P/T census's other half: the card files were read."""
-    manifest = json.loads((ROOT / "cards" / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest.get("sets")
