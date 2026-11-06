@@ -18968,12 +18968,29 @@ function confirmRoleTargets() {
   }
   const verb = activating ? "Activating" : "Casting";
   const done = activating ? "Activated" : "Cast";
+  const card = p.card;
   clearPendingCastTargeting();
+  renderActivationPrompt();
   updateActionHint(`${verb} ${cardName}...`);
   sendAction(body)
-    .then(() => updateActionHint(`${done} ${cardName}.`))
-    .catch((e) => updateActionHint(e.message, true))
-    .finally(() => clearPendingHandCast());
+    .then(() => {
+      updateActionHint(`${done} ${cardName}.`);
+      clearPendingHandCast();
+    })
+    .catch((e) => {
+      // The mana is still on the board: the auto-tap dialog every other cast
+      // opens, with this walk's body kept for its retry. Without it a roles
+      // spell (Reward the Faithful, Cabal Conditioning, Wheel and Deal) cast
+      // with its lands untapped ended on "insufficient mana" and the walk
+      // was lost.
+      if (isManaRefusal(e.message)) {
+        pendingAutoTap = { card, cardName, actionBody: body };
+        renderActivationPrompt();
+        return;
+      }
+      updateActionHint(e.message, true);
+      clearPendingHandCast();
+    });
 }
 
 function startCastSeveralTargetsPrompt(card, castAction = "cast", validTargets = null, announced = null, extra = {}) {

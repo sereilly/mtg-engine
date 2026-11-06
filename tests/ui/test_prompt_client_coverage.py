@@ -33,36 +33,19 @@ def _client_reads(js: str, key: str) -> bool:
 #: each with what the client must do. Not a waiver: the test beside each one
 #: fails the moment the client reads the key, so the entry is deleted with the
 #: client change rather than left behind as a blanket.
-#: Empty since kg3/client2: kg3/ai's ``target_group_order`` (Kaboom!'s
-#: within-group target order) was the one entry, and its client is
-#: ``applyTargetGroupOrderPrompt`` in ``app.js`` (the ``order_triggers``
-#: widget, ``applyOrderListPrompt``, with moves kept inside one group).
-#: Before it, Onslaught's wave 2 ``face_down_look`` (W1G2, Aven Soulgazer and
-#: Spy Network), whose client is ``renderFaceDownLookModal``; Judgment's
-#: ``outside_game_pick`` (W1G6, the Wishes), whose client is
+#: Empty since SCG W2G2: Scourge's two — W1G7's ``pile_top_draw`` (Parallel
+#: Thoughts), whose client is ``applyPileTopDrawPrompt``, and W1G9's
+#: ``counter_distribution`` (Forgotten Ancient), whose client is
+#: ``applyCounterDistributionPrompt``. Before them kg3/client2 emptied it of
+#: kg3/ai's ``target_group_order`` (Kaboom!'s within-group target order),
+#: whose client is ``applyTargetGroupOrderPrompt`` in ``app.js`` (the
+#: ``order_triggers`` widget, ``applyOrderListPrompt``, with moves kept
+#: inside one group); Onslaught's wave 2 ``face_down_look`` (W1G2, Aven
+#: Soulgazer and Spy Network), whose client is ``renderFaceDownLookModal``;
+#: Judgment's ``outside_game_pick`` (W1G6, the Wishes), whose client is
 #: ``renderOutsideGamePickModal``, and Torment's ``madness_cast`` (W1G1),
 #: whose client is ``applyMadnessCastPrompt``.
-_AWAITING_CLIENT: dict[str, str] = {
-    # Scourge W1G7, Parallel Thoughts: "If you would draw a card, you may
-    # instead put the top card of the pile you exiled into your hand." The
-    # client reads ``state.pile_top_draw`` (``web/prompt_values._pile_top_draw``:
-    # ``options``, ``source_name``, ``remaining``, ``pile_size``,
-    # ``library_size``) and answers ``{"action": "pile_top_draw_confirm",
-    # "option_index": 0 | 1}`` — 0 draws, 1 takes the pile's top card (from an
-    # empty pile, the skipped draw). Obstinate Familiar's ``skip_draw`` modal
-    # is the shape to copy; the pile is face down, so show its size, never a
-    # card.
-    "pile_top_draw": "pile_top_draw_confirm",
-    # Scourge W1G9, Forgotten Ancient's "you may move any number of +1/+1
-    # counters from this creature onto other creatures". The client reads
-    # ``state.counter_distribution`` ({card_name, counter, source_id, maximum,
-    # candidates: [{seat, index, id, name}]}), lets the seat give each
-    # candidate a whole number of counters with a running total held at
-    # ``maximum`` (none at all is legal), and sends
-    # ``counter_distribution_confirm`` with ``divided_targets`` — one
-    # ``{seat, id, amount}`` per creature given one or more.
-    "counter_distribution": "counter_distribution_confirm",
-}
+_AWAITING_CLIENT: dict[str, str] = {}
 
 
 def test_every_prompt_has_a_client_renderer():

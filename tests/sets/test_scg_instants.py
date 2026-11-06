@@ -1149,6 +1149,78 @@ def test_w1g8_long_term_plans_finds_a_card_for_a_seat_nobody_asks(set_pool):
 # ==== W2G2 ==========================================================
 # W2G2's tests go between this line and the "end W2G2" line.
 
+from engine import Game as _W2G2Game
+from engine import PlayerState as _W2G2PlayerState
+from engine.models import Permanent as _W2G2Permanent
+from engine.oracle import compile_card_oracle as _w2g2_compile
+from engine.targeting import derive_cast_spec as _w2g2_derive_cast_spec
+from tests.helpers import resolve_stack as _w2g2_resolve_stack
+
+
+def _w2g2_card(set_pool, name):
+    scg = set_pool("SCG")
+    return scg[name] if name in scg else set_pool("LEA")[name]
+
+
+def _w2g2_table(set_pool, hand, theirs):
+    game = _W2G2Game(players=[
+        _W2G2PlayerState("A", hand=[_w2g2_card(set_pool, n) for n in hand],
+                         library=[_w2g2_card(set_pool, "Forest")] * 10),
+        _W2G2PlayerState("B", library=[_w2g2_card(set_pool, "Forest")] * 10),
+    ])
+    game.enforce_mana_costs = False
+    placed = []
+    for name in theirs:
+        permanent = _W2G2Permanent(card=_w2g2_card(set_pool, name))
+        game._put_permanent_onto_battlefield(1, permanent, None)
+        placed.append(permanent)
+    game.start_turn(0)
+    game._settle()
+    return game, placed
+
+
+def test_w2g2_scattershot_numbers_each_copy_and_keep_leaves_it_where_it_was(set_pool):
+    """Storm's "you may choose new targets for any of the copies" asked once
+    per copy (2022-12-08: "You can make different choices for each copy"):
+    each offer carries which copy it is, the copy's current target is what
+    keeping it leaves (CR 707.10c, the offer declined), and the two copies end
+    on the targets their answers named."""
+    game, bears = _w2g2_table(
+        set_pool, ["Dark Ritual", "Dark Ritual", "Scattershot"],
+        ["Grizzly Bears", "Grizzly Bears", "Grizzly Bears"],
+    )
+    game.interactive_seats = {0}
+    for _ in range(2):
+        assert game.queue_from_hand(0, "Dark Ritual").supported
+        _w2g2_resolve_stack(game)
+    assert game.queue_from_hand(
+        0, "Scattershot", target_permanent_ids=[bears[0].permanent_id],
+    ).supported
+    assert game.resolve_top_of_stack()  # the storm trigger
+    offers = game.pending_choices_of("copy_spell_target", 0)
+    assert [(c.data["copy_number"], c.data["copy_count"]) for c in offers] == [(1, 2), (2, 2)]
+    assert game.copy_spell_target_current(offers[0])["permanent_id"] == bears[0].permanent_id
+    assert game.confirm_copy_spell_target(0, keep=True)
+    assert game.confirm_copy_spell_target(0, permanent_id=bears[2].permanent_id)
+    assert not game.pending_choices_of("copy_spell_target", 0)
+    _w2g2_resolve_stack(game)
+    assert [bear.damage_marked for bear in bears] == [2, 0, 1], game.log
+
+
+def test_w2g2_chill_hauntings_graveyard_cost_is_described_for_its_caster(set_pool):
+    """"As an additional cost to cast this spell, exile X creature cards from
+    your graveyard": the cast spec describes the choice (CR 601.2b) beside the
+    creature target — the caster's own pile, creature cards, and the number
+    named is the X — so a person picks which cards go rather than paying with
+    the top of the pile."""
+    card = set_pool("SCG")["Chill Haunting"]
+    spec = _w2g2_derive_cast_spec(card, _w2g2_compile(card), from_zone="hand")
+    assert spec["kind"] == "creature"
+    assert spec["cost_spec"] == {
+        "kind": "graveyard_creature", "exile_cost": True, "own_graveyard_only": True,
+        "card_type": "creature", "announces_x": True,
+    }
+
 # ==== end W2G2 ======================================================
 
 
