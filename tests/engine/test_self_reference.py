@@ -148,6 +148,12 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     itself as the subject of its own triggers, and "Phage" is not a word the
     game uses to describe objects, so the expansion is right to write the
     whole name.
+
+    Scourge added one: Bladewing the Risen's entry trigger reads "When
+    Bladewing enters, you may return target Dragon permanent card …". The
+    legend naming itself as the subject of its own trigger, as Phage does,
+    and "Bladewing" is not a word the game uses to describe objects, so the
+    expansion is right to write the whole name.
     """
     changed = {
         card.name
@@ -175,4 +181,5 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Balthor the Defiled",
         "Arcanis the Omnipotent",
         "Phage the Untouchable",
+        "Bladewing the Risen",
     }
