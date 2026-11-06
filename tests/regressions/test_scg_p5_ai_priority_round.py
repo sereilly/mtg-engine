@@ -310,3 +310,28 @@ def test_the_defenders_trick_waits_for_the_attackers_priority():
     if not seen["states"] and all(c.name != "Giant Growth" for c in game.players[1].graveyard):
         pytest.skip("the AI chose not to cast its trick")
     _assert_round(seen, game)
+
+
+def test_the_ais_block_trigger_waits_for_the_attackers_priority():
+    """The person attacks with Grizzly Bears into the AI's Root Spider
+    ("Whenever this creature blocks, it gets +1/+0 and gains first strike").
+    The AI blocks; its trigger is on the stack when the person — the active
+    player, CR 509.2 — receives priority, and resolves only after the pass."""
+    sid, session = _session(first=0)
+    game = session.game
+    (attacker,) = _put(game, 0, ["Grizzly Bears"])
+    _put(game, 1, ["Root Spider"])
+    state = _state(sid)
+    for _ in range(10):
+        if state["current_step"] == "declare_attackers":
+            break
+        _act(sid, action="next_phase")
+        state = _state(sid)
+    _act(sid, action="declare_attackers", attacker_ids=[attacker.permanent_id], target_seat=1)
+    seen = _drive(
+        sid, "Root Spider",
+        until=lambda g: g.current_turn_phase == "postcombat_main" or g.current_step == "end",
+    )
+    if not seen["states"] and not any("declared 1 blocker" in line for line in game.log):
+        pytest.skip("the AI did not block")
+    _assert_round(seen, game)
