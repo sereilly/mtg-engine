@@ -607,6 +607,19 @@ def _activation_candidate(
                 t for t in perms
                 if game.permanent_at(t["seat"], t["index"]) is not permanent
             ]
+        if _untaps_only(ability.instruction):
+            # "{T}: Untap target creature." (Seeker of Skybreak, Jandor's
+            # Saddlebags, Voltaic Key, Aphetto Alchemist.) An untap aimed at a
+            # permanent that is untapped moves nothing — nor one aimed at its
+            # own source, which its {T} has just tapped. The strongest-target
+            # pick below named whichever was biggest, tapped or not: the
+            # targeted twin of `_host_refusal`'s untap (SCG Phase 5).
+            perms = [
+                t for t in perms
+                if (target := game.permanent_at(t["seat"], t["index"])) is not None
+                and target.tapped
+                and not (ability.cost.requires_tap and target is permanent)
+            ]
         if not perms:
             return None
         def _power(t):
@@ -868,6 +881,16 @@ _OWN_REWRITE_KINDS = _OWN_TYPE_SET_KINDS | {
 
 #: The host steps that untap it: worth nothing on a host that is untapped.
 _HOST_UNTAP_KINDS = frozenset({"untap_enchanted_creature"})
+
+#: …and the targeted untaps, worth nothing on a target that is untapped.
+_TARGET_UNTAP_KINDS = frozenset({"untap_target_permanent", "untap_target_land"})
+
+
+def _untaps_only(instruction) -> bool:
+    """Whether every step of *instruction* untaps its target
+    (:data:`_TARGET_UNTAP_KINDS`)."""
+    steps = _effect_steps(instruction)
+    return bool(steps) and all(step.kind in _TARGET_UNTAP_KINDS for step in steps)
 
 
 def _host_refusal(game: Game, seat: int, permanent, instruction) -> bool:

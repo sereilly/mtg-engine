@@ -257,3 +257,67 @@ def test_every_step_an_activated_ability_aims_at_its_host_is_one_the_side_reader
     assert unread == set(), sorted(unread)
     assert len(seen) >= 10, sorted(seen)
     assert seen - {"grant_prevention_shield", "grant_whole_prevention_shield"} <= HOST_KINDS
+
+
+# --- the targeted twin: an untap aimed at something untapped ------------------
+
+_TARGET_UNTAPS = frozenset({"untap_target_permanent", "untap_target_land"})
+
+
+def _untap_census(pool) -> dict:
+    """Every non-Aura permanent whose first usable ability only untaps its
+    target(s), on the AI's board with a creature, an artifact and a land
+    beside it, twice: everything untapped, and everything but the source
+    tapped. Each proposal's target is read."""
+    found = {"examined": [], "moved_nothing": [], "untapped_something": 0}
+    for name, card in sorted(pool.items()):
+        if card.primary_type in ("instant", "sorcery") or "Aura" in (card.type_line or ""):
+            continue
+        program = compile_card_oracle(card)
+        if not program.supported:
+            continue
+        usable = usable_activated_abilities(program)
+        if not usable or usable[0].instruction is None:
+            continue
+        steps = _effect_steps(usable[0].instruction)
+        if not steps or not all(step.kind in _TARGET_UNTAPS for step in steps):
+            continue
+        found["examined"].append(name)
+        for tapped in (False, True):
+            game = Game(players=[PlayerState(name="AI"), PlayerState(name="Opp")])
+            game.enforce_mana_costs = False
+            game.interactive_seats = set()
+            beside = (pool["Grizzly Bears"], pool["Ornithopter"], pool["Forest"])
+            game.players[0].battlefield = [_nosick(Permanent(card=c)) for c in (card, *beside)]
+            game.players[1].battlefield = [_nosick(Permanent(card=pool["Grizzly Bears"]))]
+            if tapped:
+                for permanent in game.players[0].battlefield[1:]:
+                    permanent.tapped = True
+            game._sync_control()
+            action = ai_abilities.choose_activation_action(game, 0)
+            if action is None or action.permanent_index != 0 or action.target_permanent_index is None:
+                continue
+            slots = action.target_permanent_index
+            for slot in slots if isinstance(slots, list) else [slots]:
+                target = game.permanent_at(action.target_player_index, slot)
+                if target is None or not target.tapped or target is game.players[0].battlefield[0]:
+                    found["moved_nothing"].append((name, tapped, getattr(target, "card", None) and target.card.name))
+                else:
+                    found["untapped_something"] += 1
+    return found
+
+
+def test_no_untap_is_aimed_at_a_permanent_that_is_untapped():
+    found = _untap_census(_pool())
+    assert found["moved_nothing"] == [], found["moved_nothing"]
+    assert len(found["examined"]) >= 8, found["examined"]
+    assert found["untapped_something"] >= 5, found
+
+
+@pytest.mark.full
+def test_without_the_tapped_filter_the_untaps_move_nothing():
+    """Backwards: every candidate kept, tapped or not, as on 43a45e81."""
+    with mock.patch.object(ai_abilities, "_untaps_only", lambda instruction: False):
+        found = _untap_census(_pool())
+    names = {name for name, _tapped, _target in found["moved_nothing"]}
+    assert {"Seeker of Skybreak", "Jandor's Saddlebags", "Voltaic Key"} <= names, found["moved_nothing"]
