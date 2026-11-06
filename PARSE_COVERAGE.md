@@ -12,6 +12,59 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **698**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**19 unclaimed sentence(s) across 18 supported card(s).**
+
+- **Astral Steel**
+  - `storm`
+- **Brain Freeze**
+  - `storm`
+- **Decree of Annihilation**
+  - `exile all artifacts, creatures, and lands from the battlefield, all cards from all graveyards, and all cards from all hands`
+- **Decree of Pain**
+  - `they can't be regenerated`
+  - `draw a card for each creature destroyed this way`
+- **Decree of Savagery**
+  - `when you cycle this card, you may put four +1/+1 counters on target creature`
+- **Decree of Silence**
+  - `whenever an opponent casts a spell, counter that spell and put a depletion counter on this enchantment. if there are three or more depletion counters on this enchantment, sacrifice it`
+- **Dragonstorm**
+  - `storm`
+- **Gilded Light**
+  - `you gain shroud until end of turn`
+- **Hindering Touch**
+  - `storm`
+- **Hunting Pack**
+  - `storm`
+- **Parallel Thoughts**
+  - `if you would draw a card, you may instead put the top card of the pile you exiled into your hand`
+- **Reaping the Graves**
+  - `storm`
+- **Scattershot**
+  - `storm`
+- **Sprouting Vines**
+  - `storm`
+- **Sulfuric Vortex**
+  - `if a player would gain life, that player gains no life instead`
+- **Temporal Fissure**
+  - `storm`
+- **Tendrils of Agony**
+  - `storm`
+- **Wing Shards**
+  - `storm`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
