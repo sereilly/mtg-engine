@@ -4,9 +4,11 @@ A non-random discard and what reads how many were discarded; the caster's pick
 out of a revealed hand (Duress, Mind Warp) and what happens to the chosen card;
 cards put back from a hand onto the library (Brainstorm); a card exiled out of
 a hand, put onto the battlefield out of one, or chosen in one for a later step
-to act on; "discard it unless you pay N life"; and the revealed-hand
-notification a viewer dismisses. Every candidate list is read from the hand as
-it stands, because each card that leaves renumbers the ones behind it.
+to act on; and the revealed-hand notification a viewer dismisses. Every
+candidate list is read from the hand as it stands, because each card that
+leaves renumbers the ones behind it. ("Discard it unless you pay N life" is a
+price, and is answered beside the other life-priced offer, in
+``optional_pay.py``.)
 
 One pick goes the other way and lives here for its shape: a card brought *into*
 a hand from outside the game (the Judgment Wishes, CR 400.11b), which is the
@@ -1246,123 +1248,3 @@ class HandChoicesMixin:
     def _dismiss_hand_reveal(self, choice: PendingChoice) -> bool:
         self.discard_pending_choice(choice)
         return True
-
-    # -- Discard the card you just drew, unless you pay (CR 118.3b) ---------
-
-    def arm_discard_unless_pay_life(
-        self, player_index: int, *, card, life: int, source_name: str,
-        queued_draws: int = 0, queued_exclude_sources: tuple[int, ...] = (),
-        cause_seat: int | None = None,
-    ) -> None:
-        """Offer *player_index* the choice of paying *life* or discarding *card*.
-
-        "That player discards it **unless they pay 3 life**"
-        (Breathstealer's Crypt). A price on a card already in a hand, which is
-        what makes it its own kind rather than ``pay_life_to_save``
-        (``optional_pay.py``): that one is asked of every seat about a
-        *permanent* on the battlefield, and its whole record is which
-        permanents somebody paid for. Here the payer and the affected card are
-        one seat and one card, and the card is addressed **by identity** — a
-        hand repeats one immutable ``CardDefinition`` per copy, so a name would
-        name every copy of it.
-
-        The parameters are the printed ones: nothing here knows the card that
-        prints the sentence, so a second card printing "unless they pay N life"
-        about a drawn card needs no code.
-
-        The draws queued behind the replaced one ride here rather than being
-        made by the caller: CR 121.2 makes an N-card draw N events, and an
-        interactive seat answers this on a later request — so a caller looping
-        would draw the rest while the offer was still open, which CR 608.2
-        forbids. The resolver makes them once the answer is in.
-        """
-        self.arm_pending_choice(
-            "discard_unless_pay_life", player_index,
-            card_name=card.name,
-            life=int(life),
-            source_name=source_name,
-            _card=card,
-            _queued_draws=int(queued_draws),
-            _queued_exclude_sources=tuple(queued_exclude_sources),
-            # Whose ability would make this seat discard (CR 109.5): the
-            # permanent printing the sentence, which is not whoever happens to
-            # be resolving when the draw it replaces is made — a draw step has
-            # nobody resolving at all. Named by the caller, so
-            # `arm_pending_choice`'s own stamp never overrides it.
-            **({"_cause_seat": int(cause_seat)} if cause_seat is not None else {}),
-        )
-
-    def confirm_discard_unless_pay_life(
-        self, player_index: int, accept: bool = True
-    ) -> bool:
-        """Answer "…discards it unless they pay N life"."""
-        return self.resolve_pending_choice(
-            "discard_unless_pay_life", player_index, accept=bool(accept)
-        )
-
-    def _resolve_discard_unless_pay_life(
-        self, choice: PendingChoice, accept: bool
-    ) -> bool:
-        """Pay the life, or discard the card the offer was about.
-
-        The discard goes through ``take_card_from_hand``, which removes exactly
-        **one** copy by identity. The obvious spelling — filtering the hand by
-        ``is not card`` — deletes every copy, and a player who drew their second
-        Grizzly Bears would lose both.
-
-        A card that has already left the hand is no longer there to discard and
-        nothing is done: the offer was about that card, and CR 701.9a moves a
-        card *from a hand*.
-        """
-        data = choice.data
-        player = self.players[choice.player_index]
-        life = int(data.get("life", 0))
-        card = data.get("_card")
-        self.discard_pending_choice(choice)
-        # CR 119.4: a player may pay N life only with at least N to pay. Paying
-        # down to exactly 0 is legal and the state-based check that follows ends
-        # the game, so this refuses a payment that is not there rather than
-        # protecting a life total.
-        if accept and player.life >= life:
-            player.life -= life
-            self.log.append(
-                f"{player.name} paid {life} life to keep {data.get('card_name', 'a card')} "
-                f"({data.get('source_name', '')})"
-            )
-        elif card is not None and self.take_card_from_hand(player, card):
-            # Through the discard seam, never straight to the graveyard: a
-            # discard is CR 701.9a's event, so a replacement over it (Library
-            # of Leng, Dodecapod) and every watcher of one (Megrim) sees this
-            # one too. The cause is the seat the offer was armed for.
-            self._discard_card(player, card, cause_seat=data.get("_cause_seat"))
-            self.log.append(
-                f"{player.name} discarded {data.get('card_name', 'a card')} "
-                f"({data.get('source_name', '')})"
-            )
-        # The rest of the replaced draw, made now that the offer is answered.
-        # Each is its own event (CR 121.2) and goes back through the seam, so a
-        # second card drawn under the same enchantment gets its own reveal and
-        # its own offer.
-        queued = int(data.get("_queued_draws", 0) or 0)
-        if queued > 0:
-            self._draw_with_replacements(
-                player, queued,
-                exclude_sources=tuple(data.get("_queued_exclude_sources") or ()),
-            )
-        return True
-
-    def _default_discard_unless_pay_life(self, choice: PendingChoice) -> None:
-        """The stated policy for a seat nobody is asking: pay, while the payment
-        is not the seat's whole life total.
-
-        A policy rather than a valuation, the discipline
-        ``_default_pay_life_to_save`` states one method over: the card is the
-        seat's own and keeping it is the reason the price is printed, so the
-        default is to pay — and never to pay itself to nothing for one card. A
-        card that should choose otherwise wants a valuation in
-        ``engine/ai_valuation.py``, not a branch here.
-        """
-        life = int(choice.data.get("life", 0))
-        self._resolve_discard_unless_pay_life(
-            choice, self.players[choice.player_index].life > life
-        )
