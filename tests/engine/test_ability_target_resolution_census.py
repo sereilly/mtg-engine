@@ -621,7 +621,7 @@ def test_the_activation_census_goes_red_without_the_rule(monkeypatch):
     findings = _drive_activations(0, only=set(_KNOWN))["findings"]
     said = "\n".join(findings)
     assert "Savage Gorilla#0 [left]: not removed by the rule" in said, said
-    assert "Savage Gorilla drew 1 card" in said, said
+    assert "drew 1 card(s) (Savage Gorilla)" in said, said
     assert "Orcish Artillery#0 [left]" in said and "dealt 3 damage to P1" in said, said
     assert "Prodigal Sorcerer#0 [untargetable]" in said, said
     assert "Royal Assassin#0 [un" in said, said

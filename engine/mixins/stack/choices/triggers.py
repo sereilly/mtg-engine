@@ -1263,7 +1263,13 @@ MODE_CHOICE_SPEC = ChoiceSpec(
     default=lambda game, choice: game._default_mode_choice(choice),
     action="mode_choice_confirm",
     prompt_key="mode_choice",
-    blocked_detail="choose a mode for the triggered ability before other actions",
+    # Armed by three objects, not one (SCG Phase 5): a modal triggered
+    # ability (CR 603.3c), a modal **activated** one (CR 602.2b, Pemmin's
+    # Aura) and a resolution's own "choose one" (Sylvan Library's "pay 4
+    # life or put the card on top"). The sentence was the first one's, and
+    # the status line told a person activating Pemmin's Aura to "choose a
+    # mode for the triggered ability".
+    blocked_detail="choose one of the options before other actions",
     default_at_arm=True,
     spectator_visible=True,
     # "**For each of those cards**, pay 4 life or put the card on top of your

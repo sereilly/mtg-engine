@@ -1349,13 +1349,13 @@ def test_w1g10_read_the_runes_draws_then_discards_one_per_card(set_pool):
     assert game.queue_from_hand(0, "Read the Runes", x_value=3).supported
     _w1g10_drain(game)
     me = game.players[0]
-    assert "Read the Runes drew 3 card" in game.log
+    assert any(line.endswith("drew 3 card(s) (Read the Runes)") for line in game.log)
     assert len(me.hand) == 1, [c.name for c in me.hand]
     assert sorted(c.name for c in me.graveyard if c.name != "Read the Runes") == [
         "Island", "Island", "Shock",
     ]
     assert [p.card.name for p in game.controlled_by(0)] == ["Grizzly Bears", "Forest"]
-    assert game.log.index("Read the Runes drew 3 card") < min(
+    assert next(i for i, line in enumerate(game.log) if line.endswith("drew 3 card(s) (Read the Runes)")) < min(
         i for i, line in enumerate(game.log) if "discarded" in line
     )
 
@@ -1621,7 +1621,7 @@ def test_w1g11_oblation_sends_a_stolen_permanent_home_and_its_owner_draws(set_po
 
     assert not game.is_on_battlefield(pioneer)
     assert len(bob.library) + len(bob.hand) == 7, "six Mountains and the Pioneer"
-    assert len(bob.hand) == 2 and "Bob drew 2 cards" in game.log
+    assert len(bob.hand) == 2 and "Bob drew 2 card(s)" in game.log
     assert alice.hand == [] and len(alice.library) == 6
     assert "Oblation: Elvish Pioneer was shuffled into Bob's library" in game.log
 

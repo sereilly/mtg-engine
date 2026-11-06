@@ -17,7 +17,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..delayed_triggers import (END_OF_TURN, WHILE_EXILED_THIS_WAY,
-                                DelayedTrigger, arm_delayed_trigger)
+                                DelayedTrigger, arm_delayed_trigger,
+                                delayed_ability_text)
 from ..tokens import CREATED_TOKEN_RESULT_KEY
 from ._chosen import (COLOR_CHOSEN_THIS_WAY_KEY,
                       resolve_color_chosen_in_resolution)
@@ -345,6 +346,7 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         instruction=payload.get("instruction"),
         source_name=context.card.name,
         card=context.card,
+        ability_text=delayed_ability_text(context.card.oracle_text or ""),
         bound_permanent_id=bound_id,
         bound_as_target=bool(payload.get("bound_as_target")),
         watched_permanent_id=watched_id,

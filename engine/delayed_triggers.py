@@ -477,6 +477,12 @@ class DelayedTrigger:
     #: ability, not the object the ability is about.
     source_name: str = "delayed trigger"
     card: Any = None
+    #: The delayed ability's own printed words — the sentence of the creating
+    #: card that says when it triggers and what it does
+    #: (:func:`delayed_ability_text`) — for the stack item's ability text and
+    #: the trigger-order prompt's options. Empty falls back to
+    #: ``source_name``.
+    ability_text: str = ""
     #: CR 603.7c, the object half: the permanent "that creature" names, by the
     #: id that survives it leaving the battlefield. None means the event is
     #: not about one particular permanent (Basri Ket's attack trigger, a phase
@@ -706,7 +712,11 @@ class DelayedTrigger:
             # The fact the label used to be read for (CR 603.2d: a delayed
             # ability never triggers an additional time), stated directly.
             "delayed": True,
-            "ability_text": self.source_name,
+            # The ability's own words. The card's name stood here, so the
+            # stack and the trigger-order prompt, which write "<card>:
+            # <ability text>", read "Dimensional Breach: Dimensional Breach"
+            # (SCG Phase 5).
+            "ability_text": self.ability_text or self.source_name,
             # CR 603.7c for a chosen *player*: the ability is about the seat the
             # creating ability targeted — the seat it is **about**
             # (``StackItem.about_player_index``), never one it targets: the
@@ -723,6 +733,40 @@ class DelayedTrigger:
             # trigger context the event-scoped readers ask.
             "captured_results": dict(self.captured),
         }
+
+
+#: How a printed sentence opens a delayed triggered ability (CR 603.7a: "a
+#: delayed triggered ability … begins with 'when,' 'whenever,' or 'at'"),
+#: anywhere in the sentence — "For as long as any of those cards remain
+#: exiled, **at the beginning of** each player's upkeep, …".
+_DELAYED_OPENERS = (
+    "at the beginning of", "at end of combat", "at the end of", "at this turn's next",
+    "when ", "whenever ",
+)
+
+
+def delayed_ability_text(oracle_text: str) -> str:
+    """The sentence of *oracle_text* that is the delayed triggered ability a
+    resolution creates: the first sentence that opens one (CR 603.7a) and is
+    not itself the opening of a triggered line — "When this creature enters,
+    …" is the creating ability's trigger, the delayed one comes later in the
+    line. Empty when no sentence reads as one.
+    """
+    import re
+
+    candidates: list[tuple[bool, str]] = []
+    for line in (oracle_text or "").splitlines():
+        sentences = [part.strip() for part in re.split(r"(?<=\.)\s+", line) if part.strip()]
+        for position, sentence in enumerate(sentences):
+            lowered = sentence.lower()
+            if not any(opener in lowered for opener in _DELAYED_OPENERS):
+                continue
+            opens_its_line = position == 0 and lowered.startswith(("when", "whenever", "at "))
+            candidates.append((opens_its_line, sentence))
+    for opens_its_line, sentence in candidates:
+        if not opens_its_line:
+            return sentence
+    return candidates[0][1] if candidates else ""
 
 
 def arm_delayed_trigger(game: "Game", trigger: DelayedTrigger) -> DelayedTrigger:

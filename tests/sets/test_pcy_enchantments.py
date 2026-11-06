@@ -998,7 +998,7 @@ def test_w3g3_dual_natures_copy_fires_the_copied_entry_trigger_for_its_controlle
     (token,) = [p for p in game.controlled_by(1) if p.metadata.get("is_token")]
     assert token.effective_card.name == "Wall of Blossoms"
     assert [len(p.library) for p in game.players] == [libraries[0], libraries[1] - 2]
-    assert game.log.count("Wall of Blossoms drew 1 card") == 2
+    assert sum(line.endswith("drew 1 card(s) (Wall of Blossoms)") for line in game.log) == 2
     assert game._is_summoning_sick(token)
 
 
