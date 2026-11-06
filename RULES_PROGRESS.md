@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**431 / 641 tracked rules covered (67%)** — 3355 tests, 0 unannotated.
+**432 / 641 tracked rules covered (67%)** — 3359 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [116. Special Actions](#116-special-actions) | 3/3 | 100% |
 | [117. Timing and Priority](#117-timing-and-priority) | 6/6 | 100% |
 | [118. Costs](#118-costs) | 10/14 | 71% |
-| [119. Life](#119-life) | 5/10 | 50% |
+| [119. Life](#119-life) | 6/10 | 60% |
 | [120. Damage](#120-damage) | 6/10 | 60% |
 | [121. Drawing a Card](#121-drawing-a-card) | 5/9 | 55% |
 | [122. Counters](#122-counters) | 5/9 | 55% |
@@ -160,7 +160,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **106.1** Mana is the primary resource in the game. Players spend mana to pay costs, usually when casting s... *(8 tests, subrules ab)*
 - [ ] **106.2** Mana is represented by mana symbols (see rule 107.4). Mana symbols also represent mana costs (see...
 - [x] **106.3** Mana is produced by the effects of mana abilities (see rule 605). It may also be produced by the ... *(2 tests)*
-- [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(6 tests)*
+- [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(7 tests)*
 - [ ] **106.5** If an ability would produce one or more mana of an undefined type, it produces no mana instead.
 - [x] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona... *(14 tests, subrules a)*
 - [x] **106.7** Some abilities produce mana based on the type of mana another permanent or permanents “could prod... *(7 tests)*
@@ -319,7 +319,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **119.7** If an effect says that a player can’t gain life, that player can’t make an exchange such that the... *(6 tests)*
 - [ ] **119.8** If an effect says that a player can’t lose life, that player can’t make an exchange such that the...
 - [x] **119.9** Some triggered abilities are written, “Whenever [a player] gains life, . . . .” Such abilities ar... *(4 tests)*
-- [ ] **119.10** Some replacement effects are written, “If [a player] would gain life, . . . .” Such abilities are...
+- [x] **119.10** Some replacement effects are written, “If [a player] would gain life, . . . .” Such abilities are... *(1 tests)*
 
 ### 120. Damage
 
@@ -566,7 +566,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **500.2** A phase or step in which players receive priority ends when the stack is empty and all players pa... *(5 tests)*
 - [x] **500.3** A step in which no players receive priority ends when all specified actions that take place durin... *(2 tests)*
 - [ ] **500.4** As a step or phase begins, if there are effects that last until that step or phase, those effects...
-- [x] **500.5** As a step or phase ends, if there are effects that last until the end of that step or phase, thos... *(2 tests)*
+- [x] **500.5** As a step or phase ends, if there are effects that last until the end of that step or phase, thos... *(3 tests)*
 - [x] **500.6** When a phase or step begins, any abilities that trigger “at the beginning of” that phase or step ... *(1 tests)*
 - [x] **500.7** Some effects can give a player extra turns. They do this by adding the turns directly after the s... *(5 tests)*
 - [x] **500.8** Some effects can add phases to a turn. They do this by adding the phases directly after the speci... *(7 tests)*
@@ -794,7 +794,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(50 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(52 tests, subrules abcd)*
 - [x] **614.2** Some replacement effects apply to damage from a source. See rule 609.7. *(1 tests)*
 - [x] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re... *(2 tests)*
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
@@ -830,7 +830,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(62 tests, subrules efg)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(63 tests, subrules efg)*
 - [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General

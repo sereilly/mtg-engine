@@ -53,7 +53,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | LGN | 145 | 235 | 71.9% | 71.9% | 47.7% | 108 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| SCG *(measured)* | 143 | 262 | 76.3% | 73.7% | 47.7% | 104 |
+| SCG *(measured)* | 143 | 262 | 77.9% | 75.6% | 48.5% | 106 |
 | **All (shipped)** | **8507** | **12662** | **89.9%** | **89.4%** | **62.1%** | **6671** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -66,7 +66,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 825 | 431 | expected a subject |  |
+| 821 | 427 | expected a subject |  |
 | 181 | 94 | unrecognized effect verb |  |
 | 135 | 71 | unconsumed text |  |
 | 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -4719,6 +4719,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Create X 1/1 red Goblin creature tokens.`
 - **Goblin Piledriver**
   - `Whenever this creature attacks, it gets +2/+0 until end of turn for each other attacking Goblin.`
+- **Goblin Psychopath**
+  - `Whenever this creature attacks or blocks, flip a coin. If you lose the flip, the next time it would deal combat damage this turn, it deals that damage to you instead.`
 - **Goblin Pyromancer**
   - `When this creature enters, Goblin creatures get +3/+0 until end of turn.`
   - `At the beginning of the end step, destroy all Goblins.`
@@ -5939,6 +5941,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Karn, Silver Golem**
   - `Whenever Karn blocks or becomes blocked, it gets -4/+4 until end of turn.`
   - `{1}: Target noncreature artifact becomes an artifact creature with power and toughness each equal to its mana value until end of turn.`
+- **Karona's Zealot**
+  - `When this creature is turned face up, all damage that would be dealt to it this turn is dealt to target creature instead.`
 - **Karona, False God**
   - `At the beginning of each player's upkeep, that player untaps Karona and gains control of it.`
   - `Whenever Karona attacks, creatures of the creature type of your choice get +3/+3 until end of turn.`
