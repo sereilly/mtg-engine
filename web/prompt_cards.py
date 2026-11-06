@@ -508,15 +508,29 @@ def _search_exile(ctx: PromptContext, choices: list) -> dict:
         # that holds three, fewer over one that does not, 0 for "any number of
         # <quality>" (CR 701.23b), where taking nothing is an answer.
         "min_picks": ctx.game._search_floor(choice),
-        "cards": [ctx.owned_card(card, caster) for card in caster.library],
-        "legal_indices": [
-            index for index, card in enumerate(caster.library) if _matches(card)
-        ],
-        "graveyard_cards": [ctx.owned_card(card, caster) for card in caster.graveyard],
-        "legal_graveyard_indices": [
-            index for index, card in enumerate(caster.graveyard) if _matches(card)
-        ],
+        # **Only the zones the search looks in**, as ``search_library``
+        # sends them: the library's cards when it is searched (an empty list
+        # when it is not — the key every client reads), the graveyard's only
+        # when it is. Parallel Thoughts searches the library alone, and its
+        # payload carried the caster's graveyard with every card in it marked
+        # legal — a grid the client hid, of picks the engine refuses
+        # (SCG Phase 5, C4).
+        "cards": (
+            [ctx.owned_card(card, caster) for card in caster.library]
+            if "library" in zones else []
+        ),
+        "legal_indices": (
+            [index for index, card in enumerate(caster.library) if _matches(card)]
+            if "library" in zones else []
+        ),
     }
+    if "graveyard" in zones:
+        payload["graveyard_cards"] = [
+            ctx.owned_card(card, caster) for card in caster.graveyard
+        ]
+        payload["legal_graveyard_indices"] = [
+            index for index, card in enumerate(caster.graveyard) if _matches(card)
+        ]
     return payload
 
 
