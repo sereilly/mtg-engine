@@ -20,7 +20,7 @@ from typing import get_args
 
 import pytest
 
-from engine.pending_choices import CHOICE_SPECS, ChoiceSpec, PendingChoice, register_choice
+from engine.pending_choices import CHOICE_SPECS, ChoiceSpec, PendingChoice, register_choices
 from web.action_registry import ACTION_HANDLERS
 from web.prompts import PROMPT_RENDERERS, blocking_prompt
 from web.schemas import ActionKind
@@ -118,13 +118,51 @@ def test_kinds_and_keys_are_unique():
 def test_duplicate_registration_raises():
     """Which resolver ran would otherwise depend on import order."""
     with pytest.raises(ValueError, match="already registered"):
-        register_choice(
+        register_choices(ChoiceSpec(
             "discard",
             resolve=lambda game, choice, response: True,
             default=lambda game, choice: None,
             action="discard_confirm",
             prompt_key="discard_select",
+        ))
+
+
+def test_every_row_is_registered_by_the_table_and_only_there():
+    """A kind's row is a module-level ``ChoiceSpec`` beside the methods it
+    names, and ``engine/mixins/stack/choices/table.py`` registers every row in
+    one list, whose order is the order ``iter_pending_prompts`` reads. A row
+    left out of that list is a kind armed with no spec; a spec registered that
+    no module defines as a row, or registered from anywhere but that list, has
+    a place in the order no reader of the table can see."""
+    import ast
+    import sys
+
+    from tests.source_index import source_tree
+
+    rows: dict[int, str] = {}
+    for name, module in list(sys.modules.items()):
+        if module is None or not name.startswith("engine."):
+            continue
+        for attr, value in vars(module).items():
+            if isinstance(value, ChoiceSpec):
+                rows.setdefault(id(value), f"{name}.{attr}")
+    registered = {id(spec): kind for kind, spec in CHOICE_SPECS.items()}
+    assert len(registered) >= 90, len(registered)
+    assert set(rows) == set(registered), (
+        "rows never registered:", sorted(rows[i] for i in set(rows) - set(registered)),
+        "registered, no row:", sorted(registered[i] for i in set(registered) - set(rows)),
+    )
+
+    callers = sorted(
+        path.relative_to(REPO).as_posix()
+        for path in ENGINE.rglob("*.py")
+        if any(
+            isinstance(node, ast.Call)
+            and getattr(node.func, "id", getattr(node.func, "attr", None)) == "register_choices"
+            for node in ast.walk(source_tree(path))
         )
+    )
+    assert callers == ["engine/mixins/stack/choices/table.py"], callers
 
 
 def _armed_kinds() -> set[str]:

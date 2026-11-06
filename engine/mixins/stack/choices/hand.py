@@ -4,9 +4,11 @@ A non-random discard and what reads how many were discarded; the caster's pick
 out of a revealed hand (Duress, Mind Warp) and what happens to the chosen card;
 cards put back from a hand onto the library (Brainstorm); a card exiled out of
 a hand, put onto the battlefield out of one, or chosen in one for a later step
-to act on; "discard it unless you pay N life"; and the revealed-hand
-notification a viewer dismisses. Every candidate list is read from the hand as
-it stands, because each card that leaves renumbers the ones behind it.
+to act on; and the revealed-hand notification a viewer dismisses. Every
+candidate list is read from the hand as it stands, because each card that
+leaves renumbers the ones behind it. ("Discard it unless you pay N life" is a
+price, and is answered beside the other life-priced offer, in
+``optional_pay.py``.)
 
 One pick goes the other way and lives here for its shape: a card brought *into*
 a hand from outside the game (the Judgment Wishes, CR 400.11b), which is the
@@ -21,7 +23,7 @@ import random
 from ....linked_exile import link_exiled_card
 from ....models import Permanent
 from ....grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 from ....search_filters import search_matches
 
 
@@ -1247,122 +1249,206 @@ class HandChoicesMixin:
         self.discard_pending_choice(choice)
         return True
 
-    # -- Discard the card you just drew, unless you pay (CR 118.3b) ---------
 
-    def arm_discard_unless_pay_life(
-        self, player_index: int, *, card, life: int, source_name: str,
-        queued_draws: int = 0, queued_exclude_sources: tuple[int, ...] = (),
-        cause_seat: int | None = None,
-    ) -> None:
-        """Offer *player_index* the choice of paying *life* or discarding *card*.
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
 
-        "That player discards it **unless they pay 3 life**"
-        (Breathstealer's Crypt). A price on a card already in a hand, which is
-        what makes it its own kind rather than ``pay_life_to_save``
-        (``optional_pay.py``): that one is asked of every seat about a
-        *permanent* on the battlefield, and its whole record is which
-        permanents somebody paid for. Here the payer and the affected card are
-        one seat and one card, and the card is addressed **by identity** — a
-        hand repeats one immutable ``CardDefinition`` per copy, so a name would
-        name every copy of it.
+HAND_TO_LIBRARY_SPEC = ChoiceSpec(
+    "hand_to_library",
+    resolve=lambda game, choice, r: game._resolve_hand_to_library(
+        choice, r["hand_indices"], bool(r.get("to_bottom")),
+    ),
+    default=lambda game, choice: game._default_hand_to_library(choice),
+    action="hand_to_library_confirm",
+    prompt_key="hand_to_library",
+    blocked_detail="choose which cards go back on top of your library",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # Brainstorm draws three and then puts two back, and the two are steps of
+    # one resolution: nothing after the prompt may read a hand the answer has
+    # not reshaped yet (CR 608.2, CR 117.3b).
+    suspends=True,
+)
 
-        The parameters are the printed ones: nothing here knows the card that
-        prints the sentence, so a second card printing "unless they pay N life"
-        about a drawn card needs no code.
+REVEALED_HAND_PICK_SPEC = ChoiceSpec(
+    "revealed_hand_pick",
+    # ``.get``, not ``[...]``: an answer with **no** index is the chooser
+    # declining, which "choose **up to** X cards from it" (Discordant Dirge)
+    # permits and every earlier printing does not. The resolver is what decides
+    # whether the words were printed; a subscript here would make the decline a
+    # KeyError before it could be judged.
+    resolve=lambda game, choice, r: game._resolve_revealed_hand_pick(
+        choice, r.get("hand_index")
+    ),
+    default=lambda game, choice: game._default_revealed_hand_pick(choice),
+    action="revealed_hand_pick_confirm",
+    prompt_key="revealed_hand_pick",
+    blocked_detail="choose a card from the revealed hand before other actions",
+    # "…then you choose a card … from it. **Search that player's graveyard,
+    # hand, and library for all cards with the same name as the chosen card**…"
+    # (Lobotomy.) The step behind the pick reads what it chose, so it must not
+    # run while the choice is still owed (CR 608.2, CR 117.3b) — the same reason
+    # ``search_library`` suspends, and inert for every printing that has
+    # nothing behind the pick.
+    suspends=True,
+    # The revealed hand is public from the moment it is revealed (CR 701.20),
+    # so a spectator sees the prompt exactly as the choosing seat does.
+    spectator_visible=True,
+)
 
-        The draws queued behind the replaced one ride here rather than being
-        made by the caller: CR 121.2 makes an N-card draw N events, and an
-        interactive seat answers this on a later request — so a caller looping
-        would draw the rest while the offer was still open, which CR 608.2
-        forbids. The resolver makes them once the answer is in.
-        """
-        self.arm_pending_choice(
-            "discard_unless_pay_life", player_index,
-            card_name=card.name,
-            life=int(life),
-            source_name=source_name,
-            _card=card,
-            _queued_draws=int(queued_draws),
-            _queued_exclude_sources=tuple(queued_exclude_sources),
-            # Whose ability would make this seat discard (CR 109.5): the
-            # permanent printing the sentence, which is not whoever happens to
-            # be resolving when the draw it replaces is made — a draw step has
-            # nobody resolving at all. Named by the caller, so
-            # `arm_pending_choice`'s own stamp never overrides it.
-            **({"_cause_seat": int(cause_seat)} if cause_seat is not None else {}),
-        )
+DISCARD_SPEC = ChoiceSpec(
+    "discard",
+    resolve=lambda game, choice, r: game._resolve_discard(choice, r["hand_indices"], r["to_library"]),
+    default=lambda game, choice: game._default_discard(choice),
+    action="discard_confirm",
+    prompt_key="discard_select",
+    blocked_detail="complete discard before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    # "Discard X cards, then <do something for each card discarded this way>"
+    # (Recall) is the shape: the step behind the discard has to see the cards
+    # that were actually discarded, not the hand as it stood when the prompt was
+    # armed. CR 608.2 / CR 117.3b — nothing else in the resolution happens until
+    # the last of its prompts is answered.
+    suspends=True,
+)
 
-    def confirm_discard_unless_pay_life(
-        self, player_index: int, accept: bool = True
-    ) -> bool:
-        """Answer "…discards it unless they pay N life"."""
-        return self.resolve_pending_choice(
-            "discard_unless_pay_life", player_index, accept=bool(accept)
-        )
+HAND_REVEAL_SPEC = ChoiceSpec(
+    "hand_reveal",
+    resolve=lambda game, choice, r: game._dismiss_hand_reveal(choice),
+    default=lambda game, choice: game._dismiss_hand_reveal(choice),
+    action="dismiss_hand_reveal",
+    prompt_key="hand_reveal",
+    # Not a decision — the viewer has already seen the hand. Nothing waits on it.
+    blocked_detail=None,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
 
-    def _resolve_discard_unless_pay_life(
-        self, choice: PendingChoice, accept: bool
-    ) -> bool:
-        """Pay the life, or discard the card the offer was about.
+EXILE_FROM_HAND_CHOICE_SPEC = ChoiceSpec(
+    "exile_from_hand_choice",
+    resolve=lambda game, choice, r: game._resolve_exile_from_hand_choice(
+        choice, r.get("hand_index")
+    ),
+    default=lambda game, choice: game._default_exile_from_hand_choice(choice),
+    action="exile_from_hand_confirm",
+    prompt_key="exile_from_hand_choice",
+    blocked_detail="choose a card to exile before other actions",
+    # The sentence behind this one reads what was exiled ("you may cast that
+    # card for as long as it remains exiled"), so nothing after it may run
+    # until it is answered (CR 608.2).
+    suspends=True,
+    # …and a non-interactive seat therefore never queues it: the rest of the
+    # activation — the charge counter and the mana note — has to finish, which
+    # is the same reason `cast_choice` and `pay_life_to_save` take their default
+    # where the offer stands.
+    default_at_arm=True,
+    # A hand is hidden (CR 400.2), so the options are the chooser's alone.
+    hidden_for_ai=False,
+)
 
-        The discard goes through ``take_card_from_hand``, which removes exactly
-        **one** copy by identity. The obvious spelling — filtering the hand by
-        ``is not card`` — deletes every copy, and a player who drew their second
-        Grizzly Bears would lose both.
+EXILE_HAND_PILE_CHOICE_SPEC = ChoiceSpec(
+    "exile_hand_pile_choice",
+    resolve=lambda game, choice, r: game._resolve_exile_hand_pile(
+        choice, r.get("hand_indices") or []
+    ),
+    default=lambda game, choice: game._default_exile_hand_pile(choice),
+    action="exile_hand_pile_confirm",
+    prompt_key="exile_hand_pile_choice",
+    blocked_detail="choose which cards to exile before other actions",
+    # "Put **that many** cards from the top of your library into your hand" is
+    # the next step of the same resolution and reads what this exiled, so
+    # nothing after it may run until it is answered (CR 608.2).
+    suspends=True,
+    # A hand is hidden (CR 400.2), so the options are the chooser's alone.
+    hidden_for_ai=False,
+)
 
-        A card that has already left the hand is no longer there to discard and
-        nothing is done: the offer was about that card, and CR 701.9a moves a
-        card *from a hand*.
-        """
-        data = choice.data
-        player = self.players[choice.player_index]
-        life = int(data.get("life", 0))
-        card = data.get("_card")
-        self.discard_pending_choice(choice)
-        # CR 119.4: a player may pay N life only with at least N to pay. Paying
-        # down to exactly 0 is legal and the state-based check that follows ends
-        # the game, so this refuses a payment that is not there rather than
-        # protecting a life total.
-        if accept and player.life >= life:
-            player.life -= life
-            self.log.append(
-                f"{player.name} paid {life} life to keep {data.get('card_name', 'a card')} "
-                f"({data.get('source_name', '')})"
-            )
-        elif card is not None and self.take_card_from_hand(player, card):
-            # Through the discard seam, never straight to the graveyard: a
-            # discard is CR 701.9a's event, so a replacement over it (Library
-            # of Leng, Dodecapod) and every watcher of one (Megrim) sees this
-            # one too. The cause is the seat the offer was armed for.
-            self._discard_card(player, card, cause_seat=data.get("_cause_seat"))
-            self.log.append(
-                f"{player.name} discarded {data.get('card_name', 'a card')} "
-                f"({data.get('source_name', '')})"
-            )
-        # The rest of the replaced draw, made now that the offer is answered.
-        # Each is its own event (CR 121.2) and goes back through the seam, so a
-        # second card drawn under the same enchantment gets its own reveal and
-        # its own offer.
-        queued = int(data.get("_queued_draws", 0) or 0)
-        if queued > 0:
-            self._draw_with_replacements(
-                player, queued,
-                exclude_sources=tuple(data.get("_queued_exclude_sources") or ()),
-            )
-        return True
+PUT_FROM_HAND_CHOICE_SPEC = ChoiceSpec(
+    "put_from_hand_choice",
+    resolve=lambda game, choice, r: game._resolve_put_from_hand_choice(
+        choice, r.get("hand_index")
+    ),
+    default=lambda game, choice: game._default_put_from_hand_choice(choice),
+    action="put_from_hand_confirm",
+    prompt_key="put_from_hand_choice",
+    blocked_detail="choose a card to put onto the battlefield before other actions",
+    # The round this is a step of counts the answers to decide whether it
+    # happens again (Eureka), so the loop genuinely stops here.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands. That is also what
+    # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    # Deliberately *not* spectator_visible, unlike ``permanent_choice``: the
+    # candidates are cards in a hand (CR 400.2, a hidden zone), so rendering them
+    # to a seatless viewer would publish the hand. Only the seat that owes the
+    # decision is shown it.
+)
 
-    def _default_discard_unless_pay_life(self, choice: PendingChoice) -> None:
-        """The stated policy for a seat nobody is asking: pay, while the payment
-        is not the seat's whole life total.
+CHOOSE_CARDS_IN_HAND_SPEC = ChoiceSpec(
+    "choose_cards_in_hand",
+    resolve=lambda game, choice, r: game._resolve_choose_cards_in_hand(
+        choice, r.get("hand_indices")
+    ),
+    default=lambda game, choice: game._default_choose_cards_in_hand(choice),
+    action="choose_cards_in_hand_confirm",
+    prompt_key="choose_cards_in_hand",
+    blocked_detail="choose the cards in your hand before other actions",
+    blocks_every_seat=True,
+    # The pick is what the next step of the same resolution repeats over, so
+    # that step must not run before the answer exists.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands. That is also what
+    # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    # Deliberately *not* spectator_visible, for ``put_from_hand_choice``'s
+    # reason: the candidates are cards in a hand (CR 400.2, a hidden zone), so
+    # rendering them to a seatless viewer would publish the hand.
+)
 
-        A policy rather than a valuation, the discipline
-        ``_default_pay_life_to_save`` states one method over: the card is the
-        seat's own and keeping it is the reason the price is printed, so the
-        default is to pay — and never to pay itself to nothing for one card. A
-        card that should choose otherwise wants a valuation in
-        ``engine/ai_valuation.py``, not a branch here.
-        """
-        life = int(choice.data.get("life", 0))
-        self._resolve_discard_unless_pay_life(
-            choice, self.players[choice.player_index].life > life
-        )
+OUTSIDE_GAME_PICK_SPEC = ChoiceSpec(
+    # "You may reveal a sorcery card you own from outside the game and put it
+    # into your hand." (The Judgment Wishes.) CR 400.11b's card brought into
+    # the game: a position in the seat's own sideboard, checked against the
+    # printed phrase the pick was armed with.
+    #
+    # Not Ring of Ma'rûf's ``outside_game_draw`` with a type narrowing. That
+    # one is a CR 614 replacement choice, answered inside the draw it replaced
+    # and resolving the draws queued behind it (CR 121.2); this is a step of a
+    # resolving spell, held on ``pending_choices`` with the stack object until
+    # it is answered (CR 608.2). The two share the reader of what may come in
+    # (``Game._outside_game_choices``) and the mover (``Game.
+    # bring_card_from_outside_game``), not a queue.
+    "outside_game_pick",
+    resolve=lambda game, choice, r: game._resolve_outside_game_pick(
+        choice, r.get("sideboard_index")
+    ),
+    default=lambda game, choice: game._default_outside_game_pick(choice),
+    action="outside_game_pick_confirm",
+    prompt_key="outside_game_pick",
+    blocked_detail=(
+        "choose a card you own from outside the game before other actions"
+    ),
+    # **Not** ``suspends``: the move *is* the answer, and nothing printed
+    # behind it reads the card it brings in — the Wishes' "Exile <this>" and
+    # Death Wish's life loss stand behind the "you may" offer, which does not
+    # suspend either, and Ring of Ma'rûf's pick is a replacement's whole
+    # effect. ``blocked_detail`` is what makes the game wait (CR 608.2). A card
+    # printing a step that reads the brought-in card is the one that makes
+    # this a suspending kind (and a row in ``tests/engine/
+    # test_pending_choices.py``'s ratchet).
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    # Deliberately *not* spectator_visible: the candidates are the seat's
+    # sideboard, which ``web/serialization`` keeps private like a hand — so
+    # only the seat that owes the decision is shown them.
+)

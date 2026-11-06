@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from ....entry_choices import LIFE_PAID_AS_ENTERED
 from ....oracle_types import BIDDING_WINNER, DREW_BY_SEAT, MANA_PAID_BY_SEAT
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 from ....mana_payment import generic_cost
 from ....resumption import run_resumable
 
@@ -651,3 +651,161 @@ class NumberChoicesMixin:
         other unbounded offer in this file.
         """
         self._resolve_repeat_process(choice, False)
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+DRAW_UP_TO_SPEC = ChoiceSpec(
+    "draw_up_to",
+    resolve=lambda game, choice, r: game._resolve_draw_up_to(choice, r["number"]),
+    default=lambda game, choice: game._default_draw_up_to(choice),
+    action="draw_up_to_confirm",
+    prompt_key="draw_up_to",
+    blocked_detail="say how many cards you draw before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    # "Each player may draw up to two cards. **For each card less than two a
+    # player draws this way**, that player gains 2 life." (Truce.) The sentence
+    # behind this one is sized from every seat's answer, so nothing in the
+    # resolution may run until the last of them is given — the same reason the
+    # ``discard`` prompt suspends (CR 608.2).
+    suspends=True,
+)
+
+PAY_ANY_AMOUNT_SPEC = ChoiceSpec(
+    "pay_any_amount",
+    resolve=lambda game, choice, r: game._resolve_pay_any_amount(choice, r["amount"]),
+    default=lambda game, choice: game._default_pay_any_amount(choice),
+    action="pay_any_amount_confirm",
+    prompt_key="pay_any_amount",
+    blocked_detail="say how much mana you pay before other actions",
+    # Every seat is offered at once and the sentence behind the offer reads all
+    # of their answers, so the board must not move under any of them (CR 608.2).
+    blocks_every_seat=True,
+    # How much each player paid is public: the mana leaves visible pools and
+    # taps visible lands.
+    spectator_visible=True,
+    # "… equal to the amount of mana **they paid this way**" is a later step of
+    # the same resolution, so it may not run before the last answer exists
+    # (CR 608.2, CR 117.3b).
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default (pay nothing) is taken where the offer stands.
+    default_at_arm=True,
+)
+
+NUMBER_CHOICE_SPEC = ChoiceSpec(
+    "number_choice",
+    resolve=lambda game, choice, r: game._resolve_number_choice(choice, r["number"]),
+    default=lambda game, choice: game._default_number_choice(choice),
+    action="number_choice_confirm",
+    prompt_key="number_choice",
+    blocked_detail="choose a number before other actions",
+    # Tetravus's removal is one step of a sentence whose next step reads the
+    # answer ("create **that many** … tokens"), so the loop it is a step of has
+    # to stop until the number exists. Shapeshifter's two armings sit at the end
+    # of what they are part of, so suspending costs them nothing.
+    suspends=True,
+)
+
+SECRET_NUMBER_SPEC = ChoiceSpec(
+    "secret_number",
+    resolve=lambda game, choice, r: game._resolve_secret_number(choice, r.get("number")),
+    default=lambda game, choice: game._default_secret_number(choice),
+    action="secret_number_confirm",
+    prompt_key="secret_number",
+    blocked_detail="every player chooses a hidden number before anything else happens",
+    # Every seat is asked at once and the spell is mid-resolution: a seat that
+    # has answered may not act while another is still choosing (CR 608.2).
+    blocks_every_seat=True,
+    # Deliberately not ``spectator_visible``: a seatless viewer is shown no
+    # seat's prompt, and nothing about any answer, until the reveal is logged.
+    #
+    # "Each player loses life equal to **the number of items they revealed**"
+    # is a later step of the same resolution and reads every seat's answer, so
+    # none of it may run before the last one exists (CR 608.2, CR 117.3b).
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish,
+    # and answering where the prompt is armed is what makes that seat commit
+    # before any other answer exists.
+    default_at_arm=True,
+)
+
+BID_LIFE_SPEC = ChoiceSpec(
+    "bid_life",
+    resolve=lambda game, choice, r: game._resolve_bid_life(choice, r.get("number")),
+    default=lambda game, choice: game._default_bid_life(choice),
+    action="bid_life_confirm",
+    # Passing is a second *answer*, not a way around the prompt -- the same
+    # shape a search's "fail to find" takes. It has to be an action of its own
+    # because the bid is a number and there is no number that means "no".
+    also_answers=("bid_life_pass",),
+    prompt_key="bid_life",
+    blocked_detail="answer the bidding before other actions",
+    # The spell is resolving and the board is mid-effect: whoever wins has not
+    # lost the life or taken the creature yet, so nobody should be acting on
+    # what they can see (CR 608.2).
+    blocks_every_seat=True,
+    # The offer is made in the open -- every seat can see what the standing bid
+    # is, which is the whole of what makes the next offer a decision.
+    spectator_visible=True,
+    # A non-interactive seat never queues it: the auction is one resolution and
+    # it has to finish, so the stated default (pass) is taken where the offer
+    # stands. Without this an AI or headless seat would hold the spell on the
+    # stack for the rest of the game.
+    default_at_arm=True,
+    # The two printed sentences behind the bidding -- the life loss and the
+    # control change -- are performed by the *last* answer, so no later step of
+    # this resolution may run before it (CR 608.2). Mages' Contest is the card
+    # with a later step: "If you win the bidding, counter that spell" reads who
+    # won, and waits here for the answer that decides it.
+    suspends=True,
+)
+
+FLIP_AGAIN_SPEC = ChoiceSpec(
+    "flip_again",
+    resolve=lambda game, choice, r: game._resolve_flip_again(
+        choice, bool(r.get("accept", True))
+    ),
+    default=lambda game, choice: game._default_flip_again(choice),
+    action="flip_again_confirm",
+    prompt_key="flip_again",
+    blocked_detail="decide whether to flip again before other actions",
+    # The answer is whether the *rest of this resolution* happens at all, so
+    # nothing may run past it (CR 608.2) — and the round it starts arms the next
+    # offer, which is how a chain of decisions stays one resolution.
+    suspends=True,
+    # A non-interactive seat never queues it: the stated default is to stop, and
+    # taking it where the offer stands is what keeps AI and headless play from
+    # holding a resolution open on a decision nobody will make.
+    default_at_arm=True,
+    # Both players' life totals are public, and so is whose decision it is.
+    hidden_for_ai=False,
+    spectator_visible=True,
+)
+
+REPEAT_PROCESS_SPEC = ChoiceSpec(
+    "repeat_process",
+    resolve=lambda game, choice, r: game._resolve_repeat_process(
+        choice, bool(r.get("accept", True))
+    ),
+    default=lambda game, choice: game._default_repeat_process(choice),
+    action="repeat_process_confirm",
+    prompt_key="repeat_process",
+    blocked_detail="decide whether to repeat the process before other actions",
+    # The answer is whether the *rest of this resolution* happens at all, so
+    # nothing may run past it (CR 608.2) — and the round it starts arms the
+    # next question, which is how a chain of decisions stays one resolution.
+    suspends=True,
+    # A non-interactive seat never queues it: the stated default is to stop, and
+    # taking it where the question stands is what keeps AI and headless play
+    # from holding a resolution open on a decision nobody will make.
+    default_at_arm=True,
+    spectator_visible=True,
+)

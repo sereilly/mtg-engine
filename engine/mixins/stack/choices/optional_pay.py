@@ -7,13 +7,15 @@ an optional cost; ``_collect_optional_price`` charges all of it or none; and a
 paid offer may create a reflexive ability ("when you do", CR 603.12) whose
 target is a prompt of its own. The default a seat nobody asks takes is a
 valuation, and its reasons are written beside it. Paying life to save one
-permanent out of a sweep (Cleansing) is the same offer with a life price.
+permanent out of a sweep (Cleansing) is the same offer with a life price, and
+"discards it unless they pay N life" (Breathstealer's Crypt) the same price on
+a card just drawn into a hand.
 """
 
 from __future__ import annotations
 
 from dataclasses import replace
-from ....pending_choices import PendingChoice, optional_pay_options
+from ....pending_choices import ChoiceSpec, PendingChoice, optional_pay_options
 from ....resumption import run_resumable
 from ....mana_payment import plan_payment
 from ....oracle_types import OracleInstruction
@@ -1008,6 +1010,126 @@ class OptionalPayChoicesMixin:
             choice, mine and self.players[choice.player_index].life > life
         )
 
+    # -- Discard the card you just drew, unless you pay (CR 118.3b) ---------
+
+    def arm_discard_unless_pay_life(
+        self, player_index: int, *, card, life: int, source_name: str,
+        queued_draws: int = 0, queued_exclude_sources: tuple[int, ...] = (),
+        cause_seat: int | None = None,
+    ) -> None:
+        """Offer *player_index* the choice of paying *life* or discarding *card*.
+
+        "That player discards it **unless they pay 3 life**"
+        (Breathstealer's Crypt). A price on a card already in a hand, which is
+        what makes it its own kind rather than ``pay_life_to_save`` (the
+        offer above): that one is asked of every seat about a
+        *permanent* on the battlefield, and its whole record is which
+        permanents somebody paid for. Here the payer and the affected card are
+        one seat and one card, and the card is addressed **by identity** — a
+        hand repeats one immutable ``CardDefinition`` per copy, so a name would
+        name every copy of it.
+
+        The parameters are the printed ones: nothing here knows the card that
+        prints the sentence, so a second card printing "unless they pay N life"
+        about a drawn card needs no code.
+
+        The draws queued behind the replaced one ride here rather than being
+        made by the caller: CR 121.2 makes an N-card draw N events, and an
+        interactive seat answers this on a later request — so a caller looping
+        would draw the rest while the offer was still open, which CR 608.2
+        forbids. The resolver makes them once the answer is in.
+        """
+        self.arm_pending_choice(
+            "discard_unless_pay_life", player_index,
+            card_name=card.name,
+            life=int(life),
+            source_name=source_name,
+            _card=card,
+            _queued_draws=int(queued_draws),
+            _queued_exclude_sources=tuple(queued_exclude_sources),
+            # Whose ability would make this seat discard (CR 109.5): the
+            # permanent printing the sentence, which is not whoever happens to
+            # be resolving when the draw it replaces is made — a draw step has
+            # nobody resolving at all. Named by the caller, so
+            # `arm_pending_choice`'s own stamp never overrides it.
+            **({"_cause_seat": int(cause_seat)} if cause_seat is not None else {}),
+        )
+
+    def confirm_discard_unless_pay_life(
+        self, player_index: int, accept: bool = True
+    ) -> bool:
+        """Answer "…discards it unless they pay N life"."""
+        return self.resolve_pending_choice(
+            "discard_unless_pay_life", player_index, accept=bool(accept)
+        )
+
+    def _resolve_discard_unless_pay_life(
+        self, choice: PendingChoice, accept: bool
+    ) -> bool:
+        """Pay the life, or discard the card the offer was about.
+
+        The discard goes through ``take_card_from_hand``, which removes exactly
+        **one** copy by identity. The obvious spelling — filtering the hand by
+        ``is not card`` — deletes every copy, and a player who drew their second
+        Grizzly Bears would lose both.
+
+        A card that has already left the hand is no longer there to discard and
+        nothing is done: the offer was about that card, and CR 701.9a moves a
+        card *from a hand*.
+        """
+        data = choice.data
+        player = self.players[choice.player_index]
+        life = int(data.get("life", 0))
+        card = data.get("_card")
+        self.discard_pending_choice(choice)
+        # CR 119.4: a player may pay N life only with at least N to pay. Paying
+        # down to exactly 0 is legal and the state-based check that follows ends
+        # the game, so this refuses a payment that is not there rather than
+        # protecting a life total.
+        if accept and player.life >= life:
+            player.life -= life
+            self.log.append(
+                f"{player.name} paid {life} life to keep {data.get('card_name', 'a card')} "
+                f"({data.get('source_name', '')})"
+            )
+        elif card is not None and self.take_card_from_hand(player, card):
+            # Through the discard seam, never straight to the graveyard: a
+            # discard is CR 701.9a's event, so a replacement over it (Library
+            # of Leng, Dodecapod) and every watcher of one (Megrim) sees this
+            # one too. The cause is the seat the offer was armed for.
+            self._discard_card(player, card, cause_seat=data.get("_cause_seat"))
+            self.log.append(
+                f"{player.name} discarded {data.get('card_name', 'a card')} "
+                f"({data.get('source_name', '')})"
+            )
+        # The rest of the replaced draw, made now that the offer is answered.
+        # Each is its own event (CR 121.2) and goes back through the seam, so a
+        # second card drawn under the same enchantment gets its own reveal and
+        # its own offer.
+        queued = int(data.get("_queued_draws", 0) or 0)
+        if queued > 0:
+            self._draw_with_replacements(
+                player, queued,
+                exclude_sources=tuple(data.get("_queued_exclude_sources") or ()),
+            )
+        return True
+
+    def _default_discard_unless_pay_life(self, choice: PendingChoice) -> None:
+        """The stated policy for a seat nobody is asking: pay, while the payment
+        is not the seat's whole life total.
+
+        A policy rather than a valuation, the discipline
+        ``_default_pay_life_to_save`` states one method over: the card is the
+        seat's own and keeping it is the reason the price is printed, so the
+        default is to pay — and never to pay itself to nothing for one card. A
+        card that should choose otherwise wants a valuation in
+        ``engine/ai_valuation.py``, not a branch here.
+        """
+        life = int(choice.data.get("life", 0))
+        self._resolve_discard_unless_pay_life(
+            choice, self.players[choice.player_index].life > life
+        )
+
 
 def _compelled_block_declined(game, player_index: int, entry: dict) -> bool:
     """``ai_compelled_blocks.compelled_block_declined``, reached the way this
@@ -1016,3 +1138,95 @@ def _compelled_block_declined(game, player_index: int, entry: dict) -> bool:
     from ....ai_compelled_blocks import compelled_block_declined
 
     return compelled_block_declined(game, player_index, entry)
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+PAY_LIFE_TO_SAVE_SPEC = ChoiceSpec(
+    "pay_life_to_save",
+    resolve=lambda game, choice, r: game._resolve_pay_life_to_save(choice, r["accept"]),
+    default=lambda game, choice: game._default_pay_life_to_save(choice),
+    action="pay_life_to_save_confirm",
+    prompt_key="pay_life_to_save",
+    blocked_detail="answer the pay-to-save offer before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The answer decides what the *next* step of the same resolution does with
+    # this permanent — and, one step later, whether the seat behind you is
+    # asked about it at all — so the loop genuinely stops here.
+    suspends=True,
+    # A non-interactive seat never queues it: the sweep has to finish, and the
+    # stated default is taken where the offer stands. That is also what keeps
+    # AI and headless play free of the suspension above.
+    default_at_arm=True,
+)
+
+OPTIONAL_PAY_SPEC = ChoiceSpec(
+    "optional_pay",
+    resolve=lambda game, choice, r: game._resolve_optional_pay(
+        choice, r["accept"], r.get("option"), asked=True,
+    ),
+    default=lambda game, choice: game._default_optional_pay(choice),
+    action="resolve_optional_pay",
+    prompt_key="optional_pay",
+    # The kind outgrew its first card: it now carries any optional cost or
+    # action, on a trigger or on a whole spell (Twiddle, Rebirth), so the
+    # message names the offer rather than the one card it was written for.
+    blocked_detail="answer the optional-cost offer before other actions",
+    # An offer priced in mana is paid by tapping for it, and the engine taps
+    # only free land abilities on a payer's behalf — so the seat's own mana
+    # abilities answer the offer as much as the yes does (CR 605.3a), exactly
+    # as they do for ``mana_payment``. The web layer admits a *mana*
+    # ability and nothing else while one of these is owed
+    # (``web/actions.py``): nobody has priority in the middle of a resolution.
+    also_answers=("tap", "activate"),
+    # **An offer is a step of the resolution that makes it** (CR 608.2c: the
+    # instructions are followed in the order written), so the steps behind it
+    # wait for the answer. It did not suspend, on the argument that only a
+    # step *reading* the answer needs to wait and that one could be folded
+    # into the offer's branch (``lowering/sequences._fold_into_offer``) — and
+    # every other step behind an offer ran before an interactive seat had
+    # answered: Grip of Amnesia drew its card before the counter was decided,
+    # Twitch drew before the caster chose whether to tap, Death Wish took the
+    # life before the wish was made. The census is
+    # ``tests/regressions/test_jud_w2g2_offer_tail_census.py``.
+    suspends=True,
+)
+
+REFLEXIVE_TARGET_SPEC = ChoiceSpec(
+    "reflexive_target",
+    resolve=lambda game, choice, r: game._resolve_reflexive_target(
+        choice, r["permanent_id"]
+    ),
+    default=lambda game, choice: game._default_reflexive_target(choice),
+    action="reflexive_target_confirm",
+    prompt_key="reflexive_target",
+    blocked_detail="choose the reflexive trigger's target before other actions",
+)
+
+DISCARD_UNLESS_PAY_LIFE_SPEC = ChoiceSpec(
+    "discard_unless_pay_life",
+    resolve=lambda game, choice, r: game._resolve_discard_unless_pay_life(
+        choice, r["accept"]
+    ),
+    default=lambda game, choice: game._default_discard_unless_pay_life(choice),
+    action="discard_unless_pay_life_confirm",
+    prompt_key="discard_unless_pay_life",
+    blocked_detail="answer the pay-or-discard offer before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The offer is armed from inside a CR 614 draw replacement, which may be
+    # replacing a draw that is itself one step of a resolution. Nothing of that
+    # resolution may run until this is answered (CR 608.2).
+    suspends=True,
+    # A non-interactive seat never queues it: a draw replacement has to finish
+    # where it stands, and the stated default is taken at once. That is also
+    # what keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+)

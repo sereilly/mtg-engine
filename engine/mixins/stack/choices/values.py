@@ -16,7 +16,7 @@ from ....grammar.vocabulary import display_color_word, display_type_word
 from ....color_changes import change_color
 from ....continuous import next_timestamp
 from ....land_types import CHOSEN_LAND_TYPES, change_land_type
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 
 
 def _entry_choice_option_allowed(choice: PendingChoice, answer: str) -> bool:
@@ -1170,3 +1170,202 @@ class ValueChoicesMixin:
 
     def _default_color_set_choice(self, choice: PendingChoice) -> None:
         self._resolve_color_set_choice(choice, choice.data.get("default_colors") or [])
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+MANA_COLOR_CHOICE_SPEC = ChoiceSpec(
+    "mana_color_choice",
+    resolve=lambda game, choice, r: game._resolve_mana_color_choice(
+        choice, r.get("color")
+    ),
+    default=lambda game, choice: game._default_mana_color_choice(choice),
+    action="mana_color_choice_confirm",
+    prompt_key="mana_color_choice",
+    blocked_detail="choose the color of the mana before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # CR 608.2d's choice is the whole of what the clause does, and nothing
+    # behind it in the same resolution reads the answer — the mana lands in a
+    # pool, not in the scratchpad. So the offer is taken inline by every
+    # non-interactive seat, which is what keeps a seeded AI run producing the
+    # mana it always produced.
+    default_at_arm=True,
+)
+
+COLOR_SET_CHOICE_SPEC = ChoiceSpec(
+    "color_set_choice",
+    resolve=lambda game, choice, r: game._resolve_color_set_choice(
+        choice, r.get("colors")
+    ),
+    default=lambda game, choice: game._default_color_set_choice(choice),
+    action="color_set_choice_confirm",
+    prompt_key="color_set_choice",
+    blocked_detail="choose the colour or colours before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The colour is the whole of what this resolution does; nothing after it in
+    # the same trigger reads the answer, so the loop has nothing to wait for.
+    default_at_arm=True,
+)
+
+LAND_TYPE_CHOICE_SPEC = ChoiceSpec(
+    "land_type_choice",
+    resolve=lambda game, choice, r: game._resolve_land_type(choice, r["land_type"]),
+    # The provisional default stamped when the Aura attached is an Island, so
+    # taking it again is what a non-interactive controller does.
+    # …unless the sentence offered a list without one (``default_land_type_
+    # choice``): the default must be an answer the resolver accepts.
+    default=lambda game, choice: game._resolve_land_type(
+        choice, game.default_land_type_choice(choice)
+    ),
+    action="land_type_confirm",
+    prompt_key="land_type_choice",
+    # Phantasmal Terrain arms this as it enters, and its own comment says "the
+    # spell never visibly resolves the land change before the player finishes
+    # the choice" — which needs the game to actually wait. The Aura is already
+    # on the battlefield (not a spell held on the stack), so it is armed with
+    # ``_stack_item=None``: holds priority, holds no finished object.
+    blocked_detail="choose the land type before other actions",
+    # And nothing behind the choice may happen before it is made (CR 608.2c:
+    # the instructions are followed in the order written). "Target land
+    # becomes the basic land type of your choice until end of turn. / Draw a
+    # card." (Shimmering Mirage) drew the card while the type was still being
+    # chosen — the game waited, but only after the step behind the prompt had
+    # run. ``scry``'s arrangement, for Opt's reason, and like ``scry`` without
+    # ``default_at_arm``: the kind stays queued for every seat, which is what
+    # its callers and thirty-odd tests are written around.
+    suspends=True,
+)
+
+LAND_TYPE_SWAP_SPEC = ChoiceSpec(
+    "land_type_swap",
+    resolve=lambda game, choice, r: game._resolve_land_type_swap(
+        choice, r.get("from_type"), r.get("to_type")
+    ),
+    # The default pair is computed where the prompt is armed, against the board
+    # as it then stood, and applied here — the swap *is* the effect, so a
+    # default that merely discarded the prompt would resolve the spell having
+    # done nothing.
+    default=lambda game, choice: game._resolve_land_type_swap(
+        choice, choice.data.get("default_from"), choice.data.get("default_to")
+    ),
+    action="land_type_swap_confirm",
+    prompt_key="land_type_swap",
+    blocked_detail="choose the two land types before other actions",
+)
+
+CARD_TYPE_CHOICE_SPEC = ChoiceSpec(
+    "card_type_choice",
+    resolve=lambda game, choice, r: game._resolve_card_type_choice(
+        choice, r.get("card_type")
+    ),
+    # The handler stamps its deterministic default on the source before arming,
+    # so a non-interactive seat has nothing left to apply and the sweep behind
+    # this prompt runs at once with that answer.
+    default=lambda game, choice: game.discard_pending_choice(choice),
+    action="card_type_choice_confirm",
+    prompt_key="card_type_choice",
+    blocked_detail="choose a card type before other actions",
+    # A non-interactive seat takes the default *inline*, because the resolution
+    # this interrupts has to finish: the sweep is the next step of the same
+    # sequence.
+    default_at_arm=True,
+    # And an interactive seat's answer has to arrive before that sweep runs —
+    # a one-shot that had already phased out the default's type would make the
+    # prompt a lie. See `_resolve_card_type_choice` for why `enter_choice`,
+    # whose readers are continuous effects, does not need this and must not
+    # gain it.
+    suspends=True,
+)
+
+CREATURE_TYPE_CHOICE_SPEC = ChoiceSpec(
+    "creature_type_choice",
+    resolve=lambda game, choice, r: game._resolve_creature_type_choice(
+        choice, r.get("creature_type")
+    ),
+    # The handler stamps its deterministic default into the scratchpad before
+    # arming, so a non-interactive seat has nothing left to apply and the sweep
+    # behind this prompt runs at once with that answer — ``card_type_choice``'s
+    # arrangement, and for its reason.
+    default=lambda game, choice: game.discard_pending_choice(choice),
+    action="creature_type_choice_confirm",
+    prompt_key="creature_type_choice",
+    blocked_detail="choose a creature type before other actions",
+    default_at_arm=True,
+    # And an interactive seat's answer has to arrive before the sweep runs: an
+    # answer that landed after the board had already been swept on the default
+    # would change nothing, which is a prompt that lies.
+    suspends=True,
+    # Which creature type a player named is announced in the open (CR 608.2d is
+    # applied where everyone can see), so a seatless viewer may see the question.
+    spectator_visible=True,
+)
+
+COLOR_CHOICE_SPEC = ChoiceSpec(
+    "color_choice",
+    resolve=lambda game, choice, r: game._resolve_color_choice(
+        choice, r.get("mana_color")
+    ),
+    # The handler stamps its deterministic default on the source and in the
+    # scratchpad before arming, so a non-interactive seat has nothing left to
+    # apply and whatever reads the colour runs at once with that answer —
+    # ``card_type_choice``'s arrangement, and for its reason.
+    default=lambda game, choice: game.discard_pending_choice(choice),
+    action="color_choice_confirm",
+    prompt_key="color_choice",
+    blocked_detail="choose a color before other actions",
+    default_at_arm=True,
+    # And an interactive seat's answer has to arrive before the step behind it
+    # runs: Scrying Glass counts the revealed hand against the chosen colour in
+    # the same resolution, and an answer that landed after the count would
+    # change nothing at all — a prompt that lies.
+    suspends=True,
+    # Which colour a player named is announced in the open (CR 608.2d is applied
+    # where everyone can see), so a seatless viewer may see the question — the
+    # same reading ``creature_type_choice`` takes of the same rule.
+    spectator_visible=True,
+)
+
+TEXT_CHANGE_VOCABULARY_SPEC = ChoiceSpec(
+    "text_change_vocabulary",
+    resolve=lambda game, choice, r: game._resolve_text_change_vocabulary(
+        choice, r.get("mode")
+    ),
+    default=lambda game, choice: game._default_text_change_vocabulary(choice),
+    action="text_change_vocabulary_confirm",
+    prompt_key="text_change_vocabulary",
+    blocked_detail="choose which kind of word to replace before other actions",
+    # **Not** ``suspends``: the rewrite *is* the answer and it is the last step
+    # of the spell, so nothing behind it reads a record. ``blocked_detail`` is
+    # what makes the game wait (CR 608.2).
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    # A text change is a public change to a public object (CR 612), so a
+    # seatless viewer may see the question.
+    spectator_visible=True,
+)
+
+ENTER_CHOICE_SPEC = ChoiceSpec(
+    "enter_choice",
+    resolve=lambda game, choice, r: game._resolve_enter_choice(
+        choice, r.get("opponent_index"), r.get("mana_color"), r.get("card_name"),
+        r.get("land_types"), r.get("creature_type"), r.get("land_type"),
+    ),
+    # Black Vise / Jihad stamp their deterministic defaults on the permanent as
+    # it enters for a seat nobody asks, so a non-interactive controller has
+    # nothing left to apply; a person's prompt answered by default writes the
+    # defaults it carries (CR 614.12a: nothing was stamped for a person).
+    default=lambda game, choice: game._default_enter_choice(choice),
+    action="enter_choice_confirm",
+    prompt_key="enter_choice",
+    blocked_detail="make the entering permanent's choice before other actions",
+    default_at_arm=True,
+)

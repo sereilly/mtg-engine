@@ -422,10 +422,12 @@ Every other decision a seat owes part-way through a spell, an ability or a turn
 step — a library search, a discard, Balance's removals, Power Sink's payment,
 Word of Command's borrowed card — is a `PendingChoice` on
 `Game.pending_choices`, with a `ChoiceSpec` registered in
-`engine/pending_choices.py` (the table itself is
-`engine/mixins/stack/choices/table.py`, one row per kind in the order the
-queue is read; each family's arm / confirm / resolve / default methods are a
-mixin of their own beside it).
+`engine/pending_choices.py`. Each family of prompt is a mixin of its own in
+`engine/mixins/stack/choices/` (and `engine/mixins/entry_choices.py` for an
+entering permanent's), holding its kinds' arm / confirm / resolve / default
+methods and, at its foot, each kind's `ChoiceSpec` row (`SCRY_SPEC`); the
+table itself is `engine/mixins/stack/choices/table.py`, one
+`register_choices` list naming every row in the order the queue is read.
 
 A prompt has five parts: something arms it, a **resolver**, a **default** for
 non-interactive seats, a **renderer**, and an **action** that answers it. The
@@ -454,7 +456,8 @@ carries the same `kind`/`player_index`/`data` attributes, so no adapter is
 needed. `pending_<name>` properties remain as read-only views derived from the
 queue, each taking its seat from `choice.player_index` so the two cannot drift.
 
-Adding an interactive choice is one `register_choice(...)`, one renderer, the
+Adding an interactive choice is one `ChoiceSpec` row beside its resolver and
+its name appended to `table.py`'s list, one renderer, the
 code that arms it, and a scenario in the answered-choice census
 (`tests/regressions/test_kg_prompts_answered_choice_leaves_queue.py`, which
 fails on a kind with none); `tests/engine/test_pending_choices.py` fails if a kind is

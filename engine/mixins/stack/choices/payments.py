@@ -13,7 +13,7 @@ helpers from their own families.
 from __future__ import annotations
 
 from .... import land_mana_swaps
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 from ....mana_payment import (generic_cost, mana_cost_label, payment_prices_in_force,
                               payment_units_in_force, payment_wants_in_force,
                               plan_payment, untapped_mana_lands)
@@ -582,3 +582,30 @@ class PaymentChoicesMixin:
             and not any(perm is land for land in planned)
             for perm in mine
         )
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+MANA_PAYMENT_SPEC = ChoiceSpec(
+    "mana_payment",
+    resolve=lambda game, choice, r: game._resolve_mana_payment(
+        choice, r["pay"], asked=True,
+    ),
+    default=lambda game, choice: game._default_mana_payment(choice),
+    action="confirm_mana_payment",
+    prompt_key="mana_payment",
+    # "…unless its controller pays {X}" (Power Sink) is paid *during* the
+    # counterspell's resolution, so the game genuinely waits on it — this used
+    # to say so by being named in ``pass_priority`` instead, which is a second
+    # place to state one fact and the reason every other prompt was left out of
+    # it. Paying means tapping lands and activating mana abilities, so those two
+    # answer the prompt as much as the confirm does; everything else waits.
+    blocked_detail="pay for the spell on the stack before other actions",
+    also_answers=("tap", "activate"),
+)

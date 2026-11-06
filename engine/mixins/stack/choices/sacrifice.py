@@ -11,7 +11,7 @@ records for the sentences behind it.
 
 from __future__ import annotations
 
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 from ....oracle_types import (SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
                               KEEP_FATES, RETURN_CHOSEN_TO_HAND)
 from ....subject_filters import subject_matches
@@ -1289,3 +1289,93 @@ class SacrificeChoicesMixin:
             data["exclude"], data["reason"], data.get("record"),
             up_to=bool(data.get("up_to")), count_onto=data.get("_count_onto"),
         )
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+BALANCE_SPEC = ChoiceSpec(
+    "balance",
+    resolve=lambda game, choice, r: game._resolve_balance(
+        choice, r["land_indices"], r["creature_indices"], r["hand_indices"]
+    ),
+    default=lambda game, choice: game._default_balance(choice),
+    action="balance_confirm",
+    prompt_key="balance_select",
+    blocked_detail="complete Balance sacrifices before other actions",
+)
+
+SACRIFICE_SPEC = ChoiceSpec(
+    "sacrifice",
+    resolve=lambda game, choice, r: game._resolve_sacrifice(
+        choice, r.get("indices"), r.get("permanent_ids"),
+    ),
+    default=lambda game, choice: game._default_sacrifice(choice),
+    action="sacrifice_confirm",
+    prompt_key="sacrifice_select",
+    blocked_detail="complete forced sacrifice before other actions",
+    default_at_arm=True,
+    spectator_visible=True,
+    # "Sacrifice an artifact. **If you do**, search your library…" (Transmute
+    # Artifact): what the player gives up decides what the rest of the same
+    # resolution may find, so the rest has to wait for the answer. Only an
+    # interactive seat ever queues this — `default_at_arm` takes the
+    # deterministic answer before the flag is set — so headless and AI play run
+    # exactly as they did.
+    suspends=True,
+)
+
+AGGREGATE_SACRIFICE_SPEC = ChoiceSpec(
+    "aggregate_sacrifice",
+    resolve=lambda game, choice, r: game._resolve_aggregate_sacrifice(
+        choice, r.get("permanent_ids") or []
+    ),
+    default=lambda game, choice: game._default_aggregate_sacrifice(choice),
+    action="aggregate_sacrifice_confirm",
+    prompt_key="aggregate_sacrifice",
+    blocked_detail="choose what to sacrifice before other actions",
+    # **Not** ``suspends``: the sacrifice *is* the answer and it is the last
+    # step of the offer's accept branch, so nothing behind it reads a record.
+    # ``blocked_detail`` is what makes the game wait (CR 608.2), which it must —
+    # the creatures are still on the battlefield until the answer arrives.
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    spectator_visible=True,
+)
+
+KEEP_PERMANENTS_SPEC = ChoiceSpec(
+    "keep_permanents",
+    resolve=lambda game, choice, r: game._resolve_keep_permanents(
+        choice, r.get("permanent_ids") or []
+    ),
+    default=lambda game, choice: game._default_keep_permanents(choice),
+    action="keep_permanents_confirm",
+    prompt_key="keep_permanents",
+    blocked_detail="choose which permanents to keep before other actions",
+    # The sacrifice is this prompt's own resolver rather than a step behind it,
+    # so nothing inside the resolution is waiting on the answer - but the
+    # *other* seats' prompts are armed by the same instruction and the object
+    # stays on the stack until the last of them is answered (CR 608.2), which is
+    # what the gate above buys.
+    #
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated maximum keep is taken where the effect stands.
+    default_at_arm=True,
+    spectator_visible=True,
+    # "…then sacrifices the rest. **Each player discards cards the same
+    # way.**" (Balancing Act.) The first card with a step *behind* the keep,
+    # and that step arms a prompt of its own for the same seat. Left running,
+    # one seat owed a keep and a discard at once and each answer was refused
+    # naming the other — every blocking prompt refuses every action but its
+    # own. So the keep holds the resolution the way a forced sacrifice does,
+    # and the step behind it runs when the last keep is answered. Nothing
+    # changes for the four cards printed before it: none has a step behind
+    # the keep, and a seat nobody asks never queues one.
+    suspends=True,
+)

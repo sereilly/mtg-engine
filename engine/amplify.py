@@ -157,7 +157,7 @@ def arm_amplify_reveals(game, permanent, seat: int) -> None:
                 f"{permanent.card.name}'s amplify"
             )
             continue
-        # ``entry_reveal`` (``engine/mixins/stack/choices/table.py``): named
+        # ``entry_reveal`` (``engine/mixins/entry_choices.py``'s row): named
         # for what it asks — "which cards in your hand do you reveal as this
         # enters" — rather than for the keyword, because the counters are
         # payload. Spelled here, at the arm site, because the registry guard

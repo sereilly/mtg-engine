@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from .... import piles
 from ....game_types import as_target_ids
-from ....pending_choices import PendingChoice
-from ....trigger_order import ORDER_TRIGGERS, apply_trigger_order
+from ....pending_choices import ChoiceSpec, PendingChoice
+from ....trigger_order import ORDER_TRIGGERS, apply_trigger_order, order_is_open
 
 
 def _printed_quantifier(item) -> str | None:
@@ -1181,3 +1181,69 @@ class TriggerChoicesMixin:
         return self._resolve_mode_choice(
             choice, choose_trigger_mode(self, choice, stated)
         )
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+TRIGGER_TARGET_SPEC = ChoiceSpec(
+    "trigger_target",
+    resolve=lambda game, choice, r: game._resolve_trigger_target(
+        choice, r.get("permanent_id"), r.get("seat"), r.get("permanent_ids"),
+        graveyard_index=r.get("graveyard_index"), stack_item=r.get("stack_item"),
+        amounts=r.get("amounts"), graveyard_indices=r.get("graveyard_indices"),
+    ),
+    default=lambda game, choice: game._default_trigger_target(choice),
+    action="trigger_target_confirm",
+    prompt_key="trigger_target",
+    blocked_detail="choose the triggered ability's target before other actions",
+    # The choice is part of putting the ability on the stack (CR 603.3d), so a
+    # non-interactive seat takes it there and then — nothing queues, and
+    # headless and AI play run exactly as they did.
+    default_at_arm=True,
+    spectator_visible=True,
+)
+
+ORDER_TRIGGERS_SPEC = ChoiceSpec(
+    ORDER_TRIGGERS,
+    resolve=lambda game, choice, r: game._resolve_order_triggers(choice, r["order"]),
+    default=lambda game, choice: game._default_order_triggers(choice),
+    action="order_triggers_confirm",
+    prompt_key="order_triggers",
+    blocked_detail="choose the order of your triggered abilities before other actions",
+    # CR 603.3b's choice is part of putting the abilities on the stack, like
+    # a trigger's target (CR 603.3d) above: a seat nobody asks keeps the order
+    # they were pushed in there and then, nothing queues, and a seeded run
+    # reproduces exactly.
+    default_at_arm=True,
+    spectator_visible=True,
+    # Owed while two of its objects are still on the stack to be ordered
+    # (``trigger_order.order_is_open``) — a target prompt answered meanwhile
+    # can remove one (CR 603.3d).
+    is_open=order_is_open,
+)
+
+MODE_CHOICE_SPEC = ChoiceSpec(
+    "mode_choice",
+    resolve=lambda game, choice, r: game._resolve_mode_choice(
+        choice, r["mode_index"], r.get("target"),
+    ),
+    default=lambda game, choice: game._default_mode_choice(choice),
+    action="mode_choice_confirm",
+    prompt_key="mode_choice",
+    blocked_detail="choose a mode for the triggered ability before other actions",
+    default_at_arm=True,
+    spectator_visible=True,
+    # "**For each of those cards**, pay 4 life or put the card on top of your
+    # library." (Sylvan Library.) A choice reached inside a repetition, whose
+    # branch acts on the object the repetition is *currently* on — so the next
+    # iteration must not start before this answer is applied. Without it both
+    # iterations armed at once and both answers were applied against whichever
+    # card the loop had ended on.
+    suspends=True,
+)

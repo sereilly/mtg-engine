@@ -10,12 +10,13 @@ re-aimed (CR 115.7), and the choice CR 707.10 gives a copy's controller.
 
 from __future__ import annotations
 
+from .... import madness as _madness
 from ....face_down import MASK_FACE_DOWN, face_down_card
 from ....faces import castable_faces, is_multi_face, spell_named
 from ....game_types import single_chosen_id
 from ....grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ....models import Permanent
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 
 
 class SpellChoicesMixin:
@@ -793,3 +794,171 @@ class SpellChoicesMixin:
                 entry["role"] for entry in choice.data.get("targets") or ()
             ]
         self.discard_pending_choice(choice)
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+COPY_SPELL_TARGET_SPEC = ChoiceSpec(
+    "copy_spell_target",
+    resolve=lambda game, choice, r: game._resolve_copy_spell_target(choice, r),
+    default=lambda game, choice: game._default_copy_spell_target(choice),
+    action="copy_spell_target_confirm",
+    prompt_key="copy_spell_target",
+    blocked_detail="choose the copy's target before other actions",
+    # CR 707.10: the copy's targets are chosen as the copy is created, which is
+    # part of the resolution that created it — so a non-interactive seat answers
+    # there and then and nothing queues. That is also what keeps the headless
+    # path honest: `_settle()` drains the stack without pausing, and a prompt
+    # left queued here would be answered after the copy it was meant to aim.
+    default_at_arm=True,
+    spectator_visible=True,
+)
+
+MADNESS_CAST_SPEC = ChoiceSpec(
+    "madness_cast",
+    resolve=lambda game, choice, r: _madness.resolve_madness_offer(game, choice, r),
+    default=lambda game, choice: _madness.default_madness_offer(game, choice),
+    action="madness_cast_confirm",
+    prompt_key="madness_cast",
+    # CR 608.2g: the cast is made *during* the trigger's resolution, so the
+    # game waits on the answer and the trigger stays on the stack under the
+    # spell the answer casts. Paying for that cast is CR 601.2g's mana
+    # abilities, so a land's tap and a mana ability answer it as much as the
+    # confirm does — the arrangement every prompt paid in mana has.
+    blocked_detail="decide whether to cast the exiled card for its madness cost",
+    also_answers=("tap", "activate"),
+    # A seat nobody asks answers where the offer stands, inside the
+    # resolution, with the AI's rehearsed cast chooser — the same moment a
+    # person's cast would be made.
+    default_at_arm=True,
+    # The card is in exile (a public zone) and the offer is the rule's, so a
+    # seatless viewer may see the question.
+    spectator_visible=True,
+)
+
+RETARGET_CHOICE_SPEC = ChoiceSpec(
+    "retarget_choice",
+    resolve=lambda game, choice, r: game._resolve_retarget_choice(
+        choice, r.get("target_index")
+    ),
+    default=lambda game, choice: game._default_retarget_choice(choice),
+    action="retarget_choice_confirm",
+    prompt_key="retarget_choice",
+    blocked_detail="choose the spell's new target before other actions",
+    # The step behind this one in the same sentence writes the answer onto the
+    # stack item, so Deflection's resolution is not over until it exists
+    # (CR 608.2).
+    suspends=True,
+    # A non-interactive seat never queues it, for ``player_choice``'s reason:
+    # the resolution has to finish, and the stated default is taken where the
+    # effect stands.
+    default_at_arm=True,
+    # What a spell on the stack targets is public (CR 601.2c is announced in
+    # the open), so a seatless viewer may see the question.
+    spectator_visible=True,
+)
+
+FACE_DOWN_CAST_SPEC = ChoiceSpec(
+    "face_down_cast",
+    resolve=lambda game, choice, r: game._resolve_face_down_cast(choice, r["hand_index"]),
+    default=lambda game, choice: game._default_face_down_cast(choice),
+    action="face_down_cast_confirm",
+    prompt_key="face_down_cast",
+    # Illusionary Mask's own comment: "the actual cast happens in
+    # confirm_face_down_cast" — armed mid-resolution, so the game waits.
+    blocked_detail="choose the face-down creature before other actions",
+)
+
+WORD_OF_COMMAND_SPEC = ChoiceSpec(
+    "word_of_command",
+    resolve=lambda game, choice, r: game._resolve_word_of_command(
+        choice, r["hand_index"], r["defer_resolution"], r.get("spell_name"),
+    ),
+    default=lambda game, choice: game._default_word_of_command(choice),
+    action="word_of_command_confirm",
+    prompt_key="word_of_command",
+    blocked_detail="choose the Word of Command card before other actions",
+    # The caster's answer is recorded while the spell keeps waiting on the
+    # stack, so the object outlives the decision it carries.
+    is_open=lambda game, choice: "chosen_hand_index" not in choice.data,
+)
+
+MODAL_MODE_TARGETS_SPEC = ChoiceSpec(
+    "modal_mode_targets",
+    resolve=lambda game, choice, r: game._resolve_modal_mode_targets(
+        choice, r.get("permanent_ids")
+    ),
+    default=lambda game, choice: game._default_modal_mode_targets(choice),
+    action="modal_mode_targets_confirm",
+    prompt_key="modal_mode_targets",
+    blocked_detail=(
+        "name the targets for the mode your opponent chose before other actions"
+    ),
+    # The other half of `opponent_mode_choice` below, and every flag on it is
+    # here for that flag's own reason: this is still inside CR 601.2i's
+    # announcement, so nobody acts until it is answered, and a non-interactive
+    # caster takes the stated default where the offer stands rather than
+    # holding the cast open forever.
+    blocks_every_seat=True,
+    default_at_arm=True,
+    # A spell's targets are announced in the open (CR 601.2c).
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+OPPONENT_MODE_CHOICE_SPEC = ChoiceSpec(
+    "opponent_mode_choice",
+    resolve=lambda game, choice, r: game._resolve_opponent_mode_choice(
+        choice, r.get("mode_index")
+    ),
+    default=lambda game, choice: game._default_opponent_mode_choice(choice),
+    action="opponent_mode_choice_confirm",
+    prompt_key="opponent_mode_choice",
+    blocked_detail=(
+        "an opponent is choosing that spell's mode; wait for the answer"
+    ),
+    # CR 601.2i finishes the cast before anyone may respond, and CR 700.2e puts
+    # this choice inside that announcement — so **nobody** acts until it is
+    # answered, the caster included. That is what `blocks_every_seat` says, and
+    # it is stronger than the priority hold the detail above already implies.
+    blocks_every_seat=True,
+    # **Not** ``suspends``. That flag stops the resumable loop an effect was a
+    # step of, and this prompt is armed inside an *announcement*: no effect is
+    # running, the spell has not resolved, and there is no loop behind it. What
+    # holds the game is the block above — CR 601.2i finishes the cast, and then
+    # nobody has priority until the mode is known.
+    # A non-interactive chooser never queues it: the cast has to finish, and the
+    # stated default (the first printed mode) is taken where the offer stands.
+    # Without this an AI or headless seat would hold a cast open forever.
+    default_at_arm=True,
+    # A spell's modes are announced in the open (CR 601.2b), and so is whose
+    # choice this is.
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+TARGET_GROUP_ORDER_SPEC = ChoiceSpec(
+    # Kaboom!'s 2022-09-09 ruling: a loop over "any number of target players or
+    # planeswalkers" handles each player's group in turn order, and "You choose
+    # the relative order of targets within that group" (``handlers/_role_order``).
+    # Armed only where a group holds two targets; answered with every target's
+    # index in the order it is handled (`order`).
+    "target_group_order",
+    resolve=lambda game, choice, r: game._resolve_target_group_order(choice, r.get("order")),
+    default=lambda game, choice: game._default_target_group_order(choice),
+    action="target_group_order_confirm",
+    prompt_key="target_group_order",
+    blocked_detail="choose the order of the spell's targets before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    # The loop's later steps read the answer: the resolution waits (CR 608.2).
+    suspends=True,
+    # A seat nobody asks takes the slot order there and then.
+    default_at_arm=True,
+)

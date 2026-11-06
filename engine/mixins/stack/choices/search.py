@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import random
 from ....linked_exile import link_exiled_card, shuffle_linked_pile
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 from ....oracle_types import SEARCHED_PERMANENTS
 from ....search_filters import (landing_seat, search_matches,
                                 search_names_a_quality, search_slots,
@@ -1057,3 +1057,79 @@ class LibrarySearchChoicesMixin:
             picks = slow_pile_picks(self, choice.player_index, picks)
         if not self._resolve_search_exile(choice, picks):
             self._resolve_search_exile(choice, [])
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+SEARCH_LIBRARY_SPEC = ChoiceSpec(
+    "search_library",
+    # `zone` defaults so a caller written before the graveyard existed — and the
+    # web action, which sends it only when the client picked one — still names
+    # the library. A counted search ("up to two basic land cards") is answered
+    # whole through `picks`; the single-find shape keeps its one index.
+    resolve=lambda game, choice, r: (
+        game._resolve_search_library_picks(choice, r["picks"])
+        if "picks" in r
+        else game._resolve_search_library(
+            choice, r["library_index"], r.get("zone", "library")
+        )
+    ),
+    default=lambda game, choice: game._default_search_library(choice),
+    action="search_library_confirm",
+    # "Fail to find" (CR 701.23b) is the second answer, not a way around the
+    # prompt — and the only one available when nothing matches the restriction.
+    also_answers=("search_library_decline",),
+    prompt_key="search_library",
+    blocked_detail="complete library search before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    # A search is armed for AI seats too and drained by the auto-resolver; the
+    # prompt is rendered for whoever still owes it.
+    hidden_for_ai=False,
+    # A search takes a card out of the library and shuffles what is left, so any
+    # later step of the same resolution reads a library the answer decided.
+    suspends=True,
+)
+
+SEARCH_DESTINATION_SPEC = ChoiceSpec(
+    "search_destination",
+    # A counted search whose printed slots differ ("put one onto the
+    # battlefield tapped and the other into your hand") asks its finder which
+    # found card fills which slot. The finds are already made and shown — this
+    # is only where each lands, so it works the same over any zone a picker
+    # took the cards from.
+    resolve=lambda game, choice, r: game._resolve_search_destination(
+        choice, r.get("assignments") or []
+    ),
+    default=lambda game, choice: game._default_search_destination(choice),
+    action="search_destination_confirm",
+    prompt_key="search_destination",
+    blocked_detail="choose where each found card goes before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The cards land only when the answer is applied, so a later step of the
+    # same resolution must not read a board they have not reached yet.
+    suspends=True,
+)
+
+SEARCH_EXILE_CARDS_SPEC = ChoiceSpec(
+    "search_exile_cards",
+    resolve=lambda game, choice, r: game._resolve_search_exile(choice, r.get("picks") or []),
+    default=lambda game, choice: game._default_search_exile(choice),
+    action="search_exile_confirm",
+    prompt_key="search_exile",
+    blocked_detail="complete your search before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The picks are what the next step of the same resolution ("You may cast
+    # them this turn.") grants permission over, so that step must wait.
+    suspends=True,
+)

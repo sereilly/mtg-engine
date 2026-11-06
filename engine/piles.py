@@ -28,11 +28,12 @@ fates — each a step of one resumable loop (``engine/resumption.py``), because
 either prompt may stop to ask an interactive seat and the rest of the procedure
 has to be there when the answer arrives.
 
-The two prompts are ``pile_split`` and ``pile_choice``
-(``engine/mixins/stack/choices/table.py`` registers them). Both are face up: every
-player sees what is in each pile, which is the difference from Phyrexian
-Portal's ``library_pile_split`` / ``pile_exile_choice`` pair, whose chooser may
-be shown two numbers and nothing else (CR 406.3).
+The two prompts are ``pile_split`` and ``pile_choice`` (their rows are
+``engine/mixins/stack/choices/pile_picks.py``'s, registered by ``table.py``
+beside it). Both are face up: every player sees what is in each pile, which
+is the difference from Phyrexian Portal's ``library_pile_split`` /
+``pile_exile_choice`` pair, whose chooser may be shown two numbers and
+nothing else (CR 406.3).
 """
 
 from __future__ import annotations

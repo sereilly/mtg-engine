@@ -17,7 +17,7 @@ from ....models import Permanent
 from ....oracle_types import (CLAIMABLE_EXILED_CARDS, EXILED_THIS_WAY,
                               EXILED_THIS_WAY_OBJECTS, OracleInstruction)
 from .... import piles
-from ....pending_choices import PendingChoice
+from ....pending_choices import ChoiceSpec, PendingChoice
 from ....mana_payment import mana_cost_label
 from ....handlers.zones import GRAVEYARD_PICK_TO_LIBRARY_BOTTOM
 from ....handlers.returns import FORGOTTEN_PICKS
@@ -985,3 +985,228 @@ class PileChoicesMixin:
                 context.results[EXILED_THIS_WAY_OBJECTS] = []
                 context.results[EXILED_THIS_WAY] = 0
             self.discard_pending_choice(choice)
+
+
+# ---------------------------------------------------------------------------
+# This family's rows of the prompt table
+# ---------------------------------------------------------------------------
+#
+# One ``ChoiceSpec`` per prompt kind of this family, in the table's order
+# (``engine/pending_choices.py`` says what each field means). ``table.py``
+# registers them, in the one list ``Game.iter_pending_prompts`` reads.
+
+OPPONENT_PICKS_REVEALED_SPEC = ChoiceSpec(
+    "opponent_picks_revealed",
+    resolve=lambda game, choice, r: game._resolve_opponent_picks_revealed(
+        choice, r.get("index")
+    ),
+    default=lambda game, choice: game._default_opponent_picks_revealed(choice),
+    action="opponent_picks_revealed_confirm",
+    prompt_key="opponent_picks_revealed",
+    blocked_detail="choose one of the revealed cards before other actions",
+    # The draw behind the pick is a later step of the same resolution
+    # (CR 608.2), and it must not run against a library the answer is about to
+    # change \u2014 so arming this stops the sequence until it is answered.
+    suspends=True,
+    # A non-interactive chooser answers where the offer stands: the resolution
+    # is suspended on this prompt, and a seat that never queues would hold it
+    # open for the rest of the game.
+    default_at_arm=True,
+    # A reveal is public: CR 701.20 reveals the cards to every player, and so
+    # is whose choice this is.
+    spectator_visible=True,
+)
+
+LIBRARY_PILE_SPLIT_SPEC = ChoiceSpec(
+    "library_pile_split",
+    resolve=lambda game, choice, r: game._resolve_library_pile_split(
+        choice, r.get("first_pile")
+    ),
+    default=lambda game, choice: game._default_library_pile_split(choice),
+    action="library_pile_split_confirm",
+    prompt_key="library_pile_split",
+    blocked_detail="divide the piles before other actions",
+    # Answering arms the controller's choice, which is a later step of this
+    # same resolution (CR 608.2).
+    suspends=True,
+    # …and a non-interactive divider answers at once, or the resolution stops
+    # on a prompt nobody owes an answer to.
+    default_at_arm=True,
+)
+
+PILE_EXILE_CHOICE_SPEC = ChoiceSpec(
+    "pile_exile_choice",
+    resolve=lambda game, choice, r: game._resolve_pile_exile_choice(
+        choice, r.get("pile_index")
+    ),
+    default=lambda game, choice: game._default_pile_exile_choice(choice),
+    action="pile_exile_confirm",
+    prompt_key="pile_exile_choice",
+    blocked_detail="choose a pile to exile before other actions",
+    suspends=True,
+    default_at_arm=True,
+)
+
+PILE_SEARCH_SPEC = ChoiceSpec(
+    "pile_search",
+    resolve=lambda game, choice, r: game._resolve_pile_search(
+        choice, r.get("pile_index")
+    ),
+    default=lambda game, choice: game._default_pile_search(choice),
+    action="pile_search_confirm",
+    prompt_key="pile_search",
+    blocked_detail="search the pile before other actions",
+    suspends=True,
+    default_at_arm=True,
+)
+
+PILE_SPLIT_SPEC = ChoiceSpec(
+    "pile_split",
+    resolve=lambda game, choice, r: piles.resolve_pile_split(
+        game, choice, r.get("first_pile")
+    ),
+    default=lambda game, choice: piles.default_pile_split(game, choice),
+    action="pile_split_confirm",
+    prompt_key="pile_split",
+    blocked_detail="separate the piles before other actions",
+    # The choice between the piles is a later step of this same resolution
+    # (CR 608.2), and it is between what this answer made.
+    suspends=True,
+    # A non-interactive separator answers at once, or the resolution stops on
+    # a prompt nobody owes an answer to.
+    default_at_arm=True,
+    # The piles are face up (CR 700.3) — unlike Phyrexian Portal's, every
+    # player sees them — so the prompt is the separator's but hides nothing.
+    spectator_visible=True,
+)
+
+PILE_CHOICE_SPEC = ChoiceSpec(
+    "pile_choice",
+    resolve=lambda game, choice, r: piles.resolve_pile_choice(
+        game, choice, r.get("pile_index")
+    ),
+    default=lambda game, choice: piles.default_pile_choice(game, choice),
+    action="pile_choice_confirm",
+    prompt_key="pile_choice",
+    blocked_detail="choose a pile before other actions",
+    # What becomes of each pile is the next step of the same resolution.
+    suspends=True,
+    default_at_arm=True,
+    spectator_visible=True,
+)
+
+LINKED_EXILE_RETURN_SPEC = ChoiceSpec(
+    "linked_exile_return",
+    resolve=lambda game, choice, r: game._resolve_linked_exile_return(
+        choice, r.get("entry_index")
+    ),
+    default=lambda game, choice: game._default_linked_exile_return(choice),
+    action="linked_exile_return_confirm",
+    prompt_key="linked_exile_return",
+    blocked_detail="choose a card to return before other actions",
+    # The prompt refuses every other action, so a seat that never answers it
+    # freezes the game. A non-interactive seat therefore takes its default the
+    # moment it is armed, exactly as the exile that filled the pile does —
+    # ``auto_resolve_pending_choices`` drains only the kinds a caller lists,
+    # and a blocking prompt left off that list is a headless run that stops.
+    default_at_arm=True,
+    # The pile is face down (CR 406.3) and only its owner may look, so the
+    # options are the chooser's alone — exactly the hand pick's reason.
+    hidden_for_ai=False,
+)
+
+GRAVEYARD_PILE_CHOICE_SPEC = ChoiceSpec(
+    "graveyard_pile_choice",
+    resolve=lambda game, choice, r: game._resolve_graveyard_pile_choice(
+        choice, r.get("seat")
+    ),
+    default=lambda game, choice: game._default_graveyard_pile_choice(choice),
+    action="graveyard_pile_confirm",
+    prompt_key="graveyard_pile_choice",
+    blocked_detail="choose which graveyard to exile from before other actions",
+    # The pick this arms is a later step of the same resolution and reads the
+    # answer, so nothing may run past it (CR 608.2). The chain is what makes
+    # both prompts one resolution.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    # Whose graveyard holds what is public (CR 400.2 makes a graveyard an open
+    # zone), so a seatless viewer may see the question.
+    spectator_visible=True,
+)
+
+GRAVEYARD_EXILE_PICK_SPEC = ChoiceSpec(
+    "graveyard_exile_pick",
+    resolve=lambda game, choice, r: game._resolve_graveyard_exile_pick(
+        choice, r.get("graveyard_indices")
+    ),
+    default=lambda game, choice: game._default_graveyard_exile_pick(choice),
+    action="graveyard_exile_confirm",
+    prompt_key="graveyard_exile_pick",
+    blocked_detail="choose the cards to exile from that graveyard before other actions",
+    blocks_every_seat=True,
+    # "…**If you do**, you gain 1 life for each card exiled this way" is a
+    # later step of the same resolution and reads what this answer records, so
+    # that step must not run before the answer exists.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands. That is also what
+    # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    # A graveyard is a public zone (CR 400.2), so a seatless viewer sees the
+    # pile the chooser is looking at — unlike every hand pick (``hand.py``).
+    spectator_visible=True,
+    # "**Each player** may exile any number of cards from their graveyard"
+    # (Grave Consequences) queues one pick per seat, made in turn order
+    # (CR 101.4) — the answer action takes the oldest. So only the oldest is
+    # open: the next seat's picker was shown at once, and its Confirm was a
+    # bare "not your choice" until the seat before it had answered.
+    is_open=lambda game, choice: next(
+        (
+            queued for spec, queued in game.iter_pending_prompts()
+            if spec.kind == "graveyard_exile_pick"
+        ),
+        None,
+    ) is choice,
+)
+
+EXILED_PILE_CLAIM_SPEC = ChoiceSpec(
+    "exiled_pile_claim",
+    resolve=lambda game, choice, r: game._resolve_exiled_pile_claim(
+        choice, r["pile_index"]
+    ),
+    default=lambda game, choice: game._default_exiled_pile_claim(choice),
+    action="exiled_pile_claim_confirm",
+    prompt_key="exiled_pile_claim",
+    blocked_detail="choose one of the exiled cards before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    # Armed for AI seats too and drained by the auto-resolver: the round-robin
+    # is one resolution, and a seat whose prompt was never queued would be
+    # skipped rather than defaulted.
+    hidden_for_ai=False,
+    # The pile shrinks by one with every answer and the seats behind this one
+    # are picking out of what is left, so nothing later in the resolution may
+    # run before the answer arrives (CR 608.2, CR 117.3b).
+    suspends=True,
+)
+
+GRAVEYARD_PICK_FOR_PRICE_SPEC = ChoiceSpec(
+    "graveyard_pick_for_price",
+    resolve=lambda game, choice, r: game._resolve_graveyard_pick_for_price(
+        choice, r["graveyard_index"]
+    ),
+    default=lambda game, choice: game._default_graveyard_pick_for_price(choice),
+    action="graveyard_pick_for_price_confirm",
+    prompt_key="graveyard_pick_for_price",
+    blocked_detail="choose a card in that graveyard before other actions",
+    # A graveyard is a public zone (CR 400.2), so a spectator sees the offer
+    # exactly as the choosing seat does.
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The sentence after this one reads the pick, and the one after that reads
+    # the whole set of them: nothing behind this prompt may run until it is
+    # answered (CR 608.2).
+    suspends=True,
+)
