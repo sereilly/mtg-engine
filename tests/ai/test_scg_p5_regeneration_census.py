@@ -218,7 +218,6 @@ def _census(pool) -> dict:
     return found
 
 
-@pytest.mark.full
 def test_every_regeneration_the_ai_can_pay_for_saves_a_creature_about_to_die():
     found = _census(_pool())
     assert found["missed"] == [], found["missed"]
