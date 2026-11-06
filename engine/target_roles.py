@@ -386,7 +386,7 @@ def any_number_of_opponents_roles() -> dict:
 def any_number_of_players_roles() -> dict:
     """The ``roles`` description "any number of target **players**" lowers to
     (Reward the Faithful, Cabal Conditioning): the opponents' chain with the
-    caster admitted (CR 115.1 — a player may target themself), one role more
+    caster admitted (CR 115.1a: "target players" describes every player), one role more
     so every seat of the same bound can be named, each a later seat than the
     one before it, so no player is named twice (CR 115.3)."""
     return _any_number_of_seat_roles("player", ANY_NUMBER_OF_SEAT_ROLES + 1, False)

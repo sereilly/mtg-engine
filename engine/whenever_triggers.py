@@ -1132,7 +1132,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever a player casts a spell of the chosen (?P<cast_chosen_color>)color"),
     # "Whenever a player casts a spell **with mana value 3 or less**"
     # (Pyrostatic Pillar). A bound on the spell's mana value on the stack
-    # (CR 202.3b), both numbers payload: the threshold and its direction.
+    # (CR 202.3e), both numbers payload: the threshold and its direction.
     # Before the bare row below, its strict prefix — matched there, the clause
     # was left to the effect parser and the Pillar burned every caster.
     ("spell_cast",

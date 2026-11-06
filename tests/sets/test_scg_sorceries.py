@@ -322,8 +322,8 @@ def test_w1g4_rush_of_knowledge_draws_the_greatest_mana_value(set_pool):
 
 
 def test_w1g4_a_token_a_face_down_permanent_and_an_x_count_zero(set_pool):
-    """CR 202.3: a token's mana cost is empty (CR 111.4), a face-down
-    permanent's too (CR 708.2), and an {X} in a permanent's cost is 0 —
+    """CR 202.3: a token's mana cost is empty (CR 111.3), a face-down
+    permanent's too (CR 708.2a), and an {X} in a permanent's cost is 0 —
     Rush of Knowledge's 2020-08-07 ruling ("If a permanent on the battlefield
     has {X} in its mana cost, X is considered to be 0"). Iceberg ({X}{U}{U})
     is 2 here however much was paid for it; the face-down Shivan Dragon is 0."""
@@ -383,7 +383,7 @@ def test_w1g4_cabal_conditioning_each_named_player_discards_the_casters_greatest
     the greatest mana value among permanents you control." The caster's Hill
     Giant (4) sizes every named player's discard, the third seat's Shivan
     Dragon (6) not — "you" is the caster whichever seat the loop is on
-    (CR 109.5). The caster may be named (CR 115.1)."""
+    (CR 109.5). The caster may be named (CR 115.1a)."""
     lea = set_pool("LEA")
     game = _w1g4_table(
         set_pool, [set_pool("SCG")["Cabal Conditioning"]] + [lea["Forest"]] * 5,

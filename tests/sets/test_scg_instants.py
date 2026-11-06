@@ -260,7 +260,7 @@ def _w1g4_shield(set_pool, spell, *, x_value=None, mine=("Grizzly Bears",)):
     ("Lightning Bolt", None, ("Grizzly Bears",), True),     # 1 <= 2
     ("Hill Giant", None, ("Grizzly Bears",), False),        # 4 > 2
     ("Hill Giant", None, ("Grizzly Bears", "Hill Giant"), True),  # 4 <= 4
-    # CR 202.3b: on the stack an X in the cost is the announced value.
+    # CR 202.3e: on the stack an X in the cost is the announced value.
     ("Fireball", 1, ("Grizzly Bears",), True),              # {X}{R}, X=1: 2
     ("Fireball", 2, ("Grizzly Bears",), False),             # X=2: 3
     # Nothing controlled is a greatest of 0: even a one-drop is greater.
@@ -301,7 +301,7 @@ def test_w1g4_dispersal_shield_offers_every_spell(set_pool):
 @_w1g4_pytest.mark.parametrize("named", [[0], [1], [0, 1], [1, 2], [0, 1, 2], []])
 def test_w1g4_reward_the_faithful_heals_exactly_the_named_players(set_pool, named):
     """"Any number of target players each gain life equal to the greatest mana
-    value among permanents you control." The caster may be named (CR 115.1),
+    value among permanents you control." The caster may be named (CR 115.1a),
     zero players is a legal announcement, and **every** named player gains the
     *caster's* greatest — the third seat's Shivan Dragon (6) is not a
     permanent "you" control, whoever the loop is on (CR 109.5)."""

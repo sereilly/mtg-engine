@@ -289,7 +289,7 @@ class GreatestManaValueAmong:
     question, and a lowering that saw only the filter would have to guess which.
     CR 202.3 makes the number the permanent's mana cost — read through layer 1,
     so a copy has the copied card's and a token's or a face-down permanent's
-    is 0 (CR 111.4 / 708.2) — and CR 202.3e counts an {X} in a permanent's
+    is 0 (CR 111.3, 708.2a, 202.3a) — and CR 202.3e counts an {X} in a permanent's
     cost as 0 (Rush of Knowledge's 2020-08-07 ruling). Zero over an empty set.
     """
     filter: "ObjectFilter"

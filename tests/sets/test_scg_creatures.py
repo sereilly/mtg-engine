@@ -356,7 +356,7 @@ def test_w1g4_kurgadon_grows_on_your_six_drop_creature_spells(
     set_pool, spell, x_value, seat, counters,
 ):
     """"Whenever you cast a creature spell with mana value 6 or greater, put
-    three +1/+1 counters on this creature." CR 202.3b: an X in a spell's cost
+    three +1/+1 counters on this creature." CR 202.3e: an X in a spell's cost
     is its announced value on the stack."""
     game, kurgadon = _w1g4_kurgadon_casts(set_pool, spell, x_value=x_value, seat=seat)
     assert _w1g4_pt(kurgadon) == (3 + counters, 3 + counters), game.log

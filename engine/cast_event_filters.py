@@ -311,7 +311,7 @@ def _cast_narrowing_admits(
         if cast_subtype.lower() not in card_creature_types(game, card, caster):
             return False
     # "…a creature spell **with mana value 6 or greater**" (Kurgadon); "…a
-    # spell **with mana value 3 or less**" (Pyrostatic Pillar). CR 202.3b: on
+    # spell **with mana value 3 or less**" (Pyrostatic Pillar). CR 202.3e: on
     # the stack an {X} in the cost is the announced value, which
     # ``targeting.stack_object_mana_value`` reads off the spell's own stack
     # object (*item*) — the reader Prohibit's "if its mana value is 2 or less"

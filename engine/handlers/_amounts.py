@@ -1154,7 +1154,7 @@ def evaluate_count(
             # 202.3's number for a *permanent*, read through layer 1 the way
             # Animate Artifact's 7b reads it (``layer_bridge``): a copy has the
             # copied card's mana cost, and a token's and a face-down
-            # permanent's is 0 (CR 111.4, 708.2) — Ancient Ooze's 2004-10-04
+            # permanent's is 0 (CR 111.3, 708.2a, 202.3a) — Ancient Ooze's 2004-10-04
             # ruling says so of both. An {X} in a permanent's cost counts 0
             # (CR 202.3e; Rush of Knowledge's 2020-08-07 ruling), which is what
             # the ingested ``cmc`` already holds.
@@ -1262,7 +1262,7 @@ _MANA_VALUE_AGGREGATES = {
 def _permanent_mana_value(perm) -> int:
     """CR 202.3's mana value of a permanent: its mana cost through layer 1
     (``effective_card``), so a copy reads the copied card and a face-down
-    permanent the blank 2/2 it is (CR 708.2)."""
+    permanent the blank 2/2 it is (CR 708.2a)."""
     return int(getattr(perm.effective_card, "cmc", 0) or 0)
 
 

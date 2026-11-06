@@ -171,7 +171,7 @@ def test_w1g2_decree_of_silence_cycles_with_no_spell_to_target(set_pool):
 # Pyrostatic Pillar: "Whenever a player casts a spell with mana value 3 or
 # less, this enchantment deals 2 damage to that player." The cast trigger's
 # ``cast_mana_value`` narrowing, read off the spell's stack object (CR
-# 202.3b), and "that player" the seat the trigger is about — the caster.
+# 202.3e), and "that player" the seat the trigger is about — the caster.
 import pytest as _w1g4_pytest
 
 from engine import Game as _W1G4Game
