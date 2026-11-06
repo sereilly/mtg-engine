@@ -28,7 +28,8 @@ from ..replacement_choices import (
     replacement_choice,
 )
 from .registry import (DRAW_ARMED_REPLACEMENT, DRAW_BECOMES_COUNTER,
-                       DRAW_DISCARD_INSTEAD, DRAW_DOUBLED, DRAW_FROM_OUTSIDE,
+                       DRAW_DISCARD_INSTEAD, DRAW_DOUBLED, DRAW_FROM_EXILED_PILE,
+                       DRAW_FROM_OUTSIDE,
                        DRAW_GIVEN_TO_ANOTHER, DRAW_MAY_BE_SKIPPED,
                        DRAW_RETURNS_FROM_GRAVEYARD, LIFE_GAIN_TO_DRAW,
                        ReplacementOutcome, replacement_effect)
@@ -794,6 +795,170 @@ def _resolve_skip_draw(game, choice: ReplacementChoice, option_index: int) -> in
     # The draws queued behind this one are their own draws (CR 121.2) and are
     # offered on their own — including by this source again — once the draw
     # in front of them is finished (the seam parks them until then).
+    drawn += draws_behind(game, player, remaining, data.get(QUEUED_EXCLUDES) or ())
+    return drawn
+
+
+#: "If you would draw a card, you may instead put the top card of the pile you
+#: exiled into your hand." (Parallel Thoughts.) Obstinate Familiar's optional
+#: replacement of one draw with something where nothing was: the top card of
+#: the face-down pile this permanent's other ability exiled — a **linked**
+#: ability (CR 607.2a), so "the pile you exiled" is the record on this
+#: permanent (``engine/linked_exile.py``) and nothing else in exile.
+#:
+#: The whole line, with no payload; a printing that named another pile or
+#: added a rider would be a different rule and stays unmatched.
+PILE_TOP_INSTEAD_OF_DRAW_TEXT = (
+    "if you would draw a card, you may instead put the top card of the pile "
+    "you exiled into your hand"
+)
+
+
+def pile_top_instead_of_draw_line(line: str) -> bool:
+    """Whether *line* is, in full, Parallel Thoughts' offer. One reader for the
+    interceptor and for the claim (``REPLACEMENT_LINES``)."""
+    return (
+        " ".join((line or "").split()).strip().lower().rstrip(".")
+        == PILE_TOP_INSTEAD_OF_DRAW_TEXT
+    )
+
+
+def _pile_top_draw_sources(game, payload: dict) -> list:
+    """Every permanent offering its pile's top card for *this* draw.
+
+    "If **you** would draw a card" is CR 109.5's seat, so only the drawing
+    player's own permanents offer it; CR 614.5's exclusion rides the
+    ``exclude_sources`` key every draw replacement here reads, so a declined
+    offer is not put twice for one draw. Read off ``effective_card`` (CR 707.2,
+    CR 612.1), and pure.
+
+    **An empty pile still offers.** "You can choose to take the top card from
+    the pile (and not draw) even if there are no cards in the pile. This
+    allows you to skip draws." (Ruling 2004-10-04.) The replacement does not
+    ask whether its instruction would find anything (CR 614.6's "does as much
+    as it can"), so this predicate does not either.
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    seat = game.players.index(payload["player"])
+    return [
+        perm
+        for perm in game.controlled_by(seat)
+        if perm.permanent_id not in exclude
+        and any(
+            pile_top_instead_of_draw_line(line)
+            for line in (perm.effective_card.oracle_text or "").splitlines()
+        )
+    ]
+
+
+def _applies_pile_top_draw(game, payload: dict) -> bool:
+    return int(payload.get("count", 0)) > 0 and bool(
+        _pile_top_draw_sources(game, payload)
+    )
+
+
+@replacement_effect(
+    "draw", DRAW_FROM_EXILED_PILE, applies=_applies_pile_top_draw,
+    label="Put the top card of the exiled pile into your hand instead",
+)
+def _pile_top_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
+    """Parallel Thoughts: one draw, offered as a :class:`ReplacementChoice` —
+    the shape Obstinate Familiar's offer above has, for its reasons: the answer
+    arrives from a human on a later request, and both answers finish through
+    one registered resolver.
+
+    The default a non-interactive seat takes is the choice a player would make:
+    the pile's top card while the pile holds one — the pile is cards that seat
+    chose for itself, and taking one spends no library — and once it is empty,
+    the draw, unless the library is empty too, when "taking" nothing from the
+    empty pile is the skip the ruling allows and the draw it avoids would lose
+    the game at the next state-based check (CR 704.5b).
+
+    The option labels say "the top card of the exiled pile" and never which
+    card: the pile is face down and "you can't look at the face down cards"
+    (ruling 2004-10-04), so its size is all the offer may show.
+    """
+    from ..linked_exile import linked_entries
+
+    player = payload["player"]
+    seat = game.players.index(player)
+    source = min(
+        _pile_top_draw_sources(game, payload), key=lambda perm: perm.permanent_id
+    )
+    pile_size = len(linked_entries(source))
+    excludes = tuple(payload.get("exclude_sources") or ()) + (source.permanent_id,)
+    suspended, drawn = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="pile_top_draw",
+            player_index=seat,
+            options=(
+                "draw the card",
+                "put the top card of the exiled pile into your hand"
+                + ("" if pile_size else " (the pile is empty)"),
+            ),
+            default_option=1 if (pile_size or not player.library) else 0,
+            data={
+                "source_id": source.permanent_id,
+                # The object itself, engine-private: the pile is the record on
+                # *this* permanent, and it is still that pile if the permanent
+                # leaves while the offer waits (CR 614.1 applied the
+                # replacement when it was offered).
+                "_source": source,
+                "pile_size": pile_size,
+                "remaining_draws": int(payload["count"]) - 1,
+                "exclude_sources": excludes,
+                QUEUED_EXCLUDES: queued_excludes(payload),
+                "turn_based": bool(payload.get("turn_based")),
+            },
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} may put the top card of {source.card.name}'s pile "
+            "into their hand instead of drawing"
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("pile_top_draw")
+def _resolve_pile_top_draw(game, choice: ReplacementChoice, option_index: int) -> int:
+    """Carry out the answer to Parallel Thoughts' offer.
+
+    Option 0 declines: the draw is remade through ``_draw_with_replacements``
+    with the offering permanent excluded, so every *other* draw replacement
+    still gets its turn and this one is not asked twice (CR 614.5).
+
+    Option 1 takes the pile's top card through the one handler that already
+    does it (``put_exiled_pile_top_into_hand``, Mangara's Tome's), with this
+    permanent as its source, so the card leaves exile through the departure
+    seam and reaches the hand through ``Game.put_card_into_hand``. It is not a
+    draw, so "whenever you draw a card" does not see it — and an empty pile
+    puts nothing anywhere, which is the skipped draw the ruling describes.
+    """
+    from ..game_types import OracleExecutionContext
+    from ..oracle_types import OracleInstruction
+
+    player = game.players[choice.player_index]
+    data = choice.data
+    remaining = int(data.get("remaining_draws", 0))
+    drawn = 0
+    if option_index == 0:
+        drawn += game._draw_with_replacements(
+            player, 1,
+            turn_based=bool(data.get("turn_based")),
+            exclude_sources=tuple(data.get("exclude_sources") or ()),
+        )
+    else:
+        source = data.get("_source")
+        game._execute_oracle_instruction(
+            OracleInstruction("put_exiled_pile_top_into_hand", "", {}),
+            OracleExecutionContext(
+                caster=player, target=player,
+                card=getattr(source, "card", None), source_permanent=source,
+            ),
+        )
     drawn += draws_behind(game, player, remaining, data.get(QUEUED_EXCLUDES) or ())
     return drawn
 

@@ -1562,6 +1562,33 @@ def _obstinate_familiar():
 
 
 @scenario(
+    "pile_top_draw", "Parallel Thoughts",
+    answer=lambda g, c: {"option": 1},
+    wire=lambda g, c: {"option_index": 1},
+    then=lambda g: _assert(
+        names(g.players[0].hand) == ["Hill Giant"] and len(g.players[0].library) == 8
+    ),
+)
+def _parallel_thoughts():
+    """Scourge, still under ``measured`` when this row was written: the
+    enchantment is read off its own set file, and its face-down pile is the
+    linked record its entry trigger writes, made here directly."""
+    from engine.card_loader import load_cards, manifest_set_path
+    from engine.linked_exile import link_exiled_card
+
+    thoughts = next(
+        c for c in load_cards(manifest_set_path("SCG", include_measured=True))
+        if c.name == "Parallel Thoughts"
+    )
+    permanent = Permanent(card=thoughts)
+    game = duel(boards=((permanent,), ()))
+    for name in ("Hill Giant", "Shock"):
+        game.players[0].exile.append(card(name))
+        link_exiled_card(permanent, card(name), 0, face_down=True)
+    return _draw_one(game)
+
+
+@scenario(
     "reveal_until_kind_draw", "Abundance",
     answer=lambda g, c: {"option": _option(c, "land")},
     wire=lambda g, c: {"option_index": _option(c, "land")},

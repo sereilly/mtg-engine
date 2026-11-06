@@ -741,6 +741,27 @@ def redirect_next_damage_from_source_until_eot(
         game.log.append(f"{card_name}: its target is gone, nothing is redirected")
         return True, "resolved"
     taker_name = getattr(taker, "name", None) or taker.card.name
+    if instruction.payload.get("all_damage"):
+        # "When this creature is turned face up, **all damage** that would be
+        # dealt to it this turn is dealt to target creature instead." (Karona's
+        # Zealot.) Neither counter: the record moves every instance for the
+        # rest of the turn, which is what ``uses`` and ``amount`` both None
+        # mean on a ``DamageRedirect``, and the cleanup sweep ends it.
+        #
+        # The taker is re-asked at every event, not frozen here: "If the
+        # target creature leaves the battlefield or stops being a creature
+        # before damage would be dealt, that damage is not redirected"
+        # (ruling 2018-03-16) is CR 614.9's liveness rule, which
+        # ``damage_redirects.live_recipient`` already carries out.
+        add_redirect(
+            protected,
+            DamageRedirect(new_recipient=taker, source_name=card_name or None),
+        )
+        game.log.append(
+            f"{card_name}: all damage that would be dealt to "
+            f"{protected.card.name} this turn is dealt to {taker_name} instead"
+        )
+        return True, "resolved"
     uses = instruction.payload.get("uses")
     if uses is not None and instruction.payload.get("also_protects") == "you":
         # "{5}{W}: The next time damage would be dealt to this creature
@@ -1020,7 +1041,10 @@ def redirect_source_class_damage_until_eot(
     return True, "resolved"
 
 
-@effect_handler("redirect_source_damage_to_target_until_eot")
+@effect_handler(
+    "redirect_source_damage_to_target_until_eot",
+    "redirect_source_damage_to_you_until_eot",
+)
 def redirect_source_damage_to_target_until_eot(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext
 ) -> tuple[bool, str]:
@@ -1049,6 +1073,23 @@ def redirect_source_damage_to_target_until_eot(
     watches for nothing, and `live_recipient` would make it do nothing anyway —
     but a card that reported "armed" and moved no damage is exactly the silence
     this repo's Rock Hydra test exists to catch, so the log says which happened.
+
+    **The taker may be the controller** ("…it deals that damage **to you**
+    instead", Goblin Psychopath, the ``…_to_you_…`` kind): CR 109.5's "you" is
+    the player who controlled this ability as it resolved, fixed here, so a
+    creature that changes hands later this turn still sends the damage to that
+    player.
+
+    **And the protected end may be nobody in particular** (``protects`` is
+    ``"any"``): "the next time it would deal combat damage this turn" prints no
+    recipient, so the record watches this source's damage to anyone —
+    ``any_recipient``, found by ``source_keyed_redirects`` and hung off the
+    caster because it has nothing else to hang off, as Reflect Damage's is. Its
+    "next time" is a **time**, not a chunk (CR 615.8; Mirrorwood Treefolk's
+    ruling, 2004-10-04, read for the instance form): a creature blocked by two
+    deals both blockers its combat damage at once (CR 510.2), and both move —
+    the shared occasion Glarecaster's records use, closed by the combat damage
+    step's tail (``end_simultaneous_redirects``).
     """
     payload = instruction.payload
     caster = context.caster
@@ -1059,27 +1100,54 @@ def redirect_source_damage_to_target_until_eot(
         # strictly wider than the card. Refusing to arm is the narrow direction.
         game.log.append(f"{card_name}: its source has left, nothing is redirected")
         return True, "resolved"
-    described = (payload.get("targets") or {}).get("filter") or {}
-    new_recipient = resolve_target_permanent(
-        game,
-        context,
-        predicate=lambda perm: permanent_matches_filter(perm, described),
-        # No scan-the-board fallback, for `redirect_damage_until_eot`'s reason:
-        # damage moved onto a creature nobody named is damage the player never
-        # chose to move.
-        fallback_players=(),
-    )
-    if new_recipient is None or not game.is_on_battlefield(new_recipient):
-        game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+    if instruction.kind == "redirect_source_damage_to_you_until_eot":
+        if caster not in game.players or getattr(caster, "lost", False):
+            game.log.append(f"{card_name}: its controller is gone")
+            return True, "resolved"
+        new_recipient = caster
+        taker_name = caster.name
+    else:
+        described = (payload.get("targets") or {}).get("filter") or {}
+        new_recipient = resolve_target_permanent(
+            game,
+            context,
+            predicate=lambda perm: permanent_matches_filter(perm, described),
+            # No scan-the-board fallback, for `redirect_damage_until_eot`'s
+            # reason: damage moved onto a creature nobody named is damage the
+            # player never chose to move.
+            fallback_players=(),
+        )
+        if new_recipient is None or not game.is_on_battlefield(new_recipient):
+            game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+            return True, "resolved"
+        taker_name = new_recipient.card.name
+    protects = payload.get("protects")
+    uses = payload.get("uses")
+    if protects == "any":
+        record = DamageRedirect(
+            new_recipient=new_recipient,
+            source=source,
+            uses=None if uses == 1 else uses,
+            occasion=SharedNextTime() if uses == 1 else None,
+            combat_only=bool(payload.get("combat_only")),
+            any_recipient=True,
+            source_name=card_name or None,
+        )
+        add_redirect(caster, record)
+        game.log.append(
+            f"{card_name}: the next time {source.card.name} would deal "
+            f"{'combat ' if record.combat_only else ''}damage this turn, it is "
+            f"dealt to {taker_name} instead"
+        )
         return True, "resolved"
     record = DamageRedirect(
         new_recipient=new_recipient,
         source=source,
-        uses=payload.get("uses"),
+        uses=uses,
         combat_only=bool(payload.get("combat_only")),
         source_name=card_name or None,
     )
-    if payload.get("protects") == "opponents":
+    if protects == "opponents":
         watched = [
             game.players[seat]
             for seat in game.opponents_of(game.players.index(caster))
@@ -1092,7 +1160,7 @@ def redirect_source_damage_to_target_until_eot(
         f"{card_name}: the next {'combat ' if record.combat_only else ''}damage "
         f"{source.card.name} would deal to "
         + (", ".join(p.name for p in watched) or "nobody")
-        + f" this turn is dealt to {new_recipient.card.name} instead"
+        + f" this turn is dealt to {taker_name} instead"
     )
     return True, "resolved"
 

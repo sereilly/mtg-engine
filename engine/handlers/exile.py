@@ -1317,7 +1317,16 @@ def exile_top_of_library(game: Game, instruction: OracleInstruction, context: Or
         elif face_down:
             record_exiled_card(game, card, owner_index, face_down=True)
     context.results["exiled_cards"] = exiled
-    if exiled:
+    if exiled and face_down:
+        # "…exile the top card of your library **face down**" (Necropotence,
+        # Knowledge Vault, Duplicity): hidden from every player (CR 406.3)
+        # and never public on its way from a hidden zone (CR 400.2), and
+        # ``game.log`` is served whole to every seat — so how many, not which.
+        game.log.append(
+            f"{caster.name} exiled {len(exiled)} card(s) face down from the top "
+            "of their library"
+        )
+    elif exiled:
         game.log.append(
             f"{caster.name} exiled {', '.join(card.name for card in exiled)} "
             "from the top of their library"

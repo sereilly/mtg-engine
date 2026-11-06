@@ -56,6 +56,7 @@ from engine.cast_timing import (flash_permission_sentence,  # noqa: E402
                                 static_flash_permission)
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.life_prohibitions import life_gain_ban_line  # noqa: E402
+from engine.unspent_mana import unspent_mana_kept_line  # noqa: E402
 from engine.target_requirements import must_choose_claims_line  # noqa: E402
 from engine.counted_names import counts_as_claims_line  # noqa: E402
 from engine.cost_modifiers import cost_modifier_claims_line  # noqa: E402
@@ -442,6 +443,11 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # gain does nothing — so it is its own channel beside the row above,
     # asking the module that carries the sentence out.
     ("life_prohibitions.py", lambda s: life_gain_ban_line(s) is not None),
+    # "Players don't lose unspent mana as steps and phases end." (Upwelling,
+    # CR 500.5.) A static that switches the pool-emptying turn-based action
+    # off, asked by `Game.clear_mana_pools` — its own channel, asking the
+    # module that carries the sentence out.
+    ("unspent_mana.py", lambda s: unspent_mana_kept_line(s) is not None),
     # "While an opponent is choosing targets …, that player must choose at
     # least one Flagbearer on the battlefield if able." (Standard Bearer,
     # Coalition Flag.) A requirement on somebody else's announcement

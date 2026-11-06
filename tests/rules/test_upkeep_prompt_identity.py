@@ -97,7 +97,7 @@ def test_two_copies_of_one_upkeep_cost_are_two_separate_decisions(set_pool):
     assert payer.battlefield[0] is kept
     assert [c.name for c in payer.graveyard] == ["Breeding Pit"]
     # One payment and one sacrifice, read off the log rather than off the mana
-    # pool: CR 500.4 empties the pool as the step ends, so what is left there
+    # pool: CR 500.5 empties the pool as the step ends, so what is left there
     # says nothing about what was spent.
     assert sum("paid upkeep for Breeding Pit" in line for line in game.log) == 1
     assert sum("sacrificed Breeding Pit" in line for line in game.log) == 1

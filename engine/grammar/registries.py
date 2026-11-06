@@ -78,6 +78,7 @@ from ..flashback import FLASHBACK_CLAIM, flashback_claims_line
 from ..land_play_allowance import land_play_line
 from ..landwalk import landwalk_per_type_spec
 from ..life_prohibitions import life_gain_ban_line
+from ..unspent_mana import unspent_mana_kept_line
 from ..prevention import prevention_claims_line
 from ..regeneration import denies_regeneration_line, self_regeneration_line
 from ..replacements import replacement_claims_line
@@ -470,6 +471,13 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # seam reads.
     if life_gain_ban_line(line) is not None:
         return "life_prohibitions"
+
+    # engine/unspent_mana.py — "Players don't lose unspent mana as steps and
+    # phases end." (Upwelling, CR 500.5.) A static that switches a turn-based
+    # action off, asked by `Game.clear_mana_pools` as each step ends; nothing
+    # to lower, and the matcher asked here is the one that seam reads.
+    if unspent_mana_kept_line(line) is not None:
+        return "unspent_mana"
 
     # engine/prevention/static.py — CR 615 shields. The same arrangement one
     # layer over: a permanent's *static* prevention applies from its own text at

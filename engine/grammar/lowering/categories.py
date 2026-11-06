@@ -476,6 +476,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # different handler, in the same family.
     "redirect_source_class_damage_until_eot": "damage",
     "redirect_source_damage_to_target_until_eot": "damage",
+    # Goblin Psychopath: the same named source with its controller as the
+    # taker — no picker, which is why it is a kind of its own.
+    "redirect_source_damage_to_you_until_eot": "damage",
     # "**The next N** damage that would be dealt to target <noun> this turn"
     # (Daughter of Autumn, Hazduhr the Abbot). A point pool rather than the
     # whole event, and a chosen recipient rather than the controller — both

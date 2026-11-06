@@ -42,6 +42,7 @@ from ..models import Permanent
 from ..phasing_locks import phase_out_forbidden
 from ..source_tapped_effects import (break_pending_durations,
                                      end_effects_while_tapped)
+from ..unspent_mana import seats_keeping_unspent_mana
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
 
 
@@ -224,7 +225,15 @@ class GameHelpersMixin:
         return color
 
     def clear_mana_pools(self) -> None:
-        for player in self.players:
+        """CR 500.5's turn-based action: each pool empties as a step or phase
+        ends — unless a permanent on the board says this player doesn't lose
+        unspent mana then (Upwelling, ``engine/unspent_mana.py``), asked as
+        each step ends so mana kept while it was out empties at the first end
+        after it leaves (ruling 2009-10-01)."""
+        kept = seats_keeping_unspent_mana(self)
+        for seat, player in enumerate(self.players):
+            if seat in kept:
+                continue
             for symbol in _MANA_SYMBOLS:
                 player.mana_pool[symbol] = 0
             for bucket in player.restricted_mana.values():

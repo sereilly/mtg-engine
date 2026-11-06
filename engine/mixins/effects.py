@@ -976,6 +976,15 @@ class EffectsMixin:
         consumed, payload = apply_replacements(
             self, "life_gain",
             {"player": target, "amount": amount, "source_name": source_name},
+            # CR 616.1e: with two replacements over one gain — Lich's "draw
+            # that many cards instead" beside Sulfuric Vortex's "gains no life
+            # instead" — the affected player chooses which applies. Nothing has
+            # happened when the question is put (the gain, the record and the
+            # announcement all come after this call), so re-running exactly
+            # this call is the whole of what the answer resumes. Only an
+            # interactive seat is asked (``order_prompt_asker``); every other
+            # seat takes the default without suspending.
+            restart=lambda: self._gain_life(target, amount, source_name),
         )
         if consumed:
             return

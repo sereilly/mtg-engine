@@ -242,18 +242,26 @@ def _lower_next_damage_redirect_from_source(
     module of its own. The checks the counted caller made before handing its
     sentence down are made here for the instance form, which arrives straight
     from the dispatcher.
+
+    **And the third, unbounded.** "When this creature is turned face up, **all
+    damage** that would be dealt to it this turn is dealt to target creature
+    instead." (Karona's Zealot.) Neither counter: every instance for the rest
+    of the turn, which is what a ``DamageRedirect`` with ``uses`` and
+    ``amount`` both None has always meant ("all damage …"). Marked
+    ``all_damage`` rather than left as the absence of both, because the
+    handler's reading of an absent pool is "no damage to move", and a silent
+    default is how one spelling becomes another.
     """
     if node.amount is None:
         if (
-            not node.one_shot
-            or node.chooser is not None
+            node.chooser is not None
             or node.combat_only
             or node.optional
         ):
             raise LoweringError(
-                "a redirect off the ability's own source moves a point pool or "
-                "the next instance, with no other chooser, combat scope or "
-                "offer",
+                "a redirect off the ability's own source moves a point pool, "
+                "the next instance or all of it, with no other chooser, combat "
+                "scope or offer",
                 node=node,
             )
         if node.duration.kind not in _REST_OF_TURN:
@@ -271,12 +279,14 @@ def _lower_next_damage_redirect_from_source(
             "chosen target",
             node=node,
         )
-    # Exactly one of the two counters, so Zhalfirin Crusader's and the en-Kor
-    # creatures' payloads stay byte-identical.
-    payload: dict[str, object] = (
-        {"uses": 1} if node.amount is None
-        else {"amount": _amount_payload(node.amount)}
-    )
+    # Exactly one of the three quantities, so Zhalfirin Crusader's and the
+    # en-Kor creatures' payloads stay byte-identical.
+    if node.amount is not None:
+        payload: dict[str, object] = {"amount": _amount_payload(node.amount)}
+    elif node.one_shot:
+        payload = {"uses": 1}
+    else:
+        payload = {"all_damage": True}
     if node.also_to is not None:
         # "…to this creature **and/or you** this turn, …" (Glarecaster.) The
         # ability's controller protected beside its source, under the one
@@ -284,7 +294,11 @@ def _lower_next_damage_redirect_from_source(
         # spends them together. Only "you", and only the instance form — a
         # point pool split across two recipients is a sentence nothing prints,
         # and a second recipient of any other kind has no record to hang off.
-        if node.amount is not None or not _is_you(node.also_to):
+        if (
+            node.amount is not None
+            or not node.one_shot
+            or not _is_you(node.also_to)
+        ):
             raise LoweringError(
                 "a second protected recipient is read only as the ability's "
                 "controller, under one next time",

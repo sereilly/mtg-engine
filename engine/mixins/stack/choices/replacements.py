@@ -190,6 +190,23 @@ class ReplacementChoicesMixin:
         ]
 
     @property
+    def pending_pile_top_draws(self) -> list[dict]:
+        """Parallel Thoughts' outstanding CR 614.1 offers - one per draw a
+        permanent printing "you may instead put the top card of the pile you
+        exiled into your hand" would replace. Shaped like ``pending_skip_draws``
+        above, with the pile's size: the cards are face down, so how many
+        there are is all the offer may show (ruling 2004-10-04)."""
+        return [
+            {
+                "player_index": choice.player_index,
+                "options": list(choice.options),
+                "source_id": choice.data["source_id"],
+                "pile_size": choice.data.get("pile_size", 0),
+            }
+            for choice in pending_choices_for(self, "pile_top_draw")
+        ]
+
+    @property
     def pending_optional_damage_redirects(self) -> list[dict]:
         """CR 614.9's outstanding optional offers — one per damage event whose
         recipient a class-scoped redirect watches (Blood of the Martyr)."""
@@ -306,6 +323,15 @@ class ReplacementChoicesMixin:
         """
         return self.resolve_replacement_choice(
             player_index, 1 if skip else 0, kind="skip_draw"
+        )
+
+    def confirm_pile_top_draw(self, player_index: int, take_from_pile: bool) -> bool:
+        """Resolve the oldest pending Parallel Thoughts offer for
+        *player_index*: index 0 draws the card, index 1 puts the top card of
+        the exiled pile into the hand instead (or, from an empty pile, skips
+        the draw)."""
+        return self.resolve_replacement_choice(
+            player_index, 1 if take_from_pile else 0, kind="pile_top_draw"
         )
 
     def confirm_leng_discard(self, player_index: int, to_library: bool) -> bool:
@@ -519,6 +545,27 @@ SKIP_DRAW_SPEC = ChoiceSpec(
     blocked_detail=(
         "choose whether to skip that draw (Obstinate Familiar) before other "
         "actions"
+    ),
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+PILE_TOP_DRAW_SPEC = ChoiceSpec(
+    # "If you would draw a card, you may instead put the top card of the pile
+    # you exiled into your hand." (Parallel Thoughts.) Obstinate Familiar's
+    # offer with a card where the skip was, registered as that one is and for
+    # its reasons: the draw that armed it was consumed, both answers run
+    # through one resolver, and a non-interactive seat takes the stated default
+    # where it stands.
+    "pile_top_draw",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="pile_top_draw_confirm",
+    prompt_key="pile_top_draw",
+    blocked_detail=(
+        "choose whether to take the top card of the exiled pile instead of "
+        "drawing (Parallel Thoughts) before other actions"
     ),
     default_at_arm=True,
     spectator_visible=True,

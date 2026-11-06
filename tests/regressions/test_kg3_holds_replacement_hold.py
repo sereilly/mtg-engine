@@ -195,6 +195,33 @@ def _obstinate_familiar():
     return _catalog_under(("Obstinate Familiar",))
 
 
+@board("pile_top_draw", "Parallel Thoughts", "Catalog", draws=True)
+def _parallel_thoughts():
+    """Scourge, still under ``measured`` when this row was written, so the
+    enchantment is read off its own set file rather than the shipped catalog;
+    its pile is the record its entry trigger writes, made here directly."""
+    from engine.card_loader import load_cards, manifest_set_path
+    from engine.linked_exile import link_exiled_card
+
+    thoughts = next(
+        c for c in load_cards(manifest_set_path("SCG", include_measured=True))
+        if c.name == "Parallel Thoughts"
+    )
+    game = duel(
+        hands=(("Catalog", "Shock"), ()),
+        libraries=(("Grizzly Bears", "Forest", "Island", "Swamp", "Mountain"),
+                   ("Island",) * 8),
+    )
+    permanent = Permanent(card=thoughts)
+    game.players[0].battlefield.append(permanent)
+    for name in ("Hill Giant", "Shock"):
+        game.players[0].exile.append(card(name))
+        link_exiled_card(permanent, card(name), 0, face_down=True)
+    game._recompute_continuous_effects()
+    game.cast_from_hand(0, "Catalog")
+    return game
+
+
 @board("draw_becomes_counter", "Pursuit of Knowledge", "Catalog", draws=True)
 def _pursuit_of_knowledge():
     return _catalog_under(("Pursuit of Knowledge",))
