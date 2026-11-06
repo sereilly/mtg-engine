@@ -205,6 +205,15 @@ class ActivationAction:
     # whose cost prints no {X} — every action this policy made before it
     # announced one, since an ability with {X} in its cost was not proposed.
     x_value: int | None = None
+    # The two words a text-changing **ability** announces (CR 612, through
+    # CR 602.2b), as mana symbols: "…by replacing all instances of one color
+    # word with another" (Balduvian Shaman). `CastAction.old_color` /
+    # ``new_color``'s twins, sent as the activation path's ``old_color`` and
+    # ``mana_color`` (`activation_announcement`). The fields did not exist,
+    # so the Shaman's activation rewrote nothing and was never proposed. None
+    # for every other ability. See `ai_text_changes.ranked_word_choices`.
+    old_color: str | None = None
+    new_color: str | None = None
 
 
 @dataclass(frozen=True)
@@ -312,6 +321,47 @@ def cast_announcement(action: CastAction) -> dict:
         # CR 118.9a: which alternative cost, where several apply.
         "alternative_cost_index": action.alternative_cost_index,
     }
+
+
+def activation_announcement(action: ActivationAction) -> dict:
+    """Everything *action* announces (CR 602.2b, reaching CR 601.2b–d), as
+    the keywords ``Game.queue_permanent_ability`` /
+    ``activate_permanent_ability`` take it by.
+
+    **The one place an `ActivationAction` becomes an activation**, for
+    `cast_announcement`'s reason. There were five executors — the simulator's
+    main phase and its foreign activation, the web AI step's two, and the
+    rehearsal's queue (`ai_abilities._queue_activation`, which the
+    instant-speed executor shares) — each spelling the forwarding out for
+    itself, and they had drifted: the web's foreign executor forwarded no
+    role answer, no keyword and no X, and none of them a text change's two
+    words. The permanent's name is not here: it is the executor's first
+    argument, as a spell's is.
+    """
+    return {
+        "target_player_index": action.target_player_index,
+        "permanent_index": action.permanent_index,
+        "target_permanent_index": action.target_permanent_index,
+        "target_role_refs": action.target_role_refs,
+        "cost_hand_index": action.cost_hand_index,
+        "chosen_keyword": action.chosen_keyword,
+        "ability_index": action.ability_index,
+        "x_value": action.x_value,
+        "source_controller_index": action.source_controller_index,
+        # CR 612's two words (see `ActivationAction.old_color`): the activation
+        # path takes the replacement on the key an any-colour mana ability
+        # uses.
+        "old_color": action.old_color,
+        "mana_color": action.new_color,
+    }
+
+
+#: The `ActivationAction` fields that are not part of the announcement: the
+#: executor's first argument, the payment it makes first
+#: (`ai_payment.tap_planned_lands`) and the chooser's ranking.
+ACTIVATION_FIELDS_NOT_ANNOUNCED = frozenset({
+    "permanent_name", "land_tap_indices", "land_tap_colors", "score",
+})
 
 
 def _zone_seat(player_index: int, under: "PermittedCast | None") -> "int | None":

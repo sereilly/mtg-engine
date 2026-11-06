@@ -13,7 +13,8 @@ from .ai_policy import (
     choose_cast_action,
     choose_land_drop,
 )
-from .ai_actions import cast_announcement, spell_being_cast, zone_being_cast_from
+from .ai_actions import (activation_announcement, cast_announcement, spell_being_cast,
+                         zone_being_cast_from)
 from .ai_abilities import choose_activation_action
 from .ai_foreign_activations import choose_foreign_activation_action
 from .ai_hand_activations import choose_hand_activation_action
@@ -424,16 +425,7 @@ def _execute_foreign_activation(
     # The action as it reads once it is paid for — see `tap_planned_lands`.
     action = tap_planned_lands(game, active, action)
     result = game.activate_permanent_ability(
-        active,
-        action.permanent_name,
-        target_player_index=action.target_player_index,
-        permanent_index=action.permanent_index,
-        target_permanent_index=action.target_permanent_index,
-        target_role_refs=action.target_role_refs,
-        chosen_keyword=action.chosen_keyword,
-        ability_index=action.ability_index,
-        source_controller_index=action.source_controller_index,
-        x_value=action.x_value,
+        active, action.permanent_name, **activation_announcement(action),
     )
     _resolve_pending_choices(game)
     report.interaction_count += 1
@@ -696,24 +688,13 @@ def _play_activations(
     activation_action = None if game.is_game_over() else choose_activation_action(game, active)
     if activation_action is not None:
         activation_action = tap_planned_lands(game, active, activation_action)
+        # The whole announcement, from the one place an action becomes one
+        # (`ai_actions.activation_announcement`): the targets, a "Choose
+        # flying, …" word, the card a "Discard a card" cost takes, which
+        # ability, an X, a text change's two words.
         result = game.activate_permanent_ability(
-            active,
-            activation_action.permanent_name,
-            target_player_index=activation_action.target_player_index,
-            permanent_index=activation_action.permanent_index,
-            target_permanent_index=activation_action.target_permanent_index,
-            target_role_refs=activation_action.target_role_refs,
-            # The word a "Choose flying, …" cost announces, when the policy
-            # named one (`ai_abilities._keyword_walk_order`).
-            chosen_keyword=activation_action.chosen_keyword,
-            # Which card a "Discard a card" cost takes, when the policy named
-            # one (a card with madness, `ai_abilities._madness_discard_index`).
-            cost_hand_index=activation_action.cost_hand_index,
-            # Which ability: a land's non-mana ability is named by its index
-            # (its first is the mana ability the engine would otherwise take);
-            # None, the engine's first, for everything else.
-            ability_index=activation_action.ability_index,
-            x_value=activation_action.x_value,  # an "{X}…:" cost's, if sized
+            active, activation_action.permanent_name,
+            **activation_announcement(activation_action),
         )
         _resolve_pending_choices(game)
         report.interaction_count += 1

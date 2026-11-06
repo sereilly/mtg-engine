@@ -64,7 +64,9 @@ from .cost_pickers import spec_is_a_cost
 from .ai_payment import _plan_land_taps, tap_planned_lands
 from .ai_rehearsal import Rehearsal, deliberating, rehearse
 from .ai_weighed_cast import _effect_steps
-from .ai_actions import ActivationAction
+from .ai_actions import ActivationAction, activation_announcement
+from .ai_text_changes import (WORTH_FLOOR, ability_text_change_mode,
+                              ability_text_change_worth, ranked_word_choices)
 from .ai_scoring import (
     choose_attack_target,
     _score_activation,
@@ -514,6 +516,29 @@ def _activation_candidate(
             # every role or the activation is refused with nothing paid,
             # and the gate would refuse it.
             return None
+    # "{T}: Change the text of target white enchantment you control … by
+    # replacing all instances of one color word with another" (Balduvian
+    # Shaman, CR 612 through CR 602.2b). The activation announces the two
+    # words beside its target, and this chooser named neither: the engine
+    # took the strongest permanent and no words, the handler logged "had no
+    # effect", and a rehearsal of that read nothing to propose. The object
+    # and the words are weighed together, as the cast side weighs them
+    # (`ai_text_changes.ranked_word_choices`), and the best few rehearsed
+    # (:func:`_text_change_activation`).
+    word_choices: list = []
+    text_mode = ability_text_change_mode(ability.instruction)
+    if text_mode is not None and target_permanent_index is None and not target_role_refs:
+        word_choices = ranked_word_choices(
+            game, player_index,
+            game.activation_target_spec(
+                player_index, permanent_index, ability_index=spec_index,
+            ).get("valid_targets") or [],
+            text_mode,
+        )
+        if not word_choices:
+            return None
+        target = word_choices[0].seat
+        target_permanent_index = word_choices[0].permanent_index
     object_kinds = {"creature", "artifact", "land", "permanent", "planeswalker"}
     if (
         target_permanent_index is None
@@ -805,6 +830,8 @@ def _activation_candidate(
         return _sized_x_activation(
             game, player_index, permanent, ability, candidate, x_symbols,
         )
+    if word_choices:
+        return _text_change_activation(game, player_index, candidate, word_choices)
     # A land's ability, an ability whose whole effect is what its own source
     # is until end of turn (a Mistform's "becomes the creature type of your
     # choice"), and an ability whose whole effect is a replacement armed for a
@@ -971,7 +998,7 @@ def _rehearse_activation(
         pool.update(floating)
 
     taps = bool(action.land_tap_indices)
-    return rehearse(
+    rehearsal = rehearse(
         game, seat, perform, spell_name=None, leaves_hand=False,
         label=f"{action.permanent_name}'s ability",
         key=(
@@ -983,6 +1010,9 @@ def _rehearse_activation(
             ("keyword", action.chosen_keyword) if action.chosen_keyword else ()
         ) + (
             ("x", action.x_value) if action.x_value is not None else ()
+        ) + (
+            ("words", action.old_color, action.new_color)
+            if action.old_color or action.new_color else ()
         ) + (("through_combat",) if through_combat else ()),
         without=paid_for if taps else None,
         without_key=(
@@ -991,6 +1021,64 @@ def _rehearse_activation(
         ),
         through_combat=through_combat,
     )
+    return _with_the_words_aimed(game, seat, action, rehearsal)
+
+
+def _with_the_words_aimed(
+    game: Game, seat: int, action: ActivationAction, rehearsal: "Rehearsal | None",
+) -> "Rehearsal | None":
+    """*rehearsal* of a text-changing ability with what its two words aim at
+    added (``ai_text_changes.ability_text_change_worth``): a Circle of
+    Protection's colour is a standing's same number whichever word it names,
+    as on the cast side (``ai_scoring._rehearse_announcement``)."""
+    from dataclasses import replace
+
+    if rehearsal is None or not rehearsal.accepted or not (
+        action.old_color and action.new_color
+    ):
+        return rehearsal
+    source = game.permanent_at(
+        seat if action.source_controller_index is None else action.source_controller_index,
+        action.permanent_index,
+    )
+    usable = game.usable_abilities_of(source) if source is not None else []
+    index = action.ability_index or 0
+    if not 0 <= index < len(usable):
+        return rehearsal
+    named = game.permanent_at(action.target_player_index, action.target_permanent_index)
+    now, lasting = ability_text_change_worth(
+        game, seat, usable[index].instruction, game.permanent_id_of(named),
+        action.old_color, action.new_color,
+    )
+    if not (now or lasting):
+        return rehearsal
+    return replace(rehearsal, now=rehearsal.now + now, lasting=rehearsal.lasting + lasting)
+
+
+def _text_change_activation(
+    game: Game, seat: int, candidate: ActivationAction, choices: list,
+) -> ActivationAction | None:
+    """*candidate* aimed at the best of *choices* (``ai_text_changes.
+    ObjectChoice``: a permanent and the two words for it), or None when none
+    is worth making: each rehearsed with its words aimed
+    (:func:`_land_ability_worth`), the one leaving the seat furthest ahead
+    once the turn is over taken, and only at or above the floor a text
+    change cast is held to (``ai_text_changes.WORTH_FLOOR``) — every change of
+    a word that is written reads as *a* change."""
+    from dataclasses import replace
+
+    best: ActivationAction | None = None
+    best_worth = WORTH_FLOOR - 1e-9
+    for choice in choices:
+        aimed = replace(
+            candidate, target_player_index=choice.seat,
+            target_permanent_index=choice.permanent_index,
+            old_color=choice.old_color, new_color=choice.new_color,
+        )
+        worth = _land_ability_worth(game, seat, aimed)
+        if worth is not None and worth > best_worth:
+            best, best_worth = aimed, worth
+    return best
 
 
 def _queue_activation(table: Game, seat: int, action: ActivationAction):
@@ -998,16 +1086,7 @@ def _queue_activation(table: Game, seat: int, action: ActivationAction):
     leaves it there for the table to answer (CR 117.3c)."""
     planned = tap_planned_lands(table, seat, action)
     return table.queue_permanent_ability(
-        seat,
-        planned.permanent_name,
-        target_player_index=planned.target_player_index,
-        permanent_index=planned.permanent_index,
-        target_permanent_index=planned.target_permanent_index,
-        target_role_refs=planned.target_role_refs,
-        ability_index=planned.ability_index,
-        cost_hand_index=planned.cost_hand_index,
-        chosen_keyword=planned.chosen_keyword,
-        x_value=planned.x_value,
+        seat, planned.permanent_name, **activation_announcement(planned),
     )
 
 
