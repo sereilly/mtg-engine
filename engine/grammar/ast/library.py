@@ -266,6 +266,12 @@ class SearchLibrary:
     #: for however many finds there turn out to be, since ``tapped`` above is
     #: one entry per *printed* find and this shape prints none.
     all_tapped: bool = False
+    #: "…, then shuffle and put that card **third from the top**." (Long-Term
+    #: Plans.) How deep in the shuffled library the find goes, with ``to``
+    #: naming ``library_from_top``; 0 for every other destination. A depth
+    #: rather than a zone of its own per number, so "second from the top"
+    #: is this field with another value.
+    from_top: int = 0
 
 @dataclass(frozen=True)
 class LookAtLibraryTop:

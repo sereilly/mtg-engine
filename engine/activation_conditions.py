@@ -741,3 +741,51 @@ def _opponent_board_holds(
         game, controller_index, source,
         _opponent_board_condition(match.group("board")),
     )
+
+
+@lru_cache(maxsize=None)
+def _own_board_threshold_condition(phrase: str) -> "dict | None":
+    """"you control five or more lands" as the lowered condition payload that
+    answers it, or None when this cannot read it.
+
+    :func:`_opponent_board_condition`'s twin with the other seat, through the
+    same reader and for its reason: the identical words stand behind every
+    intervening "if you control N or more …", and a regex here would be one
+    more answer to whose permanents are counted and how. Held to the
+    ``controls`` kind with **"you"** as its seat and a printed floor (``ge``),
+    which is the one shape the row's pattern admits — the presence spelling
+    ("you control a Swamp") is :func:`_controls_the_printed_noun`'s, and a
+    comparison against another seat is not this sentence.
+    """
+    from .grammar import condition_payload_for
+
+    payload = condition_payload_for(phrase)
+    if (
+        payload is None
+        or payload.get("kind") != "controls"
+        or payload.get("who") != "you"
+        or payload.get("op") != "ge"
+        or not isinstance(payload.get("count"), int)
+    ):
+        return None
+    return payload
+
+
+def _readable_own_board_threshold(match: "re.Match[str]") -> bool:
+    """Whether the "you control N or more …" clause is one the condition
+    evaluator can answer."""
+    return _own_board_threshold_condition(match.group("board")) is not None
+
+
+def _own_board_threshold_holds(
+    game: "Game", controller_index: int, source, match: "re.Match[str]"
+) -> bool:
+    """"{T}: Add {C}{C}. Activate only if you control five or more lands."
+    (Temple of the False God.) A fact about the activator's board as it stands
+    (CR 602.5), counted by the one evaluator every printed "if" goes through —
+    so the Temple itself counts among the lands, and a land an effect has made
+    a creature, or a creature a land, is counted as the layers say it is."""
+    return _condition_holds_for_activator(
+        game, controller_index, source,
+        _own_board_threshold_condition(match.group("board")),
+    )

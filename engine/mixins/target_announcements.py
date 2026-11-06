@@ -318,6 +318,42 @@ class TargetAnnouncementsMixin:
             and any(waiting is item for waiting in self.stack)
         ):
             self.announce_targets_chosen(item)
+        # "Whenever a spell or ability is put onto the stack" (CR 601.2i,
+        # 602.2b, 603.3) — every object, a copy included (CR 707.10: it is
+        # created on the stack), once its announcement is whole. The same
+        # two exclusions as above: a target prompt still owed announces when
+        # it is answered (``_announce_answered_targets``), and an object the
+        # stack no longer holds was removed as it was put there (CR 603.3d).
+        if (
+            item is not None
+            and self.announcement_choice_for(item) is None
+            and any(waiting is item for waiting in self.stack)
+        ):
+            self.announce_put_onto_stack(item)
+
+    def announce_put_onto_stack(self, item) -> int:
+        """"Whenever a spell or ability is put onto the stack" (Grip of Chaos):
+        the event, with the object riding **by identity** under the key
+        Psychic Battle's event uses (``stack_targets.TARGETS_CHOSEN_ITEM``) —
+        several look-alikes may be on the stack at once and a ``StackItem``
+        compares by value. Returns how many abilities triggered.
+
+        Made for every object, targeted or not: "if it has a single target"
+        is the card's intervening-if (CR 603.4), asked of the object by the
+        trigger, and not a narrowing of the event. An ability that triggers
+        here is itself put onto the stack and announced in its turn, which is
+        no loop for Grip: its own trigger targets nothing, so its condition
+        fails and it never triggers (CR 603.4).
+        """
+        from ..events import emit
+        from ..stack_targets import TARGETS_CHOSEN_ITEM
+
+        if item is None:
+            return 0
+        return emit(
+            self, "spell_or_ability_put_onto_stack", subject=None,
+            **{TARGETS_CHOSEN_ITEM: item, "event_subject_player": item.caster_index},
+        )
 
     def spell_targets_nothing(self, item) -> bool:
         """Whether *item* is a **permanent spell that is not an Aura** — the

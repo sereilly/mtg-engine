@@ -34,6 +34,7 @@ from ..library_top import clear_reveal_grants
 from ..shields import END_OF_TURN, clear_shields
 from ..text_changes import end_until_eot_text_changes
 from ..turn_replacements import clear_turn_replacements
+from ..player_statics import clear_player_keyword_grants
 from ..pt import remove_temporary_pt
 from ..turn_state import stamped_turn_has_passed
 
@@ -205,6 +206,11 @@ class CleanupStepMixin:
             # swap with a printed window, and it expires by the same one sweep
             # for the same reason (engine/land_mana_swaps.py).
             clear_land_mana_swaps(player)
+            # "You gain shroud until end of turn." (Gilded Light.) A keyword a
+            # resolving spell gave the seat itself (CR 702.18a's "or player"),
+            # ended by the same sweep for CR 514.2's reason
+            # (engine/player_statics.py).
+            clear_player_keyword_grants(player)
             # "Until end of turn, for as long as that card remains on top of
             # your library, play with the top card of your library revealed."
             # (Temporal Aperture.) CR 611.2a's half of that compound duration —

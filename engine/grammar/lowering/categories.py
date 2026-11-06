@@ -60,7 +60,8 @@ module invented for the walk.
 """
 
 from ...lord_buffs import (LORD_BUFF_KIND)
-from ...player_statics import PLAYER_KEYWORD_STATIC_KIND
+from ...player_statics import (PLAYER_KEYWORD_GRANT_KIND,
+                               PLAYER_KEYWORD_STATIC_KIND)
 from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
 from ...zone_copies import ZONE_TOP_COPY_KIND
@@ -186,6 +187,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the same category, because a category names the migration family a kind
     # belongs to and not the object it acts on.
     PLAYER_KEYWORD_STATIC_KIND: "static_buffs",
+    # "You gain shroud until end of turn." (Gilded Light.) The same word to
+    # the same seat granted by a resolving spell for the turn — a one-shot
+    # keyword grant with a duration, so the family every other such grant is
+    # in (`grant_self_keyword_until_eot`'s), not the static's beside it.
+    PLAYER_KEYWORD_GRANT_KIND: "pump",
     # The self-conditional twin of the anthem above ("This creature gets +1/+1
     # as long as an opponent controls a nontoken white permanent") — the same
     # layer-7c/layer-6 contribution with the source as its own subject.

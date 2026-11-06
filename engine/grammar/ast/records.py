@@ -336,6 +336,20 @@ class WasKicked:
 
 
 @dataclass(frozen=True)
+class EventObjectTargetCount:
+    """"…, **if it has a single target**, …" (Grip of Chaos, CR 603.4.)
+
+    "It" is the spell or ability the firing event put on the stack, and the
+    question is CR 115.9a's: how many times an object or player was chosen as
+    its target when it was put there — a record of the announcement, not of
+    which targets are legal now. The number travels on the node, so "if it has
+    two targets" is this production with another value.
+    """
+
+    count: int = 1
+
+
+@dataclass(frozen=True)
 class AdditionalCostWasPaid:
     """"**If this spell's additional cost was paid**, …" (Undergrowth.)
 

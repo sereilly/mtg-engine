@@ -748,6 +748,164 @@ def test_w1g2_the_cycling_instants_cycle(set_pool):
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+#
+# Gilded Light ("You gain shroud until end of turn.", a one-shot player
+# keyword grant read by the one targeting reader) and Long-Term Plans (a
+# search placed third from the top of the shuffled library).
+import pytest as _w1g8_pytest
+
+from engine import Game as _W1G8Game
+from engine.models import PlayerState as _W1G8PlayerState
+from engine.player_statics import seat_has_player_keyword as _w1g8_has_keyword
+
+from tests.helpers import resolve_stack as _w1g8_resolve_stack
+
+
+def _w1g8_table(set_pool, hand, *, bob_hand=(), library=None, interactive=False):
+    lea = set_pool("LEA")
+    alice = _W1G8PlayerState(
+        name="Alice", hand=list(hand),
+        library=list(library if library is not None else [lea["Plains"]] * 6),
+    )
+    bob = _W1G8PlayerState(name="Bob", hand=list(bob_hand), library=[lea["Island"]] * 6)
+    game = _W1G8Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.active_player_index = 0
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    return game, alice, bob
+
+
+def _w1g8_drain(game):
+    _w1g8_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g8_resolve_stack(game)
+
+
+def test_w1g8_gilded_light_in_response_takes_the_bolt_off_its_caster(set_pool):
+    """A Lightning Bolt aimed at Alice; Gilded Light cast in response gives
+    her shroud (CR 702.18a: "This permanent or player can't be the target of
+    spells or abilities"), so the Bolt's only target is illegal as it
+    resolves and it is removed (CR 608.2b)."""
+    lea = set_pool("LEA")
+    game, alice, _bob = _w1g8_table(
+        set_pool, [set_pool("SCG")["Gilded Light"]], bob_hand=[lea["Lightning Bolt"]],
+    )
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert game.queue_from_hand(0, "Gilded Light").supported
+    _w1g8_drain(game)
+    assert alice.life == 20
+    assert _w1g8_has_keyword(game, 0, "shroud")
+    assert any("every target is illegal" in line for line in game.log)
+
+
+def test_w1g8_gilded_light_keeps_its_caster_off_every_picker_until_cleanup(set_pool):
+    """For the rest of the turn no spell can name Alice — the cast is refused
+    for want of a legal target, and Bob's own face is the only player the
+    picker offers. The cleanup step ends it (CR 514.2), and the next Bolt
+    lands."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    lea = set_pool("LEA")
+    bolt = lea["Lightning Bolt"]
+    game, alice, bob = _w1g8_table(
+        set_pool, [set_pool("SCG")["Gilded Light"]], bob_hand=[bolt, bolt],
+    )
+    assert game.cast_from_hand(0, "Gilded Light").supported
+    _w1g8_drain(game)
+    refused = game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
+    assert not refused.supported
+    assert alice.life == 20 and len(bob.hand) == 2
+    spec = derive_cast_spec(bolt, compile_card_oracle(bolt))
+    offered = game._enumerate_targets(1, bolt, spec, for_cast=True)
+    assert {"kind": "player", "seat": 0} not in offered
+    assert {"kind": "player", "seat": 1} in offered
+
+    game.resolve_cleanup_step(game.active_player_index)
+    assert not _w1g8_has_keyword(game, 0, "shroud")
+    # Ended without a trace, so a rehearsal's digest of the seat reads the
+    # seat it was before the grant (`player_statics.clear_player_keyword_grants`).
+    assert "_player_keyword_grants" not in vars(alice)
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g8_drain(game)
+    assert alice.life == 17
+
+
+def test_w1g8_gilded_light_shields_only_its_caster(set_pool):
+    """"You" is the spell's controller (CR 109.5): Bob is still a target."""
+    lea = set_pool("LEA")
+    game, _alice, bob = _w1g8_table(
+        set_pool, [set_pool("SCG")["Gilded Light"], lea["Lightning Bolt"]],
+    )
+    assert game.cast_from_hand(0, "Gilded Light").supported
+    _w1g8_drain(game)
+    assert not _w1g8_has_keyword(game, 1, "shroud")
+    assert game.cast_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    _w1g8_drain(game)
+    assert bob.life == 17
+
+
+def test_w1g8_gilded_light_still_cycles(set_pool):
+    game, alice, _bob = _w1g8_table(set_pool, [set_pool("SCG")["Gilded Light"]])
+    assert game.activate_from_hand(0, "Gilded Light").supported
+    _w1g8_drain(game)
+    assert [c.name for c in alice.hand] == ["Plains"]
+    assert not _w1g8_has_keyword(game, 0, "shroud")
+
+
+def test_w1g8_long_term_plans_puts_the_find_third_from_the_top(set_pool):
+    """The searcher picks Black Lotus as a person; the library is shuffled
+    and the Lotus put third from the top — after the shuffle, so the position
+    is the card's (the printed order: "then shuffle and put that card")."""
+    lea = set_pool("LEA")
+    library = [lea[name] for name in ("Plains", "Island", "Swamp", "Mountain", "Forest")]
+    library.append(lea["Black Lotus"])
+    game, alice, _bob = _w1g8_table(
+        set_pool, [set_pool("SCG")["Long-Term Plans"]], library=library, interactive=True,
+    )
+    assert game.cast_from_hand(0, "Long-Term Plans").supported
+    assert game.pending_choice_of("search_library", 0) is not None
+    lotus = [card.name for card in alice.library].index("Black Lotus")
+    assert game.resolve_pending_choice("search_library", 0, library_index=lotus)
+    _w1g8_drain(game)
+    assert len(alice.library) == 6
+    assert alice.library[2].name == "Black Lotus"
+    assert any("third from the top" in line for line in game.log)
+    # The find is not revealed, so the log does not name it (CR 701.20e).
+    assert not any("Black Lotus" in line for line in game.log)
+
+
+@_w1g8_pytest.mark.parametrize("others", [0, 1, 2])
+def test_w1g8_long_term_plans_with_a_short_library_puts_it_on_the_bottom(set_pool, others):
+    """2004-10-04: "If there are fewer than 3 cards in your library, put the
+    card on the bottom of your library." """
+    lea = set_pool("LEA")
+    game, alice, _bob = _w1g8_table(
+        set_pool, [set_pool("SCG")["Long-Term Plans"]],
+        library=[lea["Black Lotus"]] + [lea["Plains"]] * others, interactive=True,
+    )
+    assert game.cast_from_hand(0, "Long-Term Plans").supported
+    lotus = [card.name for card in alice.library].index("Black Lotus")
+    assert game.resolve_pending_choice("search_library", 0, library_index=lotus)
+    _w1g8_drain(game)
+    assert [card.name for card in alice.library][-1] == "Black Lotus"
+    assert len(alice.library) == others + 1
+
+
+def test_w1g8_long_term_plans_finds_a_card_for_a_seat_nobody_asks(set_pool):
+    """The default answer still finds one card and places it third."""
+    lea = set_pool("LEA")
+    library = [lea["Plains"]] * 5 + [lea["Black Lotus"]]
+    game, alice, _bob = _w1g8_table(
+        set_pool, [set_pool("SCG")["Long-Term Plans"]], library=library,
+    )
+    assert game.cast_from_hand(0, "Long-Term Plans").supported
+    _w1g8_drain(game)
+    assert len(alice.library) == 6
+    assert game.pending_choices == []
+    assert any("third from the top" in line for line in game.log)
 
 # ==== end W1G8 ======================================================
 

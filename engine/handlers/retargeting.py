@@ -366,6 +366,63 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
     return True, "resolved"
 
 
+def _reselect_at_random(
+    game: Game, item: StackItem, card_name: str, context: OracleExecutionContext,
+) -> tuple[bool, str]:
+    """"…reselect its target at random. (Select from among all legal
+    targets.)" (Grip of Chaos.)
+
+    The object's one target, drawn again from **every** legal target for its
+    slot — the current one included while it is legal (2004-10-04: "If there
+    are multiple legal targets, it may still choose the original one"), and
+    kept when there is no other (the same day's: "If there are no other legal
+    targets, it keeps its target"). The legal targets are the ones as this
+    ability resolves (the third ruling: "at which time the set of legal
+    targets may have changed"), read through ``stack_targets.change_slots`` —
+    the list the object's own picker reads — and the draw is the engine's
+    seeded RNG, so a seeded game reproduces it.
+
+    A target that moves is announced as every CR 115.7 change here is
+    (``change_target_spell_target``): the new target "becomes the target"
+    (CR 603.2), and the change is made for this ability's controller. A shape
+    ``change_slots`` refuses (a modal spell, an object printing "target" twice)
+    keeps its target, which is the direction a change must fail in.
+    """
+    import random
+
+    from ..stack_targets import apply_target_change, change_slots, target_label
+
+    slots = change_slots(game, item)
+    unchanged = f"{card_name}: {item.card.name}'s target is unchanged"
+    if isinstance(slots, str):
+        game.log.append(f"{unchanged} ({slots})")
+        return True, "resolved"
+    if len(slots) != 1:
+        game.log.append(f"{unchanged} (it no longer has a single target)")
+        return True, "resolved"
+    (slot,) = slots
+    if not slot.candidates:
+        game.log.append(f"{unchanged} (it has no other legal target)")
+        return True, "resolved"
+    pool = ((slot.current,) if slot.current_is_legal else ()) + tuple(slot.candidates)
+    pick = random.choice(pool)
+    before = target_label(game, slot.current)
+    if pick.same_object(slot.current):
+        game.log.append(f"{card_name}: {item.card.name} keeps its target, {before}")
+        return True, "resolved"
+    if not apply_target_change(game, item, slots, [pick]):
+        game.log.append(unchanged)
+        return True, "resolved"
+    game.log.append(
+        f"{card_name}: {item.card.name}'s target is reselected at random, "
+        f"from {before} to {target_label(game, pick)}"
+    )
+    game.announce_targets_chosen(
+        item, chooser=game.seat_index(context.caster), newly_targeted=True,
+    )
+    return True, "resolved"
+
+
 #: Scratchpad key each slot's prompt answers into, in turn. Private to the
 #: handler below: it is read by the step behind the prompt and cleared there.
 _EVENT_TARGET_PICK = "event_target_change_pick"
@@ -447,6 +504,8 @@ def change_event_object_targets(game: Game, instruction: OracleInstruction, cont
         return True, "resolved"
     subject = item.card.name
     unchanged = f"{card_name}: {subject}'s targets remain unchanged"
+    if instruction.payload.get("at_random"):
+        return _reselect_at_random(game, item, card_name, context)
     # Who chooses first, because it is the half the sentence leads with and
     # the half every player was just shown the evidence for: "the player who
     # reveals the card with the greatest mana value" is decided by the reveal

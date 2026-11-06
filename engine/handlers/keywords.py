@@ -1014,6 +1014,32 @@ def grant_self_keyword_until_eot(game: Game, instruction: OracleInstruction, con
     return True, "resolved"
 
 
+@effect_handler("grant_player_keyword_until_eot")
+def grant_player_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"**You** gain shroud until end of turn." (Gilded Light, CR 702.18a.)
+
+    The seat is CR 109.5's "you" — the controller of the resolving spell or
+    ability — and the record is ``player_statics``', read by the one reader
+    every targeting gate asks, so from this moment no spell or ability can
+    choose the seat and one already aimed at it finds it illegal as it
+    resolves (CR 608.2b). The cleanup step ends it (CR 514.2).
+    """
+    from ..player_statics import grant_player_keyword_until_eot as grant
+
+    if instruction.payload.get("who") != "you" or context.caster not in game.players:
+        return False, "no seat to grant a keyword to"
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    if not keywords:
+        return False, "no keyword to grant"
+    seat = game.players.index(context.caster)
+    grant(game, seat, keywords, source_name=context.card.name)
+    game.log.append(
+        f"{context.caster.name} gains {' and '.join(keywords)} until end of "
+        f"turn ({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("grant_enchanted_keyword_until_eot")
 def grant_enchanted_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…**it** gains trample until end of turn", where "it" is the enchanted

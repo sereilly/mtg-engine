@@ -273,7 +273,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ExtraLandPlays: _lower_extra_land_plays,
     ast.CantPlayLands: _lower_cant_play_lands,
     ast.CantPlayFromZone: _lower_cant_play_from_zone,
-    ast.CantCastSpellTypes: _lower_cant_cast_spell_types,
     ast.CantActivateNonManaAbilities: _lower_cant_activate_nonmana_abilities,
     ast.UpkeepCounterToll: _lower_upkeep_counter_toll,
     ast.UpkeepDamageUnlessCost: _lower_upkeep_damage_unless_cost,
@@ -447,6 +446,10 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # damage froze, so the bare reveal joins the sentences that name it.
     ast.RevealHand: _lower_reveal_hand,
     ast.ExileEntireLibrary: _lower_exile_entire_library,
+    # "…**defending player** can't cast spells this turn." (Xantid Swarm.)
+    # The seat the attack froze, so the event rides; Orim's Chant's "target
+    # player" spelling reads none and lowers as it did in the name-only table.
+    ast.CantCastSpellTypes: _lower_cant_cast_spell_types,
     # "…**that player** exiles the top four cards of their library"
     # (Scalpelexis): the seat the firing event froze, so the event rides.
     ast.ExileTopOfLibrary: _lower_exile_top_of_library,

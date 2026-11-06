@@ -421,6 +421,11 @@ _COMPUTED_ATTRIBUTE_WRITES: dict[str, str] = {
         "the per-seat count that keys each turn replacement (CR 614.5), an "
         "integer attribute on a player, not a zone."
     ),
+    "engine/player_statics.py::grant_player_keyword_until_eot": (
+        "the one-shot player keyword grants' attribute on a player (Gilded "
+        "Light, SCG W1G8; _GRANTS_ATTR), not a zone — the shape of the "
+        "collections above."
+    ),
     "engine/late_modules.py::__getattr__": (
         "a submodule of the engine package, kept on the LateModules "
         "instance it was read through: never a zone, a game or a player."

@@ -205,6 +205,13 @@ def _parse_change_event_targets(stream: TokenStream) -> "ast.ChangeEventTargets 
     "change the …" sentence.
     """
     mark = stream.mark()
+    # "…**reselect its target at random**." (Grip of Chaos.) The same object,
+    # re-aimed by chance rather than by a player: CR 115.7a's change with the
+    # choice made at random among every legal target (its reminder text, "Select
+    # from among all legal targets", is stripped with the rest). "Its target"
+    # is the object's one target.
+    if stream.accept_phrase("reselect", "its", "target", "at", "random"):
+        return ast.ChangeEventTargets(at_random=True)
     if not stream.accept_phrase("change", "the", "target", "or", "targets"):
         stream.reset(mark)
         return None

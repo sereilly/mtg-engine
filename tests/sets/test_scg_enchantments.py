@@ -835,6 +835,239 @@ def test_w1g6_form_of_the_dragon_sets_life_burns_and_grounds_attackers(set_pool)
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+#
+# Grip of Chaos: "Whenever a spell or ability is put onto the stack, if it has
+# a single target, reselect its target at random. (Select from among all legal
+# targets.)" A new event (`Game.announce_put_onto_stack`), CR 603.4's
+# intervening-if over CR 115.9a's count, and Psychic Battle's change of the
+# event's object made by the seeded RNG.
+import random as _w1g8_random
+
+from engine import Game as _W1G8Game
+from engine.models import Permanent as _W1G8Permanent
+from engine.models import PlayerState as _W1G8PlayerState
+
+from tests.helpers import resolve_stack as _w1g8_resolve_stack
+
+
+def _w1g8_table(set_pool, hand=(), *, bob_hand=(), interactive=False):
+    lea = set_pool("LEA")
+    alice = _W1G8PlayerState(name="Alice", hand=list(hand), library=[lea["Plains"]] * 6)
+    bob = _W1G8PlayerState(name="Bob", hand=list(bob_hand), library=[lea["Island"]] * 6)
+    game = _W1G8Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.active_player_index = 0
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    return game, alice, bob
+
+
+def _w1g8_put(game, seat, card):
+    permanent = _W1G8Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w1g8_drain(game):
+    _w1g8_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g8_resolve_stack(game)
+
+
+def _w1g8_grip_triggers(game):
+    return [
+        item for item in game.stack
+        if item.card.name == "Grip of Chaos" and item.ability_kind == "triggered"
+    ]
+
+
+def _w1g8_bolt_outcome(game, alice, bob, bears, elves):
+    """Where the Bolt's 3 damage went."""
+    if bears.damage_marked == 3:
+        return "bears"
+    if elves.damage_marked == 3:
+        return "elves"
+    if alice.life == 17:
+        return "alice"
+    if bob.life == 17:
+        return "bob"
+    return None
+
+
+def test_w1g8_grip_of_chaos_reselects_a_single_target_among_every_legal_one(set_pool):
+    """Each seeded game puts Grip's trigger above a Lightning Bolt aimed at
+    Bob's Bears; as it resolves, the Bolt's target is drawn from every legal
+    target — both players and both creatures — and the original is one of the
+    answers (2004-10-04: "it may still choose the original one"). Over a dozen
+    seeds every answer is legal, the original is kept at least once and the
+    Bolt is moved at least once; one seed always gives one answer."""
+    lea = set_pool("LEA")
+    outcomes = []
+    for seed in range(12):
+        game, alice, bob = _w1g8_table(set_pool, [lea["Lightning Bolt"]])
+        _w1g8_put(game, 0, set_pool("SCG")["Grip of Chaos"])
+        bears = _w1g8_put(game, 1, lea["Grizzly Bears"])
+        elves = _w1g8_put(game, 0, lea["Llanowar Elves"])
+        assert game.queue_from_hand(
+            0, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+        ).supported
+        # The Bolt keeps its target until the trigger resolves (2004-10-04).
+        assert len(_w1g8_grip_triggers(game)) == 1
+        assert game.stack[0].target_permanent_id == [bears.permanent_id]
+        _w1g8_random.seed(seed)
+        _w1g8_drain(game)
+        outcomes.append(_w1g8_bolt_outcome(game, alice, bob, bears, elves))
+    assert None not in outcomes
+    assert "bears" in outcomes
+    assert set(outcomes) - {"bears"}
+
+    again = []
+    for _ in range(2):
+        game, alice, bob = _w1g8_table(set_pool, [lea["Lightning Bolt"]])
+        _w1g8_put(game, 0, set_pool("SCG")["Grip of Chaos"])
+        bears = _w1g8_put(game, 1, lea["Grizzly Bears"])
+        elves = _w1g8_put(game, 0, lea["Llanowar Elves"])
+        game.queue_from_hand(0, "Lightning Bolt", target_permanent_ids=[bears.permanent_id])
+        _w1g8_random.seed(7)
+        _w1g8_drain(game)
+        again.append(_w1g8_bolt_outcome(game, alice, bob, bears, elves))
+    assert again[0] == again[1]
+
+
+def test_w1g8_grip_of_chaos_keeps_a_target_with_no_other_legal_one(set_pool):
+    """2004-10-04: "If there are no other legal targets, it keeps its
+    target." Terror's only legal creature is the one it named."""
+    lea = set_pool("LEA")
+    game, _alice, _bob = _w1g8_table(set_pool, [lea["Terror"]])
+    _w1g8_put(game, 0, set_pool("SCG")["Grip of Chaos"])
+    bears = _w1g8_put(game, 1, lea["Grizzly Bears"])
+    assert game.queue_from_hand(0, "Terror", target_permanent_ids=[bears.permanent_id]).supported
+    assert len(_w1g8_grip_triggers(game)) == 1
+    _w1g8_drain(game)
+    assert not game.is_on_battlefield(bears)
+    assert any("has no other legal target" in line for line in game.log)
+
+
+def test_w1g8_grip_of_chaos_reselects_among_the_targets_legal_as_it_resolves(set_pool):
+    """2004-10-04: "You determine the new target when this ability resolves,
+    at which time the set of legal targets may have changed." Alice gains
+    shroud in response (Gilded Light, which targets nothing and so is not
+    reselected itself): no seed sends Bob's Bolt at her."""
+    lea = set_pool("LEA")
+    scg = set_pool("SCG")
+    for seed in range(8):
+        game, alice, bob = _w1g8_table(
+            set_pool, [scg["Gilded Light"]], bob_hand=[lea["Lightning Bolt"]],
+        )
+        _w1g8_put(game, 0, scg["Grip of Chaos"])
+        bears = _w1g8_put(game, 1, lea["Grizzly Bears"])
+        assert game.queue_from_hand(
+            1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+        ).supported
+        assert game.queue_from_hand(0, "Gilded Light").supported
+        assert len(_w1g8_grip_triggers(game)) == 1
+        _w1g8_random.seed(seed)
+        _w1g8_drain(game)
+        assert alice.life == 20, seed
+        assert bears.damage_marked == 3 or bob.life == 17
+
+
+def test_w1g8_grip_of_chaos_ignores_what_has_no_single_target(set_pool):
+    """An untargeted spell, a spell with two targets and Grip's own trigger do
+    not set it off (CR 603.4: the condition is false, so it never triggers) —
+    which is also why two Grips do not loop. One target of an "up to two"
+    does."""
+    lea = set_pool("LEA")
+    lead_astray = set_pool("JUD")["Lead Astray"]
+    game, _alice, _bob = _w1g8_table(set_pool, [lea["Wrath of God"], lead_astray, lead_astray])
+    _w1g8_put(game, 0, set_pool("SCG")["Grip of Chaos"])
+    _w1g8_put(game, 0, set_pool("SCG")["Grip of Chaos"])
+    bears = _w1g8_put(game, 1, lea["Grizzly Bears"])
+    elves = _w1g8_put(game, 1, lea["Llanowar Elves"])
+    assert game.queue_from_hand(0, "Wrath of God").supported
+    assert _w1g8_grip_triggers(game) == []
+    game.stack.clear()
+    assert game.queue_from_hand(
+        0, "Lead Astray", target_permanent_ids=[bears.permanent_id, elves.permanent_id],
+    ).supported
+    assert _w1g8_grip_triggers(game) == []
+    game.stack.clear()
+    assert game.queue_from_hand(
+        0, "Lead Astray", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    assert len(_w1g8_grip_triggers(game)) == 2
+    _w1g8_drain(game)
+    assert game.stack == []
+
+
+def test_w1g8_grip_of_chaos_reaches_an_activated_ability(set_pool):
+    """"…a spell **or ability**": Prodigal Sorcerer's ping is put onto the
+    stack with one target and is reselected like a spell."""
+    lea = set_pool("LEA")
+    game, alice, bob = _w1g8_table(set_pool)
+    _w1g8_put(game, 0, set_pool("SCG")["Grip of Chaos"])
+    _w1g8_put(game, 0, lea["Prodigal Sorcerer"])
+    bears = _w1g8_put(game, 1, lea["Grizzly Bears"])
+    assert game.queue_permanent_ability(
+        0, "Prodigal Sorcerer", target_permanent_ids=[bears.permanent_id], ability_index=0,
+    ).supported
+    assert len(_w1g8_grip_triggers(game)) == 1
+    _w1g8_random.seed(1)
+    _w1g8_drain(game)
+    assert any("Prodigal Sorcerer" in line and "Grip of Chaos" in line for line in game.log)
+    assert bears.damage_marked + (20 - alice.life) + (20 - bob.life) + sum(
+        perm.damage_marked for perm in game.controlled_by(0)
+    ) == 1
+
+
+def test_w1g8_grip_of_chaos_trigger_can_be_stifled(set_pool):
+    """The reselection is a triggered ability on the stack (the third
+    ruling), so Stifle counters it and the Bolt keeps its target. Stifle has a
+    single target itself, so it sets Grip off too — and the only other legal
+    target for it is nothing, so that trigger keeps it."""
+    lea = set_pool("LEA")
+    scg = set_pool("SCG")
+    game, _alice, bob = _w1g8_table(
+        set_pool, [lea["Lightning Bolt"]], bob_hand=[scg["Stifle"]],
+    )
+    _w1g8_put(game, 0, scg["Grip of Chaos"])
+    bears = _w1g8_put(game, 1, lea["Grizzly Bears"])
+    assert game.queue_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    # Bottom-first: the Bolt is 0, Grip's trigger 1.
+    assert game.queue_from_hand(1, "Stifle", target_stack_index=1).supported
+    assert len(_w1g8_grip_triggers(game)) == 2
+    _w1g8_random.seed(0)
+    _w1g8_drain(game)
+    assert bears.damage_marked == 3
+    assert any("Stifle countered Grip of Chaos" in line for line in game.log)
+
+
+def test_w1g8_grip_of_chaos_hears_a_trigger_whose_target_a_person_chose(set_pool):
+    """A triggered ability is put onto the stack once its controller names
+    its target (CR 603.3d): Decree of Savagery's cycle trigger, aimed by a
+    person, sets Grip off only after the answer — and Grip moves the four
+    counters among the creatures."""
+    lea = set_pool("LEA")
+    scg = set_pool("SCG")
+    game, _alice, _bob = _w1g8_table(set_pool, [scg["Decree of Savagery"]], interactive=True)
+    _w1g8_put(game, 0, scg["Grip of Chaos"])
+    mine = _w1g8_put(game, 0, lea["Grizzly Bears"])
+    theirs = _w1g8_put(game, 1, lea["Llanowar Elves"])
+    assert game.activate_from_hand(0, "Decree of Savagery").supported
+    assert game.pending_choice_of("trigger_target", 0) is not None
+    assert _w1g8_grip_triggers(game) == []
+    assert game.resolve_pending_choice(
+        "trigger_target", 0, permanent_id=theirs.permanent_id,
+    )
+    assert len(_w1g8_grip_triggers(game)) == 1
+    _w1g8_random.seed(2)
+    _w1g8_drain(game)
+    assert any("Grip of Chaos" in line and "Decree of Savagery" in line for line in game.log)
 
 # ==== end W1G8 ======================================================
 

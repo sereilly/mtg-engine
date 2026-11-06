@@ -238,6 +238,13 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # object is targeted" and carries no number to read.
     ("player_chooses_targets",
      ("a", "player", "chooses", "one", "or", "more", "targets")),
+    # "Whenever a spell or ability is put onto the stack" (Grip of Chaos).
+    # CR 601.2i / 602.2b / 603.3: the moment an object's announcement is whole
+    # on the stack — every object, targeted or not, which is why it is its own
+    # event and not Psychic Battle's above (that one is a *choice*, and also
+    # hears a target an effect changed, which puts nothing on the stack).
+    ("spell_or_ability_put_onto_stack",
+     ("a", "spell", "or", "ability", "is", "put", "onto", "the", "stack")),
     ("spell_cast", ("a", "player", "casts", "a", "spell")),
     # "Whenever a player **kicks** a spell" (Saproling Infestation). The cast
     # event under CR 702.33d's narrowing; `engine/trigger_conditions.py`'s pattern table

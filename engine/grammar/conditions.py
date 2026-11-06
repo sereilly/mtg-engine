@@ -298,6 +298,14 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         return ast.AdditionalCostWasPaid()
     stream.reset(mark)
 
+    # "**it has a single target**" (Grip of Chaos). CR 115.9a's count over the
+    # object a firing event put on the stack; five fixed words, settled at the
+    # top for the reason the clause above is, and the lowering gates it on an
+    # event that froze such an object.
+    if stream.accept_phrase("it", "has", "a", "single", "target"):
+        return ast.EventObjectTargetCount(count=1)
+    stream.reset(mark)
+
     # "**this spell was kicked**" (Dismantling Blow) / "**it was kicked**" (the
     # Emissaries) / "**this creature wasn't kicked**" (Skizzik). CR 702.33d's
     # fact about the cast, read here -- above every reader that opens on a

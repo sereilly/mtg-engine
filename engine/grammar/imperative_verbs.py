@@ -342,6 +342,12 @@ def parse_imperative_verb(
         combat_removal = _parse_remove_from_combat(stream)
         if combat_removal is not None:
             return combat_removal
+    if stream.at_word("reselect"):
+        # "…reselect its target at random." (Grip of Chaos.) Psychic Battle's
+        # change of the firing event's object, made by chance.
+        reselected = _parse_change_event_targets(stream)
+        if reselected is not None:
+            return reselected
     if stream.at_word("change"):
         # The base-P/T rewrite is tried first and refuses without consuming
         # when the sentence is "change the text of …", so the two readings of

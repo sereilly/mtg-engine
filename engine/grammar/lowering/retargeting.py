@@ -113,6 +113,15 @@ def _lower_change_event_targets(
     payload: dict[str, object] = {}
     if node.silent_for_same_name:
         payload["silent_for_same_name"] = True
+    if node.at_random:
+        # "…reselect its target at random." (Grip of Chaos.) Emitted only when
+        # printed, so Psychic Battle's payload is byte-identical.
+        if node.silent_for_same_name:
+            raise LoweringError(
+                "a reselection at random is made by nobody, so no sentence "
+                "can silence who made it", node=node,
+            )
+        payload["at_random"] = True
     return (OracleInstruction("change_event_object_targets", "", payload),)
 
 

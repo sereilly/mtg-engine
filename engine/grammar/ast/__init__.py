@@ -158,6 +158,7 @@ from .conditions import (
 )
 from .records import (
     AdditionalCostWasPaid,
+    EventObjectTargetCount,
     WasKicked,
     AttackedOrBlockedThisCombat,
     AmongThosePlayers,
@@ -659,6 +660,7 @@ __all__ = [
     "CardsDrawnThisWay",
     "EachAdditionalCostPaid",
     "AdditionalCostWasPaid",
+    "EventObjectTargetCount",
     "WasKicked",
     "EachShortOfThisWay",
     "DestroyedThisWay",
