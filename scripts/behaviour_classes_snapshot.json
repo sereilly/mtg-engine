@@ -77,6 +77,27 @@
     "Woodland Druid"
   ],
   [
+    "Abbey Gargoyles",
+    "Aven Smokeweaver",
+    "Cerulean Wyvern",
+    "Coast Watcher",
+    "Duskrider Falcon",
+    "Freewind Falcon",
+    "Hazerider Drake",
+    "Melesse Spirit",
+    "Nightwind Glider",
+    "Sea Sprite",
+    "Thermal Glider",
+    "Treetop Sentinel",
+    "Voice of Duty",
+    "Voice of Grace",
+    "Voice of Law",
+    "Voice of Reason",
+    "Voice of Truth",
+    "Weatherseed Faeries",
+    "Windreaper Falcon"
+  ],
+  [
     "Air Elemental",
     "Armored Pegasus",
     "Aven Envoy",
@@ -96,26 +117,6 @@
     "Tormented Angel",
     "Willow Faerie",
     "Wind Drake"
-  ],
-  [
-    "Abbey Gargoyles",
-    "Aven Smokeweaver",
-    "Cerulean Wyvern",
-    "Duskrider Falcon",
-    "Freewind Falcon",
-    "Hazerider Drake",
-    "Melesse Spirit",
-    "Nightwind Glider",
-    "Sea Sprite",
-    "Thermal Glider",
-    "Treetop Sentinel",
-    "Voice of Duty",
-    "Voice of Grace",
-    "Voice of Law",
-    "Voice of Reason",
-    "Voice of Truth",
-    "Weatherseed Faeries",
-    "Windreaper Falcon"
   ],
   [
     "Anaconda",
@@ -710,6 +711,10 @@
     "Vigilant Drake"
   ],
   [
+    "Bloodrock Cyclops",
+    "Goblin Brigand"
+  ],
+  [
     "Blue Elemental Blast",
     "Red Elemental Blast"
   ],
@@ -798,6 +803,10 @@
     "Vengeance"
   ],
   [
+    "Death's-Head Buzzard",
+    "Havoc Demon"
+  ],
+  [
     "Deathgazer",
     "Dread Specter"
   ],
@@ -868,6 +877,10 @@
   [
     "Ember Beast",
     "Mogg Flunkies"
+  ],
+  [
+    "Enrage",
+    "Howl from Beyond"
   ],
   [
     "Ephemeron",
@@ -1130,6 +1143,10 @@
     "Phyrexian Ghoul"
   ],
   [
+    "Narwhal",
+    "Silver Knight"
+  ],
+  [
     "Noble Elephant",
     "War Elephant"
   ],
@@ -1260,6 +1277,10 @@
   [
     "Towering Baloth",
     "Treespring Lorian"
+  ],
+  [
+    "Treetop Rangers",
+    "Treetop Scout"
   ],
   [
     "Viashino Sandscout",
