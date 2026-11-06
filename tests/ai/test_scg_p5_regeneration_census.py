@@ -226,3 +226,21 @@ def test_every_regeneration_the_ai_can_pay_for_saves_a_creature_about_to_die():
     for window in ("attacking", "attacking (web door)", "blocking", "response"):
         assert found["taken"][window] >= 30, (window, found["taken"])
     assert "Krosan Warchief" in found["examined"]
+
+
+@pytest.mark.full
+def test_with_the_chooser_answering_as_a_main_phase_the_web_door_misses_them():
+    """Backwards: ``choose_activation_action`` answering every moment as its
+    main phase, as on 43a45e81. The engine's own windows were right there
+    too; the web's door was not — 45 of the 51 attackers (the six it took
+    stay untapped as they attack)."""
+    from unittest import mock
+
+    from engine import ai_abilities
+
+    with mock.patch.object(ai_abilities, "_at_sorcery_speed", lambda game, seat: True):
+        found = _census(_pool())
+    missed = [name for name, window in found["missed"] if window == "attacking (web door)"]
+    assert len(missed) >= 40, found["missed"]
+    assert "Krosan Warchief" in missed
+    assert {window for _name, window in found["missed"]} == {"attacking (web door)"}
