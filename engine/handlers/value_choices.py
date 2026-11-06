@@ -738,12 +738,16 @@ def _first_creature_type_written_on_target(
     CR 708.5 lets look at it (its controller), and nothing to anybody else,
     whose default must not be a word only the hidden card could tell it.
     """
-    from ..text_changes import creature_types_written, text_seen_by
+    from ..face_down import is_face_down
+    from ..text_changes import (creature_types_written, spell_text_card,
+                                text_seen_by)
     from ._targets import resolve_target_permanent
 
     if context.stack_target is not None:
+        item = context.stack_target
         written = creature_types_written(
-            text_seen_by(game, context.stack_target, seat)
+            text_seen_by(game, item, seat) if is_face_down(item)
+            else spell_text_card(item)
         )
     else:
         target = resolve_target_permanent(
