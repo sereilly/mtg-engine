@@ -711,6 +711,16 @@ CLAIMABLE_EXILED_CARDS = "claimable_exiled_cards"
 #: sentence that names an owner's zone into the per-object-record branch.
 SWEPT_OWNER_SEATS = "swept_owner_seats"
 
+#: …and the **card** each swept permanent became in exile, ``{permanent_id:
+#: card}`` — the object the pile holds, which is not the permanent's ``.card``
+#: when the permanent was face down (CR 708.9) or when that exile already held
+#: another copy of the card (``Game.put_card_into_exile``, CR 400.7). Read
+#: beside :data:`SWEPT_OWNER_SEATS` by the claim that hands each card to a
+#: player (Thieves' Auction), which otherwise found a swept card by scanning
+#: the exile zones for the permanent's card — and with two seats' copies of
+#: one ``CardDefinition`` in exile, found the first seat's both times.
+SWEPT_EXILED_CARDS = "swept_exiled_cards"
+
 #: The **cards** an exile sweep put into exile, each with the seat whose exile
 #: it went to — a sequence of ``(owner_seat, card)`` pairs, the shape
 #: :data:`CLAIMABLE_EXILED_CARDS` settled for the reason it gives (several

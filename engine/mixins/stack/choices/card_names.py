@@ -65,7 +65,7 @@ class CardNameChoicesMixin:
             if taken:
                 taken_from[zone] = len(taken)
                 cards[:] = kept
-                target.exile.extend(taken)
+                self.put_cards_into_exile(target, taken)
         # "That player shuffles" — once, after the search, and only their
         # library is disturbed (CR 701.24).
         random.shuffle(target.library)
@@ -295,8 +295,9 @@ class CardNameChoicesMixin:
         player = self.players[choice.player_index]
         named = (card_name or "").strip()
         exile_count = int(choice.data.get("exile_count", 0) or 0)
-        paid = [player.library.pop(0) for _ in range(min(exile_count, len(player.library)))]
-        player.exile.extend(paid)
+        paid = self.put_cards_into_exile(player, [
+            player.library.pop(0) for _ in range(min(exile_count, len(player.library)))
+        ])
         revealed: list = []
         found = None
         while player.library:
@@ -310,7 +311,7 @@ class CardNameChoicesMixin:
         for card in revealed:
             if card is found:
                 continue
-            player.exile.append(card)
+            self.put_card_into_exile(player, card)
         if found is not None:
             # Through the CR 614 seam every "put this card into a hand" uses,
             # so a commander headed for a hand goes to the command zone instead

@@ -233,7 +233,7 @@ class NumberChoicesMixin:
                     # the token card out of it, so nothing here special-cases
                     # the fact that it is a token.
                     if owner_index is not None:
-                        self.players[owner_index].exile.append(token.card)
+                        self.put_card_into_exile(owner_index, token.card)
                 results = choice.data.get("results")
                 if results is not None:
                     results["trigger_count"] = len(owned)

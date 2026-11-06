@@ -384,7 +384,7 @@ def _place_sorted_reveal(game, caster, revealed, payload, matches) -> tuple[list
             elif zone == "exile":
                 # CR 406.3: an exiled card goes to its owner's exile, which for a
                 # card off the top of a library is the seat whose library it was.
-                caster.exile.append(card)
+                game.put_card_into_exile(caster, card)
             else:
                 game.put_card_into_graveyard(caster, card, from_zone="library")
     if bottomed:
@@ -635,8 +635,7 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
         # cards for good — a graveyard is a zone half this pool can reach back
         # into, so lowering the word onto the branch below would have made the
         # card strictly better than it reads.
-        for card in revealed:
-            player.exile.append(card)
+        game.put_cards_into_exile(player, revealed)
         if revealed:
             game.log.append(
                 f"{player.name} exiled {len(revealed)} card(s) revealed this way"
@@ -1393,7 +1392,7 @@ def exile_revealed_card(game: Game, instruction: OracleInstruction, context: Ora
             for slot, held in enumerate(owner.library):
                 if held is card:
                     owner.library.pop(slot)
-                    owner.exile.append(card)
+                    card = game.put_card_into_exile(owner, card)
                     context.results["exiled_cards"] = [card]
                     game.log.append(
                         f"{owner.name} exiles {card.name} from their library"
@@ -1406,7 +1405,7 @@ def exile_revealed_card(game: Game, instruction: OracleInstruction, context: Ora
         game.log.append(f"{context.card.name}: {card.name} is no longer in hand")
         return True, "resolved"
     victim.hand.pop(index)
-    victim.exile.append(card)
+    card = game.put_card_into_exile(victim, card)
     context.results["exiled_cards"] = [card]
     game.log.append(f"{victim.name} exiles {card.name} from their hand")
     return True, "resolved"

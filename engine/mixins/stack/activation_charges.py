@@ -1127,7 +1127,7 @@ class ActivationChargesMixin:
             from_graveyard = [controller.graveyard[index] for index in taken]
             for index in sorted(taken, reverse=True):
                 del controller.graveyard[index]
-            controller.exile.extend(from_graveyard)
+            from_graveyard = self.put_cards_into_exile(controller, from_graveyard)
             exiled_set_for_cost = [*exiled_set_for_cost, *from_graveyard]
             if exiled_for_cost is None and from_graveyard:
                 exiled_for_cost = from_graveyard[0]
@@ -1204,7 +1204,7 @@ class ActivationChargesMixin:
                 controller.library.pop(0)
                 for _ in range(ability.cost.exile_top_of_library)
             ]
-            controller.exile.extend(from_library)
+            from_library = self.put_cards_into_exile(controller, from_library)
             exiled_set_for_cost = [*exiled_set_for_cost, *from_library]
             if exiled_for_cost is None:
                 exiled_for_cost = from_library[0]
@@ -1220,7 +1220,7 @@ class ActivationChargesMixin:
         # counter it). The stack item keeps its source_permanent reference.
         if ability.cost.exile_self:
             self.remove_from_battlefield(permanent)
-            controller.exile.append(permanent.card)
+            self.put_card_into_exile(controller, permanent.card)
             self.log.append(
                 f"{controller.name} exiled {permanent.card.name} to activate its ability"
             )
@@ -1337,15 +1337,16 @@ class ActivationChargesMixin:
             # deck repeats one immutable ``CardDefinition`` per copy, so every
             # copy of a card in a hand is the same Python object and an identity
             # filter removes all of them where this cost eats exactly one.
+            landed = []
             for card in objects:
                 self.take_card_from_hand(controller, card)
-                controller.exile.append(card)
+                landed.append(self.put_card_into_exile(controller, card))
             self.log.append(
                 f"{controller.name} exiled "
                 + ", ".join(card.name for card in objects)
                 + f" from their hand to activate {permanent.card.name}"
             )
-            return list(objects)
+            return landed
         if zone == "graveyard":
             # Highest slot first: every pop renumbers the slots behind it.
             located = []
@@ -1358,23 +1359,22 @@ class ActivationChargesMixin:
                 located.append(slot)
             for slot in sorted(located, reverse=True):
                 pile.graveyard.pop(slot)
-            controller.exile.extend(objects)
+            landed = self.put_cards_into_exile(controller, objects)
             self.log.append(
                 f"{controller.name} exiled "
                 + ", ".join(card.name for card in objects)
                 + f" from the graveyard of {pile.name} to activate "
                 f"{permanent.card.name}"
             )
-            return list(objects)
+            return landed
         taken = []
         for chosen in objects:
             owner_index = self.owner_index_of(chosen)
             card = chosen.card
             self.remove_from_battlefield(chosen)
-            self.players[
-                owner_index if owner_index is not None else controller_index
-            ].exile.append(card)
-            taken.append(card)
+            taken.append(self.put_card_into_exile(
+                owner_index if owner_index is not None else controller_index, card,
+            ))
         self.log.append(
             f"{controller.name} exiled "
             + ", ".join(card.name for card in taken)

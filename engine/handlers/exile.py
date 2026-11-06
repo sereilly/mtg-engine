@@ -30,7 +30,7 @@ from ..oracle_types import (EXILED_BY_SEAT, EXILED_CARDS_WITH_OWNERS,
                             LAST_TARGET_CONTROLLER,
                             LAST_TARGET_NAME, LAST_TARGET_OWNER,
                             PER_OBJECT_SEAT_RECORDS,
-                            SWEPT_OWNER_SEATS)
+                            SWEPT_EXILED_CARDS, SWEPT_OWNER_SEATS)
 from ..tokens import CREATED_TOKEN_RESULT_KEY, tokens_created_with
 from ._amounts import resolve_amount
 from ._filters import (_card_matches_filter, graveyard_card_matches,
@@ -64,9 +64,9 @@ def exile_target_creature_until_eot(game: Game, instruction: OracleInstruction, 
                 game.remove_from_battlefield(perm)
                 break
     if exiled_perm is not None:
-        target.exile.append(exiled_perm.card)
+        landed = game.put_card_into_exile(target, exiled_perm.card)
         owner_idx = game.players.index(target)
-        game.exile_until_eot.append((owner_idx, exiled_perm.card))
+        game.exile_until_eot.append((owner_idx, landed))
         game.log.append(f"{exiled_perm.card.name} exiled until end of turn by {card.name}")
     else:
         game.log.append(f"{card.name}: no valid creature to exile")
@@ -148,8 +148,7 @@ def exile_bound_card(game: Game, instruction: OracleInstruction, context: Oracle
                 f"{context.card.name}: {name} is no longer in {owner.name}'s graveyard"
             )
             return True, "resolved"
-    exiled = owner.graveyard.pop(index)
-    owner.exile.append(exiled)
+    exiled = game.put_card_into_exile(owner, owner.graveyard.pop(index))
     source = context.source_permanent
     if source is not None:
         link_exiled_card(source, exiled, game.players.index(owner))
@@ -182,7 +181,7 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
     (CR 608.2n), so this is the only moment both a permanent and a spell pass
     through.
     """
-    def _register(owner_index: int, card) -> None:
+    def _register(owner_index: int, card, *, awaiting: bool = False) -> None:
         counters = instruction.payload.get("counters") or {}
         if not counters:
             return
@@ -201,6 +200,7 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
             # seat and the register is the only thing that still has one.
             controller_index=owner_index,
             counters=placed,
+            awaiting_arrival=awaiting,
         )
         game.log.append(
             f"{card.name} was exiled with "
@@ -256,7 +256,7 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
                 for index, held in enumerate(player.graveyard):
                     if held is context.card:
                         player.graveyard.pop(index)
-                        player.exile.append(held)
+                        held = game.put_card_into_exile(player, held)
                         context.results["exiled_self"] = True
                         _register(game.players.index(player), held)
                         game.log.append(
@@ -287,7 +287,11 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
                 if resolving is not None and resolving.card is context.card
                 else game.players.index(context.caster)
             )
-            _register(owner_seat, context.card)
+            # …before it lands: the resolution tail bins it, and the record
+            # is bound to the object the pile holds as it does
+            # (``ExiledRecord.awaiting_arrival``). The whole card, which is
+            # what lands (CR 709.4).
+            _register(owner_seat, whole_card(context.card), awaiting=True)
             return True, "resolved"
         game.log.append(f"{context.card.name}: nothing to exile")
         return True, "resolved"
@@ -296,13 +300,13 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
     game.remove_from_battlefield(source)
     if not source.metadata.get("is_token", False):
         # CR 111.7: a token ceases to exist rather than going to exile.
-        owner.exile.append(source.card)
+        landed = game.put_card_into_exile(owner, source.card)
         # The seat the owner lookup already found. ``players.index(owner)``
         # would compare ``PlayerState`` by value, which is the look-alike bug
         # the control seam documents for permanents.
         _register(
             owner_index if owner_index is not None else game.players.index(context.caster),
-            source.card,
+            landed,
         )
     context.results["exiled_self"] = True
     game.log.append(f"{source.card.name} was exiled")
@@ -391,7 +395,7 @@ def _exile_one_created_token(game: Game, context: OracleExecutionContext, token)
         # check is here rather than assumed because the scratchpad records a
         # *permanent* id, and nothing stops a later card from recording one
         # that is not a token.
-        game.players[owner_index].exile.append(token.card)
+        game.put_card_into_exile(owner_index, token.card)
     game.log.append(f"{context.card.name} exiled {token.card.name}")
 
 
@@ -453,7 +457,7 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
             game.remove_from_battlefield(perm)
             if owner_index is None:
                 owner_index = controller_index if controller_index is not None else 0
-            game.players[owner_index].exile.append(perm.card)
+            landed = game.put_card_into_exile(owner_index, perm.card)
             # "When this creature enters, exile two target lands. When this
             # creature leaves the battlefield, return **the exiled cards** to
             # the battlefield under their owners' control." (Petradon.) The
@@ -465,7 +469,7 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
             if context.source_permanent is not None and not perm.metadata.get(
                 "is_token"
             ):
-                link_exiled_card(context.source_permanent, perm.card, owner_index)
+                link_exiled_card(context.source_permanent, landed, owner_index)
             game.log.append(f"{card.name} exiled {perm.card.name}")
         # No `last_target_controller`: the key names *the* controller, and
         # a several-target exile has one per permanent. A later step reading it
@@ -539,7 +543,7 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     game.remove_from_battlefield(perm)
     if owner_index is None:
         owner_index = controller_index if controller_index is not None else 0
-    game.players[owner_index].exile.append(perm.card)
+    landed = game.put_card_into_exile(owner_index, perm.card)
     # "Exile target creature you control. Return **that card** to the
     # battlefield … at the beginning of the next end step." (Liberate.) Which
     # card this step exiled, under the key every "that card" behind an exile
@@ -549,7 +553,7 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     # ends its existence when it leaves the battlefield, so there is no card
     # for the words to name and returning one would mint a card from nothing.
     context.results["exiled_cards"] = (
-        [] if perm.metadata.get("is_token") else [perm.card]
+        [] if perm.metadata.get("is_token") else [landed]
     )
     # Recorded as exiled **with** the ability's source when that source is a
     # permanent (CR 610.3), exactly as ``exile_top_of_library`` does it and for
@@ -560,7 +564,7 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     # creatures never come back, which is the shape of a card reporting
     # supported and quietly doing nothing.
     if context.source_permanent is not None:
-        link_exiled_card(context.source_permanent, perm.card, owner_index)
+        link_exiled_card(context.source_permanent, landed, owner_index)
     if controller_index is not None:
         context.results[LAST_TARGET_CONTROLLER] = controller_index
     game.log.append(f"{card.name} exiled {perm.card.name}")
@@ -587,7 +591,7 @@ def exile_target_graveyard(game: Game, instruction: OracleInstruction, context: 
     for victim in victims:
         exiled = list(victim.graveyard)
         victim.graveyard.clear()
-        victim.exile.extend(exiled)
+        exiled = game.put_cards_into_exile(victim, exiled)
         game.log.append(
             f"{context.card.name} exiled {victim.name}'s graveyard "
             f"({len(exiled)} card(s))"
@@ -631,7 +635,7 @@ def exile_graveyard_position(game: Game, instruction: OracleInstruction, context
         del victim.graveyard[index]
     # A graveyard is its owner's and so is the exile zone (CR 404.1, CR 406.1),
     # so the cards go from one to the other with no CR 400.3 lookup.
-    victim.exile.extend(exiled)
+    exiled = game.put_cards_into_exile(victim, exiled)
     if exiled:
         game.log.append(
             f"{context.card.name} exiled "
@@ -679,7 +683,7 @@ def exile_cost_sacrifices(game: Game, instruction: OracleInstruction, context: O
                 (i for i, held in enumerate(player.graveyard) if held is card), None
             )
             if index is not None:
-                player.exile.append(player.graveyard.pop(index))
+                game.put_card_into_exile(player, player.graveyard.pop(index))
                 exiled.append(card.name)
                 break
     game.log.append(
@@ -718,8 +722,7 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
     if index is None:
         game.log.append(f"{card.name}: no card in any graveyard to exile")
         return True, "resolved"
-    exiled = owner.graveyard.pop(index)
-    owner.exile.append(exiled)
+    exiled = game.put_card_into_exile(owner, owner.graveyard.pop(index))
     context.results["exiled_cards"] = [exiled]
     # Whose card it was, for "**Its owner** creates …" (Funeral Pyre): the pile
     # it was taken from is its owner's (CR 404.1), and the record is written as
@@ -812,7 +815,7 @@ def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: O
             if index not in set(taken_slots)
         ]
         owner.graveyard[:] = kept
-        owner.exile.extend(taken)
+        taken = game.put_cards_into_exile(owner, taken)
         by_seat[seat].extend(taken)
         all_taken.extend(taken)
         exiled += len(taken)
@@ -852,7 +855,7 @@ def _exile_announced_graveyard_slots(
         ),
     )
     if holder is not None:
-        holder.exile.extend(taken)
+        taken = game.put_cards_into_exile(holder, taken)
         # "…return **the exiled cards** to their owner's graveyard."
         # (Gravegouger, whose entry trigger announces its cards and so resolves
         # here.) CR 607.2a: linked to the permanent whose ability exiled them,
@@ -1085,7 +1088,7 @@ def exile_creature_gain_life_equal_to_power(game: Game, instruction: OracleInstr
                 game.remove_from_battlefield(perm)
                 break
     if exiled_perm is not None:
-        target.exile.append(exiled_perm.card)
+        game.put_card_into_exile(target, exiled_perm.card)
         life_gain = exiled_perm.effective_power
         game.log.append(f"{exiled_perm.card.name} exiled by {card.name}")
         game._gain_life(target, life_gain, card.name)
@@ -1225,6 +1228,7 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
     # ``oracle_types.EXILED_CARDS_WITH_OWNERS``): "those cards" behind a sweep
     # (Dimensional Breach) are the cards in the zone, by seat.
     with_owners: list[tuple[int, object]] = []
+    swept_cards: dict[int, object] = {}
     for perm in victims:
         owner_idx = game.owner_index_of(perm)
         if owner_idx is not None:
@@ -1237,9 +1241,11 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
             # turned the blank 2/2 back into the card it hid, and the blank was
             # what went into exile. ``revealed_as_it_moves`` is the seam the
             # zone funnels ask for exactly this order of events.
-            card = whole_card(revealed_as_it_moves(game, perm.card, perm))
-            owner.exile.append(card)
+            card = game.put_card_into_exile(
+                owner, whole_card(revealed_as_it_moves(game, perm.card, perm)),
+            )
             exiled_cards.append(card)
+            swept_cards[perm.permanent_id] = card
             # By identity: a ``PlayerState`` compares by value.
             with_owners.append((
                 owner_idx if owner_idx is not None else next(
@@ -1266,6 +1272,7 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
     context.results[EXILED_CARDS_WITH_OWNERS] = with_owners
     context.results[PER_OBJECT_SEAT_RECORDS["controller"]] = controllers
     context.results[SWEPT_OWNER_SEATS] = owners
+    context.results[SWEPT_EXILED_CARDS] = swept_cards
     game.log.append(f"{context.card.name} exiled {len(victims)} permanent(s)")
     return True, "resolved"
 
@@ -1322,8 +1329,7 @@ def exile_top_of_library(game: Game, instruction: OracleInstruction, context: Or
     owner_index = game.players.index(caster)
     exiled = []
     for _ in range(min(amount, len(caster.library))):
-        card = caster.library.pop(0)
-        caster.exile.append(card)
+        card = game.put_card_into_exile(caster, caster.library.pop(0))
         exiled.append(card)
         if source is not None:
             link_exiled_card(source, card, owner_index, face_down=face_down)
@@ -1378,7 +1384,7 @@ def exile_entire_library(game: Game, instruction: OracleInstruction, context: Or
         victim = game.players[seat]
     emptied = list(victim.library)
     victim.library.clear()
-    victim.exile.extend(emptied)
+    emptied = game.put_cards_into_exile(victim, emptied)
     game.log.append(
         f"{victim.name} exiled their whole library "
         f"({len(emptied)} card(s)) to {context.card.name}"
@@ -1408,7 +1414,7 @@ def exile_bound_card_from_graveyard(game: Game, instruction: OracleInstruction, 
     for index, held in enumerate(owner.graveyard):
         if held is card:
             owner.graveyard.pop(index)
-            owner.exile.append(card)
+            card = game.put_card_into_exile(owner, card)
             game.log.append(
                 f"{card.name} was exiled from {owner.name}'s graveyard "
                 f"({context.card.name})"

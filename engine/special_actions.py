@@ -877,7 +877,7 @@ def take_permanent_special_action(
         cards = [taker.graveyard[slot] for slot in exiled]
         for slot in sorted(exiled, reverse=True):
             taker.graveyard.pop(slot)
-        taker.exile.extend(cards)
+        cards = game.put_cards_into_exile(taker, cards)
         game.log.append(
             f"{taker.name} exiled "
             + ", ".join(card.name for card in cards)

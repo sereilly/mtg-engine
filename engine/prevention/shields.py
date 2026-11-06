@@ -944,8 +944,9 @@ def _exile_for_prevented(game, event: dict, used: list[Shield], prevented: int) 
     """
     recipient = event["recipient"]
     taken = min(prevented, len(recipient.library))
-    exiled = [recipient.library.pop(0) for _ in range(taken)]
-    recipient.exile.extend(exiled)
+    exiled = game.put_cards_into_exile(
+        recipient, [recipient.library.pop(0) for _ in range(taken)],
+    )
     game.log.append(
         f"{used[0].source_name or 'A shield'} prevented {prevented} damage to "
         f"{recipient.name}"

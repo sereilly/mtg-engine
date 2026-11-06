@@ -826,8 +826,9 @@ def exile_event_subject(game: Game, instruction: OracleInstruction, context: Ora
     is_token = bool(victim.metadata.get("is_token"))
     game.remove_from_battlefield(victim)
     if not is_token:
-        # CR 400.3: a card goes to its owner's exile, whoever controlled it.
-        owner.exile.append(card)
+        # CR 400.3: a card goes to its owner's exile, whoever controlled it —
+        # as the object the pile now holds (``Game.put_card_into_exile``).
+        card = game.put_card_into_exile(owner, card)
         source = context.source_permanent
         if source is not None and owner_seat is not None and instruction.payload.get(
             "until_source_leaves"
@@ -872,7 +873,7 @@ def exile_bound_permanent(game: Game, instruction: OracleInstruction, context: O
         # CR 400.3: a card goes to its owner's exile, whoever controlled it.
         # A token ceases to exist instead (CR 111.7), which the removal above
         # already accomplishes.
-        owner.exile.append(victim.card)
+        game.put_card_into_exile(owner, victim.card)
     game.log.append(f"{context.card.name} exiled {victim.card.name}")
     game._recompute_continuous_effects()
     return True, "resolved"
@@ -1281,7 +1282,7 @@ def exile_recorded_permanent(game: Game, instruction: OracleInstruction, context
     is_token = bool(victim.metadata.get("is_token"))
     game.remove_from_battlefield(victim)
     if not is_token:
-        game.players[owner_index].exile.append(exiled)
+        exiled = game.put_card_into_exile(owner_index, exiled)
         if context.source_permanent is not None:
             link_exiled_card(context.source_permanent, exiled, owner_index)
     game.log.append(f"{context.card.name}: {exiled.name} was exiled")

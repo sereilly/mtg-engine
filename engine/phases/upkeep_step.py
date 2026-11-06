@@ -381,7 +381,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 player.library.pop(0)
                 for _ in range(cost.exile_top_of_library)
             ]
-            player.exile.extend(taken)
+            taken = self.put_cards_into_exile(player, taken)
             self.log.append(
                 f"{player.name} exiled "
                 + ", ".join(card.name for card in taken)

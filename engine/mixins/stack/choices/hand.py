@@ -389,7 +389,7 @@ class HandChoicesMixin:
             card = victim.hand[hand_index]
             if not self.take_card_from_hand(victim, card):
                 return False
-            victim.exile.append(card)
+            card = self.put_card_into_exile(victim, card)
             record = choice.data.get("record")
             if record is not None:
                 record["exiled_cards"] = [card]
@@ -437,8 +437,7 @@ class HandChoicesMixin:
                 "battlefield, so no card is exiled"
             )
             return True
-        card = victim.hand.pop(hand_index)
-        victim.exile.append(card)
+        card = self.put_card_into_exile(victim, victim.hand.pop(hand_index))
         link_exiled_card(
             source, card, victim_index, to="hand", ends_on=(LEAVES,)
         )
@@ -752,7 +751,7 @@ class HandChoicesMixin:
         # copy, so an identity filter over the hand would remove every copy
         # where this removes exactly one.
         self.take_card_from_hand(player, card)
-        player.exile.append(card)
+        card = self.put_card_into_exile(player, card)
         source = choice.data.get("_source_permanent")
         if source is not None:
             # CR 406.3's rider travels on the *entry*, not on the card: two

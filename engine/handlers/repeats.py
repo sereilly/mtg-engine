@@ -23,7 +23,8 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 from ..oracle_types import (CLAIMABLE_EXILED_CARDS, EXILED_THIS_WAY_OBJECTS,
-                            SWEPT_OWNER_SEATS, PROCESS_ROUNDS_SO_FAR)
+                            SWEPT_EXILED_CARDS, SWEPT_OWNER_SEATS,
+                            PROCESS_ROUNDS_SO_FAR)
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
 from .control_flow import _run, _steps, evaluate_condition
@@ -109,10 +110,15 @@ def _claimable_exile_pile(game: Game, context) -> list[tuple[int, object]]:
     with whichever seat was asked first.
     """
     owners = context.results.get(SWEPT_OWNER_SEATS) or {}
+    # The card each permanent became in exile, as the pile holds it
+    # (``SWEPT_EXILED_CARDS``): the permanent's own ``.card`` is another object
+    # when it was face down or when the exile already held that object.
+    swept = context.results.get(SWEPT_EXILED_CARDS) or {}
     pile: list[tuple[int, object]] = []
     for entry in context.results.get(EXILED_THIS_WAY_OBJECTS) or ():
         card = getattr(entry, "card", None)
         if card is not None:
+            card = swept.get(getattr(entry, "permanent_id", None), card)
             # Off the record the sweep wrote, never off the permanent: by the
             # time this runs the object has left the battlefield, so
             # ``owner_index_of`` has nothing but a metadata key a hand-built

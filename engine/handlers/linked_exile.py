@@ -755,9 +755,9 @@ def exile_graveyard_until_leaves(game: Game, instruction: OracleInstruction, con
         return True, "resolved"
     for card in taken:
         caster.graveyard.remove(card)
-        caster.exile.append(card)
+        landed = game.put_card_into_exile(caster, card)
         link_exiled_card(
-            source, card, owner_index, to="graveyard", ends_on=(LEAVES,)
+            source, landed, owner_index, to="graveyard", ends_on=(LEAVES,)
         )
     game.log.append(
         f"{source.card.name} exiles {', '.join(card.name for card in taken)} "
@@ -860,9 +860,9 @@ def exile_until_leaves_or_untaps(
     ]
     game.remove_all_from_battlefield([victim, *auras])
     for entry, permanent in zip(entries, [victim, *auras]):
-        game.players[int(entry["owner_index"])].exile.append(permanent.card)
+        landed = game.put_card_into_exile(int(entry["owner_index"]), permanent.card)
         link_exiled_card(
-            source, permanent.card, entry["owner_index"],
+            source, landed, entry["owner_index"],
             to="battlefield",
             # The one ability in the pool whose exile ends on *either* event.
             ends_on=(LEAVES, UNTAPPED),

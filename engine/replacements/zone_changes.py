@@ -50,7 +50,7 @@ def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
     permanent never reaches the graveyard, so no dies-triggers fire (CR 614)."""
     permanent = payload["permanent"]
     if not permanent.metadata.get("is_token", False):
-        payload["player"].exile.append(permanent.card)
+        game.put_card_into_exile(payload["player"], permanent.card)
     game.log.append(f"{permanent.card.name} was exiled instead of dying")
     return ReplacementOutcome(replaced=True)
 
@@ -97,7 +97,7 @@ def _exile_instead_of_leaving(game, payload: dict) -> ReplacementOutcome | None:
     owner = game.players[
         owner_index if owner_index is not None else game.players.index(payload["player"])
     ]
-    owner.exile.append(permanent.card)
+    game.put_card_into_exile(owner, permanent.card)
     game.log.append(
         f"{permanent.card.name} was exiled instead of being put into "
         f"{payload.get('destination', 'another zone')}"
@@ -556,7 +556,7 @@ def _exile_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | Non
     player = payload["player"]
     card = payload["card"]
     source = _graveyard_exile_source(game, payload)
-    player.exile.append(card)
+    game.put_card_into_exile(player, card)
     game.log.append(
         f"{card.name} was exiled instead of going to {player.name}\'s graveyard"
         + (f" ({source.card.name})" if source is not None else "")

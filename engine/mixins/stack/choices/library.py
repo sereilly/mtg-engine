@@ -99,8 +99,7 @@ class LibraryChoicesMixin:
             # already shortened. No order is asked for — exile is unordered
             # (CR 406.2 orders no zone but the library and the graveyard).
             if choice.data.get("rest_destination") == "exile":
-                for card in rest:
-                    caster.exile.append(card)
+                self.put_cards_into_exile(caster, rest)
                 return
             # "…and the rest on **top** of your library in any order."
             # (Diabolic Vision.) The same clause as the bottom one word over,
@@ -202,7 +201,7 @@ class LibraryChoicesMixin:
             # nine of its ten picks would have been drawn instead of exiled.
             taken_to = str(choice.data.get("pick_destination", "hand"))
             if taken_to == "exile":
-                caster.exile.append(kept)
+                kept = self.put_card_into_exile(caster, kept)
             elif taken_to == "graveyard":
                 # "You choose two of those cards and put them into that
                 # player's graveyard." (Bamboozle.) Through the graveyard
@@ -260,7 +259,7 @@ class LibraryChoicesMixin:
         # top, and the only one that takes it out of the game — read rather
         # than defaulted, exactly as the other two are.
         if choice.data.get("pick_destination") == "exile":
-            caster.exile.append(kept)
+            self.put_card_into_exile(caster, kept)
             self.discard_pending_choice(choice)
             self.log.append(
                 f"{self.players[choice.player_index].name} exiled a card from "

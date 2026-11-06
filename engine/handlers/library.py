@@ -640,7 +640,7 @@ def look_top_exile_random(game: Game, instruction: OracleInstruction, context: O
     exiled_slots = set(random.sample(range(top_count), exile_count))
     rest = [card for index, card in enumerate(looked) if index not in exiled_slots]
     for index in sorted(exiled_slots):
-        caster.exile.append(looked[index])
+        game.put_card_into_exile(caster, looked[index])
     caster.library[:0] = rest
     game.log.append(
         f"{caster.name} looked at the top {top_count} cards and exiled "

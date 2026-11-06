@@ -382,10 +382,11 @@ def is_exiled_face_down(game, card) -> bool:
     """Whether *card* — the object, never a look-alike — is in some seat's exile
     face down (CR 406.3), to anybody at all.
 
-    Fail-closed for a card two entries share: a deck repeats one immutable
-    ``CardDefinition`` per copy, so a face-up copy beside a face-down one is
-    the same object, and the answer that cannot give the hidden one away is
-    "face down".
+    Exact, because no exile holds one object twice
+    (``Game.put_card_into_exile``): a face-up copy beside a face-down one is
+    another object. Fail-closed only for a pile written directly (a test, the
+    Debug Menu's injection), where a face-up copy sharing the object reads
+    "face down" — the answer that cannot give the hidden one away.
     """
     return any(
         held is card

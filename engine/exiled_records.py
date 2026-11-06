@@ -169,6 +169,15 @@ class ExiledRecord:
     #: rather than guessing at targets nobody chose.
     announcement: "StackAnnouncement | None" = None
     metadata: dict = field(default_factory=dict)
+    #: Written for a card that has not landed yet: a spell exiling itself is
+    #: binned at the very end of its own resolution (CR 608.2n), after the
+    #: instruction that decided the exile wrote this. Not live until
+    #: ``Game.put_card_into_exile`` lands the card and binds :attr:`card` to
+    #: the object the pile holds — which, when the pile already held that
+    #: object, is a new one (:func:`distinct_exile_object`). Read as live
+    #: before then, a record for a card still on the stack spoke for any copy
+    #: of it already in exile.
+    awaiting_arrival: bool = False
 
 
 #: The register's attribute on ``Game``.
@@ -203,6 +212,7 @@ def record_exiled_card(
     face_down: bool = False,
     looker_index: int | None = None,
     announcement: "StackAnnouncement | None" = None,
+    awaiting_arrival: bool = False,
 ) -> ExiledRecord:
     """Register *card* as exiled, and return its record.
 
@@ -224,6 +234,7 @@ def record_exiled_card(
         face_down=bool(face_down),
         looker_index=None if looker_index is None else int(looker_index),
         announcement=announcement,
+        awaiting_arrival=bool(awaiting_arrival),
     )
     for kind, count in (counters or {}).items():
         add_counters(record, kind, int(count))
@@ -290,6 +301,8 @@ def is_live(game, record: ExiledRecord) -> bool:
     is the one place the seam can say so.
     """
     if not 0 <= record.owner_index < len(game.players):
+        return False
+    if record.awaiting_arrival:
         return False
     if not any(held is record for held in getattr(game, RECORDS_ATTR, ()) or ()):
         return False
@@ -413,3 +426,34 @@ def records_for_cards(game, cards) -> list[ExiledRecord]:
                 matched.append(record)
                 break
     return matched
+
+
+def distinct_exile_object(card):
+    """A new object equal to *card*, for a copy arriving in an exile that
+    already holds *card* itself (``Game.put_card_into_exile``; CR 400.7, 406.7).
+
+    ``dataclasses.replace`` with nothing replaced: every field the same, so
+    the card compares equal, compiles to the same program and hits every fold
+    memo keyed by ``copies.card_identity`` — and is a different object, which
+    is what every record about an exiled card is keyed by. Stdlib only, for
+    this module's rule of importing nothing from the engine.
+    """
+    from dataclasses import replace
+
+    return replace(card)
+
+
+def bind_awaiting_records(game, owner_index: int, card, landed) -> None:
+    """Bind the oldest record written for *card* before it landed in seat
+    *owner_index*'s exile (:attr:`ExiledRecord.awaiting_arrival`) to *landed*,
+    the object the pile now holds. One record per arrival: two copies of one
+    card binned one after the other are two arrivals."""
+    for record in getattr(game, RECORDS_ATTR, ()) or ():
+        if (
+            record.awaiting_arrival
+            and record.owner_index == owner_index
+            and record.card is card
+        ):
+            record.card = landed
+            record.awaiting_arrival = False
+            return

@@ -175,8 +175,7 @@ class EntryChoicesMixin:
         # walk under which no earlier removal renumbers a later pick.
         exiled: list[tuple[object, str | None]] = []
         for index, counter in sorted(chosen, key=lambda pick: -pick[0]):
-            card = player.graveyard.pop(index)
-            player.exile.append(card)
+            card = self.put_card_into_exile(player, player.graveyard.pop(index))
             exiled.append((card, counter))
         if choice.data.get("link_to_entering") and permanent is not None:
             from ..linked_exile import link_exiled_card

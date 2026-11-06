@@ -1468,11 +1468,18 @@ def _exile_payload(
     answer, Knowledge Vault included.
 
     Which cards those are is read from the linked-exile record
-    (engine/linked_exile.py) rather than from a flag on the card, because two
-    copies of one card in a deck are the *same* ``CardDefinition`` object — the
-    record of the exiling is the only thing that can tell one from the other.
-    The count of face-down entries is what is honoured, one per matching
-    position, so a face-up copy of a card also exiled face down still shows.
+    (engine/linked_exile.py) and the exile register rather than from a flag on
+    the card, and a record names the object it was written for — which is a
+    position here because **no exile holds one object twice**
+    (``Game.put_card_into_exile``: a copy arriving as an object some exile
+    already holds arrives as a new one). This used to say the count of
+    face-down entries made it sound, "one per matching position": it hid the
+    *first* positions holding the object, and with a Dimensional Breach's
+    face-up Temple of the False God ahead of a Parallel Thoughts pile's
+    face-down one, the Breach's showed as a card back and the pile's by name
+    (Scourge's post-promotion session). The count is still honoured, for a
+    pile written directly (a test, the Debug Menu's state injection), where it
+    is the best a shared object allows.
     """
     from engine.linked_exile import face_down_exiled_cards
 
