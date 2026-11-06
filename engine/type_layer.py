@@ -32,11 +32,13 @@ from .continuous import ContinuousEffect, add_types, remove_types, scope_only
 from .land_types import DERIVED_LAND_TYPES, LAND_TYPE_EFFECTS, land_type_changes
 from .late_modules import LateModules
 from .printed_characteristics import COPIABLE_VALUE, printed_shape
+from .land_animation import LAND_ANIMATIONS_REACHING
 from .type_changes import (
     LAND_ANIMATION_ORDER,
     LAYER_4_CHANNELS,
     derived_lost_supertypes,
     gained_types,
+    land_animation_types_key,
     lost_types,
     static_type_order,
 )
@@ -389,6 +391,21 @@ def collect_static_type_effects(perm: Permanent, oid: int) -> list[ContinuousEff
     if meta.get("land_animated"):
         stamp, order = static_type_order(perm, LAND_ANIMATION_ORDER) or (0, 0)
         effects.append(land_animation_type_effect(oid, timestamp=stamp, sequence=order))
+        # "…are 1/1 green **Elf** creatures that are still lands" (Ambush
+        # Commander): each animator's creature types, re-applied at the place
+        # that animator took (``land_animation_types_key``) — the record the
+        # refresh left of which animators reached this land is what names
+        # them (CR 613.6).
+        for animator, animation in meta.get(LAND_ANIMATIONS_REACHING) or ():
+            if not getattr(animation, "creature_types", ()):
+                continue
+            stamp, order = static_type_order(
+                perm, land_animation_types_key(animator)
+            ) or (int(getattr(animator, "timestamp", 0) or 0), 0)
+            effects.append(land_animation_type_effect(
+                oid, timestamp=stamp, sequence=order,
+                subtypes=animation.creature_types,
+            ))
 
     # "All lands are no longer snow." (Melting.) Rebuilt from the board on
     # every refresh and stamped with its source's timestamp (CR 613.7a), so a
@@ -525,13 +542,17 @@ def lost_supertype_effect(
 
 
 def land_animation_type_effect(
-    oid: int, *, timestamp: int, sequence: int = 0
+    oid: int, *, timestamp: int, sequence: int = 0,
+    subtypes: tuple[str, ...] = (),
 ) -> ContinuousEffect:
     """Layer 4: a land animator makes this land a creature "that's still a
-    land" (CR 205.1b) — the creature type, added."""
+    land" (CR 205.1b) — the creature type, added, with the creature types
+    the animator prints (*subtypes*, Ambush Commander's "Elf"). Added rather
+    than set: "still lands" is CR 205.1b's retention, which keeps every type
+    the land had."""
     return add_types(
-        scope_only(oid), card_types=["creature"], timestamp=timestamp,
-        sequence=sequence, label="animated",
+        scope_only(oid), card_types=["creature"], subtypes=list(subtypes),
+        timestamp=timestamp, sequence=sequence, label="animated",
     )
 
 

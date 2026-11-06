@@ -196,16 +196,26 @@ def test_unnatural_selection_for_a_seat_nobody_asks_names_a_type_on_the_board(
 
 def test_that_type_needs_a_chosen_type_a_creature_and_a_window():
     """The production reads "becomes that type"; the lowering admits it only
-    where the words name something and a sweep ends it."""
+    where the words name something and its window is one the engine ends —
+    until end of turn, by the cleanup step — or no window at all, CR 611.2a's
+    indefinite change (Scourge's Proteus Machine and Ageless Sentinels), which
+    nothing is meant to end. A printed window nothing ends still refuses."""
     for line, reason in (
         ("Target creature becomes that type until end of turn.", "no step of this effect chose"),
-        ("Choose a creature type. Target creature becomes that type.", "no sweep ends"),
+        ("Choose a creature type. Target creature becomes that type until end "
+         "of combat.", "no sweep ends"),
         ("Choose a creature type other than Wall. Target permanent becomes that "
          "type until end of turn.", "set on a creature"),
     ):
         refused = _w1g7_compile_line(line)
         assert refused.parsed and not refused.usable
         assert reason in refused.lowering_error
+
+    indefinite = _w1g7_compile_line(
+        "Choose a creature type. Target creature becomes that type."
+    )
+    assert indefinite.usable
+    assert indefinite.instructions[-1].payload["duration"] == "permanent"
 
     # "Other than" a word that is no creature type is a sentence nobody read.
     assert not _w1g7_compile_line(

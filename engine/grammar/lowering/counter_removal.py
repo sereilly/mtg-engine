@@ -369,6 +369,35 @@ def _lower_move_counter(node: "ast.MoveCounter") -> tuple[OracleInstruction, ...
             "a counter is moved off the ability's own permanent", node=node
         )
     destination = node.destination
+    # "At the beginning of your upkeep, you may move **any number of** +1/+1
+    # counters from this creature **onto other creatures**." (Forgotten
+    # Ancient.) The move with both of its numbers left open: how many, and
+    # onto which of a described set — neither targeted (the card's
+    # 2022-12-08 ruling: "doesn't target any creatures. You choose how many
+    # +1/+1 counters will be moved (and onto which creatures) as the ability
+    # resolves"), so the distribution is a choice the resolution asks
+    # (CR 608.2d) and no picker is raised. Its own kind, for CR 122.5's
+    # reason the counted move above is one: what lands on each creature is
+    # exactly what came off the source. The set is a description the shared
+    # matcher tests, so a narrowing it cannot answer refuses here.
+    if (
+        isinstance(node.count, ast.AnyNumber)
+        and isinstance(destination, ast.TargetSpec)
+        and destination.quantifier == "all"
+        and not destination.targeted
+    ):
+        described = testable_filter_payload(
+            destination.filter,
+            refusal="a counter distribution cannot test this restriction",
+            node=node,
+            require_narrowing=True,
+        )
+        return (
+            OracleInstruction(
+                "distribute_counters_from_self", "",
+                {"counter": node.counter, "filter": described},
+            ),
+        )
     if not isinstance(destination, ast.TargetSpec) or not destination.targeted:
         raise LoweringError(
             "a moved counter goes onto a chosen permanent", node=node

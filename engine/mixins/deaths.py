@@ -31,6 +31,7 @@ from ..delayed_triggers import fire_delayed_triggers
 from ..events import emit, trigger_subject_matches
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
+from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN
 from ..replacements import apply_replacements
 from ..regeneration import regeneration_replaces_destruction
 from ..trigger_utils import make_trigger_event, matching_triggers
@@ -880,6 +881,15 @@ class DeathsMixin:
             # is about an object — the blocker's controller Gloom Sower reads
             # is the same question asked of a different event.
             "event_subject_controller": dead_seat,
+            # The creature itself, as it last existed on the battlefield
+            # (CR 608.2h), for "…tap all untapped creatures that share a
+            # creature type **with it**" (Faces of the Past): its creature types
+            # are what it had on the battlefield — a Mistform that had become a
+            # Goblin died a Goblin — and its id resolves to nothing by now
+            # (CR 400.7). Read only through the lowering's
+            # ``DEAD_SUBJECT_LAST_KNOWN_EVENTS``, so no reader that wants a
+            # battlefield object is handed this one.
+            EVENT_SUBJECT_LAST_KNOWN: dead_permanent,
         }
         for controller_index, observer in self._death_observers(
             dead_permanent, dead_seat

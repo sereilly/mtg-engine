@@ -161,6 +161,49 @@ def move_counter_from_self(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("distribute_counters_from_self")
+def distribute_counters_from_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"At the beginning of your upkeep, you may move any number of +1/+1
+    counters from this creature onto other creatures." (Forgotten Ancient.)
+
+    :func:`move_counter_from_self` with both numbers left to the resolution:
+    how many counters, and onto which of the described set — chosen as the
+    ability resolves (CR 608.2d; the card's 2022-12-08 ruling), never
+    targeted. The ability's controller answers a ``counter_distribution``
+    prompt (``mixins/stack/choices/permanents.py``), whose resolver makes the
+    move as one action (CR 122.5). Nothing to move — the source gone, or no
+    counter on it — asks nothing.
+    """
+    from ..subject_filters import subject_matches
+
+    source = context.source_permanent
+    name = context.card.name if context.card is not None else "Effect"
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{name}: no permanent to move counters from")
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", "+1/+1"))
+    if counters_on(source, counter) <= 0:
+        game.log.append(f"{source.card.name} has no {counter} counter to move")
+        return True, "resolved"
+    seat = game.controller_index_of(source)
+    if seat is None:
+        return True, "resolved"
+    described = dict(instruction.payload.get("filter") or {})
+    candidates = [
+        perm for perm in game.all_permanents()
+        if perm is not source
+        and subject_matches(game, perm, described, observer=seat, source=source)
+    ]
+    if not candidates:
+        game.log.append(f"{name}: nothing to move {counter} counters onto")
+        return True, "resolved"
+    game.arm_counter_distribution(
+        seat, card_name=name, source=source, counter=counter,
+        filter=described, candidates=candidates,
+    )
+    return True, "resolved"
+
+
 @effect_handler("move_all_counters_to_self")
 def move_all_counters_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"When this creature enters, move all +1/+1 counters from all creatures

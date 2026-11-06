@@ -731,6 +731,35 @@ def test_w1g2_the_cycling_instants_cycle(set_pool):
 # ==== W1G5 ==========================================================
 # W1G5's tests go between this line and the "end W1G5" line.
 
+from engine import Game as _W1G5Game, PlayerState as _W1G5PlayerState
+
+
+def test_w1g5_fork_still_makes_its_copy_red(set_pool):
+    """Fork's line left its card hook for the production Mischievous Quanar
+    earned: the copy of a blue spell is red (CR 707.9b, "except that the copy
+    is red"). Moved here from the creatures file: Fork is an instant."""
+    lea = set_pool("LEA")
+    p1 = _W1G5PlayerState(name="A", hand=[lea["Fork"]], library=[lea["Island"]] * 10)
+    p2 = _W1G5PlayerState(name="B", hand=[lea["Ancestral Recall"]],
+                          library=[lea["Island"]] * 10)
+    game = _W1G5Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.active_player_index = 1
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+    game._recompute_continuous_effects()
+    game.start_priority_window(1)
+    p2.mana_pool.update({"U": 1})
+    assert game.queue_from_hand(1, "Ancestral Recall", target_player_index=1).supported
+    game.priority_player_index = 0
+    p1.mana_pool.update({"R": 2})
+    cast = game.queue_from_hand(0, "Fork", target_stack_index=0)
+    assert cast.supported, cast.details
+    game.resolve_top_of_stack()
+    copy = next(item for item in game.stack if item.is_copy)
+    assert game._stack_item_colors(copy) == ("R",)
+
 # ==== end W1G5 ======================================================
 
 

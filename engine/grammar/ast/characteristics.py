@@ -751,12 +751,21 @@ class BecomeThatType:
     question (CR 608.2d) or reads an answer an earlier one recorded, and that is
     a step the lowering puts in front — never a second effect.
 
-    ``subtype`` is the third place the word can come from: **printed** in the
+    ``subtypes`` is the third place the word can come from: **printed** in the
     sentence. "…each creature you control becomes **a black Shade** …"
     (Shade's Breath.) The same CR 205.1a set over the same creature types,
     with no question asked at all — so no choosing step goes in front and the
-    record carries the word itself. None for every "that type" and "of your
-    choice" spelling, which is every node built before this field.
+    record carries the words themselves. Empty for every "that type" and "of
+    your choice" spelling. A tuple, because the noun may print several: "…it
+    becomes **a Bird Giant**" (Ageless Sentinels, whose 2004-10-04 ruling
+    reads "It becomes both creature type Giant and creature type Bird") is
+    one set of two words, which together replace the creature types it had.
+
+    The duration may be **absent** (CR 611.2a): "When this creature is turned
+    face up, it becomes the creature type of your choice. (This effect lasts
+    indefinitely.)" (Proteus Machine.) The record then carries no end, which
+    no sweep ends — the creature keeps the type until it leaves the
+    battlefield and becomes a new object (CR 400.7).
 
     ``in_addition`` is CR 205.1b's retention: "…becomes the creature type of
     your choice **in addition to its other types** until end of turn"
@@ -770,7 +779,7 @@ class BecomeThatType:
     subject: Recipient
     duration: Duration = field(default_factory=Duration)
     of_your_choice: bool = False
-    subtype: str | None = None
+    subtypes: tuple[str, ...] = ()
     in_addition: bool = False
 
 

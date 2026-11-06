@@ -153,6 +153,10 @@ ActionKind = Literal[
     "madness_cast_confirm",
     "retarget_choice_confirm",
     "loyalty_recipient_confirm",
+    # "…you may move any number of +1/+1 counters from this creature onto
+    # other creatures" (Forgotten Ancient): ``divided_targets``, one entry per
+    # receiving creature by ``id`` with its ``amount``; an empty list moves none.
+    "counter_distribution_confirm",
     "mode_choice_confirm",
     "opponent_mode_choice_confirm",
     "modal_mode_targets_confirm",

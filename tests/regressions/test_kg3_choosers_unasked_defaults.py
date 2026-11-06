@@ -62,6 +62,7 @@ _DEFAULTS: dict[str, str] = {
     "color_set_choice": "stated",         # stamped at arm
     "commander_zone_change": "stated",    # a CR 614 replacement's default
     "copy_spell_target": "worth",
+    "counter_distribution": "worth",      # all onto its own greatest-power creature
     "creature_type_choice": "stated",     # stamped at arm
     "discard": "preference",              # hand order behind the tested card
     "discard_unless_pay_life": "stated",  # pay while it is not the whole life

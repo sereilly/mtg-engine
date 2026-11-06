@@ -53,6 +53,15 @@ _AWAITING_CLIENT: dict[str, str] = {
     # is the shape to copy; the pile is face down, so show its size, never a
     # card.
     "pile_top_draw": "pile_top_draw_confirm",
+    # Scourge W1G9, Forgotten Ancient's "you may move any number of +1/+1
+    # counters from this creature onto other creatures". The client reads
+    # ``state.counter_distribution`` ({card_name, counter, source_id, maximum,
+    # candidates: [{seat, index, id, name}]}), lets the seat give each
+    # candidate a whole number of counters with a running total held at
+    # ``maximum`` (none at all is legal), and sends
+    # ``counter_distribution_confirm`` with ``divided_targets`` — one
+    # ``{seat, id, amount}`` per creature given one or more.
+    "counter_distribution": "counter_distribution_confirm",
 }
 
 

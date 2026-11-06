@@ -800,7 +800,11 @@ def test_w2g4_no_colour_effect_in_the_pool_can_depend_on_another():
         # permanents another colour effect could move.
         assert static.colors == (), name
     assert aura_cards == {"Grave Servitude", "Living Terrain", "Sinister Strength"}
-    assert set(animators) == {"Kormus Bell"}
+    # Ambush Commander (Scourge, measured): "Forests you control are 1/1
+    # green Elf creatures" — reach by land type and control, never by colour.
+    assert set(animators) == {"Kormus Bell", "Ambush Commander"}
+    for name, animation in animators.items():
+        assert animation.land_type is not None, name
     assert len(pool) >= 4700, len(pool)
 
 

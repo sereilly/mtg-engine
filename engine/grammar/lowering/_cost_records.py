@@ -272,10 +272,16 @@ def shared_creature_type_referent(
     ``subject_matches`` from the ability's source; no resolution-scoped reader
     takes it.
     """
-    from ._events import _EVENT_SUBJECT_OBJECTS
+    from ._events import DEAD_SUBJECT_LAST_KNOWN_EVENTS, _EVENT_SUBJECT_OBJECTS
 
     if referent == "it":
-        if event not in _EVENT_SUBJECT_OBJECTS:
+        # …or the creature a death announced (Faces of the Past), which is
+        # only ever read here for its creature types — answered by the object
+        # as it last existed, which the death's fire site freezes (CR 608.2h).
+        if (
+            event not in _EVENT_SUBJECT_OBJECTS
+            and event not in DEAD_SUBJECT_LAST_KNOWN_EVENTS
+        ):
             raise LoweringError(
                 "\"shares a creature type with it\" names the object this "
                 "trigger's event was about, and this position records none",

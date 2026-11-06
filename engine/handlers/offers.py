@@ -520,6 +520,25 @@ def _action_is_takeable(
         # so the offer and the action cannot disagree about where the counters
         # are — the whole reason ``exiled_records.source_object`` exists.
         return counters_on(source, counter) > 0
+    # "…you may move any number of +1/+1 counters from this creature onto
+    # other creatures." (Forgotten Ancient.) With no counter on it, or no other
+    # creature to receive one, there is no move to offer — the yes would arm a
+    # distribution with nothing in it. The same two facts the handler reads,
+    # through the same readers.
+    if instruction.kind == "distribute_counters_from_self":
+        from ..subject_filters import subject_matches
+
+        if source is None or not game.is_on_battlefield(source):
+            return False
+        if counters_on(source, str(instruction.payload.get("counter", "+1/+1"))) <= 0:
+            return False
+        described = dict(instruction.payload.get("filter") or {})
+        seat = game.controller_index_of(source)
+        return any(
+            perm is not source
+            and subject_matches(game, perm, described, observer=seat, source=source)
+            for perm in game.all_permanents()
+        )
     # "Each player **may** ante the top card of their library. If a player does,
     # that player's life total becomes 20." (Rebirth.) An empty library has no
     # top card, so there is no ante to offer — and taking the offer anyway would

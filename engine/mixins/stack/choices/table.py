@@ -143,5 +143,6 @@ register_choices(
     entry_choices.ENTRY_REVEAL_SPEC,
     spells.TARGET_GROUP_ORDER_SPEC,
     replacements.PILE_TOP_DRAW_SPEC,
+    permanents.COUNTER_DISTRIBUTION_SPEC,
     # Append a new kind here, at the bottom.
 )

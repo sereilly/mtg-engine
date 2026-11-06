@@ -162,7 +162,7 @@ def _parse_becomes_creature_type(
     creature types and nothing else), so the phrase is two effects about one
     subject: the colour change the colour branch above builds and the
     creature-type set the Mistforms' node carries, here with its word printed
-    (:attr:`ast.BecomeThatType.subtype`). A conjunction rather than a fused
+    (:attr:`ast.BecomeThatType.subtypes`). A conjunction rather than a fused
     node, for the reason the predicate list gives — the duration is
     distributed over both, fronted or trailing.
 
@@ -178,11 +178,21 @@ def _parse_becomes_creature_type(
     if word in COLOR_WORDS:
         color = COLOR_WORDS[word]
         stream.advance()
-    matched = match_longest(stream.words_from(0), 0, SUBTYPE_INDEX)
-    if matched is None or matched[0] not in CREATURE_TYPES:
+    # "…becomes **a Bird Giant**" (Ageless Sentinels): every creature type the
+    # noun prints, read while the next word is one. They are one set (CR
+    # 205.1a), so a word after them that is a subtype of some other kind or a
+    # card type is still the refusal it was — "a Shade creature" is the
+    # animation's sentence, not this one with a word skipped.
+    words: list[str] = []
+    while True:
+        matched = match_longest(stream.words_from(0), 0, SUBTYPE_INDEX)
+        if matched is None or matched[0] not in CREATURE_TYPES:
+            break
+        words.append(matched[0])
+        stream.advance(matched[1])
+    if not words:
         stream.reset(mark)
         return None
-    stream.advance(matched[1])
     following = stream.peek_word()
     if following in CARD_TYPES or (
         following is not None
@@ -191,7 +201,7 @@ def _parse_becomes_creature_type(
         stream.reset(mark)
         return None
     duration = _parse_duration(stream)
-    typed = ast.BecomeThatType(subject, duration, subtype=matched[0])
+    typed = ast.BecomeThatType(subject, duration, subtypes=tuple(words))
     if color is None:
         return typed
     return ast.Conjunction((ast.BecomeColor(subject, color, duration), typed))
