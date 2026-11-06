@@ -133,6 +133,36 @@ def life_worth(life: int) -> float:
     return worth
 
 
+#: The permanents (by id, CR 400.7) a reading prices **at their blank's
+#: cost** — mana value 0, face up or down — for the length of
+#: :func:`priced_as_their_blanks`.
+_PRICED_AS_THEIR_BLANKS: ContextVar[frozenset] = ContextVar(
+    "ai_priced_as_their_blanks", default=frozenset(),
+)
+
+
+@contextmanager
+def priced_as_their_blanks(permanent_ids):
+    """Price the permanents *permanent_ids* name at the face-down blank's
+    cost (mana value 0, CR 708.2a) in every :func:`permanent_worth` read
+    inside the block — for a rehearsal of **turning one face up**.
+
+    A face-down permanent's cost is the blank's and a face-up one's is its
+    card's, so every turn-up read as the whole of its card's mana value
+    gained: Scornful Egotist, a 1/1 for {7}{U}, turned up for its {U} morph
+    cost and rated +4.5 for a body smaller than the 2/2 it had been (SCG
+    W1G5). The card was there all along; what turning it up buys is the
+    face-up body, its abilities and its "when turned face up" trigger, each
+    of which a standing reads without the cost. Held for both copies of the
+    rehearsal and for every chooser asked on them (the attack the copy
+    declares weighs the same body the standing does)."""
+    token = _PRICED_AS_THEIR_BLANKS.set(frozenset(permanent_ids))
+    try:
+        yield
+    finally:
+        _PRICED_AS_THEIR_BLANKS.reset(token)
+
+
 def permanent_worth(permanent, *, now: bool = True) -> float:
     """What *permanent* is worth to whoever controls it.
 
@@ -149,10 +179,15 @@ def permanent_worth(permanent, *, now: bool = True) -> float:
     from .layer_bridge import computed_abilities
 
     # What it cost, read as CR 613 reads it: a Clone is worth the mana value
-    # of what it copies (CR 707.2).
+    # of what it copies (CR 707.2) — unless a turn-up is being weighed
+    # (:func:`priced_as_their_blanks`).
+    cost = (
+        0.0 if permanent.permanent_id in _PRICED_AS_THEIR_BLANKS.get()
+        else float(permanent.effective_card.cmc or 0)
+    )
     worth = (
         TOKEN_WORTH if permanent.metadata.get("is_token") else PERMANENT_WORTH
-    ) + float(permanent.effective_card.cmc or 0)
+    ) + cost
     if permanent.has_type("land"):
         worth += LAND_WORTH
     if not permanent.is_creature:
@@ -1632,6 +1667,7 @@ __all__ = [
     "has_a_creature_to_fight_with",
     "permanent_loss",
     "permanent_worth",
+    "priced_as_their_blanks",
     "pays_before_the_blocks",
     "position_digest",
     "priced_by_the_fight",

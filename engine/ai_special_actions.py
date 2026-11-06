@@ -58,6 +58,7 @@ from .ai_rehearsal import (
     deliberating,
     has_a_creature_to_fight_with,
     permanent_loss,
+    priced_as_their_blanks,
     rehearse,
     rehearsing,
 )
@@ -231,15 +232,20 @@ def _weighed(
         )
         return _Taken(refusal is None, refusal or "taken")
 
-    rehearsal = rehearse(
-        game, seat, perform, spell_name=None, leaves_hand=False,
-        label=f"{entry['name']}'s special action",
-        key=(
-            "special_action", seat, entry["permanent_id"], entry["kind"], victim_id,
-            x_value,
-        ),
-        through_combat=True,
-    )
+    # A turn-up is weighed with the permanent at its blank's cost on both
+    # copies: what it buys is the face-up creature, not its card's mana value
+    # (``ai_rehearsal.priced_as_their_blanks``).
+    priced = (entry["permanent_id"],) if entry["kind"] == TURN_FACE_UP else ()
+    with priced_as_their_blanks(priced):
+        rehearsal = rehearse(
+            game, seat, perform, spell_name=None, leaves_hand=False,
+            label=f"{entry['name']}'s special action",
+            key=(
+                "special_action", seat, entry["permanent_id"], entry["kind"],
+                victim_id, x_value,
+            ),
+            through_combat=True,
+        )
     if rehearsal is None or not rehearsal.accepted or not rehearsal.changed:
         return None
     worth = rehearsal.swing - _graveyard_price(game, seat, entry)
