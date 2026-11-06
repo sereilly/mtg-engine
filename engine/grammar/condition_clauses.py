@@ -272,6 +272,7 @@ def _accept_counter_condition(stream: TokenStream) -> "ast.Condition | None":
     empty_mark = stream.mark()
     if stream.accept_word("there") and stream.accept_word("is", "are"):
         count: int | None = None
+        comparison = "exactly"
         if stream.accept_word("no"):
             stream.accept_word("more")
             count = 0
@@ -280,13 +281,30 @@ def _accept_counter_condition(stream: TokenStream) -> "ast.Condition | None":
             if word is not None and word in NUMBER_WORDS:
                 stream.advance()
                 count = NUMBER_WORDS[word]
+        else:
+            # "If **there are three or more depletion counters on this
+            # enchantment**, sacrifice it." (Decree of Silence.) The fourth
+            # spelling on the number axis — the threshold Fasting prints on
+            # the possessive spelling below ("it has five or more …"), on the
+            # existential one. The comparison is the card's, so it rides the
+            # node exactly as it does there.
+            word = stream.peek_word()
+            threshold = stream.mark()
+            if word is not None and word in NUMBER_WORDS:
+                stream.advance()
+                if stream.accept_phrase("or", "more"):
+                    count, comparison = NUMBER_WORDS[word], "at_least"
+                else:
+                    stream.reset(threshold)
         if count is not None:
             counter_word = stream.peek_word()
             if counter_word is not None and counter_word not in ("counter", "counters"):
                 stream.advance()
                 if stream.accept_word("counters", "counter") and stream.accept_word("on"):
                     if accept_source_reference(stream):
-                        return ast.SourceCounterCount(counter_word, count)
+                        return ast.SourceCounterCount(
+                            counter_word, count, comparison=comparison
+                        )
     stream.reset(empty_mark)
 
     # "if **it has five or more hunger counters on it**" (Fasting) — the same

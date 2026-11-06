@@ -185,11 +185,22 @@ _PRINTED: dict[str, tuple] = {
 }
 
 
+#: The rows that bind only a card **in a hand** — "Players can't cycle cards."
+#: (Stabilizer, CR 702.29f) — so no battlefield subject can show them: their
+#: scenario is the hand's door (`test_a_hand_row_is_refused_by_every_reader`).
+#: ``row kind -> the banning card's text``; the card is invented because the
+#: one that prints it arrived with Scourge, under ``measured``.
+_HAND_ROWS: dict[str, str] = {
+    "cycling_ban": "Players can't cycle cards.",
+}
+
+
 def test_every_row_has_a_scenario():
     kinds = {row.kind for row in ACTIVATION_PROHIBITIONS}
-    assert kinds == set(_SCENARIOS) | set(_PRINTED), (
+    covered = set(_SCENARIOS) | set(_PRINTED) | set(_HAND_ROWS)
+    assert kinds == covered, (
         "a row of ACTIVATION_PROHIBITIONS has no scenario here, or a scenario "
-        f"names no row: {sorted(kinds ^ (set(_SCENARIOS) | set(_PRINTED)))}"
+        f"names no row: {sorted(kinds ^ covered)}"
     )
 
 
@@ -343,6 +354,33 @@ def _cycler():
     )
 
 
+def _ai_hand_proposes(game, name) -> bool:
+    """Whether the AI's hand chooser proposes activating *name* — asked twice:
+    as it stands, and from inside a rehearsal, where its own rehearsal cannot
+    run (``ai_rehearsal._rehearse`` answers None there, and mid-resolution).
+
+    The second asking is the one that tells the readers apart. Until Scourge
+    (W1G2) the chooser asked no prohibition: a refused activation on the
+    rehearsal's copy was all that kept a forbidden cycle off its list, so
+    where no rehearsal ran it proposed the cycle on its flat score.
+    """
+    from engine import ai_rehearsal
+    from engine.ai_hand_activations import choose_hand_activation_action
+
+    def proposes() -> bool:
+        proposed = choose_hand_activation_action(game, 0)
+        return proposed is not None and proposed.card_name == name
+
+    asked = proposes()
+    token = ai_rehearsal._REHEARSING.set(True)
+    try:
+        unrehearsed = proposes()
+    finally:
+        ai_rehearsal._REHEARSING.reset(token)
+    assert asked == unrehearsed, (name, asked, unrehearsed)
+    return asked
+
+
 @pytest.mark.parametrize("ban,situation", [
     ("City of Solitude", OPPONENTS_TURN), ("Hand to Hand", OWN_COMBAT),
 ])
@@ -372,6 +410,54 @@ def test_a_hand_ability_is_refused_for_the_rows_that_reach_a_card(session, ban, 
     state = client.get(f"/api/sessions/{session.id}/state", params={"seat": 0}).json()
     entry = next(e for e in state["hand_abilities"] if e["name"] == name)
     assert entry["payable"] is False and entry["prohibited"] == result.details
+    # …and the AI's hand chooser does not propose it, whether or not its
+    # rehearsal can run (``_ai_hand_proposes``).
+    assert not _ai_hand_proposes(game, name)
+
+
+@pytest.mark.parametrize("kind", sorted(_HAND_ROWS))
+def test_a_hand_row_is_refused_by_every_reader(session, kind):
+    """A row about cycling is asked at the hand's door by the engine, the
+    predicate, the wire and the AI's hand chooser alike — and reaches a hand
+    ability that is not cycling (Waker of Waves) not at all."""
+    from engine.activation_zones import HAND
+    from engine.models import CardDefinition
+    from engine.targeting import usable_activated_abilities
+
+    lock = CardDefinition(
+        name="Cycle Lock", mana_cost="{2}", cmc=2.0, type_line="Artifact",
+        oracle_text=_HAND_ROWS[kind], colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "Cycle Lock", "type_line": "Artifact"},
+    )
+    assert compile_card_oracle(lock).supported
+    name = _cycler()
+
+    def board(*, locked):
+        game, _subject = _board(session, OWN_MAIN, "Prodigal Sorcerer")
+        game.players[0].hand = [_POOL[name], _POOL["Waker of Waves"]]
+        if locked:
+            game._put_permanent_onto_battlefield(1, Permanent(card=lock), None)
+        return game
+
+    game = board(locked=False)
+    card = game.players[0].hand[0]
+    ability = usable_activated_abilities(compile_card_oracle(card), zone=HAND)[0]
+    assert activation_prohibition(game, 0, card, ability) is None
+    assert _ai_hand_proposes(game, name)
+    assert game.activate_from_hand(0, name).supported
+
+    game = board(locked=True)
+    found = activation_prohibition(game, 0, card, ability)
+    assert found is not None and found.kind == kind
+    assert not _ai_hand_proposes(game, name)
+    state = client.get(f"/api/sessions/{session.id}/state", params={"seat": 0}).json()
+    entry = next(e for e in state["hand_abilities"] if e["name"] == name)
+    assert entry["payable"] is False and entry["prohibited"] == found.details
+    result = game.activate_from_hand(0, name)
+    assert not result.supported and result.details == found.details
+    assert game.stack == [] and game.players[0].graveyard == []
+    # Not every hand ability is cycling: Waker of Waves' is untouched.
+    assert game.activate_from_hand(0, "Waker of Waves").supported
 
 
 def test_an_abeyance_does_not_stop_a_mana_ability_but_stops_cycling(session):
@@ -403,7 +489,7 @@ _ROW_PREDICATES = frozenset({
     "permanent_activations_forbidden", "nonmana_activations_forbidden",
     "global_play_timing", "combat_play_ban", "global_activation_ban",
     "activation_denial", "activation_permission_denial",
-    "aura_restriction_active",
+    "aura_restriction_active", "cycling_ban",
 })
 
 #: ``file -> the functions in it that read the table``. ``ai_policy`` is not
@@ -418,6 +504,9 @@ _READERS = {
         "_activate_from_hand", "_activate_from_graveyard",
     ),
     "engine/board_payment.py": ("source_tap_yields",),
+    # The AI's hand chooser (cycling, typecycling), which proposed a cycle a
+    # Stabilizer forbids until Scourge's W1G2 gave it the table.
+    "engine/ai_hand_activations.py": ("_choose_hand_activation_action",),
     "web/serialization.py": None,
     "web/state_view.py": None,
 }

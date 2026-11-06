@@ -57,6 +57,7 @@ from ..cast_permissions import (BOARD_FREE_CAST_CLAIM,
                                 board_free_cast_line,
                                 board_graveyard_play_line)
 from ..cost_modifiers import cost_modifier_claims_line
+from ..cycling import CYCLING_BAN_CLAIM, cycling_ban_line
 from ..counted_names import CLAIM as COUNTED_NAMES_CLAIM
 from ..counted_names import counts_as_claims_line
 from ..counter_conditions import (CLASS_UNCOUNTERABLE_CLAIM,
@@ -252,6 +253,13 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # enforce with, so the claim cannot outlive either half.
     if combat_play_ban_line(normalized) is not None:
         return COMBAT_PLAY_BAN_CLAIM
+
+    # engine/cycling.py — CR 702.29f's ban, the board half of CR 602.5 one
+    # keyword over: "Players can't cycle cards." (Stabilizer.) Enforced by the
+    # cycling row of ``activation_prohibitions`` at every door an ability is
+    # activated through, and claimed through the reader that row asks.
+    if cycling_ban_line(normalized):
+        return CYCLING_BAN_CLAIM
 
     # engine/cast_permissions.py — CR 601.3a's permission read the other way
     # round: "Any player may cast creature spells with mana value 3 or less

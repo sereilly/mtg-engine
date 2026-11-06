@@ -177,6 +177,14 @@ def _lower_exile_hand_pile(
         chosen_seat = filt.zone_owner
     elif actor == "each_player" and owner in ("owner", "each_player"):
         who = "each_player"
+    elif actor is None and owner == "each_player":
+        # "…and all cards from **all hands**." (Decree of Annihilation.) The
+        # imperative spelling of Memory Jar's "each player exiles all cards
+        # from their hand": no printed actor, so the spell's controller does
+        # the exiling, and "all hands" is every seat's pile (CR 400.1) — the
+        # scope ``zones.accept_zone_scope`` already reads "all graveyards" as.
+        # One pile per seat and nobody picks, so it is the same instruction.
+        who = "each_player"
     elif actor in ("target_player", "target_opponent") and owner == "owner":
         # "**Target player** exiles all cards from **their** hand face down."
         # (Suppress.) One chosen seat's hand, the same pairing checked the same

@@ -803,6 +803,47 @@ def _compile_card_oracle(
                 "no handler implements this spell's effect",
                 normalized_text,
             )
+        # **The same contract where a spell's other lines compile.** The gate
+        # above stands aside for an instant or sorcery with a supported ability
+        # or a trigger, and cycling is exactly that: "Destroy all creatures.
+        # They can't be regenerated. Draw a card for each creature destroyed
+        # this way." refused whole, and Decree of Pain reported supported off
+        # its cycling ability and its cycle trigger — cast, it resolved and did
+        # nothing. Decree of Annihilation and Gilded Light arrived with
+        # Scourge the same way; no shipped card is supported so. A card is
+        # supported when *any* line is, so a spell whose whole spell half is
+        # missing is the population only ``parse_coverage`` could see.
+        #
+        # An instant or sorcery *is* its spell (CR 304.1, 307.1): an ability a
+        # card in a hand can activate does not make up for the effect the
+        # card resolves with. So the spell must resolve through some handler
+        # — the modal spell's modes count, as above — whatever else compiles.
+        # Asked only where something else did compile, which is the case the
+        # gate above stands aside for; a spell with nothing at all keeps the
+        # refusal it always had below.
+        if (
+            primary_type in ("instant", "sorcery")
+            and not modes
+            and not any(instruction.kind in _effect_handler_kinds() for instruction in instructions)
+            and (any(a.supported for a in activated_abilities) or triggered_abilities)
+        ):
+            ability_lines = {
+                (ability.source_line or "").strip()
+                for ability in (*activated_abilities, *triggered_abilities)
+            }
+            offending = next(
+                (
+                    line.strip() for line in oracle_text.split("\n")
+                    if line.strip() and line.strip() not in ability_lines
+                ),
+                "",
+            )
+            return OracleProgram(
+                False,
+                "unsupported",
+                f"no spell effect is implemented: {offending}",
+                normalized_text,
+            )
 
         # The permanent half of the same contract, and the reason the exclusion
         # above is narrower than it reads. A permanent legitimately works

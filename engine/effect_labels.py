@@ -1015,6 +1015,9 @@ TRIGGERED_LABELS: dict[str, str] = {
     "exile_created_token": "triggered_exile",
     "destroy_self": "triggered_destruction",
     "destroy_all_matching": "triggered_destruction",
+    # "When you cycle this card, destroy all lands." (Decree of Annihilation.)
+    # The land sweep's first trigger; it fell back to the marker label.
+    "destroy_all_lands": "triggered_destruction",
     # Abu Ja'far and Kjeldoran Frostbeast. Declared rather than
     # defaulted so the shipped card keeps the bucket its card hook
     # reported before the grammar took the template over — the reason

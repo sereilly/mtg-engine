@@ -87,13 +87,51 @@ def test_no_supported_spell_resolves_without_an_effect():
     """A supported instant or sorcery whose every instruction lacks a handler
     resolves to nothing at all. Either give it an effect or classify it
     unsupported with a reason — silent no-op support is the failure mode the
-    whole parse-coverage apparatus exists to prevent."""
-    hollow = _hollow_spells()
+    whole parse-coverage apparatus exists to prevent.
+
+    Over the **whole** pool, measured sets included (``_whole_pool``'s
+    reason). Asked of the shipped pool alone it was blind to the set being
+    implemented, which is where Scourge's three were: Decree of Pain, Decree
+    of Annihilation and Gilded Light each reported supported off a cycling
+    ability with no spell instruction at all, and this read nothing of them
+    — on the ingest's tree (``0318c918``) the whole-pool scan names exactly
+    those three."""
+    hollow = _hollow_spells(_whole_pool())
 
     assert not hollow, (
         "supported spells that resolve with no registered handler (they do "
         f"nothing when cast): {hollow}"
     )
+
+
+def test_a_spell_whose_cycling_compiles_still_needs_its_spell_half():
+    """The compiler's own half of the contract above (``engine/oracle.py``):
+    an instant or sorcery whose spell paragraph compiles nothing is refused
+    naming that paragraph, though its cycling ability and its cycle trigger
+    compile — rather than reported supported off them, as the three Scourge
+    cards were."""
+    card = CardDefinition(
+        name="Hollow Decree", mana_cost="{2}{B}", cmc=3.0, type_line="Sorcery",
+        oracle_text=(
+            "Unmake the moon and fold the sky.\n"
+            "Cycling {2} ({2}, Discard this card: Draw a card.)\n"
+            "When you cycle this card, you gain 2 life."
+        ),
+        colors=("B",), color_identity=("B",), keywords=("Cycling",),
+        produced_mana=(), raw={"name": "Hollow Decree", "type_line": "Sorcery"},
+    )
+    program = compile_card_oracle(card)
+    assert not program.supported
+    assert program.reason == (
+        "no spell effect is implemented: Unmake the moon and fold the sky."
+    )
+
+    readable = dataclasses.replace(
+        card, oracle_text=card.oracle_text.replace(
+            "Unmake the moon and fold the sky.", "Draw two cards.",
+        ),
+    )
+    assert compile_card_oracle(readable).supported
 
 
 

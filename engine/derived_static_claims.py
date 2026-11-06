@@ -232,6 +232,13 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(COMBAT_PLAY_BAN_CLAIM)
+    # "Players can't cycle cards." (Stabilizer.) CR 702.29f's ban, read off the
+    # board at every activation by ``activation_prohibitions``' cycling row, so
+    # it produces no instruction — and the artifact's whole text is the line.
+    from .cycling import CYCLING_BAN_CLAIM, cycling_ban_line
+
+    if any(cycling_ban_line(line) for line in (oracle_text or "").splitlines()):
+        claims.append(CYCLING_BAN_CLAIM)
     # "Players can't cast spells with the same name as a nontoken permanent." /
     # "Players can't play nonbasic lands with the same name as a nontoken
     # permanent." (Cornered Market.) The same shape again: both lines are read

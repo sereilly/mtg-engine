@@ -581,6 +581,19 @@ def lower_exile_sweep(
                 node=node,
             )
         payload["name_from_event"] = True
+    # "Exile all artifacts, creatures, and lands **from the battlefield**, …"
+    # (Decree of Annihilation.) The scope is nobody (CR 403.1), and that is
+    # what this sweep already is: the handler reads every battlefield and
+    # narrows by seat only where the phrase prints a controller. So the words
+    # are honoured by the sweep itself — but only with no controller beside
+    # them, where "every seat" and "the printed seat" would be two answers.
+    if filt.on_the_battlefield:
+        if filt.controller is not None:
+            raise LoweringError(
+                "an exile sweep scoped to nobody cannot also name a controller",
+                node=node,
+            )
+        filt = dataclasses.replace(filt, on_the_battlefield=False)
     rest = dataclasses.replace(
         filt, colored=False, mana_value=None, name_from_event=False,
     )
