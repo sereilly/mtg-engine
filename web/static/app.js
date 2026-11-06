@@ -15379,17 +15379,23 @@ function renderActivationPrompt() {
     return;
   }
   const manaRequirement = pendingActivation.manaRequirement || {};
-  const canPay = me ? manaPoolCanPayCost(me.mana_pool, manaRequirement) : false;
+  // Whether the pool pays is the server's answer (`attemptPendingActivation`
+  // sends through `sendAction`, whose payment preview raises "insufficient
+  // mana" without sending): this prompt judged it with its own reading of
+  // the printed cost (`manaPoolCanPayCost`), which knows no hybrid symbol, no
+  // spending restriction and no cost an effect changed. What the engine asked
+  // the pool for, when the preview said, is "Needed".
+  const charged = autoTapChargedCost(pendingActivation.shortPlan);
 
   title.textContent = `Pay activation cost for ${pendingActivation.cardName}`;
   body.textContent = pendingActivation.awaitingApproval
     ? "Press OK to start paying this activation cost."
-    : canPay
-      ? "Cost is covered. The activation will be submitted automatically."
+    : pendingActivation.trying
+      ? "Checking whether your mana pool pays it…"
       : "Use board actions to generate the missing mana, then this prompt will complete the activation automatically.";
   steps.innerHTML = [
     `<div>Cost: ${renderSymbolsInline(pendingActivation.activationCost || "none")}</div>`,
-    `<div>Needed: ${formatManaSymbolsHtml(manaRequirement)}</div>`,
+    `<div>Needed: ${charged ? renderSymbolsInline(charged) : formatManaSymbolsHtml(manaRequirement)}</div>`,
     `<div>Current mana: ${me ? currentManaHtml(me.mana_pool) : "Unknown"}</div>`,
     `<div>Action: ${pendingActivation.awaitingApproval ? "press OK to start paying, then click lands or other mana sources." : "click lands or other mana sources, then wait for the activation to resolve."}</div>`,
   ].join("");
@@ -15400,40 +15406,56 @@ function renderActivationPrompt() {
   customOkBtn.disabled = true;
 }
 
+// Send the activation the "Pay activation cost" prompt is waiting to pay for,
+// once the pool pays it — and whether it does is asked of the server, never
+// judged here. `sendAction` previews every paying action first
+// (`previewPayingAction`, `POST …/payment_plan`): a pool that pays sends it,
+// and one that cannot raises "insufficient mana" without a request, which
+// leaves the prompt up saying what is still owed. Asked again only when
+// something the answer depends on changes (`autoTapStateKey`: the pool, what
+// is tapped, the log), so a poll that changed nothing asks nothing.
 async function attemptPendingActivation() {
   if (!pendingActivation || seat === null) return;
   if (pendingActivation.awaitingApproval || pendingActivation.nothingToChoose) {
     renderActivationPrompt();
     return;
   }
-  const me = getCurrentPlayerState();
-  if (!me) return;
-
-  if (!manaPoolCanPayCost(me.mana_pool, pendingActivation.manaRequirement)) {
-    renderActivationPrompt();
-    return;
-  }
-
   const pending = pendingActivation;
-  pendingActivation = null;
+  const key = autoTapStateKey();
+  if (pending.trying || pending.triedKey === key) return;
+  pending.triedKey = key;
+  pending.trying = true;
   renderActivationPrompt();
-  updateActionHint(`Submitting activation for ${pending.cardName}...`);
 
+  const activateBody = withPermanentId(
+    {
+      seat,
+      action: "activate",
+      permanent_name: pending.cardName,
+      permanent_index: pending.permanentIndex,
+      target_seat: pending.targetSeat,
+    },
+    "permanent_id", seat, pending.permanentIndex,
+  );
+  if (Number.isInteger(pending.abilityIndex)) activateBody.ability_index = pending.abilityIndex;
   try {
-    const activateBody = withPermanentId(
-      {
-        seat,
-        action: "activate",
-        permanent_name: pending.cardName,
-        permanent_index: pending.permanentIndex,
-        target_seat: pending.targetSeat,
-      },
-      "permanent_id", seat, pending.permanentIndex,
-    );
-    if (Number.isInteger(pending.abilityIndex)) activateBody.ability_index = pending.abilityIndex;
     await sendAction(activateBody);
+    pending.trying = false;
+    if (pendingActivation === pending) pendingActivation = null;
+    renderActivationPrompt();
     updateActionHint(`Activated ${pending.cardName}.`);
   } catch (e) {
+    pending.trying = false;
+    if (pendingActivation === pending && isManaRefusal(e.message)) {
+      pending.shortPlan = e.paymentPlan || null;
+      renderActivationPrompt();
+      // The board may have moved while the preview was out (a land tapped
+      // by hand): ask again for the state now on the table.
+      attemptPendingActivation();
+      return;
+    }
+    if (pendingActivation === pending) pendingActivation = null;
+    renderActivationPrompt();
     updateActionHint(e.message, true);
   }
 }
@@ -15716,142 +15738,27 @@ function getActivatedAbilityOptions(card) {
   return options;
 }
 
-// Mirror of the engine's per-ability activation gates (queue_permanent_ability):
-// given one ability's text, the reason it can't be activated RIGHT NOW, or null.
-// Used to grey menu buttons and to fail fast before a doomed request.
-function activationTimingDisabledReason(lineText) {
-  const line = (lineText || "").toLowerCase();
-  if (!currentState || seat === null) return null;
-  const myTurn = currentState.current_turn === seat;
-  const phase = currentState.current_turn_phase;
-  const step = currentState.current_step;
-
-  if (line.includes("activate only during your upkeep") && !(myTurn && step === "upkeep")) {
-    return "Can only be activated during your upkeep.";
-  }
-  if (line.includes("only during your turn") && !myTurn) {
-    return "Can only be activated during your turn.";
-  }
-  if (line.includes("activate only as a sorcery")) {
-    const stackEmpty = !(currentState.stack || []).length;
-    if (!(myTurn && currentState.current_phase === "main" && stackEmpty)) {
-      return "Can only be activated as a sorcery (your main phase, empty stack).";
-    }
-  }
-  if (line.includes("activate only during the end of combat step") && step !== "end_of_combat") {
-    return "Can only be activated during the end of combat step.";
-  }
-  if (
-    line.includes("activate only during combat")
-    && !line.includes("end of combat")
-    && phase !== "combat"
-  ) {
-    return "Can only be activated during combat.";
-  }
-  if (line.includes("activate only during an opponent's turn, before attackers are declared")) {
-    const combat = getCombatState(currentState);
-    const beforeAttackers =
-      phase === "beginning"
-      || phase === "precombat_main"
-      || (
-        phase === "combat"
-        && (step === "beginning_of_combat" || step === "declare_attackers")
-        && !combat?.attackers_locked
-      );
-    if (myTurn || !beforeAttackers) {
-      return "Can only be activated during an opponent's turn, before attackers are declared.";
-    }
-  }
-  return null;
-}
-
-// Every reason one ability line can't be activated right now: the engine's
-// activation-timing gates plus the non-timing cost restrictions (Library of
-// Alexandria's exact hand size, Jandor's Ring's "discard the last card you drew
-// this turn" additional cost). Null when it is activatable.
-function abilityLineDisabledReason(line) {
-  if (/activate only if you have exactly seven cards in hand/i.test(line || "")) {
-    const handCount = Number(getCurrentPlayerState()?.hand_count ?? getCurrentPlayerState()?.hand?.length ?? 0);
-    if (handCount !== 7) {
-      return `Requires exactly seven cards in hand (you have ${handCount}).`;
-    }
-  }
-  if (/discard the last card you drew this turn/i.test(line || "")) {
-    if (!getCurrentPlayerState()?.has_last_drawn_card) {
-      return "No card you drew this turn is still in hand to discard.";
-    }
-  }
-  return activationTimingDisabledReason(line);
-}
-
-// Why one loyalty ability of `card` can't be activated right now, or null.
-// Mirrors the engine's gate in mixins/stack/activation.py, so a button this
-// greys out and a request the engine would refuse are the same set: the
-// sorcery-speed window and the once-per-turn limit (CR 606.3) rule out every
-// ability on the permanent, and a minus cost bigger than the loyalty on it
-// rules out that one (CR 606.6). The two pieces of state a client can't derive
-// — whether a loyalty ability was already used this turn, and whether the card
-// widens its own timing window — ride along on the permanent payload.
-//
-// The whole-permanent halves are also refused up front, before the menu opens,
-// so in practice this answers the per-ability half. Both stay here because
-// resolveAbilityChoice checks this one function before sending anything, and a
-// mirror missing a rule the engine has is how a button starts promising more
-// than the engine will do.
-function loyaltyAbilityDisabledReason(card, opt) {
-  const cost = opt?.loyalty;
-  if (!cost || !currentState || seat === null) return null;
-
-  if (!card?.loyalty_any_time) {
-    const myTurn = currentState.current_turn === seat;
-    const stackEmpty = !(currentState.stack || []).length;
-    if (!(myTurn && currentState.current_phase === "main" && stackEmpty)) {
-      return "Loyalty abilities can only be activated during a main phase of your turn with the stack empty (CR 606.3).";
-    }
-  }
-  if (card?.loyalty_ability_used_this_turn) {
-    return "This planeswalker has already activated a loyalty ability this turn (CR 606.3).";
-  }
-  // "−X" is affordable at X = 0 whatever the loyalty is; the X prompt caps the
-  // value at the counters actually on the permanent.
-  if (cost.delta !== null && cost.delta < 0) {
-    const loyalty = currentLoyaltyOf(card);
-    if (loyalty < -cost.delta) {
-      return `Not enough loyalty: this ability costs ${-cost.delta} and ${normalizeCardName(card)} has ${loyalty} (CR 606.6).`;
-    }
-  }
-  return null;
-}
-
-// CR 602.5, the server's answer: why ability `abilityIndex` of `card` may not
-// be activated right now, or null. `ability_denials` is the engine's own
-// refusal (`activation_prohibition`, the table the activation path refuses
-// from) per usable ability, by the index the activate action takes — every
-// printed "Activate only …" clause, threshold included, and what another
-// permanent forbids (City of Solitude, Null Rod) — where the text mirror
-// below knows six. Each is the whole sentence the route refuses with.
-function serverAbilityDenial(card, abilityIndex) {
-  return abilityProhibitionOf(card, abilityIndex);
-}
-
-// Per-option gate for the multi-ability menu.
+// Per-option gate for the multi-ability menu: the server's answer
+// (`ability_denials`, see `abilityProhibitionOf`) and nothing else. What
+// forbids an ability outright — a Cursed Totem, a Null Rod, a City of
+// Solitude on another player's turn — is a fact about the board no reading of
+// the ability's own line finds, and the line's own "Activate only …" clause,
+// a loyalty ability's window (CR 606.3, 606.6) and a cost the board cannot
+// pay are the engine's answers too. This client kept a copy of each (six of
+// the timing clauses read off the text, Library of Alexandria's hand size,
+// Jandor's Ring's last-drawn card, the loyalty rules); the copies are gone.
 function abilityOptionDisabledReason(opt, card) {
-  // The server's answer first (CR 602.5): what forbids this ability outright
-  // — a Cursed Totem, a Null Rod, a City of Solitude on another player's turn
-  // — is a fact about the board, and no reading of the ability's own line
-  // finds it. The click was offered and then refused with a 400.
-  const prohibited = abilityProhibitionOf(card, opt?.index);
-  if (prohibited) return prohibited;
-  if (opt?.loyalty) return loyaltyAbilityDisabledReason(card, opt);
-  return abilityLineDisabledReason(opt.line);
+  return abilityProhibitionOf(card, opt?.index);
 }
 
 // CR 602.5 as the server answers it: why the ability at `abilityIndex` of this
 // permanent may not be activated **now**, in the engine's own sentence, or
-// null — `serverAbilityDenial`'s answer (`ability_denials`, one entry per
-// usable ability in the order `ability_index` counts them, absent when nothing
-// is denied). A permanent with one ability is clicked with no index, which is
-// its ability 0.
+// null — `ability_denials`, one entry per usable ability in the order
+// `ability_index` counts them, absent when nothing is denied: the activation
+// path's refusals before anything is chosen (web/serialization's
+// `_ability_denial`: the loyalty window, the prohibition table with every
+// printed "Activate only …" clause, a cost the board cannot pay). A permanent
+// with one ability is clicked with no index, which is its ability 0.
 function abilityProhibitionOf(card, abilityIndex = null) {
   if (!card || typeof card !== "object") return null;
   const listed = Array.isArray(card.ability_denials) ? card.ability_denials : null;
@@ -16151,22 +16058,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
-  // Activation gates (Jade Statue's combat-only, Illusionary Mask's
-  // sorcery-speed, Jandor's Ring's discard cost, ...): fail fast with the reason
-  // instead of a doomed request.
-  // The server's denial first (`ability_denials`): it is the engine's own
-  // refusal for this ability, so no picker opens for an activation that would
-  // be refused once its target had been chosen.
-  {
-    const serverReason = serverAbilityDenial(card, abilityIndex);
-    const gateReason = serverReason ? null : abilityLineDisabledReason(card?.oracle_text);
-    if (serverReason || gateReason) {
-      SFX.onError();
-      // The server's denial is already the whole sentence, card name and all.
-      updateActionHint(serverReason || `${cardName}: ${gateReason}`, true);
-      return;
-    }
-  }
 
   // A "Discard a card:" activation cost (Seasoned Hallowblade) is paid from
   // hand, so it takes the same prompt the cast-side additional cost does. It
@@ -16658,10 +16549,44 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // the "press OK to start paying" step below would be a second click that
   // decides nothing. With the cost not yet in the pool that step is what lets
   // the player tap for it.
-  const fixedManaPaidFromPool =
-    !!ownMana && !ownMana.choice
-    && manaPoolCanPayCost(getCurrentPlayerState()?.mana_pool || {}, parseManaCostSymbols(activationCost));
-  if (!shouldPromptForActivationCost(activationCost) || fixedManaPaidFromPool) {
+  // Whether the pool covers it is the server's answer: `sendAction` previews
+  // the activation and raises "insufficient mana" without sending when the
+  // pool is short, and that is the cue for the paying step below.
+  const fixedManaAbility = !!ownMana && !ownMana.choice && shouldPromptForActivationCost(activationCost);
+  if (fixedManaAbility) {
+    const directBody = withPermanentId(
+      {
+        seat,
+        action: "activate",
+        permanent_name: cardName,
+        permanent_index: permanentIndex,
+        target_seat: targetSeat,
+      },
+      "permanent_id", seat, permanentIndex,
+    );
+    if (Number.isInteger(abilityIndex)) directBody.ability_index = abilityIndex;
+    sendAction(directBody)
+      .then(() => updateActionHint(`Activated ${cardName}.`))
+      .catch((e) => {
+        if (!isManaRefusal(e.message)) {
+          updateActionHint(e.message, true);
+          return;
+        }
+        pendingActivation = {
+          cardName,
+          permanentIndex,
+          targetSeat,
+          activationCost,
+          manaRequirement: parseManaCostSymbols(activationCost),
+          awaitingApproval: true,
+          abilityIndex,
+          shortPlan: e.paymentPlan || null,
+        };
+        renderActivationPrompt();
+      });
+    return;
+  }
+  if (!shouldPromptForActivationCost(activationCost)) {
     const directBody = withPermanentId(
       {
         seat,

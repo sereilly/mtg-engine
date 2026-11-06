@@ -193,33 +193,23 @@ def test_the_client_reads_each_prohibition_off_the_payload(census):
         assert answer["lines"] == list(dict.fromkeys(listed)), row
 
 
-@needs_node
-def test_the_reader_the_menu_had_saw_none_of_them(census):
+def test_the_menu_reads_no_ability_line(census):
     """The census, backwards. The menu's disabled reason was a reading of the
-    ability's own printed line (its timing clause, its hand-size rider). No
-    line on these boards says "Cursed Totem": that reader is blind to every
-    prohibited ability here, which is the defect — and why the server's answer
-    is asked first."""
-    prohibited = [row for row in census if row["said"]]
-
-    blind = run_app_js(
-        ["abilityLineDisabledReason"],
-        "return INPUT.map((line) => abilityLineDisabledReason(line));",
-        [row["line"] for row in prohibited],
-        prelude=(
-            "function getCurrentPlayerState() { return { hand: [], hand_count: 0 }; }\n"
-            "function activationTimingDisabledReason() { return null; }\n"
-        ),
-    )
-
-    assert blind == [None] * len(prohibited)
+    ability's own printed line (its timing clause, its hand-size rider), and no
+    line on these boards says "Cursed Totem": that reader was blind to every
+    prohibited ability here, which was the defect. kg4 deleted it — every
+    clause it read is the server's answer too
+    (``tests/ui/test_kg4_client_activation_denials.py``) — so the menu reads
+    the server's list and nothing else."""
+    assert any(row["said"] for row in census)
+    reason = app_js_function_body("abilityOptionDisabledReason")
+    assert "abilityProhibitionOf(card, opt?.index)" in reason
+    assert ".line" not in reason and "oracle_text" not in reason
 
 
 def test_the_menu_and_the_click_ask_the_server_first():
     reason = app_js_function_body("abilityOptionDisabledReason")
-    assert reason.index("abilityProhibitionOf(card, opt?.index)") < reason.index(
-        "abilityLineDisabledReason"
-    )
+    assert "abilityProhibitionOf(card, opt?.index)" in reason
     # The click that sends an option re-asks that one function, so a keyboard
     # route into a greyed-out button is refused too.
     assert "abilityOptionDisabledReason(opt, pending.card)" in app_js_function_body(

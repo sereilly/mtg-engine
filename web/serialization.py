@@ -1439,6 +1439,32 @@ def _hand_revealed_to_viewer(game: Game, viewer_seat: int | None, seat: int) -> 
     return False
 
 
+def _ability_denial(game: Game, seat: int, perm, ability) -> str | None:
+    """Why *ability* of *perm* would be refused if *seat* activated it now,
+    before anything is chosen or paid — the activation path's own sentence —
+    or None.
+
+    The path's checks in its order, each the predicate the path asks: a
+    loyalty ability's window (CR 606.3, 606.6,
+    ``Game.loyalty_activation_refusal``), the prohibition table (CR 602.5,
+    ``activation_prohibition``), and a cost paid in something other than mana
+    that the board cannot pay (CR 601.2h, ``Game.unpayable_activation_cost``,
+    with no X announced — the smallest X, so nothing payable is denied). The
+    client kept a copy of each: the six "Activate only …" windows read off
+    the ability's text (``activationTimingDisabledReason``), Library of
+    Alexandria's hand size, Jandor's Ring's last-drawn card and the loyalty
+    rules. Not here: what depends on a choice still to be made (a target, an
+    X) and the {T} symbol's refusals, which the permanent's own flags say.
+    """
+    details = game.loyalty_activation_refusal(seat, perm, ability)
+    if details is not None:
+        return details
+    found = activation_prohibition(game, seat, perm, ability)
+    if found is not None:
+        return found.details
+    return game.unpayable_activation_cost(seat, perm, ability)
+
+
 def _exile_payload(
     game: Game, player: PlayerState, viewer_seat: int | None, seat: int
 ) -> list:
@@ -1598,25 +1624,19 @@ def _serialize_player(
             _mark_pickers_that_owe_nothing(perm_dict, usable)
             # CR 602.5: why each usable ability may not be activated **now**,
             # in the engine's own words, or None — indexed like the
-            # ``ability_index`` the activate action takes. One predicate
-            # (``engine/activation_prohibitions.py``), the one the activation
-            # path refuses with, so a menu built from this greys out exactly
-            # what a click would be refused for: the ability's own printed
-            # restriction (Barbarian Ring's threshold, whose payload was
-            # identical at six and at seven cards in the graveyard and whose
-            # picker opened either way), and what another permanent forbids —
-            # a City of Solitude on an opponent's turn, a Null Rod, an
-            # Interdict. Present only when some ability is denied, which is
-            # nearly no permanent on any poll.
-            denials = [
-                activation_prohibition(game, seat, perm, ability)
-                for ability in usable
-            ]
+            # ``ability_index`` the activate action takes. The activation
+            # path's own predicates (``_ability_denial``), so a menu built from
+            # this greys out exactly what a click would be refused for: the
+            # ability's own printed restriction (Barbarian Ring's threshold,
+            # whose payload was identical at six and at seven cards in the
+            # graveyard and whose picker opened either way), what another
+            # permanent forbids — a City of Solitude on an opponent's turn, a
+            # Null Rod, an Interdict — a loyalty ability's window, and a cost
+            # the board cannot pay. Present only when some ability is denied,
+            # which is nearly no permanent on any poll.
+            denials = [_ability_denial(game, seat, perm, ability) for ability in usable]
             if any(found is not None for found in denials):
-                perm_dict["ability_denials"] = [
-                    found.details if found is not None else None
-                    for found in denials
-                ]
+                perm_dict["ability_denials"] = denials
             # What each ability adds and whether activating it asks for a
             # colour (:func:`_ability_mana`) - the per-ability fact behind the
             # permanent-wide ``produced_mana`` summary.
