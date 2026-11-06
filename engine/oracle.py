@@ -72,6 +72,7 @@ from .cast_costs import (unchosen_number_definition,
 from .combat_restrictions import combat_restriction_for
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from .madness import unread_madness_line
+from .storm import unread_storm_line
 from .line_normalization import (_PARENTHETICAL_RE, _normalize_text,
                                  normalize_creature_line)
 from .self_reference import _restriction_line
@@ -248,6 +249,21 @@ _EFFECT_HANDLER_KINDS: frozenset[str] | None = None
 _TIMING_ONLY_CLAIMS: frozenset[str] = frozenset({
     "activation_restrictions", "cast_timing", FLASHBACK_CLAIM,
 })
+
+
+def _first_effect_line(oracle_text: str) -> str:
+    """The first printed line of a spell that is its effect rather than an
+    ability beside it — not a keyword line, not an activated ability (a colon),
+    not a triggered one — for a refusal to name. Falls back to the first line."""
+    lines = [line.strip() for line in (oracle_text or "").splitlines() if line.strip()]
+    for line in lines:
+        normalized = normalize_creature_line(line)
+        if not normalized or ":" in line or _is_supported_keyword_line(line):
+            continue
+        if normalized.startswith(("when ", "whenever ", "at ")):
+            continue
+        return line
+    return lines[0] if lines else ""
 
 
 def _carries_no_behaviour(instruction: OracleInstruction) -> bool:
@@ -455,6 +471,20 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"unimplemented madness cost: {unread_madness}",
+            normalized_text,
+        )
+
+    # …and a **storm** line on a permanent card (``engine/storm.py``): storm
+    # copies the spell, and a copy of a permanent spell becomes a token as it
+    # resolves (CR 707.10f, 608.3f), which the stack does not build — so the
+    # line would compile and each copy would resolve as a second card.
+    unread_storm = unread_storm_line(oracle_text, primary_type)
+    if unread_storm is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            "storm on a permanent spell (a copy of a permanent spell becomes a "
+            f"token, CR 707.10f): {unread_storm}",
             normalized_text,
         )
 
@@ -803,45 +833,41 @@ def _compile_card_oracle(
                 "no handler implements this spell's effect",
                 normalized_text,
             )
-        # **The same contract where a spell's other lines compile.** The gate
-        # above stands aside for an instant or sorcery with a supported ability
-        # or a trigger, and cycling is exactly that: "Destroy all creatures.
-        # They can't be regenerated. Draw a card for each creature destroyed
-        # this way." refused whole, and Decree of Pain reported supported off
-        # its cycling ability and its cycle trigger — cast, it resolved and did
-        # nothing. Decree of Annihilation and Gilded Light arrived with
-        # Scourge the same way; no shipped card is supported so. A card is
-        # supported when *any* line is, so a spell whose whole spell half is
-        # missing is the population only ``parse_coverage`` could see.
+        # **The same contract where a spell's other lines compile: a spell's
+        # abilities are not the spell.** The gate above stands aside for an
+        # instant or sorcery with a supported ability or a trigger, and for a
+        # permanent that would be right — its abilities *are* what it does. A
+        # spell's are not: casting it resolves its own effect, and an ability
+        # beside that effect (cycling, a cast trigger, storm) is about the card
+        # or the spell, never instead of it (CR 304.1, 307.1). Two Scourge
+        # rounds found the hole from either side at once. Cycling: "Destroy all
+        # creatures. They can't be regenerated. Draw a card for each creature
+        # destroyed this way." refused whole, and Decree of Pain reported
+        # supported off its cycling ability and its cycle trigger — cast, it
+        # resolved and did nothing; Decree of Annihilation and Gilded Light
+        # arrived the same way. Storm: its trigger copies the spell, so Mind's
+        # Desire, whose effect line refused, compiled supported off its storm
+        # line alone and every copy of it did nothing. No shipped card is
+        # supported so. A card is supported when *any* line is, so a spell
+        # whose whole spell half is missing is the population only
+        # ``parse_coverage`` could see.
         #
-        # An instant or sorcery *is* its spell (CR 304.1, 307.1): an ability a
-        # card in a hand can activate does not make up for the effect the
-        # card resolves with. So the spell must resolve through some handler
-        # — the modal spell's modes count, as above — whatever else compiles.
-        # Asked only where something else did compile, which is the case the
-        # gate above stands aside for; a spell with nothing at all keeps the
-        # refusal it always had below.
+        # So the spell must resolve through some handler — the modal spell's
+        # modes count, as above — whatever else compiles; the line named is the
+        # first that is the spell's effect rather than an ability beside it
+        # (:func:`_first_effect_line`). Asked only where something else did
+        # compile, which is the case the gate above stands aside for; a spell
+        # with nothing at all keeps the refusal it always had below.
         if (
             primary_type in ("instant", "sorcery")
             and not modes
             and not any(instruction.kind in _effect_handler_kinds() for instruction in instructions)
             and (any(a.supported for a in activated_abilities) or triggered_abilities)
         ):
-            ability_lines = {
-                (ability.source_line or "").strip()
-                for ability in (*activated_abilities, *triggered_abilities)
-            }
-            offending = next(
-                (
-                    line.strip() for line in oracle_text.split("\n")
-                    if line.strip() and line.strip() not in ability_lines
-                ),
-                "",
-            )
             return OracleProgram(
                 False,
                 "unsupported",
-                f"no spell effect is implemented: {offending}",
+                "no spell effect is implemented: " + _first_effect_line(oracle_text),
                 normalized_text,
             )
 

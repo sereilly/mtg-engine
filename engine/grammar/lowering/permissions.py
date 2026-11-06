@@ -240,20 +240,29 @@ def _lower_cast_permission(
         # waiver and on nothing else — the turn-scoped "play" grants stay
         # unwaivable.
         if node.free and not (
-            node.mode in ("cast", "play") and node.while_exiled
+            node.mode in ("cast", "play")
+            and (node.while_exiled or node.until_end_of_turn)
         ):
             # "You may cast it **without paying its mana cost** for as long as
-            # it remains exiled." (Planeswalker's Mischief.) The one waiver an
-            # exiled card is printed with, and it is carried below. Every other
-            # pairing is still refused by name rather than lowered short: no
-            # card prints "you may *play* cards exiled this way without paying
-            # their mana costs", and a free land drop or a waiver on a
-            # turn-scoped grant is a sentence nobody has read — the reader
-            # above accepts the phrase because two arms need it, which is
-            # exactly why this one has to say which it honours.
+            # it remains exiled." (Planeswalker's Mischief.) "**Until end of
+            # turn**, you may play that card without paying its mana cost."
+            # (Mind's Desire.) The two waivers an exiled card is printed with,
+            # and both are carried below: the duration table turns the flag
+            # into the sweep that ends it (cleanup, CR 514.2, for the second),
+            # and a card not played by then stays exiled (2004-10-04 ruling:
+            # "If the card is not played by end of turn, it remains exiled
+            # until end of game."). "Play" covers a land, which has no mana
+            # cost to waive and is played under CR 305.1 with the land drop it
+            # always uses — ``cast_permissions._covers`` admits a land only to a
+            # "play" grant, and the land road reads no ``free``. Every other
+            # pairing is still refused by name rather than lowered short: a
+            # waiver on a grant that lasts until the next upkeep or the next
+            # grant is a sentence nobody has read — the reader above accepts
+            # the phrase because several arms need it, which is exactly why
+            # this one has to say which it honours.
             raise LoweringError(
                 "an exiled-cards permission waives the cost only of a card "
-                "cast for as long as it remains exiled",
+                "played this turn or for as long as it remains exiled",
                 node=node,
             )
         if "exiled_cards" not in produced:

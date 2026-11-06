@@ -433,10 +433,14 @@ entries, not editing dispatch**.
   dealing finishes, CR 702.15e; `Game._apply_or_tally_lifelink`,
   `engine/simultaneous_damage.py`). Held by
   `tests/engine/test_keyword_registry.py`, which checks behaviour, not two lists.
-  A keyword that carries an argument and is admitted by the reader that
-  implements it is not in the set, because listing it would admit the bare
-  word: morph, madness, and amplify (CR 702.38, `NUMERIC_ARGUMENT_KEYWORDS`,
-  `engine/amplify.py`'s `entry_reveal` as the creature enters).
+  A keyword admitted by the reader that implements it is not in the set
+  when listing it would admit more than that reader does: one that carries an
+  argument, because listing it would admit the bare word — morph, madness,
+  and amplify (CR 702.38, `NUMERIC_ARGUMENT_KEYWORDS`, `engine/amplify.py`'s
+  `entry_reveal` as the creature enters) — and storm, which takes none but
+  is built for instants and sorceries only (`engine/storm.py`'s `is_storm`;
+  `unread_storm_line` refuses it on a permanent, whose copy would become a
+  token, CR 707.10f).
 - **Rewrite keywords** are expanded by `line_rewrites.expand_ability_lines` before any
   line is classified, so the word is not in `IMPLEMENTED_KEYWORDS`: equip
   (CR 702.6a), buyback (702.27a), kicker (702.33a), flashback (702.34). Every

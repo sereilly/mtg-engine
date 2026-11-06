@@ -192,6 +192,7 @@ class SpellChoicesMixin:
         result_key: str,
         options,
         context,
+        default_keeps: bool = False,
     ) -> PendingChoice | None:
         """Queue "choose the new target" for *player_index* (Deflection).
 
@@ -217,6 +218,10 @@ class SpellChoicesMixin:
             options=offered,
             names=[str(option.get("name", "")) for option in offered],
             _context=context,
+            # Emitted only for an offer whose default is its "keep" option
+            # (a spell copy's, ``_default_retarget_choice``), so every other
+            # prompt's data is what it was.
+            **({"default_keeps": True} if default_keeps else {}),
         )
 
     def live_retarget_choices(self, choice: PendingChoice) -> list[int]:
@@ -290,8 +295,24 @@ class SpellChoicesMixin:
         Board order alone named the chooser's own face first: Willbender
         turned face up against a Lightning Bolt aimed at its controller's
         creature moved the Bolt onto its controller, and Deflection did the
-        same for any seat 0 that cast it."""
+        same for any seat 0 that cast it.
+
+        **An offer armed to keep by default keeps.** A spell copy's "you may
+        choose new targets for the copy" (CR 707.10c) asked through this
+        prompt (``spell_copies._offer_copy_new_target``: a copy aimed at a
+        card in a graveyard or a spell) is the ``copy_spell_target`` offer one
+        prompt over, and its stated default is that one's: decline, keep the
+        original's target. Flagged on the prompt (``default_keeps``), so
+        Deflection's and Psychic Battle's defaults are untouched."""
         live = self.live_retarget_choices(choice)
+        if live and choice.data.get("default_keeps"):
+            options = choice.data.get("options") or ()
+            keep = next(
+                (position for position in live if options[position].get("kind") == "keep"),
+                None,
+            )
+            if keep is not None and self._resolve_retarget_choice(choice, keep):
+                return
         if live:
             options = choice.data.get("options") or ()
             wanted = self._retarget_preferred_seats(choice)

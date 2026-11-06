@@ -46,6 +46,7 @@ import engine.handlers.control_flow as _control_flow
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
+from engine.game_types import StackItem
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.oracle_types import EVENT_SPELL_MANA_COST, OracleInstruction
@@ -195,8 +196,20 @@ def _stacked(by_name, reader, kind):
     sacrifice to keep the spell - a price this census declines.
     """
     spells = [reader] if kind == "self_cast" else [by_name[name] for name in _SPELLS]
+    # A spell that triggers on its own cast is cast itself, twice, and storm's
+    # (CR 702.40a, Scourge) are the first such readers that *target*: a
+    # creature (Scattershot, Astral Steel), a creature card in their caster's
+    # graveyard (Reaping the Graves), a spell (Hindering Touch). So for those
+    # each seat has a creature and a creature card to name, and a spell is
+    # tried on the stack underneath when the cast has nothing else to target.
+    targets_for_self = kind == "self_cast"
+    rows = [
+        (seats, primed)
+        for seats in _CASTERS
+        for primed in ((False, True) if targets_for_self else (False,))
+    ]
     for spell in spells:
-        for first_seat, second_seat in _CASTERS:
+        for (first_seat, second_seat), primed in rows:
             boards: list[list] = [[], []]
             if kind != "self_cast":
                 boards[0].append(_nosick(Permanent(card=reader)))
@@ -204,12 +217,17 @@ def _stacked(by_name, reader, kind):
                 _nosick(Permanent(card=by_name[name]))
                 for name in ("Mountain", "Plains", "Forest", "Island", "Swamp")
             ]
+            graveyard = [spell]
+            if targets_for_self:
+                for seat in (0, 1):
+                    boards[seat].append(_nosick(Permanent(card=by_name["Grizzly Bears"])))
+                graveyard.append(by_name["Grizzly Bears"])
             hands: list[list] = [[], []]
             hands[first_seat].append(spell)
             hands[second_seat].append(spell)
             game = Game(players=[
                 PlayerState(name=f"P{seat}", hand=hands[seat], battlefield=boards[seat],
-                            graveyard=[spell], library=[by_name["Forest"]] * 6)
+                            graveyard=list(graveyard), library=[by_name["Forest"]] * 6)
                 for seat in (0, 1)
             ])
             game.enforce_mana_costs = False
@@ -217,9 +235,18 @@ def _stacked(by_name, reader, kind):
             with _flips(won=True):
                 game.start_turn(0)
                 game._settle()
+            if primed:
+                game.stack.append(StackItem(
+                    card=by_name["Lightning Bolt"], caster_index=1 - first_seat,
+                    target_player_index=first_seat, target_permanent_index=None,
+                    x_value=None,
+                ))
             if not game.queue_from_hand(first_seat, spell.name, **_aimed(spell, 1)).supported:
                 continue
-            earlier = game.stack[0]
+            earlier = next(
+                item for item in game.stack
+                if item.card is spell and not item.is_ability
+            )
             before = len(game.stack)
             if not game.queue_from_hand(second_seat, spell.name, **_aimed(spell, 0)).supported:
                 continue

@@ -11,7 +11,7 @@ cannot carry out keeps the whole line refused, naming it.
 
 :func:`keyword_line_triggers` is the other half: the keywords whose rules text
 the CR defines as a triggered ability (rampage, cumulative upkeep, flanking,
-madness, provoke), read here for both of the compiler's line loops. And
+madness, provoke, storm), read here for both of the compiler's line loops. And
 :func:`_protection_clause_modelled` is asked by the static-line gate
 (``engine/static_line_support.py``) too, so "protection from ..." printed on a
 line of its own and inside a keyword list is admitted by one reader.
@@ -30,6 +30,7 @@ from .flanking import flanking_triggers
 from .madness import madness_triggers
 from .provoke import provoke_triggers
 from .rampage import rampage_amount, rampage_triggers
+from .storm import is_storm, storm_triggers
 from .grammar.vocabulary import IMPLEMENTED_KEYWORDS
 from .line_normalization import normalize_creature_line
 
@@ -212,6 +213,14 @@ def _qualified_keyword_part(part: str) -> bool:
 
     if is_landwalk(part):
         return True
+    # Storm (CR 702.40a) carries no argument, and is admitted by its reader
+    # all the same rather than listed in `IMPLEMENTED_KEYWORDS`: that set means
+    # "implemented everywhere the CR says it applies", and storm on a permanent
+    # spell (whose copies become tokens, CR 707.10f) is not built. The compiler
+    # refuses that half by card type (`storm.unread_storm_line`), which a
+    # line-only gate like this one cannot see.
+    if is_storm(part):
+        return True
     # Both clauses split the same way (CR 702.16g's shorthand), and the split
     # lives in :func:`_protection_clause_modelled` — the one the static-line gate
     # asks too, so the comma-joined spelling and the standalone one cannot admit
@@ -266,4 +275,9 @@ def keyword_line_triggers(normalized_line: str) -> tuple[ParsedTriggeredAbility,
         # target creature defending player controls block this creature this
         # combat if able. If you do, untap that creature." (`engine/provoke.py`.)
         *provoke_triggers(normalized_line),
+        # CR 702.40a: "When you cast this spell, copy it for each other spell
+        # that was cast before it this turn. …" (`engine/storm.py`.) An
+        # instant's or a sorcery's triggered abilities are compiled by the
+        # loop an artifact's are, so this one reader reaches both.
+        *storm_triggers(normalized_line),
     )

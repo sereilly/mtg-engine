@@ -658,13 +658,19 @@ def test_a_library_permission_offers_only_its_own_seats_top_card():
 
 @pytest.mark.cr("118.9", "601.3")
 def test_a_cost_waiver_an_exiled_cards_grant_cannot_carry_refuses_the_line():
-    """The refusal that keeps the new phrase honest.
+    """The refusal that keeps the phrase honest, and what it now admits.
 
     "…without paying its mana cost" became readable behind "that card" for
     Temporal Aperture, and "that card" is also how an *exiled-cards* permission
-    names its pile. That arm's payload has nowhere to put a waiver, so a card
-    printing one would be a permission with CR 118.9 quietly dropped — the
-    player paying for a spell the effect gave away. It refuses by name instead.
+    names its pile. When this was written that arm's payload had nowhere to
+    put a waiver, so the turn-scoped waived sentence refused. It has one now
+    (``free``, carried since Planeswalker's Mischief and granted by
+    ``handlers/permissions.grant_cast_permission``), and Scourge prints the
+    sentence word for word: Mind's Desire's "Until end of turn, you may play
+    that card without paying its mana cost." So the waiver is carried on the
+    turn-scoped grant (SCG W1G1, ``tests/sets/test_scg_sorceries.py`` casts the
+    card it exiles for free), and a waiver on a grant of any other lifetime —
+    one nobody prints — still refuses by name, never lowered short.
     """
     def _card(effect: str) -> CardDefinition:
         return CardDefinition(
@@ -674,12 +680,25 @@ def test_a_cost_waiver_an_exiled_cards_grant_cannot_carry_refuses_the_line():
             colors=(), color_identity=(), keywords=(), produced_mana=(), raw={},
         )
 
-    honoured = "Until end of turn, you may play that card."
-    dropped = "Until end of turn, you may play that card without paying its mana cost."
+    def _grant(program):
+        (sequence,) = program.instructions
+        (grant,) = [
+            step for step in sequence.payload["steps"]
+            if step.kind == "grant_cast_permission"
+        ]
+        return grant.payload
 
-    # The pair is the assertion: the waiver is the only difference between the
-    # sentence the engine carries out and the one it declines.
-    assert _w3g4_compile(_card(honoured)).supported
-    assert not _w3g4_compile(_card(dropped)).supported
+    honoured = _w3g4_compile(_card("Until end of turn, you may play that card."))
+    waived = _w3g4_compile(_card(
+        "Until end of turn, you may play that card without paying its mana cost."
+    ))
+    assert honoured.supported and waived.supported
+    assert "free" not in _grant(honoured)
+    assert _grant(waived)["free"] is True
+    assert _grant(waived)["duration"] == "end_of_turn"
+    refused = _w3g4_compile(_card(
+        "Until your next turn, you may play that card without paying its mana cost."
+    ))
+    assert not refused.supported
 
 # --- end W3G4 ---
