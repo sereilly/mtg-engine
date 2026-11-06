@@ -55,6 +55,15 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
 
     A trigger whose event froze no spell copies nothing: there is no "that
     spell" for the words to name.
+
+    **How many is payload** (``for_each``), read by one reader
+    (``storm.copies_for_each``). Storm (CR 702.40a) is this sentence with a
+    count: "copy it for each other spell that was cast before it this turn. If
+    the spell has any targets, you may choose new targets for any of the
+    copies." Each copy is its own object with its own offer (2022-12-08 ruling:
+    "You can make different choices for each copy"), and a count of none makes
+    none. Absent, it is one copy — Double Vision's and Mirari's payload is
+    unchanged.
     """
     caster = context.caster
     copied = triggering_spell(game, context)
@@ -64,21 +73,42 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
         game.log.append(f"{context.card.name}: that spell is no longer on the stack")
         return True, "resolved"
     caster_index = game.players.index(caster)
-    copy = _copy_of_spell(copied, caster_index)
-    # CR 707.10: a copy has the original's targets (or the ones the copying
-    # effect changed them to). It does not choose again.
-    game._stack_push(targets_already_chosen=True, item=copy)
-    game.log.append(f"{context.card.name} copied {copied.card.name}")
-    # "**You may choose new targets for the copy.**" (CR 707.10c.) The
-    # sentence is part of this production - the parse requires it - and it was
-    # consumed and never offered. Asked through the prompt Chain Lightning's
-    # copy already uses, which re-aims **one** permanent-or-player target of
-    # a spell with one mode: a copy that chose anything else (several targets,
-    # a spell, a card in a graveyard, a mode other than the first) keeps the
-    # original's, which is the offer declined rather than a list for the wrong
-    # slot. A seat that is not asked keeps the original's too.
-    if _copy_reaim_is_one_slot(game, copy):
-        game.arm_copy_spell_target(caster_index, copy)
+    copies = 1
+    counted = instruction.payload.get("for_each")
+    if counted is not None:
+        from ..storm import copies_for_each
+
+        owed = copies_for_each(game, counted, copied)
+        if owed is None:
+            # A count nothing can read is not a number to guess: no copy.
+            game.log.append(
+                f"{context.card.name}: no record says how many copies to make"
+            )
+            return True, "resolved"
+        copies = owed
+        if not copies:
+            game.log.append(
+                f"{context.card.name}: no spell was cast before it this turn, "
+                "so nothing is copied"
+            )
+            return True, "resolved"
+    for _ in range(copies):
+        copy = _copy_of_spell(copied, caster_index)
+        # CR 707.10: a copy has the original's targets (or the ones the
+        # copying effect changed them to). It does not choose again.
+        game._stack_push(targets_already_chosen=True, item=copy)
+        game.log.append(f"{context.card.name} copied {copied.card.name}")
+        # "**You may choose new targets for the copy.**" (CR 707.10c.) The
+        # sentence is part of this production - the parse requires it - and
+        # it was consumed and never offered. Asked through the prompt Chain
+        # Lightning's copy already uses, which re-aims **one**
+        # permanent-or-player target of a spell with one mode: a copy that
+        # chose anything else (several targets, a spell, a card in a
+        # graveyard, a mode other than the first) keeps the original's, which
+        # is the offer declined rather than a list for the wrong slot. A seat
+        # that is not asked keeps the original's too.
+        if _copy_reaim_is_one_slot(game, copy):
+            game.arm_copy_spell_target(caster_index, copy)
     return True, "resolved"
 
 

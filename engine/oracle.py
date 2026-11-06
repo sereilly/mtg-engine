@@ -72,6 +72,7 @@ from .cast_costs import (unchosen_number_definition,
 from .combat_restrictions import combat_restriction_for
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from .madness import unread_madness_line
+from .storm import unread_storm_line
 from .line_normalization import (_PARENTHETICAL_RE, _normalize_text,
                                  normalize_creature_line)
 from .self_reference import _restriction_line
@@ -248,6 +249,21 @@ _EFFECT_HANDLER_KINDS: frozenset[str] | None = None
 _TIMING_ONLY_CLAIMS: frozenset[str] = frozenset({
     "activation_restrictions", "cast_timing", FLASHBACK_CLAIM,
 })
+
+
+def _first_effect_line(oracle_text: str) -> str:
+    """The first printed line of a spell that is its effect rather than an
+    ability beside it — not a keyword line, not an activated ability (a colon),
+    not a triggered one — for a refusal to name. Falls back to the first line."""
+    lines = [line.strip() for line in (oracle_text or "").splitlines() if line.strip()]
+    for line in lines:
+        normalized = normalize_creature_line(line)
+        if not normalized or ":" in line or _is_supported_keyword_line(line):
+            continue
+        if normalized.startswith(("when ", "whenever ", "at ")):
+            continue
+        return line
+    return lines[0] if lines else ""
 
 
 def _carries_no_behaviour(instruction: OracleInstruction) -> bool:
@@ -455,6 +471,20 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"unimplemented madness cost: {unread_madness}",
+            normalized_text,
+        )
+
+    # …and a **storm** line on a permanent card (``engine/storm.py``): storm
+    # copies the spell, and a copy of a permanent spell becomes a token as it
+    # resolves (CR 707.10f, 608.3f), which the stack does not build — so the
+    # line would compile and each copy would resolve as a second card.
+    unread_storm = unread_storm_line(oracle_text, primary_type)
+    if unread_storm is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            "storm on a permanent spell (a copy of a permanent spell becomes a "
+            f"token, CR 707.10f): {unread_storm}",
             normalized_text,
         )
 
@@ -881,6 +911,32 @@ def _compile_card_oracle(
                 False,
                 "unsupported",
                 f"no ability of this permanent is implemented: {offending}",
+                normalized_text,
+            )
+
+        # **A spell's abilities are not the spell.** The gate above exempts an
+        # instant or sorcery that has an activated or a triggered ability, and
+        # for a permanent that is right — its abilities *are* what it does. A
+        # spell's are not: casting it resolves its own effect, and an ability
+        # beside that effect (cycling, a cast trigger, storm) is about the
+        # card or the spell, never instead of it. Storm is what made the
+        # exemption a hole: its trigger copies the spell, so Mind's Desire,
+        # whose effect line refused, compiled supported off its storm line
+        # alone and every copy of it did nothing. It also names three Scourge
+        # cards that arrived the same shape off a cycling line (Decree of Pain,
+        # Decree of Annihilation, Gilded Light — the common brief's "eighteen
+        # dropped sentences") and no shipped card.
+        if (
+            primary_type in ("instant", "sorcery")
+            and not modes
+            and not any(not _carries_no_behaviour(i) for i in instructions)
+            and (triggered_abilities or any(a.supported for a in activated_abilities))
+        ):
+            return OracleProgram(
+                False,
+                "unsupported",
+                "this spell's own effect is not implemented: "
+                + _first_effect_line(oracle_text),
                 normalized_text,
             )
 
