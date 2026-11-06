@@ -695,19 +695,6 @@ one card prints this") reads as a work item long after it stopped being true.
   fire site records only the `CardDefinition`, not the stack item. Fixing it
   means giving that fire site the object. (Re-verified 2026-09-07.)
 
-- **A cast cost that exiles X cards from a graveyard has no picker** (what is
-  left of "the browser names one object for a counted cost", FEM and WTH).
-  Odyssey's client group drained the rest: an activation's counted or
-  any-number cost is a multi-select, over permanents (Goblin Warrens) and
-  over graveyard cards (Night Soil, Necropolis), and the engine pays the
-  named set or refuses. For a **cast** the engine takes
-  `cost_graveyard_indices` (Skeletal Scrying, Haunting Misery) and no client
-  sends it, so the top-down default is still what a person gets. Parts: a
-  cost spec out of `engine/cost_pickers.py` carrying the candidates
-  (`_graveyard_exile_candidates`), and a cast arm in the client -
-  `startCastCostPrompt` asks costs before X, and this cost's count *is* X
-  (Infernal Harvest's pinned reason in `_PICKERLESS_CAST_COSTS`).
-
 - **What stands after the round after Seventh Edition** (round 3,
   2026-10-06 to 10-18). The round between Planeshift and Seventh Edition left
   an entry here, and the layer-4 and entry-trigger entries above carried
@@ -1110,10 +1097,11 @@ one card prints this") reads as a work item long after it stopped being true.
   * *Cadaverous Bloom's "Add {B}{B} or {G}{G}" ignores the colour
     announced* — `mana_color` G produces {B}{B}; the only card in the pool
     printing that shape (W3G5).
-  * *Two cast-side costs have no picker*, pinned with their parts in
+  * *One cast-side cost has no picker*, pinned with its parts in
     `_PICKERLESS_CAST_COSTS`: Infernal Harvest's X is asked after any cost
-    stage, and Haunting Misery's wire field (`cost_graveyard_indices`, since
-    Odyssey) has no client behind it - the entry above (W3G5).
+    stage (W3G5). Haunting Misery's half closed with Scourge's client
+    group: a cast cost that exiles X graveyard cards is a picker
+    (`startCastGraveyardCostPrompt`, `cost_graveyard_indices`).
 
 - **What Apocalypse measured and left** (2026-10-11; thirteen groups, each
   part named in the report and the commit that declined it. CR 608.2b's
@@ -1467,6 +1455,20 @@ one card prints this") reads as a work item long after it stopped being true.
   * *Rysorian Badger* stays in `test_stack_targets._UNANNOUNCED_TRIGGER_TARGETS`:
     its pile is fixed by combat inside a "may", a different shape from
     Gravegouger's, which wave 2 announced as the trigger goes on the stack.
+
+- **A graveyard has no arrival seam** (measured 2026-11-06 by Scourge's
+  engine closer, which gave exile one). Every copy of a card in a zone is
+  the same `CardDefinition` object, so two copies in one graveyard are one
+  object to anything that asks by identity: a `GraveyardTarget`'s ordinal
+  can shift when an earlier copy leaves, CR 613.7d's arrival timestamps
+  (`engine/graveyard_order.py`) are stamped by position, and Recoup's
+  flashback grant, keyed by identity, covers both copies. Exile's shape is
+  the lead: `Game.put_card_into_exile` (`mixins/zone_funnels.py`) makes a
+  distinct object only on a collision, at the one arrival, and
+  `tests/engine/test_exile_arrival_seam.py` fails a write outside it. Parts:
+  that funnel for the graveyard, its roads converted (a census of them
+  first: exile's was 79, with 132 of 365 drives red), and the three readers
+  above re-measured. Its own round.
 
 - **Ten flat spellings of the testable-keys check remain in `lowering/`**
   (down from 39 at VIS), each a set difference over the outer payload's keys
@@ -1910,7 +1912,22 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run on 2026-11-01, with Legions shipped, it answers **Scourge** (SCG,
+Run on 2026-11-06, with Scourge shipped, it answers **Eighth Edition** (8ED,
+2003-07-28, 342 cards and no new one — a pure-reprint core set, so its
+promotion moves origins and membership, not support) and then Mirrodin (MRD,
+2003-10-02, 269 new). **Scourge arrived at 56.6%** — 81 of 143 read
+supported, but 18 of those carried a sentence the support gate could not
+see (storm dropped on all twelve storm cards, three Decrees and Gilded Light
+compiling no spell effect at all), so the real work list was 80. Storm (CR
+702.40, a cast trigger counting the turn's spells), typecycling, morph's
+third half (costs that are not mana, any permanent turned face up, a tax on
+morph costs), the Dragon Auras' graveyard road, reductions keyed by what a
+spell is, and mana value as an amount landed with no hook; one card
+(Dimensional Breach) waited for wave 2. Both waves' groups each found the
+hole the cards fell through from its own side — the hollow-spell gate
+exempting any spell with an ability, and an exiled card's ordinary upkeep
+trigger firing from exile — and the merges kept one reader of each.
+Run on 2026-11-01, with Legions shipped, it answered **Scourge** (SCG,
 2003-05-26, 142 new by the release line's count — re-measure against this
 pool) and then Eighth Edition (8ED, 2003-07-28, a core set with no new
 card). **Legions arrived at 67.6%**: every one of its 145 cards a creature,
@@ -2110,6 +2127,7 @@ a wave is five parallel worktree groups integrated serially.
 | JUD | 143 | 55.9% | 2 waves (ten groups landed every card, three at a time for memory; then four: the client, the engine pile, the AI pile, the rehearsal's answers) + 3 follow-ups on regressions the full gates found |
 | ONS | 335 | 59.4% | 2 waves (thirteen groups landed 331, morph end to end in one; then six: the last four cards, two client groups, the engine pile, the AI pile, the rehearsal's answers) |
 | LGN | 145 | 67.6% | 2 waves (seven groups landed all 47 with no hook; then four: the client, the rehearsal's engine reds, the engine pile, the AI pile) + 1 follow-up the promotion's full pass found + 2 closers after Phase 5 |
+| SCG | 143 | 56.6% (81 read supported; 18 of them hollow) | 2 waves (nine groups landed 79 of the 80 with no hook; then five: the last card, the client, the AI pile, the engine pile, the rehearsal's inventories) + 3 follow-ups (the client's last prompt and an exile search's floor; the full-pass rehearsal's four census reds) + 4 closers after Phase 5 (the engine, the web, the AI, the client) + 1 follow-up their full gate found |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -2125,20 +2143,21 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-11-01, after Legions' promotion and its closers): 5,993 unique cards
-over 37 sets, 8,507 printings, 100% supported. Grammar parses 89.9% of
-lines, lowers 89.4% and executes 62.1% (`GRAMMAR_COVERAGE.md`; the All row
-fell on membership alone as Legions' lines joined it). **0.8%** of supported
-cards carry a name-keyed hook — 47 cards, 52 entries in 6 registries
+2026-11-06, after Scourge's promotion and its closers): 6,135 unique cards
+over 38 sets, 8,650 printings, 100% supported. Grammar parses 89.8% of
+lines, lowers 89.3% and executes 62.0% (`GRAMMAR_COVERAGE.md`; the All row
+fell on membership alone as Scourge's lines joined it). **0.7%** of supported
+cards carry a name-keyed hook — 46 cards, 51 entries in 6 registries
 (`HOOK_RELIANCE.md`) — and the projection that implies for the release line
-has fallen from 1,195 hand-written entries to **227**, across twenty-four
-consecutive sets that added no hook (Legions' 144 new cards added none).
-That is the measure moving the way the architecture needs it to.
-Parse coverage: 5,991 of 5,993 supported cards fully claimed, 2
+has fallen from 1,195 hand-written entries to **217**, across twenty-five
+consecutive sets that added no hook (Scourge's 142 new cards added none, and
+Fork's hook was retired for a production). That is the measure moving the
+way the architecture needs it to.
+Parse coverage: 6,133 of 6,135 supported cards fully claimed, 2
 acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is
-the CR coverage tracker (429 of 640 tracked rules, 3,251 tests).
-`CARD_VERIFICATION.md` is a log, not a target: 929 passed (641 in-game,
-288 auto), 66 equivalent, 0 failed, 4,998 untested.
+the CR coverage tracker (432 of 641 tracked rules, 3,371 tests).
+`CARD_VERIFICATION.md` is a log, not a target: 984 passed (692 in-game,
+292 auto), 70 equivalent, 0 failed, 5,081 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,

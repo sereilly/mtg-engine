@@ -697,7 +697,15 @@ entries, not editing dispatch**.
   action (CR 116.2b); effects turn a permanent down or up through
   `turn_face_down` / `turn_face_up(game, perm, how=…)`. The wire carries
   `face_down` and, to the controller alone, `hidden_card`; the AI's rehearsal
-  copy conceals an opponent's face-down cards (CR 708.5).
+  copy conceals an opponent's face-down cards (CR 708.5). A non-mana morph
+  cost is read and paid by the alternative-cost reader
+  (`alternative_costs._read_cost_clauses`) the special action's offer names.
+  **`game.log` is every seat's, so a line names only what every seat may
+  see**: a card exiled face down, a private find or a card behind a
+  face-down object is counted, not named (`linked_exile.exiled_cards_for_the_log`),
+  and a face-down exile stays face down after its exiler leaves
+  (`keep_face_down_after_departure`). Held by
+  `tests/engine/test_hidden_cards_stay_out_of_the_log.py`.
 
 **Casting and activating**
 

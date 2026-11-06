@@ -1591,3 +1591,147 @@ two or three workers from then on.
 Two modules sit inside the 200-line band for the next set's Phase 0, and a
 third on its edge: `choices/table.py` 1,825, `web/action_prompt_answers.py`
 1,808, `ai_abilities.py` 1,800.
+
+### SCG — 2026-11-06
+
+*Two waves and fourteen groups on the Onslaught block's last set: 56.6% on
+arrival, and 18 of those 81 hollow.* The support gate counts a card supported
+when any line is, so storm was dropped silently on all twelve storm cards and
+three Decrees and Gilded Light compiled no spell at all; the real list was
+80. Phase 0 split the three band modules first (the prompt table into its
+families, the web prompt answers by renderer, the AI ability chooser's foreign
+and hand halves). Wave 1's nine groups landed 79 of the 80 with no hook:
+- **Storm** (CR 702.40): a cast trigger counting the turn's casts, each copy
+  offered its new target.
+- **Cycling and morph:** typecycling, Stabilizer and the four Decrees; morph
+  costs that are not mana, "whenever a permanent is turned face up" and
+  Exiled Doomsayer's tax.
+- **Graveyard and cost:** the Dragon Auras' graveyard road (which had never
+  fired: Squee too), and reductions keyed by type, mana value and colour.
+- **The rest:** mana value as an amount, replacements and redirects (Sulfuric
+  Vortex, Parallel Thoughts, Upwelling), the stack and players (Grip of
+  Chaos, Xantid Swarm, Temple of the False God), and the statics.
+
+Wave 2's five took Dimensional Breach, the client, four AI defects, an engine
+pile and the first rehearsal's inventories, then three follow-ups.
+Shipped cards fixed beside them:
+- fifteen whose castable highlight ignored their own cast clause;
+- Fungal Rebirth returning an instant;
+- face-down exiles turning face up when their exiler left, and fourteen log
+  lines naming hidden cards;
+- Juzám Djinn's upkeep damage firing from exile under Three Wishes;
+- every roles cast losing its walk to a mana refusal;
+- Foresight and Manipulate Fate finding nothing (CR 701.23d).
+
+The integration lessons were about reading:
+- **Shadowing, twice.** Two groups whose cards fell through one hole each
+  closed it from their side: the hollow-spell gate (storm and cycling), and
+  CR 113.6k's exile upkeep reader (the last card and the engine pile). Both
+  merged without a conflict that showed it. Each was found by reading the
+  reports against each other, and one reader was kept.
+- **The briefs** carried four wrong CR numbers, each corrected by its group.
+- **`main` was held** at the round's base until the promotion, so every
+  link's tests stayed in every meeting.
+- **The creatures file** reached its cap at the seventh merge and was split
+  at a section boundary.
+- **The full-pass rehearsal** on the last wave's link found four censuses in
+  files no branch edited, each meeting a later change. The promotion's own
+  full pass was green, and the wrong insert turned only the order guard red.
+
+Phase 5 ran the same day:
+- two smoke games played to the end (won on turn 14, lost on turn 18);
+- every list item driven but seven;
+- 50 rows recorded, 44 passing and 6 failing (Scattershot, Dragon Wings,
+  Parallel Thoughts, Grip of Chaos, Three Wishes, Mangara's Tome);
+- one client defect fixed (the cleanup discard prompt was shown to both
+  seats).
+It sent four closers, each by where its defects live:
+- **E, the engine.** A second copy of a card exiled was the first copy's
+  object, so position decided which was hidden and which one left (Three
+  Wishes beside Mangara's Tome, Parallel Thoughts beside Dimensional
+  Breach). Now every arrival is one transition, `Game.put_card_into_exile`,
+  which makes a distinct object on a collision (79 arrivals; 132 of 365
+  drives red on base). The other three:
+  - a trigger fires only from the zone it functions in (CR 113.6m; Squee
+    and five Dragon Auras, 7 of 15 red);
+  - a copy is announced once its targets are decided (CR 707.10c;
+    Scattershot's re-aimed copies triggered Daru Spiritualist twice);
+  - a trigger off a trigger is the next round of ordering (CR 603.3b;
+    Grip of Chaos had been ordered beside the trigger it fired on).
+- **W, the web.** The web AI acted while nobody held priority: smoke game
+  1's turn 11 put an ability on the stack before the person's blocks. Now
+  it acts only while it holds priority, and outside its own main phase it
+  answers through the engine's `act_at_priority` (10 of 13 census rows red
+  on base). The rest:
+  - a game lost in the upkeep went on stepping; 18 stepping entry points
+    now go no further (CR 104.1; 14 red);
+  - every price the client is shown comes from one reader,
+    `cast_mana_charge` (173 of 326 red);
+  - four log lines' wording.
+- **A, the AI.** Three decisions:
+  - Pemmin's Aura untapped an opponent's creature, because "tap enchanted"
+    matched "Untap enchanted";
+  - a CR 614.9 redirect was scored flat and tapped idle (16 proposals, now
+    0);
+  - Krosan Warchief was not regenerated after a block.
+- **C, the client.** The P5 agent's own seven classes, one change each:
+  - the cleanup prompt's fallback is gone;
+  - a type select opens with nothing chosen;
+  - every paying action is previewed before it is sent;
+  - long lists scroll;
+  - divisions show their art;
+  - a stale panel no longer lingers;
+  - a probe cast no longer returns a 400.
+
+The chain found three things:
+- **The round's third shadowing.** A and W each fixed the unregenerated
+  Warchief: A rerouted the main-phase chooser, and W sent the web AI
+  through the engine's priority answer. W's fix left A's reroute with no
+  caller, so one road was kept.
+- **The Debug Menu's state paste** rebuilt exile from card names, so two
+  copies were one object: E1's own shape, on the road the re-drive sets its
+  boards up by. It now goes through E's funnel.
+- **Two `full`-marked AI tests** went red at the closers' full gate. A had
+  not run `tests/ai -m full` whole. Rehearsing Beacon of Destiny's redirect
+  sent two seeded Legions games another way. One of them reached a board
+  where `compelled_blocks` planned a twice-provoked Goblin Turncoat onto its
+  first requirement, not where CR 509.1c puts it. The follow-up fixed the
+  plan and reseeded the Swooping Talon test.
+
+The browser agent then drove every closer's fix as a human seat on the
+merged tree and re-recorded the six rows passing: the tracker reads 0
+failed. It also saw a web AI let a blocked Krosan Warchief die with
+{1}{G} open on a four-attacker board. The brief's one-attacker board
+regenerated twice, and the rebuilt board would not miss in the engine or
+through the API, so it is a Known gap with its evidence, unreproduced.
+
+*Edits in place:*
+- The chain may hold `main` until the promotion.
+- A type most groups share opens its `_later_groups` sibling on the base.
+- "Two names meaning one thing" names the two-sides-of-one-hole shape.
+- A brief's CR numbers are checked before it is sent.
+- Closers run in parallel, so they shadow each other too. A closer that
+  re-weighs an AI decision runs `tests/ai -m full` whole, and a seam a
+  closer adds reaches the Debug Menu's paste.
+- CLAUDE.md carries:
+  - storm's place outside `IMPLEMENTED_KEYWORDS`;
+  - a coloured-only reduction;
+  - the prompt table's rows beside their resolvers;
+  - the log naming only what every seat may see;
+  - the closers' seven: the web AI acting only while it holds priority,
+    stepping that stops at a game's end, a copy announced once, trigger
+    rounds and trigger zones, exile's one arrival, one price reader, and
+    every paying action previewed.
+
+*Known gaps:*
+- **Drained:** the band modules.
+- **Rewritten:** the band entry to `effect_labels.py`; the AI leftovers and
+  the log and wire leftovers grow by Scourge's measured-and-left.
+- **Added:**
+  - the rehearsal seed reading the log's length;
+  - "<Subtype> permanent card" reading as a creature card (exact until the
+    first Kindred card);
+  - Phase 5's AI leftovers, the `effect_order` wording, the client's
+    leftovers, and the Debug Menu paste dropping hidden cards;
+  - the re-check's unreproduced Warchief, under "Seen, not measured";
+  - in ROADMAP, the graveyard's missing arrival seam.

@@ -189,7 +189,13 @@ And when writing one:
   never wedged; Carrionette's spec existed). The census of the subject is the
   brief.
 - **Verify a report's correction before relaying it.** A report is model output
-  about code, and the code is one grep away.
+  about code, and the code is one grep away. **And a brief's CR numbers before
+  sending it**: Scourge's carried four wrong ones, each corrected by the group
+  it misled — the pool empties under 500.5, not 500.4; an Aura told its host
+  is 303.4i, not 303.4f; "permanent card" is 110.4a, not 110.4b; a single
+  target is counted by 115.9a, not 115.10. A group checking its own found ten
+  engine comments citing 202.3b (a double-faced card's back face) for X on the
+  stack (202.3e); no guard reads a citation outside 701.
 - **A test asserts an invariant, never a sibling's progress.** "These four
   morph cards stay unsupported" went red at the link where a sibling supported
   one, and a strict `xfail` of a defect a sibling was fixing turned into an
@@ -223,7 +229,9 @@ And when writing one:
   which has two blind spots** (kg3): once `main` moves past a link, that link's
   files leave the list, so a branch whose base is older than `main` — it never
   met the links merged since — also runs the test files those links added or
-  edited (kg3 kept them in `gate/wave1_tests.txt`); and a per-set file no branch
+  edited (kg3 kept them in `gate/wave1_tests.txt`; Scourge held `main` at the
+  round's base until the promotion, which keeps every link's files in the list
+  by construction — `main` need not move at a wave's close); and a per-set file no branch
   edited is in no list, so a link whose branch changes behaviour broadly (a
   default, an entry road, combat assignment, log wording) also runs `tests/sets`
   whole (three per-set reds surfaced late in kg3).
@@ -336,7 +344,15 @@ on at least one resolution.
   clause built as two mechanisms. `dup_ideas.py` after each wave and a read of
   the merged diff, because a duplicate idea need not share a name. Reconcile at
   the merge only when the answer is not a rules reading; otherwise hand both to
-  a wave-2 group by name.
+  a wave-2 group by name. **Two groups whose cards fell through one hole each
+  close it from their own side**, and the second fix is dead code after the
+  merge: Scourge's storm and cycling groups each added a hollow-spell gate to
+  the compiler (both merged clean; the earlier one fired first), and its last
+  card's group and the engine-pile group each wrote CR 113.6k's reader for an
+  exiled card's upkeep trigger (one conflict, at two call sites). Read every
+  report's "shipped cards found" and "what the brief got wrong" against the
+  others' by subject before staging the second, and keep one reader with both
+  reasons in its comment.
 - **Two fixes of one bug: take the one that subsumes the other, and prove it
   with the losing branch's tests.** When one is a hand-written list and the
   other derives the set, take the derivation and carry the list's additions
@@ -393,7 +409,11 @@ on at least one resolution.
   sections** to a `_later_groups` sibling — assert every moved line is in both
   the old text and the new file, and leave the marker pairs behind so a branch
   still in flight merges against unchanged context. Later groups append to
-  whichever file has room.
+  whichever file has room. A type most groups write into reaches the cap at a
+  meeting, mid-wave (Scourge's creatures file, nine sections, 2,601 lines at
+  the seventh merge): when more than five groups open a section in one type's
+  file, open its `_later_groups` sibling on the base and split the sections
+  between the two before the fan-out.
 
 ### Module splits
 
@@ -914,7 +934,9 @@ records it through the Debug Menu.
    A recorded pass also moves `BEHAVIOUR_CLASSES.md` (a verified card covers
    its class), so the agent's last commit is one `check_all --freshness`
    reads clean — not the two freshness regenerations alone, which left
-   Onslaught's merge stale.
+   Onslaught's merge stale. A pass carries no note
+   (`verification_store.record` keeps a reason for a fail only), so what
+   was watched for a pass goes in the commit message.
 2. **Play the set where a player meets it.** Give this to one agent with a port,
    a browser session and four lists, and the instruction "record what you
    watched":
@@ -947,6 +969,22 @@ records it through the Debug Menu.
    then drives every fix as a human seat. **A fix is not watched until the
    reporter watches it**, and a failing row is re-recorded only after that.
    Budget the closers as a second and a third gate after the promotion.
+
+   Closers are parallel branches, and three things that hold for a wave's
+   groups hold for them too (Scourge's four):
+   - **They shadow each other** ("Silent merge hazards"). The AI closer and
+     the web closer each fixed the unregenerated Krosan Warchief: the AI
+     closer inside the main-phase chooser, the web closer by sending the web
+     AI through the engine's priority answer. That left the first fix with no
+     caller. Read the closers' reports against each other before the chain.
+   - **A closer that changes what an AI decision is worth runs `tests/ai -m
+     full` whole.** Its own files are not enough. Re-scoring one redirect
+     sent two seeded Legions games another way, and only the closers' full
+     gate saw it.
+   - **A seam a closer adds reaches the Debug Menu's raw-state builder too**
+     (`web/debug_actions._apply_raw_state`), because the re-drive sets its
+     boards up through that builder. It had rebuilt exile by card name after
+     the engine closer made each exiled copy its own object.
 
    For a reprint set this step is the only one that shows what promotion
    bought: check the deck editor's set filter's count against the census.
@@ -1008,14 +1046,13 @@ drained the colour-blind planner with a test on the neighbouring board (the
 Angel already face down), and Legions' Phase 5 found Onslaught's own board
 (the Angel cast face down) still stranding its turn-up.
 
-- **Two modules sit in the 200-line band and a third on its edge.**
-  `engine/mixins/stack/choices/table.py` (the prompt table, 1,825) and
-  `web/action_prompt_answers.py` (1,808) are listed by
-  `scripts/integration/headroom.py`; `engine/ai_abilities.py` is at 1,800,
-  exactly 200 left, so its next line puts it in. *Clears:* the next set's Phase 0, code motion only (`oracle_diff`
-  0/0/0, `sim_fingerprint` 0 moved). The table's rows are order-bearing
-  (CLAUDE.md, "Prompts"): split it by family into modules the table imports in
-  order, not by cutting the list.
+- **`engine/effect_labels.py` is nineteen lines short of the 200-line band**
+  (1,781; Scourge's rows added 53, and every set adds rows — one per new
+  instruction kind a guard asks a label of). *Clears:* the next set's Phase 0,
+  code motion only (`oracle_diff` 0/0/0, `sim_fingerprint` 0 moved): split by
+  the label families (the activated table, the triggered table and its
+  by-condition rows) into modules the reader imports, so a row's home is its
+  family.
 
 - **`target_permanent_index` keeps two shapes and three meanings.** kg3 split
   the seat channel (`StackItem.about_player_index` is the seat a trigger is
@@ -1135,16 +1172,93 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   under banding never weighs a trampler's excess (it keeps the default
   split). The instant-speed ability chooser reads only a non-land's first
   ability, and removal-shaped rescues (Quicksilver Wall) stay skipped
-  (ROADMAP, "Abilities at instant speed, the rest"). *Clears:* the next AI
-  round.
+  (ROADMAP, "Abilities at instant speed, the rest"). Scourge's, each
+  measured by the group that met it: `buff_creatures_global` with `all`
+  (17 both-sides pumps: Bone Flute, Orc General, Goblin Soothsayer) is still
+  scored as one-sided — `all` means different things in different kinds, so
+  the flat-sweep reader (`ai_valuation.swept_filter`) cannot read it; a
+  headless Fork and Mischievous Quanar's turn-up copy keep the original's
+  target (only `copy_triggering_spell`'s copies are aimed); there is no
+  graveyard-recursion value, so a Dragon Aura in the yard is worth nothing
+  and a seat returned Eternal Dragon in its upkeep for five mana and
+  plainscycled it for two, three turns running; Goblin Psychopath attacks
+  without weighing its coin flip; Grip of Chaos and Gilded Light's spell
+  half are never cast (the rehearsal reads no gain); an AI or headless
+  opponent always declines Metamorphose's free permanent; Decree of
+  Silence was cycled with nothing to counter; a creature with a printed
+  toughness a board static kills is still not asked about; Lethal Vapors
+  is never activated by anyone (a safe floor). And three its Phase 5 AI
+  closer measured and left: Pemmin's Aura's +1/−1 is never weighed as
+  removal on an opponent's X/1 (`ai_target_sides.host_effect_side` does not
+  open a `choose_one`'s modes); Zealous Inquisitor is still activated
+  precombat where the rehearsed fight shows its redirect would win an
+  attack; and "moves nothing, so not proposed" is applied by the activation
+  chooser to the shapes it names, not to every ability. The re-check saw
+  one more: an AI put all five Pemmin's Auras it cast on one Prodigal
+  Sorcerer (legal, and worth little past the first). *Clears:* the next
+  AI round.
 
 - **Log and wire leftovers.** "slot N" internal indices in seven lines of
   `handlers/keywords.py` and `handlers/pump.py`; "Camouflage matched …" names
   the card by a literal with no card name in scope; a printed −1/−0 logs as
   "−1/+0" (13 format sites); a held resolution logs both "resolved and moved
   to graveyard" and "finished resolving"; Kaboom!'s role prompt reads "Choose
-  the player" for a players-or-planeswalkers role. Each moves seeded logs, so
-  a round taking them reseeds once. *Clears:* a log-wording round.
+  the player" for a players-or-planeswalkers role. Two spells of one name on the stack
+  read the same in a retarget prompt (Hindering Touch's storm copy offered
+  "Shock" and "Shock"). An `effect_order` option names its effect and not
+  its source (Lich's "Gain no life instead" beside a second replacement);
+  parts, from Scourge's web closer: a `sources(game, event)` hook on each of
+  the 46 `label=` registrations, and the option written "<effect>
+  (<source>)" at `order_prompt_asker` and the prevention ask site,
+  building on the instanced labels. Each moves seeded logs, so
+  a round taking them reseeds once — and, until the next entry is cleared, a
+  changed line count also moves AI decisions. *Clears:* a log-wording round.
+
+- **Client leftovers** (Scourge's Phase 5). The wire's `cost_reduced` is
+  not coloured: a reduced badge reads like a printed one. Two client copies
+  of engine answers the payload already carries: `activationTimingDisabledReason`
+  reads an ability's timing off its text, not `ability_denials`, and
+  `renderActivationPrompt` judges affordability with its own
+  `manaPoolCanPayCost`. And with a person's phase rail flagging
+  declare_blockers on an AI's turn, `web/seats._hold_priority_for_human`
+  hands that person priority before they have declared blocks (CR 509.1
+  is the step's turn-based action, made before priority). After a
+  drag-cast, the card preview stays up over the seat's exile and graveyard
+  piles until another card is hovered. And one seat can now owe two
+  `order_triggers` prompts at once, one per CR 603.3b round
+  (`StackItem.trigger_round`); whether the client answers both in order
+  is unwatched, since the re-check found no board that arms two at once.
+  *Clears:* a client round, each change clicked in a browser.
+
+- **A Debug Menu paste drops `<hidden>` entries**
+  (`web/debug_actions._cards_from_raw`): a pasted state with a card face
+  down in exile deletes it, so a face-down exile is set up through play
+  after the last paste. *Clears:* a debug-tooling change that keeps the
+  hidden object a paste does not name.
+
+- **The rehearsal seed reads the log's length.** `ai_rehearsal._rehearsal_seed`
+  is `7919*turn + len(game.log)`, so adding or removing one log line reseeds
+  every later rehearsal's concealment shuffle (`conceal_from`) and moves AI
+  decisions with no AI code touched: Scourge's engine pile merged Carbonize's
+  two lines into one and moved 2 of 12 `sim_fingerprint` runs, one of them a
+  decision (Natural Selection, whose value is a sample over a hidden library,
+  not proposed at T8). *Clears:* an AI determinism round: seed from the turn
+  and a counter the log's wording cannot move (resolutions, say); it reseeds
+  every fingerprint once, and the round after it reads log changes as log
+  changes.
+
+- **"<Subtype> permanent card" reads as "<Subtype> creature card"** on 30
+  cards (28 shipped: the Rebel and Mercenary searchers, Goblin Lackey,
+  Zirilan, Seahunter, Moggcatcher, Celestial Gatekeeper; and Bladewing the
+  Risen, Dragonstorm). `nouns.py` skips CR 110.4a's six types after a
+  subtype and lets the subtype supply "creature". Exact on a pool with no
+  Kindred card (CR 205.3m, 308.2), narrower only on one: an invented Kindred
+  Enchantment — Dragon is not offered by Bladewing. The census is
+  `scratch/scg/w2g5/probe_subtype_permanent_card.py`. *Clears:* the set that
+  ingests the first Kindred card (Lorwyn): `nouns.parse_object_filter`
+  records the union after a subtype, `returns._REANIMABLE_CARD_TYPES` admits
+  a union, and `search_library` / `put_chosen_card_from_hand_onto_battlefield`
+  take a `card_type` list; all 30 programs move.
 
 - **Seen, not measured.** `declare_blockers_step._remove_blocker_from_combat`
   pops `combat_band_blocks` by blocker index, but that map is keyed by
@@ -1154,3 +1268,18 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   4 s, the trigger is unidentified — a suspect is the stale-log guard in
   `renderState` discarding the new game after a rematch. *Clears:* whoever
   reproduces it, with a captured server log.
+  Scourge's re-check saw a web AI attack with four creatures. A person
+  blocked its Krosan Warchief with Hill Giant, and the Warchief died with
+  {1}{G} open: the AI held priority in declare blockers and passed with
+  nothing on the stack (turn 9; `scratch/scg/p5c/redrive/itemA_*.json`,
+  `rA_block_drag.png`). On the brief's one-attacker board it regenerated
+  twice. The integrator rebuilt the four-attacker board and could not make
+  it miss (`redrive/integrator_repro/`):
+  - in the engine, 120 rehearsal seeds, with a Shock among the person's
+    hidden cards;
+  - through the API, 13 variants: each attacker removed, the Pemmin's
+    Auras, the rail's stops, and a person's pass sent right after the
+    block (refused).
+  The server log records paths and not request bodies, so what the browser
+  sent between the block and the damage is unknown. *Clears:* whoever
+  reproduces it with the request bodies captured.
