@@ -15,7 +15,8 @@ import re
 
 from ..auras import aura_enchants
 from ..delayed_triggers import fire_delayed_triggers
-from ..exiled_records import EXILE_RECORD_KEY, live_records
+from ..exiled_records import (EXILE_RECORD_KEY, functions_in_exile,
+                              live_records)
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords,
                         clear_removed_ability_keywords,
@@ -1509,6 +1510,11 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 continue
             for trig in matching_triggers(record.card, condition_kinds={"upkeep_self"}):
                 if trig.instruction.kind not in EFFECT_HANDLERS:
+                    continue
+                # Only an ability that says it works from exile (CR 113.6):
+                # a record holds any card something will read again, and
+                # Juzám Djinn's own upkeep damage is not one of them.
+                if not functions_in_exile(trig):
                     continue
                 upkeep_events.append({
                     "controller_index": record.controller_index,

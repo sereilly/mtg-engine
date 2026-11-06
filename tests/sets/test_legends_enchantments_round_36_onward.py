@@ -429,7 +429,10 @@ def test_sylvan_library_puts_back_one_copy_not_every_copy(set_pool, catalog_by_n
     game.auto_resolve_pending_choices()
 
     assert any(
-        "put Forest on top of their library" in line for line in game.log
+        # Counted, not named: hand to library is hidden to hidden (CR 400.2;
+        # tests/engine/test_hidden_cards_stay_out_of_the_log.py).
+        "put a card from their hand on top of their library" in line
+        for line in game.log
     ), "the library branch has to run, or this test asserts nothing"
     after = len(p1.hand) + len(p1.library)
     assert after == before, (

@@ -646,7 +646,7 @@ class ZoneFunnelsMixin:
         game, and Idol of Endurance — which taps for its own ability — dumped
         its whole pile into the graveyard at the next untap step.
         """
-        from ..linked_exile import take_linked_entries
+        from ..linked_exile import entry_name_for_the_log, take_linked_entries
 
         entries = take_linked_entries(permanent, ending=ending)
         returned: Permanent | None = None
@@ -678,8 +678,11 @@ class ZoneFunnelsMixin:
                     ),
                 )
                 if arrival is None:
+                    # A face-down entry going back to a hand is never shown
+                    # (CR 406.3, 400.2), so the line counts it.
                     self.log.append(
-                        f"{card.name} returns to {owner.name}'s {destination} "
+                        f"{entry_name_for_the_log(entry, destination)} returns to "
+                        f"{owner.name}'s {destination} "
                         f"({permanent.card.name} {why})"
                     )
                     continue

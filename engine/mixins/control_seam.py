@@ -912,6 +912,13 @@ class ControlSeamMixin:
         targets = [perm for perm in permanents if perm is not None]
         if not targets:
             return []
+        # CR 406.3: what a departing permanent exiled face down stays face
+        # down once it is gone, and once it has phased out (CR 702.26d keeps
+        # its record on it, where the battlefield scan cannot see it).
+        from ..linked_exile import keep_face_down_after_departure
+
+        for perm in targets:
+            keep_face_down_after_departure(self, perm)
         if zone_change:
             # CR 708.9: "If a face-down permanent … moves from the battlefield
             # to any other zone, its owner must reveal it to all players as they
