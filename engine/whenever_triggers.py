@@ -1105,6 +1105,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # more" is CR 115.6's own wording and is what that seam asks before it
     # announces anything.
     ("player_chooses_targets",      r"whenever a player chooses one or more targets"),
+    # "Whenever a spell or ability is put onto the stack" (Grip of Chaos).
+    # Every object, as its announcement becomes whole (CR 601.2i, 602.2b,
+    # 603.3d) — announced by `Game.announce_put_onto_stack`, from the one
+    # place an object goes on the stack. Not the row above: a target an
+    # effect changes is a choice and puts nothing on the stack.
+    ("spell_or_ability_put_onto_stack",
+     r"whenever a spell or ability is put onto the stack"),
     ("spell_cast",                  r"whenever a player casts a (?P<color_word>white|blue|black|red|green) spell"),
     # "Whenever a player casts a **multicolored** spell". Printed where a
     # colour word goes and not a colour (CR 105.4) — a count of them, two or

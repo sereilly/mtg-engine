@@ -618,6 +618,10 @@ class ChangeSlot:
 
     current: ChosenTarget
     candidates: tuple[ChosenTarget, ...]
+    #: Whether ``current`` is itself among the legal targets for its slot now.
+    #: A *change* never offers it (CR 115.7a's "another"); a reselection
+    #: "from among all legal targets" (Grip of Chaos) does, when it is legal.
+    current_is_legal: bool = False
 
 
 def target_label(game: "Game", target: ChosenTarget) -> str:
@@ -848,6 +852,7 @@ def change_slots(game: "Game", item: "StackItem") -> "list[ChangeSlot] | str":
         slots.append(ChangeSlot(
             current,
             tuple(candidate for candidate in candidates if not candidate.same_object(current)),
+            current_is_legal=any(candidate.same_object(current) for candidate in candidates),
         ))
     return slots
 

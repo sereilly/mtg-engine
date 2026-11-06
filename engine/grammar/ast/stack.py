@@ -260,9 +260,17 @@ class ChangeEventTargets:
     ``silent_for_same_name`` is the trailing "Changing targets this way doesn't
     trigger abilities of permanents named ~." It arrives through a rider and
     names the card by the lexer's SELF token, so nothing here knows a name.
+
+    ``at_random`` is "…**reselect its target at random**. (Select from among
+    all legal targets.)" (Grip of Chaos): nobody chooses — the new target is
+    drawn from every legal target, the current one included (the 2004-10-04
+    ruling: "it may still choose the original one"), and the object keeps its
+    target when it has no other (the same day's). "Its target" is one target,
+    which the trigger's intervening-if holds it to.
     """
 
     silent_for_same_name: bool = False
+    at_random: bool = False
 
 
 @dataclass(frozen=True)

@@ -661,6 +661,9 @@ class TriggerChoicesMixin:
         self._announce_targeting(item)
         if queued:
             self.announce_targets_chosen(item, chooser=choice.player_index)
+            # …and the object is now whole on the stack (CR 603.3d), which
+            # ``_stack_push`` left unsaid while this answer was owed.
+            self.announce_put_onto_stack(item)
 
     def _default_trigger_target(self, choice: PendingChoice) -> bool:
         """What a non-interactive seat answers with: the seat the resolution

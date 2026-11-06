@@ -768,4 +768,9 @@ EXILED_SPELL_CONTROLLER = EXILED_SPELL_CONTROLLER_KEY
 #: identity. Under a cast trigger or an upkeep the same five words name nothing.
 EVENT_PRODUCES: dict[str, frozenset[str]] = {
     "player_chooses_targets": frozenset({EVENT_CHOSEN_TARGETS}),
+    # "Whenever a spell or ability is put onto the stack, if **it** has a
+    # single target, reselect **its** target at random." (Grip of Chaos.)
+    # The object put there, frozen by identity under the same key
+    # (`Game.announce_put_onto_stack`).
+    "spell_or_ability_put_onto_stack": frozenset({EVENT_CHOSEN_TARGETS}),
 }

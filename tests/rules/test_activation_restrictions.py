@@ -530,8 +530,15 @@ def test_602_5_a_board_clause_whose_noun_nothing_can_test_is_unreadable():
     )
     # A *threshold* is not a presence test, and must not be read as one: "two or
     # more" silently answered as "at least one" is a restriction lifted early.
-    assert not activation_restriction_line(
+    # It is readable now — by its own row, as the count it is (Temple of the
+    # False God's "you control five or more lands", SCG W1G8) — and that it
+    # counts rather than asks presence is held by
+    # tests/rules/test_scg_w1g8_board_thresholds.py.
+    assert activation_restriction_line(
         "Activate only if you control two or more snow lands."
+    )
+    assert not activation_restriction_line(
+        "Activate only if you control two or more lands with the highest life total."
     )
 
 

@@ -26,6 +26,7 @@ from .costs import Cost
 # this module is the roof over both halves, and a roof that could only see
 # one of them is the drift the union's own note is about.
 from .records import (AdditionalCostWasPaid, AttackedOrBlockedThisCombat,
+                      EventObjectTargetCount,
                       ChosenNameMilledThisWay,
     SharedColorMilledThisWay,
                       SharedColorMilledThisWay,
@@ -779,6 +780,7 @@ Condition = Union[
     # sets a loop walks over a record are not asked and are not here: they
     # are ``ForEach.iterator``'s, in ``ast/loops.py``.
     AdditionalCostWasPaid,
+    EventObjectTargetCount,
     WasKicked,
     AttackedOrBlockedThisCombat,
     AmongThosePlayers,

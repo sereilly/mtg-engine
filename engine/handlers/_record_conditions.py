@@ -48,6 +48,22 @@ def evaluate_record_condition(
     *kind* off *payload*.
     """
 
+    if kind == "event_object_target_count":
+        # "Whenever a spell or ability is put onto the stack, **if it has a
+        # single target**, …" (Grip of Chaos.) CR 115.9a: the number of times
+        # an object or player was chosen as the object's target when it was
+        # put on the stack — ``stack_targets.chosen_targets``, which lists a
+        # target that has since left as well (CR 115.9a counts the choice, not
+        # what is legal now). An object the engine cannot count answers False,
+        # the direction a trigger must fail in (CR 603.4 asks it twice).
+        from ..stack_targets import TARGETS_CHOSEN_ITEM, chosen_targets
+
+        item = (context.trigger_context or {}).get(TARGETS_CHOSEN_ITEM)
+        if item is None:
+            return False
+        chosen = chosen_targets(game, item)
+        return chosen is not None and len(chosen) == int(payload.get("count", 1))
+
     if kind == "additional_cost_paid":
         # "**If this spell's additional cost was paid**, …" (Undergrowth.)
         # CR 601.2b's optional additional cost, asked at resolution about an

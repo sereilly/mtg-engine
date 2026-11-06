@@ -751,6 +751,21 @@ def lower_record_condition(
             # refuses there rather than reading back a key nothing wrote.
             payload["kicker"] = optional_cost_key(condition.kicker)
         return payload
+    if isinstance(condition, ast.EventObjectTargetCount):
+        # "…, if **it** has a single target, …" (Grip of Chaos.) "It" is the
+        # object the firing event put on the stack, frozen by identity
+        # (``_events.EVENT_PRODUCES``); under any other event the pronoun names
+        # nothing and the gate would answer for nobody, so it refuses there.
+        from ._events import EVENT_PRODUCES
+        from ...oracle_types import EVENT_CHOSEN_TARGETS
+
+        if EVENT_CHOSEN_TARGETS not in EVENT_PRODUCES.get(event or "", frozenset()):
+            raise LoweringError(
+                '"it has a single target" names a stack object this event '
+                "did not freeze",
+                node=condition,
+            )
+        return {"kind": "event_object_target_count", "count": int(condition.count)}
     if isinstance(condition, ast.AdditionalCostWasPaid):
         # "**If this spell's additional cost was paid**, …" (Undergrowth.) No
         # symbols in the payload: the card prints "the" additional cost and
