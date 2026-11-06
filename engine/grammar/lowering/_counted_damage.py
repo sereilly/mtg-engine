@@ -190,6 +190,23 @@ def _payment_channel_damage(
     return (OracleInstruction("deal_damage", "", payload),)
 
 
+def lower_maximum_damage(
+    node: ast.DealDamage, count: dict[str, object]
+) -> tuple[OracleInstruction, ...]:
+    """"Torrent of Fire deals damage to any target equal to **the greatest
+    mana value among permanents you control**."
+
+    A maximum over a set (``_amounts.maximum_amount_spec``), spent by the one
+    counted damage aimed at the sentence's one recipient — the tail the three
+    payment channels share, because what differs between them and this is only
+    where the number comes from: the riders, the recipient refusals and the
+    sweep hand-over are the same, and a second copy of them is one refusal to
+    forget. Taken at resolution (CR 608.2), so a permanent leaving in response
+    shrinks the damage.
+    """
+    return _payment_channel_damage(node, count)
+
+
 def _lower_cost_tap_damage(
     node: ast.DealDamage,
 ) -> tuple[OracleInstruction, ...]:

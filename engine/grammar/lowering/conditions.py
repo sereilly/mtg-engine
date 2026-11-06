@@ -40,7 +40,8 @@ import dataclasses
 from ...oracle_types import CHOSEN_CREATURE_TYPE_THIS_WAY, REVEALED_HAND_CARDS
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import count_filter_on_frozen_seat, count_spec
+from ._amounts import (count_filter_on_frozen_seat, count_spec,
+                       maximum_amount_spec)
 from ._common import _is_enchanted, testable_filter_payload
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CAST_SPELL_EVENTS,
                       _EVENT_SUBJECT_OBJECTS,
@@ -551,6 +552,12 @@ def _lower_condition(
         bound_count = count_spec(bound.filter, condition) if isinstance(
             bound, ast.CountOf
         ) else None
+        # "Counter target spell if its mana value is less than or equal to
+        # **the greatest mana value among permanents you control**." (Dispersal
+        # Shield.) A maximum over a set as the bound, on the same ``count_from``
+        # channel and taken at the same moment (CR 608.2c) as the count above.
+        if bound_count is None:
+            bound_count = maximum_amount_spec(bound, condition, event=event)
         if bound_count is None and not isinstance(bound, ast.Fixed):
             raise LoweringError(
                 "a characteristic gate compares against a printed number or a "

@@ -24,6 +24,7 @@ from __future__ import annotations
 import dataclasses
 
 from . import ast
+from .bounds import parse_comparison
 from .errors import GrammarError
 from .nouns import parse_object_filter
 from .stream import TokenStream
@@ -58,6 +59,33 @@ def _accept_ordinal_exclusion(stream: TokenStream, type_word: str):
         stream.reset(mark)
         return _REFUSED
     return ordinal
+
+
+def _accept_mana_value_bound(stream: TokenStream):
+    """``with mana value <N> or greater|less`` after a cast's "spell", as the
+    :class:`ast.Comparison`, None when no "with mana value" is printed, or
+    :data:`_REFUSED` when it is printed and is not that shape.
+
+    Kurgadon's "a creature spell **with mana value 6 or greater**" and
+    Pyrostatic Pillar's "a spell **with mana value 3 or less**". Consumed and
+    carried on the subject, while the condition — this bound included — comes
+    from ``engine/trigger_conditions.py``'s table (``cast_mana_value``), which
+    reads only the two directions with a printed number: an exact value or an
+    X bound is a set the table cannot narrow to, so the line refuses rather
+    than the two front ends watching different spells.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("with", "mana", "value"):
+        return None
+    try:
+        bound = parse_comparison(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return _REFUSED
+    if bound.op not in ("ge", "le") or not isinstance(bound.value, ast.Fixed):
+        stream.reset(mark)
+        return _REFUSED
+    return bound
 
 
 def _accept_unshared_colour(stream: TokenStream) -> ast.ObjectFilter | None:
@@ -161,6 +189,18 @@ def _parse_cast_event(
             "spell_cast", trigger_word,
             subject=ast.ObjectFilter(chosen_color=True),
         )
+    stream.reset(mark)
+    # "…a player casts a spell **with mana value 3 or less**" (Pyrostatic
+    # Pillar). The table's ``cast_mana_value`` row on this scope, read whole
+    # here for the chosen colour's reason: the bare "a player casts a spell"
+    # entry behind this is its strict prefix.
+    if stream.accept_phrase("a", "player", "casts", "a", "spell"):
+        bound = _accept_mana_value_bound(stream)
+        if bound is not None and bound is not _REFUSED:
+            return ast.TriggerEvent(
+                "spell_cast", trigger_word,
+                subject=ast.ObjectFilter(mana_value=bound),
+            )
     stream.reset(mark)
     # "…casts a *blue* spell" (the Rod/Cup/Sphere cycle, Freyalise's Charm,
     # Leshrac's Sigil). The colour is part of the condition rather than a
@@ -382,6 +422,15 @@ def _parse_cast_event(
         if narrowed is not None:
             stream.advance()
             if stream.accept_word("spell"):
+                # "…a creature spell **with mana value 6 or greater**"
+                # (Kurgadon), the table's ``cast_mana_value`` row on this
+                # scope.
+                bound = _accept_mana_value_bound(stream)
+                if bound is _REFUSED:
+                    stream.reset(mark)
+                    return None
+                if bound is not None:
+                    narrowed = dataclasses.replace(narrowed, mana_value=bound)
                 return ast.TriggerEvent(
                     "you_cast_spell", trigger_word, subject=narrowed,
                 )

@@ -820,6 +820,229 @@ def test_w1g3_cabal_interrogator_makes_a_revealed_card_discarded(set_pool, catal
 
 # ==== W1G4 ==========================================================
 # W1G4's tests go between this line and the "end W1G4" line.
+#
+# Ancient Ooze's CR 604.3 total ("the total mana value of other creatures you
+# control", ``evaluate_count``'s ``total_mana_value``), Kurgadon's cast
+# trigger by mana value (``cast_mana_value``), and the drive list: Fierce
+# Empath, Vengeful Dead, Consumptive Goo.
+import pytest as _w1g4_pytest
+
+from engine import Game as _W1G4Game
+from engine.face_down import face_down_card as _w1g4_face_down
+from engine.models import Permanent as _W1G4Permanent
+from engine.models import PlayerState as _W1G4PlayerState
+from engine.tokens import make_token_card as _w1g4_token
+from tests.helpers import resolve_stack as _w1g4_resolve_stack
+
+
+def _w1g4_table(set_pool, hand=(), *, library=None, interactive=False):
+    lea = set_pool("LEA")
+    alice = _W1G4PlayerState(
+        name="Alice", hand=list(hand),
+        library=list(library) if library is not None else [lea["Island"]] * 8,
+    )
+    bob = _W1G4PlayerState(name="Bob", library=[lea["Island"]] * 8)
+    game = _W1G4Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.active_player_index = 0
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    return game
+
+
+def _w1g4_put(game, seat, card):
+    permanent = _W1G4Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    _w1g4_resolve_stack(game)
+    return permanent
+
+
+def _w1g4_pt(permanent):
+    return permanent.effective_power, permanent.effective_toughness
+
+
+def test_w1g4_ancient_ooze_is_the_total_mana_value_of_your_other_creatures(set_pool):
+    """Bears (2) and Hill Giant (4) are 6; the 2004-10-04 ruling's token and
+    face-down creature add 0; the Ooze leaves itself out ("other"), the
+    noncreature Iceberg is not a creature, and the opponent's Shivan Dragon is
+    not "you control"."""
+    lea = set_pool("LEA")
+    game = _w1g4_table(set_pool)
+    ooze = _w1g4_put(game, 0, set_pool("SCG")["Ancient Ooze"])
+    for card in (
+        lea["Grizzly Bears"], lea["Hill Giant"], set_pool("ICE")["Iceberg"],
+        _w1g4_face_down(lea["Shivan Dragon"]),
+        _w1g4_token("Soldier", 1, 1, "Token Creature — Soldier"),
+    ):
+        _w1g4_put(game, 0, card)
+    _w1g4_put(game, 1, lea["Shivan Dragon"])
+    game.check_state_based_actions()
+    assert _w1g4_pt(ooze) == (6, 6), game.log
+
+
+def test_w1g4_ancient_ooze_is_recomputed_as_the_board_changes(set_pool):
+    """CR 604.3 applies continuously: a creature leaving shrinks it, and alone
+    it is 0/0 and dies to CR 704.5f."""
+    lea = set_pool("LEA")
+    game = _w1g4_table(set_pool)
+    ooze = _w1g4_put(game, 0, set_pool("SCG")["Ancient Ooze"])
+    bears = _w1g4_put(game, 0, lea["Grizzly Bears"])
+    giant = _w1g4_put(game, 0, lea["Hill Giant"])
+    game.check_state_based_actions()
+    assert _w1g4_pt(ooze) == (6, 6)
+    game.remove_from_battlefield(giant)
+    game.check_state_based_actions()
+    assert _w1g4_pt(ooze) == (2, 2)
+    game.remove_from_battlefield(bears)
+    game.check_state_based_actions()
+    assert not game.is_on_battlefield(ooze), game.log
+    assert [card.name for card in game.players[0].graveyard][-1] == "Ancient Ooze"
+
+
+def _w1g4_kurgadon_casts(set_pool, spell, *, x_value=None, seat=0):
+    lea = set_pool("LEA")
+    game = _w1g4_table(set_pool)
+    kurgadon = _w1g4_put(game, 0, set_pool("SCG")["Kurgadon"])
+    game.players[seat].hand.append(lea[spell])
+    game.active_player_index = seat
+    announced = {} if x_value is None else {"x_value": x_value}
+    assert game.queue_from_hand(seat, spell, **announced).supported
+    _w1g4_resolve_stack(game)
+    return game, kurgadon
+
+
+@_w1g4_pytest.mark.parametrize("spell, x_value, seat, counters", [
+    ("Shivan Dragon", None, 0, 3),     # a creature spell, mana value 6
+    ("Lord of the Pit", None, 0, 3),   # 7
+    ("Sengir Vampire", None, 0, 0),    # 5
+    ("Rock Hydra", 4, 0, 3),           # {X}{R}{R}, X=4: 6 on the stack
+    ("Rock Hydra", 3, 0, 0),           # X=3: 5
+    ("Shivan Dragon", None, 1, 0),     # an opponent's cast is not "you cast"
+])
+def test_w1g4_kurgadon_grows_on_your_six_drop_creature_spells(
+    set_pool, spell, x_value, seat, counters,
+):
+    """"Whenever you cast a creature spell with mana value 6 or greater, put
+    three +1/+1 counters on this creature." CR 202.3e: an X in a spell's cost
+    is its announced value on the stack."""
+    game, kurgadon = _w1g4_kurgadon_casts(set_pool, spell, x_value=x_value, seat=seat)
+    assert _w1g4_pt(kurgadon) == (3 + counters, 3 + counters), game.log
+
+
+def test_w1g4_kurgadon_ignores_a_six_drop_that_is_not_a_creature(set_pool):
+    """Decree of Annihilation is a sorcery with mana value 10: no trigger goes
+    on the stack above it."""
+    game = _w1g4_table(set_pool)
+    _w1g4_put(game, 0, set_pool("SCG")["Kurgadon"])
+    decree = set_pool("SCG")["Decree of Annihilation"]
+    assert decree.cmc >= 6 and "Creature" not in decree.type_line
+    game.players[0].hand.append(decree)
+    assert game.queue_from_hand(0, "Decree of Annihilation").supported
+    assert [item.card.name for item in game.stack] == ["Decree of Annihilation"], game.log
+
+
+def test_w1g4_kurgadon_trigger_resolves_before_the_spell(set_pool):
+    """The trigger goes on the stack above the spell that fired it (CR 603.3):
+    the counters arrive while the Dragon is still a spell."""
+    lea = set_pool("LEA")
+    game = _w1g4_table(set_pool, [lea["Shivan Dragon"]])
+    kurgadon = _w1g4_put(game, 0, set_pool("SCG")["Kurgadon"])
+    assert game.queue_from_hand(0, "Shivan Dragon").supported
+    assert len(game.stack) == 2
+    game.resolve_top_of_stack()
+    assert _w1g4_pt(kurgadon) == (6, 6)
+    assert [item.card.name for item in game.stack] == ["Shivan Dragon"]
+
+
+# --- the drive list ---------------------------------------------------------
+
+
+def _w1g4_empath_library(set_pool):
+    lea = set_pool("LEA")
+    return [lea["Grizzly Bears"], lea["Sengir Vampire"], lea["Shivan Dragon"],
+            lea["Island"], lea["Craw Wurm"]]
+
+
+def test_w1g4_fierce_empath_finds_a_six_drop_creature(set_pool):
+    """A seat nobody asks takes the search; what it finds is a creature card
+    with mana value 6 or greater — never the five-drop."""
+    game = _w1g4_table(
+        set_pool, [set_pool("SCG")["Fierce Empath"]],
+        library=_w1g4_empath_library(set_pool),
+    )
+    assert game.queue_from_hand(0, "Fierce Empath").supported
+    _w1g4_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g4_resolve_stack(game)
+    found = [card.name for card in game.players[0].hand]
+    assert len(found) == 1 and found[0] in ("Shivan Dragon", "Craw Wurm"), game.log
+    assert len(game.players[0].library) == 4
+
+
+def test_w1g4_fierce_empath_offers_a_person_only_the_six_drops(set_pool):
+    game = _w1g4_table(
+        set_pool, [set_pool("SCG")["Fierce Empath"]],
+        library=_w1g4_empath_library(set_pool), interactive=True,
+    )
+    assert game.queue_from_hand(0, "Fierce Empath").supported
+    _w1g4_resolve_stack(game)
+    offer = game.pending_choice_of("optional_pay", 0) or game.pending_choice_of("may", 0)
+    if offer is not None:
+        assert game.resolve_pending_choice(offer.kind, 0, accept=True)
+    search = game.pending_choice_of("search_library", 0)
+    assert search is not None, [choice.kind for choice in game.pending_choices]
+    names = [card.name for card in game.players[0].library]
+    # A Sengir Vampire is not a legal pick.
+    assert not game.resolve_pending_choice(
+        "search_library", 0, library_index=names.index("Sengir Vampire"),
+    )
+    assert game.resolve_pending_choice(
+        "search_library", 0, library_index=names.index("Craw Wurm"),
+    )
+    _w1g4_resolve_stack(game)
+    assert [card.name for card in game.players[0].hand] == ["Craw Wurm"], game.log
+
+
+def test_w1g4_vengeful_dead_drains_for_itself_and_another_zombie(set_pool, catalog_by_name):
+    """"Whenever this creature or another Zombie dies, each opponent loses 1
+    life." A non-Zombie dying is nothing."""
+    lea = set_pool("LEA")
+    game = _w1g4_table(set_pool)
+    dead = _w1g4_put(game, 0, set_pool("SCG")["Vengeful Dead"])
+    zombie = _w1g4_put(game, 1, catalog_by_name["Scathe Zombies"])
+    bears = _w1g4_put(game, 0, lea["Grizzly Bears"])
+    lives = []
+    for permanent in (bears, zombie, dead):
+        permanent.damage_marked = 99
+        game.check_state_based_actions()
+        _w1g4_resolve_stack(game)
+        assert not game.is_on_battlefield(permanent)
+        lives.append(game.players[1].life)
+    assert lives == [20, 19, 18], game.log
+    assert game.players[0].life == 20
+
+
+def test_w1g4_consumptive_goo_shrinks_a_creature_and_grows_itself(set_pool):
+    """The 2004-10-04 ruling: aimed at itself it gets both -1/-1 and the
+    counter during the resolution, and survives it."""
+    lea = set_pool("LEA")
+    game = _w1g4_table(set_pool)
+    goo = _w1g4_put(game, 0, set_pool("SCG")["Consumptive Goo"])
+    bears = _w1g4_put(game, 1, lea["Grizzly Bears"])
+    assert game.activate_permanent_ability(
+        0, "Consumptive Goo", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g4_resolve_stack(game)
+    assert _w1g4_pt(bears) == (1, 1) and _w1g4_pt(goo) == (2, 2), game.log
+    assert game.activate_permanent_ability(
+        0, "Consumptive Goo", target_permanent_ids=[goo.permanent_id],
+    ).supported
+    _w1g4_resolve_stack(game)
+    game.check_state_based_actions()
+    assert game.is_on_battlefield(goo) and _w1g4_pt(goo) == (2, 2), game.log
 
 # ==== end W1G4 ======================================================
 

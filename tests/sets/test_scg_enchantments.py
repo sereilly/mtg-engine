@@ -167,6 +167,78 @@ def test_w1g2_decree_of_silence_cycles_with_no_spell_to_target(set_pool):
 
 # ==== W1G4 ==========================================================
 # W1G4's tests go between this line and the "end W1G4" line.
+#
+# Pyrostatic Pillar: "Whenever a player casts a spell with mana value 3 or
+# less, this enchantment deals 2 damage to that player." The cast trigger's
+# ``cast_mana_value`` narrowing, read off the spell's stack object (CR
+# 202.3e), and "that player" the seat the trigger is about — the caster.
+import pytest as _w1g4_pytest
+
+from engine import Game as _W1G4Game
+from engine.models import Permanent as _W1G4Permanent
+from engine.models import PlayerState as _W1G4PlayerState
+from tests.helpers import resolve_stack as _w1g4_resolve_stack
+
+
+def _w1g4_pillar_table(set_pool, spell, caster):
+    lea = set_pool("LEA")
+    seats = [
+        _W1G4PlayerState(name=f"P{seat + 1}", library=[lea["Island"]] * 8)
+        for seat in range(2)
+    ]
+    game = _W1G4Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = caster
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    pillar = _W1G4Permanent(card=set_pool("SCG")["Pyrostatic Pillar"])
+    game._put_permanent_onto_battlefield(0, pillar, None)
+    game._sync_control()
+    game.players[caster].hand.append(lea[spell])
+    return game
+
+
+@_w1g4_pytest.mark.parametrize("spell, x_value, caster, burned", [
+    ("Grizzly Bears", None, 0, True),     # 2: its controller is burned too
+    ("Grizzly Bears", None, 1, True),     # an opponent's cast
+    ("Lightning Bolt", None, 1, True),    # 1
+    ("Hill Giant", None, 1, False),       # {3}{R}: 4
+    ("Sengir Vampire", None, 1, False),   # 5
+    ("Fireball", 2, 1, True),             # {X}{R}, X=2: 3 on the stack
+    ("Fireball", 3, 1, False),            # X=3: 4
+])
+def test_w1g4_pyrostatic_pillar_burns_whoever_casts_a_cheap_spell(
+    set_pool, spell, x_value, caster, burned,
+):
+    game = _w1g4_pillar_table(set_pool, spell, caster)
+    card = set_pool("LEA")[spell]
+    announced = {} if "Creature" in card.type_line else {"target_player_index": 1 - caster}
+    if x_value is not None:
+        announced["x_value"] = x_value
+    assert game.queue_from_hand(caster, spell, **announced).supported
+    # The trigger is on the stack above the spell (CR 603.3) — or is not.
+    assert len(game.stack) == (2 if burned else 1), game.log
+    if burned:
+        game.resolve_top_of_stack()
+    lives = [player.life for player in game.players]
+    expected = [20, 20]
+    if burned:
+        expected[caster] = 18
+    assert lives == expected, game.log
+
+
+def test_w1g4_pyrostatic_pillar_burns_a_face_down_spell(set_pool):
+    """CR 708.4: a face-down spell is a 2/2 with no mana cost, mana value 0 —
+    Krosan Colossus' 9 is hidden, and the Pillar sees a 0."""
+    game = _w1g4_pillar_table(set_pool, "Island", 1)
+    game.players[1].hand[:] = [set_pool("ONS")["Krosan Colossus"]]
+    game.enforce_mana_costs = True
+    game.players[1].mana_pool.update({"C": 3})
+    assert game.queue_from_hand(1, "Krosan Colossus", alternative_cost=True).supported
+    assert len(game.stack) == 2, game.log
+    game.resolve_top_of_stack()
+    assert [player.life for player in game.players] == [20, 18], game.log
 
 # ==== end W1G4 ======================================================
 

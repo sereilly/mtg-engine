@@ -279,6 +279,23 @@ class GreatestPowerAmong:
 
 
 @dataclass(frozen=True)
+class GreatestManaValueAmong:
+    """"the greatest mana value among permanents you control" (Scourge's six:
+    Accelerated Mutation, Torrent of Fire, Rush of Knowledge, Dispersal
+    Shield, Reward the Faithful, Cabal Conditioning) — a maximum over a set,
+    :class:`GreatestPowerAmong` one characteristic over.
+
+    Its own node for that class's reason: the same objects answer a different
+    question, and a lowering that saw only the filter would have to guess which.
+    CR 202.3 makes the number the permanent's mana cost — read through layer 1,
+    so a copy has the copied card's and a token's or a face-down permanent's
+    is 0 (CR 111.3, 708.2a, 202.3a) — and CR 202.3e counts an {X} in a permanent's
+    cost as 0 (Rush of Knowledge's 2020-08-07 ruling). Zero over an empty set.
+    """
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class ThatMuch:
     """A back-reference to a quantity the surrounding context produced
     ("you gain that much life", "equal to the damage dealt").
@@ -753,7 +770,9 @@ class DamageDealtThisTurn:
     #: event a clause names is payload here exactly as a printed noun phrase is
     #: everywhere else in this grammar. ``"target"`` is Whipkeeper's "the
     #: damage already dealt **to it** this turn", "it" being the creature the
-    #: same sentence aims at.
+    #: same sentence aims at. ``"that_player"`` is Final Punishment's "dealt
+    #: **to that player** this turn", the seat the sentence in front of it
+    #: named — matched against that sentence by the lowering.
     recipient: str = "source"
     #: ``None`` is "from any source", which is what a clause printing no "by …"
     #: phrase means. Spelled out rather than left to the default, because the
@@ -782,7 +801,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, CountersOnEventSubject, CountersOnGranter, LifePaidAsEntered, ChosenNumberAsCast, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
+Amount = Union[Fixed, Var, CountOf, GreatestManaValueAmong, CountersOnSource, CountersOnEventSubject, CountersOnGranter, LifePaidAsEntered, ChosenNumberAsCast, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
 
 
 # ---------------------------------------------------------------------------

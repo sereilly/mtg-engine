@@ -380,14 +380,28 @@ def any_number_of_opponents_roles() -> dict:
     """The ``roles`` description "any number of target opponents" lowers to:
     :data:`ANY_NUMBER_OF_SEAT_ROLES` optional opponent roles, each a later seat
     than the one before it."""
+    return _any_number_of_seat_roles("opponent", ANY_NUMBER_OF_SEAT_ROLES, True)
+
+
+def any_number_of_players_roles() -> dict:
+    """The ``roles`` description "any number of target **players**" lowers to
+    (Reward the Faithful, Cabal Conditioning): the opponents' chain with the
+    caster admitted (CR 115.1a: "target players" describes every player), one role more
+    so every seat of the same bound can be named, each a later seat than the
+    one before it, so no player is named twice (CR 115.3)."""
+    return _any_number_of_seat_roles("player", ANY_NUMBER_OF_SEAT_ROLES + 1, False)
+
+
+def _any_number_of_seat_roles(noun: str, count: int, opponents_only: bool) -> dict:
+    """*count* optional seat roles named "<noun> 1" … , each after the last."""
     roles: list[dict] = []
-    for index in range(ANY_NUMBER_OF_SEAT_ROLES):
-        role: dict = {
-            "role": f"opponent {index + 1}", "kind": "player",
-            "opponents_only": True, OPTIONAL_ROLE: True,
-        }
+    for index in range(count):
+        role: dict = {"role": f"{noun} {index + 1}", "kind": "player"}
+        if opponents_only:
+            role["opponents_only"] = True
+        role[OPTIONAL_ROLE] = True
         if index:
-            role[LATER_SEAT_ROLE] = f"opponent {index}"
+            role[LATER_SEAT_ROLE] = f"{noun} {index}"
         roles.append(role)
     return {"kind": ROLES_TARGET_KIND, "roles": roles}
 

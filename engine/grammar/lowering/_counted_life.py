@@ -53,7 +53,8 @@ from ...oracle_types import (DISCARDED_THIS_WAY, OracleInstruction,
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import (count_filter_on_frozen_seat, count_spec,
-                       printed_count_spec, recorded_count_spec)
+                       maximum_amount_spec, printed_count_spec,
+                       recorded_count_spec)
 from ._common import (
     dropped_narrowings,
     _amount_payload,
@@ -340,6 +341,23 @@ def lower_counted_gain(
                     "amount": "x", "recipient": recipient,
                     X_FROM_COUNT: count_spec(node.amount.filter, node),
                 },
+            ),
+        )
+    # "Any number of target players each gain life equal to **the greatest mana
+    # value among permanents you control**." (Reward the Faithful.) A maximum
+    # over a set, beside the count above and on its channel, through the
+    # floor's one reader of the aggregate. Uncapped and unmultiplied, as
+    # printed: a cap or a rate on top would be arithmetic nobody has checked.
+    maximum = maximum_amount_spec(node.amount, node, event=event)
+    if maximum is not None:
+        if node.capped_by or node.per_each is not None:
+            raise LoweringError(
+                "a life gain sized by a maximum is gained uncapped", node=node
+            )
+        return (
+            OracleInstruction(
+                "target_gains_life", "",
+                {"amount": "x", "recipient": recipient, X_FROM_COUNT: maximum},
             ),
         )
     # "When this creature leaves the battlefield, you gain life equal to **the

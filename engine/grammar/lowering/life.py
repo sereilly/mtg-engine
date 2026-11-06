@@ -505,6 +505,38 @@ def _lower_lose_life(
         # record since Life Chisel; the loss fell to ``_amount_payload``, which
         # knows no cost record, and refused.
         payload = {"amount": "x", X_FROM_COUNT: paid}
+    elif isinstance(node.amount, ast.DamageDealtThisTurn):
+        # "Target player loses life equal to **the damage already dealt to
+        # that player this turn**." (Final Punishment.) The turn's damage
+        # ledger joined on the recipient *seat* — Discordant Spirit's "dealt to
+        # you" one seat over — and "that player" is the seat this sentence
+        # chose: the loser and the player the history is about are one seat,
+        # checked rather than assumed. Every other subject, a narrowing by
+        # source and another recipient name a reading nothing here writes. The
+        # 2004-10-04 ruling (prevented damage does not count) is the ledger's
+        # own: it records damage dealt, after prevention.
+        history = node.amount
+        if (
+            history.recipient != "that_player"
+            or history.source_name is not None
+            or history.others_only
+            or node.player.kind not in ("target_player", "target_opponent")
+            or node.per_each is not None
+        ):
+            raise LoweringError(
+                "a life loss equal to the damage already dealt reads the "
+                "history of the one player this sentence targets",
+                node=node,
+            )
+        payload = {
+            "amount": "x",
+            X_FROM_COUNT: {
+                "damage_ledger": {
+                    "recipient": "target_player", "source_name": None,
+                    "others_only": False, "base": 0,
+                },
+            },
+        }
     elif isinstance(node.amount, ast.CountOf):
         # "…you may have target player lose life **equal to the number of
         # Zombies on the battlefield**." (Gempalm Polluter.) The gain's

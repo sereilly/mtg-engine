@@ -507,6 +507,19 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     # SET_PLAYBOOK records from Revised's round 8.
     had_article = bool(stream.accept_word("the"))
 
+    # "…deals damage to any target equal to **the greatest mana value among
+    # permanents you control**." (Torrent of Fire, and four more Scourge
+    # spells.) A maximum over a noun phrase, through the one reader the
+    # ", where X is …" trailer asks (``where_x.accept_greatest_among``) — the
+    # two front ends print the same aggregate, so they read it once. Late, for
+    # the cycle every ``where_x`` import here breaks at call time.
+    if had_article:
+        from .where_x import accept_greatest_among
+
+        greatest_among = accept_greatest_among(stream)
+        if greatest_among is not None:
+            return greatest_among
+
     # "…loses life equal to **the number of items they revealed**." (Goblin
     # Game.) The number that seat named in secret one sentence up — a
     # back-reference per seat, like "the amount of mana they paid this way"
@@ -658,6 +671,18 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
         "damage", "already", "dealt", "to", "it", "this", "turn"
     ):
         return ast.DamageDealtThisTurn(recipient="target", source_name=None)
+    stream.reset(mark_history)
+    # "Target player loses life equal to **the damage already dealt to that
+    # player this turn**." (Final Punishment.) The same history aimed at a
+    # *player*: the ledger's recipient seat rather than its recipient
+    # permanent, and "that player" names whichever seat the sentence in front
+    # of the clause names — which only the lowering can see, so the words ride
+    # the node as printed and are matched there. Its 2004-10-04 ruling is
+    # Whipkeeper's: prevented damage was never dealt and does not count.
+    if stream.accept_phrase(
+        "damage", "already", "dealt", "to", "that", "player", "this", "turn"
+    ):
+        return ast.DamageDealtThisTurn(recipient="that_player", source_name=None)
     stream.reset(mark_history)
 
     if stream.accept_phrase("damage", "dealt"):

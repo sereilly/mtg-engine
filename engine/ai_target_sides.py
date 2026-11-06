@@ -753,12 +753,8 @@ def ability_seat_side(instruction: OracleInstruction | None) -> str | None:
             continue
         if targets.get("opponents_only"):
             sides.add("opponent")
-        elif step.kind in _SEAT_GIFT_KINDS:
-            sides.add("you")
-        elif step.kind in _SEAT_DENIAL_KINDS:
-            sides.add("opponent")
         else:
-            sides.add(_effect_side(step))
+            sides.add(_seat_step_side(step))
     if "opponent" in sides:
         return "opponent"
     if "you" in sides:
@@ -1277,13 +1273,40 @@ def announced_roles_loop_side(card: CardDefinition) -> str | None:
     """
     for instruction in compile_card_oracle(card).instructions:
         payload = instruction.payload or {}
-        if instruction.kind != "for_each" or not (
-            payload.get("iterator") or {}
-        ).get("announced_roles"):
+        iterator = payload.get("iterator") or {}
+        if instruction.kind != "for_each":
+            continue
+        if iterator.get("players") == "any_number_of_target_players":
+            # "**Any number of target players** each gain life …" (Reward the
+            # Faithful) / "… each discard …" (Cabal Conditioning). Every role is
+            # a seat, the caster's included, and the body is done *to* each
+            # one — so the side is the seat reading of what it does: a gift
+            # names the caster, a denial the opponents. Read as sideless, the
+            # walk took the caster's own seat first (it is first in seat order
+            # whenever the caster is seat 0, and the only one when it is the
+            # last seat): Cabal Conditioning made its caster discard, or was
+            # never cast. Wheel and Deal's chain names only opponents and has
+            # no side to choose.
+            sides = {
+                _seat_step_side(step) for step in payload.get("effect") or ()
+            } - {None}
+            return "opponent" if "opponent" in sides else "you" if "you" in sides else None
+        if not iterator.get("announced_roles"):
             continue
         sides = {_effect_side(step) for step in payload.get("effect") or ()} - {None}
         return "opponent" if "opponent" in sides else "you" if "you" in sides else None
     return None
+
+
+def _seat_step_side(step: OracleInstruction) -> str | None:
+    """What one step does to the **player** it is about, as a side: a gift
+    names the caster, a denial an opponent, anything else the family reading
+    (:func:`ability_seat_side`'s per-step rule)."""
+    if step.kind in _SEAT_GIFT_KINDS:
+        return "you"
+    if step.kind in _SEAT_DENIAL_KINDS:
+        return "opponent"
+    return _effect_side(step)
 
 
 def _sides_of_roles(roles, run, slot_sides) -> tuple[str | None, ...]:

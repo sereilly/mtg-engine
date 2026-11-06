@@ -42,14 +42,25 @@ from .subject_verb import parse_subject_verb
 
 
 #: The verbs a seat loop's distributive subject may govern, each of which reads
-#: its seat off the loop's binding once its elided "you" is rebound.
-_LOOP_SEAT_DEEDS = (ast.Discard, ast.Draw)
+#: its seat off the loop's binding once its elided "you" is rebound. The life
+#: gain is Reward the Faithful's ("…each gain life equal to …").
+_LOOP_SEAT_DEEDS = (ast.Discard, ast.Draw, ast.GainLife)
+
+#: The seat sets "any number of target <players> each" may announce, by the
+#: printed noun: Wheel and Deal's opponents, and Reward the Faithful's and
+#: Cabal Conditioning's players — the caster included (CR 115.1a, 601.2c), each
+#: player once (CR 115.3).
+_ANY_NUMBER_OF_SEATS: dict[str, str] = {
+    "opponents": "any_number_of_target_opponents",
+    "players": "any_number_of_target_players",
+}
 
 
 def _parse_any_number_of_target_opponents_each(
     stream: TokenStream, parse_optional_action,
 ) -> "ast.ForEach | None":
-    """``Any number of target opponents each <verb> …[, then <verb> …]``.
+    """``Any number of target opponents|players each <verb> …[, then <verb>
+    …]``.
 
     The head names the iterator; each verb phrase behind it is read by the
     imperative reader — which hands its elided subject "you" — and rebound to
@@ -59,9 +70,12 @@ def _parse_any_number_of_target_opponents_each(
     performed by the caster. Returns None with the cursor untouched.
     """
     mark = stream.mark()
-    if not stream.accept_phrase(
-        "any", "number", "of", "target", "opponents", "each"
-    ):
+    seats = None
+    if stream.accept_phrase("any", "number", "of", "target"):
+        seats = _ANY_NUMBER_OF_SEATS.get(stream.peek_word() or "")
+        if seats is not None:
+            stream.advance()
+    if seats is None or not stream.accept_word("each"):
         stream.reset(mark)
         return None
     steps: list = []
@@ -88,7 +102,7 @@ def _parse_any_number_of_target_opponents_each(
         stream.reset(joined)
         break
     effect = steps[0] if len(steps) == 1 else ast.Sequence(tuple(steps))
-    return ast.ForEach(ast.PlayerRef("any_number_of_target_opponents"), effect)
+    return ast.ForEach(ast.PlayerRef(seats), effect)
 
 
 def _parse_choose_targets_for_each(

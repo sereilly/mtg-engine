@@ -19,7 +19,8 @@ from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, DISCARDED_BY_SEAT,
                              OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import halved_count_spec, per_card_count_spec
+from ._amounts import (halved_count_spec, maximum_amount_spec,
+                       per_card_count_spec)
 # The characteristics ``count_from_payload`` reads off a cost-eaten
 # permanent. A floor, shared with the damage family that named it: a mill
 # sized by one asks the same question a damage sized by one does, and two
@@ -374,6 +375,15 @@ def _lower_draw(
         payload: dict[str, object] = {
             "amount": "x",
             X_FROM_COUNT: per_card_count_spec(node.count, node, node.player),
+        }
+    elif maximum_amount_spec(node.count, node, event=event) is not None:
+        # "Draw cards equal to **the greatest mana value among permanents you
+        # control**." (Rush of Knowledge.) A maximum over a set, counted at
+        # resolution (CR 608.2) on the ``x_from_count`` channel the count one
+        # branch up travels, through the floor's one reader of the aggregate.
+        payload: dict[str, object] = {
+            "amount": "x",
+            X_FROM_COUNT: maximum_amount_spec(node.count, node, event=event),
         }
     elif isinstance(node.count, ast.GreatestDiscardedThisWay):
         # "…draws cards equal to **the greatest number of cards a player
