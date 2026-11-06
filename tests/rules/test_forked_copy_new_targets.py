@@ -266,9 +266,18 @@ def test_every_spell_copier_asks_a_person_who_named_no_new_target(catalog_by_nam
                         trigger_context={"cast_item": bolt, "cast_card": bolt.card},
                     ))
                     copy = next(item for item in reversed(game.stack) if item.is_copy)
-                    assert _aim(game, copy) == ("player", 0), unit.name
                     prompt = game.pending_choice_of("copy_spell_target", 0)
                     assert (prompt is not None) is interactive, (unit.name, interactive)
+                    if interactive or step.kind == "copy_top_stack_spell":
+                        # Asked, and not yet answered; or a Fork, whose
+                        # prompt is armed only for a seat somebody asks.
+                        assert _aim(game, copy) == ("player", 0), unit.name
+                    else:
+                        # The trigger's copy, for a seat nobody asks, takes
+                        # the measured answer (``ai_prompts.choose_copy_target``,
+                        # SCG W2G3): a copy of the opponent's Bolt is not
+                        # kept on its own controller's face.
+                        assert _aim(game, copy) != ("player", 0), unit.name
                 examined[unit.name] = step.kind
 
     assert set(examined.values()) == set(COPY_KINDS), examined

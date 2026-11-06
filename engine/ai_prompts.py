@@ -100,6 +100,98 @@ def choose_trigger_mode(game: Game, choice, stated: int) -> int:
     return best
 
 
+class _Answered:
+    """The shape a rehearsal reads off what it carried out (``supported``,
+    ``details``) for an answer that is not a cast."""
+
+    def __init__(self, supported: bool) -> None:
+        self.supported = supported
+        self.details = "" if supported else "the answer was not taken"
+
+
+#: Under this, a re-aimed copy is no better than one left where it was: the
+#: standings are sums of floats.
+_COPY_GAIN = 1e-9
+
+
+def _best_rehearsed_answer(game: Game, seat: int, carried, answers, answer, label: str):
+    """The answer out of *answers* whose rehearsal leaves *seat* furthest
+    ahead of leaving the copy as it is, or None where none does better.
+
+    Each answer is carried out on a scratch copy cut loose from the
+    resolution that offered it (``detach="abstract"``: the rest of that
+    resolution — the copies still to be made — is not made there), by
+    ``answer(table, held, choice)`` with *carried* copied into the table as
+    *held*; the copy and everything below it on the stack resolve, and the
+    table is compared with the same copy left untouched — the copy keeping
+    its original's target. One copy at a time: the next copy's offer is
+    weighed with this one already aimed."""
+    if rehearsing():
+        return None
+    best, best_swing = None, _COPY_GAIN
+    with deliberating():
+        for choice in answers:
+            rehearsal = rehearse(
+                game, seat,
+                lambda table, held, choice=choice: _Answered(bool(answer(table, held, choice))),
+                leaves_hand=False, carried=carried, detach="abstract", label=label,
+            )
+            if rehearsal is None:
+                return None
+            if rehearsal.accepted and rehearsal.swing > best_swing:
+                best, best_swing = choice, rehearsal.swing
+    return best
+
+
+def choose_copy_target(game: Game, choice, kept: dict) -> dict:
+    """Where a seat nobody asks aims a spell copy it may re-aim (CR 707.10c:
+    "you may choose new targets for the copy") at **a permanent or a
+    player** (the ``copy_spell_target`` prompt): the offered target whose
+    rehearsal leaves the seat furthest ahead, or *kept* — the original's, the
+    prompt's stated answer — where none does better than keeping it.
+
+    Every copy kept its original's target, so storm's copies stacked on one
+    creature: Scattershot's three copies each dealt their 1 to the same
+    1/1, and two were countered by the rules once it died (CR 608.2b), with
+    two other creatures to hit (W1G1)."""
+    targets = list(choice.data.get("targets") or ())
+    if choice.data.get("_copy") is None or not targets:
+        return kept
+    answers = [
+        {"seat": target.get("seat")} if target.get("kind") == "player"
+        else {"permanent_id": target.get("permanent_id")}
+        for target in targets
+    ]
+    answers = [response for response in answers if response != kept]
+    picked = _best_rehearsed_answer(
+        game, choice.player_index, choice, answers,
+        lambda table, prompt, response: table._resolve_copy_spell_target(prompt, response),
+        label=f"{choice.data.get('card_name') or 'a copy'} (the copy's new target)",
+    )
+    return kept if picked is None else picked
+
+
+def choose_copy_retarget(game: Game, seat: int, copy, slots, options):
+    """Which of *options* a seat nobody asks re-aims a spell copy at when its
+    one target is **a card in a graveyard or a spell** (``stack_targets``'
+    CR 115.7 change, *slots* its one slot), or None to keep the original's.
+
+    :func:`choose_copy_target`'s question one zone over: Reaping the Graves'
+    storm copies each kept its original's card, so the first copy to resolve
+    returned it and every other one, the original included, was countered by
+    the rules (W1G1)."""
+    from .stack_targets import apply_target_change
+
+    picked = _best_rehearsed_answer(
+        game, seat, (copy, slots, tuple(options)), list(range(len(options))),
+        lambda table, held, index: apply_target_change(
+            table, held[0], held[1], [held[2][index]],
+        ),
+        label=f"{copy.card.name} (the copy's new target)",
+    )
+    return None if picked is None else options[picked]
+
+
 def choose_search_card(
     game: Game, player_index: int, data: dict
 ) -> tuple[str, int] | None:

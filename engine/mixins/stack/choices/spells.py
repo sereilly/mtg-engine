@@ -767,7 +767,9 @@ class SpellChoicesMixin:
         return True
 
     def _default_copy_spell_target(self, choice: PendingChoice) -> None:
-        """The stated policy: **decline** — keep the original's target.
+        """The stated policy: **decline** — keep the original's target —
+        unless the seat is one nobody asks and re-aiming it is measured to do
+        better (``ai_prompts.choose_copy_target``).
 
         Every other picker in this engine defaults to the first candidate
         offered, and each of those is a target the ability *must* have. This one
@@ -776,8 +778,9 @@ class SpellChoicesMixin:
         become illegal keeps pointing at it and is countered on resolution
         (CR 608.2b), which is what declining means there too — re-aiming it at
         whatever the enumerator happened to list first would be a decision
-        nobody made. A card whose copy should be aimed cleverly needs a
-        valuation in `engine/ai_valuation.py`, not a branch here.
+        nobody made. The one that is made is a rehearsal of each offered
+        target against keeping it: storm's copies each kept their original's,
+        so Scattershot's three copies hit one 1/1 (SCG W2G3).
         """
         copy_item = choice.data.get("_copy")
         targets = list(choice.data.get("targets") or ())
@@ -811,6 +814,15 @@ class SpellChoicesMixin:
                 )
                 held = self.permanent_id_of(perm) if perm is not None else None
             current = {"permanent_id": held}
+        # A seat nobody asks takes the measured answer; an interactive seat's
+        # offer taken by default (a drain, an abandoned seat) declines, as the
+        # graveyard-or-spell offer's does (``_default_retarget_choice``).
+        if choice.player_index not in self.interactive_seats:
+            from ....ai_prompts import choose_copy_target
+
+            chosen = choose_copy_target(self, choice, current)
+            if chosen is not current and self._resolve_copy_spell_target(choice, chosen):
+                return
         if not self._resolve_copy_spell_target(choice, current):
             self.discard_pending_choice(choice)
 

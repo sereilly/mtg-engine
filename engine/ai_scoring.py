@@ -409,6 +409,38 @@ def _names_an_unweighed_seat(
     return len(_seats_the_cast_may_name(game, seat, card)) > 1
 
 
+def body_needs_the_board(card: CardDefinition) -> bool:
+    """Whether *card* is a creature whose printed **toughness** is no number
+    — a ``*`` a characteristic-defining ability fills in (CR 604.3): Ancient
+    Ooze's "the total mana value of other creatures you control", Plague
+    Rats, Lhurgoyf's ``1+*``, Maro's cards in hand.
+
+    The board sizes such a body, and a board that sizes it 0 kills it as it
+    arrives (CR 704.5f): Ancient Ooze cast onto an empty board is a 0/0 that
+    goes straight to the graveyard. A cast of one is rehearsed before it is
+    proposed (``ai_casts._cast_candidate_announcing``), which is the engine's
+    whole answer — every layer, every entry choice, the state-based check."""
+    return (
+        card.primary_type == "creature"
+        and card.printed_toughness is not None
+        and card.base_toughness is None
+    )
+
+
+def _arrives_to_stay(rehearsal: Rehearsal | None) -> bool:
+    """Whether a rehearsed **permanent** cast is one to propose: the engine
+    took it, and once the turn is over its caster is ahead by more than the
+    half a life ``HARM_FLOOR`` forgives — which a permanent still on the
+    battlefield always is, worth at least the card it was
+    (``ai_rehearsal.PERMANENT_WORTH``), and one that died as it arrived is
+    not: its card is in a graveyard and nothing it did is left.
+
+    A cast nobody could rehearse (None) is proposed as it always was."""
+    if rehearsal is None:
+        return True
+    return rehearsal.accepted and rehearsal.lasting > -HARM_FLOOR
+
+
 def _worth_proposing(rehearsal: Rehearsal | None) -> bool:
     """Whether a rehearsed cast is one to propose: the engine took it, it
     changed something **that outlasts the turn**, and it did not leave its
@@ -801,8 +833,8 @@ def _score_cast(
     **A spell is worth what it does**: `SPELL_BASE_SCORE` and the swing its
     rehearsal measured (*rehearsal*; a spell nobody could rehearse scores the
     base alone). **A permanent is worth what it is**: its type and, for a
-    creature, its printed body — weights, and tuning like every other number
-    in this module.
+    creature, its body (`_cast_body`) — weights, and tuning like every other
+    number in this module.
     """
     caster = game.players[caster_index]
 
@@ -827,9 +859,10 @@ def _score_cast(
     else:
         score = 1.5
         if card.primary_type == "creature":
+            power, toughness = _cast_body(game, caster_index, card)
             score += 1.2
-            score += _creature_stat(card, "power") * 0.7
-            score += _creature_stat(card, "toughness") * 0.4
+            score += power * 0.7
+            score += toughness * 0.4
             if target_index == caster_index:
                 score += 1.0
         if card.primary_type in {"artifact", "enchantment"}:
@@ -913,9 +946,20 @@ def _extract_damage(card: CardDefinition) -> int:
     return 0
 
 
-def _creature_stat(card: CardDefinition, key: str) -> int:
-    raw_value = str(card.raw.get(key, "0"))
-    return int(raw_value) if raw_value.isdigit() else 0
+def _cast_body(game: Game, caster_index: int, card: CardDefinition) -> tuple[int, int]:
+    """The power and toughness *card* would be weighed at as its caster's
+    creature: the printed numbers, or — for a half a characteristic-defining
+    ability fills in (CR 604.3, which functions in every zone) — the number it
+    counts for the card where it is (``Game.card_pt_outside_battlefield``):
+    Ancient Ooze in hand is the total mana value of the creatures its caster
+    controls. Each half is held at 0 or more, the most a body can lend a
+    score. A ``*`` read as 0 weighed every such creature as a 0/0 whatever
+    the board, so a Nightmare beside seven Swamps ranked below a Grizzly
+    Bears."""
+    power, toughness = card.base_power, card.base_toughness
+    if power is None or toughness is None:
+        power, toughness = game.card_pt_outside_battlefield(card, caster_index)
+    return max(0, int(power or 0)), max(0, int(toughness or 0))
 
 
 #: Life a seat keeps back when the X it announces is paid in life ("As an

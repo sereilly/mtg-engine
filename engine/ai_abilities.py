@@ -819,9 +819,15 @@ _OWN_TYPE_SET_KINDS = frozenset({
 })
 
 #: Every rewrite of what its source **is** that is rehearsed, not scored: the
-#: type sets above, and a base P/T read off a target (Riptide Mangler,
-#: Sentinel, Sworn Defender) — worth nothing when the two powers are equal.
-_OWN_REWRITE_KINDS = _OWN_TYPE_SET_KINDS | {"set_source_base_pt_from_target"}
+#: type sets above, a base P/T read off a target (Riptide Mangler,
+#: Sentinel, Sworn Defender) — worth nothing when the two powers are equal —
+#: and turning itself face down ("{3}{U}{U}: Turn this creature face down.",
+#: Mischievous Quanar, CR 708.2a), which makes it the blank 2/2 and is worth
+#: only what turning it up again will buy: scored flat, the seat paid five
+#: mana every main phase to shrink a 3/3 (SCG W1G5).
+_OWN_REWRITE_KINDS = _OWN_TYPE_SET_KINDS | {
+    "set_source_base_pt_from_target", "turn_self_face_down",
+}
 
 
 def _gives_up_its_source(cost) -> bool:
