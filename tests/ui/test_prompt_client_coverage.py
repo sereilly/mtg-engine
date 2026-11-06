@@ -42,7 +42,18 @@ def _client_reads(js: str, key: str) -> bool:
 #: ``outside_game_pick`` (W1G6, the Wishes), whose client is
 #: ``renderOutsideGamePickModal``, and Torment's ``madness_cast`` (W1G1),
 #: whose client is ``applyMadnessCastPrompt``.
-_AWAITING_CLIENT: dict[str, str] = {}
+_AWAITING_CLIENT: dict[str, str] = {
+    # Scourge W1G7, Parallel Thoughts: "If you would draw a card, you may
+    # instead put the top card of the pile you exiled into your hand." The
+    # client reads ``state.pile_top_draw`` (``web/prompt_values._pile_top_draw``:
+    # ``options``, ``source_name``, ``remaining``, ``pile_size``,
+    # ``library_size``) and answers ``{"action": "pile_top_draw_confirm",
+    # "option_index": 0 | 1}`` — 0 draws, 1 takes the pile's top card (from an
+    # empty pile, the skipped draw). Obstinate Familiar's ``skip_draw`` modal
+    # is the shape to copy; the pile is face down, so show its size, never a
+    # card.
+    "pile_top_draw": "pile_top_draw_confirm",
+}
 
 
 def test_every_prompt_has_a_client_renderer():

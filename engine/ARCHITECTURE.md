@@ -392,6 +392,15 @@ stays name-free — Veteran Bodyguard's redirect reads the damage source's own
 combat state rather than trusting which loop of the combat step it arrived in,
 which is what makes it correctly decline a blocked trampler's excess.
 
+A replacement and a prohibition over the same event are different rules. "If a
+player would gain life, that player gains no life instead" (Sulfuric Vortex,
+`replacements/life_gain.py`) is a `life_gain` interceptor, so beside Lich's
+"draw that many cards instead" the gaining player chooses which applies
+(CR 616.1e; `Game._gain_life` passes a restart, so an interactive seat is
+asked). "Players can't gain life" (Forsaken Wastes) is CR 119.7's ban, asked by
+`engine/life_prohibitions.py` *before* any replacement is gathered, and it
+stops Lich as well.
+
 ### Replacements that need a decision
 
 Some replacement effects are optional ("you *may* put it on top of your library
@@ -411,10 +420,15 @@ other seat takes the default immediately. Both paths finish through the same
 `@replacement_choice(kind)` resolver, so there is one completion path rather
 than an inline AI branch and a `confirm_` method that must agree.
 
-Adding an interactive replacement is an interceptor plus a resolver — no new
-`Game` field, confirm method, or prompt plumbing. `pending_lamp_draw`,
-`pending_outside_game_draw` and `pending_leng_discards` remain as read-only
-views over the queue in the shapes the web layer reads.
+Adding an interactive replacement is an interceptor plus a resolver, and —
+because a queued offer is a prompt like any other — the prompt's row: its
+`ChoiceSpec` in `mixins/stack/choices/replacements.py` (named last in
+`table.py`), a `pending_*` view and `confirm_*` answer there, a renderer in
+`web/prompt_values.py` and its `@action_handler` (Obstinate Familiar's
+`skip_draw` and Parallel Thoughts' `pile_top_draw` are the shape). No new
+`Game` field. `pending_lamp_draw`, `pending_outside_game_draw` and
+`pending_leng_discards` remain as read-only views over the queue in the shapes
+the web layer reads.
 
 ## Pending choices
 
