@@ -1,8 +1,8 @@
 """Handlers for the turn's own structure: phases, steps, and their choices.
 
-End/advance the turn, the cleanup and untap selections, the upkeep
-pay-or-consequence decisions, Island Sanctuary's draw choice, and stepping
-an AI turn forward.
+End/advance the turn, the cleanup and untap selections, Time Vault's skip of
+the turn beginning, the upkeep pay-or-consequence decisions, Island
+Sanctuary's draw choice, and stepping an AI turn forward.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from .game_flow import _advance_ai_turn, _advance_phase, _ai_step
 from .seats import _ai_should_hold, _hold_priority_for_human, _seat_type
 from .turn_steps import (
     _advance_after_upkeep_choices,
+    _begin_turn,
     _can_pay_upkeep_choice,
     _cleanup_discard_requirement,
     _clear_untap_selection,
@@ -184,6 +185,27 @@ def _action_cleanup_select(session, req, seat_type):
             session.current_turn, discard_hand_indices=selected,
         ):
             _start_next_turn(session)
+
+@action_handler("time_vault_skip")
+def _action_time_vault_skip(session, req, seat_type):
+    # Time Vault: skip the turn you are beginning to untap the artifact.
+    if req.seat != session.current_turn or not session.time_vault_pending:
+        raise HTTPException(status_code=400, detail="no Time Vault skip is pending for you")
+    name = req.card_name or (session.time_vault_pending[0] if session.time_vault_pending else None)
+    if not name or not session.game.untap_for_skip(req.seat, name):
+        raise HTTPException(status_code=400, detail="cannot skip to untap that permanent")
+    session.time_vault_resolved_turn = session.game.turn
+    session.time_vault_pending = []
+    _start_next_turn(session)  # the skipped player's turn does not run
+
+@action_handler("time_vault_decline")
+def _action_time_vault_decline(session, req, seat_type):
+    # Decline the skip and take the turn normally.
+    if req.seat != session.current_turn:
+        raise HTTPException(status_code=400, detail="not your turn")
+    session.time_vault_resolved_turn = session.game.turn
+    session.time_vault_pending = []
+    _begin_turn(session, req.seat, defer_untap_selection=True)
 
 @action_handler("untap_select", human_only=HUMAN_ONLY)
 def _action_untap_select(session, req, seat_type):
