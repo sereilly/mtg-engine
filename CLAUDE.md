@@ -325,7 +325,14 @@ first combat.
   where it adds a block that pays (`pays_before_the_blocks`), and a response
   there (`blocks_owed`) is read through that combat too; at instant speed the
   activation chooser weighs a tapped or summoning-sick permanent's abilities
-  without {T}.
+  without {T}. The web AI seat acts only while it holds priority
+  (`game_flow._ai_holds_priority`, CR 117.1a) and gives that answer
+  everywhere but its own main phase with an empty stack; there its doors are
+  the casts and the main-phase chooser (`ai_abilities.choose_activation_action`,
+  asked only at sorcery speed, as the simulator's `_play_activations` asks it),
+  each door once a step (`Session.ai_doors_spent`). Whatever any door puts on
+  the stack goes round the table before it resolves (`_hand_priority_round`,
+  CR 117.3c).
 - **Rehearsal**: `ai_rehearsal.rehearse` deep-copies the game, casts the
   candidate on the copy, resolves on defaults and reads `seat_standing` (life,
   cards, `permanent_worth` through the layers) right after and at the end of
@@ -613,6 +620,13 @@ entries, not editing dispatch**.
 - **Every "put into a hand / a library"** goes through `Game.put_card_into_hand`
   (`mixins/zone_funnels.py`)
   / `put_card_into_library` (CR 903.9b has no single fire site).
+- **Arriving in exile is one transition**: `Game.put_card_into_exile` returns
+  the object the pile now holds — a new, equal one when some exile already
+  holds that object (CR 400.7) — and the caller writes that down, so no exile
+  holds one object twice and every record about an exiled card names one card.
+  The Debug Menu's raw-state paste goes through it too
+  (`tests/engine/test_exile_arrival_seam.py`). A graveyard has no such seam
+  yet (ROADMAP).
 - **An entry that asks waits** (CR 614.12a): `_enter_battlefield` performs the
   entry state with the permanent in no zone (`engine/entry_awaiting.py`;
   `controller_index_of` answers its seat), and at a table that holds for
@@ -735,6 +749,9 @@ entries, not editing dispatch**.
   coloured one spills its excess onto generic (CR 118.7a–d), and one that
   "reduces only the amount of colored mana you pay" (Edgewalker,
   `CostReduction.colored_only`) never spills — `reduce_cost`, in one place.
+  Every price the wire shows is the one the cast charges:
+  `cost_modifiers.cast_mana_charge` (increases, then reductions) is read by
+  the hand badge, the castable highlight and `ways`.
 
 **Targets**
 
@@ -806,6 +823,10 @@ entries, not editing dispatch**.
   (`chosen_targets(item)`) and how they may change (CR 115.7). Every way an
   object comes to have targets announces it once through
   `Game.announce_targets_chosen`; "becomes the target" triggers hang off it.
+  A copy whose targets may be chosen anew is pushed unannounced and announced
+  once they are decided (`Game.announce_copy_put_onto_stack`, CR 707.10c):
+  becomes-the-target, "chooses targets" only where one moved, then put onto
+  the stack.
   **The object a trigger is about is never its target**: a fire site records it
   as `StackItem.about_permanent_id` only for a line that names no target of
   its own (`trigger_utils.bound_event_object`), and the context builder hands
@@ -856,7 +877,14 @@ entries, not editing dispatch**.
   (`resolve_next_object`), and for a resolution held for an answer, after its
   release (`StackItem.held_triggers`); every answer is a window — so a
   sweep's dying creatures are never offered; `resolve_top_of_stack` announces
-  anything still waiting.
+  anything still waiting. **A trigger set off while triggers are being put on
+  the stack is CR 603.3b's next round** (`Game.announcing_trigger_round`): the
+  ordering is asked per seat per round (`StackItem.trigger_round`), and a later
+  round sits above.
+- **A trigger fires only from the zone it functions in** (CR 113.6m):
+  `trigger_utils.matching_triggers` (the battlefield by default) and
+  `battlefield_triggers` never yield an ability stated for another zone
+  (`trigger_functions_from`); the graveyard and exile scans name theirs.
 - `engine/phases/upkeep_effects.py` — `@upkeep_effect(condition, kind)` for the
   pay-or-consequence upkeep triggers; a duplicate pair raises at import.
 
@@ -1050,8 +1078,10 @@ entries, not editing dispatch**.
   stack, or `awaits_an_answer()`); a step that must wait is held
   (`Game.held_step`) and resumes at its window, so its log line and sweeps
   run once, and the web's `turn_steps._leave_step` answers an AI seat's held
-  prompt in the same request. Nothing happens in combat once the game is
-  over (CR 104.1, `resolve_combat_damage`).
+  prompt in the same request. **Once the game is over the engine's stepping
+  goes no further** (CR 104.1): every stepping entry point wears
+  `game_over_guard.goes_no_further`, held to every stepping-named `Game`
+  method by `tests/engine/test_scg_p5_game_over_stepping.py`.
 - `engine/mixins/stack/` — the stack (CR 405), one family of mixins per stage:
   `casting` with `cast_announcement`, `cast_additional_costs`,
   `cast_alternative_costs`, `cast_target_validation` and `pool_payment`
@@ -1185,7 +1215,9 @@ serves every sender, delayed only while the state key stays unchanged — and
 forgets the state key it last sent from when a game ends (a rematch can open
 on the same turn, step and log length). The client does not plan taps: a
 click on a castable card is answered by `web/payment_plan.py`
-(`POST …/payment_plan` previews; `auto_tap` on the action taps).
+(`POST …/payment_plan` previews; `auto_tap` on the action taps), and every
+paying action is previewed before it is sent (`previewPayingAction`), so a
+pool that cannot pay opens the auto-tap dialog without a refused request.
 
 The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`). **A
 client change is not done until it has been clicked in a browser** — a

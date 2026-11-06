@@ -94,6 +94,8 @@ let currentState = null;
 eval(
   "let keepPermanentsSelected = new Set();\n"
   + grab("renderKeepPermanentsModal") + "\n" + grab("applySecretNumberPrompt")
+  // A tile's face: the permanent's art off the board, else its name (SCG P5).
+  + "\n" + grab("candidatePermanentTileFace") + "\n" + grab("candidatePermanentImage")
   + ";globalThis.T={renderKeepPermanentsModal,applySecretNumberPrompt}"
 );
 (async () => {

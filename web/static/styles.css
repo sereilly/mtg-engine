@@ -2125,6 +2125,14 @@ h2.targeting-valid {
   gap: 6px;
   color: var(--ink-soft);
   font-size: 0.88rem;
+  /* A long list scrolls inside the panel, under its title and buttons: a
+     Dimensional Breach return over a twenty-permanent board ran past the
+     bottom of the dock, where the dock's own scroll took the title away with
+     it (SCG Phase 5). The dock is 70% of the stage; this leaves the head and
+     the body their room. The modal dialogs' grids scroll the same way
+     (.library-card-grid, 52vh). */
+  max-height: max(160px, calc(70vh - 240px));
+  overflow-y: auto;
 }
 
 .prompt-choice-row,

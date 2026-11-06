@@ -354,7 +354,9 @@ def test_the_roles_dialog_answers_each_role_in_role_order(set_pool):
     out = run_app_js(
         ["getTriggerTargetInfo", "getModalModeTargetsInfo", "triggerNamesSeveralTargets",
          "severalTargetsPrompt", "candidateOwnerLabel", "renderSeveralTargetsModal",
-         "renderRoleTargetsModal", "candidatePermanentName"],
+         "renderRoleTargetsModal", "candidatePermanentName",
+         # A tile's face: the permanent's art, read off the board (SCG P5).
+         "candidatePermanentTileFace", "candidatePermanentImage"],
         _ROLES_BODY,
         {"state": state, "mine": bears.permanent_id, "theirs": giant.permanent_id},
         prelude=_DOM + (
