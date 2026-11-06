@@ -533,9 +533,6 @@ ACTIVATED_LABELS: dict[str, str] = {
     # fallback would label it `activated_damage`, which is the one thing this
     # ability never does.
     "redirect_source_damage_to_target_until_eot": "activated_prevention",
-    # Goblin Psychopath's losing flip sends the same creature's next combat
-    # damage to its own controller — the same record with a different taker.
-    "redirect_source_damage_to_you_until_eot": "activated_prevention",
     # Pentagram of the Ages, and with a CR 615.5 rider as payload Cho-Arrim
     # Alchemist's life (Reverse Damage's sentence, one activation over) and
     # Bone Mask's exile — one bucket, because what each ability is for is the
