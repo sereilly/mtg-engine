@@ -541,7 +541,7 @@ def _mana_value_of(card) -> int:
     Off the printed cost, which is the only reading available: the object being
     asked about has left the battlefield, so there is no permanent to put through
     the layer system and no continuous effect that could have changed the number
-    anyway (CR 202.3b — mana value is computed from the mana cost as printed).
+    anyway (CR 202.3 — mana value is computed from the mana cost as printed).
     """
     return int(card.cmc or 0)
 

@@ -662,7 +662,7 @@ def evaluate_state_condition(
             # "Counter target spell **if its mana value is 2 or less**."
             # (Prohibit.) CR 608.2c: asked while the instruction is followed,
             # of the spell the counter beside it will act on — the reader that
-            # effect uses, so the two mean one object. CR 202.3b: on the stack
+            # effect uses, so the two mean one object. CR 202.3e: on the stack
             # an X in the cost is the announced value, which is
             # ``stack_object_mana_value``'s whole difference from a card's
             # printed number. A target that has left the stack has no mana

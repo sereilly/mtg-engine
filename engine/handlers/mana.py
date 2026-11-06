@@ -618,7 +618,7 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         for permanent_id in recorded:
             permanent = game.permanent_by_id(permanent_id)
             if permanent is not None:
-                # CR 202.3b — mana value is computed from the mana cost, and
+                # CR 202.3 — mana value is computed from the mana cost, and
                 # `effective_card` is what the permanent's cost *is* after
                 # layer 1 (a copy carries the copied cost, not its own).
                 count += max(0, int(permanent.effective_card.cmc or 0))

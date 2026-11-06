@@ -644,10 +644,10 @@ def spec_names_the_stack(spec: dict | None) -> bool:
 
 
 def stack_object_mana_value(item) -> int:
-    """The mana value of a spell on the stack (CR 202.3, CR 202.3b).
+    """The mana value of a spell on the stack (CR 202.3, CR 202.3e).
 
     The printed cost, **plus** whatever X was announced for each ``{X}`` in it:
-    CR 202.3b says that while a spell is on the stack, an X in its mana cost is
+    CR 202.3e says that while a spell is on the stack, an X in its mana cost is
     the chosen value, so Fireball cast for X=3 has mana value 4 and not 1. That
     is the whole difference from ``handlers/returns._mana_value_of``, which asks
     about a card in a graveyard — a zone where CR 107.3g pins X at 0.

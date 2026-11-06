@@ -398,7 +398,7 @@ class StackTargetsMixin:
                 ):
                     continue
             # "…spell **with mana value 3 or less**" (Liquify). The spell's
-            # mana value *as it is on the stack* (CR 202.3b: an X in its cost
+            # mana value *as it is on the stack* (CR 202.3e: an X in its cost
             # counts at the announced value), so a spell whose X makes it
             # bigger is not offered and, re-asked here at CR 608.2b, is not
             # countered.

@@ -88,7 +88,7 @@ def _twice_target_spell_mana_value(
 
     The mana value is read through ``targeting.stack_object_mana_value``, so an
     {X} spell on the stack is priced at what its controller announced
-    (CR 202.3b) rather than at the 0 its printed cost carries.
+    (CR 202.3e) rather than at the 0 its printed cost carries.
     """
     if target is None:
         return None

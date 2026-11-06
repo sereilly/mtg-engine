@@ -850,7 +850,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # chosen (None, or 0 auto-inferred from an empty pool), assume the caster
         # chose the matching value.
         if instruction.payload.get("mv_equals_x") and context.x_value:
-            # CR 202.3b: while a spell is on the stack, an X in its mana cost is
+            # CR 202.3e: while a spell is on the stack, an X in its mana cost is
             # the value its controller announced — so a Fireball cast for X=3
             # has mana value 4, not the 1 its printed cost carries. Read through
             # the one function that knows that (``targeting``), which is also
@@ -1012,7 +1012,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # scratchpad the moment it is known: the next sentence creates a
         # delayed ability that will not fire until a later phase, by which time
         # the card is in a graveyard and the stack item is gone (CR 608.2h).
-        # CR 202.3b again: Mana Drain on a Fireball cast for X=3 makes {C}{C}{C}{C}.
+        # CR 202.3e again: Mana Drain on a Fireball cast for X=3 makes {C}{C}{C}{C}.
         from ..targeting import stack_object_mana_value
 
         context.results["countered_spell_mana_value"] = stack_object_mana_value(countered)

@@ -357,7 +357,7 @@ def _lower_counter_spell(
             # A printed bound, in the ``{op, value}`` form every filter payload
             # carries it in. The picker offers only a spell inside it and
             # CR 608.2b re-asks the same enumeration at resolution, both
-            # against the spell's mana value *on the stack* (CR 202.3b: an X
+            # against the spell's mana value *on the stack* (CR 202.3e: an X
             # in its cost is the announced value, so a Fireball for 3 is a
             # four), through ``targeting.stack_object_mana_value``.
             payload["mana_value"] = {
