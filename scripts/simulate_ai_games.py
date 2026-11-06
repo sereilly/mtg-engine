@@ -160,6 +160,14 @@ def main() -> int:
             f"{sum(report.activations_from_graveyard.values())} "
             f"({len(report.activations_from_graveyard)} distinct cards)"
         )
+    # CR 113.6j at instant speed: a cycle whose trigger paid then (Decree of
+    # Silence in response to a spell). None before the kg4 round.
+    if report.activations_from_hand_at_instant_speed:
+        print(
+            "Abilities activated from a hand at instant speed: "
+            f"{sum(report.activations_from_hand_at_instant_speed.values())} "
+            f"({len(report.activations_from_hand_at_instant_speed)} distinct cards)"
+        )
 
     # CR 116.2c-e: special actions a seat took — a creature bought a turn off
     # Volrath's Curse or Lost in Thought. Until JUD's wave 2 no AI path took

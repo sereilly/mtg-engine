@@ -262,6 +262,14 @@ class SimulationReport:
     #: the priority windows (`_answer_priority`). A pool printing one that
     #: reads empty here is that coming back.
     activations_from_graveyard: Counter[str] = field(default_factory=Counter)
+    #: Abilities activated from a card **in its owner's hand** at instant
+    #: speed (CR 113.6j — a cycle whose trigger pays then: Decree of Silence
+    #: in response to a spell), by the card. **Empty in every run before the
+    #: kg4 round**: the hand was asked in its owner's main phase alone, so a
+    #: cycle's "you may counter target spell" was spent on an empty stack.
+    #: Counted by `_answer_priority`; the main phase's cycles are its own log
+    #: lines.
+    activations_from_hand_at_instant_speed: Counter[str] = field(default_factory=Counter)
 
     @property
     def ok(self) -> bool:
@@ -1007,6 +1015,8 @@ def _answer_priority(
         return _record_activation(game, seat, act, report, game_index, turn)
     if act.kind == "graveyard":
         return _record_graveyard_activation(game, seat, act, report, game_index, turn)
+    if act.kind == "hand":
+        return _record_hand_activation(game, seat, act, report, game_index, turn)
     card, action, result = act.card, act.action, act.result
     when = _when_at_priority(game, act.answering, act.in_combat)
     modes_named = _modes_named(card, action)
@@ -1056,6 +1066,28 @@ def _record_activation(
         ] += 1
         return False
     report.activations_at_instant_speed[act.window] += 1
+    return True
+
+
+def _record_hand_activation(
+    game: Game, seat: int, act: PriorityAct, report: SimulationReport,
+    game_index: int, turn: int,
+) -> bool:
+    """Record an ability of a card in *seat*'s hand `act_at_priority`
+    activated: True when it went on the stack."""
+    action, result = act.action, act.result
+    report.log_lines.append(
+        f"G{game_index} T{turn} {game.players[seat].name} "
+        f"activate {action.card_name} from hand -> {result.details} "
+        f"[{_when_at_priority(game, act.answering, act.in_combat)}]"
+    )
+    if not result.supported:
+        report.refused_instant_activations[
+            f"{action.card_name} (from hand): {result.details}"
+        ] += 1
+        return False
+    report.activations_at_instant_speed[act.window] += 1
+    report.activations_from_hand_at_instant_speed[action.card_name] += 1
     return True
 
 
