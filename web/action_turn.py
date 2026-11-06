@@ -13,9 +13,9 @@ from fastapi import HTTPException
 
 from .action_helpers import answered_permanent_id
 from .action_registry import HUMAN_ONLY, action_handler
-from .combat_prompts import _ai_declare_attackers, _banding_assignment_pending
-from .game_flow import _advance_ai_turn, _advance_phase, _ai_step
-from .seats import _ai_should_hold, _hold_priority_for_human, _seat_type
+from .combat_prompts import _banding_assignment_pending
+from .game_flow import _advance_ai_turn, _advance_phase, _ai_step, _hold_at_flagged_step
+from .seats import _seat_type
 from .turn_steps import (
     _advance_after_upkeep_choices,
     _begin_turn,
@@ -487,14 +487,11 @@ def _action_ai_step(session, req, seat_type):
     stepped_turn = session.current_turn
     if _ai_step(session):
         # The AI finished acting in the current step. Hold here if the human
-        # flagged this (main) step; otherwise leave it and advance the turn,
-        # pausing at any later step they flagged.
-        step = session.game.current_step
-        if _ai_should_hold(session, step):
-            if step == "declare_attackers":
-                _ai_declare_attackers(session)
-            _hold_priority_for_human(session)
-        else:
-            _advance_phase(session)
-            if session.current_turn == stepped_turn:
-                _advance_ai_turn(session)
+        # flagged this step (the AI's attack declaration and its answer to
+        # priority first; not while a declaration is owed); otherwise leave
+        # it and advance the turn, pausing at any later step they flagged.
+        if _hold_at_flagged_step(session):
+            return
+        _advance_phase(session)
+        if session.current_turn == stepped_turn:
+            _advance_ai_turn(session)
