@@ -247,7 +247,7 @@ def test_cuombajj_witches_deals_both_halves_after_the_opponent_s_pick_in_apnap_o
     assert _asked(game) == [0, 1], game.log[-10:]
 
 
-@pytest.mark.cr("608.2f", "120.8")
+@pytest.mark.cr("608.2f")
 def test_nobody_asked_disorder_deals_what_it_prints():
     """The totals are the printed ones. Disorder's ruling (2004-10-04):
     "Players take 0 or 2 damage. Disorder does not do 2 damage per creature
