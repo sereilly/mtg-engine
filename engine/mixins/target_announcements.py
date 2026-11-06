@@ -843,6 +843,7 @@ class TargetAnnouncementsMixin:
         self, item, *, chooser: int | None = None,
         silently_for: str | None = None,
         newly_targeted: bool = False,
+        at_random: bool = False,
     ) -> int:
         """"Whenever a player chooses one or more targets" (Psychic Battle) --
         the one announcement of CR 601.2c's choice, for every way a stack
@@ -895,6 +896,13 @@ class TargetAnnouncementsMixin:
         Ghost it should have made its controller sacrifice. Same shape as the
         defect that method's docstring records, one layer up: one event,
         several ways in, the fire site wired into one of them.
+
+        *at_random* is a target **no player chose**: "reselect its target at
+        random" (Grip of Chaos). CR 115.7 is about effects that let a *player*
+        change or choose targets, and Psychic Battle listens for "a player
+        chooses one or more targets" — a draw the effect makes is neither. The
+        new target still "becomes the target" (CR 603.2, *newly_targeted*);
+        only the choice is not announced.
         """
         from ..events import emit
         from ..stack_targets import TARGETS_CHOSEN_ITEM, TARGETS_CHANGED_SILENTLY_FOR, has_targets
@@ -903,6 +911,8 @@ class TargetAnnouncementsMixin:
             return 0
         if newly_targeted:
             self._announce_targeting(item)
+        if at_random:
+            return 0
         # ``has_targets`` is also what answers for a permanent spell that is
         # not an Aura: it chose none (CR 115.1), though it carries the one its
         # entry trigger will choose.
