@@ -24,6 +24,7 @@ from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
 from ...modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
 from ...trigger_order import offer_trigger_order, restore_apnap
+from ...trigger_utils import battlefield_triggers
 
 
 class TriggeredAbilitiesMixin:
@@ -514,7 +515,7 @@ class TriggeredAbilitiesMixin:
         )
         announcement_spent = False
         triggered: list[dict] = []
-        for trig in program.triggered_abilities:
+        for trig in battlefield_triggers(program.triggered_abilities):
             if (
                 trig.condition.kind not in ENTRY_TRIGGER_CONDITIONS
                 or not trig.supported

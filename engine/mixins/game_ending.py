@@ -17,7 +17,7 @@ from ..equipment import is_equipment, unattach_illegal_equipment
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..pt import toughness_has_been_set
-from ..trigger_utils import matching_triggers
+from ..trigger_utils import battlefield_triggers, matching_triggers
 from ..target_immunity import cannot_be_enchanted
 from ..tokens import is_token_card
 
@@ -1257,9 +1257,9 @@ class GameEndingMixin:
             emptied = permanent.metadata.get(EMPTIED_KINDS_MARK)
             if not emptied:
                 continue
-            for trig in compile_card_oracle(
+            for trig in battlefield_triggers(compile_card_oracle(
                 permanent.effective_card
-            ).triggered_abilities:
+            ).triggered_abilities):
                 if trig.condition.kind != "last_counter_removed":
                     continue
                 kind = str(trig.condition.payload.get("counter_kind", ""))
@@ -1303,9 +1303,9 @@ class GameEndingMixin:
         # it by nothing, or a permanent that entered empty — and CR 603.8 says
         # the state is what fires it either way.
         for permanent in list(self.all_permanents()):
-            for trig in compile_card_oracle(
+            for trig in battlefield_triggers(compile_card_oracle(
                 permanent.effective_card
-            ).triggered_abilities:
+            ).triggered_abilities):
                 if trig.condition.kind != "source_has_no_counters":
                     continue
                 kind = str(trig.condition.payload.get("counter_kind", ""))
@@ -1335,9 +1335,9 @@ class GameEndingMixin:
                 any_changed = True
 
         for permanent in list(self.all_permanents()):
-            for trig in compile_card_oracle(
+            for trig in battlefield_triggers(compile_card_oracle(
                 permanent.effective_card
-            ).triggered_abilities:
+            ).triggered_abilities):
                 if trig.condition.kind != "counters_reach_threshold":
                     continue
                 kind = str(trig.condition.payload.get("counter_kind", ""))
@@ -1399,9 +1399,9 @@ class GameEndingMixin:
             observer = self.controller_index_of(permanent)
             if observer is None:
                 continue
-            for trig in compile_card_oracle(
+            for trig in battlefield_triggers(compile_card_oracle(
                 permanent.effective_card
-            ).triggered_abilities:
+            ).triggered_abilities):
                 kind = trig.condition.kind
                 if kind == "controls_matching_permanent":
                     # The sacrifice shape is the inline sweep's above; a second

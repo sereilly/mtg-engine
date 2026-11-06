@@ -219,7 +219,9 @@ def graveyard_trigger_events(
         if players is not None and not any(p is player for p in players):
             continue
         for card in list(player.graveyard):
-            for trig in matching_triggers(card, condition_kinds={kind}):
+            for trig in matching_triggers(
+                card, condition_kinds={kind}, zone="graveyard",
+            ):
                 if not _functions_from(trig, "graveyard"):
                     continue
                 if event is not None and not graveyard_trigger_applies(
@@ -281,7 +283,9 @@ def cast_trigger_events(game: Game, event: Event) -> list[dict]:
             "ability_text": trig.source_line,
             "trigger_context": dict(event.payload) or None,
         }
-        for trig in matching_triggers(card, condition_kinds={event.kind})
+        # The object being cast, on the stack (CR 603.6d): a zone no stamp
+        # names, so nothing is asked of one.
+        for trig in matching_triggers(card, condition_kinds={event.kind}, zone=None)
         if trig.instruction is not None
     ]
 
@@ -354,7 +358,9 @@ def moved_card_trigger_events(game: Game, event: Event) -> list[dict]:
             "ability_text": trig.source_line,
             "trigger_context": dict(event.payload) or None,
         }
-        for trig in matching_triggers(card, condition_kinds=conditions)
+        # About the card that moved, from wherever it landed (CR 113.6k): the
+        # condition is the claim, so nothing is asked of a stamp.
+        for trig in matching_triggers(card, condition_kinds=conditions, zone=None)
         if trig.instruction is not None
     ]
 
