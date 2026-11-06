@@ -172,3 +172,23 @@ def test_a_face_down_permanent_nothing_names_is_refused_whole():
     assert refused.status_code == 400
     assert "hidden_card" in refused.json()["detail"]
     assert game.players[0].battlefield == [morph] and game.players[0].life != 3
+
+
+def test_a_pasted_aura_is_attached_as_play_attaches_it():
+    """The paste's ``attached_to_seat`` / ``attached_to_index`` reconnect an
+    Aura through ``attach_aura`` — both directions — so its grant applies: a
+    pasted Rancor on a Grizzly Bears is +2/+0 and trample at once. It wrote the
+    Aura's own ``attached_to`` alone, and the Bears stayed a vanilla 2/2."""
+    sid, game = _session()
+    state = _state(sid, 0)
+    state["players"][0]["battlefield"] = [
+        {"name": "Grizzly Bears"},
+        {"name": "Rancor", "attached_to_seat": 0, "attached_to_index": 0},
+    ]
+    pasted = _paste(sid, state, 0)
+    assert pasted.status_code == 200, pasted.text
+    bears = pasted.json()["players"][0]["battlefield"][0]
+    assert (bears["name"], bears["power"], bears["toughness"]) == ("Grizzly Bears", 4, 2)
+    assert "Trample" in bears["keywords"]
+    rancor = pasted.json()["players"][0]["battlefield"][1]
+    assert rancor["attached_to_id"] == bears["id"]

@@ -11,12 +11,16 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
+from engine.aura_attachment import attach_aura
+from engine.exiled_records import distinct_exile_object
+from engine.face_down import face_down_card, hidden_card_of
+from engine.linked_exile import keep_face_down_after_departure
 from engine.models import Permanent
 
 from .session_store import Session
 
 from .runtime import CARD_BY_NAME
-from .serialization import _printed_stat
+from .serialization import _printed_stat, exile_hidden_flags
 
 
 # Debug actions that stay available while the game is waiting on a pending
@@ -126,8 +130,6 @@ def _pasted_exile(game, seat: int, entries, viewer_seat: int | None) -> list[tup
     leaves an exiled card where it was leaves what is known about it too —
     which is what the paste promises for anything its text cannot describe.
     """
-    from .serialization import exile_hidden_flags
-
     player = game.players[seat]
     flags = exile_hidden_flags(game, player, viewer_seat, seat)
     hidden = [card for card, flag in zip(player.exile, flags) if flag]
@@ -173,8 +175,6 @@ def _restore_exiles(game, plans: list[list[tuple]]) -> None:
     face-down one after it as the copy, and the record would hide the wrong
     card.
     """
-    from engine.exiled_records import distinct_exile_object
-
     pending = {id(card) for plan in plans for card, kept in plan if kept}
     for seat, plan in enumerate(plans):
         for card, kept in plan:
@@ -196,8 +196,6 @@ def _card_for_raw_permanent(game, raw: dict):
     "Face-down creature" is no card, so a paste of any board holding a morph
     was refused whole, as an unknown card.
     """
-    from engine.face_down import face_down_card, hidden_card_of
-
     if not raw.get("face_down"):
         return _lookup_card_for_raw_state(raw["name"])
     named = raw.get("hidden_card")
@@ -254,8 +252,6 @@ def _apply_raw_state(session: Session, raw: dict, viewer_seat: int | None = None
     HTTPException(400) before the live game is mutated, so a bad paste never
     half-applies.
     """
-    from engine.linked_exile import keep_face_down_after_departure
-
     game = session.game
     players_raw = raw.get("players")
     if not isinstance(players_raw, list) or len(players_raw) != len(game.players):
@@ -313,7 +309,12 @@ def _apply_raw_state(session: Session, raw: dict, viewer_seat: int | None = None
     # would have made them. Built from names, both would be the catalog's one.
     _restore_exiles(game, [built["exile"] for built in rebuilt])
 
-    # Second pass: reconnect aura attachments now that every permanent exists.
+    # Second pass: reconnect aura attachments now that every permanent exists
+    # — through ``attach_aura``, which records both directions and the
+    # attachment's timestamp (CR 613.7e). This wrote the Aura's own
+    # ``attached_to`` alone, and the host's ``attached_auras`` is the list the
+    # grants read, so a pasted Rancor was attached to nothing that counted:
+    # its Grizzly Bears stayed a 2/2 without trample.
     for seat, player in enumerate(game.players):
         for perm, p_raw in zip(player.battlefield, rebuilt[seat]["battlefield_raw"]):
             target_seat = p_raw.get("attached_to_seat")
@@ -322,7 +323,8 @@ def _apply_raw_state(session: Session, raw: dict, viewer_seat: int | None = None
                 continue
             targets = game.players[target_seat].battlefield
             if 0 <= target_index < len(targets):
-                perm.metadata["attached_to"] = targets[target_index]
+                attach_aura(perm, targets[target_index])
+    game._recompute_continuous_effects()
 
     # Turn / phase / priority tracking.
     if isinstance(raw.get("turn_number"), int):

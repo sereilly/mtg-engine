@@ -772,7 +772,17 @@ function renderCombatOverlay(state = currentState) {
   }
 }
 
+// Whether a permanent has *keyword* (lower case) **now**: the server's
+// `keywords`, which are the layers' answer (web/serialization's
+// `_effective_keywords` — an Aura's grant in, a layer-6 removal out). This
+// read the printed text, so the combat damage dialog and the damage effects
+// gave a Grizzly Bears under Rancor no trample and a creature that had lost
+// its trample still had it. The text is read only for a bare card the server
+// sent no keyword list with.
 function cardHasKeyword(card, keyword) {
+  if (Array.isArray(card?.keywords)) {
+    return card.keywords.some((word) => String(word).toLowerCase() === keyword);
+  }
   return String(card?.oracle_text || "").toLowerCase().includes(keyword);
 }
 
