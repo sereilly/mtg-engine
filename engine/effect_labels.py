@@ -1273,8 +1273,6 @@ TRIGGERED_LABELS: dict[str, str] = {
     # prefix is read.
     "move_counter_from_self": "triggered_counter",
     "move_all_counters_to_self": "triggered_counter",
-    # Forgotten Ancient's upkeep move of any number onto other creatures.
-    "distribute_counters_from_self": "triggered_counter",
     "remove_counter_from_self": "triggered_counter",
     "remove_all_counters_from_self": "triggered_counter",
     "remove_counter_from_attached": "triggered_counter",
