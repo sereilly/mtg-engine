@@ -1412,6 +1412,29 @@ def test_w2g5_the_ai_turns_skirk_volcanist_face_up_where_its_damage_kills(set_po
     assert game.is_on_battlefield(volcanist) and volcanist.card.name == "Skirk Volcanist"
 
 
+def test_w2g5_skirk_volcanists_targets_are_targets_when_it_resolves(set_pool):
+    """The probe saw "target" ignored in "among one, two, or three target
+    creatures": it is the divided description's own word — each creature
+    named is a target, re-checked as the trigger resolves (CR 608.2b). A
+    person names the Bears for 2 and the Giant for 1; the Bears leaves first,
+    so its 2 is dealt to nobody and the Giant takes its 1."""
+    game, volcanist, placed = _w2g5_volcanist_table(set_pool, ("Hill Giant", "Grizzly Bears"))
+    game.interactive_seats = {0}
+    bears, giant = placed["Grizzly Bears"], placed["Hill Giant"]
+
+    assert _w2g5_take_special_action(game, 0, volcanist, "turn_face_up") is None
+    (prompt,) = game.pending_choices_of("trigger_target", 0)
+    assert prompt.data.get("division_total") == 3 and prompt.data.get("max_targets") == 3
+    assert game.confirm_trigger_target(
+        0, permanent_ids=[bears.permanent_id, giant.permanent_id], amounts=[2, 1],
+    )
+    game.remove_from_battlefield(bears)
+    _w2g5_resolve_stack(game)
+
+    assert giant.damage_marked == 1
+    assert not any("damage to Grizzly Bears" in line for line in game.log)
+
+
 def test_w2g5_the_ai_leaves_skirk_volcanist_down_where_nothing_dies(set_pool):
     """The other half of the weighing: a lone Serra Angel survives 3, so two
     Mountains buy nothing and the face-down creature stays as it is."""
