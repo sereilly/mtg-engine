@@ -295,7 +295,23 @@ at its fixed part with `SpecialActionOffer.x_symbols`; the taker announces X
 just before paying (CR 107.3d) as the seam's `x_value`, the listing reports
 `x_symbols` and `max_x`, and `turn_face_up(x_value=)` hands X to the face-up
 triggers (CR 702.37f) — an effect that turns it up chose no X, so theirs is
-0. Effects act on the
+0. A morph cost that is not mana (Scourge: "Morph—Pay 5 life", "—Sacrifice
+two Mountains", "—Return a Bird you control to its owner's hand", "—Discard a
+Zombie card") is read by `face_down.morph_price` — mana first, the rest through
+`alternative_costs._read_cost_clauses`, flashback's arrangement — and offered
+as `SpecialActionOffer.clauses`, an `AlternativeCost`: the seam gates it with
+`Game._unpayable_alternative_cost(refused_as=)` and pays it with
+`Game._pay_alternative_cost(paying_for=)`, the payers named on
+`cost_permanent_ids` / `cost_hand_index` and listed as `cost_permanents` /
+`cost_hand_choices`. The cost is read with the permanent's text changes
+applied (Putrid Raptor's ruling). "All morph costs cost {2} more" (Exiled
+Doomsayer) is a `CostModifier` with `applies_to="turn_face_up"`, asked by
+`_morph_offer` through `cost_modifiers.keyword_cost_modifiers` — never
+under `"morph"`, the {3} face-down cast's keyword. Turning face up also
+announces `permanent_turned_face_up` on the event bus ("Whenever a permanent
+is turned face up", and an Aura's "When enchanted creature is turned face
+up", narrowed by `event_filters._turned_face_up_filter`), in the same CR
+603.3b window as the permanent's own `turned_face_up` triggers. Effects act on the
 same two seams (`engine/handlers/face_down.py`): "turn … face down / face
 up" is the `TurnFace` node (`turn_target_face_down`, `turn_target_face_up`,
 `turn_self_face_down`; "any number of target …", Weaver of Lies, is the

@@ -58,7 +58,10 @@ class CostModifier:
                   "buyback" for CR 702.27a's optional additional cost. The
                   third is not a narrower "cast": it reduces one *printed
                   offer* and never the spell's own mana cost, so a reader of
-                  either of the first two must not see it and vice versa
+                  either of the first two must not see it and vice versa;
+                  a keyword's cost ("flashback"), and "turn_face_up" for the
+                  price of CR 702.37e's special action ("All morph costs
+                  cost {2} more", Exiled Doomsayer)
     reduces    -- whether this takes mana off rather than adding it
     colour     -- mana symbol the affected object must have, or None for any;
                   ``MULTICOLORED`` where the sentence prints that word in the

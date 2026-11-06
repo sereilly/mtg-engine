@@ -280,6 +280,8 @@ def test_w1g5_exiled_doomsayer_taxes_a_mana_morph_cost_two(set_pool):
     game, _p1, _p2 = _w1g5_game([egotist, *_w1g5_lands("Island", 2)], [doomsayer])
     assert "can't pay" in _w1g5_refusal(game, 0, egotist, "turn_face_up")
     game, _p1, _p2 = _w1g5_game([egotist, *_w1g5_lands("Island", 3)], [doomsayer])
+    (offer,) = _w1g5_offers(game, 0)
+    assert offer["morph_cost"] == "{U}" and offer["morph_cost_modifier"] == 2
     assert _w1g5_take(game, 0, egotist, "turn_face_up") is None
     assert all(p.tapped for p in game.controlled_by(0) if p.card.name == "Island")
 

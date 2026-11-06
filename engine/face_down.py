@@ -774,9 +774,21 @@ def _take_morph(
 def _morph_entry_extras(game: "Game", permanent: "Permanent") -> dict:
     """What the client needs to show the offer: the price (CR 702.37e shows
     it to all players as the action is taken; before then the offer is the
-    controller's alone, which is who this entry is listed for)."""
+    controller's alone, which is who this entry is listed for) — and, where
+    the board changes it, by how much generic mana (``morph_cost_modifier``:
+    +2 under an Exiled Doomsayer), so the offer shows what the seam charges."""
+    from .cost_modifiers import keyword_cost_modifiers
+
     printed = face_up_morph_cost(permanent)
-    return {"morph_cost": printed} if printed else {}
+    if not printed:
+        return {}
+    extras: dict = {"morph_cost": printed}
+    controller = game.controller_index_of(permanent)
+    if controller is not None:
+        more, less, _by = keyword_cost_modifiers(game, controller, TURN_FACE_UP)
+        if more or less:
+            extras["morph_cost_modifier"] = more - less
+    return extras
 
 
 def _register() -> None:

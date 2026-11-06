@@ -334,12 +334,14 @@ class SpecialActionOffer:
     to the player it is punishing.
 
     ``mana``, ``sacrifice`` and ``exile_from_graveyard`` are the three prices
-    this pool prints — a mana cost (CR 116.2c, the Licids), one permanent of
-    the taker's choice described by a subject filter (CR 116.2d, Volrath's
-    Curse), and a number of cards of the taker's choice out of their own
-    graveyard (CR 116.2d, Lost in Thought). All are paid by the seam below
-    rather than by the offer's own ``take``, because a cost is a cost wherever
-    it appears: paying it is not part of what the action *does*.
+    the CR 116.2c/d offers print — a mana cost (CR 116.2c, the Licids), one
+    permanent of the taker's choice described by a subject filter (CR 116.2d,
+    Volrath's Curse), and a number of cards of the taker's choice out of their
+    own graveyard (CR 116.2d, Lost in Thought) — and ``clauses`` is a printed
+    cost's every other clause (a morph cost, CR 702.37e). All are paid by the
+    seam below rather than by the offer's own ``take``, because a cost is a
+    cost wherever it appears: paying it is not part of what the action
+    *does*.
 
     ``x_symbols`` is how many ``{X}`` the mana price prints beyond ``mana``
     (Legions' "Morph {X}{X}{R}", Warbreak Trumpeter). CR 107.3d: "the value

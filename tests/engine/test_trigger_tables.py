@@ -364,6 +364,14 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # ONS W1G1: CR 702.37e / 708.8's event, Legions' and Scourge's line
     # (no Onslaught card prints it). Announced by ``face_down.turn_face_up``.
     "turned_face_up": "when this creature is turned face up",
+    # SCG W1G5: the same event watched from the board ("whenever a permanent
+    # is turned face up", Aphetto Runecaster) and from an Aura on the
+    # permanent turned up (Fatal Mutation) — the latter in the "when" table,
+    # above the self row whose `.+?` once read it as the Aura's own turn.
+    "permanent_turned_face_up": (
+        "whenever a permanent is turned face up",
+        "when enchanted creature is turned face up",
+    ),
     "leaves_battlefield": "when this creature leaves the battlefield",
     # Ertai's Familiar. CR 603.1's one ability with two trigger events, and the
     # example is a *shadowing* check as much as a coverage one: the generic

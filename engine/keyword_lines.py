@@ -182,9 +182,11 @@ def _qualified_keyword_part(part: str) -> bool:
     # Morph carries a cost as well (CR 702.37a), and is admitted the same way
     # once more: by the reader that charges it (`engine/face_down.py`), which
     # is also the reader the CR 702.37e special action and the {3}
-    # alternative cost are built from. A non-mana morph cost (Legions'
-    # "Morph—Reveal a white card") or an {X} keeps the line refused, naming
-    # it, rather than shipping a creature that turns face up for nothing.
+    # alternative cost are built from. A morph cost that is not mana is
+    # admitted only when every clause of it reads ("Morph—Pay 5 life",
+    # Scourge, through ``face_down.morph_price``); one that does not ("Morph—
+    # Reveal a white card") keeps the line refused, naming it, rather than
+    # shipping a creature that turns face up for nothing.
     from .face_down import morph_cost_text
 
     if morph_cost_text(part) is not None:
