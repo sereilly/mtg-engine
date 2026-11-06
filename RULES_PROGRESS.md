@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**431 / 641 tracked rules covered (67%)** — 3353 tests, 0 unannotated.
+**431 / 641 tracked rules covered (67%)** — 3355 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -683,7 +683,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(60 tests, subrules ab)*
 - [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(3 tests)*
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(50 tests, subrules acde)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(52 tests, subrules acde)*
 
 ### 603. Handling Triggered Abilities
 
@@ -712,7 +712,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 605. Mana Abilities
 
-- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(32 tests, subrules ab)*
+- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(33 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
 - [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(31 tests, subrules abc)*
 - [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(7 tests, subrules a)*

@@ -53,7 +53,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | LGN | 145 | 235 | 71.9% | 71.9% | 47.7% | 108 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| SCG *(measured)* | 143 | 262 | 75.2% | 71.8% | 45.8% | 99 |
+| SCG *(measured)* | 143 | 262 | 76.3% | 73.7% | 47.7% | 104 |
 | **All (shipped)** | **8507** | **12662** | **89.9%** | **89.4%** | **62.1%** | **6671** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -66,7 +66,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 827 | 433 | expected a subject |  |
+| 825 | 431 | expected a subject |  |
 | 181 | 94 | unrecognized effect verb |  |
 | 135 | 71 | unconsumed text |  |
 | 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -4571,6 +4571,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, if this card is in your graveyard, you may discard a card. If you do, return this card to your hand.`
 - **Gilded Drake**
   - `When this creature enters, exchange control of this creature and up to one target creature an opponent controls. If you don't or can't make an exchange, sacrifice this creature. This ability still resolves if its target becomes illegal.`
+- **Gilded Light**
+  - `You gain shroud until end of turn. (You can't be the target of spells or abilities.)`
 - **Glacial Chasm**
   - `When this land enters, sacrifice a land.`
 - **Glacial Crevasses**
@@ -4926,6 +4928,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Grip of Amnesia**
   - `Counter target spell unless its controller exiles all cards from their graveyard.`
   - `Draw a card.`
+- **Grip of Chaos**
+  - `Whenever a spell or ability is put onto the stack, if it has a single target, reselect its target at random. (Select from among all legal targets.)`
 - **Grizzled Wolverine**
   - `{R}: This creature gets +2/+0 until end of turn. Activate only during the declare blockers step, only if at least one creature is blocking this creature, and only once each turn.`
 - **Grizzly Fate**
@@ -6596,6 +6600,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `You may have this creature assign its combat damage as though it weren't blocked.`
 - **Lonely Sandbar**
   - `{T}: Add {U}.`
+- **Long-Term Plans**
+  - `Search your library for a card, then shuffle and put that card third from the top.`
 - **Longhorn Firebeast**
   - `When this creature enters, any opponent may have it deal 5 damage to them. If a player does, sacrifice this creature.`
 - **Looming Shade**
@@ -11371,6 +11377,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Temple of Triumph**
   - `When this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
   - `{T}: Add {R} or {W}.`
+- **Temple of the False God**
+  - `{T}: Add {C}{C}. Activate only if you control five or more lands.`
 - **Temporal Adept**
   - `{U}{U}{U}, {T}: Return target permanent to its owner's hand.`
   - `{U}{U}{U}, {T}: Return target permanent to its owner's hand.`
@@ -13044,6 +13052,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Target creature gets +1/+1 until end of turn.`
 - **Xanthic Statue**
   - `{5}: Until end of turn, this artifact becomes an 8/8 Golem artifact creature with trample.`
+- **Xantid Swarm**
+  - `Whenever this creature attacks, defending player can't cast spells this turn.`
 - **Xenic Poltergeist**
   - `{T}: Until your next upkeep, target noncreature artifact becomes an artifact creature with power and toughness each equal to its mana value.`
   - `{T}: Until your next upkeep, target noncreature artifact becomes an artifact creature with power and toughness each equal to its mana value.`
