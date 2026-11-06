@@ -25,6 +25,8 @@ chosen target is a spell.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 from ..continuous import next_timestamp
 from ..game_types import as_target_ids, target_ids
 from ..events import emit
@@ -36,7 +38,7 @@ from ..trigger_order import is_triggered_object
 class TargetAnnouncementsMixin:
     def _stack_push(
         self, item=None, *, targets_already_chosen: bool = False,
-        announced_at_cast: bool = False,
+        announced_at_cast: bool = False, announce: bool = True,
     ):
         """Put *item* on the stack and finish announcing it, then return it.
 
@@ -76,6 +78,17 @@ class TargetAnnouncementsMixin:
         of a spell or ability, sacrifice this Aura") sacrificed itself to its
         own "tap enchanted creature", whose stack object carries the enchanted
         creature it was cast on.
+
+        *announce* False is a **copy** whose controller has not yet decided
+        what its targets will be (CR 707.10c: "Once the player has decided
+        what the copy's targets will be, the copy is put onto the stack with
+        those targets"). Nothing is announced for it here — not "becomes the
+        target", not "is put onto the stack" — and it is marked
+        ``announcement_owed`` until the decision is settled
+        (:meth:`announce_copy_put_onto_stack`). Announced at the push, a
+        storm copy of Scattershot told Daru Spiritualist it was targeted by
+        the original's target before it was re-aimed, and again for the new
+        target after (Scourge's post-promotion session).
         """
         if not self.trigger_condition_holds(item):
             return None
@@ -87,6 +100,10 @@ class TargetAnnouncementsMixin:
         # Whether it is still there when the window closes is asked then — the
         # choices below can remove it (CR 603.3c-d).
         if self.collected_triggers is not None and is_triggered_object(item):
+            # …and which round of CR 603.3b's repeating process it is: one
+            # after the triggered ability whose being put on the stack set it
+            # off (``_announcing``), 0 for one the unit of play set off.
+            item.trigger_round = self.announcing_trigger_round
             self.collected_triggers.append(item)
         fault = self.cast_announcement_fault(item) if announced_at_cast else None
         if fault is not None:
@@ -120,7 +137,9 @@ class TargetAnnouncementsMixin:
             # to hold the announcement to: that one rides the object unjudged,
             # at the push and at resolution alike.
             item.targets_chosen = True
-        self._stack_push_object(item, announce=not announced_at_cast)
+        self._stack_push_object(item, announce=announce and not announced_at_cast)
+        if not announce and item is not None:
+            item.announcement_owed = True
         if announced_at_cast:
             # **The trigger is what targets, and now is when** (CR 115.1d,
             # CR 603.3d). The permanent spell that named this target was not
@@ -251,7 +270,10 @@ class TargetAnnouncementsMixin:
         an announcement can set off another trigger ("becomes the target of",
         "whenever a player chooses one or more targets"), and that one belongs
         to the same unit — it waits behind the others and is chosen in this
-        same loop, and its controller orders it with them. Asked too before
+        same loop — but to the **next round** of CR 603.3b's process
+        (``StackItem.trigger_round``, :meth:`_announcing`): it goes on above
+        the objects whose announcement set it off and is ordered only with its
+        own round (``engine/trigger_order.py``). Asked too before
         anything resolves (``resolve_top_of_stack``), so an object can never
         resolve with a choice it has not made.
         """
@@ -318,6 +340,10 @@ class TargetAnnouncementsMixin:
             and any(waiting is item for waiting in self.stack)
         ):
             self.announce_targets_chosen(item)
+        # A copy whose targets are still being decided announces nothing yet
+        # (CR 707.10c; ``announce_copy_put_onto_stack``).
+        if item is not None and item.announcement_owed:
+            return
         # "Whenever a spell or ability is put onto the stack" (CR 601.2i,
         # 602.2b, 603.3) — every object, a copy included (CR 707.10: it is
         # created on the stack), once its announcement is whole. The same
@@ -350,10 +376,68 @@ class TargetAnnouncementsMixin:
 
         if item is None:
             return 0
-        return emit(
-            self, "spell_or_ability_put_onto_stack", subject=None,
-            **{TARGETS_CHOSEN_ITEM: item, "event_subject_player": item.caster_index},
-        )
+        with self._announcing(item):
+            return emit(
+                self, "spell_or_ability_put_onto_stack", subject=None,
+                **{TARGETS_CHOSEN_ITEM: item, "event_subject_player": item.caster_index},
+            )
+
+    @contextmanager
+    def _announcing(self, item):
+        """While *item* — a **triggered** ability being put on the stack — has
+        its announcements made, what they set off belongs to the next round of
+        CR 603.3b's process (``Game.announcing_trigger_round``):
+
+            … Then the game once again checks for and performs state-based
+            actions until none are performed, then abilities that triggered
+            during this process go on the stack. This process repeats …
+
+        Grip of Chaos's "whenever a spell or ability is put onto the stack"
+        set off by Bladewing the Risen's entry trigger was offered in the same
+        "order your triggered abilities" prompt as that trigger, so it could be
+        put underneath the ability it reselects the target of. A spell's or an
+        activated ability's announcements set off nothing of a later round:
+        they are not triggered abilities being put on the stack.
+        """
+        if item is None or not is_triggered_object(item):
+            yield
+            return
+        outer = self.announcing_trigger_round
+        self.announcing_trigger_round = max(outer, int(item.trigger_round) + 1)
+        try:
+            yield
+        finally:
+            self.announcing_trigger_round = outer
+
+    def announce_copy_put_onto_stack(
+        self, item, *, chooser: int | None = None, chose: bool = False,
+    ) -> None:
+        """Make the announcements a copy pushed with ``announce=False`` owes,
+        now that its controller has decided what its targets will be (CR
+        707.10c) — once, for the targets it now has.
+
+        "…becomes the target" (CR 603.2e) for each of them; "whenever a player
+        chooses one or more targets" (Psychic Battle) only when *chose* — the
+        controller changed a target, CR 707.10c's "may" taken (keeping the
+        original's targets is the offer declined, and a copy inherits its
+        targets, CR 707.10: nobody chose them); and "whenever a spell or
+        ability is put onto the stack" (Grip of Chaos — CR 707.10: to copy a
+        spell is to put a copy of it onto the stack), whose "if it has a single
+        target" (CR 603.4) is so asked of the targets the copy has.
+
+        A no-op for an object that owes nothing (announced already, or never
+        held back), so every settle point may call it; and nothing for a copy
+        the stack no longer holds.
+        """
+        if item is None or not getattr(item, "announcement_owed", False):
+            return
+        item.announcement_owed = False
+        if not any(entry is item for entry in self.stack):
+            return
+        self._announce_targeting(item)
+        if chose:
+            self.announce_targets_chosen(item, chooser=chooser)
+        self.announce_put_onto_stack(item)
 
     def spell_targets_nothing(self, item) -> bool:
         """Whether *item* is a **permanent spell that is not an Aura** — the
@@ -687,13 +771,18 @@ class TargetAnnouncementsMixin:
         is the same seat read by the ordinary "that player" machinery — the key
         every frozen-seat reader in ``handlers/`` already asks for.
         """
-        from ..events import emit
-
         # CR 115.1: a permanent spell that is not an Aura is not targeted, so
         # nothing "becomes the target" of it — whatever it carries is its
         # entry trigger's, announced when that trigger is put on the stack.
         if self.spell_targets_nothing(item):
             return
+        with self._announcing(item):
+            self._announce_targeting_now(item)
+
+    def _announce_targeting_now(self, item) -> None:
+        """:meth:`_announce_targeting`'s announcements, inside its round."""
+        from ..events import emit
+
         self._announce_targeted_player(item)
         for permanent_id in target_ids(item.target_permanent_id):
             if not isinstance(permanent_id, int):
@@ -926,7 +1015,8 @@ class TargetAnnouncementsMixin:
         }
         if silently_for is not None:
             payload[TARGETS_CHANGED_SILENTLY_FOR] = silently_for
-        return emit(self, "player_chooses_targets", subject=None, **payload)
+        with self._announcing(item):
+            return emit(self, "player_chooses_targets", subject=None, **payload)
 
     def record_no_target_named(self, item) -> None:
         """Write down that *item*'s announcement chose **zero targets**, which

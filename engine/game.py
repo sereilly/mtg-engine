@@ -620,6 +620,15 @@ class Game(
     # it is bookkeeping to every ``vars()`` walker. See
     # ``TargetAnnouncementsMixin._announce_waiting_triggers``.
     unannounced_triggers: list = field(default_factory=list)
+    # CR 603.3b's "then abilities that triggered during this process go on the
+    # stack. This process repeats": the round a triggered ability set off
+    # **now** belongs to — one more than the triggered ability being put on
+    # the stack while its announcements are made ("becomes the target", "a
+    # player chooses targets", "is put onto the stack"), and 0 at every other
+    # moment. Stamped onto each collected object as ``StackItem.trigger_round``
+    # (``TargetAnnouncementsMixin._announcing``). Always 0 between calls, so
+    # it is bookkeeping to every ``vars()`` walker.
+    announcing_trigger_round: int = 0
     # CR 603.7 delayed triggered abilities created by a resolving spell or
     # ability ("Whenever one or more nontoken creatures attack this turn, …" —
     # Basri Ket's −2; "At the beginning of your next main phase, …" — Mana

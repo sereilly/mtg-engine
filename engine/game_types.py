@@ -512,6 +512,22 @@ class StackItem(_TargetIdsGuard):
     # once the resolution is over and its state-based check made (CR 603.3b,
     # 603.3d, 117.5). None while nothing waits; never compared or printed.
     held_triggers: tuple | None = field(default=None, repr=False, compare=False)
+    # A **copy** put on the stack before its controller has decided what its
+    # targets will be (CR 707.10c: "Once the player has decided what the
+    # copy's targets will be, the copy is put onto the stack with those
+    # targets"), whose announcements — "becomes the target", "a player chooses
+    # targets", "is put onto the stack" — are owed until that decision is
+    # settled (``Game.announce_copy_put_onto_stack``). Set by ``_stack_push``'s
+    # ``announce=False``; never compared or printed.
+    announcement_owed: bool = field(default=False, repr=False, compare=False)
+    # CR 603.3b's "this process repeats": which round of putting triggered
+    # abilities on the stack this one belongs to — 0 for an ability set off
+    # by the unit of play, one more than the triggered ability whose being put
+    # on the stack set it off (Grip of Chaos's trigger off Bladewing the
+    # Risen's entry trigger). Stamped by ``_stack_push`` as it collects the
+    # object; read by ``engine/trigger_order.py``, which orders each round
+    # apart and puts a later round above an earlier one.
+    trigger_round: int = field(default=0, repr=False, compare=False)
     # CR 108.3: the seat that **owns** this object's card, which is where
     # CR 400.3 sends it whenever it leaves the stack for a graveyard, a hand, a
     # library or exile — resolving (CR 608.2n), countered (CR 701.6a), removed

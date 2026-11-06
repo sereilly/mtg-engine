@@ -69,11 +69,23 @@ event each is about; and the same printed ability of two copies of one card,
 set off by the same event and aimed at the same thing, cannot be told apart in
 either order. Neither is asked (:func:`interchangeable`).
 
+**Rounds** (the rule's last sentences: "then abilities that triggered during
+this process go on the stack. This process repeats"). An ability set off by an
+announcement made while a triggered ability is put on the stack — "becomes the
+target", "a player chooses one or more targets", "is put onto the stack" —
+triggered *during* that process, so it goes on in the next round: above every
+object of the round that set it off, and ordered only with its own round.
+``StackItem.trigger_round`` says which (stamped by ``_stack_push`` from
+``Game.announcing_trigger_round``); :func:`restore_apnap` sorts a window by
+round and then APNAP, and :func:`order_groups` asks once per seat per round.
+Grip of Chaos's trigger off Bladewing the Risen's entry trigger was offered in
+that trigger's own prompt, and could be put under the ability it re-aims.
+
 **The second part of the rule has no card.** No supported card in the pool has
 a trigger condition that is another ability triggering (Psychic Battle's is a
 player choosing targets; Sanctum of All's sentence makes an ability trigger an
 additional time, which CR 603.2d counts and this engine counts in
-``additional_triggers``). So there is one round, and
+``additional_triggers``). So each round has one part, and
 ``tests/engine/test_trigger_order_census.py`` names the census that says so.
 """
 
@@ -173,7 +185,10 @@ def restore_apnap(game: "Game", collected) -> bool:
     anything moved.
     """
     live = _live(game, collected)
-    if len({item.caster_index for item in live}) < 2:
+    if (
+        len({item.caster_index for item in live}) < 2
+        and len({_round(item) for item in live}) < 2
+    ):
         return False
     rank = {
         seat: place
@@ -184,8 +199,12 @@ def restore_apnap(game: "Game", collected) -> bool:
         if any(entry is item for item in live)
     )
     current = [game.stack[slot] for slot in slots]
+    # By round first (CR 603.3b's "then abilities that triggered during this
+    # process go on the stack. This process repeats"): every ability a round
+    # set off goes on above that round. Then APNAP within a round.
     wanted = sorted(
-        current, key=lambda item: rank.get(item.caster_index, len(rank)),
+        current,
+        key=lambda item: (_round(item), rank.get(item.caster_index, len(rank))),
     )
     if all(a is b for a, b in zip(current, wanted)):
         return False
@@ -194,25 +213,42 @@ def restore_apnap(game: "Game", collected) -> bool:
     return True
 
 
+def _round(item) -> int:
+    """Which round of CR 603.3b's repeating process *item* went on in
+    (``StackItem.trigger_round``)."""
+    return int(getattr(item, "trigger_round", 0) or 0)
+
+
 def order_groups(game: "Game", collected) -> list[tuple[int, list]]:
     """``(seat, objects top first)`` for each seat with a choice to make.
 
     Over what is **still on the stack**: an object removed as it was put there
     (no legal target or mode, CR 603.3c-d) is not one anybody orders. Seats in
     APNAP order (CR 101.4), which is the order the rule has them choose in.
+
+    **One group per seat per round** (CR 603.3b: "then abilities that
+    triggered during this process go on the stack. This process repeats"): an
+    ability set off while another was being put on the stack — Grip of Chaos's
+    "whenever a spell or ability is put onto the stack" off Bladewing the
+    Risen's entry trigger — goes on in the next round, above the one that set
+    it off, and is never ordered beside it. Rounds in order, each seat's group
+    in APNAP order within its round.
     """
     seen = _live(game, collected)
-    by_seat: dict[int, list] = {}
+    by_round: dict[int, dict[int, list]] = {}
     for item in seen:
-        by_seat.setdefault(item.caster_index, []).append(item)
+        by_round.setdefault(_round(item), {}).setdefault(
+            item.caster_index, []
+        ).append(item)
     positions = {id(entry): index for index, entry in enumerate(game.stack)}
     groups = []
-    for seat in game.apnap_seats(by_seat, include_lost=True):
-        items = by_seat.get(seat) or []
-        if len(items) < 2 or interchangeable(items):
-            continue
-        items.sort(key=lambda item: -positions[id(item)])
-        groups.append((seat, items))
+    for _number, by_seat in sorted(by_round.items()):
+        for seat in game.apnap_seats(by_seat, include_lost=True):
+            items = by_seat.get(seat) or []
+            if len(items) < 2 or interchangeable(items):
+                continue
+            items.sort(key=lambda item: -positions[id(item)])
+            groups.append((seat, items))
     return groups
 
 
