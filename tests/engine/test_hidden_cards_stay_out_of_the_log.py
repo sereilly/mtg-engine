@@ -32,16 +32,20 @@ itself (Brass Herald, Fact or Fiction), and a card it names is public from
 then on. A card whose own text prints "reveal" or names a card is excused, as
 the private-find census excuses it: its search or its pick is announced.
 
-Validated backwards (``scratch/scg/w2g4``): with W1G7's three hunks reverted
+Validated backwards (``scratch/scg/w2g4``). With W1G7's three hunks reverted
 (``exile_top_of_library``'s face-down count, the face-down pile search line,
-``put_exiled_pile_top_into_hand``) the census names Mangara's Tome, Parallel
-Thoughts, Necropotence, Knowledge Vault, Duplicity, Kyren Archive and Three
-Wishes. On W2G4's base, after them, it named eight more: Gustha's Scepter's
-exile and its look, Three Wishes' look and its play permission, Kyren
-Archive's and Knowledge Vault's "go to their owner's hand", Necropotence's
-end-step return, Painful and Agonizing Memories' "went on top of", Phyrexian
-Portal's find — and the exiled cards' own upkeep triggers firing from exile
-(Juzám Djinn under Three Wishes "dealt 1 damage", ``functions_in_exile``).
+``put_exiled_pile_top_into_hand``) the movers census names exactly W1G7's
+seven: Mangara's Tome, Parallel Thoughts, Necropotence, Knowledge Vault,
+Duplicity, Kyren Archive and Three Wishes. On W2G4's base engine it named
+seven more rows: Gustha's Scepter's exile and its look, Three Wishes' look and
+play permissions, Necropotence's end-step "put X into their hand from exile",
+Painful and Agonizing Memories' "went on top of", Phyrexian Portal's find, and
+Sylvan Library's choice and its put-back. Kyren Archive's and Knowledge
+Vault's "X go to their owner's hand" hid behind a second defect the census
+cannot see by name — the pile read face *up* once its exiler was sacrificed —
+and ``tests/regressions/test_scg_w2g4_face_down_exile.py`` holds that one, with
+the exiled cards' own upkeep triggers firing from exile. The aimed census read
+nothing on the base engine: no log line names a face-down creature's card.
 """
 
 from __future__ import annotations
@@ -226,20 +230,35 @@ def _anywhere(game, name: str) -> bool:
 
 
 class _WatchedLog(list):
-    """``game.log``, asking on every line whether it names a hidden card."""
+    """``game.log``, asking on every line whether it names a hidden card.
+
+    A line naming a card that is hidden as it is written is held until the
+    next line (or the end of the drive), and counts only if the card is hidden
+    still: a line written just before the move it describes ("… is put into
+    its owner's graveyard") names a card on its way somewhere public. A card
+    that is public now and then was seen, and its name is the table's
+    afterwards — whatever hidden zone it goes to later."""
 
     def __init__(self, game, lines=()):
         super().__init__(lines)
         self.game = game
         self.seen_public: set[str] = set()
+        self.held: list[tuple[str, str, str]] = []
         self.named: list[tuple[str, str, str]] = []
+
+    def confirm(self) -> None:
+        """Count every held line whose card is still hidden."""
+        for line, name, where in self.held:
+            if _hidden_now(self.game, name) is not None:
+                self.named.append((line, name, where))
+        self.held = []
 
     def append(self, line) -> None:
         super().append(line)
+        self.confirm()
         text = str(line)
         for name in _SECRETS:
-            if name not in self.seen_public and _hidden_now(self.game, name) is None \
-                    and _anywhere(self.game, name):
+            if name not in self.seen_public and _hidden_now(self.game, name) is None                     and _anywhere(self.game, name):
                 self.seen_public.add(name)
         for name in _SECRETS:
             if name in self.seen_public or not _SAYS[name].search(text):
@@ -249,7 +268,7 @@ class _WatchedLog(list):
                 continue
             where = _hidden_now(self.game, name)
             if where is not None:
-                self.named.append((text, name, where))
+                self.held.append((text, name, where))
 
     def extend(self, lines) -> None:
         for line in lines:
@@ -386,12 +405,9 @@ def _announced(card) -> bool:
     return any(word in text for word in _ANNOUNCED)
 
 
-def _named_and_still_hidden(game) -> list[tuple[str, str, str]]:
-    log = game.log
-    return [
-        (line, name, where) for line, name, where in log.named
-        if name not in log.seen_public and _hidden_now(game, name) is not None
-    ]
+def _named_while_hidden(game) -> list[tuple[str, str, str]]:
+    game.log.confirm()
+    return list(game.log.named)
 
 
 def run_census(by_name, rows, *, aim_at_mask=False) -> dict:
@@ -402,7 +418,7 @@ def run_census(by_name, rows, *, aim_at_mask=False) -> dict:
             found["undriven"].append(f"{card.name} ({shape})")
             continue
         found["driven"] += 1
-        named = _named_and_still_hidden(game)
+        named = _named_while_hidden(game)
         if named:
             bucket = "announced" if _announced(card) else "named"
             found[bucket][f"{card.name} ({shape})"] = named
