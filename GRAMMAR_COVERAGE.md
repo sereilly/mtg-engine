@@ -53,7 +53,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | LGN | 145 | 235 | 71.9% | 71.9% | 47.7% | 108 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| SCG *(measured)* | 143 | 262 | 71.4% | 67.2% | 45.0% | 98 |
+| SCG *(measured)* | 143 | 262 | 71.8% | 68.3% | 45.8% | 99 |
 | **All (shipped)** | **8507** | **12662** | **89.9%** | **89.4%** | **62.1%** | **6671** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -68,13 +68,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 827 | 433 | expected a subject |  |
 | 188 | 101 | unrecognized effect verb |  |
-| 136 | 72 | unconsumed text |  |
+| 135 | 71 | unconsumed text |  |
 | 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
 | 35 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 23 | 19 | expected 'unless defending player controls' |  |
 | 22 | 16 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 8 | 2 | no lowering for RawEffect |  |
+| 7 | 1 | no lowering for RawEffect |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
@@ -90,7 +90,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 | 2 | 2 | expected a keyword ability |  |
-| 2 | 2 | 'it' with nothing in this effect that revealed a card |  |
+| 2 | 2 | expected an object noun |  |
 
 ## Cards executing through the grammar
 
@@ -2077,6 +2077,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Cloudchaser Eagle**
   - `When this creature enters, destroy target enchantment.`
   - `When this creature enters, destroy target enchantment.`
+- **Clutch of Undeath**
+  - `Enchanted creature gets +3/+3 as long as it's a Zombie. Otherwise, it gets -3/-3.`
 - **Coal Golem**
   - `{3}, Sacrifice this creature: Add {R}{R}{R}.`
 - **Coalition Victory**
@@ -8041,6 +8043,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: Untap enchanted creature.`
   - `{U}: Enchanted creature gains flying until end of turn.`
   - `{U}: Enchanted creature gains shroud until end of turn. (It can't be the target of spells or abilities.)`
+  - `{1}: Enchanted creature gets +1/-1 or -1/+1 until end of turn.`
 - **Penance**
   - `Put a card from your hand on top of your library: The next time a black or red source of your choice would deal damage this turn, prevent that damage.`
 - **Pendelhaven**
