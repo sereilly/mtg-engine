@@ -31,11 +31,14 @@ from __future__ import annotations
 import pytest
 
 from engine import ai_simulator
-from engine.ai_abilities import _rehearse_activation, choose_activation_action
+from engine.ai_abilities import (_exists_to_be_given_up, _gives_up_its_source,
+                                 _rehearse_activation, choose_activation_action)
+from engine.ai_actions import activation_announcement
 from engine.ai_combat import run_ai_combat_phase
-from engine.ai_priority import act_at_priority
-from engine.ai_rehearsal import deliberating
-from engine.ai_scoring import _worth_proposing
+from engine.ai_payment import tap_planned_lands
+from engine.ai_rehearsal import deliberating, rehearse
+from engine.ai_scoring import _leaves_nothing, _worth_proposing
+from engine.ai_valuation import source_becomes_an_aura
 from engine.card_loader import load_catalog
 from engine.faces import compilation_units
 from engine.models import Permanent, PlayerState
@@ -95,13 +98,47 @@ def test_every_main_phase_proposal_moves_something_that_lasts():
     """The census, whole: every shipped permanent with an activated ability,
     under seat 0 with every colour of mana, in its postcombat main phase
     against a Grizzly Bears. Whatever the chooser proposes, carried out on a
-    copy, is a cast the rule would propose — 432 were not on the base."""
+    copy, is one the cast rule would propose of the effect alone (the {T} it
+    costs on both copies; a Licid asked only whether its change lasts) —
+    on the base, 698 proposals and most of them not."""
     _census(every=1)
 
 
 def test_every_main_phase_proposal_moves_something_that_lasts_sampled():
     """The census's quick-pass sample (``stable_sample``)."""
     _census(every=_SAMPLE)
+
+
+def _on(game, seat, name):
+    return next((p for p in game.controlled_by(seat) if p.card.name == name), None)
+
+
+def _effect_rehearsal(game, seat, action, ability):
+    """*action* carried out on a copy (``ai_rehearsal.rehearse``) against a
+    copy with the same lands tapped and — for a {T} ability — its source
+    tapped too: what the **effect** did, the reading the cast rule is asked
+    of here. Built from the rehearsal itself rather than the chooser's own
+    gate, so the census asks the question independently of the answer."""
+    def perform(table):
+        planned = tap_planned_lands(table, seat, action)
+        return table.queue_permanent_ability(
+            seat, planned.permanent_name, **activation_announcement(planned),
+        )
+
+    def without(table, _carried):
+        pool = table.players[seat].mana_pool
+        floating = dict(pool)
+        tap_planned_lands(table, seat, action)
+        pool.clear()
+        pool.update(floating)
+        if ability.cost.requires_tap:
+            table.permanent_at(seat, action.permanent_index).tapped = True
+
+    with deliberating():
+        return rehearse(
+            game, seat, perform, spell_name=None, leaves_hand=False,
+            without=without, without_key=("census", action.land_tap_indices),
+        )
 
 
 def _census(*, every: int) -> None:
@@ -115,9 +152,21 @@ def _census(*, every: int) -> None:
         if action is None or action.permanent_name != unit.name:
             continue
         proposed += 1
-        with deliberating():
-            rehearsal = _rehearse_activation(game, 0, action)
-        if rehearsal is not None and not _worth_proposing(rehearsal):
+        source = _on(game, 0, unit.name)
+        ability = game.usable_abilities_of(source)[action.ability_index or 0]
+        if _gives_up_its_source(ability.cost) and _exists_to_be_given_up(source):
+            # A one-shot keeps its flat score (`ai_abilities._exists_to_be_given_up`:
+            # the standing prices the permanent at least a card, so no
+            # rehearsal would ever crack the Egg) — the gate's one exception.
+            continue
+        rehearsal = _effect_rehearsal(game, 0, action, ability)
+        if rehearsal is None:
+            continue
+        if source_becomes_an_aura(ability.instruction):
+            ok = rehearsal.accepted and rehearsal.changed and not _leaves_nothing(rehearsal)
+        else:
+            ok = _worth_proposing(rehearsal)
+        if not ok:
             wrong.append((unit.name, action.ability_index, round(rehearsal.swing, 2)))
     assert wrong == [], wrong
     assert examined >= _EXAMINED_FLOOR // every, examined

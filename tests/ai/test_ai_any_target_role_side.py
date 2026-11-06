@@ -11,9 +11,11 @@ the activator's own side, from either chair.
 """
 from __future__ import annotations
 
+from unittest import mock
+
 import pytest
 
-from engine import Game, PlayerState
+from engine import Game, PlayerState, ai_abilities
 from engine.ai_abilities import choose_activation_action
 from engine.models import Permanent
 
@@ -36,8 +38,13 @@ def _table(set_pool, seat: int) -> Game:
 
 @pytest.mark.parametrize("seat", [0, 1])
 def test_the_shield_goes_on_the_activators_side_from_either_chair(set_pool, seat):
+    """Which side the shield's role is aimed at — asked on an idle board,
+    so with the rehearsed "moves nothing" gate (kg4,
+    ``ai_abilities._moves_something``) off: a shield with nothing coming is
+    not proposed at all."""
     game = _table(set_pool, seat)
-    action = choose_activation_action(game, seat)
+    with mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True):
+        action = choose_activation_action(game, seat)
 
     assert action is not None and action.permanent_name == "Shieldmage Advocate"
     card_ref, shielded = action.target_role_refs

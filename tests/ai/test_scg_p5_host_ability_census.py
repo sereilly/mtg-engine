@@ -156,7 +156,13 @@ def _activation_census(pool) -> dict:
 
 
 def test_no_host_ability_is_activated_for_the_other_side():
-    found = _activation_census(_pool())
+    # The side is the question, asked on a board with no fight in it, so the
+    # rehearsed "moves nothing" gate every ability meets since kg4
+    # (`ai_abilities._moves_something`) is off: a host's pump until end of
+    # turn is not proposed there at all, and the floor below would read the
+    # wrong gate.
+    with mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True):
+        found = _activation_census(_pool())
     assert found["wrong_side"] == [], found["wrong_side"]
     # Floors: how much the census examined, and that the gate is not a ban.
     assert len(found["examined"]) >= 30, found["examined"]
@@ -167,7 +173,8 @@ def test_no_host_ability_is_activated_for_the_other_side():
 @pytest.mark.full
 def test_without_the_gate_the_census_finds_what_phase_five_saw():
     """Backwards: ``_host_refusal`` taken out, as on 43a45e81."""
-    with mock.patch.object(ai_abilities, "_host_refusal", lambda *args: False):
+    with mock.patch.object(ai_abilities, "_host_refusal", lambda *args: False), \
+            mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True):
         found = _activation_census(_pool())
     wrong = {name for name, _index, _seat in found["wrong_side"]}
     assert len(found["wrong_side"]) >= 12, found["wrong_side"]
@@ -316,8 +323,12 @@ def test_no_untap_is_aimed_at_a_permanent_that_is_untapped():
 
 @pytest.mark.full
 def test_without_the_tapped_filter_the_untaps_move_nothing():
-    """Backwards: every candidate kept, tapped or not, as on 43a45e81."""
-    with mock.patch.object(ai_abilities, "_untaps_only", lambda instruction: False):
+    """Backwards: every candidate kept, tapped or not, as on 43a45e81 — and
+    since kg4 with the rehearsed "moves nothing" gate off too
+    (``ai_abilities._moves_something``), a second layer that also passes over
+    an untap of what is untapped."""
+    with mock.patch.object(ai_abilities, "_untaps_only", lambda instruction: False), \
+            mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True):
         found = _untap_census(_pool())
     names = {name for name, _tapped, _target in found["moved_nothing"]}
     assert {"Seeker of Skybreak", "Jandor's Saddlebags", "Voltaic Key"} <= names, found["moved_nothing"]

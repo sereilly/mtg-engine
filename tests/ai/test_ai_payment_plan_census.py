@@ -35,7 +35,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from engine import Game, PlayerState, ai_payment
+from engine import Game, PlayerState, ai_abilities, ai_payment
 from engine.ai_mana_sources import _nonland_mana_source
 from engine.ai_payment import _plan_land_taps, tap_planned_lands
 from engine.ai_abilities import choose_activation_action
@@ -416,9 +416,17 @@ def test_the_lotus_is_not_spent_on_an_ability_or_on_its_own_target():
     )
     game = _table(["Black Lotus", "Grizzly Bears"])
     _enter(game, pump)
-    assert choose_activation_action(game, 0) is None
+    # Which source pays is the question, so the rehearsed "moves nothing"
+    # gate every ability meets since kg4 (`ai_abilities._moves_something`,
+    # which passes over a pump with no fight to spend it in) is off.
+    from unittest import mock
+
+    gate_off = mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True)
+    with gate_off:
+        assert choose_activation_action(game, 0) is None
     _enter(game, _POOL["Forest"])
-    action = choose_activation_action(game, 0)
+    with gate_off:
+        action = choose_activation_action(game, 0)
     assert action is not None and action.permanent_name == "Test Pumper"
     assert [game.permanent_at(0, s).card.name for s in action.land_tap_indices] == ["Forest"]
 

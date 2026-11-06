@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import pytest
 
-from engine import Game, PlayerState
+from engine import Game, PlayerState, ai_simulator
 from engine.ai_abilities import choose_activation_action
+from engine.ai_combat import run_ai_combat_phase
 from engine.aura_attachment import attach_aura
 from engine.models import Permanent
 from tests.helpers import resolve_stack
@@ -82,20 +83,25 @@ def test_w2g5_a_crown_is_not_sacrificed_for_a_point_nothing_needs(set_pool, sick
 
 def test_w2g5_a_crown_is_sacrificed_when_it_is_the_lethal_point(set_pool):
     """At six life the Crown's +1/+1 to both Bears (they share a type) is the
-    sixth damage: the rehearsal fights the combat, sees the game end, and the
-    sacrifice is proposed — and carried out it pumps both."""
+    sixth damage: the rehearsal fights the combat and sees the game end. Both
+    Bears attack with it or without it and nothing can block, so since kg4
+    the sacrifice waits for the blocks (``ai_abilities._read_through_the_fight``)
+    and is made in the declare-blockers step — and it is the lethal point
+    there: the Crown goes, both Bears hit as 3/3s, and the game is over."""
     game, crown = _w2g5_crowned(set_pool, life=6)
-    action = choose_activation_action(game, 0)
-    assert action is not None and action.permanent_name == "Crown of Vigor"
-    assert game.activate_permanent_ability(
-        0, action.permanent_name, permanent_index=action.permanent_index,
-    ).supported
-    resolve_stack(game)
+    assert choose_activation_action(game, 0) is None
+    report = ai_simulator.SimulationReport(
+        games_requested=1, games_completed=0, interaction_count=0,
+    )
+    game.prompt_driver = ai_simulator._resolve_pending_choices
+    game.priority_driver = ai_simulator._priority_answerer(game, report, 1, [1])
+    run_ai_combat_phase(game, 0)
+    assert any(
+        "activate Crown of Vigor" in line and "declare blockers" in line
+        for line in report.log_lines
+    ), report.log_lines
     assert crown not in game.players[0].battlefield
-    assert sorted(
-        (p.effective_power, p.effective_toughness)
-        for p in game.controlled_by(0) if p.is_creature
-    ) == [(3, 3), (3, 3)]
+    assert game.players[1].life <= 0 and game.is_game_over()
 
 
 @pytest.mark.parametrize(("life", "activated"), [

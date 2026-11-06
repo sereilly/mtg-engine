@@ -69,6 +69,7 @@ from .ai_text_changes import (WORTH_FLOOR, ability_text_change_mode,
                               ability_text_change_worth, ranked_word_choices)
 from .ai_scoring import (
     choose_attack_target,
+    _leaves_nothing,
     _score_activation,
     _worth_proposing,
 )
@@ -897,7 +898,12 @@ def _activation_candidate(
     # **And every other ability** (kg4): proposed only where carried out on a
     # copy it moves something that lasts without leaving the seat worse off
     # (`_moves_something`) — in the main phase; at instant speed every
-    # proposal is rehearsed by its caller, and held to more.
+    # proposal is rehearsed by its caller, and held to more. Not a one-shot
+    # given up (`_exists_to_be_given_up`: the Mossfire Egg), whose flat score
+    # is kept for the reason that function gives — the standing prices the
+    # permanent at least a card, so a rehearsal would never crack it.
+    if _gives_up_its_source(ability.cost) and _exists_to_be_given_up(permanent):
+        return candidate
     if not _AT_INSTANT_SPEED.get() and not _moves_something(game, player_index, candidate):
         return None
     return candidate
@@ -1017,17 +1023,26 @@ def _sets_only_what_its_source_is(instruction) -> bool:
 
 def _rehearse_activation(
     game: Game, seat: int, action: ActivationAction,
-    *, through_combat: bool = False,
+    *, through_combat: bool = False, cost_neutral: bool = False,
 ) -> Rehearsal | None:
     """What activating *action* would do, carried out on a scratch copy of
     the game (``ai_rehearsal.rehearse``) the way `activate_chosen_ability`
     carries it out — the planned lands tapped, the ability put on the stack —
     against the same copy with the same lands tapped and nothing activated.
     *through_combat* fights the turn's combat on both copies first, for an
-    ability whose good is gone by the end of the turn."""
+    ability whose good is gone by the end of the turn.
+
+    *cost_neutral* also taps the source on the copy with nothing activated
+    when the ability's cost is {T}: what is read is then what the **effect**
+    did, the question :func:`_moves_something` asks — a "{T}: … until end of
+    turn" whose source stays tapped is otherwise a change that lasts, and a
+    creature tapped is a body missing *now*, neither of which the effect
+    did."""
 
     def perform(table):
         return _queue_activation(table, seat, action)
+
+    source_taps = cost_neutral and _taps_its_source(game, seat, action)
 
     def paid_for(table, _carried) -> None:
         pool = table.players[seat].mana_pool
@@ -1035,8 +1050,12 @@ def _rehearse_activation(
         tap_planned_lands(table, seat, action)
         pool.clear()
         pool.update(floating)
+        if source_taps:
+            source = table.permanent_at(seat, action.permanent_index)
+            if source is not None:
+                source.tapped = True
 
-    taps = bool(action.land_tap_indices)
+    taps = bool(action.land_tap_indices) or source_taps
     rehearsal = rehearse(
         game, seat, perform, spell_name=None, leaves_hand=False,
         label=f"{action.permanent_name}'s ability",
@@ -1052,15 +1071,29 @@ def _rehearse_activation(
         ) + (
             ("words", action.old_color, action.new_color)
             if action.old_color or action.new_color else ()
-        ) + (("through_combat",) if through_combat else ()),
+        ) + (("through_combat",) if through_combat else ()) + (
+            ("source_tapped",) if source_taps else ()
+        ),
         without=paid_for if taps else None,
         without_key=(
             ("paid", action.land_tap_indices, action.land_tap_colors)
+            + ((("source_tapped", seat, action.permanent_index),) if source_taps else ())
             if taps else None
         ),
         through_combat=through_combat,
     )
     return _with_the_words_aimed(game, seat, action, rehearsal)
+
+
+def _taps_its_source(game: Game, seat: int, action: ActivationAction) -> bool:
+    """Whether the ability *action* names (on the seat's own permanent) has
+    {T} in its cost."""
+    if action.source_controller_index is not None:
+        return False
+    source = game.permanent_at(seat, action.permanent_index)
+    usable = game.usable_abilities_of(source) if source is not None else []
+    index = action.ability_index or 0
+    return 0 <= index < len(usable) and bool(getattr(usable[index].cost, "requires_tap", False))
 
 
 def _with_the_words_aimed(
@@ -1174,19 +1207,41 @@ def _moves_something(game: Game, seat: int, action: ActivationAction) -> bool:
     second main phase, a "{T}: Untap target land" with every land untapped, a
     "can't block" on a creature with nothing to block, a looter's draw with
     nothing to discard (kg4: `tests/ai/test_kg4_aiact_moves_nothing.py`).
-    An ability nobody could rehearse is proposed as it always was."""
-    rehearsal = _rehearse_activation(game, seat, action)
+    An ability nobody could rehearse is proposed as it always was.
+
+    Read **cost-neutral** (:func:`_rehearse_activation`): the {T} the cost
+    pays is on both copies, so what is judged is the effect — the cost is
+    this chooser's other floors' to price, as it always was. And an ability
+    that turns its own source into an Aura (the Licids) is asked only whether
+    it moves something that lasts: what such an Aura is worth is the
+    restriction it puts on its host ("can't attack"), which no standing
+    reads, against the creature its source stops being, which one does."""
+    rehearsal = _rehearse_activation(game, seat, action, cost_neutral=True)
     if rehearsal is None:
         return True
     if rehearsal.accepted and rehearsal.changed:
-        rehearsal = _read_through_the_fight(game, seat, action, rehearsal)
+        rehearsal = _read_through_the_fight(
+            game, seat, action, rehearsal, cost_neutral=True,
+        )
         if rehearsal is None:
             return False
+    if rehearsal.accepted and rehearsal.changed and _becomes_an_aura(game, seat, action):
+        return not _leaves_nothing(rehearsal)
     return _worth_proposing(rehearsal)
+
+
+def _becomes_an_aura(game: Game, seat: int, action: ActivationAction) -> bool:
+    """Whether the ability *action* names turns its own source into an Aura
+    (``ai_valuation.source_becomes_an_aura``)."""
+    source = game.permanent_at(seat, action.permanent_index)
+    usable = game.usable_abilities_of(source) if source is not None else []
+    index = action.ability_index or 0
+    return 0 <= index < len(usable) and source_becomes_an_aura(usable[index].instruction)
 
 
 def _read_through_the_fight(
     game: Game, seat: int, action: ActivationAction, rehearsal: Rehearsal,
+    *, cost_neutral: bool = False,
 ) -> "Rehearsal | None":
     """*rehearsal* read again **with the fight fought** where its good is gone
     by the end of the turn (``ai_rehearsal.priced_by_the_fight``) and a
@@ -1211,7 +1266,9 @@ def _read_through_the_fight(
     if priced_by_the_fight(rehearsal.now, rehearsal.lasting, rehearsal.fleeting) and (
         precombat or blocks_still_to_come(game)
     ):
-        fought = _rehearse_activation(game, seat, action, through_combat=True)
+        fought = _rehearse_activation(
+            game, seat, action, through_combat=True, cost_neutral=cost_neutral,
+        )
         if fought is not None and fought.accepted:
             if precombat and not fought.declarations_changed and _waits_for_the_blocks(
                 game, seat, action,
