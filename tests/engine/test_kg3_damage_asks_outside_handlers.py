@@ -142,8 +142,10 @@ def test_every_damage_call_outside_the_handlers_can_ask_and_none_runs_past_the_q
 #: such loop fails too, so the table cannot outlive what it excuses.
 _NOT_APNAP = {
     ("handlers/damage.py", "deal_damage_and_opponent_choice"):
-        "the second half's recipient is the opponent's pick, made as that "
-        "half is reached, so no order can be computed over the two in advance",
+        "a loop over the sentence's two halves, not its recipients: the "
+        "second half's is the opponent's pick, made as that half is reached; "
+        "both halves' chunks are collected and dealt in APNAP order by "
+        "simultaneous_damage.deal_sentence once it is made (kg4 `dealings`)",
     ("phases/combat_damage_step.py", "resolve_all_combat_damage"):
         "first-strike and regular passes, not recipients (CR 510.4)",
 }

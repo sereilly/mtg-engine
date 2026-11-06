@@ -30,11 +30,15 @@ the steps produce at the damage seams (``simultaneous_damage.begin_sentence``,
 ``collect``) and deal them as one loop in APNAP order of the seat each one's
 question goes to, the printed order within a seat (CR 101.4c)
 (``deal_sentence``). Hail Storm, whose printed order is already APNAP on
-every board it can be cast on, is the control.
+every board it can be cast on, is the control. Cuombajj Witches' "1 damage to
+any target and 1 damage to any target of an opponent's choice", the one split
+sentence a handler deals itself (``deal_damage_and_opponent_choice``), is
+dealt the same way once the opponent has chosen.
 
 Measured backwards on 313bd09d: Disorder asked [0, 1, 0, 1] (three seats:
 [1, 2, 0, 1, 2, 0]), Kaervek's Hex [0, 1, 0, 1], Warpath [1, 0] and Bellowing
-Fiend [1, 0]; the control and the totals pass there too.
+Fiend [1, 0]; the Witches asked the defender about the first half before the
+opponent's pick; the control and the totals pass there too.
 """
 
 from __future__ import annotations
@@ -214,6 +218,33 @@ def test_hail_storm_s_printed_order_is_already_apnap():
     _cast(game, 1, _POOL["Hail Storm"])
 
     assert _asked(game) == [0, 1, 1], game.log[-10:]
+
+
+@pytest.mark.cr("616.1", "101.4", "608.2f")
+def test_cuombajj_witches_deals_both_halves_after_the_opponent_s_pick_in_apnap_order():
+    """"…deals 1 damage to any target and 1 damage to any target of an
+    opponent's choice." One sentence, one dealing: its first half used to be
+    dealt — and its question asked — before the opponent had chosen the
+    second half's target, so the defender was asked about the first half
+    before the active player about the second. Its ruling (2020-11-10) has the
+    opponent choose a *target* ("An opponent can't target a creature they
+    control with hexproof"), which is made before any damage is dealt; both
+    halves are then dealt at once, the active player asked first."""
+    game = _table()
+    witches = _put(game, 0, "Cuombajj Witches")
+    _contend(*game.players)
+    game.interactive_seats = {0, 1}
+
+    result = game.activate_permanent_ability(0, witches.card.name, target_player_index=1)
+    assert result.supported, result.details
+    for _ in range(4):
+        if game.pending_choices or not game.stack:
+            break
+        game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("opponent_damage", 1)]
+    assert game.confirm_opponent_damage_choice(1, target_seat=0)
+    assert _asked(game) == [0, 1], game.log[-10:]
 
 
 @pytest.mark.cr("608.2f", "120.8")
