@@ -31,6 +31,7 @@ from ._common import (
     _is_target, _names_several_targets, _restrictions_beyond,
     refuse_untestable, split_creature_type_choice, testable_filter_payload
 )
+from ._cost_records import shared_creature_type_referent
 from ._filters import split_bound_card_type
 from ._record_keys import REMOVED_FROM_COMBAT_PERMANENTS
 from ._events import (EVENT_SUBJECT_CONTROLLER, _EVENT_SUBJECT_CONTROLLERS,
@@ -502,6 +503,39 @@ def _lower_tap(
                     spec.filter, creature_type_of_your_choice=False
                 ),
             )
+        # "Whenever a creature dies, tap all untapped creatures **that share a
+        # creature type with it** or untap all tapped creatures that share a
+        # creature type with it." (Faces of the Past.) CR 205.3m's relation to
+        # an object only the resolution can name — here the creature that
+        # died, as it last existed (CR 608.2h) — so, as on the destroy sweep
+        # (Endemic Plague), the far end is read once by
+        # ``shared_creature_type_referent`` and travels under that referent for
+        # ``handlers/_chosen.resolve_shared_creature_type`` to turn into the
+        # anchor's creature types. Lifted off here because the whitelist below
+        # reads the filter and the relation has no ``to_payload`` form;
+        # dropped, the sweep would reach every untapped creature.
+        shared_referent: str | None = None
+        if spec.filter.shares_creature_type_with is not None:
+            shared_referent = shared_creature_type_referent(
+                spec.filter.shares_creature_type_with, event=event,
+                produced=produced, node=node,
+            )
+            if shared_referent == "event_subject" and spec.filter.other_than_source:
+                # "…all **other** creatures that share a creature type with
+                # it": other than the event's object, which this sweep has no
+                # key to exclude — ``other_than_source`` is the ability's own
+                # source, a different permanent.
+                raise LoweringError(
+                    "'other' beside a type shared with the event's object names "
+                    "that object, which the tap/untap sweep cannot exclude",
+                    node=node,
+                )
+            spec = dataclasses.replace(
+                spec,
+                filter=dataclasses.replace(
+                    spec.filter, shares_creature_type_with=None
+                ),
+            )
         # Two checks and they ask different things, which is why both stay.
         # This one is about the **AST**: a field of `ObjectFilter` that
         # `to_payload` does not carry would be a restriction dropped before the
@@ -585,6 +619,17 @@ def _lower_tap(
                 # ``with_keywords`` stays absent on round 43's rule: no card
                 # in the pool sweeps a tap over the creatures that *have* one.
                 "without_keywords",
+                # "Tap all creatures **with toughness 2 or less**."
+                # (Thundercloud Elemental.) A layer-7 characteristic read as
+                # the sweep resolves: a literal bound reaches the payload as
+                # ``toughness`` ({op, value}) and ``subject_matches`` compares
+                # it against ``effective_toughness``, so a creature pumped in
+                # response stays untapped. A variable bound is never emitted
+                # (``_payloads``), and ``testable_filter_payload`` below
+                # refuses the set field it leaves behind. ``power`` stays
+                # absent on round 43's rule: nothing in the pool sweeps a tap
+                # by power.
+                "toughness",
             }),
         )
         if leftovers:
@@ -622,6 +667,8 @@ def _lower_tap(
         kind = "tap_all_matching" if isinstance(node, ast.Tap) else "untap_all_matching"
         if chosen_type:
             described = {**described, **chosen_type}
+        if shared_referent is not None:
+            described = {**described, "shares_creature_type_with": shared_referent}
         # "**Target player** untaps all basic lands they control." (Early
         # Harvest.) The printed subject is a *chosen seat* (CR 601.2c) and the
         # noun phrase records it as `controller: "that_player"` — which the

@@ -513,9 +513,11 @@ def _lower_become_that_type(
     * **one targeted creature.** The noun phrase is what the picker offers and
       the handler re-asks, so it is described; a set ("all creatures become
       that type") is a different write nothing here performs.
-    * **until end of turn.** The only window with a sweep behind this record
-      (the cleanup step ends a gained type by its ``duration``); any other,
-      and the absent one, would be a creature type that never comes off.
+    * **until end of turn, or no window at all.** The cleanup step ends a
+      gained type by its ``duration``; the absent window is CR 611.2a's
+      indefinite effect (Ageless Sentinels, Proteus Machine) and is meant
+      never to come off. Any other printed window would be a creature type
+      that outlives what the card says, because nothing ends it.
 
     "…becomes **the creature type of your choice**" (``of_your_choice``) is
     the same set with the question asked by this sentence: the
@@ -545,12 +547,18 @@ def _lower_become_that_type(
     word_source: dict[str, object] = {
         "subtype_from": CHOSEN_CREATURE_TYPE_THIS_WAY
     }
-    if node.subtype is not None:
+    if node.subtypes:
         if node.of_your_choice:
             raise LoweringError(
                 "a creature type is printed or chosen, not both", node=node
             )
-        word_source = {"subtype": node.subtype}
+        # One printed word keeps the key it always had (Shade's Breath's
+        # payload is byte-identical); several ("a Bird Giant", Ageless
+        # Sentinels) are one set and travel as one list.
+        word_source = (
+            {"subtype": node.subtypes[0]} if len(node.subtypes) == 1
+            else {"subtypes": list(node.subtypes)}
+        )
     elif node.of_your_choice:
         prelude = (
             OracleInstruction(
@@ -562,15 +570,26 @@ def _lower_become_that_type(
         raise LoweringError(
             "'that type' names a type no step of this effect chose", node=node
         )
-    if node.duration.kind not in ("until_end_of_turn", "this_turn"):
+    # Two windows: until end of turn, which the cleanup step ends by the
+    # record's ``duration``, and **none at all** (CR 611.2a), which nothing
+    # ends — "it becomes a Bird Giant" (Ageless Sentinels), "it becomes the
+    # creature type of your choice. (This effect lasts indefinitely.)" (Proteus
+    # Machine). The indefinite record is ``type_changes.gain_types``' own
+    # "permanent" duration, the one Ashnod's Transmogrant's gained type
+    # carries; it goes with the permanent, because an object that leaves the
+    # battlefield returns as a new one (CR 400.7). Any other printed window
+    # would be a type that never comes off, so it still refuses.
+    if node.duration.kind not in ("until_end_of_turn", "this_turn", None):
         raise LoweringError(
             "no sweep ends a creature-type change at "
-            f"{node.duration.kind or 'no duration'}",
+            f"{node.duration.kind}",
             node=node,
         )
     payload: dict[str, object] = {
         **word_source,
-        "duration": "until_end_of_turn",
+        "duration": (
+            "permanent" if node.duration.kind is None else "until_end_of_turn"
+        ),
     }
     if node.in_addition:
         # CR 205.1b: "…in addition to its other types" keeps every creature

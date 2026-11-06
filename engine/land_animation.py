@@ -38,6 +38,12 @@ lands.**"), which says nothing the one-sentence spelling does not. All three
 are payload on the same instruction, and :func:`land_animation_reaches` is the
 one answer to "which lands", asked by the layer-4 refresh and the layer-6 grant
 alike.
+
+**A creature type since Scourge**: "Forests you control are 1/1 green **Elf**
+creatures that are still lands" (Ambush Commander). The words between the
+colour and "creatures" are creature types (CR 205.3m), added in layer 4 beside
+the creature card type — "still lands" is CR 205.1b's retention, so the land
+keeps every type it had — and read off the vocabulary, never a list here.
 """
 
 from __future__ import annotations
@@ -87,6 +93,9 @@ class LandAnimation:
     keywords   -- the keyword abilities the animated lands have ("…creatures
                   **with first strike**"), layer 6, lowercase; empty for a line
                   that prints none
+    creature_types -- the creature types the animated lands have ("…1/1 green
+                  **Elf** creatures", Ambush Commander), layer 4, lowercase;
+                  empty for a line that prints none
     """
 
     land_type: str | None
@@ -95,6 +104,7 @@ class LandAnimation:
     color: str | None = None
     controller: str | None = None
     keywords: tuple[str, ...] = ()
+    creature_types: tuple[str, ...] = ()
 
 
 @lru_cache(maxsize=1)
@@ -135,11 +145,13 @@ _UNTYPED_NOUNS = ("lands", "land")
 # still lands" or the same clause as a sentence of its own ("…. They're still
 # lands", the spelling Oracle uses once anything follows "creatures"). Every
 # optional group is a word the dataclass carries, so nothing here is matched
-# and dropped.
+# and dropped: the words in front of "creatures" are an optional colour and
+# then creature types (Ambush Commander's "green Elf"), split and checked word
+# by word in :func:`_adjectives`, which refuses any word that is neither.
 _PATTERN = re.compile(
     r"^(?:all (?P<type>[a-z'-]+)|(?P<own_type>[a-z'-]+) you control)"
     r" are (?P<power>\d+)/(?P<toughness>\d+)"
-    r"(?: (?P<color>[a-z]+))? creatures"
+    r"(?: (?P<adjectives>[a-z' -]+?))? creatures"
     r"(?: with (?P<keywords>[a-z ,]+?))?"
     r"(?: that are still lands|\. they're still lands)$"
 )
@@ -168,6 +180,32 @@ def _keyword_list(words: str | None) -> tuple[str, ...] | None:
     return tuple(names)
 
 
+def _adjectives(words: str | None) -> tuple[str | None, tuple[str, ...]] | None:
+    """The colour and the creature types the words before "creatures" name, or
+    None when any word is neither.
+
+    "black" (Kormus Bell) is a colour, "green Elf" (Ambush Commander) a colour
+    and a creature type; the colour comes first, as English prints it. A word
+    outside both — "1/1 **artifact** creatures" — refuses the whole line
+    rather than animating the lands as if it were not printed. Creature types
+    are CR 205.3m's list in ``data/vocabulary/``.
+    """
+    if not words:
+        return None, ()
+    vocabulary = _vocabulary()
+    tokens = words.split()
+    color = None
+    if tokens and tokens[0] in vocabulary.COLOR_WORDS:
+        color = vocabulary.COLOR_WORDS[tokens[0]]
+        tokens = tokens[1:]
+    creature_types = []
+    for token in tokens:
+        if token not in vocabulary.CREATURE_TYPES:
+            return None
+        creature_types.append(token)
+    return color, tuple(creature_types)
+
+
 def land_animation_for(normalized_line: str) -> LandAnimation | None:
     """The land animation *normalized_line* imposes, or None.
 
@@ -192,16 +230,14 @@ def land_animation_for(normalized_line: str) -> LandAnimation | None:
         land_type = _land_subtype(type_word)
         if land_type is None:
             return None
-    color_word = match.group("color")
-    color = None
-    if color_word is not None:
-        color = _vocabulary().COLOR_WORDS.get(color_word)
-        # "All Swamps are 1/1 *artifact* creatures that are still lands" would
-        # reach here with an adjective this table cannot express. Refusing keeps
-        # the card unsupported and loud rather than animating it as if the word
-        # were not printed.
-        if color is None:
-            return None
+    # "All Swamps are 1/1 *artifact* creatures that are still lands" would
+    # reach here with an adjective this table cannot express. Refusing keeps
+    # the card unsupported and loud rather than animating it as if the word
+    # were not printed.
+    adjectives = _adjectives(match.group("adjectives"))
+    if adjectives is None:
+        return None
+    color, creature_types = adjectives
     return LandAnimation(
         land_type=land_type,
         power=int(match.group("power")),
@@ -209,6 +245,7 @@ def land_animation_for(normalized_line: str) -> LandAnimation | None:
         color=color,
         controller=controller,
         keywords=keywords,
+        creature_types=creature_types,
     )
 
 
@@ -231,6 +268,9 @@ def land_animation_payload(animation: LandAnimation) -> dict[str, object]:
         payload["controller"] = animation.controller
     if animation.keywords:
         payload["keywords"] = list(animation.keywords)
+    # Scourge's key, emitted only when printed, for the same reason.
+    if animation.creature_types:
+        payload["creature_types"] = list(animation.creature_types)
     return payload
 
 
@@ -245,6 +285,9 @@ def land_animation_from_payload(payload: dict) -> LandAnimation:
         color=payload.get("color"),
         controller=str(controller) if controller else None,
         keywords=tuple(str(word) for word in payload.get("keywords") or ()),
+        creature_types=tuple(
+            str(word) for word in payload.get("creature_types") or ()
+        ),
     )
 
 

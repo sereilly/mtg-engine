@@ -235,6 +235,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # object and put it on another, and CR 122.5 makes that one action.
     "move_counter_from_self": "counters",
     "move_all_counters_to_self": "counters",
+    # Forgotten Ancient: the move with how many and onto which left to the
+    # resolution (CR 608.2d), still one action per CR 122.5.
+    "distribute_counters_from_self": "counters",
     "remove_counter_from_self": "counters",
     "remove_all_counters_from_self": "counters",
     # Corrosion: the sweep spelling of the row above, over a described set

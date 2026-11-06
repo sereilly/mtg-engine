@@ -30,6 +30,7 @@ from .combat_restrictions import combat_restriction_for
 from .target_immunity import immunity_claims_line
 from .lord_buffs import lord_buff_for
 from .zone_copies import ZONE_TOP_COPY_KIND
+from .land_animation import LAND_ANIMATION_KIND
 from .static_bonuses import static_bonus_for
 from .grammar import compile_line as compile_grammar_line
 from .line_normalization import _PARENTHETICAL_RE, normalize_creature_line
@@ -134,6 +135,18 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # honoured a creature printing it, and the card came back "text too
         # complex" for its only line.
         PLAYER_KEYWORD_STATIC_KIND,
+        # "Forests you control are 1/1 green Elf creatures that are still
+        # lands." (Ambush Commander.) A land animator printed on a creature —
+        # the same CR 613 layer-4/5/7b static Living Lands and Natural
+        # Emergence print on enchantments, read by the board-wide type pass
+        # (``mixins/board_statics._board_type_statics``) off every permanent's
+        # compiled program whatever its card type. It reaches the grammar
+        # through ``engine/grammar/derived.py``, which hands over
+        # ``engine/land_animation.py``'s own payload, so the gate and the
+        # dispatch are one table; without this row the creature came back
+        # "text too complex" for a line the noncreature path has claimed since
+        # Alpha.
+        LAND_ANIMATION_KIND,
     }
 )
 

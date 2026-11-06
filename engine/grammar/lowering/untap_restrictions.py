@@ -243,9 +243,28 @@ def _lower_doesnt_untap_next_step(
         and not subject.targeted
         and event == "land_tapped_for_mana"
     )
+    # "Whenever this creature deals combat damage to a creature, tap that
+    # creature. **That creature** doesn't untap during its controller's next
+    # untap step." (Mercurial Kite.) The demonstrative with its noun written
+    # out, after a sentence of this same effect that tapped one object — the
+    # singular spelling of the bound plural, and Whip Vine's "That creature"
+    # one restriction over. It names what *that tap* recorded
+    # (``_TAPPED_PERMANENTS``), not the trigger's own object, so it falls to the
+    # back-reference read below; the noun is a restatement, which is why the
+    # card type is the only narrowing that read honours. Only where neither
+    # event-bound "that" above claims the word, so Labyrinth Minotaur and
+    # Winter's Night keep the referents they had.
+    bound_tapped = (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and not subject.targeted
+        and not bound_pair
+        and not bound_tapped_land
+        and _TAPPED_PERMANENTS in produced
+    )
     if not bare_pronoun and not chosen and not own_source and not swept and (
         not bound_pair
-    ) and not bound_tapped_land and (
+    ) and not bound_tapped_land and not bound_tapped and (
         not isinstance(subject, ast.TargetSpec) or subject.quantifier != "those"
     ):
         raise LoweringError(

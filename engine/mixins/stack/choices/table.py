@@ -142,5 +142,6 @@ register_choices(
     hand.OUTSIDE_GAME_PICK_SPEC,
     entry_choices.ENTRY_REVEAL_SPEC,
     spells.TARGET_GROUP_ORDER_SPEC,
+    permanents.COUNTER_DISTRIBUTION_SPEC,
     # Append a new kind here, at the bottom.
 )

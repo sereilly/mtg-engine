@@ -192,6 +192,27 @@ EVENT_SUBJECT_LAST_KNOWN_EVENTS: frozenset[str] = frozenset({
 })
 
 
+#: Death conditions whose fire site freezes the creature that died **as it
+#: last existed on the battlefield** (``oracle_types.EVENT_SUBJECT_LAST_KNOWN``,
+#: written into ``mixins/deaths._fire_creature_dies_triggers``' context).
+#:
+#: Not a part of :data:`_EVENT_SUBJECT_OBJECTS` and not of the set above, on
+#: purpose: those are claims that an *id* resolves to a permanent, and a dead
+#: creature's id resolves to nothing (CR 400.7) — every lowering that reads
+#: those sets would act on a battlefield object the death took away. This one
+#: admits only readers of the object's **characteristics**, which CR 608.2h's
+#: last-known information answers: "…tap all untapped creatures that share a
+#: creature type **with it**" (Faces of the Past), read by
+#: ``_cost_records.shared_creature_type_referent``.
+#:
+#: Only the board-wide condition the pool prints the pronoun under; the two
+#: controller-scoped spellings announced beside it share the context and are a
+#: row each the day a card needs one.
+DEAD_SUBJECT_LAST_KNOWN_EVENTS: frozenset[str] = frozenset({
+    "creature_dies",
+})
+
+
 def dealer_is_event_subject(
     source, event: str | None, *, causative: bool = False,
 ) -> bool:

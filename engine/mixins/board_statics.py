@@ -42,7 +42,8 @@ from ..type_layer import (attached_animation_type_effect,
                           land_animation_type_effect, land_type_effect,
                           lost_supertype_effect)
 from ..type_changes import (LAND_ANIMATION_ORDER, add_derived_lost_supertype,
-                            clear_derived_type_changes, set_animates_host,
+                            clear_derived_type_changes,
+                            land_animation_types_key, set_animates_host,
                             set_static_type_order)
 from ..type_statics import TypeStatic, apply_type_statics
 from ..handlers._targets import attached_host
@@ -50,6 +51,26 @@ from ..subject_filters import subject_matches
 from ..models import Permanent
 from ..oracle import compile_card_oracle
 from ..static_bonuses import conditional_static_holds
+
+
+def _record_land_animation_order(
+    permanent: Permanent, source: Permanent, animation: LandAnimation,
+    stamp: int, order: int,
+) -> None:
+    """Where a land animator applied to *permanent* in layer 4: the one shared
+    key for "is a creature" (additions of one card type commute, so the first
+    place wins), and — when the animator prints creature types ("…1/1 green
+    **Elf** creatures", Ambush Commander) — a key of the animator's own, so
+    the collector re-applies those words where this animator took its place
+    (``type_changes.land_animation_types_key``)."""
+    set_static_type_order(
+        permanent, LAND_ANIMATION_ORDER, timestamp=stamp, order=order,
+    )
+    if animation.creature_types:
+        set_static_type_order(
+            permanent, land_animation_types_key(source),
+            timestamp=stamp, order=order,
+        )
 
 
 class BoardStaticsMixin:
@@ -353,9 +374,10 @@ class BoardStaticsMixin:
             ),
             effect=lambda permanent, stamp, order: land_animation_type_effect(
                 id(permanent), timestamp=stamp, sequence=order,
+                subtypes=animation.creature_types,
             ),
-            record=lambda permanent, stamp, order: set_static_type_order(
-                permanent, LAND_ANIMATION_ORDER, timestamp=stamp, order=order,
+            record=lambda permanent, stamp, order: _record_land_animation_order(
+                permanent, source, animation, stamp, order,
             ),
         )
 

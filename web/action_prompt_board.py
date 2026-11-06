@@ -420,6 +420,33 @@ def _action_loyalty_recipient_confirm(session, req, seat_type):
     if not session.game.confirm_loyalty_recipient(req.seat, req.target_permanent_id):
         raise HTTPException(status_code=400, detail="invalid loyalty-counter recipient")
 
+@action_handler("counter_distribution_confirm")
+def _action_counter_distribution_confirm(session, req, seat_type):
+    # Forgotten Ancient: how many counters onto which creatures, as one answer
+    # — the shape a divided announcement already arrives in
+    # (``divided_targets``: a creature by ``id`` and its ``amount``). An
+    # absent or empty list moves none, which "any number" allows. The engine
+    # holds every id to the live candidates and the total to what the source
+    # still has, so a client cannot move more than is there.
+    pending = next(
+        (c for c in session.game.pending_choices_of("counter_distribution")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no counter distribution pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    ids, amounts = [], []
+    for entry in req.divided_targets or []:
+        if entry.id is None or entry.amount is None:
+            raise HTTPException(
+                status_code=400,
+                detail="each entry names a creature by id and how many counters",
+            )
+        ids.append(entry.id)
+        amounts.append(entry.amount)
+    if not session.game.confirm_counter_distribution(req.seat, ids, amounts):
+        raise HTTPException(status_code=400, detail="invalid counter distribution")
+
 @action_handler("player_choice_confirm")
 def _action_player_choice_confirm(session, req, seat_type):
     # Backdraft: "Choose a player who cast one or more sorcery spells this

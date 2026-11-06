@@ -1461,6 +1461,50 @@ def _lilianas_scrounger():
     return game
 
 
+def _plus_one_counters(game: Game, seat: int, name: str) -> int:
+    from engine.named_counters import counters_on
+
+    return counters_on(on_board(game, seat, name), "+1/+1")
+
+
+@scenario(
+    "counter_distribution", "Forgotten Ancient",
+    answer=lambda g, c: {
+        "permanent_ids": [on_board(g, 0, "Grizzly Bears").permanent_id],
+        "amounts": [2],
+    },
+    wire=lambda g, c: {"divided_targets": [
+        {"seat": 0, "id": on_board(g, 0, "Grizzly Bears").permanent_id, "amount": 2},
+    ]},
+    then=lambda g: _assert(
+        _plus_one_counters(g, 0, "Craw Wurm") + _plus_one_counters(g, 0, "Grizzly Bears")
+        == 3
+    ),
+)
+def _forgotten_ancient():
+    """"…you may move any number of +1/+1 counters from this creature onto
+    other creatures." No shipped card prints it — the first is Scourge's
+    Forgotten Ancient, a measured set this pool-wide census does not load — so
+    it is driven over the instruction the card lowers to, from a Craw Wurm
+    holding three counters, the way ``face_down_look`` is."""
+    from engine.game_types import OracleExecutionContext
+    from engine.oracle_types import OracleInstruction
+
+    game = duel(boards=(("Craw Wurm", "Grizzly Bears"), ("Grizzly Bears",)))
+    source = on_board(game, 0, "Craw Wurm")
+    game.place_plus1_counters(source, 3)
+    instruction = OracleInstruction("distribute_counters_from_self", "", {
+        "counter": "+1/+1",
+        "filter": {"type_filter": "creature", "exclude_self": True},
+    })
+    context = OracleExecutionContext(
+        caster=game.players[0], target=game.players[1], card=source.card,
+        source_permanent=source,
+    )
+    game._execute_oracle_instruction(instruction, context)
+    return game
+
+
 @scenario(
     "keep_permanents", "Cataclysm",
     answer=lambda g, c: {"permanent_ids": [on_board(g, 1, "Grizzly Bears").permanent_id, on_board(g, 1, "Forest").permanent_id]},

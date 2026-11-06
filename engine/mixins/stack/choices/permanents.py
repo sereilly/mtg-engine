@@ -940,6 +940,164 @@ class PermanentChoicesMixin:
         if not self._resolve_loyalty_recipient(choice, self.permanent_id_of(pick)):
             self.discard_pending_choice(choice)
 
+    # -- Counters moved from the source onto any of a set (Forgotten Ancient)
+
+    def arm_counter_distribution(
+        self, player_index: int, *, card_name: str, source, counter: str,
+        filter: dict, candidates: list,
+    ) -> PendingChoice | None:
+        """Ask *player_index* how many *counter* counters to move off *source*
+        and onto which of *candidates* (CR 608.2d, CR 122.5).
+
+        "…you may move any number of +1/+1 counters from this creature onto
+        other creatures." (Forgotten Ancient.) Nothing is targeted — the card's
+        2022-12-08 ruling: "You choose how many +1/+1 counters will be moved
+        (and onto which creatures) as the ability resolves" — so the set is the
+        printed noun phrase enumerated now and asked again at the answer.
+        """
+        return self.arm_pending_choice(
+            "counter_distribution", player_index,
+            card_name=card_name,
+            counter=counter,
+            source_id=self.permanent_id_of(source),
+            filter=dict(filter or {}),
+            _source=source,
+            _candidates=list(candidates),
+        )
+
+    def counter_distribution_maximum(self, choice: PendingChoice) -> int:
+        """How many counters the source still has to give — the ceiling of
+        the answer, read now: a counter that came off in between is not one
+        the seat can move (CR 122.5: a move takes what is there)."""
+        from ....named_counters import counters_on
+
+        source = choice.data.get("_source")
+        if source is None or not self.is_on_battlefield(source):
+            return 0
+        return counters_on(source, str(choice.data.get("counter") or "+1/+1"))
+
+    def live_counter_distribution(self, choice: PendingChoice) -> list:
+        """The armed candidates still on the battlefield and still matching the
+        printed noun phrase ("other creatures"), by identity.
+
+        Public because the prompt renderer is the second legitimate caller: the
+        list offered and the list an answer is held to are one rule. The source
+        is never one of them — "other" (CR 109.1's identity, ``exclude_self``)
+        is asked against it, and a move onto itself is no move (CR 122.5).
+        """
+        described = dict(choice.data.get("filter") or {})
+        source = choice.data.get("_source")
+        return [
+            perm
+            for perm in (choice.data.get("_candidates") or ())
+            if perm is not source
+            and self.is_on_battlefield(perm)
+            and subject_matches(
+                self, perm, described,
+                observer=choice.player_index, source=source,
+            )
+        ]
+
+    def confirm_counter_distribution(
+        self, player_index: int, permanent_ids: list, amounts: list,
+    ) -> bool:
+        """*permanent_ids* names each receiving creature by stable id and
+        *amounts* how many counters it gets, position by position. Two empty
+        lists are a legal answer: "any number" includes none."""
+        return self.resolve_pending_choice(
+            "counter_distribution", player_index,
+            permanent_ids=permanent_ids, amounts=amounts,
+        )
+
+    def _resolve_counter_distribution(
+        self, choice: PendingChoice, permanent_ids: list, amounts: list,
+    ) -> bool:
+        """Move the counters the seat named, as one action (CR 122.5).
+
+        Validated whole before anything moves, so one bad entry rejects the
+        answer and leaves the prompt queued: the two lists pair up, every id is
+        a live candidate named once, every amount is a whole number of one or
+        more, and together they ask for no more counters than the source still
+        has. Then the total comes off the source and each share goes on its
+        creature, through the counter seams (``named_counters.remove_counters``,
+        ``Game.place_pt_counters``) so a P/T counter takes its layer-7d
+        contribution with it in both directions (CR 122.1a).
+        """
+        from ....named_counters import remove_counters
+
+        ids = list(permanent_ids or [])
+        shares = list(amounts or [])
+        if len(ids) != len(shares):
+            return False
+        if not all(isinstance(pid, int) and not isinstance(pid, bool) for pid in ids):
+            return False
+        if len(set(ids)) != len(ids):
+            return False
+        if not all(
+            isinstance(share, int) and not isinstance(share, bool) and share >= 1
+            for share in shares
+        ):
+            return False
+        live = self.live_counter_distribution(choice)
+        chosen = []
+        for pid in ids:
+            perm = self.permanent_by_id(pid)
+            if perm is None or not any(perm is candidate for candidate in live):
+                return False
+            chosen.append(perm)
+        total = sum(shares)
+        if total > self.counter_distribution_maximum(choice):
+            return False
+        self.discard_pending_choice(choice)
+        card_name = choice.data.get("card_name", "")
+        counter = str(choice.data.get("counter") or "+1/+1")
+        if not chosen:
+            self.log.append(f"{card_name}: no {counter} counters moved")
+            return True
+        source = choice.data.get("_source")
+        remove_counters(source, counter, total)
+        for perm, share in zip(chosen, shares):
+            self.place_pt_counters(perm, counter, share)
+        self.log.append(
+            f"{card_name}: moved "
+            + ", ".join(
+                f"{share} {counter} counter(s) onto {perm.card.name}"
+                for perm, share in zip(chosen, shares)
+            )
+        )
+        self.check_state_based_actions()
+        return True
+
+    def _default_counter_distribution(self, choice: PendingChoice) -> None:
+        """The stated policy: **every counter onto the seat's own strongest
+        other creature** — the greatest power, then toughness, ties broken by
+        board order — and **none** when the seat controls no candidate.
+
+        The "may" in front has already been answered yes (Tetravus's reason,
+        ``remove_any_number_of_counters_from_self``), so moving nothing would
+        make accepting the offer do nothing; and a counter put on another
+        seat's creature is a gift to that seat, which no stated policy makes.
+        A card whose AI should choose otherwise needs a valuation, not a
+        branch here.
+        """
+        maximum = self.counter_distribution_maximum(choice)
+        own = [
+            perm for perm in self.live_counter_distribution(choice)
+            if self.controller_index_of(perm) == choice.player_index
+        ]
+        if maximum <= 0 or not own:
+            self._resolve_counter_distribution(choice, [], [])
+            return
+        pick = max(
+            own,
+            key=lambda perm: (perm.effective_power, perm.effective_toughness,
+                              -own.index(perm)),
+        )
+        if not self._resolve_counter_distribution(
+            choice, [self.permanent_id_of(pick)], [maximum]
+        ):
+            self._resolve_counter_distribution(choice, [], [])
+
     # -- Face-down permanents looked at (CR 708.5; Aven Soulgazer, Spy Network)
 
     def arm_face_down_look(
@@ -1161,5 +1319,29 @@ LOYALTY_RECIPIENT_SPEC = ChoiceSpec(
     # seat never queues it — it takes the stated default where it stands.
     default_at_arm=True,
     # Nothing later in the same resolution reads the answer: the counter is the
+    # last thing the ability does.
+)
+
+
+COUNTER_DISTRIBUTION_SPEC = ChoiceSpec(
+    "counter_distribution",
+    resolve=lambda game, choice, r: game._resolve_counter_distribution(
+        choice, r.get("permanent_ids") or [], r.get("amounts") or []
+    ),
+    default=lambda game, choice: game._default_counter_distribution(choice),
+    action="counter_distribution_confirm",
+    prompt_key="counter_distribution",
+    blocked_detail=(
+        "choose how many counters to move and onto which creatures before "
+        "other actions"
+    ),
+    # The ability has to finish resolving, so a non-interactive seat never
+    # queues it — it takes the stated default where it stands. "No player may
+    # take actions until the ability has finished resolving" (the card's
+    # ruling) is the hold a person's answer gets from ``blocked_detail``.
+    default_at_arm=True,
+    # Which creatures got counters is public (no CR 400.2 hidden zone).
+    spectator_visible=True,
+    # Nothing later in the same resolution reads the answer: the move is the
     # last thing the ability does.
 )

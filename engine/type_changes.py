@@ -97,6 +97,22 @@ ANIMATES_HOST = "animates_host"
 #: land became a creature.
 LAND_ANIMATION_ORDER = "land_animation"
 
+
+def land_animation_types_key(animator: "Permanent") -> tuple[str, int]:
+    """The :data:`STATIC_TYPE_ORDER` key of one land animator's **creature
+    types** ("…are 1/1 green **Elf** creatures that are still lands", Ambush
+    Commander).
+
+    One key per animator rather than :data:`LAND_ANIMATION_ORDER`'s one for
+    all, because creature types are not the same addition from every animator:
+    a later effect that *sets* creature types (CR 205.1a, "becomes that type")
+    replaces those an earlier animator added and not those a later one did, so
+    each animator's words have to be re-applied at the place that animator
+    took. A pair, so it cannot collide with a global static's
+    ``permanent_id`` key on the same permanent.
+    """
+    return (LAND_ANIMATION_ORDER, int(animator.permanent_id))
+
 #: This module's channels that layer 4 reads off a permanent's **own**
 #: record when it collects: what an effect added, what one took away, and
 #: what a static is taking. Named here, by the module that owns the keys,
@@ -284,7 +300,8 @@ __all__ = [
     "LAND_ANIMATION_ORDER", "LOST_TYPES", "STATIC_TYPE_ORDER",
     "add_derived_lost_supertype", "animates_host",
     "clear_derived_type_changes", "derived_lost_supertypes",
-    "end_type_changes", "gain_types", "gained_types", "lose_types",
+    "end_type_changes", "gain_types", "gained_types",
+    "land_animation_types_key", "lose_types",
     "lost_types", "set_animates_host", "set_static_type_order",
     "static_type_order",
 ]

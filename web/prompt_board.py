@@ -651,6 +651,39 @@ def _loyalty_recipient(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("counter_distribution")
+def _counter_distribution(ctx: PromptContext, choices: list) -> dict:
+    """"…you may move any number of +1/+1 counters from this creature onto
+    other creatures." (Forgotten Ancient.) How many counters, and onto which
+    of the creatures the printed noun phrase names — the seat may split them
+    among several, or move none.
+
+    ``maximum`` is what the source still holds, read now; ``candidates`` come
+    from the engine's own liveness rule (``live_counter_distribution``), so the
+    list offered and the list the answer is held to are one rule. ``seat`` /
+    ``index`` ride beside the stable ``id`` for the canvas, which addresses a
+    card by its slot; the answer names each creature by id with its amount
+    (``divided_targets``), and the engine refuses a total over ``maximum``.
+    """
+    choice = choices[0]
+    candidates = []
+    for perm in ctx.game.live_counter_distribution(choice):
+        candidates.append({
+            "seat": ctx.game.controller_index_of(perm),
+            "index": ctx.game.battlefield_index_of(perm),
+            "id": ctx.game.permanent_id_of(perm),
+            "name": perm.card.name,
+        })
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "counter": choice.data.get("counter", "+1/+1"),
+        "source_id": choice.data.get("source_id"),
+        "maximum": ctx.game.counter_distribution_maximum(choice),
+        "candidates": candidates,
+    }
+
+
 @prompt_renderer("permanent_choice")
 def _permanent_choice(ctx: PromptContext, choices: list) -> dict:
     """"…to another permanent of that type" (Enchantment Alteration): the

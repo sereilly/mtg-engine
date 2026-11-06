@@ -5,7 +5,9 @@ from typing import TYPE_CHECKING
 from ..game_types import single_chosen_id
 from ..oracle_types import TAPPED_THIS_WAY_OBJECTS, X_FROM_COUNT
 from ._amounts import resolve_amount
-from ._chosen import resolve_chosen_card_type_in_resolution
+from ._chosen import (SHARES_CREATURE_TYPE_WITH,
+                      resolve_chosen_card_type_in_resolution,
+                      resolve_shared_creature_type)
 from ._filters import permanent_matches_filter
 from ._targets import (recorded_permanent_ids, attached_host,
                        block_pair_permanents, defending_player_seat,
@@ -403,6 +405,21 @@ def _tap_or_untap_all_matching(
             game.log.append(f"{context.card.name}: no creature type was chosen")
             return True, "resolved"
         described["subtype_filter"] = str(chosen_subtype)
+    # "…tap all untapped creatures **that share a creature type with it**…"
+    # (Faces of the Past.) The far end resolved into its creature types as this
+    # resolves (``resolve_shared_creature_type``, the destroy sweep's reader):
+    # the creature that died, as it last existed. Unresolved — nothing was
+    # frozen for the referent to name — the sweep turns nothing, for the
+    # destroy sweep's reason: a dropped narrowing on a sweep takes the board.
+    names_nothing = False
+    if described.get(SHARES_CREATURE_TYPE_WITH):
+        described = resolve_shared_creature_type(described, context, game)
+        names_nothing = SHARES_CREATURE_TYPE_WITH in described
+        if names_nothing:
+            game.log.append(
+                f"{context.card.name}: nothing for 'shares a creature type "
+                "with' to name"
+            )
     # "…all untapped Islands **that player** controls" (Monsoon). The seat is
     # the one the firing event froze (CR 603.10), not the source's controller —
     # which is the wrong seat on every end step but their own.
@@ -462,7 +479,7 @@ def _tap_or_untap_all_matching(
     # for it — so the matcher refused the word and this sweep matched the empty
     # set, which the log reported as "nothing to tap or untap" rather than as a
     # failure. Same reader as the damage sweep and the two target pickers.
-    matched = [
+    matched = [] if names_nothing else [
         perm for perm in game.all_permanents()
         if subject_matches(
             game, perm, described,

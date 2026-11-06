@@ -556,46 +556,54 @@ def set_target_creature_type(game: Game, instruction: OracleInstruction, context
     if target is None:
         game.log.append(f"{name}: no valid creature to change the type of")
         return True, "resolved"
-    word = _chosen_creature_type(game, instruction, context, name)
-    if word is None:
+    words = _chosen_creature_types(game, instruction, context, name)
+    if words is None:
         return True, "resolved"
-    _set_creature_type(game, (target,), word, name=name, instruction=instruction)
+    _set_creature_type(game, (target,), words, name=name, instruction=instruction)
     return True, "resolved"
 
 
-def _chosen_creature_type(
+def _chosen_creature_types(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
     name: str,
-) -> str | None:
-    """The creature type the record prints (``subtype``), or the one the
-    choosing step in front recorded (CR 608.2d), or None — logged — when
-    nobody chose one.
+) -> tuple[str, ...] | None:
+    """The creature types the record prints (``subtype``, or ``subtypes``
+    when the noun prints several), or the one the choosing step in front
+    recorded (CR 608.2d), or None — logged — when nobody chose one.
 
     An unanswered choice sets nothing: a creature that became a type nobody
-    picked is the wrong creature, and the catalog bound is CR 205.3m's.
+    picked is the wrong creature, and the catalog bound is CR 205.3m's — over
+    every printed word, so a list with one word outside it sets nothing
+    rather than the rest of the set.
     """
     from ..grammar.vocabulary import CREATURE_TYPES
 
-    # "…becomes a black **Shade**" (Shade's Breath): the word is printed on
-    # the record itself, so there is no choice to read back — the same
-    # catalog bound applies to it all the same.
-    printed = instruction.payload.get("subtype")
-    chosen = (
-        printed if printed is not None
-        else context.results.get(str(instruction.payload.get("subtype_from") or ""))
-    )
-    word = str(chosen or "").strip().lower()
-    if word not in CREATURE_TYPES:
+    # "…becomes a black **Shade**" (Shade's Breath), "…becomes **a Bird
+    # Giant**" (Ageless Sentinels): the words are printed on the record
+    # itself, so there is no choice to read back — the same catalog bound
+    # applies to them all the same.
+    printed = instruction.payload.get("subtypes")
+    if printed is None and instruction.payload.get("subtype") is not None:
+        printed = [instruction.payload.get("subtype")]
+    if printed is None:
+        printed = [
+            context.results.get(str(instruction.payload.get("subtype_from") or ""))
+        ]
+    words = tuple(str(word or "").strip().lower() for word in printed)
+    if not words or any(word not in CREATURE_TYPES for word in words):
         game.log.append(f"{name}: no creature type was chosen, so nothing changes")
         return None
-    return word
+    return words
 
 
 def _set_creature_type(
-    game: Game, perms, word: str, *, name: str, instruction: OracleInstruction,
+    game: Game, perms, words: tuple[str, ...], *, name: str,
+    instruction: OracleInstruction,
 ) -> None:
     """CR 205.1a's subtype set on each of *perms*: one layer-4 record apiece,
     each with its own timestamp (CR 613.7b) and the instruction's duration.
+    Every word of *words* is in the one record, so "a Bird Giant" replaces the
+    creature types once and leaves both.
 
     The one writer of the record for all four subjects (a target, the source,
     an Aura's host, every creature), so the record's shape — the key the layer
@@ -610,7 +618,7 @@ def _set_creature_type(
     for perm in perms:
         gain_types(
             perm,
-            subtypes=[word],
+            subtypes=list(words),
             source=name,
             duration=duration,
             # CR 205.1a: a subtype *set* replaces the subtypes "from the
@@ -624,12 +632,16 @@ def _set_creature_type(
     # decided for the whole board (CR 613.8a).
     game._refresh_dynamic_creatures()
     game._recalculate_lord_buffs()
-    article = "an" if word[:1] in "aeiou" else "a"
+    article = "an" if words[0][:1] in "aeiou" else "a"
+    named = " ".join(word.title() for word in words)
     retained = " in addition to its other types" if in_addition else ""
+    # The window the record carries, said as the card says it: the indefinite
+    # one (CR 611.2a, Proteus Machine) prints none.
+    window = " until end of turn" if duration == "until_end_of_turn" else ""
     for perm in perms:
         game.log.append(
-            f"{perm.card.name} became {article} {word.title()}{retained} until "
-            f"end of turn ({name})"
+            f"{perm.card.name} became {article} {named}{retained}{window} "
+            f"({name})"
         )
 
 
@@ -652,10 +664,10 @@ def set_self_creature_type(game: Game, instruction: OracleInstruction, context: 
     if not source.is_creature:
         game.log.append(f"{name}: is not a creature, so takes no creature type")
         return True, "resolved"
-    word = _chosen_creature_type(game, instruction, context, name)
-    if word is None:
+    words = _chosen_creature_types(game, instruction, context, name)
+    if words is None:
         return True, "resolved"
-    _set_creature_type(game, (source,), word, name=name, instruction=instruction)
+    _set_creature_type(game, (source,), words, name=name, instruction=instruction)
     return True, "resolved"
 
 
@@ -677,10 +689,10 @@ def set_enchanted_creature_type(game: Game, instruction: OracleInstruction, cont
     if host is None or not host.is_creature:
         game.log.append(f"{name}: enchants no creature, so nothing changes")
         return True, "resolved"
-    word = _chosen_creature_type(game, instruction, context, name)
-    if word is None:
+    words = _chosen_creature_types(game, instruction, context, name)
+    if words is None:
         return True, "resolved"
-    _set_creature_type(game, (host,), word, name=name, instruction=instruction)
+    _set_creature_type(game, (host,), words, name=name, instruction=instruction)
     return True, "resolved"
 
 
@@ -699,8 +711,8 @@ def set_each_creature_type(game: Game, instruction: OracleInstruction, context: 
     from ..subject_filters import subject_matches
 
     name = context.card.name if context.card is not None else "Effect"
-    word = _chosen_creature_type(game, instruction, context, name)
-    if word is None:
+    words = _chosen_creature_types(game, instruction, context, name)
+    if words is None:
         return True, "resolved"
     filters = instruction.payload.get("filter") or {}
     observer = (
@@ -715,7 +727,7 @@ def set_each_creature_type(game: Game, instruction: OracleInstruction, context: 
     if not affected:
         game.log.append(f"{name}: no creature to change the type of")
         return True, "resolved"
-    _set_creature_type(game, affected, word, name=name, instruction=instruction)
+    _set_creature_type(game, affected, words, name=name, instruction=instruction)
     return True, "resolved"
 
 
