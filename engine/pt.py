@@ -269,6 +269,26 @@ def remove_temporary_pt(perm: Permanent, until: str) -> None:
         perm.toughness_bonus -= toughness
 
 
+def pt_change_text(power: int, toughness: int) -> str:
+    """A modification of +*power*/+*toughness* written the way a card prints
+    one (CR 613.4c's "+X/+Y"): each half signed, and a **zero half signed as
+    the other half is** — "-1/-0", "+2/+0", "-0/-2", never "-1/+0".
+
+    Every printed modification in the pool follows that convention (a zero
+    half never carries the sign its partner does not), so the log line reads
+    the card's own words. It was thirteen format sites each writing
+    ``{power:+}/{toughness:+}``, so a printed -1/-0 logged as "-1/+0" — the
+    sign of a zero is lost once the lowering has negated it. One formatter, so
+    the next pump's log line cannot pick a fourteenth spelling.
+    """
+    power, toughness = int(power), int(toughness)
+    if power == 0 and toughness < 0:
+        return f"-0/{toughness}"
+    if toughness == 0 and power < 0:
+        return f"{power}/-0"
+    return f"{power:+d}/{toughness:+d}"
+
+
 def switch_pt(perm: Permanent) -> None:
     """Layer 7d: switch power and toughness until end of turn (the flag is
     cleared at cleanup). Two switches cancel out."""

@@ -115,7 +115,10 @@ def test_tainted_pact_asks_about_each_card_and_waits_on_the_stack(set_pool):
     assert _names(item.card for item in game.stack) == ["Tainted Pact"]
     assert caster.graveyard == []
     assert game.waiting_prompt() is game.pending_choices[0]
-    assert "Tainted Pact resolved and moved to graveyard" not in game.log
+    assert not any(
+        line.startswith("Tainted Pact") and "moved to graveyard" in line
+        for line in game.log
+    )
 
     # Declining is one round of the process, not the end of it.
     assert game.confirm_optional_pay(0, accept=False)
@@ -142,7 +145,7 @@ def test_tainted_pact_ends_when_a_card_is_taken(set_pool):
     assert game.pending_choices == []
     assert game.stack == []
     assert _names(caster.graveyard) == ["Tainted Pact"]
-    assert "Tainted Pact finished resolving" in game.log
+    assert "Tainted Pact finished resolving and moved to graveyard" in game.log
 
 
 def test_tainted_pact_stops_on_a_second_card_of_one_name_and_offers_neither(set_pool):

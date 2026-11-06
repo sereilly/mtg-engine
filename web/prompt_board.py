@@ -12,11 +12,50 @@ cast by a prompt rather than from a hand.
 
 from __future__ import annotations
 
+from collections import Counter
+
 from engine.faces import face_cards
 from engine.grammar.vocabulary import display_type_word
 from engine.trigger_order import live_trigger_indices, trigger_card
 
 from .prompt_registry import PromptContext, prompt_renderer
+
+
+def _stack_place(stack_index: int) -> str:
+    """Where a stack object is, topmost being 0, in the words the stack is
+    read in."""
+    if stack_index <= 0:
+        return "top of the stack"
+    ordinal = stack_index + 1
+    if 10 <= ordinal % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(ordinal % 10, "th")
+    return f"{ordinal}{suffix} from the top"
+
+
+def _told_apart_on_the_stack(entries: list[dict]) -> list[dict]:
+    """*entries* with each ``stack`` candidate whose name another one shares
+    named with its place on the stack as well.
+
+    ``stack_targets.stack_object_label`` says whose a spell is and whether it
+    is a copy, which tells most look-alikes apart; two Shocks one player cast
+    still read "P2's Shock" twice, and the person choosing between them has
+    the stack in front of them, so the prompt says which is which by where
+    each sits — now, as it is shown (``stack_index``, topmost 0). Every other
+    entry, and every unique name, is left as it was."""
+    names = Counter(
+        entry.get("name") for entry in entries
+        if entry.get("kind") == "stack" and isinstance(entry.get("stack_index"), int)
+    )
+    for entry in entries:
+        if (
+            entry.get("kind") == "stack"
+            and isinstance(entry.get("stack_index"), int)
+            and names[entry.get("name")] > 1
+        ):
+            entry["name"] = f"{entry.get('name')} ({_stack_place(entry['stack_index'])})"
+    return entries
 
 
 @prompt_renderer("trigger_target")
@@ -89,7 +128,7 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     payload = {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
-        "candidates": candidates,
+        "candidates": _told_apart_on_the_stack(candidates),
     }
     # A seat that does not control the trigger and is asked for its target
     # anyway: "Whenever a creature enters, **that creature's controller** may
@@ -960,10 +999,10 @@ def _retarget_choice(ctx: PromptContext, choices: list) -> dict:
     return {
         "card_name": data.get("card_name", ""),
         "prompt": data.get("prompt", "Choose a new target."),
-        "options": [
+        "options": _told_apart_on_the_stack([
             _retarget_option(ctx, options[position], position)
             for position in ctx.game.live_retarget_choices(choice)
-        ],
+        ]),
     }
 
 
@@ -981,4 +1020,17 @@ def _retarget_option(ctx: PromptContext, option: dict, position: int) -> dict:
         if permanent is not None:
             out["id"] = permanent.permanent_id
             out["seat"] = ctx.game.controller_index_of(permanent)
+    # A spell (Psychic Battle's counterspell, Hindering Touch's storm copy):
+    # where it is on the stack as the client is shown it — ``stack_index``,
+    # topmost 0, the convention ``trigger_target``'s spell candidates use —
+    # and whose it is, so two of one name can be told apart and pointed at.
+    if option.get("kind") == "stack":
+        item = option.get("_stack_item")
+        stack = ctx.game.stack
+        position = next(
+            (place for place, waiting in enumerate(stack) if waiting is item), None
+        )
+        if position is not None:
+            out["stack_index"] = len(stack) - 1 - position
+            out["seat"] = getattr(item, "caster_index", None)
     return out

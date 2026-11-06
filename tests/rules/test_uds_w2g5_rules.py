@@ -121,7 +121,7 @@ def test_the_state_based_check_waits_for_the_last_answer(catalog_by_name):
 
     assert game.stack == []
     assert game.waiting_prompt() is None
-    assert "Recall finished resolving" in game.log
+    assert "Recall finished resolving and moved to graveyard" in game.log
 
 
 @pytest.mark.cr("602.2b", "608.2")

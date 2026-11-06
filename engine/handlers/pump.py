@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from ..destruction_events import mark_delayed_destruction
 from ..models import Permanent
-from ..pt import add_pt_modifier
+from ..pt import add_pt_modifier, pt_change_text
 from ..source_tapped_effects import record_while_tapped
 from ..keywords import grant_keyword
 from ._amounts import resolve_amount, count_from_payload
@@ -28,7 +28,8 @@ from ._common import apply_temp_pt_boost
 from ._filters import permanent_matches_filter
 from ._targets import (block_pair_permanents, attached_host,
                        defending_player_seat, resolve_target_permanent,
-                       resolve_target_permanents, resolve_target_slots)
+                       resolve_target_permanents, resolve_target_slots,
+                       target_ordinal)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -51,7 +52,7 @@ def berserk_pump(game: Game, instruction: OracleInstruction, context: OracleExec
         # attacked this turn." Mark it; the end step checks attacked_this_turn.
         mark_delayed_destruction(game, target_perm, "destroy_if_attacked_eot")
         game.log.append(
-            f"{card.name} gives {target_perm.card.name} {boost:+d}/+0 and "
+            f"{card.name} gives {target_perm.card.name} {pt_change_text(boost, 0)} and "
             "trample until end of turn"
         )
     else:
@@ -95,7 +96,7 @@ def pump_enchanted_creature(game: Game, instruction: OracleInstruction, context:
     apply_temp_pt_boost(enchanted, power_delta, toughness_delta)
     game.log.append(
         f"{card.name} grants {enchanted.card.name} "
-        f"{power_delta:+}/{toughness_delta:+} until end of turn"
+        f"{pt_change_text(power_delta, toughness_delta)} until end of turn"
     )
     return True, "resolved"
 
@@ -128,11 +129,11 @@ def pump_self(game: Game, instruction: OracleInstruction, context: OracleExecuti
     # is what the default keeps saying.
     if str(instruction.payload.get("duration") or "") == "indefinite":
         add_pt_modifier(source_permanent, power_delta, toughness_delta)
-        game.log.append(f"{card.name} gets {power_delta:+}/{toughness_delta:+}")
+        game.log.append(f"{card.name} gets {pt_change_text(power_delta, toughness_delta)}")
         return True, "resolved"
     apply_temp_pt_boost(source_permanent, power_delta, toughness_delta)
     game.log.append(
-        f"{card.name} gets {power_delta:+}/{toughness_delta:+} until end of turn"
+        f"{card.name} gets {pt_change_text(power_delta, toughness_delta)} until end of turn"
     )
     return True, "resolved"
 
@@ -236,7 +237,7 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
             apply_temp_pt_boost(creature, power_delta, toughness_delta, until=until)
         game.log.append(
             ", ".join(p.card.name for p in chosen[:maximum])
-            + f" each get {power_delta:+}/{toughness_delta:+} until "
+            + f" each get {pt_change_text(power_delta, toughness_delta)} until "
             + until.replace("_", " ")
             + f" ({card.name})"
         )
@@ -271,7 +272,7 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
         # or a printed "-2/-0" logged as "+-2" reads as a typo for a boost.
         game.log.append(
             f"{card.name} gives {target_perm.card.name} "
-            f"{power_delta:+}/{toughness_delta:+} until "
+            f"{pt_change_text(power_delta, toughness_delta)} until "
             + until.replace("_", " ")
         )
     return True, "resolved"
@@ -334,7 +335,7 @@ def pump_target_while_source_tapped(game: Game, instruction: OracleInstruction, 
     game._refresh_dynamic_creatures()
     game.log.append(
         f"{card.name} gives {target_perm.card.name} "
-        f"{power_delta:+d}/{toughness_delta:+d} while it remains tapped"
+        f"{pt_change_text(power_delta, toughness_delta)} while it remains tapped"
     )
     return True, "resolved"
 
@@ -389,7 +390,7 @@ def buff_creatures_global_while_source_tapped(
     game._refresh_dynamic_creatures()
     game.log.append(
         f"{context.card.name} gives {len(affected)} creature(s) "
-        f"{power_delta:+d}/{toughness_delta:+d} while it remains tapped"
+        f"{pt_change_text(power_delta, toughness_delta)} while it remains tapped"
     )
     return True, "resolved"
 
@@ -424,14 +425,18 @@ def pump_targets_until_eot(game: Game, instruction: OracleInstruction, context: 
     caster_index = game.players.index(context.caster)
     chosen = resolve_target_slots(game, context, len(slots))
 
-    taken: list[Permanent] = []
+    taken: list[tuple[int, Permanent]] = []
     for index, permanent in enumerate(chosen):
         wanted = slot_filters[index] if index < len(slot_filters) else {}
+        which = target_ordinal(index)
         if permanent is None or not game.is_on_battlefield(permanent):
-            game.log.append(f"{card.name}: nothing legal in slot {index + 1}")
+            game.log.append(f"{card.name}: its {which} target is no longer a legal target")
             continue
         if not permanent.is_creature or not permanent_matches_filter(permanent, wanted):
-            game.log.append(f"{card.name}: slot {index + 1} is no longer a legal target")
+            game.log.append(
+                f"{card.name}: its {which} target, {permanent.card.name}, is no "
+                "longer a legal target"
+            )
             continue
         # "you control" / "you don't control" are seat tests, which
         # permanent_matches_filter deliberately does not answer — the same split
@@ -441,18 +446,20 @@ def pump_targets_until_eot(game: Game, instruction: OracleInstruction, context: 
             continue
         if controller == "not_you" and game.controls(caster_index, permanent):
             continue
-        if distinct and any(permanent is seen for seen in taken):
+        earlier = next((at for at, seen in taken if seen is permanent), None)
+        if distinct and earlier is not None:
             game.log.append(
-                f"{card.name}: slot {index + 1} named a creature an earlier slot already took"
+                f"{card.name}: its {which} target, {permanent.card.name}, is "
+                f"already its {target_ordinal(earlier)} target"
             )
             continue
-        taken.append(permanent)
+        taken.append((index, permanent))
         spec = slots[index]
         power = resolve_amount(spec.get("power", 0), context.x_value)
         toughness = resolve_amount(spec.get("toughness", 0), context.x_value)
         apply_temp_pt_boost(permanent, power, toughness)
         game.log.append(
-            f"{card.name} gives {permanent.card.name} {power:+}/{toughness:+} until end of turn"
+            f"{card.name} gives {permanent.card.name} {pt_change_text(power, toughness)} until end of turn"
         )
     return True, "resolved"
 
@@ -491,7 +498,7 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     # buff, and said neither how much nor to how many.
     game.log.append(
         f"{card.name} gives {len(affected)} creature(s) "
-        f"{power_delta:+d}/{toughness_delta:+d} until end of turn"
+        f"{pt_change_text(power_delta, toughness_delta)} until end of turn"
     )
     return True, "resolved"
 
@@ -665,7 +672,7 @@ def pump_block_pair(game: Game, instruction: OracleInstruction, context: OracleE
         apply_temp_pt_boost(perm, power, toughness, until=until)
         game.log.append(
             f"{context.card.name} gives {perm.card.name} "
-            f"{power:+d}/{toughness:+d} until " + until.replace("_", " ")
+            f"{pt_change_text(power, toughness)} until " + until.replace("_", " ")
         )
         pumped += 1
     if not pumped:
@@ -764,6 +771,6 @@ def pump_event_subject(game: Game, instruction: OracleInstruction, context: Orac
     apply_temp_pt_boost(subject, power_delta, toughness_delta, until=until)
     game.log.append(
         f"{context.card.name} gives {subject.card.name} "
-        f"{power_delta:+d}/{toughness_delta:+d} until " + until.replace("_", " ")
+        f"{pt_change_text(power_delta, toughness_delta)} until " + until.replace("_", " ")
     )
     return True, "resolved"

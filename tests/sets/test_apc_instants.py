@@ -2081,8 +2081,7 @@ def test_w2g4_shimmering_mirage_draws_only_after_the_type_is_named(
     assert game.log[mark + 3:] == [
         "Shimmering Mirage: Forest becomes a Swamp",
         f"{chooser.name} drew 1 card(s) (Shimmering Mirage)",
-        "Shimmering Mirage resolved and moved to graveyard",
-        "Shimmering Mirage finished resolving",
+        "Shimmering Mirage finished resolving and moved to graveyard",
     ]
 
 

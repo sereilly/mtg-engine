@@ -76,6 +76,8 @@ def test_the_ai_half_of_tahngarths_glare_is_answered_with_the_humans():
     log = answered["log"]
     mine = log.index(f"{me} is looking at the top 3 cards of {ai}'s library")
     theirs = log.index(f"{ai} is looking at the top 3 cards of {me}'s library")
-    assert mine < theirs < log.index("Tahngarth's Glare finished resolving")
+    assert mine < theirs < log.index(
+        "Tahngarth's Glare finished resolving and moved to graveyard"
+    )
     # Nobody has passed priority since the spell resolved.
     assert not any("passed priority" in line for line in log[theirs:])

@@ -32,7 +32,7 @@ from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
                                 MUST_ASSIGN_AS_UNBLOCKED,
                                  BLOCKED_WITHOUT_BLOCKERS)
 from ..oracle_types import REMOVED_FROM_COMBAT_PERMANENTS
-from ..pt import add_pt_modifier
+from ..pt import add_pt_modifier, pt_change_text
 from ..rampage import rampage_bonus
 
 if TYPE_CHECKING:
@@ -195,7 +195,7 @@ def rampage_pump(game: Game, instruction: OracleInstruction, context: OracleExec
     if bonus:
         add_pt_modifier(attacker, bonus, bonus, until="end_of_turn")
         game.log.append(
-            f"{attacker.card.name} gets +{bonus}/+{bonus} until end of turn (rampage {amount})"
+            f"{attacker.card.name} gets {pt_change_text(bonus, bonus)} until end of turn (rampage {amount})"
         )
     return True, "resolved"
 

@@ -76,10 +76,12 @@ def test_the_driver_answers_with_the_spell_still_on_the_stack():
     first = seen[0]
     assert first["owed"] == ["discard"]
     assert first["stack"] == [("Mind Rot", True)]
-    assert "Mind Rot finished resolving" not in first["log"]
-    # The answer released it: once, at the end, with the discard made.
+    assert not any("Mind Rot finished resolving" in line for line in first["log"])
+    # The answer released it: once, at the end, with the discard made — one
+    # closing line, which says where the card went as well.
     assert not game.stack and not game.pending_choices
-    assert game.log.count("Mind Rot finished resolving") == 1
+    assert sum("Mind Rot finished resolving" in line for line in game.log) == 1
+    assert game.log.count("Mind Rot finished resolving and moved to graveyard") == 1
     assert len(game.players[1].hand) == 1
     assert "Mind Rot" in names(game.players[0].graveyard)
 

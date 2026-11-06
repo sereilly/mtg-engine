@@ -1519,14 +1519,28 @@ class StackResolutionMixin:
             held = self.resolving_stack_item
             if held is not None and held.card is card and self.choices_for_stack_item(held):
                 held.finish_resolution = finish
+                first_pass["held"] = held
                 self._log_spell_awaiting_choice(card)
                 return
+            # A resolution that stopped to ask ends here, at its last answer —
+            # handed to the held object above, or resumed behind a suspending
+            # prompt (a search) with the object still held — and this step's
+            # line is the one that says so: "Mind Rot finished resolving and
+            # moved to graveyard". ``_release_stack_item`` used to add its own
+            # "finished resolving" under the bin's "resolved and moved to
+            # graveyard": two lines for one ending.
+            holding = first_pass.get("held") or (
+                held if held is not None and held.card is card
+                and getattr(held, "resolution_held", False) else None
+            )
+            if holding is not None:
+                holding.ending_logged = True
             # CR 608.2n: "into its **owner's** graveyard" — the caster's only
             # when the caster owns it.
             self._bin_spell_card(
                 owner, card,
                 exile_instead=exile_instead_of_graveyard or first_pass["ends_turn"],
-                verb="resolved",
+                verb="finished resolving" if holding is not None else "resolved",
                 # CR 702.27a's second static ability, asked here because "as it
                 # resolves" is exactly this step and nowhere else. The answer is
                 # the announcement this cast made, which by now survives only on

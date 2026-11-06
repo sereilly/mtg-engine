@@ -18,6 +18,7 @@ Split out of ``damage.py`` at the 2,000-line cap's split round.
 from __future__ import annotations
 
 from ..game_types import target_ids
+from ..pt import pt_change_text
 from ..simultaneous_damage import deal_at_once
 from ._amounts import resolve_amount
 from ._common import apply_damage_to_creature, apply_temp_pt_boost
@@ -155,7 +156,7 @@ def prepare_then_interact(game, instruction, context):
         toughness = resolve_amount(prepare.get("toughness", 0), context.x_value)
         apply_temp_pt_boost(first, power, toughness)
         game.log.append(
-            f"{card.name} gives {first.card.name} {power:+d}/{toughness:+d} "
+            f"{card.name} gives {first.card.name} {pt_change_text(power, toughness)} "
             "until end of turn"
         )
     elif prepare.get("kind") == "counter":
