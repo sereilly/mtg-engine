@@ -1136,6 +1136,44 @@ def reaches_both_sides(instruction: OracleInstruction | None) -> bool:
     return False
 
 
+def lowers_toughness(card: CardDefinition) -> bool:
+    """Whether *card*'s compiled program holds a **static** P/T contribution
+    that lowers a creature's toughness (CR 613.4c, layer 7c): a lord buff
+    (``lord_buffs.LORD_BUFF_KIND``, the one instruction every such static in
+    the pool compiles to) with a negative toughness, whatever it narrows to
+    and under whatever condition — "Other creatures get -1/-1" (Kaervek, the
+    Spiteful), "Nonblack creatures get -1/-1" (Ascendant Evincar), "Other
+    black creatures get -1/-1" (Urborg Shambler), "All creatures of the
+    chosen type get -1/-1" (Engineered Plague), "During turns other than
+    yours, creatures you control get -0/-2" (Vibrating Sphere).
+
+    The question a cast asks before it trusts a printed toughness: such a
+    static on the battlefield kills a creature with a printed toughness it
+    exceeds the moment it arrives (CR 704.5f), and no flat score reads that
+    (:func:`board_lowers_toughness`). Over-inclusive on purpose — a condition
+    that does not hold, a narrowing that misses — because what it buys is a
+    rehearsal, which reads the board exactly."""
+    from .lord_buffs import LORD_BUFF_KIND
+
+    for instruction in compile_card_oracle(card).instructions:
+        if instruction.kind != LORD_BUFF_KIND:
+            continue
+        toughness = (instruction.payload or {}).get("toughness")
+        if isinstance(toughness, int) and not isinstance(toughness, bool) and toughness < 0:
+            return True
+    return False
+
+
+def board_lowers_toughness(game) -> bool:
+    """Whether some permanent on the battlefield — any seat's, read as it is
+    now (``Permanent.effective_card``, CR 613 layer 1 and 3) — carries a
+    static that lowers a creature's toughness (:func:`lowers_toughness`)."""
+    return any(
+        lowers_toughness(permanent.effective_card)
+        for permanent in game.all_permanents()
+    )
+
+
 def source_toughness_change(instruction: OracleInstruction | None) -> int | None:
     """The toughness change an effect makes to its own source, when that is the
     whole of the effect — every step a ``pump_self`` with printed numbers — or
@@ -1383,6 +1421,8 @@ __all__ = [
     "ALL_MEANS_EVERY_MATCH_KINDS",
     "ALL_MEANS_EVERY_SEAT_KINDS",
     "DRAW_REPLACEMENT_ARMINGS",
+    "board_lowers_toughness",
+    "lowers_toughness",
     "EVERY_PLAYER",
     "MANA_ABILITY_KINDS",
     "SOURCE_HAMPER_KINDS",
