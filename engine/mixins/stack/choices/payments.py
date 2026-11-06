@@ -415,11 +415,23 @@ class PaymentChoicesMixin:
         theirs to tap before they answer.
         """
         from ....ai_mana_sources import _land_mana_is_unplannable
+        from ....board_payment import conditioned_tap_pays_now
 
+        board = list(self.controlled_by(seat))
+        free = untapped_mana_lands(board)
         return [
             land
-            for land in untapped_mana_lands(self.controlled_by(seat))
-            if self.land_mana_tap_refusal(land) is None
+            for land in board
+            if (
+                any(land is held for held in free)
+                and self.land_mana_tap_refusal(land) is None
+                # A land whose only mana ability prints a board condition
+                # (Temple of the False God's "only if you control five or
+                # more lands") has no default tap to refuse or allow, and the
+                # pure reader above cannot ask the board: it pays when its
+                # clause holds now.
+                or conditioned_tap_pays_now(self, land)
+            )
             and not _land_mana_is_unplannable(self, land)
         ]
 
