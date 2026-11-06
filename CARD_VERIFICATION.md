@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **6135**
-- Passed: **976** (684 checked in-game, 292 auto-passed)
-- Failed: **6**
-- Equivalent to a passing card: **68**
-- Untested: **5085**
+- Passed: **984** (692 checked in-game, 292 auto-passed)
+- Failed: **0**
+- Equivalent to a passing card: **70**
+- Untested: **5081**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -871,7 +871,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Chaotic Goo | ⬜ untested |  |
 | Chaotic Strike | ⬜ untested |  |
 | Charcoal Diamond | ⬜ untested |  |
-| Charging Paladin | ⬜ untested |  |
+| Charging Paladin | ✅ pass |  |
 | Charging Rhino | ⬜ untested |  |
 | Charging Slateback | ⬜ untested |  |
 | Charging Troll | ⬜ untested |  |
@@ -1440,7 +1440,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Dragon Shadow | ⬜ untested |  |
 | Dragon Tyrant | ⬜ untested |  |
 | Dragon Whelp | ✅ pass |  |
-| Dragon Wings | ❌ fail | Its return-from-graveyard trigger fires while it is on the battlefield attached to Shivan Dragon (CR 113.6m): Bladewing and Eternal Dragon entering each raised a Yes/No that did nothing (Dragon Wings was no longer in the graveyard). Return from graveyard onto Shivan Dragon worked. |
+| Dragon Wings | ✅ pass |  |
 | Dragonspeaker Shaman | ✅ pass |  |
 | Dragonstalker | ✅ pass | auto-pass: keywords only (flying, protection from dragons) |
 | Dragonstorm | ⬜ untested |  |
@@ -2307,7 +2307,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Grinning Demon | ⬜ untested |  |
 | Grinning Totem | ⬜ untested |  |
 | Grip of Amnesia | ⬜ untested |  |
-| Grip of Chaos | ❌ fail | Its trigger on Bladewing the Risen's entry trigger is offered in the same order-your-triggers window as that trigger (CR 117.5/603.3b: it triggers once that trigger is on the stack, so it goes on top); the player may order it beneath and dodge the reselection. Reselection itself (Spark Spray to a random creature) works. |
+| Grip of Chaos | ✅ pass |  |
 | Grizzled Wolverine | ⬜ untested |  |
 | Grizzly Bears | ✅ pass |  |
 | Grizzly Fate | ⬜ untested |  |
@@ -2461,7 +2461,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Hobble | ⬜ untested |  |
 | Hobblefiend | ⬜ untested |  |
 | Holistic Wisdom | ⬜ untested |  |
-| Hollow Dogs | ⬜ untested |  |
+| Hollow Dogs | ≡ equivalent | same behaviour as Charging Paladin |
 | Hollow Specter | ✅ pass |  |
 | Hollow Trees | ⬜ untested |  |
 | Hollow Warrior | ⬜ untested |  |
@@ -3152,7 +3152,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Manakin | ⬜ untested |  |
 | Mangara's Blessing | ⬜ untested |  |
 | Mangara's Equity | ⬜ untested |  |
-| Mangara's Tome | ❌ fail | Its face-down pile is matched to exile by card identity: a pile Mountain beside a Three Wishes Mountain was shown face up to the owner and offered as playable via Three Wishes. The {2} draw replacement and the search modal (Exile k of 5, library only) work; log names no card. |
+| Mangara's Tome | ✅ pass |  |
 | Mangara, the Diplomat | ⬜ untested |  |
 | Maniacal Rage | ⬜ untested |  |
 | Manipulate Fate | ⬜ untested |  |
@@ -3501,7 +3501,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Necrite | ⬜ untested |  |
 | Necrologia | ⬜ untested |  |
 | Necromancy | ⬜ untested |  |
-| Necromentia | ⬜ untested |  |
+| Necromentia | ✅ pass |  |
 | Necropolis | ✅ pass |  |
 | Necropotence | ✅ pass |  |
 | Necrosavant | ⬜ untested |  |
@@ -3692,7 +3692,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Parallax Tide | ⬜ untested |  |
 | Parallax Wave | ⬜ untested |  |
 | Parallel Evolution | ⬜ untested |  |
-| Parallel Thoughts | ❌ fail | Face-down pile is matched to exile by card identity: with same-named cards also exiled face up (Dimensional Breach), 4 of the 7 pile cards (Mountain, Forest, Goblin Warchief, Temple) show face up to both seats and 4 Breach cards show hidden; taking the pile top removed the Breach-exiled Temple and left the pile's Temple in exile. Search modal (library only, Exile k of 7) fine. |
+| Parallel Thoughts | ✅ pass |  |
 | Paralyze | ✅ pass |  |
 | Parapet | ⬜ untested |  |
 | Parasitic Bond | ≡ equivalent | same behaviour as Wanderlust |
@@ -4489,7 +4489,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Scarwood Goblins | ✅ pass | auto-pass: no abilities |
 | Scarwood Hag | ⬜ untested |  |
 | Scathe Zombies | ✅ pass |  |
-| Scattershot | ❌ fail | Storm copies announce becomes-the-target on the original's target before the re-aim prompt (CR 707.10c): 7 copies on Daru Spiritualist fired 7 Daru triggers, then the 2 re-aimed at Zealous Inquisitor fired again; Daru ended 1/17 (should be 1/11). Prompt itself (copy k of 7, keep) fine. |
+| Scattershot | ✅ pass |  |
 | Scavenged Weaponry | ⬜ untested |  |
 | Scavenger Folk | ⬜ untested |  |
 | Scavenging Ghoul | ✅ pass |  |
@@ -5395,7 +5395,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Thrashing Mudspawn | ⬜ untested |  |
 | Thrashing Wumpus | ⬜ untested |  |
 | Threaten | ⬜ untested |  |
-| Three Wishes | ❌ fail | Face-down exile and its play permission are matched by card identity: with Mangara's Tome's pile also holding a Mountain, the pile's Mountain showed face up to its owner and was playable via Three Wishes (played it); Three Wishes' own Mountain then showed hidden and was no longer playable. Log names no hidden card (fine). |
+| Three Wishes | ✅ pass |  |
 | Thresher Beast | ⬜ untested |  |
 | Thrill of Possibility | ⬜ untested |  |
 | Thriss, Nantuko Primus | ⬜ untested |  |
@@ -5751,7 +5751,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Viashivan Dragon | ⬜ untested |  |
 | Vibrating Sphere | ⬜ untested |  |
 | Vicious Hunger | ⬜ untested |  |
-| Vicious Kavu | ⬜ untested |  |
+| Vicious Kavu | ≡ equivalent | same behaviour as Charging Paladin |
 | Victimize | ⬜ untested |  |
 | Victual Sliver | ⬜ untested |  |
 | Vigilant Drake | ⬜ untested |  |

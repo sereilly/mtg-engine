@@ -490,6 +490,11 @@
       "status": "pass",
       "updated_at": 1782797545.2013893
     },
+    "Charging Paladin": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793996336.4951692
+    },
     "Chill Haunting": {
       "reason": "",
       "status": "pass",
@@ -886,9 +891,9 @@
       "updated_at": 1782693770.4119496
     },
     "Dragon Wings": {
-      "reason": "Its return-from-graveyard trigger fires while it is on the battlefield attached to Shivan Dragon (CR 113.6m): Bladewing and Eternal Dragon entering each raised a Yes/No that did nothing (Dragon Wings was no longer in the graveyard). Return from graveyard onto Shivan Dragon worked.",
-      "status": "fail",
-      "updated_at": 1793969152.8465033
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793993780.8865979
     },
     "Dragonspeaker Shaman": {
       "reason": "",
@@ -1376,9 +1381,9 @@
       "updated_at": 1792615195.6480482
     },
     "Grip of Chaos": {
-      "reason": "Its trigger on Bladewing the Risen's entry trigger is offered in the same order-your-triggers window as that trigger (CR 117.5/603.3b: it triggers once that trigger is on the stack, so it goes on top); the player may order it beneath and dodge the reselection. Reselection itself (Spark Spray to a random creature) works.",
-      "status": "fail",
-      "updated_at": 1793969201.3934116
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793993997.8821476
     },
     "Grizzly Bears": {
       "reason": "",
@@ -1901,9 +1906,9 @@
       "updated_at": 1793570152.2525067
     },
     "Mangara's Tome": {
-      "reason": "Its face-down pile is matched to exile by card identity: a pile Mountain beside a Three Wishes Mountain was shown face up to the owner and offered as playable via Three Wishes. The {2} draw replacement and the search modal (Exile k of 5, library only) work; log names no card.",
-      "status": "fail",
-      "updated_at": 1793971357.3766937
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793993384.8791761
     },
     "Meddle": {
       "reason": "",
@@ -2090,6 +2095,11 @@
       "status": "pass",
       "updated_at": 1791787824.558571
     },
+    "Necromentia": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793996353.7960215
+    },
     "Necropolis": {
       "reason": "",
       "status": "pass",
@@ -2196,9 +2206,9 @@
       "updated_at": 1792623617.3802717
     },
     "Parallel Thoughts": {
-      "reason": "Face-down pile is matched to exile by card identity: with same-named cards also exiled face up (Dimensional Breach), 4 of the 7 pile cards (Mountain, Forest, Goblin Warchief, Temple) show face up to both seats and 4 Breach cards show hidden; taking the pile top removed the Breach-exiled Temple and left the pile's Temple in exile. Search modal (library only, Exile k of 7) fine.",
-      "status": "fail",
-      "updated_at": 1793969184.797967
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793993020.126269
     },
     "Paralyze": {
       "reason": "",
@@ -2601,9 +2611,9 @@
       "updated_at": 1782586144.231241
     },
     "Scattershot": {
-      "reason": "Storm copies announce becomes-the-target on the original's target before the re-aim prompt (CR 707.10c): 7 copies on Daru Spiritualist fired 7 Daru triggers, then the 2 re-aimed at Zealous Inquisitor fired again; Daru ended 1/17 (should be 1/11). Prompt itself (copy k of 7, keep) fine.",
-      "status": "fail",
-      "updated_at": 1793969136.2695708
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793993646.7603908
     },
     "Scavenging Ghoul": {
       "reason": "",
@@ -3046,9 +3056,9 @@
       "updated_at": 1788931761.7442148
     },
     "Three Wishes": {
-      "reason": "Face-down exile and its play permission are matched by card identity: with Mangara's Tome's pile also holding a Mountain, the pile's Mountain showed face up to its owner and was playable via Three Wishes (played it); Three Wishes' own Mountain then showed hidden and was no longer playable. Log names no hidden card (fine).",
-      "status": "fail",
-      "updated_at": 1793971333.799092
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1793993368.3275096
     },
     "Throne of Bone": {
       "reason": "",

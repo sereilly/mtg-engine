@@ -7,7 +7,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 - Cards in the catalog: **6135**
 - Distinct behaviours: **5584**
 - Cards sharing a behaviour with another: **799** in **248** classes
-- Unverified cards covered by a verified peer: **231**
+- Unverified cards covered by a verified peer: **233**
 
 | Size | Cards |
 | --- | --- |
@@ -71,7 +71,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 3 | Breezekeeper, Teferi's Drake, Tolarian Drake |
 | 3 | Cateran Brute, Cateran Kidnappers, Cateran Persuader |
 | 3 | Cave Tiger, Rabid Wolverines, Viashino Weaponsmith |
-| 3 | Charging Paladin, Hollow Dogs, Vicious Kavu |
+| 3 | **Charging Paladin**, Hollow Dogs, Vicious Kavu |
 | 3 | Crafty Pathmage, Dwarven Nomad, **Dwarven Warriors** |
 | 3 | Crazed Skirge, Rorix Bladewing, Volcanic Dragon |
 | 3 | Darkness, **Fog**, Holy Day |
