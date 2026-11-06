@@ -21,6 +21,7 @@ from ...announced_creature_type import GRAVEYARD_ANNOUNCED_CREATURE_TYPE
 from ...oracle_types import DISCARDED_INTO_GRAVEYARD, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ..vocabulary import PERMANENT_CARD_TYPES
 from ._events import OTHER_CHOSEN_PERMANENT, _back_reference_payload
 from ._bound_returns import lower_untargeted_return
 from ._described_returns import (_graveyard_to_hand_payload,
@@ -43,8 +44,16 @@ from ._common import (
 #: The empty tuple is deliberately **absent**: Regrowth's untyped "target card"
 #: would be admitted by any type the handler happened to scan for, which is a
 #: silent narrowing of the player's choice rather than a card.
+#:
+#: And CR 110.4a's whole union, which is what "a **Dragon permanent** card"
+#: (Bladewing the Risen) and "Bird and/or Cleric **permanent** cards"
+#: (Celestial Gatekeeper) record (``nouns.parse_object_filter``): every type
+#: in it is one a card on the battlefield can have, so the union names nothing
+#: the move cannot put there. It travels as ``card_types``, the key
+#: ``graveyard_card_matches`` reads as an OR.
 _REANIMABLE_CARD_TYPES = frozenset({
     ("creature",), ("artifact",), ("enchantment",), ("land",),
+    tuple(PERMANENT_CARD_TYPES),
 })
 
 
@@ -997,7 +1006,12 @@ def _lower_return_to_zone(
             # ``graveyard_card_matches``/``card_has_type``, which is CR 205.2a's
             # answer — an Artifact Creature card in a graveyard *is* an artifact
             # card, and `primary_type` says it is only a creature one.
-            if filt.card_types[0] != "creature":
+            if len(filt.card_types) > 1:
+                # CR 110.4a's union (the only one the gate above admits):
+                # "a Dragon **permanent** card" is any of the six, not
+                # whichever of them a list happens to put first.
+                payload["card_types"] = list(filt.card_types)
+            elif filt.card_types[0] != "creature":
                 payload["card_type"] = filt.card_types[0]
             # "target **Dragon** permanent card" (Bladewing the Risen), lifted
             # out of the blanket refusal above. Emitted only when printed, so

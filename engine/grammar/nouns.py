@@ -806,10 +806,18 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 # already reads. Consumed and dropped, "Return target
                 # permanent card from your graveyard to your hand" (Fungal
                 # Rebirth) lowered to Regrowth's "any card" and returned a
-                # Lightning Bolt. Only for the bare noun: after a subtype
-                # ("a Goblin permanent card") the subtype has already said
-                # what the card is.
-                if singular == "permanent" and not d.card_types and not d.subtypes:
+                # Lightning Bolt.
+                #
+                # **After a subtype too** ("a Goblin permanent card", Goblin
+                # Lackey): the card is one of the six types *and* has the
+                # subtype. This used to be left to the creature implication
+                # below, on the reading that a creature type "has already said
+                # what the card is" — true of a pool with no Kindred card and
+                # narrower on one: a Kindred Enchantment — Goblin is a Goblin
+                # permanent card (CR 205.3m, 308.2) and no creature card, and a
+                # Kindred Instant — Goblin is a Goblin card and no permanent
+                # card. The union is the printed set, Kindred or not.
+                if singular == "permanent" and not d.card_types:
                     d.card_types.extend(PERMANENT_CARD_TYPES)
             # "target spell or permanent" (the Lace cycle) unions two *generic*
             # nouns. Neither contributes a card type, so the union restricts
@@ -918,10 +926,10 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     # A creature subtype implies the creature type: "destroy target Wall" means
     # a creature. Land/artifact subtypes ("destroy all Plains") must not, so the
     # implication is keyed on the vocabulary the subtype came from.
-    # It survives a *generic* head noun too: "a Goblin **permanent** card"
-    # (Goblin Wizard) is still a creature card, because CR 205.3 puts a creature
-    # type only on a creature — the printed "permanent" is future-proofing, not
-    # a wider set.
+    # Not after "permanent card" ("a Goblin **permanent** card", Goblin
+    # Wizard), which has recorded CR 110.4a's union above: a creature type is
+    # a creature's *or a kindred's* (CR 205.3m), so the printed "permanent" is
+    # a wider set than "creature" the day a Kindred card is in the pool.
     if d.subtypes and not d.card_types and all(s in CREATURE_TYPES for s in d.subtypes):
         d.card_types.append("creature")
 

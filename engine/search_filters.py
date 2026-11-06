@@ -88,6 +88,19 @@ def card_has_type(card, wanted: str, *, game=None, owner=None) -> bool:
     )
 
 
+def card_has_any_type(card, wanted, *, game=None, owner=None) -> bool:
+    """Whether *card* has the card type *wanted* — one word, or a printed
+    union as a tuple or list, of which one member is enough ("an artifact or
+    enchantment card", Enlightened Tutor; CR 110.4a's six after a subtype, "a
+    Dragon **permanent** card", Bladewing the Risen). ``"any"`` among them is
+    every card. :func:`card_has_type` per member, so a union means for each
+    word what the word means alone."""
+    words = wanted if isinstance(wanted, (list, tuple)) else (wanted,)
+    return "any" in words or any(
+        card_has_type(card, word, game=game, owner=owner) for word in words
+    )
+
+
 def card_colors(card, *, game=None, owner=None) -> frozenset[str]:
     """The colours *card* is, as symbols (CR 105.1, CR 202.2).
 
@@ -153,13 +166,7 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     # tuple as well as a word, and one member is enough. It used to take a word
     # alone and the lowering refused a union outright, which is the safe
     # direction and cost the three tutors their cards.
-    card_type = data.get("card_type", "any")
-    wanted_types = (
-        card_type if isinstance(card_type, (list, tuple)) else (card_type,)
-    )
-    if "any" not in wanted_types and not any(
-        card_has_type(card, name) for name in wanted_types
-    ):
+    if not card_has_any_type(card, data.get("card_type", "any")):
         return False
     type_line = card.type_line.lower()
     if any(excluded in type_line for excluded in data.get("exclude_types") or ()):

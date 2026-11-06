@@ -23,7 +23,7 @@ from ..keywords import grant_keyword
 from ..models import Permanent
 from ..replacements.zone_changes import EXILE_ON_LEAVING_BATTLEFIELD
 from ..resumption import run_resumable
-from ..search_filters import card_has_type
+from ..search_filters import card_has_any_type, card_has_type
 from ._filters import _card_matches_filter, graveyard_card_matches
 from ._targets import (_resolve_graveyard_slots, resolve_role_graveyard_card,
                        resolve_role_permanent, roles_still_legal)
@@ -42,6 +42,18 @@ if TYPE_CHECKING:
 REANIMATED_PERMANENTS = "reanimated_permanents"
 
 
+def _type_noun(card_type) -> str:
+    """*card_type* as the log names it: the word, or for a union the noun the
+    card printed — CR 110.4a's six are "permanent"."""
+    if not isinstance(card_type, (list, tuple)):
+        return str(card_type)
+    from ..grammar.vocabulary import PERMANENT_CARD_TYPES
+
+    if tuple(card_type) == tuple(PERMANENT_CARD_TYPES):
+        return "permanent"
+    return " or ".join(str(word) for word in card_type)
+
+
 def _holds_a_reanimable_card(player, index, card_filter, card_type="creature") -> bool:
     """Whether *player*'s graveyard holds a card of *card_type* this effect may
     take.
@@ -53,7 +65,7 @@ def _holds_a_reanimable_card(player, index, card_filter, card_type="creature") -
     graveyard = getattr(player, "graveyard", ())
 
     def eligible(card) -> bool:
-        return card_has_type(card, card_type) and (
+        return card_has_any_type(card, card_type) and (
             card_filter is None or card_filter(card, owner=player)
         )
 
@@ -70,7 +82,7 @@ def _reanimable_slot(player, card_filter, card_type="creature"):
     out afterwards.
     """
     for index, card in enumerate(getattr(player, "graveyard", ())):
-        if card_has_type(card, card_type) and (
+        if card_has_any_type(card, card_type) and (
             card_filter is None or card_filter(card, owner=player)
         ):
             yield index
@@ -131,6 +143,13 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # by the order of a list, which is what made an Artifact Creature card
     # invisible to a phrase naming an artifact.
     card_type = str(instruction.payload.get("card_type", "creature"))
+    # "…target Dragon **permanent** card" (Bladewing the Risen): CR 110.4a's
+    # union, any of whose words the card may answer — carried as a tuple
+    # through every reader below (``card_has_any_type``), and named in the log
+    # as the noun the card printed.
+    union = tuple(instruction.payload.get("card_types") or ())
+    if union:
+        card_type = union
     # "Return **the top** creature card of your graveyard to the
     # battlefield." (Shallow Grave.) CR 404.1 puts an arriving card on *top* of
     # its owner's graveyard and CR 404.2 keeps the pile in that order, and this
@@ -147,13 +166,13 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
             (
                 slot
                 for slot in range(len(caster.graveyard) - 1, -1, -1)
-                if card_has_type(caster.graveyard[slot], card_type)
+                if card_has_any_type(caster.graveyard[slot], card_type)
             ),
             None,
         )
         if idx is None:
             game.log.append(
-                f"{context.card.name}: no {card_type} card in the graveyard"
+                f"{context.card.name}: no {_type_noun(card_type)} card in the graveyard"
             )
             context.results[REANIMATED_PERMANENTS] = ()
             return True, "resolved"
@@ -188,8 +207,12 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
         # test passed and the creature default then refused every Aura in the
         # pile. Written as the word this handler is already searching by, so
         # the two readers ask one question; a payload with no ``card_type`` key
-        # spells "creature" here exactly as the default did.
-        spec["card_type"] = card_type
+        # spells "creature" here exactly as the default did. A union rides
+        # the predicate's union key, ``card_types``.
+        if union:
+            spec["card_types"] = list(union)
+        else:
+            spec["card_type"] = card_type
     # "…onto the battlefield under your control **attached to this creature**."
     # (Iridescent Drake.) CR 303.4g: an Aura entering with no legal object to
     # enchant *remains in its current zone* — so the host is not a step behind
@@ -336,7 +359,7 @@ def _reanimate_onto_chosen_host(
             source_player, card = caster, caster.graveyard[slot]
     name = getattr(context.card, "name", "") or "Effect"
     if card is None:
-        game.log.append(f"{name}: no {card_type} card to return from a graveyard")
+        game.log.append(f"{name}: no {_type_noun(card_type)} card to return from a graveyard")
         context.results[REANIMATED_PERMANENTS] = ()
         context.results["its_mana_value"] = 0
         return True, "resolved"
@@ -465,7 +488,7 @@ def _complete_reanimation(
         game.log.append(
             f"{source_name} returned {reanimated.card.name} from a graveyard "
             "to the battlefield" if reanimated is not None
-            else f"{source_name}: no {card_type} card to return from a graveyard"
+            else f"{source_name}: no {_type_noun(card_type)} card to return from a graveyard"
         )
 
     reanimated = game._reanimate_creature_to_battlefield(
