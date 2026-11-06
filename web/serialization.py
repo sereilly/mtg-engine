@@ -17,7 +17,6 @@ from engine import Game
 from engine.activation_permissions import card_widens_activation
 from engine.board_payment import tap_alone_symbols
 from engine.color_changes import spell_color_change
-from engine.cost_modifiers import spell_cost_tax
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.entry_choices import chosen_as_entered
 from engine.face_down import face_up_morph_cost, hidden_card_of, is_face_down
@@ -906,73 +905,54 @@ def _mark_pickers_that_owe_nothing(perm_dict: dict, usable: list) -> None:
         top["requires_target"] = False
 
 
-def _apply_generic_tax_to_cost(cost_text: str, tax: int) -> str:
-    """Fold ``tax`` extra generic mana into a printed cost string (e.g. Gloom's
-    +{3} on white spells: '{W}' -> '{3}{W}', '{3}{R}' -> '{6}{R}')."""
-    if tax <= 0:
-        return cost_text
-    tokens = re.findall(r"\{([^}]+)\}", cost_text or "")
-    generic_idx = next((i for i, t in enumerate(tokens) if t.isdigit()), None)
-    if generic_idx is not None:
-        tokens[generic_idx] = str(int(tokens[generic_idx]) + tax)
-    else:
-        tokens = [str(tax)] + tokens
-    return "".join("{" + t + "}" for t in tokens)
+def _cast_price(card, game, caster_index, from_zone: str) -> tuple[str, bool, bool]:
+    """``(the cost the UI shows, increased?, reduced?)`` for a cast of *card*
+    by *caster_index* out of *from_zone* — the mana the payment will ask for
+    before X is announced, written as the card prints a cost.
 
+    CR 601.2f over the mana cost the cast is charged: the card's own
+    (``cost_modifiers.cast_mana_charge``), or, for a graveyard copy this seat
+    may cast only by paying an alternative cost (flashback, CR 118.9b,
+    702.34a), that cost with every increase and reduction in force
+    (``Game.alternative_cost_mana``, CR 118.9d). This folded in the
+    **increases** alone (``spell_cost_tax``), so a reduction was paid and never
+    shown: Goblin Brigand read ``{1}{R}`` under Goblin Warchief while the
+    payment asked for ``{R}``; Edgewalker's coloured-only discount, a
+    Medallion's, Krosan Drover's and a card's own were the same blind spot
+    (SCG Phase 5, C3). A flashback cost read Catalyst Stone's reduction and
+    a generic tax but not a coloured one (Derelor) or a board's reduction.
 
-def _cast_tax(card, game: Game | None, caster_index: int | None) -> int:
-    """The extra generic mana a cast of *card* by *caster_index* is charged
-    (CR 601.2f) — the engine's own answer, ``cost_modifiers.spell_cost_tax``.
-
-    This was ``_gloom_white_tax``: three more for a white spell while a
-    permanent **named Gloom** was on the battlefield. A name in a comparison,
-    so every other printing of the sentence — "Red spells cost {2} more to
-    cast" (Chill), a Gloom copied by a Clone — showed the printed cost in the
-    hand and charged the taxed one at the cast. The engine has had one reader
-    for the whole template since the tax became text-keyed; this asks it.
-
-    Nothing for a land, which is played and not cast (CR 305.1), and nothing
-    where the caller cannot say who would be casting.
+    The printed cost is passed through unchanged when nothing in force moves
+    it, and an ``{X}`` stays where it is printed (it is announced later). A
+    multi-face card as a whole is not a spell (CR 709.3) and a land is not
+    cast (CR 305.1): each is shown as printed.
     """
-    if game is None or caster_index is None or card.primary_type == "land":
-        return 0
-    return int(spell_cost_tax(game, caster_index, card)[0])
+    printed = card.mana_cost or ""
+    if game is None or caster_index is None or card.primary_type == "land" or face_cards(card):
+        return printed, False, False
+    from engine.cost_modifiers import cast_mana_charge
+    from engine.mana_payment import mana_cost_label
 
+    charged_printed = printed
+    owed = None
+    if from_zone == "graveyard":
+        from engine.cast_permissions import permission_for
 
-def _required_zone_cost(card, game, caster_index, from_zone: str) -> str | None:
-    """The mana a cast of *card* out of *from_zone* is charged **instead of**
-    its mana cost, as printed symbols — or None when it is charged its own.
-
-    The permission a bare cast would be made under
-    (``cast_permissions.permission_for`` in its own order, which is the one
-    ``Game._cast_onto_stack`` takes when the caster announces nothing) and the
-    alternative cost that permission requires (CR 118.9b). Flashback is the
-    card: CR 702.34a's "by paying [cost] rather than paying its mana cost".
-
-    With what a board changes about that cost folded in — "Flashback costs you
-    pay cost {2} less" (Catalyst Stone) — through the reader and the
-    arithmetic the cast path charges with, so the number shown is the number
-    paid. A cost this cannot spell as plain symbols (an {X}) is passed through
-    as printed.
-    """
-    if game is None or caster_index is None or from_zone != "graveyard":
-        return None
-    from engine.cast_permissions import permission_for
-    from engine.cost_modifiers import keyword_cost_modifiers, reduce_cost
-    from engine.cost_modifier_lines import CostReduction
-    from engine.mana_payment import mana_cost_from_symbols, mana_cost_label
-
-    permission = permission_for(game, caster_index, card, from_zone)
-    cost = permission.cost if permission is not None else None
-    if cost is None or cost.mana is None:
-        return None
-    symbols = mana_cost_from_symbols(cost.mana)
-    if symbols is None:
-        return cost.mana
-    more, less, _names = keyword_cost_modifiers(game, caster_index, cost.keyword)
-    symbols = dict(symbols)
-    symbols["generic"] = symbols.get("generic", 0) + more
-    return mana_cost_label(reduce_cost(symbols, CostReduction(generic=less)))
+        permission = permission_for(game, caster_index, card, from_zone)
+        if permission is not None and (permission.cost is not None or permission.free):
+            charged_printed = (permission.cost.mana if permission.cost is not None else None) or ""
+            owed = game.alternative_cost_mana(caster_index, card, permission.cost)
+    if owed is None:
+        owed = cast_mana_charge(game, caster_index, card)
+    x_symbols = charged_printed.count("{X}")
+    base = game._parse_mana_cost(charged_printed, x_value=0)
+    keys = set(base) | set(owed)
+    if all(int(base.get(k, 0)) == int(owed.get(k, 0)) for k in keys):
+        return charged_printed, False, False
+    increased = any(int(owed.get(k, 0)) > int(base.get(k, 0)) for k in keys)
+    reduced = any(int(owed.get(k, 0)) < int(base.get(k, 0)) for k in keys)
+    label = "{X}" * x_symbols + (mana_cost_label(owed) if any(owed.values()) else "")
+    return label or "{0}", increased, reduced
 
 
 def _serialize_card(
@@ -1000,7 +980,6 @@ def _serialize_card(
     # that string added it to whichever half printed a generic symbol —
     # Stand // Deliver read `{W}{5}{U}` under Gloom, the white half's tax on
     # the blue half's cost. Each face below is taxed as the spell it is.
-    tax = 0 if face_cards(card) else _cast_tax(card, game, caster_index)
     # CR 118.9b, CR 702.34a: a copy in a graveyard that this seat may cast only
     # by paying an alternative cost — its flashback cost — is charged *that*,
     # and "the cost the UI shows and auto-taps for" is what this field is. The
@@ -1008,17 +987,18 @@ def _serialize_card(
     # which lands the insufficient-mana prompt taps (Firebolt's {R} where the
     # cast charges {4}{R}, so the retry was refused again), what the prompt
     # says the cast costs, and whether to ask for an X (an X spell flashed back
-    # for a cost with no X in it has X = 0, CR 107.3b).
-    zone_cost = _required_zone_cost(card, game, caster_index, from_zone)
-    effective_cost = _apply_generic_tax_to_cost(
-        card.mana_cost if zone_cost is None else zone_cost, tax
-    )
+    # for a cost with no X in it has X = 0, CR 107.3b). The increases **and the
+    # reductions** in force are folded in (``_cast_price``).
+    effective_cost, increased, reduced = _cast_price(card, game, caster_index, from_zone)
     serialized = _card_preview(card)
     serialized.update({
         "mana_cost": effective_cost,
         "printed_mana_cost": card.mana_cost,
         "effective_mana_cost": effective_cost,
-        "cost_increased": tax > 0,
+        "cost_increased": increased,
+        # The other direction (a Warchief, a Medallion, Edgewalker): the
+        # badge is cheaper than the card prints.
+        "cost_reduced": reduced,
         # The card's colours as its seat's statics leave them (CR 613.1e):
         # under its owner's Celestial Dawn a nonland card off the battlefield
         # is white, and the hand drew it in its printed colours. A preview

@@ -61,8 +61,7 @@ from engine.mixins.stack.card_activation import hand_activation_cost
 from engine.oracle import compile_card_oracle
 from engine.mana_payment import mana_cost_label
 from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose
-from engine.cost_modifiers import (cost_reduction_for_cast, reduce_cost,
-                                   spell_cost_tax, spell_symbol_tax)
+from engine.cost_modifiers import cast_mana_charge
 from engine.cast_costs import additional_costs
 from engine.face_down import is_face_down
 from engine.targeting import (derive_activation_spec, derive_cast_spec,
@@ -512,19 +511,11 @@ def _card_castable_now(
         # self-reductions (a Pearl Medallion out and the white spell that *is*
         # castable stays greyed), plus Derelor's coloured pip, which no amount
         # of generic arithmetic can see.
-        tax, _taxing = spell_cost_tax(game, player_index, card)
-        pips, _pip_taxing = spell_symbol_tax(game, player_index, card)
-        reduction, _reducing = cost_reduction_for_cast(game, player_index, card)
-        # Use x_value=0 so X spells are shown as playable (castable at X=0)
-        cost = reduce_cost(
-            game._parse_mana_cost(
-                card.mana_cost,
-                x_value=0,
-                extra_generic=extra_generic + tax,
-                extra_pips=pips,
-            ),
-            reduction,
-        )
+        #
+        # Through the one reader every price on the wire asks
+        # (``cost_modifiers.cast_mana_charge``), at X = 0 so an X spell is
+        # shown as playable (castable at X = 0).
+        cost = cast_mana_charge(game, player_index, card, extra_generic=extra_generic)
         # CR 601.2h, through `engine.board_payment`: an exact matching of this
         # cost's pips to the mana in the pool and the mana each untapped land's
         # tap would add (`mana_payment.plan_payment`), with what a tap makes
@@ -914,15 +905,7 @@ def _zone_cast_price(game, player_index: int, spell, permission) -> str:
         return mana_cost_label(owed) if any(owed.values()) else ""
     if "{X}" in (spell.mana_cost or ""):
         return spell.mana_cost
-    tax, _taxing = spell_cost_tax(game, player_index, spell)
-    pips, _pip_taxing = spell_symbol_tax(game, player_index, spell)
-    reduction, _reducing = cost_reduction_for_cast(game, player_index, spell)
-    owed = reduce_cost(
-        game._parse_mana_cost(
-            spell.mana_cost, x_value=0, extra_generic=tax, extra_pips=pips,
-        ),
-        reduction,
-    )
+    owed = cast_mana_charge(game, player_index, spell)
     return mana_cost_label(owed) if any(owed.values()) else ""
 
 
