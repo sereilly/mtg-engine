@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**430 / 640 tracked rules covered (67%)** — 3328 tests, 0 unannotated.
+**430 / 640 tracked rules covered (67%)** — 3337 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -683,7 +683,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(60 tests, subrules ab)*
 - [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(3 tests)*
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(49 tests, subrules acde)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(50 tests, subrules acde)*
 
 ### 603. Handling Triggered Abilities
 
@@ -870,7 +870,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.20** Reveal *(11 tests, subrules ab)*
 - [x] **701.21** Sacrifice *(20 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
-- [x] **701.23** Search *(13 tests, subrules abd)*
+- [x] **701.23** Search *(15 tests, subrules abd)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*
 - [x] **701.26** Tap and Untap *(3 tests, subrules ab)*
 
@@ -902,7 +902,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.26** Phasing *(20 tests, subrules adfgim)*
 - [x] **702.27** Buyback *(15 tests, subrules a)*
 - [x] **702.28** Shadow *(6 tests, subrules abc)*
-- [x] **702.29** Cycling *(26 tests, subrules abcef)*
+- [x] **702.29** Cycling *(35 tests, subrules abcef)*
 - [x] **702.30** Echo *(16 tests, subrules ab)*
 - [x] **702.32** Fading *(14 tests, subrules a)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*

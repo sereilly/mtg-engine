@@ -53,7 +53,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | LGN | 145 | 235 | 71.9% | 71.9% | 47.7% | 108 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| SCG *(measured)* | 143 | 262 | 67.9% | 63.0% | 41.2% | 93 |
+| SCG *(measured)* | 143 | 262 | 69.5% | 64.9% | 42.7% | 93 |
 | **All (shipped)** | **8507** | **12662** | **89.9%** | **89.4%** | **62.1%** | **6667** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -66,9 +66,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 833 | 439 | expected a subject |  |
+| 831 | 437 | expected a subject |  |
 | 188 | 101 | unrecognized effect verb |  |
-| 138 | 74 | unconsumed text |  |
+| 136 | 72 | unconsumed text |  |
 | 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
 | 35 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -2685,15 +2685,19 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Decomposition**
   - `When enchanted creature dies, its controller loses 2 life.`
 - **Decree of Annihilation**
+  - `Exile all artifacts, creatures, and lands from the battlefield, all cards from all graveyards, and all cards from all hands.`
   - `When you cycle this card, destroy all lands.`
 - **Decree of Justice**
   - `Create X 4/4 white Angel creature tokens with flying.`
   - `When you cycle this card, you may pay {X}. If you do, create X 1/1 white Soldier creature tokens.`
 - **Decree of Pain**
+  - `Destroy all creatures. They can't be regenerated. Draw a card for each creature destroyed this way.`
   - `When you cycle this card, all creatures get -2/-2 until end of turn.`
 - **Decree of Savagery**
   - `Put four +1/+1 counters on each creature you control.`
+  - `When you cycle this card, you may put four +1/+1 counters on target creature.`
 - **Decree of Silence**
+  - `Whenever an opponent casts a spell, counter that spell and put a depletion counter on this enchantment. If there are three or more depletion counters on this enchantment, sacrifice it.`
   - `When you cycle this card, you may counter target spell.`
 - **Dedicated Martyr**
   - `{W}, Sacrifice this creature: You gain 3 life.`

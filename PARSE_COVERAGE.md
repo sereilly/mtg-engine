@@ -25,25 +25,14 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**19 unclaimed sentence(s) across 18 supported card(s).**
+**13 unclaimed sentence(s) across 13 supported card(s).**
 
 - **Astral Steel**
   - `storm`
 - **Brain Freeze**
   - `storm`
-- **Decree of Annihilation**
-  - `exile all artifacts, creatures, and lands from the battlefield, all cards from all graveyards, and all cards from all hands`
-- **Decree of Pain**
-  - `they can't be regenerated`
-  - `draw a card for each creature destroyed this way`
-- **Decree of Savagery**
-  - `when you cycle this card, you may put four +1/+1 counters on target creature`
-- **Decree of Silence**
-  - `whenever an opponent casts a spell, counter that spell and put a depletion counter on this enchantment. if there are three or more depletion counters on this enchantment, sacrifice it`
 - **Dragonstorm**
   - `storm`
-- **Gilded Light**
-  - `you gain shroud until end of turn`
 - **Hindering Touch**
   - `storm`
 - **Hunting Pack**
