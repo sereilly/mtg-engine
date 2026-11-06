@@ -3215,6 +3215,7 @@ function withPermanentId(body, field, seatIndex, permanentIndex, state = current
 function getCleanupDiscardInfo(state = currentState) {
   if (!state || seat === null) return null;
   if (state.current_phase !== "cleanup") return null;
+  if (state.current_turn !== seat) return null; // CR 514.1: only the active player discards — the fallback below read the viewer's own hand on another seat's turn
   const info = state.cleanup_discard;
   if (info && Number(info.required_count || 0) > 0) {
     return info;
