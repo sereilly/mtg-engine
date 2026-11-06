@@ -65,11 +65,12 @@ def test_602_5_a_threshold_clause_counts_the_activators_own_board():
 
 
 @pytest.mark.cr("602.5", "605.1a")
-def test_605_1a_the_temples_conditioned_mana_ability_is_its_bare_tap(set_pool):
+def test_605_1a_the_temples_conditioned_mana_ability_is_tapped_by_asking(set_pool):
     """A mana ability with a CR 602.5 clause is still a mana ability (CR
-    605.1a), and Temple of the False God's is its only one — so the land's
-    bare tap is that ability, gated by its clause at the tap seam: refused on
-    four lands, {C}{C} on five."""
+    605.1a), and Temple of the False God's is its only one — so a tap asked
+    for {C} activates it (CR 605: asking for a symbol picks the ability),
+    gated by its clause at the tap seam: refused on four lands, {C}{C} on
+    five."""
     temple = set_pool("SCG")["Temple of the False God"]
     plains = set_pool("LEA")["Plains"]
     for others, made in ((3, 0), (4, 2)):
@@ -80,6 +81,6 @@ def test_605_1a_the_temples_conditioned_mana_ability_is_its_bare_tap(set_pool):
         game.active_player_index = 0
         game._sync_control()
         _nosick(source)
-        tapped = game.tap_land_for_mana(0, temple.name, permanent_id=source.permanent_id)
+        tapped = game.tap_land_for_mana(0, temple.name, "C", permanent_id=source.permanent_id)
         assert tapped is (made > 0)
         assert mine.mana_pool.get("C", 0) == made

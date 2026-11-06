@@ -149,6 +149,11 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
             if "library" in zones else []
         ),
     }
+    # "…then shuffle and put that card **third from the top**." (Long-Term
+    # Plans.) The depth a ``library_from_top`` destination places the find
+    # at, so the dialog can say where it goes; absent for every other search.
+    if choice.data.get("from_top"):
+        payload["from_top"] = int(choice.data["from_top"])
     # A counted search ("up to two basic land cards", Cultivate) is answered
     # whole: the client multi-selects up to `max_picks` and sends one pick
     # list. The printed slots ride along so the dialog can say where the finds

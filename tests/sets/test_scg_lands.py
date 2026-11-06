@@ -103,7 +103,7 @@ def test_w1g8_temple_of_the_false_god_needs_five_lands(set_pool):
     tapped or added; the castable highlight's question agrees."""
     game, alice, temple = _w1g8_temple_table(set_pool, 3)
     refusal = game.tap_land_for_mana_or_refusal(
-        0, temple.card.name, permanent_id=temple.permanent_id,
+        0, temple.card.name, "C", permanent_id=temple.permanent_id,
     )
     assert refusal is not None and "five or more lands" in refusal
     assert not temple.tapped and alice.mana_pool.get("C", 0) == 0
@@ -118,13 +118,20 @@ def test_w1g8_temple_of_the_false_god_needs_five_lands(set_pool):
 
 
 def test_w1g8_temple_of_the_false_god_taps_for_two_on_five_lands(set_pool):
-    """The Temple counts itself: with four Mountains beside it the bare tap
-    adds {C}{C}, and an effect's payment plans over it (a cost an effect
-    collects, CR 605.3a)."""
+    """The Temple counts itself: with four Mountains beside it, a tap asked
+    for {C} activates its one mana ability (CR 605: asking for a symbol picks
+    the ability, ``land_mana_ability_for``) and adds {C}{C}; so does the
+    activation path."""
     game, alice, temple = _w1g8_temple_table(set_pool, 4)
-    assert temple in game.payment_lands(0)
-    assert game.effect_payment_plan(alice, {"generic": 6}) is not None
-    assert game.tap_land_for_mana(0, temple.card.name, permanent_id=temple.permanent_id)
+    assert game.land_mana_ability_for(temple, "C") == 0
+    assert game.tap_land_for_mana(0, temple.card.name, "C", permanent_id=temple.permanent_id)
+    assert temple.tapped and alice.mana_pool.get("C", 0) == 2
+    game, alice, temple = _w1g8_temple_table(set_pool, 4)
+    activated = game.activate_permanent_ability(
+        0, temple.card.name, permanent_index=game.battlefield_index_of(temple),
+        ability_index=0,
+    )
+    assert activated.supported, activated.details
     assert temple.tapped and alice.mana_pool.get("C", 0) == 2
 
 

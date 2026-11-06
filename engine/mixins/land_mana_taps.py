@@ -162,36 +162,27 @@ class LandManaTapsMixin:
             # which is the answer the tap seam refuses.
             return None, True
         priced = False
-        conditioned = None
         for ability in compile_card_oracle(land.effective_card).activated_abilities:
             instruction = ability.instruction
             if instruction is None or not ability.supported:
                 continue
             if not (is_mana_ability(ability) or instruction.kind == "if_then"):
                 continue
-            if is_tap_alone_mana_ability(ability):
-                if not prints_activation_restriction(ability.source_line or ""):
-                    return instruction, priced
-                # A tap-alone ability that prints a board condition ("Activate
-                # only if you control a Swamp", the Tainted lands) is reachable
-                # by index and asked its clause there
-                # (``land_mana_tap_refusal``), but it is not the default a bare
-                # tap runs while the land has a free one: a default that could
-                # be refused would refuse the land's free mana with it.
-                if conditioned is None:
-                    conditioned = instruction
-                    continue
+            if is_tap_alone_mana_ability(ability) and not prints_activation_restriction(
+                ability.source_line or ""
+            ):
+                return instruction, priced
+            # A tap-alone ability that prints a board condition ("Activate
+            # only if you control a Swamp", the Tainted lands) is reachable by
+            # index and asked its clause there (``land_mana_tap_refusal``), but
+            # it is never the default a bare tap runs: a default that could be
+            # refused would refuse the land's free mana with it. A land whose
+            # *only* mana ability is conditioned (Temple of the False God) is
+            # reached by index too — ``land_mana_ability_for`` names it — so
+            # every reader that counts a land without asking the board (CR
+            # 602.5's clause is a fact about the board) leaves it out.
             priced = True
-        # **Unless it is the only one.** "{T}: Add {C}{C}. Activate only if you
-        # control five or more lands." (Temple of the False God.) No free mana
-        # stands behind it to be refused, so the conditioned ability *is* the
-        # bare tap — and its clause is asked at this door all the same, because
-        # ``land_tap_prohibition`` asks the default's own ability through the
-        # one CR 602.5 table. Left without a default, the land answered
-        # "priced": the castable highlight and the AI's planner counted it
-        # (they read every ability by index) while every executor's tap went
-        # to the default and was refused — a payment stranded part-way.
-        return conditioned, priced
+        return None, priced
 
     def _chosen_land_mana_ability(self, land, ability_index: int):
         """The instruction of the mana ability *ability_index* names on *land*,
@@ -237,14 +228,28 @@ class LandManaTapsMixin:
         from ..ai_valuation import mana_ability_symbols
         from ..land_mana_swaps import swapped_production
 
-        free, _priced = self._land_mana_abilities(land)
-        if free is None or color in mana_ability_symbols(free):
+        free, priced = self._land_mana_abilities(land)
+        if free is not None and color in mana_ability_symbols(free):
+            return None
+        # A land with no compiled mana ability at all (a basic, a dual) is the
+        # summary path's, which the default runs.
+        if free is None and not priced:
             return None
         # …nor where a land type the land **gained** makes it (CR 305.6:
         # "{T}: Add {B}" for a Swamp it was made): that is the seam's own arm,
         # which runs when no ability is named.
         if color in self._gained_type_mana(land):
             return None
+        # **A land whose every tap-alone mana ability prints a board
+        # condition** ("{T}: Add {C}{C}. Activate only if you control five or
+        # more lands.", Temple of the False God) has no default for a bare tap
+        # to run (``_land_mana_abilities`` never makes a refusable ability the
+        # default), so the walk below is the only way its mana is reached.
+        # Returning None here sent every planned tap of it to that default,
+        # which the seam refused: the castable highlight and the AI's planner
+        # counted the land (they read each ability by index) and the payment
+        # was stranded part-way. Such a land skips the swap shortcut below,
+        # whose premise is a default that answers.
         # **A land under a swap makes the swapped symbol by any of its
         # abilities** ("If a land is tapped for mana, it produces {B}
         # instead", Infernal Darkness), so the default one answers — and it is
@@ -255,19 +260,26 @@ class LandManaTapsMixin:
         # one exception is a colours-only swap ("…instead of any other
         # **color**", Hall of Gemstone) over a default that makes only {C},
         # which the swap leaves alone.
-        swap = swapped_production(self, land)
+        swap = swapped_production(self, land) if free is not None else None
         if swap is not None and swap.produced is not None and not (
             swap.colors_only and mana_ability_symbols(free) <= {"C"}
         ):
             return None
+        # With no default, a conditioned ability whose clause refuses now is
+        # still the one asked for: named, so the seam refuses it with the
+        # printed clause as its reason rather than as a default that is not
+        # there ("only if you control five or more lands").
+        conditioned = None
         for index, ability in enumerate(self.usable_abilities_of(land)):
             if not is_tap_alone_mana_ability(ability):
                 continue
-            if color in mana_ability_symbols(ability.instruction) and (
-                self.land_mana_tap_refusal(land, index) is None
-            ):
+            if color not in mana_ability_symbols(ability.instruction):
+                continue
+            if self.land_mana_tap_refusal(land, index) is None:
                 return index
-        return None
+            if free is None and conditioned is None:
+                conditioned = index
+        return conditioned
 
     def land_mana_tap_refusal(self, land, ability_index: int | None = None) -> str | None:
         """Why tapping *land* for mana through :meth:`tap_land_for_mana` would

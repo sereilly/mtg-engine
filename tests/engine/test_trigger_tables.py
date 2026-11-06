@@ -175,6 +175,9 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # Psychic Battle. CR 601.2c's choice as its own event: a spell's targets,
     # an ability's and a target changed by an effect all announce it.
     "player_chooses_targets": "whenever a player chooses one or more targets",
+    # Grip of Chaos (SCG W1G8). Every object, as its announcement is whole on
+    # the stack (CR 601.2i, 602.2b, 603.3d); not the choice above.
+    "spell_or_ability_put_onto_stack": "whenever a spell or ability is put onto the stack",
     "opponent_casts_spell": "whenever an opponent casts a spell",
     "you_cast_spell": "whenever you cast a spell",
     # Chance Encounter. CR 705.2: only the player who flipped wins a flip, so

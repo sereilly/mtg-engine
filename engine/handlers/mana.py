@@ -90,8 +90,14 @@ def activate_each_lands_mana_ability(
             # chooses nothing: an Underground River's summary begins with the
             # {B} of its painful second ability, so naming it here would deal
             # that player a damage nobody decided on. Where the default
-            # ability does not make the first printed symbol, none is named.
-            if tap_alone_ability_for(game, land, symbol) is not None:
+            # ability does not make the first printed symbol, none is named —
+            # unless there is no default at all (Temple of the False God's one
+            # mana ability prints a board condition), where the symbol is
+            # what reaches the ability.
+            if (
+                tap_alone_ability_for(game, land, symbol) is not None
+                and game._land_mana_abilities(land)[0] is not None
+            ):
                 symbol = None
             if game.tap_land_for_mana(
                 seat, land.card.name, symbol, permanent_id=land_id,
