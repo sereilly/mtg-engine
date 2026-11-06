@@ -360,9 +360,10 @@ def begin_sentence(game, *, source) -> SimultaneousDamage | None:
     ``sequence`` marked ``oracle_types.ONE_DEALING``), collecting its chunks
     until :func:`deal_sentence` — or None when a dealing is already open: the
     sentence's chunks then join that one, collected there if it is collecting
-    (and dealt by its opener), otherwise dealt as each step reaches them.
-    Nothing in the pool resolves a split sentence inside another dealing; the
-    second branch is the honest fallback, not a road."""
+    (and dealt by its opener), otherwise dealt as each step reaches them. No
+    road to that is known — a split sentence resolves from the stack or an
+    activation, after any dealing that fired it has finished — so the last
+    branch is a fallback that keeps the damage, not an ordering anyone gets."""
     dealing = begin(game, combat=False, source=source)
     if dealing is not None:
         dealing.agenda = []
