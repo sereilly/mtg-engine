@@ -708,6 +708,13 @@ class OracleExecutionContext(_TargetIdsGuard):
     # only in a mana symbol. None for a spell and for a triggered ability,
     # neither of which has one.
     ability_text: str | None = None
+    # What a resolving **spell** says (``text_changes.spell_text_card``, CR
+    # 612): *card* with the text changes made to it on the stack. *card*
+    # stays the printed object a handler moves and names; this is its words,
+    # for a handler that quotes them (a delayed trigger's own sentence,
+    # ``handlers/delayed._creating_words``). None for an ability, and for a
+    # spell resolved through a path that names no text card.
+    text_card: CardDefinition | None = None
     # The chosen target spell/ability on the stack (Counterspell, Fork).
     stack_target: "StackItem | None" = None
     # Event data captured when a triggered ability fired, read by its effect handler

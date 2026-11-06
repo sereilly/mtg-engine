@@ -49,7 +49,7 @@ def goes_no_further(ended=None):
                 return ended(self) if callable(ended) else ended
             return method(self, *args, **kwargs)
 
-        setattr(guarded, GUARDED, True)
+        guarded._stops_once_the_game_is_over = True
         return guarded
 
     return wrap
