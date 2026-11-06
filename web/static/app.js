@@ -21392,6 +21392,34 @@ function faceDownPreviewLines(card) {
   return lines;
 }
 
+// Which way the board moves what this card's cast is charged, from the
+// server's two flags (`cost_increased` / `cost_reduced`, web/serialization's
+// `_cast_price` over `cost_modifiers.cast_mana_charge`): "reduced",
+// "increased", "changed" for both at once (a generic tax beside a coloured
+// discount), or null for a badge that is the printed cost. The badge drew the
+// charged cost with nothing to tell it from the printed one, so a Goblin
+// Brigand under a Goblin Warchief read {R} as though the card printed it.
+function castPriceChange(card) {
+  if (!card || typeof card !== "object") return null;
+  const up = card.cost_increased === true;
+  const down = card.cost_reduced === true;
+  if (up && down) return "changed";
+  if (down) return "reduced";
+  if (up) return "increased";
+  return null;
+}
+
+// The preview's line for a changed price: what the cast is charged now and
+// what that was changed from (`cost_before_modifiers`: the printed cost, or
+// the alternative cost a permission charges). Empty for an unchanged one.
+function castPriceNote(card) {
+  const changed = castPriceChange(card);
+  if (!changed) return "";
+  const before = card.cost_before_modifiers || card.printed_mana_cost || "";
+  const how = { reduced: "reduced", increased: "increased", changed: "changed" }[changed];
+  return `Costs ${card.mana_cost || "{0}"} to cast now (${how} from ${before || "{0}"}).`;
+}
+
 function showCardPreview(card) {
   card = faceDownPreviewCard(card);
   _cancelPendingPreviewHide();
@@ -21417,6 +21445,8 @@ function showCardPreview(card) {
     sections.push("👑 Commander - this is the designated commander card");
   }
   for (const line of faceDownPreviewLines(card)) sections.push(renderSymbolsInline(line));
+  const priceNote = castPriceNote(card);
+  if (priceNote) sections.push(`<span class="preview-price-${castPriceChange(card)}">${renderSymbolsInline(priceNote)}</span>`);
   if (keywordLabel) sections.push(renderSymbolsInline(keywordLabel));
   // Above the rules text, beside the keywords: "the chosen color" in the text
   // below reads against the line that says which colour that is.
@@ -21865,6 +21895,8 @@ function createCardElement(card, options = {}) {
   if (!hidden && showManaCost && typeof card === "object" && card.mana_cost) {
     const costEl = document.createElement("div");
     costEl.className = "card-mana-cost";
+    const changed = castPriceChange(card);
+    if (changed) costEl.classList.add(`card-mana-cost--${changed}`);
     costEl.innerHTML = renderSymbolsInline(card.mana_cost);
     wrapper.appendChild(costEl);
   }

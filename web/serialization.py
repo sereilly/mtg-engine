@@ -905,10 +905,12 @@ def _mark_pickers_that_owe_nothing(perm_dict: dict, usable: list) -> None:
         top["requires_target"] = False
 
 
-def _cast_price(card, game, caster_index, from_zone: str) -> tuple[str, bool, bool]:
-    """``(the cost the UI shows, increased?, reduced?)`` for a cast of *card*
-    by *caster_index* out of *from_zone* — the mana the payment will ask for
-    before X is announced, written as the card prints a cost.
+def _cast_price(card, game, caster_index, from_zone: str) -> tuple[str, bool, bool, str]:
+    """``(the cost the UI shows, increased?, reduced?, the cost before the
+    modifiers)`` for a cast of *card* by *caster_index* out of *from_zone* —
+    the mana the payment will ask for before X is announced, written as the
+    card prints a cost, and the cost the increases and reductions were applied
+    to (the printed one, or the alternative cost a permission charges).
 
     CR 601.2f over the mana cost the cast is charged: the card's own
     (``cost_modifiers.cast_mana_charge``), or, for a graveyard copy this seat
@@ -929,7 +931,7 @@ def _cast_price(card, game, caster_index, from_zone: str) -> tuple[str, bool, bo
     """
     printed = card.mana_cost or ""
     if game is None or caster_index is None or card.primary_type == "land" or face_cards(card):
-        return printed, False, False
+        return printed, False, False, printed
     from engine.cost_modifiers import cast_mana_charge
     from engine.mana_payment import mana_cost_label
 
@@ -948,11 +950,11 @@ def _cast_price(card, game, caster_index, from_zone: str) -> tuple[str, bool, bo
     base = game._parse_mana_cost(charged_printed, x_value=0)
     keys = set(base) | set(owed)
     if all(int(base.get(k, 0)) == int(owed.get(k, 0)) for k in keys):
-        return charged_printed, False, False
+        return charged_printed, False, False, charged_printed
     increased = any(int(owed.get(k, 0)) > int(base.get(k, 0)) for k in keys)
     reduced = any(int(owed.get(k, 0)) < int(base.get(k, 0)) for k in keys)
     label = "{X}" * x_symbols + (mana_cost_label(owed) if any(owed.values()) else "")
-    return label or "{0}", increased, reduced
+    return label or "{0}", increased, reduced, charged_printed or "{0}"
 
 
 def _serialize_card(
@@ -989,7 +991,7 @@ def _serialize_card(
     # says the cast costs, and whether to ask for an X (an X spell flashed back
     # for a cost with no X in it has X = 0, CR 107.3b). The increases **and the
     # reductions** in force are folded in (``_cast_price``).
-    effective_cost, increased, reduced = _cast_price(card, game, caster_index, from_zone)
+    effective_cost, increased, reduced, before = _cast_price(card, game, caster_index, from_zone)
     serialized = _card_preview(card)
     serialized.update({
         "mana_cost": effective_cost,
@@ -999,6 +1001,12 @@ def _serialize_card(
         # The other direction (a Warchief, a Medallion, Edgewalker): the
         # badge is cheaper than the card prints.
         "cost_reduced": reduced,
+        # What those two compare against: the cost the increases and
+        # reductions in force were applied to — the printed one, or the
+        # alternative cost a permission charges (a flashback cost). The badge
+        # is coloured by the two flags and the preview says "{R}, reduced
+        # from {2}{R}", so a reduced badge no longer reads like a printed one.
+        "cost_before_modifiers": before,
         # The card's colours as its seat's statics leave them (CR 613.1e):
         # under its owner's Celestial Dawn a nonland card off the battlefield
         # is white, and the hand drew it in its printed colours. A preview
