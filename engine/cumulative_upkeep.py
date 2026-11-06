@@ -58,10 +58,11 @@ CUMULATIVE_UPKEEP_KIND = "cumulative_upkeep"
 AGE_COUNTER = "age"
 
 #: The bucket the support report puts it in. Carried here rather than added to
-#: ``effect_labels.TRIGGERED_LABELS`` for the reason ``rampage.RAMPAGE_LABEL``
-#: is: that table describes the abilities the **grammar** reads, and this one is
-#: derived from a keyword line the grammar never sees, so an entry there would
-#: read as dead to the guard that holds the table to the pool.
+#: ``triggered_labels.TRIGGERED_LABELS`` for the reason
+#: ``rampage.RAMPAGE_LABEL`` is: that table describes the abilities the
+#: **grammar** reads, and this one is derived from a keyword line the grammar
+#: never sees, so an entry there would read as dead to the guard that holds
+#: the table to the pool.
 CUMULATIVE_UPKEEP_LABEL = "upkeep_effect"
 
 #: "cumulative upkeep {1}{u}" as it survives ``normalize_creature_line`` —

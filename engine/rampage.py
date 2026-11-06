@@ -32,10 +32,11 @@ from .oracle_types import (OracleInstruction, ParsedTriggeredAbility,
 RAMPAGE_KIND = "rampage_pump"
 
 #: The bucket the support report puts it in. Carried here rather than added to
-#: ``effect_labels.TRIGGERED_LABELS`` for the reason a ``card_hooks.CardLine``
-#: carries its own: those tables describe the abilities the **grammar** reads,
-#: and this one is derived from a keyword line the grammar never sees. An entry
-#: there would read as dead to the guard that holds the tables to the pool.
+#: ``triggered_labels.TRIGGERED_LABELS`` for the reason a
+#: ``card_hooks.CardLine`` carries its own: those tables describe the abilities
+#: the **grammar** reads, and this one is derived from a keyword line the
+#: grammar never sees. An entry there would read as dead to the guard that
+#: holds the tables to the pool.
 #: ``triggered_pump`` is the existing word for a triggered P/T change — the
 #: report asks what the ability is for, and the answer is not "rampage".
 RAMPAGE_LABEL = "triggered_pump"

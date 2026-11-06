@@ -49,10 +49,11 @@ from .oracle_types import (OracleInstruction, ParsedTriggeredAbility,
 FLANKING_KIND = "pump_block_pair"
 
 #: The bucket the support report puts it in. Carried here rather than added to
-#: ``effect_labels.TRIGGERED_LABELS`` for the reason ``rampage.RAMPAGE_LABEL``
-#: is: that table describes the abilities the **grammar** reads, and this one is
-#: derived from a keyword line the grammar never sees, so an entry there would
-#: read as dead to the guard that holds the table to the pool.
+#: ``triggered_labels.TRIGGERED_LABELS`` for the reason
+#: ``rampage.RAMPAGE_LABEL`` is: that table describes the abilities the
+#: **grammar** reads, and this one is derived from a keyword line the grammar
+#: never sees, so an entry there would read as dead to the guard that holds
+#: the table to the pool.
 FLANKING_LABEL = "triggered_pump"
 
 #: The word as it survives ``normalize_creature_line`` — lowercased, with the

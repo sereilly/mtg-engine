@@ -27,8 +27,9 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
-from engine.effect_labels import (ACTIVATED_LABELS, TRIGGERED_LABELS,
-                                  TRIGGERED_LABELS_BY_CONDITION)
+from engine.activated_labels import ACTIVATED_LABELS
+from engine.triggered_labels import (TRIGGERED_LABELS,
+                                     TRIGGERED_LABELS_BY_CONDITION)
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.engine.test_effect_labels import (activated_shapes,
