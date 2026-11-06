@@ -502,6 +502,12 @@ def _search_exile(ctx: PromptContext, choices: list) -> dict:
         # way; this is what stops the UI offering a fourth pick that will be
         # rejected whole.
         "maximum": choice.data.get("maximum"),
+        # CR 701.23d: how many this answer **must** name — the engine's own
+        # floor (``_search_floor``), the key ``search_library`` sends. Three
+        # for Foresight's "search your library for three cards" over a library
+        # that holds three, fewer over one that does not, 0 for "any number of
+        # <quality>" (CR 701.23b), where taking nothing is an answer.
+        "min_picks": ctx.game._search_floor(choice),
         "cards": [ctx.owned_card(card, caster) for card in caster.library],
         "legal_indices": [
             index for index, card in enumerate(caster.library) if _matches(card)

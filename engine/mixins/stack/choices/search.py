@@ -544,7 +544,23 @@ class LibrarySearchChoicesMixin:
         its own example. No restriction means nothing for the picker and the
         resolver to read differently, so the reason for the exemption does
         not reach it (``search_filters.search_names_a_quality``).
+
+        **The exile search is the same sentence** (``search_exile_cards``):
+        "Search your library for three cards, exile them" (Foresight,
+        Manipulate Fate), "…for five cards … in a face-down pile" (Mangara's
+        Tome), "…for seven cards" (Parallel Thoughts) print a ``maximum`` and
+        no quality, so each must find that many or as many as the zone holds;
+        "any number of <quality> cards" (Chandra, Heart of Fire, Mana
+        Severance, Skyship Weatherlight) prints neither a number nor a floor.
+        Its quality is the two keys its one matcher reads
+        (:meth:`_exile_search_matches`), so "names no quality" and "admits
+        every card" are one fact there too.
         """
+        if choice.kind == "search_exile_cards":
+            maximum = choice.data.get("maximum")
+            if maximum is None or self._exile_search_names_a_quality(choice.data):
+                return 0
+            return min(int(maximum), len(self._exile_search_candidates(choice)))
         if choice.data.get("up_to"):
             return 0
         slots = len(self._search_destination_slots(choice.data))
@@ -951,10 +967,49 @@ class LibrarySearchChoicesMixin:
                 return False
         return True
 
-    def _resolve_search_exile(self, choice: PendingChoice, picks: list) -> bool:
+    @staticmethod
+    def _exile_search_names_a_quality(data: dict) -> bool:
+        """Whether the exile search is for cards **with a stated quality**
+        (CR 701.23b) — a card type or a colour, the two keys
+        :meth:`_exile_search_matches` reads — rather than simply for a
+        quantity of cards (CR 701.23d)."""
+        return bool(tuple(data.get("card_types") or ())) or bool(
+            tuple(data.get("colors") or ())
+        )
+
+    def _exile_search_candidates(self, choice: PendingChoice) -> list[dict]:
+        """Every card the exile search may find, as the picks it is answered
+        with (``{"zone", "index"}``), graveyard first and each zone in order.
+
+        One enumeration for the floor (:meth:`_search_floor`'s "as many as
+        possible") and the default answer, through the one matcher the resolver
+        accepts by, so the count the floor is held to and the cards the default
+        offers cannot disagree."""
+        caster = self.players[choice.player_index]
+        zones = tuple(choice.data.get("zones", ("graveyard", "library")))
+        return [
+            {"zone": zone, "index": index}
+            for zone in ("graveyard", "library")
+            if zone in zones
+            for index, card in enumerate(
+                caster.graveyard if zone == "graveyard" else caster.library
+            )
+            if self._exile_search_matches(
+                card, choice.data, game=self, owner=choice.player_index,
+            )
+        ]
+
+    def _resolve_search_exile(
+        self, choice: PendingChoice, picks: list, *, enforce_floor: bool = True,
+    ) -> bool:
         """Every pick is validated before anything moves — a single bad entry
         rejects the whole answer and leaves the prompt queued, so a malformed
-        request cannot exile half a selection."""
+        request cannot exile half a selection.
+
+        ``enforce_floor`` is the search-library resolver's door, for the same
+        reason: only the default's last resort holds the key, so a search
+        nobody can answer still leaves the prompt; every answer off the wire
+        goes through the registry's resolver, which never passes it."""
         caster = self.players[choice.player_index]
         zones = tuple(choice.data.get("zones", ("graveyard", "library")))
         seen: set[tuple[str, int]] = set()
@@ -977,10 +1032,18 @@ class LibrarySearchChoicesMixin:
             cleaned.append((zone, index))
         # "Search your library for **three** cards" (Foresight). A printed
         # ceiling, checked before anything moves like every other part of this
-        # answer — CR 701.23b lets a search find fewer, so there is no floor,
-        # but a fourth pick is a card the effect never named.
+        # answer — a fourth pick is a card the effect never named.
         maximum = choice.data.get("maximum")
         if maximum is not None and len(cleaned) > int(maximum):
+            return False
+        # …and, for that bare quantity, a floor (CR 701.23d): "three cards"
+        # names no quality, so it must find three, or as many as the library
+        # holds. The exile search took "nothing" for every one of the four
+        # cards that print it — Parallel Thoughts' pile could be left empty
+        # and Foresight could exile nothing at all. A stated quality ("any
+        # number of red instant and/or sorcery cards") keeps CR 701.23b's
+        # fail-to-find: the floor is 0 there.
+        if enforce_floor and len(cleaned) < self._search_floor(choice):
             return False
         exiled = []
         for zone in ("library", "graveyard"):
@@ -1066,23 +1129,24 @@ class LibrarySearchChoicesMixin:
         Where a ceiling is printed the default takes that many — the same
         "as much as the card allows" reading, bounded. Without the trim the
         picks would be refused whole and the seat would take *nothing*, which
-        is the opposite default."""
+        is the opposite default.
+
+        **"Take nothing" stops at the floor** (CR 701.23d,
+        :meth:`_search_floor`): a pile that never comes back but is a bare
+        quantity — Foresight's and Manipulate Fate's "search your library for
+        three cards, exile them" — must still find three, so the seat that
+        would take none takes exactly that many, the first the search admits
+        (the library's top cards, which is the order the rest of this policy
+        reads). Mana Severance's "any number of land cards" names a quality and
+        still takes none."""
+        floor = self._search_floor(choice)
+        candidates = self._exile_search_candidates(choice)
         if not choice.data.get("comes_back", True):
-            if not self._resolve_search_exile(choice, []):
-                self.discard_pending_choice(choice)
+            if not self._resolve_search_exile(choice, candidates[:floor]):
+                if not self._resolve_search_exile(choice, [], enforce_floor=False):
+                    self.discard_pending_choice(choice)
             return
-        caster = self.players[choice.player_index]
-        picks = [
-            {"zone": zone, "index": index}
-            for zone in ("graveyard", "library")
-            if zone in tuple(choice.data.get("zones", ("graveyard", "library")))
-            for index, card in enumerate(
-                caster.graveyard if zone == "graveyard" else caster.library
-            )
-            if self._exile_search_matches(
-                card, choice.data, game=self, owner=choice.player_index,
-            )
-        ]
+        picks = candidates
         maximum = choice.data.get("maximum")
         if maximum is not None:
             picks = picks[: int(maximum)]
@@ -1097,7 +1161,7 @@ class LibrarySearchChoicesMixin:
 
             picks = slow_pile_picks(self, choice.player_index, picks)
         if not self._resolve_search_exile(choice, picks):
-            self._resolve_search_exile(choice, [])
+            self._resolve_search_exile(choice, [], enforce_floor=False)
 
 
 # ---------------------------------------------------------------------------

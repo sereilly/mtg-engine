@@ -12851,11 +12851,17 @@ function renderSearchExileModal(info) {
       (info.colors || []).join("/"),
       (info.card_types || []).join(" or "),
     ].filter(Boolean).join(" ");
-    // "…for **three** cards" (Foresight) prints a ceiling; the "any number of"
-    // spelling (Chandra, Heart of Fire) does not. CR 701.23b lets a search find
-    // fewer than it names, so it is always "up to".
-    const howMany = info.maximum ? `up to ${info.maximum}` : "any number of";
-    subtitle.textContent = `Choose ${howMany} ${what || "matching"} cards to exile.`;
+    // "…for **three** cards" (Foresight) prints a number and no quality, so
+    // it must find that many (CR 701.23d) — the server's `min_picks`, fewer
+    // only where the library holds fewer; the "any number of <quality>"
+    // spelling (Chandra, Heart of Fire) may find none (CR 701.23b).
+    const floor = searchExileFloor(info);
+    const howMany = floor > 0
+      ? (info.maximum && floor < info.maximum ? `all ${floor}` : `${floor}`)
+      : info.maximum ? `up to ${info.maximum}` : "any number of";
+    subtitle.textContent = floor > 0
+      ? `Choose ${howMany} card${floor === 1 ? "" : "s"} to exile — you must find ${floor === 1 ? "it" : "them"}.`
+      : `Choose ${howMany} ${what || "matching"} cards to exile.`;
   }
 
   const confirmBtn = document.getElementById("searchExileConfirmBtn");
@@ -12887,11 +12893,7 @@ function renderSearchExileModal(info) {
           searchExileSelected.add(key);
         }
         el.classList.toggle("selected");
-        if (confirmBtn) {
-          confirmBtn.textContent = searchExileSelected.size
-            ? `Exile ${searchExileSelected.size} Card${searchExileSelected.size === 1 ? "" : "s"}`
-            : "Take Nothing";
-        }
+        syncSearchExileConfirm(info, confirmBtn);
       });
     });
   }
@@ -12902,6 +12904,9 @@ function renderSearchExileModal(info) {
   if (confirmBtn && !confirmBtn.dataset.bound) {
     confirmBtn.dataset.bound = "1";
     confirmBtn.addEventListener("click", async () => {
+      // Held at the floor (CR 701.23d): the server refuses a shorter answer
+      // whole, and the modal would only come back with nothing picked.
+      if (confirmBtn.disabled) return;
       const picks = [...searchExileSelected].map((key) => {
         const [zone, idx] = key.split(":");
         return { zone, index: Number(idx) };
@@ -12911,11 +12916,33 @@ function renderSearchExileModal(info) {
       await sendAction({ seat, action: "search_exile_confirm", search_picks: picks });
     });
   }
-  if (confirmBtn) {
-    confirmBtn.textContent = searchExileSelected.size
-      ? `Exile ${searchExileSelected.size} Card${searchExileSelected.size === 1 ? "" : "s"}`
-      : "Take Nothing";
+  syncSearchExileConfirm(info, confirmBtn);
+}
+
+// How many cards the exile search must find (CR 701.23d): the server's
+// `min_picks` (`_search_floor`), 0 for an older payload or a search that names
+// a quality.
+function searchExileFloor(info) {
+  return Math.max(0, Number(info?.min_picks) || 0);
+}
+
+// The one confirm button's face. With a floor it counts toward it ("Exile 2 of
+// 3") and stays disabled until it is met, and never offers "Take Nothing" —
+// Parallel Thoughts and Foresight offered it, and took it. Without one, the
+// count, and "Take Nothing" for none (CR 701.23b's fail-to-find).
+function syncSearchExileConfirm(info, confirmBtn) {
+  if (!confirmBtn) return;
+  const picked = searchExileSelected.size;
+  const floor = searchExileFloor(info);
+  if (floor > 0) {
+    confirmBtn.textContent = `Exile ${picked} of ${floor}`;
+    confirmBtn.disabled = picked < floor;
+    return;
   }
+  confirmBtn.disabled = false;
+  confirmBtn.textContent = picked
+    ? `Exile ${picked} Card${picked === 1 ? "" : "s"}`
+    : "Take Nothing";
 }
 
 // Glasses of Urza: show the viewer the actual cards in the looked-at player's
