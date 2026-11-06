@@ -240,7 +240,7 @@ def test_the_dialog_shows_the_descriptions_as_slots_and_refuses_a_second_card():
     assert "buildSlotRow()" in dialog
     # Whose library and whose hand, from the payload.
     assert "info.zone_seat === seat" in dialog and "info.zone_owner_name" in dialog
-    assert "searchDestinationWords(oneDestination, info.enters_tapped, zoneOwnerName)" in dialog
+    assert "searchDestinationWords(oneDestination, info.enters_tapped, zoneOwnerName, info.from_top)" in dialog
     # The floor holds the confirm and withdraws "fail to find".
     assert "info.min_picks" in dialog
     assert "confirmBtn.disabled = n === 0 || n < minPicks" in dialog

@@ -109,8 +109,12 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
         game.log.append(f"{context.card.name} copied {copied.card.name}")
         # "**You may choose new targets for the copy.**" (CR 707.10c.) The
         # sentence is part of this production - the parse requires it - and
-        # it was consumed and never offered.
-        _offer_copy_new_target(game, context, copy, caster_index)
+        # it was consumed and never offered. Numbered, so a person asked
+        # about each of a storm's copies in turn is told which one this is.
+        _offer_copy_new_target(
+            game, context, copy, caster_index,
+            copy_number=position + 1, copy_count=copies,
+        )
 
     # One step per copy and a last one that takes the final answer. The loop
     # is the last thing this handler does (``engine/resumption.py``): a copy
@@ -127,6 +131,7 @@ _COPY_NEW_TARGET = "_copy_new_target"
 
 def _offer_copy_new_target(
     game: Game, context: OracleExecutionContext, copy: StackItem, seat: int,
+    *, copy_number: int | None = None, copy_count: int | None = None,
 ) -> None:
     """Offer *seat* the new target CR 707.10c lets it choose for *copy*.
 
@@ -149,9 +154,14 @@ def _offer_copy_new_target(
     One target only, as ``copy_spell_target`` asks: a copy that chose several
     keeps them all, which is the offer declined rather than a list for the
     wrong slot.
+
+    *copy_number* of *copy_count* is which copy this is, for the prompt's
+    words ("copy 2 of 4"); it changes nothing about what is offered.
     """
     if _copy_reaim_is_one_slot(game, copy):
-        game.arm_copy_spell_target(seat, copy)
+        game.arm_copy_spell_target(
+            seat, copy, copy_number=copy_number, copy_count=copy_count,
+        )
         return
     if seat not in game.interactive_seats:
         return
@@ -167,11 +177,16 @@ def _offer_copy_new_target(
     if not options:
         return
     name = copy.card.name
+    which = (
+        f"copy {copy_number} of {copy_count} of {name}"
+        if copy_count is not None and copy_number is not None and copy_count > 1
+        else f"the copy of {name}"
+    )
     game.arm_retarget_choice(
         seat,
         card_name=name,
         prompt=(
-            f"Choose a new target for the copy of {name} "
+            f"Choose a new target for {which} "
             f"(now {target_label(game, slots[0].current)}), or keep it."
         ),
         result_key=_COPY_NEW_TARGET,

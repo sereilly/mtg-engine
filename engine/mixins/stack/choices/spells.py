@@ -610,8 +610,17 @@ class SpellChoicesMixin:
             for slot in held
         )
 
-    def arm_copy_spell_target(self, player_index: int, copy_item) -> None:
+    def arm_copy_spell_target(
+        self, player_index: int, copy_item, *,
+        copy_number: int | None = None, copy_count: int | None = None,
+    ) -> None:
         """Offer the copy's controller the re-aiming CR 707.10 gives them.
+
+        *copy_number* of *copy_count* says which copy is being asked about when
+        one effect makes several (storm, CR 702.40a: "You can make different
+        choices for each copy", 2022-12-08), so the prompt can say "copy 2 of
+        4". Stamped only for a count above one; every other offer's data is
+        what it was.
 
         The candidate list is the *same* one the caster's picker would be shown
         for the card — ``derive_cast_spec`` plus ``_enumerate_targets`` — so the
@@ -667,25 +676,61 @@ class SpellChoicesMixin:
             offered and not self._copy_already_holds(copy_item, offered[0])
         ):
             return
+        numbering = (
+            {"copy_number": int(copy_number), "copy_count": int(copy_count)}
+            if copy_count is not None and copy_number is not None and copy_count > 1
+            else {}
+        )
         self.arm_pending_choice(
             "copy_spell_target", player_index,
             card_name=copy_item.card.name,
             targets=offered,
             _copy=copy_item,
+            **numbering,
+        )
+
+    def copy_spell_target_current(self, choice: PendingChoice) -> "dict | None":
+        """The offered candidate the waiting copy is aimed at **now** — the
+        original's target, which declining the offer keeps (CR 707.10c) — or
+        None when it holds none of them (its target has since become
+        illegal, and keeping it leaves the copy to be countered, CR 608.2b).
+        Read for the prompt, so a person can see what "keep" keeps."""
+        copy_item = choice.data.get("_copy")
+        if copy_item is None:
+            return None
+        return next(
+            (
+                target for target in choice.data.get("targets") or ()
+                if self._copy_already_holds(copy_item, target)
+            ),
+            None,
         )
 
     def confirm_copy_spell_target(
         self, player_index: int, permanent_id: int | None = None,
-        target_seat: int | None = None,
+        target_seat: int | None = None, *, keep: bool = False,
     ) -> bool:
-        """Answer the copy's target choice with a permanent's id or a seat."""
+        """Answer the copy's target choice with a permanent's id or a seat —
+        or *keep*: decline the offer and leave the copy on the original's
+        target, the answer a seat nobody asks gives
+        (``_default_copy_spell_target``)."""
+        if keep:
+            return self.resolve_pending_choice(
+                "copy_spell_target", player_index, keep=True,
+            )
         return self.resolve_pending_choice(
             "copy_spell_target", player_index,
             permanent_id=permanent_id, seat=target_seat,
         )
 
     def _resolve_copy_spell_target(self, choice: PendingChoice, response: dict) -> bool:
-        """Aim the waiting copy at the answer, if the answer was offered."""
+        """Aim the waiting copy at the answer, if the answer was offered.
+
+        ``keep`` is the offer declined: the stated default, which re-aims the
+        copy at nothing new — whatever it holds, legal or not, it keeps."""
+        if response.get("keep"):
+            self._default_copy_spell_target(choice)
+            return True
         match = self._select_trigger_mode_target(
             {"valid_targets": choice.data.get("targets") or ()}, response
         )

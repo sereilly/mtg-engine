@@ -239,6 +239,48 @@ def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
             if narrowing:
                 spec["filter"] = narrowing
             specs.append(spec)
+    described = getattr(cost, "exile_graveyard_filter", None)
+    if described is not None:
+        # The **cast** side's spelling of the graveyard exile above
+        # (``AdditionalCost.exile_graveyard_filter``): "As an additional cost to
+        # cast this spell, exile X creature cards from your graveyard" (Haunting
+        # Misery, Chill Haunting), "…exile X cards from your graveyard"
+        # (Skeletal Scrying). Which cards leave is the caster's (CR 601.2b) and
+        # the charger has held a named set to the cost since ODY W2G1
+        # (``_named_graveyard_cost_refusal``, on ``cost_graveyard_indices``) —
+        # but nothing described the choice, so every person paid with the top
+        # of the pile. The activation spec's shape and flags, so the enumerator
+        # offers the pile with the matcher the charger accepts by; always the
+        # caster's own pile (``_graveyard_exile_candidates`` reads no other).
+        spec = {
+            "kind": GRAVEYARD_TARGET_KIND,
+            "exile_cost": True,
+            "own_graveyard_only": True,
+        }
+        wanted = described.get("type_filter")
+        if isinstance(wanted, str):
+            spec["card_type"] = wanted
+        else:
+            spec["any_card"] = True
+        narrowing = {
+            key: value for key, value in described.items()
+            if not (key == "type_filter" and isinstance(value, str))
+        }
+        if narrowing:
+            spec["cost_filter"] = narrowing
+        if getattr(cost, "exile_graveyard_count_x", False):
+            # One X for the clause and anything else that reads it (CR
+            # 107.3a: Haunting Misery's and Chill Haunting's live only here,
+            # Skeletal Scrying's {X}{B} prints it in the mana cost as well):
+            # the set the caster names announces it, so the client sends
+            # ``x_value`` as the number picked — the flag "Sacrifice X lands"
+            # and "discard X cards" carry.
+            spec["announces_x"] = True
+        else:
+            count = int(getattr(cost, "exile_graveyard_count", 1) or 1)
+            if count > 1:
+                spec["count"] = count
+        specs.append(spec)
     described = getattr(cost, "sacrifice_filter", None)
     if described is not None:
         spec = {

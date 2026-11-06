@@ -123,7 +123,7 @@ def test_a_face_down_angel_turns_up_from_its_button(set_pool):
     assert [e for e in build_state(session, 1)["special_actions"] if e["kind"] == "turn_face_up"] == []
 
     built = run_app_js(
-        ["turnFaceUpActionLabel", "turnFaceUpHiddenName", "sendSpecialAction"],
+        ["turnFaceUpActionLabel", "turnFaceUpHiddenName", "morphPriceText", "sendSpecialAction"],
         "return { label: turnFaceUpActionLabel(INPUT.entry), body: await sendSpecialAction(INPUT.entry) };",
         {"entry": entry, "state": mine},
         prelude="let seat = 0; let currentState = INPUT.state; const sendAction = async (body) => body;",

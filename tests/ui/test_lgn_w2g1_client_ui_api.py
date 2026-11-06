@@ -268,10 +268,15 @@ def test_the_morph_x_row_offers_each_payable_x_and_sends_the_one_clicked(set_poo
     out = run_app_js(
         ["renderSpecialActions", "renderSpecialActionXRow", "morphCostWithX",
          "turnFaceUpActionLabel", "turnFaceUpHiddenName", "startSpecialActionCostPrompt",
-         "sendSpecialAction"],
+         "sendSpecialAction",
+         # SCG W2G2: the price said on the button, and the offer's own steps
+         # (a mana-only cost has none, so the X row opens as before).
+         "morphPriceText", "morphPriceInAll", "takeMorphOffer", "morphCostSteps",
+         "morphStepFields", "openMorphCostStep"],
         _X_ROW_BODY, {"state": state, "x": 2},
         prelude=_DOM + (
-            "let specialActionXFor = null; let pendingPermanentCost = null;"
+            "let specialActionXFor = null; let specialActionXFields = {};"
+            " let pendingPermanentCost = null;"
             # The real table's turn-face-up row; the other kinds never arise here.
             "const SPECIAL_ACTION_LABELS = { turn_face_up: (name, entry) => turnFaceUpActionLabel(entry) };"
         ),
