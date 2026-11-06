@@ -575,6 +575,44 @@ def test_w1g3_a_reduced_goblin_is_proposed_and_paid_by_the_ai_from_lands(
     assert _w1g3_ai_casts._cast_candidate(bare, 0, hero, 0) is None
 
 
+def test_w1g3_the_castable_highlight_glows_at_the_reduced_price(set_pool, catalog_by_name):
+    """The web's castable highlight prices a cast through the same readers
+    (``state_view._card_castable_now`` → ``cost_reduction_for_cast`` →
+    ``board_can_pay``): two Mountains glow Goblin Hero under Goblin Warchief
+    and Craw Wurm's {4}{G}{G} glows on four Forests under Krosan Drover; neither
+    glows without its reducer."""
+    from fastapi.testclient import TestClient
+
+    from web.app import app, store
+    from web.state_view import _compute_playable_hand_indices
+
+    client = TestClient(app)
+    sid = client.post("/api/sessions", json={
+        "mode": "human_vs_human", "host_name": "Host", "guest_name": "Guest",
+        "host_colors": 2, "guest_colors": 2, "seed": 4243,
+    }).json()["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    session = store.get(sid)
+    scg = set_pool("SCG")
+    for reducer, land, spell in (
+        ("Goblin Warchief", "Mountain", "Goblin Hero"),
+        ("Krosan Drover", "Forest", "Craw Wurm"),
+    ):
+        glows = {}
+        for with_reducer in (True, False):
+            game = _w1g3_table(catalog_by_name)
+            if with_reducer:
+                _w1g3_put(game, 0, scg[reducer])
+            count = 2 if land == "Mountain" else 4
+            for _ in range(count):
+                _w1g3_put(game, 0, catalog_by_name[land])
+            game.players[0].hand.append(catalog_by_name[spell])
+            session.game = game
+            session.current_turn = 0
+            glows[with_reducer] = 0 in _compute_playable_hand_indices(session, 0)
+        assert glows == {True: True, False: False}, (reducer, spell)
+
+
 def test_w1g3_rock_jockey_cannot_be_cast_after_a_land(set_pool, catalog_by_name):
     """"You can't cast Rock Jockey if you've played a land this turn." (CR
     601.3.) Played, not put: a land drop this turn refuses the cast with

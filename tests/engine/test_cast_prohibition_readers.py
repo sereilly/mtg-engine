@@ -174,6 +174,11 @@ def _ban_targeting(game):
     game.targeting_bans.append({"source_name": "Peace Talks", "remaining_turns": 2})
 
 
+def _played_a_land(game):
+    # What the land-play path records (CR 305.1); the board is left alone.
+    game.lands_played_this_turn[0] = 1
+
+
 _SCENARIOS: dict[str, list[tuple]] = {
     "set_lockout": [
         ("a spell", OWN_MAIN, "Moorish Cavalry", "City in a Bottle", 1, {}, None),
@@ -228,6 +233,12 @@ _SCENARIOS: dict[str, list[tuple]] = {
     "same_name_as_permanent_ban": [
         ("a spell", OWN_MAIN, "Grizzly Bears", "Cornered Market", 1, {}, None),
         ("a nonbasic land", OWN_MAIN, "Taiga", "Cornered Market", 1, {}, None),
+    ],
+    # "You can't cast Rock Jockey if you've played a land this turn." The
+    # card's own sentence, so no permanent imposes it: the arm is the land drop.
+    "self_cast_ban": [
+        ("its own card, after a land drop", OWN_MAIN, "Rock Jockey", None, 0, {},
+         _played_a_land),
     ],
 }
 
@@ -403,6 +414,11 @@ _HAND = [
 _REFUSES_NOTHING_HERE = {
     "Firestorm Phoenix": "its sentence locks one returned copy of itself in a hand",
     "Limited Resources": "binds only while ten or more lands are on the battlefield",
+    "Rock Jockey": (
+        "its cast ban is about its own card in a hand (the self_cast_ban row's "
+        "scenario), and its land ban binds only a Jockey cast this turn — one put "
+        "onto this board was not"
+    ),
 }
 
 
