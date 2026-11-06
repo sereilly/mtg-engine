@@ -131,7 +131,57 @@ def _functions_from(trig, zone: str) -> bool:
     return (instruction.payload or {}).get(FUNCTIONS_FROM) == zone
 
 
-def graveyard_trigger_events(game: Game, kind: str, players=None) -> list[dict]:
+#: Whether one graveyard card's trigger answers one event — the graveyard twin
+#: of :data:`EVENT_FILTERS`. A twin rather than the same table, because every
+#: predicate there is asked of a **permanent** (its controller is the observer,
+#: it is the source "another" excludes), and a card in a graveyard is neither
+#: (CR 108.4a: its owner stands in as controller; nothing on the battlefield is
+#: "it"). Keyed by event kind and registered beside the permanent predicate it
+#: shadows (``event_filters._subject_led_graveyard_filter``).
+GraveyardEventFilter = Callable[
+    ["Game", int, object, "ParsedTriggeredAbility", Event], bool
+]
+
+GRAVEYARD_EVENT_FILTERS: dict[str, GraveyardEventFilter] = {}
+
+
+def graveyard_event_filter(
+    *kinds: str,
+) -> Callable[[GraveyardEventFilter], GraveyardEventFilter]:
+    """Register a per-kind applicability predicate for a graveyard card."""
+
+    def decorator(fn: GraveyardEventFilter) -> GraveyardEventFilter:
+        for kind in kinds:
+            if kind in GRAVEYARD_EVENT_FILTERS:
+                raise ValueError(f"duplicate graveyard event filter for {kind!r}")
+            GRAVEYARD_EVENT_FILTERS[kind] = fn
+        return fn
+
+    return decorator
+
+
+def graveyard_trigger_applies(
+    game: Game, seat: int, card, trig: ParsedTriggeredAbility, event: Event,
+) -> bool:
+    """Whether a graveyard card's *trig* answers *event*.
+
+    **Fail-closed.** A kind with no narrowing for any observer (no entry in
+    :data:`EVENT_FILTERS`) fires; a kind narrowed for a permanent and with no
+    graveyard reading here does **not** — "when a Dragon enters" (Bladewing's
+    Thrall) asked without its filter would fire for every permanent that
+    entered, which is the card working far more often than it prints.
+    """
+    if event.kind not in EVENT_FILTERS:
+        return True
+    reader = GRAVEYARD_EVENT_FILTERS.get(event.kind)
+    if reader is None:
+        return False
+    return reader(game, seat, card, trig, event)
+
+
+def graveyard_trigger_events(
+    game: Game, kind: str, players=None, event: Event | None = None,
+) -> list[dict]:
     """Every graveyard-resident trigger matching *kind*, as enqueueable event dicts.
 
     The third zone a trigger can fire from, after the battlefield
@@ -153,6 +203,14 @@ def graveyard_trigger_events(game: Game, kind: str, players=None) -> list[dict]:
     The seat is the graveyard's **owner** (CR 108.4a: the controller of a card
     that has none is its owner), which is what "**your** end step" means for a
     card nobody controls.
+
+    *event* is the announcement when one is being collected (:func:`collect`;
+    the step scans pass none, their condition being the step itself). Two
+    things ride it that a step needs nothing of: the event's own narrowing,
+    asked through :func:`graveyard_trigger_applies` — "when **a Dragon**
+    enters" (Bladewing's Thrall) — and the event's payload as the trigger's
+    context, which is where "attached to **that creature**" (the Dragon Auras)
+    finds the permanent the event was about.
     """
     from .trigger_utils import matching_triggers
 
@@ -164,14 +222,21 @@ def graveyard_trigger_events(game: Game, kind: str, players=None) -> list[dict]:
             for trig in matching_triggers(card, condition_kinds={kind}):
                 if not _functions_from(trig, "graveyard"):
                     continue
-                events.append({
+                if event is not None and not graveyard_trigger_applies(
+                    game, seat, card, trig, event,
+                ):
+                    continue
+                entry = {
                     "controller_index": seat,
                     "source_permanent": None,
                     "card": card,
                     "instruction": trig.instruction,
                     "effect_kind": trig.effect_kind,
                     "ability_text": trig.source_line,
-                })
+                }
+                if event is not None and event.payload:
+                    entry["trigger_context"] = dict(event.payload)
+                events.append(entry)
     return events
 
 
@@ -346,7 +411,7 @@ def collect(game: Game, event: Event) -> list[dict]:
     events.extend(emblem_trigger_events(game, event.kind, scoped))
     # And from a graveyard (CR 113.6m), for the same reason: no battlefield scan
     # can find a card that is not on one.
-    events.extend(graveyard_trigger_events(game, event.kind, scoped))
+    events.extend(graveyard_trigger_events(game, event.kind, scoped, event))
     # And from the stack, for the object being cast (CR 603.6d). Beside the
     # other two rather than at the cast site, so APNAP ordering and the enqueue
     # path treat every zone's triggers alike.
@@ -505,4 +570,7 @@ def _controller_of(game: Game, permanent: Permanent) -> PlayerState:
 from . import cast_event_filters, event_filters  # noqa: E402,F401
 
 
-__all__ = ["EVENT_FILTERS", "Event", "collect", "emit", "event_filter"]
+__all__ = [
+    "EVENT_FILTERS", "Event", "GRAVEYARD_EVENT_FILTERS", "collect", "emit",
+    "event_filter", "graveyard_event_filter", "graveyard_trigger_applies",
+]

@@ -870,9 +870,65 @@ def lower_untargeted_return(
             raise LoweringError(
                 f"the self-return handler does not honour {leftovers[0]!r}", node=node
             )
+        # Every rider of the move itself that no handler here reads. The
+        # filter's leftovers above are the noun phrase; these are the verb's,
+        # and this branch read **none** of them — "…to the battlefield
+        # **attached to that creature**" (the Scourge Dragon Auras) lowered to a
+        # bare return and was stopped only by the Aura support gate, which is
+        # not a gate any other card type passes through.
+        # "**You** return this card from your graveyard …" (Mangara's
+        # Blessing) and "…under **your** / **its owner's** control" name the
+        # seat the handler already uses: the card is in its owner's graveyard
+        # (CR 404.1) and the ability is the owner's (CR 108.4a).
+        unread_riders = [
+            name for name in (
+                "exile_on_leave", "repetitions", "losing_subtypes",
+                "losing_abilities", "gaining_abilities", "also_stack",
+                "bound_card_from",
+            )
+            if getattr(node, name, None)
+        ]
+        if node.actor is not None and node.actor.kind != "you":
+            unread_riders.append("actor")
+        if node.under_control_of is not None and node.under_control_of.kind not in (
+            "you", "owner",
+        ):
+            unread_riders.append("under_control_of")
+        if unread_riders:
+            raise LoweringError(
+                f"the self-return handler does not honour {unread_riders[0]!r}",
+                node=node,
+            )
         payload: dict[str, object] = {
             "tapped": node.entering_tapped, "functions_from": "graveyard",
         }
+        if node.attached_to is not None:
+            # "When a creature with mana value 6 or greater enters, you may
+            # return this card from your graveyard to the battlefield
+            # **attached to that creature**." (Dragon Breath, Fangs, Scales,
+            # Shadow and Wings.) CR 303.4i: the effect names the host, so
+            # nothing is chosen and nothing is targeted (shroud is no bar), and
+            # an Aura that cannot legally enchant it — gone, protected, of the
+            # wrong kind — stays in the graveyard. "That creature" is the
+            # object the firing event was about, which is a claim about the
+            # fire site (``_EVENT_SUBJECT_OBJECTS``: it froze the id), so it is
+            # admitted only there; a host an earlier step chose is Takklemaggot's
+            # reading and this sentence has no earlier step.
+            if to_hand:
+                raise LoweringError(
+                    "a card returned to a hand is attached to nothing", node=node
+                )
+            if (
+                node.attached_to != "chosen"
+                or event not in _EVENT_SUBJECT_OBJECTS
+                or _ATTACH_HOST_KEY in produced
+            ):
+                raise LoweringError(
+                    "\"attached to that creature\" names the firing event's "
+                    "object, and this event records none",
+                    node=node,
+                )
+            payload["attached_to"] = "event_subject"
         if node.entering_counters:
             # "…**with a +1/+1 counter on it**" (Sand Golem). CR 121.2 puts the
             # counters on as part of the move, so they ride this instruction

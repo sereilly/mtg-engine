@@ -742,6 +742,41 @@ def offer_buys_own_drawback(game: Game, player_index: int, entry: dict) -> bool:
     return game.controller_index_of(source) == player_index
 
 
+def returned_aura_lands_on_wrong_side(
+    game: Game, player_index: int, entry: dict,
+) -> bool:
+    """Whether a seat nobody asks would, by taking "you may return this card
+    from your graveyard to the battlefield **attached to that creature**",
+    put an Aura on the side of the table it works against.
+
+    The Scourge Dragon Auras: "that creature" is whichever creature with mana
+    value 6 or greater entered, under **any** player's control, and the Aura
+    returns under its owner's (CR 108.4a, the trigger's seat). Every one of the
+    five helps its host — haste, flying, trample, a pump — so taking the gift
+    onto an opponent's Dragon hands that opponent the Aura, and "take gifts"
+    took it every time. The cast chooser's question asked of a host the effect
+    names (``ai_targets._aura_harms_its_host``, the one reader of which side an
+    Aura belongs on): declined where the host is on the wrong side for the
+    Aura's text, the standing policy everywhere else.
+    """
+    if not any(
+        getattr(step, "kind", None) == "return_self_from_graveyard"
+        and (step.payload or {}).get("attached_to") == "event_subject"
+        for step in entry.get("_on_accept") or ()
+    ):
+        return False
+    context = entry.get("_context")
+    card = getattr(context, "card", None)
+    frozen = getattr(context, "trigger_context", None) or {}
+    host = game.permanent_by_id(frozen.get("event_subject_permanent_id"))
+    if card is None or host is None or not game.is_on_battlefield(host):
+        return False
+    from .ai_targets import _aura_harms_its_host
+
+    harmful = _aura_harms_its_host(card)
+    return (game.controller_index_of(host) == player_index) == harmful
+
+
 #: The printed actors that put one offer to every seat of a set
 #: (``handlers/offers._offered_seats``) — "any player may …" reaches the
 #: AST as ``each_player``.

@@ -179,12 +179,38 @@ def _arm_offered_price(game: Game, seat: int, card, instruction, pool) -> None:
         game.players[seat].graveyard[:0] = [fodder] * int(price.get("count", 1))
 
 
-def _run_step(game: Game, seat: int, condition_kind: str, card) -> None:
+#: The permanent an entry announcement is armed with: a Dragon with mana value
+#: 6, which is what every entry-triggered graveyard ability in the pool asks
+#: for (Bladewing's Thrall's "a Dragon", the Scourge Dragon Auras' "a creature
+#: with mana value 6 or greater"). Asserted against each trigger's own filter
+#: before it is used, so a card asking for something else fails loudly here
+#: rather than reading as one that never fired.
+_ENTERING = "Shivan Dragon"
+
+
+def _run_step(game: Game, seat: int, condition_kind: str, card, trig=None) -> None:
     """Run the step this trigger names — the announcement being tested."""
     if condition_kind in ("end_step_self", "end_step"):
         game.resolve_end_step(seat)
     elif condition_kind in ("upkeep_self", "upkeep_each"):
         game.resolve_upkeep(seat)
+    elif condition_kind == "matching_permanent_enters":
+        # "When a Dragon enters, you may return this card from your graveyard
+        # to the battlefield." (Bladewing's Thrall.) No step announces it: the
+        # one entry seam does, for every road onto the battlefield.
+        from engine.subject_filters import subject_matches
+
+        entering = Permanent(card=_pool()[_ENTERING])
+        described = (trig.condition.payload or {}).get("enterer_filter")
+        game.players[seat].battlefield.append(entering)
+        game._sync_control()
+        admitted = subject_matches(game, entering, described, observer=seat)
+        game.remove_from_battlefield(entering)
+        assert admitted, (
+            f"{card.name}: this guard's entering {_ENTERING} does not answer "
+            f"{described!r}; arm the entry with a permanent that does"
+        )
+        game._put_permanent_onto_battlefield(seat, Permanent(card=entering.card), None)
     else:
         raise AssertionError(
             f"{card.name}: this guard does not know which step announces "
@@ -234,7 +260,7 @@ def test_every_graveyard_functioning_trigger_reaches_its_zone():
             _arm(game, 0, card, gate)
         _arm_offered_price(game, 0, card, trig.instruction, pool)
 
-        _run_step(game, 0, trig.condition.kind, card)
+        _run_step(game, 0, trig.condition.kind, card, trig)
         # A trigger that prints a target names it as it goes on the stack
         # (CR 603.3d), and this seat is interactive, so it is asked (Genesis's
         # "return target creature card from your graveyard"). Answered by the

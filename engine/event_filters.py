@@ -27,7 +27,8 @@ from typing import TYPE_CHECKING
 from .subject_filters import subject_matches
 from .simultaneous_damage import answers as simultaneous_damage_answers
 from .events import (Event, _controller_of, destroyed_trigger_applies,
-                     event_filter, trigger_subject_matches)
+                     event_filter, graveyard_event_filter,
+                     trigger_subject_matches)
 
 if TYPE_CHECKING:
     from .game import Game
@@ -1112,6 +1113,26 @@ def _subject_led_filter(
     return trigger_subject_matches(
         game, trig, _SUBJECT_LED_FILTER_KEYS[event.kind], event.subject,
         observer=game.controller_index_of(permanent), source=permanent,
+    )
+
+
+@graveyard_event_filter(*_SUBJECT_LED_FILTER_KEYS)
+def _subject_led_graveyard_filter(
+    game: Game, seat: int, card, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """The same question asked of a card in a graveyard: "When **a Dragon**
+    enters, you may return this card from your graveyard to the battlefield"
+    (Bladewing's Thrall); "When **a creature with mana value 6 or greater**
+    enters, …" (the Scourge Dragon Auras).
+
+    The observer is the graveyard's owner (CR 108.4a: a card nobody controls
+    is controlled by its owner, so "you control" is relative to them), and
+    there is no source on the battlefield for "another" to exclude — the card
+    is not a permanent, so nothing entering is "it".
+    """
+    return trigger_subject_matches(
+        game, trig, _SUBJECT_LED_FILTER_KEYS[event.kind], event.subject,
+        observer=seat, source=None,
     )
 
 
