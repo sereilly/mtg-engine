@@ -298,8 +298,11 @@ def test_the_activation_funnel_routes_the_land_before_it_reads_any_text():
 
     routed = body.index("landTapsOnlyAsItsNewType(card)")
     assert "tapLandAsItsNewType(card, permanentIndex)" in body
+    # kg4 deleted the timing line's reader (``abilityLineDisabledReason(card?.
+    # oracle_text)``): an ability's timing is the server's ``ability_denials``.
+    assert "card?.oracle_text" not in body
     for reader in (
-        "getActivatedAbilityOptions(card)", "card?.oracle_text",
+        "getActivatedAbilityOptions(card)",
         "cardRequiresManaColorChoice(card)", "abilityManaColors(card)",
     ):
         assert routed < body.index(reader), reader
