@@ -139,10 +139,7 @@ def _names_the_spell(item, card) -> bool:
     is one object). Never an ability, whose ``card`` is its source's."""
     if item is None or card is None or getattr(item, "is_ability", True):
         return False
-    printed = getattr(item, "card", None)
-    if printed is None:
-        return False
-    if printed is card:
+    if getattr(item, "card", None) is card:
         return True
     from .text_changes import spell_text_card
 
