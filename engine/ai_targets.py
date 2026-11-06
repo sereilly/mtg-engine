@@ -228,8 +228,21 @@ _HARMFUL_AURA_MARKERS = (
     "doesn't untap",
     "tap enchanted",
     "you control enchanted",
+    # "When this Aura enters, gain control of enchanted land until end of
+    # turn." (Wellspring.) A steal of the host, as the line above is; until
+    # SCG it read harmful only because "untap enchanted land" holds the
+    # letters "tap enchanted" (see the word reading below).
+    "gain control of enchanted",
     "can't attack",
     "can't block",
+)
+#: The markers as **words**: "tap enchanted" is a marker, and it is also the
+#: last two words of "{U}: Untap enchanted creature" — a gift its controller
+#: pays for. Read as a substring it made Pemmin's Aura, Instill Energy and
+#: Nature's Chosen harmful, so an AI seat cast Pemmin's Aura on a person's
+#: creature and then paid to untap it for them (SCG Phase 5, smoke game 1).
+_HARMFUL_AURA_MARKER_WORDS = re.compile(
+    r"\b(?:" + "|".join(re.escape(marker) for marker in _HARMFUL_AURA_MARKERS) + r")"
 )
 #: …and the Auras whose whole effect is a price charged to **the host's
 #: controller** rather than to the host: "this Aura deals 1 damage to that
@@ -257,7 +270,7 @@ def _aura_harms_its_host(card: CardDefinition) -> bool:
     """
     text = (card.oracle_text or "").lower()
     return (
-        any(marker in text for marker in _HARMFUL_AURA_MARKERS)
+        _HARMFUL_AURA_MARKER_WORDS.search(text) is not None
         or _HARMFUL_AURA_PATTERN.search(text) is not None
     )
 

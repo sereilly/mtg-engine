@@ -96,6 +96,12 @@ _OWN_KINDS = frozenset({
     # means one of its controller's own.
     "untap_target_permanent",
     "untap_target_land",
+    # …and the same untap aimed at the permanent its source is attached to:
+    # "{U}: Untap enchanted creature." (Pemmin's Aura, Instill Energy,
+    # Nature's Chosen.) The ``tapping`` category read it "opponent", so an
+    # AI seat holding the Aura on a person's creature untapped it for them
+    # (SCG Phase 5, `host_effect_side`).
+    "untap_enchanted_creature",
 })
 
 
@@ -114,6 +120,9 @@ _OPPONENT_KINDS = frozenset({
     "target_cant_attack_until_eot",
     "target_cant_block_until_eot",
     "target_cant_block_source_until_eot",
+    # …and its host twin: "{R}: Enchanted creature can't block this turn."
+    # (Manacles of Decay.) ``combat_restrictions`` has no side to give.
+    "attached_cant_block_until_eot",
     "force_target_to_block_until_eot",
     "become_blocked",
     # CR 615 aimed at what the target deals rather than what it is dealt:
@@ -209,6 +218,11 @@ _PT_DELTA_KINDS = frozenset({
     "pump_targets_until_eot",
     "pump_target_while_source_tapped",
     "add_counter_to_target",
+    # The host twins (`host_effect_side`): "{B}: Enchanted creature gets
+    # -1/-1 until end of turn" (Manacles of Decay) is Shrink on the host, and
+    # the ``pump`` category read it as Giant Growth.
+    "pump_enchanted_creature",
+    "add_pt_counters_to_attached",
 })
 
 
@@ -1454,6 +1468,79 @@ def ability_denies_its_target(instruction: OracleInstruction | None) -> bool:
         if isinstance((step.payload or {}).get("targets"), dict)
     ] or [instruction]
     return any(denies_its_target(step) for step in steps)
+
+
+#: The steps that act on **the permanent their source is attached to** —
+#: "enchanted creature", "equipped creature" (CR 301.5f reads the two alike) —
+#: and on nothing else: what an Aura's own ability does to its host. Each
+#: handler finds that permanent through ``handlers._targets.attached_host``;
+#: `tests/ai/test_scg_p5_host_ability_census.py` holds this table to every
+#: such step an activated ability in the pool compiles to.
+HOST_KINDS = frozenset({
+    "pump_enchanted_creature",
+    "grant_enchanted_keyword_until_eot",
+    "grant_regeneration_to_enchanted_creature",
+    "untap_enchanted_creature",
+    "tap_enchanted_creature",
+    "add_pt_counters_to_attached",
+    "attached_cant_block_until_eot",
+    "return_attached_permanent_to_hand",
+    "phase_out_enchanted",
+    "recolor_enchanted_chosen_color",
+    "set_enchanted_creature_type",
+})
+
+#: …and the shared kinds a payload key points at the host instead of at a
+#: target: "Prevent the next 1 damage that would be dealt to enchanted
+#: creature this turn" (Fylgja), "The next time a source of your choice would
+#: deal damage to enchanted creature this turn, prevent that damage" (Kithkin
+#: Armor).
+_HOST_PAYLOAD_KEYS = ("to_attached",)
+
+#: Steps that only choose the word a host step after them reads ("…becomes
+#: the creature type of your choice", Mistform Mask): no object, no side.
+_HOST_CHOICE_KINDS = frozenset({"choose_creature_type"})
+
+
+def _acts_on_the_host(step: OracleInstruction) -> bool:
+    payload = step.payload or {}
+    if isinstance(payload.get("targets"), dict):
+        return False
+    return step.kind in HOST_KINDS or any(payload.get(key) for key in _HOST_PAYLOAD_KEYS)
+
+
+def host_effect_side(instruction: OracleInstruction | None) -> str | None:
+    """Whose permanent an ability's **host** should be for the ability to be
+    worth its controller's mana — "you", "opponent", or None — when every
+    step of its effect acts on the permanent its source is attached to
+    (:data:`HOST_KINDS`); None for every other ability.
+
+    An Aura's controller activates its abilities (CR 602.2), and what they
+    do lands on whatever creature it enchants, whoever controls that. The
+    own-board chooser had no question for it: Pemmin's Aura on a person's
+    Krosan Warchief, "{U}: Untap enchanted creature", was proposed every main
+    phase, and once untapped the person's attacker so that it could block
+    (SCG Phase 5, smoke game 1). Read step by step with
+    :func:`_effect_side`, the one reading a targeted step gets, the denial
+    winning where steps differ — :func:`ability_target_side`'s rule. A step
+    that names a target of its own ("Enchanted creature deals 1 damage to
+    target creature with flying", Dizzying Gaze) is about that target, so an
+    ability printing one has no host side here.
+    """
+    if instruction is None:
+        return None
+    steps = [
+        step for step in _effect_steps(instruction)
+        if step.kind not in _HOST_CHOICE_KINDS
+    ]
+    if not steps or not all(_acts_on_the_host(step) for step in steps):
+        return None
+    sides = {_effect_side(step) for step in steps} - {None}
+    if "opponent" in sides:
+        return "opponent"
+    if "you" in sides:
+        return "you"
+    return None
 
 
 #: The step that taps **or** untaps its target, which way being the state the

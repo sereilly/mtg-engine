@@ -31,6 +31,7 @@ from .ai_target_sides import (
     ability_role_target_sides,
     ability_seat_side,
     ability_target_side,
+    host_effect_side,
     named_counter_marks_for_harm,
     instruction_target_side,
 )
@@ -120,7 +121,23 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
     A tapped or summoning-sick permanent is passed over, except **at instant
     speed** (``_AT_INSTANT_SPEED``, every proposal rehearsed): there only its
     {T} abilities are (CR 107.5, 602.5a) — an attacker's "{1}: …" is not.
+
+    **Asked anywhere but the seat's own main phase with an empty stack, the
+    answer is the instant-speed chooser's**
+    (``ai_policy.choose_instant_speed_activation``): every proposal carried
+    out on a copy and made only where it outlasts the turn — the answer the
+    engine's priority windows give (``ai_priority.act_at_priority``). The
+    web's AI step asks this chooser in each step of the seat's turn it holds
+    priority in, combat included, and the flat score below is a main phase's:
+    an attacker is tapped, so the Krosan Warchief a person had blocked with a
+    3/3 was passed over with {1}{G} open and died unregenerated, and Pemmin's
+    Aura's untap was proposed again in the declare-attackers step with no
+    rehearsal at all (SCG Phase 5, smoke games 1 and 2).
     """
+    if not _AT_INSTANT_SPEED.get() and not _at_sorcery_speed(game, player_index):
+        from .ai_policy import choose_instant_speed_activation
+
+        return choose_instant_speed_activation(game, player_index)
     player = game.players[player_index]
 
     best: ActivationAction | None = None
@@ -154,6 +171,20 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
                     best = candidate
 
     return best
+
+
+#: The steps a seat's sorcery-speed actions are taken in (CR 307.1, 505.6a).
+_MAIN_STEPS = frozenset({"precombat_main", "postcombat_main"})
+
+
+def _at_sorcery_speed(game: Game, seat: int) -> bool:
+    """Whether *seat* is the active player in a main phase of its turn with
+    the stack empty — the moment the flat main-phase score is a reading of."""
+    return (
+        game.active_player_index == seat
+        and game.current_step in _MAIN_STEPS
+        and not game.stack
+    )
 
 
 def _abilities_weighed(game: Game, permanent) -> list:
@@ -230,6 +261,11 @@ def _activation_candidate(
     # leaves it in play (Swooping Talon shedding flying) is rehearsed below.
     hampers = hampers_its_own_source(ability.instruction)
     if harms_its_own_source(ability.instruction) and not hampers:
+        return None
+    # An effect that lands on **the permanent its source is attached to**
+    # ("Enchanted creature …"): whose that permanent is, against the side the
+    # effect helps (`_host_refusal`).
+    if _host_refusal(game, player_index, permanent, ability.instruction):
         return None
 
     # A cost paid in permanents or cards is a trade this policy cannot
@@ -828,6 +864,42 @@ _OWN_TYPE_SET_KINDS = frozenset({
 _OWN_REWRITE_KINDS = _OWN_TYPE_SET_KINDS | {
     "set_source_base_pt_from_target", "turn_self_face_down",
 }
+
+
+#: The host steps that untap it: worth nothing on a host that is untapped.
+_HOST_UNTAP_KINDS = frozenset({"untap_enchanted_creature"})
+
+
+def _host_refusal(game: Game, seat: int, permanent, instruction) -> bool:
+    """Whether an ability of *permanent* whose whole effect lands on the
+    permanent it is attached to (``ai_target_sides.host_effect_side``) is not
+    one for *seat* to activate: attached to nothing, attached to a permanent
+    on the other side from the one the effect helps, or an untap of a host
+    that is already untapped.
+
+    The Aura's controller pays and the host's controller gains. Asked nothing,
+    the flat score rated "{U}: Untap enchanted creature" 2.5 wherever the
+    Aura was: an AI seat holding Pemmin's Aura on a person's Krosan Warchief
+    paid {U} to untap it in its main phase — the person's attacker, which then
+    blocked — and again in its declare-attackers step (SCG Phase 5, smoke game
+    1). On its own untapped creature the same untap moves nothing, and a cast
+    that moves nothing is not proposed either. A host side of None (a bounce,
+    a phase-out, a recolour: either side's, by the moment) is left to the
+    score, as it always was.
+    """
+    from .handlers._targets import attached_host
+
+    side = host_effect_side(instruction)
+    if side is None:
+        return False
+    host = attached_host(game, permanent, last_known=False)
+    if host is None:
+        return True
+    if (game.controller_index_of(host) == seat) != (side == "you"):
+        return True
+    return not host.tapped and all(
+        step.kind in _HOST_UNTAP_KINDS for step in _effect_steps(instruction)
+    )
 
 
 def _gives_up_its_source(cost) -> bool:
