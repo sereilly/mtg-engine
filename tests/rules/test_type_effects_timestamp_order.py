@@ -92,7 +92,12 @@ class _W2G4Board:
     def card(self, name):
         if name in self._catalog:
             return self._catalog[name]
-        return self._set_pool("PLS")[name]
+        # Planeshift, and Scourge while it is measured (Ambush Commander).
+        for code in ("PLS", "SCG"):
+            pool = self._set_pool(code)
+            if name in pool:
+                return pool[name]
+        raise KeyError(name)
 
     def enter(self, name):
         perm = Permanent(card=self.card(name))
@@ -1532,9 +1537,15 @@ def test_j6_no_card_that_enters_beside_another_players_carries_an_ordered_static
     or layer-5 static — they are enchantments and two artifacts. (The one
     creature here, Transmogrifying Licid, grants its type as an Aura and only
     once it has made itself one.) A Magus of the Moon in the pool is what
-    changes that, and it fails here first."""
+    changes that, and it fails here first.
+
+    Scourge's Ambush Commander is a creature that is the source of one
+    ("Forests you control are 1/1 green Elf creatures that are still lands"),
+    and still leaves the order unobservable: what it reaches is its own
+    controller's Forests, and no other card a cross-player entry moves carries
+    a layer-4 or layer-5 static that could reach them beside it."""
     pool_size, found = _j6_ordered_static_sources()
-    assert found.get("creature") == {"Transmogrifying Licid"}
+    assert found.get("creature") == {"Transmogrifying Licid", "Ambush Commander"}
     assert "land" not in found
     assert found["artifact"] == {"Kormus Bell", "Thran Lens"}
     assert len(found["enchantment"]) >= 22, sorted(found["enchantment"])
@@ -1675,6 +1686,9 @@ _J6_TYPE_AND_COLOUR_STATICS = {
     "Nature's Revolt": ("Forest", {}),
     "Celestial Dawn": ("Tundra", {}),
     "Kormus Bell": ("Swamp", {}),
+    # Scourge (measured): the animator printed on a creature, stripped by
+    # Opalescence and Humility like the enchantments above.
+    "Ambush Commander": ("Forest", {}),
     # a ``global_statics`` row
     "Conspiracy": ("Grizzly Bears", {"creature_type": "elf"}),
     "Dralnu's Crusade": ("Goblin Raider", {}),
@@ -1683,11 +1697,14 @@ _J6_TYPE_AND_COLOUR_STATICS = {
     "Thran Lens": ("Grizzly Bears", {}),
 }
 
-#: The twelve that vanished with their source's abilities on the tree before.
+#: The twelve that vanished with their source's abilities on the tree before,
+#: and every type static ``_board_type_statics`` has gathered since (Ambush
+#: Commander, Scourge W1G9).
 _J6_VANISHED = (
     "Blood Moon", "Conversion", "Blanket of Night", "Glaciers",
     "Illusionary Terrain", "Melting", "Living Lands", "Living Plane",
     "Natural Emergence", "Nature's Revolt", "Celestial Dawn", "Kormus Bell",
+    "Ambush Commander",
 )
 
 
