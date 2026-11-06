@@ -362,12 +362,16 @@ class CombatDamageAssignmentMixin:
         rebuild it from the wire payload and required two blockers, which is
         how a Thorn Elemental blocked by one Benalish Hero went unasked.
 
-        **Except a trampler in front of one blocker** (CR 702.19b), which is a
-        decision — lethal to the blocker and the rest to this seat, or more
-        of it to the blocker — only for a defending player who is **sitting
-        there**: like the active player's (:meth:`trample_assignments_to_ask`)
-        its unasked answer is the stated default, so an AI defender keeps it
-        and is not handed a decision its chooser has never weighed.
+        **A trampler in front of one blocker** (CR 702.19b) is a decision
+        too, for every defending seat: lethal to the blocker and the rest to
+        this seat, or more of it to the blocker. It was listed only for a
+        defending player sitting there, so a seat nobody sits in was handed
+        nothing and kept the engine's default — the rest to itself, which is
+        the *attacker's* split — while the AI's chooser would keep all of it
+        on a blocker that dies of lethal damage anyway
+        (``ai_combat.choose_defender_damage_assignment``). Whether the step
+        *stops* for it is still only a person's question
+        (:meth:`trample_assignments_to_ask`).
         """
         owed: list[int] = []
         for attacker_idx in sorted(self.combat_attackers):
@@ -386,9 +390,9 @@ class CombatDamageAssignmentMixin:
             # spread onto it owed this seat nothing, and the default divided
             # it.
             blocking = self._attacker_all_blockers(attacker_idx)
-            offered = self.unblocked_assignment_chooser(attacker_idx) == seat or (
-                seat in self.interactive_seats
-                and self._has_trample_choice(attacker_idx)
+            offered = (
+                self.unblocked_assignment_chooser(attacker_idx) == seat
+                or self._has_trample_choice(attacker_idx)
             )
             if len(blocking) < (1 if offered else 2):
                 continue
