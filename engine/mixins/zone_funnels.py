@@ -278,11 +278,14 @@ class ZoneFunnelsMixin:
         )
 
     def put_card_into_library(
-        self, owner, card, position: str = "bottom", *, from_battlefield=None
+        self, owner, card, position: "str | int" = "bottom", *, from_battlefield=None
     ) -> bool:
         """Put *card* into its owner's library, unless something diverts it.
-        ``position`` is "top" or "bottom"; the return value and
-        *from_battlefield* read as :meth:`put_card_into_hand`'s do."""
+        ``position`` is "top" or "bottom", or a depth from the top — ``3`` is
+        "third from the top" (Long-Term Plans), and a library with fewer cards
+        above that depth takes the card on the bottom (its 2004-10-04 ruling);
+        the return value and *from_battlefield* read as
+        :meth:`put_card_into_hand`'s do."""
         seat = self._owner_seat(owner)
         # CR 709.4 and CR 708.9 — see ``put_card_into_hand``.
         card = whole_card(revealed_as_it_moves(self, card, from_battlefield))
@@ -295,6 +298,8 @@ class ZoneFunnelsMixin:
         library = self.players[seat].library
         if position == "top":
             library.insert(0, card)
+        elif isinstance(position, int) and not isinstance(position, bool):
+            library.insert(min(max(position - 1, 0), len(library)), card)
         else:
             library.append(card)
         return True

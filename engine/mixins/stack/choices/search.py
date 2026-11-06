@@ -240,6 +240,39 @@ class LibrarySearchChoicesMixin:
             self._record_search_reveal(choice)
             self.discard_pending_choice(choice)
             return True
+        elif destination == "library_from_top":
+            # "…, then shuffle and put that card **third from the top**."
+            # (Long-Term Plans.) The branch above at a printed depth, and for
+            # its reason it shuffles first and returns: the shared shuffle
+            # below would lose the position. A library too short for the
+            # depth takes the card on the bottom (the 2004-10-04 ruling:
+            # "If there are fewer than 3 cards in your library, put the card
+            # on the bottom of your library"), which the funnel's depth does.
+            if zone == "library":
+                random.shuffle(caster.library)
+            depth = int(choice.data.get("from_top") or 0)
+            if depth < 2:
+                # A depth the lowering always writes; without it the card
+                # would be placed nowhere the printed sentence names.
+                return False
+            self.put_card_into_library(caster, card, depth)
+            from ....grammar.vocabulary import ORDINAL_WORDS
+
+            shown = (
+                card.name if self.find_is_public(choice.data, destination, zone)
+                else "a card"
+            )
+            ordinal = next(
+                (word for word, n in ORDINAL_WORDS.items() if n == depth),
+                f"#{depth}",
+            )
+            self.log.append(
+                f"{caster.name} searched {zone} and put {shown} {ordinal} "
+                "from the top of their library"
+            )
+            self._record_search_reveal(choice)
+            self.discard_pending_choice(choice)
+            return True
         elif destination == "graveyard":
             # "…put that card into your graveyard, then shuffle." (Entomb; the
             # counted spelling is Buried Alive's.) Through

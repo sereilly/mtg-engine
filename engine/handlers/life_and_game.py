@@ -1251,6 +1251,19 @@ def forbid_casting_types_this_turn(game: Game, instruction: OracleInstruction, c
     from ..spell_prohibitions import forbid_casting_this_turn as record
 
     victim = context.target
+    if instruction.payload.get("who") == "defending_player":
+        # "Whenever this creature attacks, **defending player** can't cast
+        # spells this turn." (Xantid Swarm.) The seat the attack froze
+        # (CR 506.2, 603.10) — the one this creature attacked, never another
+        # defender in a multiplayer game (the 2016-06-08 ruling) — named
+        # rather than targeted, so nothing can make it illegal.
+        from ._targets import defending_player_seat
+
+        seat = defending_player_seat(game, context)
+        victim = game.players[seat] if seat is not None else None
+        if victim is None:
+            game.log.append(f"{context.card.name}: no defending player")
+            return True, "resolved"
     if victim not in game.players:
         game.log.append(f"{context.card.name}: no valid target")
         return True, "resolved"

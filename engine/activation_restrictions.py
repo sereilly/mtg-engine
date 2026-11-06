@@ -79,6 +79,8 @@ from .activation_conditions import (
     _counted_pile_holds,
     _readable_opponent_board,
     _opponent_board_holds,
+    _readable_own_board_threshold,
+    _own_board_threshold_holds,
 )
 from .activation_tallies import (
     _PRINTED_FREQUENCY,
@@ -931,6 +933,26 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         reads_payload=True,
         payload_readable=_readable_opponent_board,
         denial_from_payload=lambda match: f"only if {match.group('board')}",
+    ),
+    # "Activate only if **you control five or more lands**." (Temple of the
+    # False God.) The Wayfarer row's shape with the seat turned round and a
+    # printed floor where it compares: the clause is read by the grammar's
+    # condition reader and admitted only as a count of what "you" control
+    # with an "or more", so the number and the noun are payload. Anchored on
+    # "<number> or more", which keeps it off the presence row ("you control
+    # a Swamp") — that row's reader refuses a threshold, so the two are
+    # disjoint by what each admits as well as by their words. A board fact,
+    # so askable mid-payment: the Temple's mana ability is still one (CR
+    # 605.1a), and a planner that counted it on four lands would strand the
+    # payment it was planned into.
+    ActivationRestriction(
+        re.compile(r"^activate only if (?P<board>you control [a-z]+ or more .+)$"),
+        _own_board_threshold_holds,
+        "that clause's board condition is not met",
+        reads_payload=True,
+        payload_readable=_readable_own_board_threshold,
+        denial_from_payload=lambda match: f"only if {match.group('board')}",
+        askable_mid_payment=True,
     ),
     # "Activate only if three or more creature cards are above this card."
     # (Ashen Ghoul.) The one clause in the pool that asks about a graveyard's

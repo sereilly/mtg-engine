@@ -53,6 +53,7 @@ from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
+from ..vocabulary import ORDINAL_WORDS
 from ..phrases import _accept_number, _parse_zone, accept_article_descriptions
 from ._other_libraries import _parse_search_other_library
 
@@ -317,6 +318,26 @@ def _accept_search_zone_list(stream: TokenStream) -> "frozenset[str] | None":
             return frozenset(zones)
 
 
+def _accept_depth_from_top(stream: TokenStream) -> "int | None":
+    """``<ordinal> from the top`` at the cursor — the position a find is put
+    at in the library just shuffled — or None with the cursor where it was.
+
+    "Third from the top" (Long-Term Plans) is a position, never a count, which
+    is why it is read through :data:`vocabulary.ORDINAL_WORDS` and not the
+    number words. "First from the top" is not printed (that card says "on
+    top"), so only a depth of two or more is a position this reads.
+    """
+    mark = stream.mark()
+    depth = ORDINAL_WORDS.get(str(stream.peek_word() or ""))
+    if depth is None or depth < 2:
+        return None
+    stream.advance()
+    if stream.accept_phrase("from", "the", "top"):
+        return depth
+    stream.reset(mark)
+    return None
+
+
 def _parse_search_single_find(
     stream: TokenStream, graveyard: bool, possessive: str, *, hand: bool = False,
 ) -> ast.Statement:
@@ -417,6 +438,18 @@ def _parse_search_single_find(
             if not stream.accept_word("it", "them"):
                 stream.expect_word("that", "the")
                 stream.expect_word("card")
+            # "…, then shuffle and put that card **third from the top**."
+            # (Long-Term Plans.) The same order — the shuffle first, the find
+            # placed after — at a printed depth rather than on top, so the
+            # depth is the node's and the zone says which flow places it.
+            depth = _accept_depth_from_top(stream)
+            if depth is not None:
+                return ast.SearchLibrary(
+                    ast.PlayerRef("you"), filt, ast.Zone("library_from_top"),
+                    graveyard, hand=hand, tapped=(False,),
+                    named_alternatives=tuple(alternatives), reveal=reveal,
+                    from_top=depth,
+                )
             stream.expect_word("on")
             stream.expect_word("top")
             # "…on top **of your library**" is the same clause spelled out; the

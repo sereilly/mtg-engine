@@ -303,6 +303,13 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # the *next sentence* reads, so the sentence that reads it is what names
         # the channel. Absent for every search written before this one.
         record_key=instruction.payload.get("record_key"),
+        # "…put that card **third from the top**." (Long-Term Plans.) The
+        # depth the ``library_from_top`` destination places the find at.
+        # Absent for every other search, so their prompts carry what they did.
+        **(
+            {"from_top": int(instruction.payload["from_top"])}
+            if instruction.payload.get("from_top") else {}
+        ),
     )
     # Whose zone, not the chooser's, because they are not always the same seat.
     searched = game.players[seats.get("zone_seat", caster_index)]

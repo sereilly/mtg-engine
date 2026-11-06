@@ -274,6 +274,105 @@ def test_w1g2_the_wire_labels_a_typecycling_button_with_its_printed_line(set_poo
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+#
+# Xantid Swarm: "Whenever this creature attacks, defending player can't cast
+# spells this turn." The seat the attack froze (CR 506.2, 603.10), through
+# the cast-prohibition table every cast path asks.
+from engine import Game as _W1G8Game
+from engine.cast_prohibitions import cast_prohibition as _w1g8_cast_prohibition
+from engine.models import Permanent as _W1G8Permanent
+from engine.models import PlayerState as _W1G8PlayerState
+
+from tests.helpers import resolve_stack as _w1g8_resolve_stack
+
+
+def _w1g8_combat(set_pool, attackers, *, seats=2, hands=None):
+    """*attackers* on seat 0, every seat holding *hands*[seat], at seat 0's
+    declare-attackers step."""
+    lea = set_pool("LEA")
+    players = [
+        _W1G8PlayerState(
+            name=f"P{seat}", hand=list((hands or {}).get(seat, ())),
+            library=[lea["Plains"]] * 5,
+        )
+        for seat in range(seats)
+    ]
+    game = _W1G8Game(players=players)
+    game.enforce_mana_costs = False
+    mine = []
+    for card in attackers:
+        perm = _W1G8Permanent(card=card)
+        game._put_permanent_onto_battlefield(0, perm, None)
+        perm.metadata["summoning_sickness_turn"] = -99
+        mine.append(perm)
+    _w1g8_resolve_stack(game)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.current_step == "declare_attackers"
+    return game, mine
+
+
+def test_w1g8_xantid_swarm_stops_the_defending_player_casting_this_turn(set_pool):
+    """Before the trigger resolves the defender may still cast (2016-06-08:
+    "The defending player may cast spells before Xantid Swarm's triggered
+    ability resolves."); once it has, every spell is refused — an instant in
+    combat and a creature later — while the attacker casts freely."""
+    lea = set_pool("LEA")
+    growth = lea["Giant Growth"]
+    game, (swarm,) = _w1g8_combat(
+        set_pool, [set_pool("SCG")["Xantid Swarm"]],
+        hands={0: [growth], 1: [growth, growth, lea["Grizzly Bears"]]},
+    )
+    bears = _W1G8Permanent(card=lea["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(1, bears, None)
+    assert game.declare_attackers(0, [0], 1)[0]
+    assert [item.card.name for item in game.stack] == ["Xantid Swarm"]
+    # In response: allowed.
+    assert game.cast_from_hand(
+        1, "Giant Growth", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert any("P1 can't cast any spells this turn (Xantid Swarm)" in line for line in game.log)
+
+    refused = game.cast_from_hand(1, "Giant Growth", target_permanent_ids=[bears.permanent_id])
+    assert not refused.supported
+    assert "can't cast any spells this turn" in refused.details
+    prohibited = _w1g8_cast_prohibition(game, 1, lea["Grizzly Bears"])
+    assert prohibited is not None and prohibited.kind == "casting_forbidden_this_turn"
+    assert len(game.players[1].hand) == 2
+    # The attacker is not bound.
+    assert _w1g8_cast_prohibition(game, 0, growth) is None
+    assert game.cast_from_hand(0, "Giant Growth", target_permanent_ids=[swarm.permanent_id]).supported
+
+
+def test_w1g8_xantid_swarm_binds_only_the_player_it_attacked(set_pool):
+    """2016-06-08: "In a multiplayer game, only the player Xantid Swarm
+    attacked is affected. Other defending players may cast spells." Swarm at
+    P2, a Bear at P1: only P2 is stopped."""
+    lea = set_pool("LEA")
+    game, _mine = _w1g8_combat(
+        set_pool, [set_pool("SCG")["Xantid Swarm"], lea["Grizzly Bears"]], seats=3,
+    )
+    ok, why = game.declare_attackers(0, [0, 1], attacker_targets={0: 2, 1: 1})
+    assert ok, why
+    _w1g8_resolve_stack(game)
+    growth = lea["Giant Growth"]
+    assert _w1g8_cast_prohibition(game, 2, growth) is not None
+    assert _w1g8_cast_prohibition(game, 1, growth) is None
+    assert _w1g8_cast_prohibition(game, 0, growth) is None
+
+
+def test_w1g8_xantid_swarm_ban_ends_with_the_turn(set_pool):
+    lea = set_pool("LEA")
+    game, _mine = _w1g8_combat(set_pool, [set_pool("SCG")["Xantid Swarm"]])
+    assert game.declare_attackers(0, [0], 1)[0]
+    _w1g8_resolve_stack(game)
+    assert _w1g8_cast_prohibition(game, 1, lea["Giant Growth"]) is not None
+    game.start_next_turn()
+    assert game.active_player_index == 1
+    assert _w1g8_cast_prohibition(game, 1, lea["Giant Growth"]) is None
 
 # ==== end W1G8 ======================================================
 

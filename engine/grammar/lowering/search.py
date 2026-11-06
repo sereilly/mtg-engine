@@ -107,6 +107,11 @@ def _lower_search_library(
     # than somewhere random. The parse side carries no owner on this zone —
     # the library just shuffled is the searcher's by construction.
     to_library_top = node.to.name == "library_top"
+    # "…then shuffle and put that card **third from the top**." (Long-Term
+    # Plans.) The same order at a printed depth (``node.from_top``), placed by
+    # the same single-find flow — so only a single find of the searcher's own
+    # library reaches it, refused below for every shape that finds more.
+    to_library_from_top = node.to.name == "library_from_top"
     # "…put them into your **graveyard**, then shuffle." (Buried Alive; Entomb
     # prints the single-find spelling.) A fourth destination with a flow, and
     # the possessive is required for the hand's reason: CR 404.1 sends a card
@@ -115,7 +120,7 @@ def _lower_search_library(
     to_graveyard = node.to.name == "graveyard" and (
         node.to.owner is not None and node.to.owner.kind == "you"
     )
-    if not to_battlefield and not to_library_top and not to_graveyard and (
+    if not to_battlefield and not to_library_top and not to_library_from_top and not to_graveyard and (
         node.to.name != "hand" or node.to.owner is None or node.to.owner.kind != "you"
     ):
         raise LoweringError(
@@ -294,7 +299,7 @@ def _lower_search_library(
     # One entry per find, in the printed order: how many are found and where each
     # goes are the same fact, so a card that names two destinations cannot lower
     # to a search that finds one.
-    destinations = [_SEARCH_DESTINATIONS[node.to.name]]
+    destinations = [_SINGLE_FIND_DESTINATIONS[node.to.name]]
     for zone in node.extra_destinations:
         if zone.name not in _SEARCH_DESTINATIONS:
             raise LoweringError(
@@ -316,6 +321,16 @@ def _lower_search_library(
         restrictions.pop("named", None)
         restrictions["named_among"] = list(node.named_alternatives)
         destinations = destinations * len(node.named_alternatives)
+    if to_library_from_top and (
+        len(destinations) != 1 or node.count_amount is not None
+        or node.unbounded or node.one_of_each or node.graveyard or node.hand
+        or node.from_top < 2
+    ):
+        raise LoweringError(
+            "a find put at a depth in the library is one card from that "
+            "library alone",
+            node=node,
+        )
     payload: dict[str, object] = {"count": len(destinations), "card_type": card_type}
     if filt.named_as_target is not None:
         # The spell's own target (CR 601.2c), so ``engine/targeting.py`` raises
@@ -406,6 +421,9 @@ def _lower_search_library(
         payload["exile_rest"] = True
     if to_library_top:
         payload["destination"] = "library_top"
+    if to_library_from_top:
+        payload["destination"] = "library_from_top"
+        payload["from_top"] = node.from_top
     if to_graveyard and len(destinations) == 1:
         # The single-find spelling (Entomb). The counted one carries its zone in
         # ``destinations`` above, which is the list `_place_found_card` walks;
@@ -476,6 +494,11 @@ _SEARCH_DESTINATIONS = {
     "hand": "hand", "battlefield": "battlefield", "library_top": "library_top",
     "graveyard": "graveyard",
 }
+#: The single-find flow's fifth, "…put that card **third from the top**"
+#: (Long-Term Plans): the depth rides as ``from_top``. Kept out of the table
+#: above, which the counted flow reads per find and which has no branch that
+#: places a card at a depth — so a counted search naming it refuses there.
+_SINGLE_FIND_DESTINATIONS = {**_SEARCH_DESTINATIONS, "library_from_top": "library_from_top"}
 
 #: The same question for a search of *somebody else's* library. Exile is here
 #: and not above because only this sentence prints it, and the hand is the

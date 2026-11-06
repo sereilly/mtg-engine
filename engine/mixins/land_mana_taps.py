@@ -162,23 +162,36 @@ class LandManaTapsMixin:
             # which is the answer the tap seam refuses.
             return None, True
         priced = False
+        conditioned = None
         for ability in compile_card_oracle(land.effective_card).activated_abilities:
             instruction = ability.instruction
             if instruction is None or not ability.supported:
                 continue
             if not (is_mana_ability(ability) or instruction.kind == "if_then"):
                 continue
-            if is_tap_alone_mana_ability(ability) and not prints_activation_restriction(
-                ability.source_line or ""
-            ):
-                return instruction, priced
-            # A tap-alone ability that prints a board condition ("Activate
-            # only if you control a Swamp", the Tainted lands) is reachable by
-            # index and asked its clause there (``land_mana_tap_refusal``), but
-            # it is never the default a bare tap runs: a default that could be
-            # refused would refuse the land's free mana with it.
+            if is_tap_alone_mana_ability(ability):
+                if not prints_activation_restriction(ability.source_line or ""):
+                    return instruction, priced
+                # A tap-alone ability that prints a board condition ("Activate
+                # only if you control a Swamp", the Tainted lands) is reachable
+                # by index and asked its clause there
+                # (``land_mana_tap_refusal``), but it is not the default a bare
+                # tap runs while the land has a free one: a default that could
+                # be refused would refuse the land's free mana with it.
+                if conditioned is None:
+                    conditioned = instruction
+                    continue
             priced = True
-        return None, priced
+        # **Unless it is the only one.** "{T}: Add {C}{C}. Activate only if you
+        # control five or more lands." (Temple of the False God.) No free mana
+        # stands behind it to be refused, so the conditioned ability *is* the
+        # bare tap — and its clause is asked at this door all the same, because
+        # ``land_tap_prohibition`` asks the default's own ability through the
+        # one CR 602.5 table. Left without a default, the land answered
+        # "priced": the castable highlight and the AI's planner counted it
+        # (they read every ability by index) while every executor's tap went
+        # to the default and was refused — a payment stranded part-way.
+        return conditioned, priced
 
     def _chosen_land_mana_ability(self, land, ability_index: int):
         """The instruction of the mana ability *ability_index* names on *land*,
@@ -593,7 +606,13 @@ class LandManaTapsMixin:
                 return f"{land.card.name}{_LOGGED_TAP_REFUSALS[refusal]}"
             from ..activation_prohibitions import ACTIVATION_PROHIBITIONS
 
-            if any(row.kind == refusal for row in ACTIVATION_PROHIBITIONS):
+            # …and a printed "Activate only …" clause too (the
+            # ``printed_restriction`` row, keyed ``activation_restricted``
+            # here): "only if you control five or more lands" is the reason
+            # the Temple's tap made nothing, and the asker is owed it.
+            if refusal in _TAP_REFUSAL_BY_ROW.values() or any(
+                row.kind == refusal for row in ACTIVATION_PROHIBITIONS
+            ):
                 prohibited = self.land_tap_prohibition(land, ability_index)
                 if prohibited is not None:
                     return prohibited.details

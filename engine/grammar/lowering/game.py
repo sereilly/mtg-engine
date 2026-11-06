@@ -15,7 +15,8 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (RESTRICTION_TURNS, _REST_OF_TURN, _amount_payload,
                       _describe_targets, _filter_payload)
-from ._events import COUNTED_NUMBER, frozen_seat_record
+from ._events import (_DEFENDING_PLAYER_EVENTS, COUNTED_NUMBER,
+                      frozen_seat_record)
 from ._seats import _player_recipient
 
 
@@ -593,7 +594,7 @@ def _lower_cant_play_from_zone(
 
 
 def _lower_cant_cast_spell_types(
-    node: "ast.CantCastSpellTypes",
+    node: "ast.CantCastSpellTypes", event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"Until end of turn, target player can't cast instant or sorcery spells."
     (Abeyance, CR 601.3.)
@@ -616,7 +617,20 @@ def _lower_cant_cast_spell_types(
             "durationless one is a permanent's static ability",
             node=node,
         )
-    if node.player.kind not in ("target_player", "target_opponent"):
+    # "Whenever this creature attacks, **defending player** can't cast spells
+    # this turn." (Xantid Swarm.) CR 506.2's seat, frozen by the combat fire
+    # site — the seat *this* creature attacked, which in a multiplayer game is
+    # the only defender bound (the 2016-06-08 ruling) — and named rather than
+    # chosen, so nothing is described for a picker. Gated on an event that
+    # really stamped one, exactly as the discard and the mill gate the
+    # identical phrase: under any other event the words name nobody.
+    defending = node.player.kind == "defending_player"
+    if defending and event not in _DEFENDING_PLAYER_EVENTS:
+        raise LoweringError(
+            '"defending player" names a seat this event did not record',
+            node=node,
+        )
+    if not defending and node.player.kind not in ("target_player", "target_opponent"):
         raise LoweringError(
             f"no handler stops {node.player.kind!r} casting spells", node=node
         )
@@ -628,7 +642,10 @@ def _lower_cant_cast_spell_types(
         # refuses that one by design ("a ban naming nothing is a ban on
         # nothing").
         payload["any_spell"] = True
-    _describe_targets(payload, node.player)
+    if defending:
+        payload["who"] = "defending_player"
+    else:
+        _describe_targets(payload, node.player)
     return (
         OracleInstruction("forbid_casting_types_this_turn", "", payload),
     )

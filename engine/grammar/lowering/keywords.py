@@ -208,6 +208,57 @@ def _lower_gain_keyword(
     )
 
 
+def _lower_player_keyword_grant(
+    node: ast.GainKeyword,
+) -> tuple[OracleInstruction, ...]:
+    """"**You** gain shroud until end of turn." (Gilded Light.)
+
+    CR 702.18a: shroud is "This permanent **or player** can't be the target of
+    spells or abilities", so the subject is a seat and the grant is the
+    one-shot twin of Ivory Mask's "You have shroud." — the same word, gated on
+    the same list (``player_statics.GRANTABLE_PLAYER_KEYWORDS``), read by the
+    same one reader (``player_statics.seat_has_player_keyword``) every
+    targeting gate asks.
+
+    Only "you", and only until the end of the turn, because those are what the
+    record carries: "you" is CR 109.5's controller of the spell, and the
+    cleanup step is the one sweep that ends the grant (CR 514.2). A target
+    player would need a picker and a CR 608.2b re-check of its own; a printed
+    narrowing on the seat ("you, if you control …") or another window
+    (CR 611.2a's durationless grant lasts the game) would be a word the record
+    has no field for — each refuses, naming what is missing, rather than being
+    granted as the bare sentence.
+    """
+    from ...player_statics import (GRANTABLE_PLAYER_KEYWORDS,
+                                   PLAYER_KEYWORD_GRANT_KIND)
+
+    player = node.subject
+    if player.kind != "you" or any(
+        (player.or_planeswalker, player.last_damager, player.did,
+         player.controls, player.compared)
+    ):
+        raise LoweringError(
+            f"no player keyword grant reaches {player.kind!r}", node=node
+        )
+    if node.duration.kind not in ("until_end_of_turn", "this_turn"):
+        raise LoweringError(
+            "a player keyword grant ends at the end of the turn; nothing "
+            f"ends one at {node.duration.kind!r}",
+            node=node,
+        )
+    for keyword in node.keywords:
+        if keyword not in GRANTABLE_PLAYER_KEYWORDS:
+            raise LoweringError(
+                f"no reader answers {keyword!r} about a player", node=node
+            )
+    return (
+        OracleInstruction(
+            PLAYER_KEYWORD_GRANT_KIND, "",
+            {"keywords": tuple(node.keywords), "who": "you"},
+        ),
+    )
+
+
 def _chosen_color_prelude(
     node: ast.GainKeyword, produced: frozenset[str]
 ) -> tuple[OracleInstruction, ...]:
@@ -365,6 +416,8 @@ def _lower_granted_keywords(
         return (
             OracleInstruction("grant_target_keyword_until_eot", "", computed),
         )
+    if isinstance(node.subject, ast.PlayerRef):
+        return _lower_player_keyword_grant(node)
     if node.duration.kind == "while_source_tapped":
         return _lower_keyword_while_source_tapped(node)
     if node.duration.kind is None:
