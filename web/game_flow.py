@@ -20,11 +20,9 @@ from engine.ai_policy import (
     choose_cast_action,
     choose_combat_instant_cast_action,
 )
-from engine.ai_abilities import (
-    choose_activation_action,
-    choose_foreign_activation_action,
-    choose_hand_activation_action,
-)
+from engine.ai_abilities import choose_activation_action
+from engine.ai_foreign_activations import choose_foreign_activation_action
+from engine.ai_hand_activations import choose_hand_activation_action
 from engine.ai_graveyard_activations import (
     activate_chosen_graveyard_ability,
     choose_graveyard_activation_action,

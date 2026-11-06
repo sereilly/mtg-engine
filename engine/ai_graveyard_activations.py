@@ -25,10 +25,11 @@ and, given priority outside its main phase (`ai_simulator._answer_priority`),
 only where what it does lasts (``lasting_only``), as
 `ai_policy.choose_instant_speed_activation` asks of a battlefield ability.
 
-A module of its own rather than a third chooser in ``ai_abilities`` (at its
-size band), beside the action shape it builds
-(`ai_actions.GraveyardActivationAction`) and for that action's reason: the
-engine door is its own.
+A module of its own rather than another chooser in ``ai_abilities``, beside
+the action shape it builds (`ai_actions.GraveyardActivationAction`) and for
+that action's reason: the engine door is its own. The hand's chooser
+(``ai_hand_activations``) and another seat's (``ai_foreign_activations``)
+left ``ai_abilities`` for the same reason.
 """
 
 from __future__ import annotations

@@ -1,20 +1,25 @@
-"""Which ability an AI seat activates: on its own permanents, on another
-seat's (CR 602.1b), and on a card in its hand (CR 113.6j).
+"""Which ability an AI seat activates on a permanent **it controls**.
 
 :func:`choose_activation_action` walks the seat's own board for the best
 ability it may activate and can pay for, asking the engine's gates first —
 the activation prohibitions and restrictions (CR 602.5), a target
 requirement, a cost no board can pay — and aiming each target on the side
 its effect wants (:func:`_activation_target_side`, read step by step off the
-program). :func:`choose_foreign_activation_action` asks the same of an
-opponent's permanent, where a drawback printed for an opponent to pay for
-(Volrath's Dungeon, Ribbon Snake) is the reason to pay
-(``ai_valuation.foreign_activation_use``). :func:`choose_hand_activation_action`
-is cycling and whatever else is payable only from a hand.
+program). What the flat score cannot price — a land's ability, an X, a
+hamper or a rewrite of its own source, a replacement waiting on a later
+draw, a shield — is rehearsed (:func:`_land_ability_worth`,
+:func:`_sized_x_activation`).
 
 Instant speed is ``ai_policy``'s: it rehearses this chooser's proposals in a
 priority window and sets aside the ones it turned down
 (``_ACTIVATIONS_SET_ASIDE``, read here).
+
+Each other place an ability is activated from has a chooser of its own
+beside this one, by the door the engine opens for it: a permanent **another
+seat** controls (CR 602.1b, ``ai_foreign_activations``, which asks
+:func:`_choose_target_for_instruction` here for the seat an aimed ability
+names), a card **in the hand** (CR 113.6j, ``ai_hand_activations``) and one
+**in the graveyard** (CR 113.6b, ``ai_graveyard_activations``).
 """
 
 from __future__ import annotations
@@ -30,7 +35,6 @@ from .ai_target_sides import (
     instruction_target_side,
 )
 from .ai_valuation import (
-    foreign_activation_use,
     hand_entry_steps,
     hampers_its_own_source,
     harms_its_own_source,
@@ -39,7 +43,6 @@ from .ai_valuation import (
     shields_only,
     sized_by_its_own_empty_counters,
     source_becomes_an_aura,
-    source_toughness_change,
     waits_on_a_later_draw,
 )
 from .activation_permissions import activation_permission_denial
@@ -47,9 +50,8 @@ from .activation_prohibitions import activation_prohibition
 from .activation_restrictions import activation_denial, global_activation_ban
 from .cost_modifiers import sacrifice_taxes
 from .game import Game
-from .models import Permanent, PlayerState
+from .models import Permanent
 from .oracle import OracleInstruction, compile_card_oracle
-from .activation_zones import HAND
 from .targeting import (
     derive_activation_spec,
     spec_roles,
@@ -61,15 +63,12 @@ from .cost_pickers import spec_is_a_cost
 from .ai_payment import _plan_land_taps, tap_planned_lands
 from .ai_rehearsal import Rehearsal, deliberating, rehearse
 from .ai_weighed_cast import _effect_steps
-from .ai_actions import ActivationAction, HandActivationAction
+from .ai_actions import ActivationAction
 from .ai_scoring import (
-    SWING_CAP,
     choose_attack_target,
-    _permanent_value,
     _score_activation,
     _worth_proposing,
 )
-from .ai_declarations import legal_attackers
 from .ai_targets import (
     _graveyard_denial_target,
     _one_graveyard_card_is_denied,
@@ -301,9 +300,10 @@ def _activation_candidate(
     # phase down to 1 — and then proposed it once more, which the engine
     # refuses (CR 119.4: a player can pay life only up to their total) and
     # the simulator counts as a seat doing nothing. The reserve is the one
-    # `FOREIGN_ACTIVATION_LIFE_RESERVE`, `ai_casts.BUYBACK_LIFE_RESERVE` and
-    # `ai_scoring.X_LIFE_RESERVE` already keep, for their reason: the last points of
-    # life are the ones that lose the game.
+    # `ai_foreign_activations.FOREIGN_ACTIVATION_LIFE_RESERVE`,
+    # `ai_casts.BUYBACK_LIFE_RESERVE` and `ai_scoring.X_LIFE_RESERVE` already
+    # keep, for their reason: the last points of life are the ones that lose
+    # the game.
     life_cost = int(ability.cost.pay_life or 0)
     if life_cost and player.life - life_cost < ACTIVATION_LIFE_RESERVE:
         return None
@@ -1096,12 +1096,13 @@ def _activation_target_side(permanent: Permanent, instruction) -> str | None:
     "opponent", or None for no preference.
 
     **Read step by step** (`ai_target_sides.ability_target_side`), the reading the
-    foreign chooser already took. This asked `instruction_target_side` of the
-    top-level instruction, and a ``sequence`` / ``may`` wrapper has no side, so
-    an ability whose effect is two steps fell back to "the biggest creature on
-    either board": Bullwhip pinged and Serrated Biskelion shrank the AI's own
-    biggest creature, Power Matrix and Ivy Seer pumped the opponent's, and
-    Wishmonger gave the opponent's protection. Measured over both manifest
+    foreign chooser (`ai_foreign_activations`) already took. This asked
+    `instruction_target_side` of the top-level instruction, and a
+    ``sequence`` / ``may`` wrapper has no side, so an ability whose effect is
+    two steps fell back to "the biggest creature on either board": Bullwhip
+    pinged and Serrated Biskelion shrank the AI's own biggest creature, Power
+    Matrix and Ivy Seer pumped the opponent's, and Wishmonger gave the
+    opponent's protection. Measured over both manifest
     roles with a creature of each size on each board: 47 abilities aimed at
     the wrong seat in one board or the other. The top-level reading stays as
     the fallback for a leaf whose target is not a ``targets`` payload.
@@ -1266,392 +1267,12 @@ def _choose_activation_role_targets(
     return chain(options, 0) if options else None
 
 
-# --- Abilities on a permanent another seat controls ---------------------------
-#
-# CR 602.1b: "Any player may activate this ability." Every activation chooser
-# above walks the seat's own board, so for the life of this engine no AI seat
-# ever paid to use an opponent's Volrath's Dungeon, Ribbon Snake or Task Mage
-# Assembly — 23 shipped and 11 PCY cards printing a permission that admits
-# a seat other than the controller (W1G5's census). The engine has let any
-# player activate them since `activation_permissions` existed; this is the
-# policy half. Which of them a seat *wants* is
-# `ai_valuation.foreign_activation_use`, read off the compiled program.
-
-#: Life a seat keeps back when it pays life to use an opponent's ability.
-#: "Pay 5 life: Destroy this enchantment" (Volrath's Dungeon) is removal
-#: bought with life, and a seat this low spends its life staying alive.
-FOREIGN_ACTIVATION_LIFE_RESERVE = 10
-#: …and when it pays life for an ability of its own (`choose_activation_action`).
-#: The same number for the same reason; a separate name because it is a
+#: Life a seat keeps back when it pays life for an ability of its own
+#: (`choose_activation_action`): the number
+#: `ai_foreign_activations.FOREIGN_ACTIVATION_LIFE_RESERVE` keeps for an
+#: opponent's ability, for the same reason; a separate name because it is a
 #: separate weight, and tuning one should not move the other.
 ACTIVATION_LIFE_RESERVE = 10
-#: Taking an opponent's permanent off the battlefield, before what the
-#: permanent itself is worth (`_permanent_value`).
-FOREIGN_REMOVAL_SCORE = 3.0
-#: Killing an opponent's creature with its own printed drawback.
-FOREIGN_KILL_SCORE = 5.0
-
-#: The board-target kinds a foreign "aimed" ability is chosen for. A graveyard
-#: or stack target is left alone: "Return target creature card from a
-#: graveyard to its owner's hand" (Endbringer's Revel) needs a pick of *whose*
-#: card this policy does not make for its own copy either, and a stack target
-#: has nothing to aim at in the main phase this runs in.
-_FOREIGN_OBJECT_KINDS = frozenset({"creature", "artifact", "land", "permanent", "planeswalker"})
-
-
-def _plain_activation_cost(cost) -> bool:
-    """Whether *cost* is mana and a fixed amount of life, and nothing else.
-
-    Every other cost a foreign ability could print — a tap, a sacrifice, a
-    discard, a counter, an alternative ("Pay 2 life or {2}", Tidal Control) —
-    is a trade or a choice this chooser cannot price. Asked as "equal to a
-    bare cost with the same mana" rather than field by field, so a cost field
-    added later is declined until someone decides otherwise.
-    """
-    from dataclasses import replace
-
-    from .activated_ability_cost import ActivatedAbilityCost
-
-    try:
-        return replace(cost, pay_life=0) == ActivatedAbilityCost(mana=dict(cost.mana))
-    except (TypeError, ValueError):
-        return False
-
-
-def choose_foreign_activation_action(
-    game: Game, player_index: int
-) -> ActivationAction | None:
-    """The best ability this seat may activate on a permanent **another seat
-    controls** (CR 602.1b), or None.
-
-    A separate chooser from :func:`choose_activation_action` because the two
-    read one program in opposite directions: an effect that removes or hampers
-    its own source is a loss to the source's controller (which that chooser now
-    skips) and the whole point to anyone else. What the effect is for is
-    `ai_valuation.foreign_activation_use`:
-
-    * **removes_source** is wanted whenever it is affordable — mana from the
-      board, life only above :data:`FOREIGN_ACTIVATION_LIFE_RESERVE`;
-    * **shrinks_source** is wanted only when the shrink kills the creature
-      outright, the one hamper that needs nothing lined up behind it;
-    * **aimed** is the activator's own ability in every respect but where it
-      is printed (CR 113.8), so it is targeted and scored exactly as
-      :func:`choose_activation_action` would score it on this seat's board.
-
-    Every gate the engine will ask is asked first, so a proposal is not a
-    refused activation every turn: the permission (`activation_permission_
-    denial`), the printed timing ("only as a sorcery", "only during their
-    turn", `activation_restrictions.activation_denial`), a board-wide ban, and
-    CR 602.2b's target gate.
-    """
-    from .activation_permissions import card_widens_activation
-
-    player = game.players[player_index]
-    best: ActivationAction | None = None
-    for source_seat, permanent in game.permanents_with_controller():
-        if source_seat == player_index or game.players[source_seat].lost:
-            continue
-        if not card_widens_activation(permanent.effective_card):
-            continue
-        permanent_index = game.battlefield_index_of(permanent)
-        if permanent_index is None:
-            continue
-        if global_activation_ban(game, permanent):
-            continue
-        # ``usable_abilities_of``: empty for a permanent that lost its
-        # abilities — "loses all abilities", which this asked inline, and a
-        # land whose type was set (CR 305.7), which it did not.
-        for ability_index, ability in enumerate(game.usable_abilities_of(permanent)):
-            candidate = _foreign_activation_candidate(
-                game, player_index, player, source_seat, permanent,
-                permanent_index, ability_index, ability,
-            )
-            if candidate is not None and (best is None or candidate.score > best.score):
-                best = candidate
-    return best
-
-
-def _foreign_activation_candidate(
-    game: Game, player_index: int, player: PlayerState, source_seat: int,
-    permanent: Permanent, permanent_index: int, ability_index: int, ability,
-) -> ActivationAction | None:
-    """One ability on another seat's *permanent*, as an action — or None."""
-    instruction = ability.instruction
-    if instruction is None or not ability.supported or is_mana_ability(instruction):
-        return None
-    line = ability.source_line or ""
-    if activation_permission_denial(game, player_index, permanent, line):
-        return None
-    if activation_denial(game, player_index, permanent, line):
-        return None
-    if not _plain_activation_cost(ability.cost):
-        return None
-    life_cost = int(ability.cost.pay_life or 0)
-    if life_cost and player.life - life_cost < FOREIGN_ACTIVATION_LIFE_RESERVE:
-        return None
-
-    use = foreign_activation_use(ability)
-    target = source_seat
-    target_permanent_index: int | None = None
-    if use == "removes_source":
-        score = FOREIGN_REMOVAL_SCORE + _permanent_value(permanent)
-    elif use == "returns_source":
-        # The owner plays it again, so this is tempo rather than removal:
-        # worth it when recasting costs them at least what bouncing cost us,
-        # or when the permanent is an untapped creature standing in front of
-        # an attack this seat can make this turn. Without the second clause a
-        # {4} bounce of a three-mana wall is never worth it; without the
-        # first, a seat with nobody to attack with bounced it every turn and
-        # its owner recast it every turn (PCY's Quicksilver Wall, measured).
-        paid = sum(int(value or 0) for value in ability.cost.mana.values())
-        clears_a_blocker = (
-            permanent.is_creature and not permanent.tapped
-            and bool(legal_attackers(game, player_index, against=source_seat))
-        )
-        if float(permanent.card.cmc or 0) < paid and not clears_a_blocker:
-            return None
-        score = FOREIGN_REMOVAL_SCORE + float(permanent.card.cmc or 0)
-    elif use == "shrinks_source":
-        change = source_toughness_change(instruction) or 0
-        if not permanent.is_creature or (
-            permanent.effective_toughness + change > permanent.damage_marked
-        ):
-            return None
-        score = FOREIGN_KILL_SCORE + _permanent_value(permanent)
-    elif use == "aimed":
-        spec = derive_activation_spec(ability) or {}
-        described = ((instruction.payload or {}).get("targets") or {}).get("filter") or {}
-        if described.get("controller") is not None:
-            # "Target creature **you control**": the enumeration below runs
-            # from the source's seat, so a printed seat would be read as the
-            # wrong player's. Declined rather than mis-aimed.
-            return None
-        if spec.get("kind") == "player":
-            target = _choose_target_for_instruction(instruction, player_index, game)
-        elif spec.get("kind") in _FOREIGN_OBJECT_KINDS:
-            legal = game.activation_target_spec(
-                source_seat, permanent_index, ability_index=ability_index,
-            ).get("valid_targets") or []
-            perms = [t for t in legal if t.get("kind") == "permanent"]
-            # Read step by step, so a sequence's grant is aimed by the grant
-            # (`ai_target_sides.ability_target_side`), and **only** a side the
-            # program states: an object effect with none is a coin flip
-            # between the two boards, and on another seat's ability the wrong
-            # board is a gift paid for.
-            side = ability_target_side(instruction)
-            if side == "you":
-                # Asked of the step that names the target, for the reason
-                # the side is: a wrapper denies nothing.
-                if ability_denies_its_target(instruction):
-                    return None
-                perms = [t for t in perms if t["seat"] == player_index]
-            elif side == "opponent":
-                perms = [t for t in perms if t["seat"] != player_index]
-            else:
-                return None
-            if not perms:
-                return None
-
-            def _power(t):
-                perm = game.permanent_at(t["seat"], t["index"])
-                return perm.effective_power if perm is not None else 0
-
-            chosen = max(perms, key=_power)
-            target = chosen["seat"]
-            target_permanent_index = chosen["index"]
-        else:
-            return None
-        score = _score_activation(game, player_index, instruction, target)
-    else:
-        return None
-
-    if game.activation_target_refusal(
-        player_index, permanent, ability,
-        target_player_index=target,
-        target_permanent_index=target_permanent_index,
-    ) is not None:
-        return None
-    if game.activation_target_requirement_refusal(
-        player_index, permanent, ability,
-        target_player_index=target,
-        target_permanent_index=target_permanent_index,
-    ) is not None:
-        # An opponent's Flagbearer demands a target this announcement does not
-        # name. Not proposed: the gate would refuse it with nothing paid.
-        return None
-
-    land_taps: tuple[int, ...] = ()
-    tap_colors: tuple[str, ...] = ()
-    required = dict(ability.cost.mana)
-    if game.enforce_mana_costs and any(required.values()):
-        plan = _plan_land_taps(game, player, required)
-        if plan is None:
-            return None
-        land_taps, tap_colors = plan
-    if score <= 0.0:
-        return None
-    return ActivationAction(
-        permanent_name=permanent.card.name,
-        permanent_index=permanent_index,
-        target_player_index=target,
-        land_tap_indices=land_taps,
-        score=score,
-        target_permanent_index=target_permanent_index,
-        land_tap_colors=tap_colors,
-        source_controller_index=source_seat,
-        ability_index=ability_index,
-    )
-
-
-def choose_hand_activation_action(
-    game: Game, player_index: int
-) -> HandActivationAction | None:
-    """The best ability this seat can activate from its **hand**, or None.
-
-    Cycling, and whatever else prints a cost payable only from a hand
-    (CR 113.6j). Which abilities those are is not decided here — it is
-    ``usable_activated_abilities(program, zone=HAND)``, the same reader
-    ``Game.activate_from_hand`` gates on and the same one that keeps the ability
-    off a permanent's list — so this policy names no card and no keyword.
-
-    Called **after** the seat's cast for the turn, so the untapped lands the
-    payment is planned against are the mana the cast did not want: a seat
-    cycles with what is left over rather than instead of playing its spell.
-
-    One action per call, like :func:`choose_activation_action`, and the tie-break
-    is hand order — the seat cycles once a priority pass rather than emptying
-    its hand in a loop, and a seeded run reproduces exactly.
-
-    **What the activation sets off is weighed** (:func:`_rehearse_hand_
-    activation`): the score read a cycle's draw and nothing it triggers, so
-    Slice and Dice's "When you cycle this card, you may have it deal 1 damage
-    to each creature" was cycled whatever it did to the seat's own board (ONS
-    W1G3). A harmful candidate is not proposed and the swing is added to the
-    score; a plain cycle measures nothing and keeps its score.
-    """
-    with deliberating():
-        return _choose_hand_activation_action(game, player_index)
-
-
-def _choose_hand_activation_action(
-    game: Game, player_index: int,
-) -> HandActivationAction | None:
-    """:func:`choose_hand_activation_action` inside its deliberation."""
-    from dataclasses import replace
-
-    player = game.players[player_index]
-    best: HandActivationAction | None = None
-    for hand_index, card in enumerate(player.hand):
-        program = compile_card_oracle(card)
-        from_hand = usable_activated_abilities(program, zone=HAND)
-        if not from_hand:
-            continue
-        ability = from_hand[0]
-        if ability.instruction is None:
-            continue
-
-        # A mana ability activated for its own sake empties at the end of the
-        # step; the same floor `choose_activation_action` keeps one zone over.
-        if is_mana_ability(ability.instruction):
-            continue
-
-        # Any cost beyond mana and the discard the zone read is derived from is
-        # a trade this policy cannot price — the same honest floor the
-        # battlefield loop takes, and derived from the compiled cost so it
-        # names no card.
-        cost = ability.cost
-        if (
-            cost.sacrifice_filter is not None
-            or cost.discard_cards
-            or cost.pay_life
-            or cost.exile_top_of_library
-        ):
-            continue
-
-        land_taps: tuple[int, ...] = ()
-        # The cost as CR 601.2f computes it, through the same reader
-        # ``Game.activate_from_hand`` charges: a Fluctuator on the board makes
-        # a Cycling {2} free, and a policy pricing the printed cost would pass
-        # over an ability the engine would let it take for nothing.
-        from .mixins.stack.card_activation import hand_activation_cost
-
-        tap_colors: tuple[str, ...] = ()
-        required = hand_activation_cost(game, player_index, card, ability)[0]
-        if game.enforce_mana_costs and any(required.values()):
-            plan = _plan_land_taps(game, player, required)
-            if plan is None:
-                continue
-            land_taps, tap_colors = plan
-
-        # The seat is the target: nothing activatable from a hand in the pool
-        # aims anywhere else, and an ability that did would be refused at
-        # announcement rather than aimed by this policy.
-        score = _score_activation(game, player_index, ability.instruction, player_index)
-        if score <= 0.0:
-            continue
-        candidate = HandActivationAction(
-            card_name=card.name,
-            hand_index=hand_index,
-            ability_index=0,
-            land_tap_indices=land_taps,
-            score=score,
-            land_tap_colors=tap_colors,
-        )
-        rehearsal = _rehearse_hand_activation(game, player_index, candidate)
-        if rehearsal is not None:
-            if not _worth_proposing(rehearsal):
-                continue
-            candidate = replace(
-                candidate,
-                score=score + max(-SWING_CAP, min(SWING_CAP, rehearsal.swing)),
-            )
-        if best is None or candidate.score > best.score:
-            best = candidate
-    return best
-
-
-def _rehearse_hand_activation(
-    game: Game, seat: int, action: HandActivationAction,
-) -> Rehearsal | None:
-    """What activating *action* from the hand would do, carried out on a
-    scratch copy (``ai_rehearsal.rehearse``) as the simulator's executor
-    carries it out — the planned lands tapped, ``activate_from_hand``, the
-    stack resolved on defaults — against the same copy with those lands
-    tapped and nothing activated.
-
-    The card leaving the hand is the activation's own cost, not a cast's trip,
-    so it is **read as a change** (``leaves_hand=False``): a plain cycle is a
-    card out and a card in, a swing of nothing, and what is left over is what
-    the cycle set off."""
-
-    def perform(table):
-        planned = tap_planned_lands(table, seat, action)
-        return table.activate_from_hand(
-            seat, planned.card_name,
-            ability_index=planned.ability_index, hand_index=planned.hand_index,
-        )
-
-    def paid_for(table, _carried) -> None:
-        pool = table.players[seat].mana_pool
-        floating = dict(pool)
-        tap_planned_lands(table, seat, action)
-        pool.clear()
-        pool.update(floating)
-
-    taps = bool(action.land_tap_indices)
-    return rehearse(
-        game, seat, perform, spell_name=None, leaves_hand=False,
-        label=f"{action.card_name}'s ability from hand",
-        key=(
-            "hand_activation", seat, action.card_name, action.hand_index,
-            action.ability_index, action.land_tap_indices, action.land_tap_colors,
-        ),
-        without=paid_for if taps else None,
-        without_key=(
-            ("paid", action.land_tap_indices, action.land_tap_colors)
-            if taps else None
-        ),
-    )
 
 
 def _hand_entry_has_a_card(

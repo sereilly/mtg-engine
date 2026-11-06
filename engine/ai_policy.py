@@ -27,8 +27,9 @@ them imports this one:
 * ``ai_targets`` and ``ai_divisions`` — what it names, and how a divided
   spell splits what it divides;
 * ``ai_scoring`` — what a proposal is worth, measured by rehearsing it;
-* ``ai_abilities`` — which ability to activate, on the seat's own
-  permanents, another seat's, or a card in its hand;
+* ``ai_abilities`` — which ability to activate on the seat's own
+  permanents; ``ai_foreign_activations`` on another seat's, and
+  ``ai_hand_activations`` on a card in its hand;
 * ``ai_declarations`` — its attackers and its blockers;
 * ``ai_prompts`` — the answers it gives part-way through a resolution;
 * ``ai_payment`` and ``ai_mana_sources`` — the taps that pay for all of it.
