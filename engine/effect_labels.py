@@ -866,6 +866,14 @@ ACTIVATED_LABELS: dict[str, str] = {
     # the bottom (CR 701.25a), so scry's `activated_look`, as the triggered
     # table already files the upkeep surveil beside its scry.
     "surveil": "activated_look",
+    # --- Scourge, at its promotion rehearsal -----------------------------
+    # Thundercloud Elemental: "{3}{U}: All other creatures lose flying until
+    # end of turn." Whiteout's sweep in the activated position for the first
+    # time, and the bucket of its two neighbours here — the team grant it
+    # mirrors and the one-target removal, `remove_target_keyword_until_eot` —
+    # which is also what the `pump` category default already said, so the
+    # row moves no label: it pins one.
+    "remove_team_keyword_until_eot": "activated_pump",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -1499,6 +1507,44 @@ TRIGGERED_LABELS: dict[str, str] = {
     # above (the seat the damage froze rather than a described one), and its
     # bucket: the game ends.
     "target_player_loses_game": "triggered_game_end",
+    # --- Scourge, at its promotion rehearsal -----------------------------
+    # Seven leaves the set's triggers are the first to reach in the triggered
+    # position, shown by the guard's second assertion once Thundercloud
+    # Elemental's activated row turned the first green — each settled against
+    # the bucket its family already has rather than the `spell_pattern` marker
+    # they fell back to.
+    #
+    # Frontline Strategist ("When this creature is turned face up, prevent all
+    # combat damage non-Soldier creatures would deal this turn") and Karona's
+    # Zealot ("…all damage that would be dealt to it this turn is dealt to
+    # target creature instead"): the activated
+    # table's `activated_prevent` for both kinds, with this side's prefix —
+    # Leery Fogbeast's unnarrowed Fog above is the same word.
+    "grant_source_class_prevention_shield": "triggered_prevent",
+    "redirect_next_damage_from_source_until_eot": "triggered_prevent",
+    # Lingering Death: "At the beginning of the end step of enchanted
+    # creature's controller, that player sacrifices that creature." Beside
+    # `sacrifice_self` and `sacrifice_matching_permanent`.
+    "sacrifice_attached_permanent": "triggered_sacrifice",
+    # Mischievous Quanar: "When this creature is turned face up, copy target
+    # instant or sorcery spell." Beside the storm trigger's
+    # `copy_triggering_spell`: a copy of a spell either way.
+    "copy_top_stack_spell": "triggered_copy",
+    # Xantid Swarm: "Whenever this creature attacks, defending player can't
+    # cast spells this turn." `forbid_land_plays_this_turn`'s
+    # `activated_restriction`, the other half of CR 305.1's pair, with this
+    # side's prefix: a seat is barred from an action for the turn.
+    "forbid_casting_types_this_turn": "triggered_restriction",
+    # Grip of Chaos: "Whenever a spell or ability is put onto the stack, if it
+    # has a single target, reselect its target at random." No shipped bucket
+    # names a change of targets; its grammar category's own word, the way
+    # `counter_top_stack_spell` reads `triggered_counterspells`.
+    "change_event_object_targets": "triggered_retargeting",
+    # Form of the Dragon: "At the beginning of each end step, your life total
+    # becomes 5." A total *set*, which can be a gain or a loss — so neither
+    # `triggered_damage` (`target_loses_life`) nor a gain's bucket, for Mirror
+    # Universe's reason on the activated side; its category's own word.
+    "set_life_total": "triggered_life",
 }
 
 # The wrapper kinds whose label depends on what triggered them: `may` wraps

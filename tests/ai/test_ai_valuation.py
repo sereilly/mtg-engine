@@ -526,6 +526,24 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # first) and `least_harmed_permanent` answer it now;
         # `tests/ai/test_ai_divided_trigger_shares.py` holds both.
         "Shambling Swarm",
+        # Reviewed at Scourge's promotion rehearsal, by running it, and it is
+        # the finding. Skirk Volcanist: "When this creature is turned face up,
+        # it deals 3 damage divided as you choose among one, two, or three
+        # target creatures" - Flameshot's division on Shambling Swarm's road
+        # (a trigger, announced by `Game._default_trigger_division` for a seat
+        # nobody asks), and the pool's first divided *damage* trigger. Its
+        # side is right: "opponent" off the `damage` category (derived:
+        # thresholded, not whole-board). Its split was Shambling Swarm's
+        # finding over again, on damage: 1 apiece over a Hill Giant, a Craw
+        # Wurm and a Grizzly Bears killed nothing, and with no opposing
+        # creature all 3 went on the Volcanist itself beside a Serra Angel
+        # that would have lived. The rehearsal of turning it face up read
+        # that split, so the AI never turned it up at all. Damage now takes
+        # the counters' lethal-first arithmetic at a step of one
+        # (`divided_shrink_shares(..., damage=True)`, CR 704.5g) and
+        # concentrates where no share kills; the Scourge creature tests'
+        # W2G5 section holds the boards.
+        "Skirk Volcanist",
     }
     assert set(described) <= reviewed, sorted(set(described) - reviewed)
 

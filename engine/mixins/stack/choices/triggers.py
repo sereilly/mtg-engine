@@ -993,10 +993,21 @@ class TriggerChoicesMixin:
         spread killed nothing over four creatures with an X/1 among them, and
         on its controller's own board it killed the Savannah Lions it was
         offered first beside a Hill Giant that would have lived.
+
+        **Damage is split the same way** (``damage=True``, CR 704.5g), and
+        where no share of it kills, it is **concentrated** on the first
+        candidate — the divided spell's policy, for the spell's reason: a
+        share is measured against a toughness. Skirk Volcanist (SCG, the
+        pool's one divided damage trigger), reviewed at Scourge's promotion
+        rehearsal by running it: the spread put 1 apiece on a Hill Giant, a
+        Craw Wurm and a Grizzly Bears and killed nothing, and with no
+        opposing creature it aimed all 3 at the Volcanist itself, the
+        offer's first, beside a Serra Angel that would have lived.
         """
         from ....ai_divisions import (divided_shrink_shares,
                                       least_harmed_permanent)
         from ....divided_damage import CHOSEN, EVENLY, divided_instruction, spread_shares
+        from ....grammar.lowering.categories import INSTRUCTION_CATEGORIES
 
         permanents = [
             target["permanent_id"] for target in choice.data.get("targets") or ()
@@ -1018,9 +1029,19 @@ class TriggerChoicesMixin:
             if getattr(item, "ability_instruction", None) is not None else ()
         )
         counter = str((divided.payload.get("counter") if divided is not None else "") or "")
+        # What `ai_target_sides.divided_shape` calls ``thresholded``: the
+        # divided step is damage, measured against a toughness.
+        damage = (
+            divided is not None and INSTRUCTION_CATEGORIES.get(divided.kind) == "damage"
+        )
+        source = getattr(item, "source_permanent", None)
+        deathtouch = (
+            damage and source is not None and self._has_keyword(source, "deathtouch")
+        )
         if chosen and wanted and preferred:
             shares = divided_shrink_shares(
                 self, preferred, int(choice.data["division_total"]), ceiling, counter,
+                damage=damage, deathtouch=deathtouch,
             )
             if shares:
                 return self._resolve_trigger_targets(
@@ -1030,9 +1051,12 @@ class TriggerChoicesMixin:
         if chosen and not preferred and permanents:
             least_harmed = least_harmed_permanent(
                 self, permanents, int(choice.data["division_total"]), counter,
+                damage=damage, deathtouch=deathtouch,
             )
             if least_harmed is not None:
                 permanents = [least_harmed]
+        if chosen and damage:
+            ceiling = 1
         picked = preferred[:ceiling] if preferred else permanents[:1]
         if not picked:
             self.discard_pending_choice(choice)
