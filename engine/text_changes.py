@@ -454,6 +454,28 @@ def current_text_card(holder) -> "CardDefinition":
     return spell_text_card(holder)
 
 
+def text_seen_by(game, holder, seat: "int | None") -> "CardDefinition":
+    """What *holder* — a permanent or a spell on the stack — says **to
+    *seat***.
+
+    A face-up object says the same to everybody (:func:`current_text_card`).
+    A face-down one has no text (CR 708.2a) to anybody but the one seat CR
+    708.5 lets look at it, its controller — and to that seat it says what it
+    would say face up, with the text changes applied to it folded on
+    (:func:`face_up_text_card`; CR 708.8 keeps them applying once it is face
+    up, which is Putrid Raptor's 2004-10-04 ruling). A default a seat's choice
+    reads from here can name only what that seat may see.
+    """
+    from .face_down import hidden_card, may_look_at
+
+    behind = hidden_card(getattr(holder, "card", None))
+    if behind is None or not may_look_at(game, seat, holder):
+        return current_text_card(holder)
+    if isinstance(getattr(holder, "metadata", None), dict):
+        return face_up_text_card(holder)
+    return spell_text_of(behind, spell_text_changes(holder))
+
+
 def _changes_of(holder) -> tuple[dict, ...]:
     """The recorded changes of a permanent (:func:`text_changes`) or a spell
     (:func:`spell_text_changes`)."""
@@ -730,5 +752,5 @@ __all__ = [
     "change_land_word", "changed_words", "creature_type_plural",
     "creature_types_written", "current_text_card", "has_text_changes",
     "one_pass", "spell_text_card", "spell_text_changes", "spell_text_of",
-    "text_changes",
+    "text_changes", "text_seen_by",
 ]
