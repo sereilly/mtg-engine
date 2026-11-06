@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**431 / 641 tracked rules covered (67%)** — 3344 tests, 0 unannotated.
+**431 / 641 tracked rules covered (67%)** — 3353 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -299,7 +299,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
 - [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(4 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
-- [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(7 tests, subrules abc)*
+- [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(10 tests, subrules abc)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(5 tests)*
 - [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(32 tests, subrules abcd)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
@@ -377,14 +377,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **202.1** A card’s mana cost is indicated by mana symbols near the top of the card. (See rule 107.4.) On mo... *(3 tests, subrules ab)*
 - [x] **202.2** An object is the color or colors of the mana symbols in its mana cost, regardless of the color of... *(2 tests)*
-- [x] **202.3** The mana value of an object is a number equal to the total amount of mana in its mana cost, regar... *(11 tests, subrules a)*
+- [x] **202.3** The mana value of an object is a number equal to the total amount of mana in its mana cost, regar... *(12 tests, subrules ae)*
 - [x] **202.4** Any additional cost listed in an object’s rules text or imposed by an effect isn’t part of the ma... *(1 tests)*
 
 ### 205. Type Line
 
 - [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(18 tests, subrules ab)*
 - [x] **205.2** Card Types *(14 tests, subrules ab)*
-- [x] **205.3** Subtypes *(5 tests, subrules bim)*
+- [x] **205.3** Subtypes *(8 tests, subrules bim)*
 - [x] **205.4** Supertypes *(11 tests, subrules abcd)*
 
 ### 206. Expansion Symbol
@@ -452,7 +452,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 305. Lands
 
-- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(8 tests)*
+- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(9 tests)*
 - [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(23 tests, subrules ab)*
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
@@ -669,8 +669,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(320 tests, subrules abcdefghi)*
-- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(30 tests, subrules a)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(326 tests, subrules abcdefghi)*
+- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(31 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [ ] **601.5** While announcing the choices of any targets and/or the division or distribution of any effects as...
 - [x] **601.6** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
