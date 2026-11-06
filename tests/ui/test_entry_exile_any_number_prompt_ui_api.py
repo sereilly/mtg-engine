@@ -80,7 +80,7 @@ def test_frankensteins_monster_s_exact_count_is_not_any_number():
 def test_an_any_number_answer_of_any_size_is_accepted_through_the_action():
     from types import SimpleNamespace
 
-    from web.action_prompt_answers import _action_entry_exile_confirm
+    from web.action_prompt_cards import _action_entry_exile_confirm
 
     for picks in ([], [0], [0, 2]):
         game = _ghoul_entering(["Grizzly Bears", "Lightning Bolt", "Hill Giant"])

@@ -8057,7 +8057,7 @@ function enterChoiceMissing(info) {
 }
 
 // The action that answers *info*, in the fields the route reads for its shape
-// (web/action_prompt_answers.py). `targetSeat` is the opponent a pill click
+// (web/action_prompt_values.py). `targetSeat` is the opponent a pill click
 // named; a shape that names none sends the chooser's own seat, which the route
 // asks for and the engine does not read.
 function enterChoicePayload(info, targetSeat = null) {

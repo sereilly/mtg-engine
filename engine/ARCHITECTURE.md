@@ -443,6 +443,8 @@ handler / upkeep effect / entry replacement
   → web/prompts.py renders it (one renderer per kind, in web/prompt_cards.py,
     web/prompt_board.py or web/prompt_values.py), refuses other actions, and
     answers AI-owned ones
+  → the answering action's handler (in web/action_prompt_cards.py,
+    web/action_prompt_board.py or web/action_prompt_values.py, as its renderer)
   → confirm_*  → game.resolve_pending_choice(kind, seat, **response) → spec.resolve
 ```
 

@@ -58,8 +58,11 @@ LAYERS = (
     "payment_plan",
     # The cast plumbing the normal cast and the debug free-casts share.
     "action_helpers",
-    # One module of registered handlers per group of ActionKinds.
-    "action_prompt_answers",
+    # One module of registered handlers per group of ActionKinds: the prompt
+    # answers first, split as the renderers are (cards, board, values).
+    "action_prompt_cards",
+    "action_prompt_board",
+    "action_prompt_values",
     "action_turn",
     "action_combat",
     "action_debug",

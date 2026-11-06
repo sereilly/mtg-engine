@@ -4,7 +4,7 @@ browser.
 Found by driving Runed Halo in the running app to look at what it had named.
 The server arms one prompt kind (``enter_choice``) in nine shapes, renders all
 of them (``web/prompt_values._enter_choice``) and answers all of them
-(``web/action_prompt_answers``) — and the client's reader,
+(``web/action_prompt_values``) — and the client's reader,
 ``getEnterChoiceInfo``, returned null for every shape that names no opponent.
 So for a human seat a resolved Ward, Runed Halo, Conspiracy or Shimmer left the
 panel saying "Main Phase" while the server refused every other action with

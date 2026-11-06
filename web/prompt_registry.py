@@ -6,7 +6,9 @@ prompt is answered with — ``prompt_cards``, ``prompt_board`` and
 ``prompt_values`` — and each registers through :func:`prompt_renderer`. That
 is why this table is a module of its own and sits below all four in
 ``web.LAYERS``: the renderer modules import it, and ``prompts`` imports them
-so that importing it is what fills the table.
+so that importing it is what fills the table. The handlers that answer the
+prompts are split the same way, each beside its renderer's family:
+``action_prompt_cards``, ``action_prompt_board`` and ``action_prompt_values``.
 """
 
 from __future__ import annotations

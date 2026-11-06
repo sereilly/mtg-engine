@@ -60,7 +60,9 @@ from . import (  # noqa: F401
     action_combat,
     action_debug,
     action_pregame,
-    action_prompt_answers,
+    action_prompt_board,
+    action_prompt_cards,
+    action_prompt_values,
     action_turn,
 )
 
