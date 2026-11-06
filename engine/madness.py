@@ -76,7 +76,7 @@ MADNESS_TRIGGER = "exiled_with_madness"
 MADNESS_CAST_KIND = "offer_madness_cast"
 
 #: The bucket the support report puts the trigger in. Carried here rather than
-#: in ``effect_labels.TRIGGERED_LABELS`` for ``rampage.RAMPAGE_LABEL``'s
+#: in ``triggered_labels.TRIGGERED_LABELS`` for ``rampage.RAMPAGE_LABEL``'s
 #: reason: that table describes what the grammar reads, and this ability is
 #: derived from a keyword line the grammar never sees.
 MADNESS_LABEL = "triggered_cast"

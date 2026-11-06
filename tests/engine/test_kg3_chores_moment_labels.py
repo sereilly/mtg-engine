@@ -1,7 +1,7 @@
 """A triggered wrapper's label names the moment or the shape — never one card's
 effect — and nothing reads a label as a fact.
 
-``engine/effect_labels.py``'s ``TRIGGERED_LABELS_BY_CONDITION`` lets the
+``engine/triggered_labels.py``'s ``TRIGGERED_LABELS_BY_CONDITION`` lets the
 *condition* name the moment for a wrapper kind (``may``, ``if_then``,
 ``unless_player_pays``, ``for_each``), because the wrapper says nothing about
 what it offers. Measured at kg3, eleven rows named the effect of the card that
@@ -38,7 +38,7 @@ from engine import Game, PlayerState
 from engine import effect_labels
 from engine.card_loader import load_catalog
 from engine.delayed_triggers import DelayedTrigger, arm_delayed_trigger, fire_delayed_triggers
-from engine.effect_labels import TRIGGERED_LABELS, TRIGGERED_LABELS_BY_CONDITION
+from engine.triggered_labels import TRIGGERED_LABELS, TRIGGERED_LABELS_BY_CONDITION
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.oracle_types import OracleInstruction

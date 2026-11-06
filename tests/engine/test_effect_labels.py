@@ -1,6 +1,8 @@
-"""Guard: ``engine/effect_labels.py`` still describes the pool.
+"""Guard: the effect-label tables still describe the pool.
 
-The tables in that module are the ``effect_kind`` vocabulary
+The tables ``engine/effect_labels.py`` reads — ``ACTIVATED_LABELS`` in
+``engine/activated_labels.py``, ``TRIGGERED_LABELS`` and its by-condition
+rows in ``engine/triggered_labels.py`` — are the ``effect_kind`` vocabulary
 ``engine/parsing/`` used to produce, carried across the deletion so 57 cards
 were not silently re-bucketed. A frozen list of strings copied out of deleted
 code is exactly the kind of table that rots into a description of a pool that
@@ -26,8 +28,8 @@ from engine.faces import compilation_units
 import engine.front_ends as front_ends
 import engine.oracle as oracle
 from engine.card_loader import load_cards, load_catalog, manifest_set_paths
-from engine.effect_labels import (
-    ACTIVATED_LABELS,
+from engine.activated_labels import ACTIVATED_LABELS
+from engine.triggered_labels import (
     TRIGGERED_LABELS,
     TRIGGERED_LABELS_BY_CONDITION,
 )
