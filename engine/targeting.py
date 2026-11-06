@@ -65,6 +65,7 @@ from .activation_zones import BATTLEFIELD, ability_functions_from
 from .divided_damage import DIVIDED_TARGETS, divided_entry
 from .target_roles import spec_roles
 from .target_descriptions import GRAVEYARD_TARGET_KIND, _TYPE_FILTER_TO_KIND
+from .cost_modifiers import spell_mana_value
 from .cost_pickers import _cost_picker_spec
 from .payload_target_specs import _X_FROM_COUNT
 from .text_changes import spell_text_card
@@ -655,15 +656,15 @@ def stack_object_mana_value(item) -> int:
     One reader, because the number is asked by things that must agree: a cost
     the card defines from it (Reflecting Mirror) and a counter that compares it
     against a chosen X (Spell Blast).
+
+    The arithmetic is ``cost_modifiers.spell_mana_value``'s — the same
+    number for the card the cast path is pricing, before it is on the stack —
+    asked with this object's announced X, so the two cannot come apart.
     """
     card = getattr(item, "card", None)
     if card is None:
         return 0
-    base = int(getattr(card, "cmc", 0) or 0)
-    x_symbols = (getattr(card, "mana_cost", "") or "").lower().count("{x}")
-    if not x_symbols:
-        return base
-    return base + x_symbols * int(getattr(item, "x_value", 0) or 0)
+    return spell_mana_value(card, getattr(item, "x_value", None))
 
 
 #: The cast-spec kinds whose announced target is an **object on the

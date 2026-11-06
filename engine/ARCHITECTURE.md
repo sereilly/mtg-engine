@@ -330,6 +330,22 @@ shows both). The client draws what each seat was sent and nothing else: the
 controller's `hidden_card` as the real card marked face down, anyone else a
 card back (`faceDownDisplayCard` in `web/static/battlefield-canvas.js`).
 
+**`game.log` is every seat's, so a line names only what the table may see.**
+A card in a hand or library nothing revealed, a card exiled face down (CR
+406.3, its look permission included — a look is one seat's view), and the card
+behind a face-down object are counted, never named: "may look at 3 face-down
+card(s)", "a face-down card goes to their owner's hand"
+(`linked_exile.exiled_cards_for_the_log` / `entry_name_for_the_log`). A card
+exiled face down stays so after its exiler leaves or phases out —
+`linked_exile.keep_face_down_after_departure` hands the permanent's face-down
+entries to the game's register (`engine/exiled_records.py`) at the one
+transition out — and an exiled card's own upkeep trigger fires from exile only
+when it says it works there (`exiled_records.functions_in_exile`, CR 113.6k).
+Held by `tests/engine/test_hidden_cards_stay_out_of_the_log.py` (beside
+`test_private_finds_stay_out_of_the_log.py` for looks and searches): a new log
+line that names a card goes through the census's watcher, which flags any name
+hidden as it is written and still hidden at the next line.
+
 A printed keyword is part of an object's copiable values, so it is *seeded*
 by layer 1 rather than granted afterwards; grants and removals are continuous
 effects recorded in order by
