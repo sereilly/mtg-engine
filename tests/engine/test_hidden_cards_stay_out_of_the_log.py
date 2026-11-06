@@ -63,7 +63,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.oracle_types import OracleInstruction
 from engine.targeting import derive_activation_spec, derive_cast_spec
-from tests.helpers import _nosick, resolve_stack, stable_sample
+from tests.helpers import _nosick, full_census, resolve_stack, stable_sample
 
 #: A step whose kind names one of these moves a card through a hidden zone, or
 #: exiles one, or turns one face down — the population, read off the program.
@@ -425,37 +425,36 @@ def run_census(by_name, rows, *, aim_at_mask=False) -> dict:
     return found
 
 
-@pytest.mark.full
+#: One row in eight in the quick pass, by what the row is (``stable_sample``),
+#: so a merge that moves the pool adds rows rather than re-sampling them; the
+#: full pass (``MTG_FULL_CENSUS``) drives every row.
+_EVERY = 8
+
+
+def _sampled(rows) -> list[tuple]:
+    return [
+        row for row in rows
+        if stable_sample(f"{row[0].name}:{row[1]}:{row[2]}", _EVERY)
+    ]
+
+
 def test_no_log_line_names_a_hidden_card(pool, by_name):
     """Every card that moves a card through a hidden zone, driven to its next
     upkeep: no line names a card that was hidden as it was written and still
-    is, and was never public in between.
+    was at the next line, and was never public in between.
 
-    The floor is what this pool drives (816 of 895 rows on SCG W2G4's base):
-    a census that stops reaching its cards reads clean over nothing."""
-    rows = hidden_movers(pool)
-    census = run_census(by_name, rows)
-    assert census["driven"] >= 800, (census["driven"], census["undriven"][:20])
+    The floor is what this pool drives — 816 of 895 rows on SCG W2G4's base,
+    ~100 in the quick pass's eighth: a census that stops reaching its cards
+    reads clean over nothing."""
+    census = run_census(by_name, _sampled(hidden_movers(pool)))
+    floor = 800 if full_census() else 60
+    assert census["driven"] >= floor, (census["driven"], census["undriven"][:20])
     assert census["named"] == {}, census["named"]
     # The excused rows are excused by their own text, and only by it.
     for row in census["announced"]:
         assert _announced(by_name[row.rsplit(" (", 1)[0]]), row
 
 
-def test_no_log_line_names_a_hidden_card_sampled(pool, by_name):
-    """The quick pass's share of the census above: one row in eight, by what
-    the row is (``stable_sample``), so a merge that moves the pool adds rows
-    rather than re-sampling them."""
-    rows = [
-        row for row in hidden_movers(pool)
-        if stable_sample(f"{row[0].name}:{row[1]}:{row[2]}", 8)
-    ]
-    census = run_census(by_name, rows)
-    assert census["driven"] >= 60, (census["driven"], census["undriven"][:20])
-    assert census["named"] == {}, census["named"]
-
-
-@pytest.mark.full
 def test_nothing_aimed_at_a_face_down_creature_names_its_card(pool, by_name):
     """Every supported spell and activated ability whose picker offers the
     opponent's face-down creature, aimed at it: the card it hides is named only
@@ -463,9 +462,11 @@ def test_nothing_aimed_at_a_face_down_creature_names_its_card(pool, by_name):
     never while it is face down (CR 708.5).
 
     The floor is what this pool drives: 863 of 2,446 rows on SCG W2G4's base
-    (a row is driven when its picker offers the face-down creature)."""
-    census = run_census(by_name, aimers(pool), aim_at_mask=True)
-    assert census["driven"] >= 800, census["driven"]
+    (a row is driven when its picker offers the face-down creature), ~100 in
+    the quick pass's eighth."""
+    census = run_census(by_name, _sampled(aimers(pool)), aim_at_mask=True)
+    floor = 800 if full_census() else 60
+    assert census["driven"] >= floor, census["driven"]
     hidden_card_named = {
         row: named for row, named in {**census["named"], **census["announced"]}.items()
         if any(name in _FACE_DOWN for _line, name, _where in named)

@@ -418,12 +418,12 @@ class PaymentChoicesMixin:
         from ....board_payment import conditioned_tap_pays_now
 
         board = list(self.controlled_by(seat))
-        free = untapped_mana_lands(board)
+        free = {id(land) for land in untapped_mana_lands(board)}
         return [
             land
             for land in board
             if (
-                any(land is held for held in free)
+                id(land) in free
                 and self.land_mana_tap_refusal(land) is None
                 # A land whose only mana ability prints a board condition
                 # (Temple of the False God's "only if you control five or
