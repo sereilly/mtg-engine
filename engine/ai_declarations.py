@@ -226,7 +226,7 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     legal_attackers_list = [
         idx for idx in legal_attackers_list
         if idx in forced or attack_is_worth_its_trigger(
-            game, player.battlefield[idx], opponent_index,
+            game, game.permanent_at(attacking_player_index, idx), opponent_index,
         )
     ]
     if not legal_attackers_list:
