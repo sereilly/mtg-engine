@@ -120,6 +120,7 @@ _DEFAULTS: dict[str, str] = {
     "pile_exile_choice": "worth",         # the smaller pile
     "pile_search": "position",            # the first card
     "pile_split": "worth",                # the most even split by value
+    "pile_top_draw": "stated",            # the pile while it holds a card
     "player_choice": "position",          # the first seat offered
     "put_from_hand_choice": "position",   # the first card
     "reflexive_target": "position",       # the first permanent offered
