@@ -56,7 +56,8 @@ from .ai_weighed_cast import (
 )
 from .ai_rehearsal import (blocks_owed, blocks_still_to_come, deliberating,
                            pays_before_the_blocks)
-from .ai_valuation import entry_sacrifice_is_unavoidable, entry_targets_a_spell, is_mana_ability
+from .ai_valuation import (copies_for_the_spells_before_it, entry_sacrifice_is_unavoidable,
+                           entry_targets_a_spell, is_mana_ability)
 from .faces import castable_faces
 from .game import Game
 from .models import CardDefinition
@@ -132,6 +133,7 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
 def _choose_cast_action(game: Game, player_index: int) -> CastAction | None:
     """`choose_cast_action`, inside its deliberation."""
     best: CastAction | None = None
+    proposed: list[CastAction] = []
     for hand_index, card in hand_spells(game.players[player_index]):
         if _held_for_a_spell_to_answer(game, player_index, card):
             continue
@@ -141,6 +143,8 @@ def _choose_cast_action(game: Game, player_index: int) -> CastAction | None:
         # free (Aluren) is the waiver the candidate is weighed under
         # (`ai_weighed_cast.hand_waiver`).
         candidate = _priced_candidate(game, player_index, card, hand_index)
+        if candidate is not None:
+            proposed.append(candidate)
         if candidate is not None and _is_better_cast(candidate, best):
             best = candidate
 
@@ -164,6 +168,8 @@ def _choose_cast_action(game: Game, player_index: int) -> CastAction | None:
             game, player_index, permitted.spell, permitted.index,
             from_zone=permitted.zone, under=permitted,
         )
+        if candidate is not None:
+            proposed.append(candidate)
         if candidate is not None and _is_better_cast(candidate, best):
             best = candidate
 
@@ -178,9 +184,58 @@ def _choose_cast_action(game: Game, player_index: int) -> CastAction | None:
             game, player_index, card, zone_index,
             from_zone="command", extra_generic=tax,
         )
+        if candidate is not None:
+            proposed.append(candidate)
         if candidate is not None and _is_better_cast(candidate, best):
             best = candidate
 
+    return _storm_spell_last(game, player_index, best, proposed)
+
+
+def _storm_spell_last(
+    game: Game, player_index: int, best: CastAction | None,
+    proposed: list[CastAction],
+) -> CastAction | None:
+    """*best* — unless it is a **storm** spell
+    (``ai_valuation.copies_for_the_spells_before_it``) and another proposed
+    cast can be made first with the storm spell still paid for afterwards:
+    then the best such cast, so the storm spell is weighed, and cast, after
+    the turn's other casts.
+
+    Storm copies a spell for each other spell cast before it this turn (CR
+    702.40a), so every cast ahead of it is a copy more — and the rehearsal
+    the storm spell is weighed by reads exactly that, once those casts have
+    been made. Cast first, as the best-scoring card in hand, its count was
+    usually 0: four SCG games made 31 storm casts and 6 copies (W1G1). The
+    other cast is one this chooser proposed anyway, so making it first costs
+    nothing — unless it spends the mana the storm spell needs, which is
+    asked of the planner with the other cast's sources set aside
+    (``ai_payment._plan_land_taps``'s *without*); a mana spell's own mana is
+    not counted, so a ritual that would pay for both is not found and the
+    storm spell keeps its place.
+    """
+    if best is None:
+        return best
+    card = spell_being_cast(zone_being_cast_from(game, player_index, best), best)
+    if not copies_for_the_spells_before_it(card):
+        return best
+    player = game.players[player_index]
+    cost = _cost_for(game, player, card, best.x_value)
+    others = sorted(
+        (
+            candidate for candidate in proposed
+            if candidate is not best
+            and not copies_for_the_spells_before_it(spell_being_cast(
+                zone_being_cast_from(game, player_index, candidate), candidate,
+            ))
+        ),
+        key=lambda candidate: -candidate.score,
+    )
+    for other in others:
+        if _plan_land_taps(
+            game, player, cost, without=frozenset(other.land_tap_indices or ()),
+        ) is not None:
+            return other
     return best
 
 

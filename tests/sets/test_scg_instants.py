@@ -373,10 +373,12 @@ def test_w1g1_reaping_the_graves_copies_each_return_another_card(set_pool, befor
     assert "Grizzly Bears" in returned and "Forest" not in returned
 
 
-def test_w1g1_reaping_the_graves_copies_keep_the_target_for_a_default_seat(set_pool):
-    """A seat nobody asks declines CR 707.10c's offer: every copy names the
-    original's card, the first to resolve returns it and the rest find their
-    target gone (CR 608.2b). The AI's aim is a policy question, left as is."""
+def test_w1g1_reaping_the_graves_copies_are_aimed_for_a_default_seat(set_pool):
+    """A seat nobody asks weighs CR 707.10c's offer (SCG W2G3,
+    ``ai_prompts.choose_copy_retarget``): the copy names the other card, and
+    both come back. W1G1 left the aim a policy question; kept, the copy
+    returned the original's card and the original found its target gone
+    (CR 608.2b)."""
     game, _, _ = _w1g1_table(
         set_pool, ["Dark Ritual", "Reaping the Graves"],
         graveyard=["Grizzly Bears", "Craw Wurm"],
@@ -384,8 +386,8 @@ def test_w1g1_reaping_the_graves_copies_keep_the_target_for_a_default_seat(set_p
     _w1g1_cast_fillers(game, 0, 1)
     assert game.queue_from_hand(0, "Reaping the Graves", target_permanent_index=0).supported
     _w1g1_resolve_stack(game)
-    assert [card.name for card in game.players[0].hand] == ["Grizzly Bears"]
-    assert any("every target is illegal" in line for line in game.log)
+    assert sorted(card.name for card in game.players[0].hand) == ["Craw Wurm", "Grizzly Bears"]
+    assert not any("every target is illegal" in line for line in game.log)
 
 
 def test_w1g1_a_copys_graveyard_offer_taken_by_default_keeps_the_target(set_pool):

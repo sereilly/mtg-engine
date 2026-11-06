@@ -981,6 +981,27 @@ def swept_filter(payload: dict) -> "dict | None":
     return None
 
 
+def copies_for_the_spells_before_it(card: CardDefinition) -> bool:
+    """Whether casting *card* copies it for each other spell cast before it
+    this turn — storm (CR 702.40a), read off the compiled program: a "when
+    you cast this spell" trigger (``self_cast``) resolving
+    ``copy_triggering_spell`` counted by ``storm.SPELLS_CAST_BEFORE_IT``.
+
+    Such a spell is worth one copy more for every spell cast ahead of it, so
+    the main-phase chooser casts it after the turn's other casts
+    (``ai_policy._storm_spell_last``)."""
+    from .storm import SPELLS_CAST_BEFORE_IT
+
+    return any(
+        ability.condition is not None
+        and ability.condition.kind == "self_cast"
+        and ability.instruction is not None
+        and ability.instruction.kind == "copy_triggering_spell"
+        and (ability.instruction.payload or {}).get("for_each") == SPELLS_CAST_BEFORE_IT
+        for ability in compile_card_oracle(card).triggered_abilities
+    )
+
+
 def reaches_both_sides(instruction: OracleInstruction | None) -> bool:
     """Whether some step of an ability's effect lands on **its activator's
     side as well as the other** — on every player, or on every permanent a
@@ -1275,6 +1296,7 @@ __all__ = [
     "cards_drawn_by_controller",
     "cards_drawn_by_target",
     "caster_sacrifice_steps",
+    "copies_for_the_spells_before_it",
     "counters_a_spell",
     "destroyed_permanent_filter",
     "is_mana_ability",

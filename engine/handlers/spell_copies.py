@@ -141,10 +141,10 @@ def _offer_copy_new_target(
     ``retarget_choice`` (Psychic Battle's prompt) offers "keep" beside each.
     Before this a storm copy of Reaping the Graves could only return the card
     its original named, and every copy after the first did nothing. Asked of an
-    interactive seat only: for any other the stated policy is the decline
-    ``copy_spell_target``'s default takes, so an AI's or a headless copy is
-    exactly what it was (aiming a copy cleverly is a valuation's job,
-    ``_default_copy_spell_target``).
+    interactive seat; any other seat's answer is measured, as
+    ``copy_spell_target``'s default measures it (``ai_prompts.choose_copy_retarget``:
+    each option rehearsed against keeping the original's), and applied here
+    at once, since no prompt is armed for it.
 
     One target only, as ``copy_spell_target`` asks: a copy that chose several
     keeps them all, which is the offer declined rather than a list for the
@@ -153,9 +153,8 @@ def _offer_copy_new_target(
     if _copy_reaim_is_one_slot(game, copy):
         game.arm_copy_spell_target(seat, copy)
         return
-    if seat not in game.interactive_seats:
-        return
-    from ..stack_targets import change_options, change_slots, target_label
+    from ..stack_targets import (apply_target_change, change_options, change_slots,
+                                 target_label)
     from .retargeting import _target_option
 
     slots = change_slots(game, copy)
@@ -165,6 +164,14 @@ def _offer_copy_new_target(
         return
     options = change_options(slots, [])
     if not options:
+        return
+    if seat not in game.interactive_seats:
+        from ..ai_prompts import choose_copy_retarget
+
+        pick = choose_copy_retarget(game, seat, copy, slots, options)
+        if pick is not None and apply_target_change(game, copy, slots, [pick]):
+            game.log.append(f"{copy.card.name} (copy) targets {target_label(game, pick)}")
+            game.announce_targets_chosen(copy, chooser=seat, newly_targeted=True)
         return
     name = copy.card.name
     game.arm_retarget_choice(
@@ -392,9 +399,10 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         #
         # Never beside a target named on the cast: that caster has answered,
         # and a second question would be the same one asked twice. And only
-        # of a seat somebody is asking — the prompt's default for any other
-        # is "keep the original's", which is what the copy already holds, so
-        # an AI's or a headless Fork is left exactly as it was.
+        # of a seat somebody is asking, so an AI's or a headless Fork keeps
+        # the original's target — unlike the trigger's copies, whose prompt
+        # is armed for every seat and whose default for a seat nobody asks is
+        # measured (``ai_prompts.choose_copy_target``, SCG W2G3).
         game.arm_copy_spell_target(caster_index, game.stack[-1])
     return True, "resolved"
 
