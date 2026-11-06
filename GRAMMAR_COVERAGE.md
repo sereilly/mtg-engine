@@ -53,7 +53,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ONS | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | LGN | 145 | 235 | 71.9% | 71.9% | 47.7% | 108 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| SCG *(measured)* | 143 | 262 | 78.6% | 78.2% | 51.1% | 110 |
+| SCG *(measured)* | 143 | 262 | 82.1% | 81.7% | 54.6% | 119 |
 | **All (shipped)** | **8507** | **12662** | **89.9%** | **89.4%** | **62.1%** | **6671** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -66,9 +66,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 821 | 427 | expected a subject |  |
+| 819 | 425 | expected a subject |  |
 | 180 | 93 | unrecognized effect verb |  |
-| 135 | 71 | unconsumed text |  |
+| 134 | 70 | unconsumed text |  |
 | 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
 | 35 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -83,14 +83,14 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 2 | expected 'top' |  |
 | 3 | 1 | expected 'of' |  |
-| 3 | 2 | expected 'the number of' in a where-clause |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 3 | an Aura's continuous grant is derived by engine/auras.py |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | expected a keyword ability |  |
-| 2 | 2 | expected an object noun |  |
 | 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
+| 1 | 1 | expected 'a' |  |
 
 ## Cards executing through the grammar
 
@@ -153,6 +153,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Accelerate**
   - `Target creature gains haste until end of turn.`
   - `Draw a card.`
+- **Accelerated Mutation**
+  - `Target creature gets +X/+X until end of turn, where X is the greatest mana value among permanents you control.`
 - **Acceptable Losses**
   - `Acceptable Losses deals 5 damage to target creature.`
 - **Accumulated Knowledge**
@@ -1473,6 +1475,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}, Sacrifice a Cleric: Target player loses 2 life and you gain 2 life.`
 - **Cabal Coffers**
   - `{2}, {T}: Add {B} for each Swamp you control.`
+- **Cabal Conditioning**
+  - `Any number of target players each discard a number of cards equal to the greatest mana value among permanents you control.`
 - **Cabal Executioner**
   - `Whenever this creature deals combat damage to a player, that player sacrifices a creature of their choice.`
 - **Cabal Inquisitor**
@@ -2977,6 +2981,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Disorder**
   - `Disorder deals 2 damage to each white creature and each player who controls a white creature.`
   - `Disorder deals 2 damage to each white creature and each player who controls a white creature.`
+- **Dispersal Shield**
+  - `Counter target spell if its mana value is less than or equal to the greatest mana value among permanents you control.`
 - **Dispersing Orb**
   - `{3}{U}, Sacrifice a permanent: Return target permanent to its owner's hand.`
 - **Disrupt**
@@ -3948,6 +3954,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Take an extra turn after this one. At the beginning of that turn's end step, you lose the game.`
   - `Take an extra turn after this one. At the beginning of that turn's end step, you lose the game.`
   - `Take an extra turn after this one. At the beginning of that turn's end step, you lose the game.`
+- **Final Punishment**
+  - `Target player loses life equal to the damage already dealt to that player this turn.`
 - **Finishing Blow**
   - `Destroy target creature or planeswalker.`
 - **Fire // Ice**
@@ -6213,6 +6221,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `This creature can't attack unless defending player controls an Island.`
   - `{U}, Sacrifice an Island: Target land an opponent controls becomes an Island until end of turn.`
   - `When you control no Islands, sacrifice this creature.`
+- **Kurgadon**
+  - `Whenever you cast a creature spell with mana value 6 or greater, put three +1/+1 counters on this creature.`
 - **Kyren Archive**
   - `At the beginning of your upkeep, you may exile the top card of your library face down.`
   - `{5}, Discard your hand, Sacrifice this artifact: Put all cards exiled with this artifact into their owner's hand.`
@@ -8641,6 +8651,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Pyromania**
   - `{1}{R}, Discard a card at random: This enchantment deals 1 damage to any target.`
   - `{1}{R}, Sacrifice this enchantment: It deals 1 damage to any target.`
+- **Pyrostatic Pillar**
+  - `Whenever a player casts a spell with mana value 3 or less, this enchantment deals 2 damage to that player.`
 - **Pyrotechnics**
   - `Pyrotechnics deals 4 damage divided as you choose among any number of targets.`
   - `Pyrotechnics deals 4 damage divided as you choose among any number of targets.`
@@ -9167,6 +9179,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card.`
 - **Reviving Vapors**
   - `Reveal the top three cards of your library and put one of them into your hand. You gain life equal to that card's mana value. Put all other cards revealed this way into your graveyard.`
+- **Reward the Faithful**
+  - `Any number of target players each gain life equal to the greatest mana value among permanents you control.`
 - **Rewards of Diversity**
   - `Whenever an opponent casts a multicolored spell, you gain 4 life.`
 - **Rewind**
@@ -9459,6 +9473,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: Target attacking creature gets +2/+0 until end of turn. When that creature leaves the battlefield this turn, sacrifice this artifact. If the creature deals damage to a creature this turn, the creature dealt damage can't be regenerated this turn. If a creature dealt damage by the targeted creature would die this turn, exile that creature instead.`
 - **Rupture**
   - `Sacrifice a creature. Rupture deals damage equal to that creature's power to each creature without flying and each player.`
+- **Rush of Knowledge**
+  - `Draw cards equal to the greatest mana value among permanents you control.`
 - **Rushing River**
   - `Return target nonland permanent to its owner's hand. If this spell was kicked, return another target nonland permanent to its owner's hand.`
 - **Rushwood Elemental**
@@ -11797,6 +11813,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this artifact: Exile target player's graveyard.`
 - **Tornado**
   - `{2}{G}, Pay 3 life for each velocity counter on this enchantment: Destroy target permanent and put a velocity counter on this enchantment. Activate only once each turn.`
+- **Torrent of Fire**
+  - `Torrent of Fire deals damage to any target equal to the greatest mana value among permanents you control.`
 - **Torrent of Lava**
   - `Torrent of Lava deals X damage to each creature without flying.`
 - **Torture**
