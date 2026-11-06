@@ -110,7 +110,28 @@ class TargetEnumerationMixin:
         # is why the web layer enumerated a mode's targets through a second
         # path (``for_cast=False``) that skipped the arms altogether.
         mode_index: int | None = None,
+        # The stack object whose targets these are, for a caller enumerating
+        # them from **outside** that object's own resolution: a retarget's
+        # candidates (CR 115.7a), a copy's new targets (CR 707.10c). While the
+        # list is built, *card* names that object (``Game.judged_stack_items``),
+        # so the legality below judges the spell by what it is now — a Lace's
+        # colour, Fork's red — and not by its printed card. None for a spell
+        # being cast (it is on no stack yet) and for the object resolving,
+        # which ``Game.resolving_items`` already names.
+        stack_item=None,
     ) -> list[dict]:
+        if stack_item is not None:
+            from .object_colors import judging_targets_of
+
+            with judging_targets_of(self, stack_item):
+                return self._enumerate_targets(
+                    caster_index, card, spec, for_cast=for_cast,
+                    ability_instruction=ability_instruction,
+                    source_permanent=source_permanent,
+                    ability_source=ability_source, triggered=triggered,
+                    optional_cost_payments=optional_cost_payments,
+                    mode_index=mode_index,
+                )
         kind = spec["kind"]
         if kind in ("none", "modal"):
             return []

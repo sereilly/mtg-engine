@@ -36,6 +36,8 @@ a colour override applied to the wrong seat's cards is the card backwards.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 #: The printed colour word as the symbol the rest of the engine spells a colour
 #: with. A third copy of this map would be a third chance to disagree, so the
 #: two that exist (``layer_bridge``'s for permanents and this one) are the whole
@@ -130,27 +132,72 @@ def card_colors(game=None, card=None, seat=None) -> tuple[str, ...]:
     return override if override is not None else printed
 
 
+def _names_the_spell(item, card) -> bool:
+    """Whether *card* is how a reader holding only a card names the spell
+    *item*: its printed card, or what it says now (CR 612,
+    ``text_changes.spell_text_card`` — memoised by the changes, so one text
+    is one object). Never an ability, whose ``card`` is its source's."""
+    if item is None or card is None or getattr(item, "is_ability", True):
+        return False
+    printed = getattr(item, "card", None)
+    if printed is None:
+        return False
+    if printed is card:
+        return True
+    from .text_changes import spell_text_card
+
+    return spell_text_card(item) is card
+
+
 def spell_colors(game=None, card=None, seat=None) -> tuple[str, ...]:
-    """The colours of *card* **as the spell it is now**: where *card* is the
-    spell resolving (``Game.resolving_items``' last entry, not an ability),
-    the stack object's own colours (``Game._stack_item_colors`` — a Lace's
-    recolour on the object, then the controller's board), else
-    :func:`card_colors`.
+    """The colours of *card* **as the spell it is now**: where *card* names a
+    stack object this game can say is the one asked about, that object's own
+    colours (``Game._stack_item_colors`` — a Lace's recolour on the object,
+    then the controller's board), else :func:`card_colors`.
 
     A spell reaches protection and the damage paths as its printed card, which
     records nothing an effect did to it on the stack: Purelace made a Lightning
     Bolt white, and the Bolt — read through :func:`card_colors` — went on being
     red, dealt its 3 to a Black Knight (protection from white, CR 702.16b/e)
-    and was stopped by protection from red. Only the resolving object is
-    asked: every copy of a card in a game is one ``CardDefinition``, so
-    identity names the spell only while it is the one resolving.
+    and was stopped by protection from red. Every copy of a card in a game is
+    one ``CardDefinition``, so identity names a spell only where the game says
+    which object is meant, and two places say it:
+
+    * the object whose targets are being **judged** from outside its own
+      resolution (``Game.judged_stack_items``, :func:`judging_targets_of`) —
+      a retarget's candidates (CR 115.7a), a copy's new targets (CR 707.10c),
+      asked while some *other* object resolves. First, because a copy made
+      during its original's resolution (Chain Lightning) shares the original's
+      card and is not the original: the Lace that made the original white is
+      not a copiable value (CR 707.2), and Fork's copy is red where its
+      original was not;
+    * the object **resolving** (``Game.resolving_items``' last entry).
     """
-    items = getattr(game, "resolving_items", None) if game is not None else None
-    if items:
-        item = items[-1]
-        if getattr(item, "card", None) is card and not getattr(item, "is_ability", True):
-            return tuple(game._stack_item_colors(item))
+    if game is not None:
+        for items in (
+            getattr(game, "judged_stack_items", None),
+            getattr(game, "resolving_items", None),
+        ):
+            if items and _names_the_spell(items[-1], card):
+                return tuple(game._stack_item_colors(items[-1]))
     return card_colors(game, card, seat)
+
+
+@contextmanager
+def judging_targets_of(game, item):
+    """While the block runs, a bare card naming *item* is *item*
+    (:func:`spell_colors`): the legal targets being enumerated are the stack
+    object's, judged by what it is now. Pushed by
+    ``_enumerate_targets(stack_item=…)``; a no-op for ``None``."""
+    if item is None or game is None:
+        yield
+        return
+    judged = game.judged_stack_items
+    judged.append(item)
+    try:
+        yield
+    finally:
+        judged.pop()
 
 
 def object_colors(game, obj, seat=None) -> tuple[str, ...]:
@@ -300,5 +347,6 @@ def of_each_color(game, permanents) -> bool:
 __all__ = [
     "ALL_COLORS", "card_colors", "color_override_for_seat", "colors_among",
     "colors_among_described",
-    "is_multicolored", "object_colors", "of_each_color", "share_a_color",
+    "is_multicolored", "judging_targets_of", "object_colors", "of_each_color",
+    "share_a_color",
 ]

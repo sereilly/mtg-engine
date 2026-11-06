@@ -644,7 +644,11 @@ class SpellChoicesMixin:
             return False
         offered: list[dict] = []
         for candidate in self._enumerate_targets(
-            player_index, copy_item.card, spec, for_cast=True
+            player_index, copy_item.card, spec, for_cast=True,
+            # The copy as it is (CR 707.2, 707.10c): Fork's is red, and one made
+            # while its original resolves is not that original — a Lace on it
+            # is not copied — though the two share one card.
+            stack_item=copy_item,
         ):
             if candidate.get("kind") == "player":
                 seat = candidate.get("seat")

@@ -767,6 +767,11 @@ def _candidates(
         source_permanent=getattr(item, "source_permanent", None),
         ability_source=getattr(item, "source_permanent", None) if is_ability else None,
         triggered=triggered,
+        # The object judged as it is now (a Lace's colour, a copy's own), not
+        # as its printed card: a change is asked from inside another object's
+        # resolution (Psychic Battle, Grip of Chaos, a copy's re-aim) — and,
+        # for CR 608.2b's re-check, the object's own.
+        stack_item=item,
     )
     depth = len(game.stack)
     address = {"channel": current.channel, "position": current.position, "mode": current.mode}

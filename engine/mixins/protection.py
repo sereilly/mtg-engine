@@ -707,14 +707,24 @@ class ProtectionMixin:
         if caster_index is not None and caster_index != self.controller_index_of(target):
             if self._has_keyword(target, "hexproof"):
                 return False
-            if source_card is not None:
+            if source_card is not None or ability_source is not None:
                 # The same layer-5 reading the protection block above makes,
                 # and for the same reason: "hexproof from black" asks what
                 # colour the spell **is** (CR 702.11d), which is not the field
-                # printed on the card.
-                from ..object_colors import card_colors
+                # printed on the card — the stack object's own colour where the
+                # card names one (``spell_colors``: a Lace, Fork's red copy),
+                # and for an ability the colour of its source **as a
+                # permanent** ("abilities … from [quality] sources", the
+                # layers' answer, as protection asks it above). It read the
+                # printed card through the board (``card_colors``), so a Bolt a
+                # Thoughtlace had made blue went on targeting Sporeweb Weaver.
+                from ..object_colors import object_colors, spell_colors
 
-                source_colors = set(card_colors(self, source_card, caster_index))
+                source_colors = set(
+                    object_colors(self, ability_source)
+                    if ability_source is not None
+                    else spell_colors(self, source_card, caster_index)
+                )
                 for word, symbol in _COLOR_WORD_TO_SYMBOL.items():
                     if symbol in source_colors and self._has_keyword(
                         target, f"hexproof from {word}"
