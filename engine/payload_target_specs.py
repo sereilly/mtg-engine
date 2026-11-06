@@ -819,6 +819,11 @@ def _reanimation_spec(payload: dict) -> dict | None:
     # so ignoring it is the whole restriction gone.
     if payload.get("graveyard_mana_value"):
         spec["graveyard_mana_value"] = dict(payload["graveyard_mana_value"])
+    # "target **Dragon** permanent card" (Bladewing the Risen): the subtype on
+    # the key the handler re-checks (``graveyard_card_matches``), for the type's
+    # reason above — a picker without it offers every creature card.
+    if payload.get("graveyard_subtypes"):
+        spec["graveyard_subtypes"] = list(payload["graveyard_subtypes"])
     return spec
 
 

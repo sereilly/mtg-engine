@@ -27,7 +27,7 @@ from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
                       _EVENT_SUBJECT_PLAYERS, _back_reference_payload,
                       trigger_quantity_key)
 from ._record_keys import (BOARD_LOOP_OBJECT, LOOP_BOUND_OBJECT,
-                           SWEPT_CONTROLLER_SEATS,
+                           SWEPT_CONTROLLER_SEATS, _PRODUCED_QUANTITIES,
                            _RECORDED_PERMANENTS)
 from ._amounts import count_spec, printed_count_spec
 from ._common import (
@@ -657,6 +657,19 @@ def _stamp_token_count(
                     node=node,
                 )
             payload["count"] = {"seat_record": node.count.source}
+            return payload["count"]
+        # "Exile all creatures you control. Then create **that many** 5/5 red
+        # Dragon creature tokens with flying." (Day of the Dragons.) A step of
+        # *this* effect produced the number, and it is the nearer antecedent —
+        # ``_events._back_reference_payload``'s rule, which every other family
+        # reading a bare "that many" asks and this one did not: it read
+        # ``trigger_count``, a key nothing in an entry trigger writes, and the
+        # enchantment exiled every creature its controller had and made no
+        # Dragons at all. Only when the effect produced **exactly one**
+        # quantity, for that function's reason.
+        within = tuple(sorted(produced & _PRODUCED_QUANTITIES))
+        if len(within) == 1 and not node.count.bonus:
+            payload["count"] = {"amount_from": within[0]}
             return payload["count"]
         # "create that many … tokens" — the count is the firing event's own
         # number (a delayed attack trigger's matching attackers), recorded by

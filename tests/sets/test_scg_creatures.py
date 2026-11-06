@@ -143,6 +143,89 @@ def test_w1g6_bladewings_thrall_returns_under_its_owner_for_an_opponents_dragon(
     _w1g6_resolve_stack(declined)
     assert [card.name for card in declined.players[0].graveyard] == ["Bladewing's Thrall"]
 
+
+def _w1g6_cast_bladewing(game):
+    game._close_current_priority_step()
+    assert game.queue_from_hand(0, "Bladewing the Risen").supported
+
+
+def test_w1g6_bladewing_the_risen_offers_only_a_dragon_permanent_card(set_pool):
+    """"…return target Dragon permanent card from your graveyard to the
+    battlefield." The picker offers the Shivan Dragon and neither the Grizzly
+    Bears nor the Lightning Bolt beside it."""
+    game = _w1g6_table(
+        set_pool, hand=["Bladewing the Risen"],
+        graveyard=["Grizzly Bears", "Shivan Dragon", "Lightning Bolt"],
+    )
+    spec = game.cast_target_spec(0, _w1g6_card(set_pool, "Bladewing the Risen"))
+    assert [t["name"] for t in spec["valid_targets"]] == ["Shivan Dragon"]
+    _w1g6_cast_bladewing(game)
+    _w1g6_settle(game)
+    assert {p.card.name for p in game.controlled_by(0)} == {
+        "Bladewing the Risen", "Shivan Dragon",
+    }
+    assert sorted(c.name for c in game.players[0].graveyard) == [
+        "Grizzly Bears", "Lightning Bolt",
+    ]
+
+
+def test_w1g6_bladewing_the_risen_asked_names_its_dragon_and_may_decline(set_pool):
+    """An asked seat names the target as the trigger goes on the stack (CR
+    603.3d) — offered the Dragon alone — and then answers the "may"."""
+    for accept in (True, False):
+        game = _w1g6_table(
+            set_pool, hand=["Bladewing the Risen"],
+            graveyard=["Grizzly Bears", "Shivan Dragon"], interactive={0},
+        )
+        _w1g6_cast_bladewing(game)
+        game.resolve_top_of_stack()
+        (choice,) = game.pending_choices
+        assert choice.kind == "trigger_target"
+        assert [t["name"] for t in choice.data["targets"]] == ["Shivan Dragon"]
+        assert game.resolve_pending_choice(
+            "trigger_target", 0, seat=0, graveyard_index=1
+        )
+        game.resolve_top_of_stack()
+        assert game.confirm_optional_pay(0, "Bladewing the Risen", accept=accept)
+        _w1g6_resolve_stack(game)
+        returned = [p.card.name for p in game.controlled_by(0)]
+        assert ("Shivan Dragon" in returned) is accept
+
+
+def test_w1g6_bladewing_the_risen_does_nothing_when_its_target_leaves_first(set_pool):
+    """CR 608.2b in response: the targeted Dragon card leaves the graveyard
+    with the trigger on the stack, so the trigger has no legal target and
+    nothing comes back — and no other card is taken in its place."""
+    game = _w1g6_table(
+        set_pool, hand=["Bladewing the Risen"],
+        graveyard=["Shivan Dragon", "Shivan Dragon"],
+    )
+    _w1g6_cast_bladewing(game)
+    game.resolve_top_of_stack()
+    assert [item.card.name for item in game.stack] == ["Bladewing the Risen"]
+    pile = game.players[0].graveyard
+    game.players[0].exile.append(pile.pop(0))
+    game.players[0].exile.append(pile.pop(0))
+    _w1g6_settle(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Bladewing the Risen"]
+
+
+def test_w1g6_bladewing_the_risen_pumps_dragon_creatures(set_pool):
+    """"{B}{R}: Dragon creatures get +1/+1 until end of turn" — every Dragon,
+    the opponent's too, and nothing else; gone at cleanup."""
+    game = _w1g6_table(set_pool)
+    bladewing = _w1g6_enter(game, set_pool, 0, "Bladewing the Risen")
+    _w1g6_settle(game)
+    theirs = _w1g6_enter(game, set_pool, 1, "Shivan Dragon")
+    bears = _w1g6_enter(game, set_pool, 0, "Grizzly Bears")
+    assert game.activate_permanent_ability(0, "Bladewing the Risen").supported
+    _w1g6_resolve_stack(game)
+    assert (bladewing.effective_power, bladewing.effective_toughness) == (5, 5)
+    assert (theirs.effective_power, theirs.effective_toughness) == (6, 6)
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+    game.resolve_cleanup_step(0)
+    assert (theirs.effective_power, theirs.effective_toughness) == (5, 5)
+
 # ==== end W1G6 ======================================================
 
 

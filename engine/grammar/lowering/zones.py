@@ -33,6 +33,7 @@ from ...oracle_types import OracleInstruction, REVEALED_TOP_CARDS_BY_SEAT
 from ...subject_filters import SOURCE_RESOLVED_CARD_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
+from ..vocabulary import PERMANENT_CARD_TYPES
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ._deaths import BOUND_CARD_EVENTS
 from ._described_returns import _graveyard_to_hand_payload
@@ -227,13 +228,13 @@ def _lower_put_on_library_top(
 
 #: CR 110.4a: "an artifact, battle, creature, enchantment, land, or
 #: planeswalker card" — what "permanent card" names, for a pick out of a hand
-#: whose phrase printed no type of its own (Ugin's −10). The hand-card matcher
+#: (Ugin's −10). The parse records it on the phrase itself now
+#: (``vocabulary.PERMANENT_CARD_TYPES``), and this is the same tuple for a
+#: filter built without it. The hand-card matcher
 #: (``handlers._filters._card_matches_filter``) reads a ``type_filter`` list as
 #: a union, the spelling Tempting Wurm's "artifact, creature, enchantment,
 #: and/or land cards" lowers to.
-_PERMANENT_CARD_TYPES = (
-    "artifact", "battle", "creature", "enchantment", "land", "planeswalker",
-)
+_PERMANENT_CARD_TYPES = PERMANENT_CARD_TYPES
 
 
 #: What a bottomed graveyard card may be narrowed by: exactly the printed

@@ -64,7 +64,7 @@ from tests.helpers import resolve_stack as _w1g6_resolve_stack
 
 
 def _w1g6_card(set_pool, name):
-    for code in ("SCG", "LEA", "LEG", "USG", "ONS", "STH"):
+    for code in ("SCG", "LEA", "LEG", "USG", "ONS", "STH", "TMP", "ARN"):
         pool = set_pool(code)
         if name in pool:
             return pool[name]
@@ -248,6 +248,236 @@ def test_w1g6_dragon_auras_cast_from_the_hand_still_enchant(set_pool):
     assert _w1g6_attached(game, "Dragon Shadow") == [bears]
     assert bears.effective_power == 3
     assert game._has_keyword(bears, "fear")
+
+
+def _w1g6_enchant(game, aura, host):
+    """Cast *aura* from seat 0's hand onto *host* and resolve it."""
+    game._close_current_priority_step()
+    assert game.queue_from_hand(
+        0, aura, target_permanent_ids=[host.permanent_id]
+    ).supported
+    _w1g6_resolve_stack(game)
+    (attached,) = [p for p in game.all_permanents() if p.card.name == aura]
+    assert attached.metadata.get("attached_to") is host
+    return attached
+
+
+def _w1g6_pt(perm):
+    return perm.effective_power, perm.effective_toughness
+
+
+# --- Clutch of Undeath ------------------------------------------------------
+
+
+def test_w1g6_clutch_of_undeath_pumps_a_zombie_and_shrinks_anything_else(set_pool):
+    """"Enchanted creature gets +3/+3 as long as it's a Zombie. Otherwise, it
+    gets -3/-3." Gravedigger (a Zombie) is 5/5; a Grizzly Bears is -1/-1 and
+    dies to the state-based check."""
+    game = _w1g6_table(set_pool, hand=["Clutch of Undeath"])
+    digger = _w1g6_enter(game, set_pool, 0, "Gravedigger")
+    _w1g6_settle(game)
+    _w1g6_enchant(game, "Clutch of Undeath", digger)
+    assert _w1g6_pt(digger) == (5, 5)
+
+    game = _w1g6_table(set_pool, hand=["Clutch of Undeath"])
+    bears = _w1g6_enter(game, set_pool, 1, "Grizzly Bears")
+    _w1g6_enchant(game, "Clutch of Undeath", bears)
+    assert _w1g6_pt(bears) == (-1, -1)
+    game.check_state_based_actions()
+    assert not game.is_on_battlefield(bears)
+    assert "Clutch of Undeath" in _w1g6_graveyard(game)
+
+
+def test_w1g6_clutch_of_undeath_switches_arms_when_its_host_becomes_a_zombie(set_pool):
+    """The criterion is re-asked through layer 4 (CR 611.3b): a Craw Wurm
+    under the Clutch is 3/1, and made a Zombie it is 9/7."""
+    from engine.type_changes import gain_types as _w1g6_gain_types
+
+    game = _w1g6_table(set_pool, hand=["Clutch of Undeath"])
+    wurm = _w1g6_enter(game, set_pool, 0, "Craw Wurm")
+    _w1g6_enchant(game, "Clutch of Undeath", wurm)
+    assert _w1g6_pt(wurm) == (3, 1)
+    _w1g6_gain_types(wurm, subtypes=["Zombie"], source="test")
+    game._recompute_continuous_effects()
+    assert _w1g6_pt(wurm) == (9, 7)
+
+
+# --- Pemmin's Aura ----------------------------------------------------------
+
+
+def test_w1g6_pemmins_aura_asks_which_pump_as_it_resolves(set_pool):
+    """"{1}: Enchanted creature gets +1/-1 or -1/+1 until end of turn." The
+    choice is made on resolution (CR 608.2d): an asked seat is offered both
+    printed options and gets the one it picks, until end of turn."""
+    for pick, expected in ((0, (3, 1)), (1, (1, 3))):
+        game = _w1g6_table(set_pool, hand=["Pemmin's Aura"], interactive={0})
+        bears = _w1g6_enter(game, set_pool, 0, "Grizzly Bears")
+        _w1g6_enchant(game, "Pemmin's Aura", bears)
+        assert game.activate_permanent_ability(
+            0, "Pemmin's Aura", ability_index=3,
+        ).supported
+        game.resolve_top_of_stack()
+        (choice,) = game.pending_choices
+        assert choice.kind == "mode_choice"
+        assert choice.data["labels"] == ["+1/-1", "-1/+1"]
+        assert game.resolve_pending_choice("mode_choice", 0, mode_index=pick)
+        _w1g6_resolve_stack(game)
+        assert _w1g6_pt(bears) == expected
+        game.resolve_cleanup_step(0)
+        assert _w1g6_pt(bears) == (2, 2)
+
+
+def test_w1g6_pemmins_aura_untaps_and_grants_flying_and_shroud(set_pool):
+    """The other three abilities, driven attached: untap, flying, shroud."""
+    game = _w1g6_table(set_pool, hand=["Pemmin's Aura"])
+    bears = _w1g6_enter(game, set_pool, 0, "Grizzly Bears")
+    _w1g6_enchant(game, "Pemmin's Aura", bears)
+    bears.tapped = True
+    for index in range(3):
+        assert game.activate_permanent_ability(
+            0, "Pemmin's Aura", ability_index=index,
+        ).supported
+        _w1g6_resolve_stack(game)
+    assert not bears.tapped
+    assert game._has_keyword(bears, "flying")
+    assert game._has_keyword(bears, "shroud")
+
+
+# --- Uncontrolled Infestation -----------------------------------------------
+
+
+def _w1g6_infested(set_pool, *, tapped=False):
+    game = _w1g6_table(set_pool, hand=["Uncontrolled Infestation", "Twiddle"])
+    city = _W1G6Permanent(card=_w1g6_card(set_pool, "City of Brass"), tapped=tapped)
+    forest = _W1G6Permanent(card=_w1g6_card(set_pool, "Forest"))
+    game.players[1].battlefield.extend([city, forest])
+    game._sync_control()
+    return game, city, forest
+
+
+def test_w1g6_uncontrolled_infestation_enchants_only_a_nonbasic_land(set_pool):
+    """"Enchant nonbasic land": the picker offers the City of Brass and not
+    the Forest, and a cast naming the Forest is refused (CR 601.2c)."""
+    game, city, forest = _w1g6_infested(set_pool)
+    card = _w1g6_card(set_pool, "Uncontrolled Infestation")
+    spec = game.cast_target_spec(0, card)
+    assert [t["name"] for t in spec["valid_targets"]] == ["City of Brass"]
+    game._close_current_priority_step()
+    refused = game.queue_from_hand(
+        0, "Uncontrolled Infestation", target_permanent_ids=[forest.permanent_id]
+    )
+    assert not refused.supported
+    _w1g6_enchant(game, "Uncontrolled Infestation", city)
+
+
+def test_w1g6_uncontrolled_infestation_destroys_the_land_tapped_for_mana(set_pool):
+    """"When enchanted land becomes tapped, destroy it" — and tapping for mana
+    is becoming tapped (CR 106.12's event, every road)."""
+    game, city, _forest = _w1g6_infested(set_pool)
+    _w1g6_enchant(game, "Uncontrolled Infestation", city)
+    assert game.tap_land_for_mana(
+        1, "City of Brass", chosen_color="R", permanent_id=city.permanent_id,
+    )
+    _w1g6_settle(game)
+    assert not game.is_on_battlefield(city)
+    assert "City of Brass" in _w1g6_graveyard(game, 1)
+
+
+def test_w1g6_uncontrolled_infestation_on_a_tapped_land_waits_for_the_next_tap(set_pool):
+    """Ruling 2004-10-04: "It only triggers if the land becomes tapped after
+    this Aura is on it. Attaching it to a tapped land will not destroy the
+    land until the next time the land is untapped and then tapped again." —
+    and an effect's tap (Twiddle) is a tap too."""
+    game, city, _forest = _w1g6_infested(set_pool, tapped=True)
+    _w1g6_enchant(game, "Uncontrolled Infestation", city)
+    assert game.is_on_battlefield(city)
+    assert city.tapped
+    city.tapped = False
+    assert game.queue_from_hand(
+        0, "Twiddle", target_permanent_ids=[city.permanent_id]
+    ).supported
+    _w1g6_settle(game)
+    assert not game.is_on_battlefield(city)
+
+
+def test_w1g6_uncontrolled_infestation_falls_off_a_land_that_becomes_basic(set_pool):
+    """The supertype half of the enchant clause is enforced by the CR 704.5m
+    sweep as well as the cast, through layer 4: made basic, the City is no
+    longer a legal host and the Aura goes to the graveyard."""
+    from engine.type_changes import gain_types as _w1g6_gain_types
+
+    game, city, _forest = _w1g6_infested(set_pool)
+    aura = _w1g6_enchant(game, "Uncontrolled Infestation", city)
+    _w1g6_gain_types(city, supertypes=["Basic"], source="test")
+    game.check_state_based_actions()
+    assert not game.is_on_battlefield(aura)
+    assert "Uncontrolled Infestation" in _w1g6_graveyard(game)
+    assert game.is_on_battlefield(city)
+
+
+# --- Alpha Status (a red on the base) ---------------------------------------
+
+
+def test_w1g6_alpha_status_counts_each_other_creature_sharing_a_type_once(set_pool):
+    """"+2/+2 for each other creature on the battlefield that shares a
+    creature type with it" — "it" is the enchanted creature. An Elf Warrior
+    beside an Elf Druid, a Human Soldier, an opponent's Goblin Warrior and a
+    Bear: two share a type, +4/+4. A second Elf Warrior shares both and is
+    counted once (ruling 2004-10-04): +6/+6. It compiled supported and gave
+    +0/+0 on every board, the "it" bound to nothing."""
+    game = _w1g6_table(set_pool, hand=["Alpha Status"])
+    host = _w1g6_enter(game, set_pool, 0, "Elvish Warrior")
+    for seat, name in ((0, "Wirewood Elf"), (0, "Glory Seeker"),
+                       (1, "Goblin Sky Raider"), (1, "Grizzly Bears")):
+        _w1g6_enter(game, set_pool, seat, name)
+    _w1g6_settle(game)
+    _w1g6_enchant(game, "Alpha Status", host)
+    assert _w1g6_pt(host) == (2 + 4, 3 + 4)
+    _w1g6_enter(game, set_pool, 1, "Elvish Warrior")
+    game._recompute_continuous_effects()
+    assert _w1g6_pt(host) == (2 + 6, 3 + 6)
+
+
+# --- Day of the Dragons (a red on the base) ---------------------------------
+
+
+def test_w1g6_day_of_the_dragons_makes_a_dragon_for_each_creature_it_exiled(set_pool):
+    """"Exile all creatures you control. Then create that many 5/5 red Dragon
+    creature tokens with flying." Two creatures and a token of the caster's,
+    one of the opponent's: three Dragons (ruling 2017-11-17: "Token creatures
+    will count"). Leaving, it sacrifices the Dragons and returns the two
+    nontoken cards. The count read a key nothing in the trigger wrote, and it
+    made no Dragons at all."""
+    from engine.tokens import make_token_card as _w1g6_make_token_card
+
+    game = _w1g6_table(set_pool, hand=["Day of the Dragons", "Disenchant"])
+    _w1g6_enter(game, set_pool, 0, "Grizzly Bears")
+    _w1g6_enter(game, set_pool, 0, "Craw Wurm")
+    token = _W1G6Permanent(card=_w1g6_make_token_card(
+        name="Soldier Token", power=1, toughness=1, type_line="Creature — Soldier",
+    ))
+    token.metadata["is_token"] = True
+    game._put_permanent_onto_battlefield(0, token, None)
+    theirs = _w1g6_enter(game, set_pool, 1, "Grizzly Bears")
+    _w1g6_settle(game)
+    game._close_current_priority_step()
+    assert game.queue_from_hand(0, "Day of the Dragons").supported
+    _w1g6_settle(game)
+    dragons = [p for p in game.controlled_by(0) if p.card.name == "Dragon Token"]
+    assert len(dragons) == 3
+    assert all(_w1g6_pt(d) == (5, 5) and game._has_keyword(d, "flying") for d in dragons)
+    assert game.is_on_battlefield(theirs)
+    assert sorted(c.name for c in game.players[0].exile) == ["Craw Wurm", "Grizzly Bears"]
+
+    day = next(p for p in game.all_permanents() if p.card.name == "Day of the Dragons")
+    assert game.queue_from_hand(
+        0, "Disenchant", target_permanent_ids=[day.permanent_id]
+    ).supported
+    _w1g6_settle(game)
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Craw Wurm", "Grizzly Bears",
+    ]
+    assert not game.players[0].exile
 
 # ==== end W1G6 ======================================================
 

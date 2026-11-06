@@ -34,7 +34,8 @@ from .readers import _SELF_NOUNS, accept_source_reference
 from .vocabulary import GENERIC_NOUNS as _GENERIC_NOUNS
 from .vocabulary import singular as _singular
 from .vocabulary import (ALL_SUBTYPES, CARD_TYPES, COLOR_WORDS, CREATURE_TYPES,
-                         SUBTYPE_INDEX, SUPERTYPES, TYPE_LINE_SUPERTYPES, match_longest)
+                         PERMANENT_CARD_TYPES, SUBTYPE_INDEX, SUPERTYPES,
+                         TYPE_LINE_SUPERTYPES, match_longest)
 
 # Head nouns that are not card types but name a set of objects. "target" is one
 # of them: Fireball's "among any number of targets" uses it as a bare noun.
@@ -799,6 +800,17 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # same way a type word's is — see _accept_card_noun.
             if not d.is_card and _accept_card_noun(stream):
                 d.is_card = True
+                # CR 110.4a: "permanent card" is "an artifact, battle,
+                # creature, enchantment, land, or planeswalker card" — a
+                # narrowing, recorded as the type union every card matcher
+                # already reads. Consumed and dropped, "Return target
+                # permanent card from your graveyard to your hand" (Fungal
+                # Rebirth) lowered to Regrowth's "any card" and returned a
+                # Lightning Bolt. Only for the bare noun: after a subtype
+                # ("a Goblin permanent card") the subtype has already said
+                # what the card is.
+                if singular == "permanent" and not d.card_types and not d.subtypes:
+                    d.card_types.extend(PERMANENT_CARD_TYPES)
             # "target spell or permanent" (the Lace cycle) unions two *generic*
             # nouns. Neither contributes a card type, so the union restricts
             # nothing about the *permanent* — but it is not nothing: it names a

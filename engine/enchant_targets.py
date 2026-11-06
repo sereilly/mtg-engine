@@ -97,8 +97,17 @@ _ENCHANT_COLOUR = (
 _ENCHANT_NOUN_UNION = (
     rf"(?:{'|'.join(_ENCHANT_NOUNS)})(?: or (?:{'|'.join(_ENCHANT_NOUNS)}))*"
 )
+#: "Enchant **nonbasic** land" (Uncontrolled Infestation). CR 205.4's
+#: supertype, a fifth independent half of CR 702.5's [quality] — so it
+#: composes with the others instead of multiplying the rows, as each half
+#: before it does. Only the negated "basic" is printed in the pool, and only it
+#: is admitted: a positive "Enchant basic land" or "Enchant snow land" is one
+#: alternative to add the day a card prints it, and until then the line refuses
+#: (the keyword exclusion's rule above).
+_ENCHANT_SUPERTYPE_EXCLUSION = r"(?:nonbasic )?"
 _ENCHANT_SUBJECT = (
     rf"{_ENCHANT_COLOUR}"
+    rf"{_ENCHANT_SUPERTYPE_EXCLUSION}"
     rf"{_ENCHANT_NEGATION}"
     rf"{_ENCHANT_NOUN_UNION}"
     rf"{_ENCHANT_KEYWORD_EXCLUSION}"
@@ -152,6 +161,24 @@ _ENCHANT_WITHOUT = re.compile(r"^(?P<noun>.+?) without (?P<keyword>[a-z]+)$")
 # a seat restriction the card never printed. The line structure is the only
 # thing that says where the clause ends, so the reader keeps it.
 _WHOLE_ENCHANT_LINE = re.compile(rf"^enchant ({_ENCHANT_SUBJECT})$")
+
+
+_ENCHANT_NONSUPERTYPE = re.compile(r"^non(?P<supertype>basic) (?P<noun>.+)$")
+
+
+def enchant_subject_supertype_exclusion(subject: str) -> tuple[str, str | None]:
+    """Split an enchant subject into its noun and the supertype it excludes.
+
+    ``"nonbasic land"`` -> ``("land", "basic")``; a subject with no such word
+    -> ``(subject, None)``. Asked after the colour half is off (the order the
+    words are printed in), by the picker, the cast gate, the attach predicate
+    and the CR 704.5m sweep — one split, for :func:`enchant_subject_seat`'s
+    reason.
+    """
+    match = _ENCHANT_NONSUPERTYPE.match(subject)
+    if match is None:
+        return subject, None
+    return match.group("noun"), match.group("supertype")
 
 
 def enchant_subject_seat(subject: str) -> tuple[str, str | None]:
@@ -262,6 +289,7 @@ def enchant_clause_nouns(clause: str) -> tuple[str, ...]:
     """
     noun = enchant_subject_seat(clause)[0]
     noun = enchant_subject_colours(noun)[0]
+    noun = enchant_subject_supertype_exclusion(noun)[0]
     if noun.startswith("non-"):
         noun = noun.split(" ", 1)[1] if " " in noun else noun
     return tuple(part.strip() for part in noun.split(" or "))
@@ -358,6 +386,12 @@ def enchant_subject_spec(subject: str) -> dict | None:
     # the picker offers exactly the legal hosts rather than a superset, and the
     # gate enforces it off this same split.
     noun, colours, colours_excluded = enchant_subject_colours(noun)
+    # "Enchant **nonbasic** land" (Uncontrolled Infestation). Carried into the
+    # spec's ``filter`` — the noun phrase the enumerator asks
+    # ``subject_matches`` of, where ``exclude_supertypes`` is a testable key
+    # answered through layer 4 (``has_supertype``) — so the picker offers only
+    # the legal hosts, and the gate enforces it off this same split.
+    noun, excluded_supertype = enchant_subject_supertype_exclusion(noun)
     # "Enchant **artifact or creature**" (Teferi's Curse). A union has no one
     # noun to key a spec on, so it takes the general permanent picker and the
     # gate narrows it — the safe direction, and the same one the negated-subtype
@@ -376,6 +410,11 @@ def enchant_subject_spec(subject: str) -> dict | None:
         spec["exclude_colors" if colours_excluded else "any_colors"] = list(colours)
     if without_keyword is not None:
         spec["without_keyword"] = without_keyword
+    if excluded_supertype is not None:
+        spec["filter"] = {
+            **(spec.get("filter") or {}),
+            "exclude_supertypes": [excluded_supertype],
+        }
     flag = _ENCHANT_SEAT_TO_FLAG.get(seat)
     if flag is not None:
         spec[flag] = True

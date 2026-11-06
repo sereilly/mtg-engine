@@ -101,6 +101,30 @@ def _resolve_per_each_pronoun(node: ast.Pump) -> ast.Pump:
     )
 
 
+def _per_each_shares_with_host(node: ast.Pump) -> ast.Pump:
+    """"**Enchanted creature** gets +2/+2 for each other creature on the
+    battlefield that shares a creature type with **it**." (Alpha Status.)
+
+    :func:`_resolve_per_each_pronoun`'s argument, one subject over: the pump's
+    own subject is the Aura's host, and the "it" the count measures against
+    cannot name anything else — the Aura itself has no creature type. So the
+    relation is bound to the host here, onto the far end the Crowns already
+    use (``"attached_host"``, which ``subject_matches`` answers from the
+    ability's source, layer 4 included). Left as the bare pronoun it was a key
+    no matcher tests, and the count matched nothing: Alpha Status compiled
+    supported and gave +0/+0 on every board.
+    """
+    filt = node.per_each
+    if filt is None or filt.shares_creature_type_with != "it":
+        return node
+    return dataclasses.replace(
+        node,
+        per_each=dataclasses.replace(
+            filt, shares_creature_type_with="attached_host"
+        ),
+    )
+
+
 def _lower_pump_per_milled(node: ast.Pump) -> tuple[OracleInstruction, ...]:
     """"…**it** gets +1/+0 until end of turn **for each creature card put into
     your graveyard this way**." (Song of Blood, in the sentence its delayed
@@ -408,6 +432,7 @@ def lower_counted_pump(
             # writes to has no end-of-turn sweep — it would be a permanent
             # bonus on a card that printed "until end of turn".
             if _is_enchanted(node.subject) and node.duration.kind is None:
+                node = _per_each_shares_with_host(node)
                 return (
                     OracleInstruction("dynamic_pt_bonus", "", {
                         "power": _per_each_amount(

@@ -40,6 +40,7 @@ from ...subject_filters import subject_matches
 from ...enchant_targets import (_ENCHANT_LAND_SUBTYPES,
                                 enchant_subject_colours,
                                 enchant_subject_keyword_exclusion,
+                                enchant_subject_supertype_exclusion,
                                 enchant_subject_seat)
 from ...targeting import (derive_cast_spec, role_is_stack, spec_roles,
                           targets_mana_value_x)
@@ -196,6 +197,14 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
         present = permanent_effective_colors(permanent) & set(colours)
         if bool(present) is colours_excluded:
             return False
+    # "Enchant **nonbasic** land" (Uncontrolled Infestation). The supertype
+    # half (CR 205.4), split by the reader the picker builds its spec from and
+    # asked through ``Permanent.has_supertype`` — CR 613 layer 4, so a land an
+    # effect made basic stops being a legal host and the CR 704.5m sweep then
+    # puts the Aura in the graveyard.
+    noun, excluded_supertype = enchant_subject_supertype_exclusion(noun)
+    if excluded_supertype is not None and permanent.has_supertype(excluded_supertype):
+        return False
     # "Enchant **artifact or creature**" (Teferi's Curse). A printed union is an
     # OR, so any one member is enough — asked of the same matcher table a single
     # noun uses, which is what keeps a union from being a second vocabulary.
