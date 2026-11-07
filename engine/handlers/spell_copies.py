@@ -6,7 +6,10 @@ additional and alternative costs) — and the four sentences that call it: "copy
 that spell" off a cast trigger (Double Vision, Mirari), "copy target instant or
 sorcery spell" (Fork), "copy this spell" (Chain Lightning) and "copy that spell
 for each other permanent or player the spell could target" (Radiate). A copy
-that may choose new targets is re-aimed through ``arm_copy_spell_target``.
+that may choose new targets is offered them through one offer,
+``_offer_copy_new_target`` (``offer_new_targets`` for a single copy), whatever
+road made it — a prompt for a seat somebody asks, the measured answer for one
+nobody asks.
 
 Split out of ``stack.py`` at the 2,000-line cap's split round. A card put back
 onto the stack *as* a copy of the spell it was (Ertai's Meddling) stays with the
@@ -425,32 +428,49 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         # CR 707.10c: "You may choose new targets for the copy" — and this
         # caster did, on the cast: the copy is put onto the stack with them,
         # announced once (the colour above already its own, CR 707.9b).
+        # Never asked again: that caster has answered, and a second question
+        # would be the same one asked twice.
         game.announce_copy_put_onto_stack(copy, chooser=caster_index, chose=True)
-    elif caster_index in game.interactive_seats and _copy_reaim_is_one_slot(
-        game, game.stack[-1]
-    ):
-        # …and a caster who named none **is asked**. The sentence was offered
-        # only through the cast's own second step, which a client runs for a
-        # permanent picker and cannot run for a player at all — so a Forked
-        # Lightning Bolt aimed at a face could not be re-aimed, by any click
-        # or any request: no prompt was armed. The prompt the trigger's copy
-        # one handler up already uses (and Chain Lightning's), under its
-        # condition: one permanent-or-player target, no mode. Its candidates
-        # are the copied card's own picker's, the original's target among
-        # them — keeping it is the "may" declined.
-        #
-        # Never beside a target named on the cast: that caster has answered,
-        # and a second question would be the same one asked twice. And only
-        # of a seat somebody is asking, so an AI's or a headless Fork keeps
-        # the original's target — unlike the trigger's copies, whose prompt
-        # is armed for every seat and whose default for a seat nobody asks is
-        # measured (``ai_prompts.choose_copy_target``, SCG W2G3).
-        if not game.arm_copy_spell_target(caster_index, copy):
-            game.announce_copy_put_onto_stack(copy, chooser=caster_index)
-    else:
-        # The original's targets, kept (CR 707.10c's "may" not taken).
-        game.announce_copy_put_onto_stack(copy, chooser=caster_index)
+        return True, "resolved"
+    # …and a caster who named none **is offered it**, through the one offer
+    # every copy road makes (:func:`offer_new_targets`) — the trigger's
+    # copies' (Double Vision, storm). The sentence was offered only through
+    # the cast's own second step, which a client runs for a permanent picker
+    # and cannot run for a player at all; then only to a seat somebody asks,
+    # for one permanent-or-player target. So a headless or AI Fork — and
+    # Mischievous Quanar's turn-up copy, the same kind — kept the original's
+    # target: an opponent's Bolt aimed at the copier's own creature was
+    # copied onto that creature (kg4). A seat nobody asks now takes the
+    # measured answer (``ai_prompts.choose_copy_target``), and a copy whose
+    # one target is a spell or a card in a graveyard (a Forked Counterspell)
+    # is offered CR 115.7's change, as a storm copy's is.
+    offer_new_targets(game, context, copy, caster_index)
     return True, "resolved"
+
+
+def offer_new_targets(
+    game: Game, context: OracleExecutionContext, copy: StackItem, seat: int,
+) -> None:
+    """CR 707.10c's "you may choose new targets for the copy", for one copy
+    already pushed unannounced (``announce=False``): offered to *seat*
+    (:func:`_offer_copy_new_target` — a prompt for a seat somebody asks, the
+    measured answer for one nobody asks), the answer written onto the copy,
+    and the copy announced once its targets are decided.
+
+    A loop of one offer and the step that takes its answer, because a copy
+    whose new target is a card in a graveyard or a spell is asked through
+    ``retarget_choice``, which suspends the resolution until it is answered
+    (``engine/resumption.py``): **the last thing its caller does**."""
+    made = [copy]
+
+    def step(position) -> None:
+        if position is None:
+            _apply_copy_new_target(game, context, made, seat)
+            _settle_unasked_copies(game, made, seat)
+            return
+        _offer_copy_new_target(game, context, copy, seat)
+
+    run_resumable(game, [0, None], step)
 
 
 @effect_handler("copy_this_spell")
@@ -537,11 +557,11 @@ def copy_this_spell(game: Game, instruction: OracleInstruction, context: OracleE
     game.log.append(
         f"{game.players[seat].name} copied {context.card.name} (copy put on the stack)"
     )
-    if not (
-        instruction.payload.get("may_choose_new_target")
-        and game.arm_copy_spell_target(seat, copy)
-    ):
+    if not instruction.payload.get("may_choose_new_target"):
         game.announce_copy_put_onto_stack(copy, chooser=seat)
+        return True, "resolved"
+    # The one offer every copy road makes (CR 707.10c).
+    offer_new_targets(game, context, copy, seat)
     return True, "resolved"
 
 

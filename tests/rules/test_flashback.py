@@ -1178,6 +1178,9 @@ def test_707_10_a_copy_of_a_flashed_back_spell_is_just_a_copy():
     game.enforce_mana_costs = False
     assert game.queue_from_hand(0, "Firebolt", target_player_index=1, from_zone="graveyard").supported
     game.players[0].hand.append(_pool()["Fork"])
+    # Asked, and declined: the copy keeps the Firebolt's target (a seat nobody
+    # asks would aim it where it measures best, CR 707.10c).
+    game.interactive_seats = {0}
     assert game.cast_from_hand(0, "Fork", target_stack_index=0).supported
     _settle(game)
     assert game.players[1].life == 16          # the spell and its copy

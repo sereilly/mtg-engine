@@ -12,11 +12,12 @@ Bolt aimed at a face kept the original's target — no prompt was armed, and
 nothing a seat could send re-aimed it.
 
 Fork's handler was its own, older than the trigger's copy (Double Vision,
-Mirari) and never taught what that one was: it arms the ``copy_spell_target``
-prompt now, under the same condition, when the cast named no new target. And
-both go through one builder of a copy (CR 707.10: "all decisions made for
-it"), where Fork's had left a graveyard target and a second chosen mode
-behind.
+Mirari) and never taught what that one was: it makes the same offer now
+(``spell_copies.offer_new_targets``), when the cast named no new target —
+for every seat, a seat nobody asks taking the measured answer (kg4; it kept
+the original's). And both go through one builder of a copy (CR 707.10: "all
+decisions made for it"), where Fork's had left a graveyard target and a
+second chosen mode behind.
 
 Census, both manifest roles: one card compiles to Fork's kind
 (``copy_top_stack_spell``), two to the trigger's (``copy_triggering_spell``),
@@ -135,17 +136,23 @@ def test_707_10c_a_target_named_on_the_cast_is_the_answer_and_is_not_asked_twice
     assert game.pending_choice_of("copy_spell_target", 0) is None
 
 
-@pytest.mark.cr("707.10")
-def test_707_10_a_seat_nobody_asks_keeps_the_originals_target(catalog_by_name):
-    """Headless and AI: nothing queued, nothing logged, the copy as it was."""
-    game, me, _you, _bolt, _bears = _table(catalog_by_name, interactive=False)
+@pytest.mark.cr("707.10c")
+def test_707_10c_a_seat_nobody_asks_takes_the_measured_answer(catalog_by_name):
+    """Headless and AI: nothing queued, and the copy of an opponent's Bolt
+    aimed at the Fork's own controller is not kept on that face — the
+    measured answer the trigger's copies already took
+    (``ai_prompts.choose_copy_target``). It kept the original's target (kg4:
+    the Fork turned an opponent's burn back on its own caster)."""
+    game, me, _you, _bolt, bears = _table(catalog_by_name, interactive=False)
     log = len(game.log)
 
     copy = _fork(game, me, catalog_by_name)
 
-    assert _aim(game, copy) == ("player", 0)
+    aim = _aim(game, copy)
+    assert aim != ("player", 0)
+    assert aim != ("permanent", bears[0].permanent_id)
     assert not game.pending_choices
-    assert not any("(copy) targets" in line for line in game.log[log:])
+    assert any("(copy) targets" in line for line in game.log[log:])
 
 
 @pytest.mark.cr("707.10")
@@ -268,15 +275,15 @@ def test_every_spell_copier_asks_a_person_who_named_no_new_target(catalog_by_nam
                     copy = next(item for item in reversed(game.stack) if item.is_copy)
                     prompt = game.pending_choice_of("copy_spell_target", 0)
                     assert (prompt is not None) is interactive, (unit.name, interactive)
-                    if interactive or step.kind == "copy_top_stack_spell":
-                        # Asked, and not yet answered; or a Fork, whose
-                        # prompt is armed only for a seat somebody asks.
+                    if interactive:
+                        # Asked, and not yet answered.
                         assert _aim(game, copy) == ("player", 0), unit.name
                     else:
-                        # The trigger's copy, for a seat nobody asks, takes
-                        # the measured answer (``ai_prompts.choose_copy_target``,
-                        # SCG W2G3): a copy of the opponent's Bolt is not
-                        # kept on its own controller's face.
+                        # Every copy, for a seat nobody asks, takes the
+                        # measured answer (``ai_prompts.choose_copy_target``,
+                        # SCG W2G3; a Fork's and Quanar's too since kg4): a
+                        # copy of the opponent's Bolt is not kept on its own
+                        # controller's face.
                         assert _aim(game, copy) != ("player", 0), unit.name
                 examined[unit.name] = step.kind
 

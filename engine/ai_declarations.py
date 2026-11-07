@@ -21,7 +21,9 @@ Which trades are worth making is :func:`_score_block_pair`'s, with the
 damage estimates beside it — and a block that loses its blocker
 (:func:`_block_loses_its_blocker`) is made only in a gang that kills its
 attacker (:func:`_gang_blocks`) or as a chump the life it saves is worth
-(:func:`_chump_blocks`).
+(:func:`_chump_blocks`). A creature whose own attack or block trigger is a
+gamble (Goblin Psychopath's coin flip) is declared only where the
+declaration pays for it (``ai_combat_triggers``).
 """
 
 from __future__ import annotations
@@ -29,6 +31,8 @@ from __future__ import annotations
 from .game import Game
 from .aura_restrictions import aura_restriction_active
 from .models import Permanent
+from .ai_combat_triggers import (attack_is_worth_its_trigger, block_is_worth_its_trigger,
+                                 expected_attack_damage)
 from .ai_compelled_blocks import compelled_blocks, fight_outcome
 from .ai_rehearsal import life_worth, permanent_worth
 from .ai_scoring import choose_attack_target, _permanent_value
@@ -212,6 +216,22 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         ):
             forced.append(idx)
 
+    # **A creature whose own attack trigger is a gamble attacks only where the
+    # damage it is expected to deal pays for it** (`ai_combat_triggers`, read
+    # off the compiled program): Goblin Psychopath's lost flip sends its five
+    # to its own controller, so at even life it stays home, and against a
+    # player at five it goes. Every branch below — the empty board, the
+    # trades, the lethal swing — chooses among these. A forced creature
+    # attacks whatever its trigger costs.
+    legal_attackers_list = [
+        idx for idx in legal_attackers_list
+        if idx in forced or attack_is_worth_its_trigger(
+            game, game.permanent_at(attacking_player_index, idx), opponent_index,
+        )
+    ]
+    if not legal_attackers_list:
+        return []
+
     opponent_blockers = [
         perm
         for perm in game.controlled_by(opponent)
@@ -242,8 +262,13 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     # Go all-in when lethal is on the table — through the same prune, because a
     # declaration that is refused deals no damage at all. This returned the raw
     # legal set, so under either attack cap the lethal swing was refused whole
-    # and the seat attacked with nobody on the turn it could have won.
-    if sum(player.battlefield[i].effective_power for i in legal_attackers_list) >= opponent.life:
+    # and the seat attacked with nobody on the turn it could have won. The
+    # damage counted is the damage each attacker is expected to deal
+    # (`expected_attack_damage`): a coin flip's half of a Psychopath is not a
+    # lethal swing.
+    if sum(
+        expected_attack_damage(game, player.battlefield[i]) for i in legal_attackers_list
+    ) >= opponent.life:
         return _obeying_declaration(
             game, attacking_player_index, legal_attackers_list,
             against=opponent_index,
@@ -553,6 +578,18 @@ def choose_combat_blockers(
             attacker = attacker_player.battlefield[attacker_idx]
             minimum_blockers[attacker_idx] = game._minimum_blockers(attacker)
             if not game._can_block_attacker(blocker, attacker):
+                continue
+            # A blocker whose own block trigger is a gamble (Goblin
+            # Psychopath's flip, Time Elemental's five to its controller)
+            # blocks only where what the block stops and kills pays for it
+            # (`ai_combat_triggers`). A block CR 509.1c requires is the
+            # engine's to make whatever this seat prefers (below).
+            if not block_is_worth_its_trigger(
+                game, blocker, attacker,
+                _estimated_damage_prevented(
+                    game, defending_player_index, attacker_idx, blocker_idx,
+                ),
+            ):
                 continue
             legal_pairs.append((blocker_idx, attacker_idx, _score_block_pair(blocker, attacker)))
 

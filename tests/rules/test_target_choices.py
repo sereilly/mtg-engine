@@ -304,6 +304,9 @@ def test_a_copy_that_keeps_the_originals_targets_chose_none():
 
     assert game.queue_from_hand(0, "Fork", target_stack_index=0).supported
     assert len(_arbiter_triggers(game)) == 1, "Fork chose a target"
+    # Asked, and declined: the copy keeps the original's target (CR 707.10c's
+    # "may" not taken — a seat nobody asks would take the measured answer).
+    game.interactive_seats = {0}
     resolve_stack(game)
 
     assert bear.damage_marked == 4, "the copy and the original both hit the Bear"

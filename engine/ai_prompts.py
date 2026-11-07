@@ -28,7 +28,7 @@ resolution paths import these from here, inside the function that asks.
 
 from __future__ import annotations
 
-from .ai_target_sides import ability_target_side, spell_target_side
+from .ai_target_sides import ability_target_side, spell_seat_side, spell_target_side
 from .ai_rehearsal import deliberating, permanent_worth, rehearse, rehearsing
 from .ai_prompt_readers import offer_trade, TollLoss, toll_branch_loss
 from .ai_valuation import offer_buys_a_drawback_to_its_source
@@ -37,7 +37,7 @@ from .models import CardDefinition, Permanent
 from .search_filters import search_matches, searched_seat
 from .ai_payment import _cost_for, _plan_land_taps
 from .ai_actions import hand_spells
-from .ai_scoring import _score_tutor_choice, _permanent_value
+from .ai_scoring import _score_tutor_choice, _permanent_value, choose_attack_target
 from .ai_cast_gates import _can_cast_with_targets
 
 
@@ -163,12 +163,81 @@ def choose_copy_target(game: Game, choice, kept: dict) -> dict:
         for target in targets
     ]
     answers = [response for response in answers if response != kept]
+    if rehearsing():
+        # No rehearsal inside a rehearsal — so a copy offered there (the
+        # rehearsal of casting a Fork, the copy's own resolution on the
+        # scratch table) was kept where its original pointed, and a Fork of
+        # an opponent's Bolt aimed at the copier's own creature read as a
+        # second Bolt on that creature: a cast worth nothing, never proposed
+        # (kg4). The answer there is the side's (:func:`_copy_target_by_side`),
+        # cheap and only ever a move off the wrong side; the real one is
+        # measured when the copy is made.
+        return _copy_target_by_side(game, choice, kept, answers)
     picked = _best_rehearsed_answer(
         game, choice.player_index, choice, answers,
         lambda table, prompt, response: table._resolve_copy_spell_target(prompt, response),
         label=f"{choice.data.get('card_name') or 'a copy'} (the copy's new target)",
     )
     return kept if picked is None else picked
+
+
+def _answer_seat(game: Game, answer: dict) -> "int | None":
+    """The seat a ``copy_spell_target`` answer is on: the player it names, or
+    the controller of the permanent it names."""
+    if "seat" in answer:
+        return answer.get("seat")
+    permanent = game.permanent_by_id(answer.get("permanent_id"))
+    return None if permanent is None else game.controller_index_of(permanent)
+
+
+def _copy_target_by_side(game: Game, choice, kept: dict, answers: list) -> dict:
+    """Where a seat nobody asks aims a copy **inside a rehearsal**, where no
+    answer can be measured: *kept*, unless *kept* is on the wrong side of the
+    table for what the copy does (``ai_target_sides.spell_target_side``, else
+    ``spell_seat_side`` where a player may be named) — then the first answer on the right side: the
+    opponent the seat attacks (``ai_scoring.choose_attack_target``) where a
+    player is offered, else the dearest permanent there
+    (``ai_rehearsal.permanent_worth``); for a gift, the seat's own dearest
+    permanent, else its own face.
+
+    A floor rather than a choice: the scratch table this answers for is
+    reading whether the copy is worth making at all, and the copy's real
+    target is measured when it is made (:func:`choose_copy_target`). A copy
+    already on the right side is never moved here."""
+    seat = choice.player_index
+    copy = choice.data.get("_copy")
+    card = getattr(copy, "card", None)
+    if card is None:
+        return kept
+    wanted = spell_target_side(card)
+    if wanted is None and ("seat" in kept or any("seat" in answer for answer in answers)):
+        # A target that may be a player ("any target"): what the spell does
+        # to the player it names says whose side it is for.
+        wanted = spell_seat_side(card)
+    kept_seat = _answer_seat(game, kept)
+    if wanted is None or kept_seat is None:
+        return kept
+    if (kept_seat == seat) == (wanted == "you"):
+        return kept
+    hostile = wanted == "opponent"
+    right = [
+        answer for answer in answers
+        if (seat_of := _answer_seat(game, answer)) is not None
+        and (seat_of != seat) == hostile
+    ]
+    players = [answer for answer in right if "seat" in answer]
+    permanents = sorted(
+        (answer for answer in right if "seat" not in answer),
+        key=lambda answer: -permanent_worth(game.permanent_by_id(answer["permanent_id"])),
+    )
+    if hostile and players:
+        attacked = choose_attack_target(game, seat)
+        return next(
+            (answer for answer in players if answer["seat"] == attacked), players[0]
+        )
+    if permanents:
+        return permanents[0]
+    return players[0] if players else kept
 
 
 def choose_copy_retarget(game: Game, seat: int, copy, slots, options):
