@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**433 / 641 tracked rules covered (67%)** — 3479 tests, 0 unannotated.
+**433 / 641 tracked rules covered (67%)** — 3501 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -204,7 +204,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 109. Objects
 
 - [x] **109.1** An object is an ability on the stack, a card, a copy of a card, a token, a spell, a permanent, or... *(1 tests)*
-- [x] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d... *(19 tests, subrules ab)*
+- [x] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d... *(39 tests, subrules ab)*
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
 - [x] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th... *(4 tests, subrules b)*
 - [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(25 tests)*
@@ -265,7 +265,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 115. Targets
 
-- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(36 tests, subrules abcd)*
+- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(38 tests, subrules abcd)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
 - [x] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe... *(13 tests)*
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
@@ -348,7 +348,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 122. Counters
 
-- [x] **122.1** A counter is a marker placed on an object or player that modifies its characteristics and/or inte... *(26 tests, subrules af)*
+- [x] **122.1** A counter is a marker placed on an object or player that modifies its characteristics and/or inte... *(27 tests, subrules af)*
 - [x] **122.2** Counters on an object are not retained if that object moves from one zone to another. The counter... *(1 tests)*
 - [x] **122.3** If a permanent has both a +1/+1 counter and a -1/-1 counter on it, N +1/+1 and N -1/-1 counters a... *(3 tests)*
 - [ ] **122.4** If a permanent with an ability that says it can’t have more than N counters of a certain kind on ...
@@ -384,7 +384,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(18 tests, subrules ab)*
 - [x] **205.2** Card Types *(14 tests, subrules ab)*
-- [x] **205.3** Subtypes *(32 tests, subrules bim)*
+- [x] **205.3** Subtypes *(48 tests, subrules bim)*
 - [x] **205.4** Supertypes *(11 tests, subrules abcd)*
 
 ### 206. Expansion Symbol
@@ -437,7 +437,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **303.1** A player who has priority may cast an enchantment card from their hand during a main phase of the... *(2 tests)*
 - [x] **303.2** When an enchantment spell resolves, its controller puts it onto the battlefield under their control. *(4 tests)*
 - [x] **303.3** Enchantment subtypes are always a single word and are listed after a long dash: “Enchantment — Sh... *(3 tests)*
-- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(54 tests, subrules abcdefghijm)*
+- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(56 tests, subrules abcdefghijm)*
 - [x] **303.5** Some enchantments have the subtype “Saga.” See rule 714 for more information about Saga cards. *(2 tests)*
 - [x] **303.6** Some enchantments have the subtype “Class.” See rule 716 for more information about Class cards. *(2 tests)*
 - [x] **303.7** Some Aura enchantments also have the subtype “Role.” *(3 tests, subrules a)*
@@ -633,7 +633,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(105 tests, subrules abcdfghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(106 tests, subrules abcdfghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(15 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -669,7 +669,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(331 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(341 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(32 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [ ] **601.5** While announcing the choices of any targets and/or the division or distribution of any effects as...
@@ -680,7 +680,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(15 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(60 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(62 tests, subrules ab)*
 - [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(3 tests)*
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
 - [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(52 tests, subrules acde)*
@@ -688,7 +688,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 603. Handling Triggered Abilities
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
-- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(46 tests, subrules bcde)*
+- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(48 tests, subrules bcde)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(122 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
@@ -780,7 +780,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(172 tests, subrules abcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(175 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(22 tests, subrules abc)*
 - [x] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t... *(2 tests)*
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(95 tests, subrules abcd)*
@@ -836,9 +836,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 700. General
 
 - [ ] **700.1** Anything that happens in a game is an event. Multiple events may take place during the resolution...
-- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(30 tests, subrules abde)*
+- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(31 tests, subrules abde)*
 - [ ] **700.3** Some effects cause objects to be temporarily grouped into piles.
-- [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(10 tests)*
+- [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(11 tests)*
 - [ ] **700.5** A player’s devotion to [color] is equal to the number of mana symbols of that color among the man...
 - [ ] **700.6** The term historic refers to an object that has the legendary supertype, the artifact card type, o...
 - [ ] **700.7** If an ability uses a phrase such as “this [something]” to identify an object, where [something] i...
@@ -859,16 +859,16 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.5** Cast *(4 tests, subrules a)*
 - [x] **701.6** Counter *(17 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
-- [x] **701.8** Destroy *(7 tests, subrules abc)*
+- [x] **701.8** Destroy *(9 tests, subrules abc)*
 - [x] **701.9** Discard *(9 tests, subrules ac)*
 - [x] **701.12** Exchange *(11 tests, subrules ab)*
 - [x] **701.13** Exile *(7 tests, subrules a)*
 - [x] **701.14** Fight *(8 tests, subrules abd)*
 - [x] **701.17** Mill *(7 tests, subrules a)*
 - [x] **701.18** Play *(6 tests, subrules ab)*
-- [x] **701.19** Regenerate *(29 tests, subrules abc)*
+- [x] **701.19** Regenerate *(31 tests, subrules abc)*
 - [x] **701.20** Reveal *(12 tests, subrules ab)*
-- [x] **701.21** Sacrifice *(29 tests, subrules a)*
+- [x] **701.21** Sacrifice *(30 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(26 tests, subrules abd)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*
@@ -888,9 +888,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.10** Haste *(3 tests, subrules bc)*
 - [x] **702.11** Hexproof *(6 tests, subrules bd)*
 - [x] **702.12** Indestructible *(3 tests, subrules b)*
-- [x] **702.14** Landwalk *(17 tests, subrules abc)*
+- [x] **702.14** Landwalk *(18 tests, subrules abc)*
 - [x] **702.15** Lifelink *(12 tests, subrules be)*
-- [x] **702.16** Protection *(72 tests, subrules abcdefgmn)*
+- [x] **702.16** Protection *(73 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(11 tests, subrules a)*
 - [x] **702.19** Trample *(26 tests, subrules bdf)*

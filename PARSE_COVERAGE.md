@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **6133**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **682**
+- With deletion-probe findings (ignored words): **643**
 
 ## Acknowledged simplifications
 
@@ -42,11 +42,9 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Aku Djinn | `put a +1/+1 counter on each creature each opponent controls` | each |
 | Albino Troll | `if this permanent came under your control since the beginning of your ` | permanent |
 | All Hallow's Eve | `if this card is exiled with a scream counter on it, remove a scream co` | card more all |
-| Alpha Kavu | `target kavu creature gets -1/+1 until end of turn` | creature |
 | Amber Prison | `tap target artifact, creature, or land. that permanent doesn't untap d` | or |
 | Amulet of Unmaking | `exile target artifact, creature, or land` | or |
 | Ana Sanctuary | `if you control a blue or black permanent, target creature gets +1/+1 u` | or |
-| Anaba Ancestor | `another target minotaur creature gets +1/+1 until end of turn` | creature |
 | Anarchy | `destroy all white permanents` | all |
 | Ancestral Knowledge | `look at the top ten cards of your library, then exile any number of th` | back |
 | Angel's Trumpet | `tap all untapped creatures that player controls that didn't attack thi` | all |
@@ -69,7 +67,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Awakening | `untap all creatures and lands` | all |
 | Backdraft | `choose a player who cast one or more sorcery spells this turn. backdra` | down |
 | Baki's Curse | `baki's curse deals 2 damage to each creature for each aura attached to` | baki's |
-| Balthor the Stout | `another target barbarian creature gets +1/+0 until end of turn` | creature |
 | Bane of the Living | `all creatures get -x/-x until end of turn` | all |
 | Barbarian Bully | `this creature gets +2/+2 until end of turn unless a player has this cr` | creature |
 | Barl's Cage | `target creature doesn't untap during its controller's next untap step` | controller's |
@@ -78,7 +75,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Battle Cry | `untap all white creatures you control` | all |
 | Battle-Rattle Shaman | `you may have target creature get +2/+0 until end of turn` | have |
 | Bend or Break | `each player separates all nontoken lands they control into two piles. ` | all all all |
-| Bladewing the Risen | `dragon creatures get +1/+1 until end of turn` | creatures |
 | Blazing Effigy | `it deals x damage to target creature, where x is 3 plus the amount of ` | creature |
 | Blind Fury | `all creatures lose trample until end of turn. if a creature would deal` | all |
 | Blinding Light | `tap all nonwhite creatures` | all |
@@ -87,7 +83,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Bloodfire Infusion | `this aura deals damage equal to the sacrificed creature's power to eac` | each |
 | Bloodfire Kavu | `it deals 2 damage to each creature` | each |
 | Bloodline Shaman | `choose a creature type. reveal the top card of your library. if that c` | card |
-| Bloodstoke Howler | `beast creatures you control get +3/+0 until end of turn` | creatures |
 | Blossoming Wreath | `you gain life equal to the number of creature cards in your graveyard` | cards |
 | Bog Down | `target player discards two cards. if this spell was kicked, that playe` | spell |
 | Boil | `destroy all islands` | all |
@@ -126,7 +121,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Cloak of Confusion | `you may have it assign no combat damage this turn. if you do, defendin` | have |
 | Coils of the Medusa | `destroy all non-wall creatures blocking enchanted creature` | all |
 | Contagion | `distribute two -2/-1 counters among one or two target creatures` | target |
-| Contested Cliffs | `target beast creature you control fights target creature an opponent c` | creature |
 | Corrosion | `put a rust counter on each artifact target opponent controls. then des` | each each |
 | Corrosion | `remove all rust counters from all permanents` | all |
 | Cradle Guard | `if this permanent came under your control since the beginning of your ` | permanent |
@@ -138,7 +132,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Curse of Marit Lage | `tap all islands` | all |
 | Cyclone | `put a wind counter on this enchantment, then sacrifice this enchantmen` | enchantment |
 | Dance of the Dead | `if it's on the battlefield, it loses "enchant creature card in a grave` | tapped |
-| Daru Encampment | `target soldier creature gets +1/+1 until end of turn` | creature |
 | Day of the Dragons | `exile all creatures you control. then create that many 5/5 red dragon ` | all |
 | Day of the Dragons | `sacrifice all dragons you control. then return the exiled cards to the` | all |
 | Death Match | `that creature's controller may have target creature of their choice ge` | have |
@@ -184,8 +177,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Dwarven Driller | `destroy target land unless its controller has this creature deal 2 dam` | creature |
 | Dwarven Hold | `if this land is tapped, put a storage counter on it` | land |
 | Dwarven Landslide | `destroy target land. if this spell was kicked, destroy another target ` | spell |
-| Dwarven Lieutenant | `target dwarf creature gets +1/+0 until end of turn` | creature |
-| Dwarven Pony | `target dwarf creature gains mountainwalk until end of turn` | creature |
 | Dwarven Scorcher | `this creature deals 1 damage to target creature unless that creature's` | creature |
 | Dwell on the Past | `target player shuffles up to four target cards from their graveyard in` | target |
 | Dystopia | `that player sacrifices a green or white permanent of their choice` | or |
@@ -196,7 +187,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Electryte | `it deals damage equal to its power to each blocking creature` | each |
 | Elven Rite | `distribute two +1/+1 counters among one or two target creatures` | target |
 | Elvish Hunter | `target creature doesn't untap during its controller's next untap step` | controller's |
-| Elvish Pathcutter | `target elf creature gains forestwalk until end of turn` | creature |
 | Endemic Plague | `destroy all creatures that share a creature type with the sacrificed c` | all |
 | Energy Vortex | `this enchantment deals 3 damage to that player unless they pay {1} for` | enchantment |
 | Enervate | `tap target artifact, creature, or land` | or |
@@ -208,64 +198,50 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Escape Routes | `return target white or black creature you control to its owner's hand` | or |
 | Evacuation | `return all creatures to their owners' hands` | all |
 | Evaporate | `evaporate deals 1 damage to each white and/or blue creature` | each and/or |
-| Everglove Courier | `target elf creature gets +2/+2 and has trample for as long as this cre` | creature |
 | Experimental Overload | `create an x/x blue and red weird creature token, where x is the number` | cards or |
 | Explosive Growth | `target creature gets +2/+2 until end of turn. if this spell was kicked` | spell |
 | Extinction | `destroy all creatures of the creature type of your choice` | all |
 | Extruder | `if this permanent came under your control since the beginning of your ` | permanent |
 | Eye of Singularity | `destroy each permanent with the same name as another permanent, except` | each |
 | Eye of Singularity | `destroy all other permanents with that name. they can't be regenerated` | all |
-| Faerie Noble | `other faerie creatures you control get +1/+0 until end of turn` | creatures |
 | Falling Timber | `prevent all combat damage target creature would deal this turn. if thi` | spell |
 | False Prophet | `exile all creatures` | all |
 | Famished Ghoul | `exile up to two target cards from a single graveyard` | target |
 | Feint | `tap all creatures blocking target attacking creature. prevent all comb` | all each |
 | Festering Wound | `this aura deals x damage to that player, where x is the number of infe` | aura |
-| Fever Charm | `fever charm deals 3 damage to target wizard creature` | creature |
 | Fight or Flight | `separate all creatures that player controls into two piles. only creat` | all |
 | Fire Ants | `this creature deals 1 damage to each other creature without flying` | each |
 | Fire Covenant | `fire covenant deals x damage divided as you choose among any number of` | target |
 | Flameshot | `flameshot deals 3 damage divided as you choose among one, two, or thre` | or target |
-| Flamestick Courier | `target goblin creature gets +2/+2 and has haste for as long as this cr` | creature |
 | Flashfires | `destroy all plains` | all |
 | Fleetfoot Panther | `return a green or white creature you control to its owner's hand` | or |
 | Floodgate | `it deals damage to each nonblue creature without flying equal to half ` | each down |
 | Flowstone Slide | `all creatures get +x/-x until end of turn` | all |
 | Forced March | `destroy all creatures with mana value x or less` | all |
 | Freyalise Supplicant | `this creature deals damage to any target equal to half the sacrificed ` | down |
-| Frightshroud Courier | `target zombie creature gets +2/+2 and has fear for as long as this cre` | creature |
 | Frost Breath | `tap up to two target creatures. those creatures don't untap during the` | controller's |
 | Fyndhorn Pollen | `all creatures get -1/-0 until end of turn` | all |
 | Gabriel Angelfire | `choose flying, first strike, trample, or rampage 3. gabriel angelfire ` | or |
 | Gaea's Blessing | `target player shuffles up to three target cards from their graveyard i` | target |
 | Gamekeeper | `you may exile it. if you do, reveal cards from the top of your library` | put |
 | Gauntlets of Chaos | `exchange control of target artifact, creature, or land you control and` | or |
-| Gempalm Avenger | `soldier creatures get +1/+1 and gain first strike until end of turn` | creatures |
 | Gempalm Polluter | `you may have target player lose life equal to the number of zombies on` | have |
-| Gempalm Sorcerer | `wizard creatures gain flying until end of turn` | creatures |
-| Gempalm Strider | `elf creatures get +2/+2 until end of turn` | creatures |
 | Gemstone Mine | `add one mana of any color. if there are no mining counters on this lan` | land, |
 | Ghitu Slinger | `if this permanent came under your control since the beginning of your ` | permanent |
-| Ghosthelm Courier | `target wizard creature gets +2/+2 and has shroud for as long as this c` | creature |
 | Ghoul's Feast | `target creature gets +x/+0 until end of turn, where x is the number of` | cards |
 | Giant Albatross | `you may pay {1}{u}. if you do, for each creature that dealt damage to ` | creature |
 | Giant Trap Door Spider | `exile this creature and target creature without flying that's attackin` | that's |
 | Glyph of Doom | `choose target wall creature. at this turn's next end of combat, destro` | all |
 | Glyph of Reincarnation | `destroy all creatures that were blocked by target wall this turn. they` | all |
-| Goblin Burrows | `target goblin creature gets +2/+0 until end of turn` | creature |
 | Goblin Flotilla | `unless you pay {r}, whenever this creature blocks or becomes blocked b` | creature |
-| Goblin Lookout | `goblin creatures get +2/+0 until end of turn` | creatures |
 | Goblin Marshal | `if this permanent came under your control since the beginning of your ` | permanent |
 | Goblin Patrol | `if this permanent came under your control since the beginning of your ` | permanent |
-| Goblin Pyromancer | `goblin creatures get +3/+0 until end of turn` | creatures |
 | Goblin Pyromancer | `destroy all goblins` | all |
-| Goblin Shrine | `it deals 1 damage to each goblin creature` | each creature |
-| Goblin Taskmaster | `target goblin creature gets +1/+0 until end of turn` | creature |
+| Goblin Shrine | `it deals 1 damage to each goblin creature` | each |
 | Goblin War Buggy | `if this permanent came under your control since the beginning of your ` | permanent |
 | Gorilla War Cry | `all creatures gain menace until end of turn` | all |
 | Graceful Antelope | `you may have target land become a plains until this creature leaves th` | have |
 | Grafted Skullcap | `draw an additional card` | additional |
-| Grassland Crusader | `target elf or soldier creature gets +2/+2 until end of turn` | creature |
 | Gravegouger | `exile up to two target cards from a single graveyard` | target |
 | Greater Werewolf | `put a -0/-2 counter on each creature blocking or blocked by this creat` | each creature |
 | Grip of Amnesia | `counter target spell unless its controller exiles all cards from their` | all |
@@ -283,7 +259,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Haunting Echoes | `exile all cards from target player's graveyard other than basic land c` | all |
 | Havoc Demon | `all creatures get -5/-5 until end of turn` | all |
 | Hazezon Tamar | `exile all sand warriors` | all |
-| Heart Wolf | `target dwarf creature gets +2/+0 and gains first strike until end of t` | creature |
 | Heart of Bogardan | `this enchantment deals x damage to target player or planeswalker and e` | enchantment |
 | Heat Stroke | `destroy each creature that blocked or was blocked this turn` | each |
 | Heightened Awareness | `draw an additional card` | additional |
@@ -311,7 +286,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Hush | `destroy all enchantments` | all |
 | Hypnotic Cloud | `target player discards a card. if this spell was kicked, that player d` | spell |
 | Hypnox | `if you cast it from your hand, exile all cards from target opponent's ` | all |
-| Icatian Lieutenant | `target soldier creature gets +1/+0 until end of turn` | creature |
 | Icatian Moneychanger | `you gain 1 life for each credit counter on this creature` | creature |
 | Icatian Skirmishers | `all creatures banded with it gain first strike until end of turn` | all |
 | Icatian Store | `if this land is tapped, put a storage counter on it` | land |
@@ -352,7 +326,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Kjeldoran Home Guard | `if this creature attacked or blocked this combat, put a -0/-1 counter ` | creature |
 | Knight of Valor | `each creature without flanking blocking this creature gets -1/-1 until` | each |
 | Kor Chant | `all damage that would be dealt this turn to target creature you contro` | target |
-| Krosan Groundshaker | `target beast creature gains trample until end of turn` | creature |
 | Krosan Reclamation | `target player shuffles up to two target cards from their graveyard int` | target |
 | Kyren Sniper | `you may have this creature deal 1 damage to target player or planeswal` | creature |
 | Labyrinth Minotaur | `that creature doesn't untap during its controller's next untap step` | controller's |
@@ -407,7 +380,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Mirari's Wake | `add one mana of any type that land produced` | any |
 | Misfortune | `you put a +1/+1 counter on each creature you control and gain 4 life` | each |
 | Misfortune | `you put a -1/-1 counter on each creature that player controls and misf` | each misfortune |
-| Mishra's Factory | `target assembly-worker creature gets +1/+1 until end of turn` | creature |
 | Mishra's War Machine | `this creature deals 3 damage to you unless you discard a card. if it d` | creature |
 | Mistform Wakecaster | `choose a creature type. each creature you control becomes that type un` | each |
 | Mogg Infestation | `destroy all creatures target player controls. for each creature that d` | all |
@@ -424,7 +396,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Necra Sanctuary | `if you control a green or white permanent, target player loses 1 life.` | or |
 | Needle Storm | `needle storm deals 4 damage to each creature with flying` | each |
 | Nefashu | `up to five target creatures each get -1/-1 until end of turn` | each |
-| Nemata, Grove Guardian | `saproling creatures get +1/+1 until end of turn` | creatures |
 | Nevinyrral's Disk | `destroy all artifacts, creatures, and enchantments` | all |
 | No Rest for the Wicked | `return to your hand all creature cards in your graveyard that were put` | all |
 | Noetic Scales | `return to its owner's hand each creature that player controls with pow` | each |
@@ -445,8 +416,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Opal Gargoyle | `if this permanent is an enchantment, it becomes a 2/2 gargoyle creatur` | permanent |
 | Opal Titan | `if this permanent is an enchantment, it becomes a 4/4 giant creature w` | permanent |
 | Opposition | `tap target artifact, creature, or land` | or |
-| Orc General | `other orc creatures get +1/+1 until end of turn` | creatures |
-| Orcish Captain | `flip a coin. if you win the flip, target orc creature gets +2/+0 until` | creature |
 | Orcish Healer | `regenerate target black or green creature` | or |
 | Orcish Healer | `regenerate target black or green creature` | or |
 | Orim's Chant | `target player can't cast spells this turn. if this spell was kicked, c` | spell |
@@ -457,7 +426,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Parallax Inhibitor | `put a fade counter on each permanent with fading you control` | each |
 | Paroxysm | `that player reveals the top card of their library. if that card is a l` | card, |
 | Patriarch's Bidding | `each player chooses a creature type. each player returns all creature ` | all |
-| Pearlspear Courier | `target soldier creature gets +2/+2 and has vigilance for as long as th` | creature |
 | Peat Bog | `add {b}{b}. if there are no depletion counters on this land, sacrifice` | land, |
 | Peer Pressure | `choose a creature type. if you control more creatures of that type tha` | all |
 | Perish | `destroy all green creatures. they can't be regenerated` | all |
@@ -465,9 +433,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Pestilent Haze | `all creatures get -2/-2 until end of turn` | all |
 | Phantasmal Sphere | `put a +1/+1 counter on this creature, then sacrifice this creature unl` | creature |
 | Phantasmal Sphere | `target opponent creates an x/x blue orb creature token with flying, wh` | creature |
-| Phyrexian Driver | `other mercenary creatures get +1/+1 until end of turn` | creatures |
 | Phyrexian Processor | `create an x/x black phyrexian minion creature token, where x is the li` | artifact |
-| Piety Charm | `target soldier creature gets +2/+2 until end of turn` | creature |
 | Plague Dogs | `all creatures get -1/-1 until end of turn` | all |
 | Plague Wind | `destroy all creatures you don't control. they can't be regenerated` | all |
 | Planar Birth | `return all basic land cards from all graveyards to the battlefield tap` | all |
@@ -586,11 +552,9 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Slice and Dice | `you may have it deal 1 damage to each creature` | each |
 | Slithery Stalker | `exile target green or white creature an opponent controls` | or |
 | Smokestack | `that player sacrifices a permanent of their choice for each soot count` | artifact |
-| Snarling Undorak | `target beast creature gets +1/+1 until end of turn` | creature |
 | Snow Fortress | `this creature deals 1 damage to target creature without flying that's ` | that's |
 | Snow Hound | `return this creature and target green or blue creature you control to ` | or |
 | Songs of the Damned | `add {b} for each creature card in your graveyard` | card |
-| Soraya the Falconer | `target bird creature gains banding until end of turn` | creature |
 | Sorrow's Path | `it deals 2 damage to you and each creature you control` | each |
 | Soul Echo | `sacrifice this enchantment if there are no echo counters on it. otherw` | enchantment |
 | Soulshriek | `target creature you control gets +x/+0 until end of turn, where x is t` | cards |
@@ -608,13 +572,12 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Sporogenesis | `remove all fungus counters from all creatures` | all |
 | Spreading Plague | `destroy all other creatures that share a color with it. they can't be ` | all |
 | Squall | `squall deals 2 damage to each creature with flying` | each |
-| Squirrel Wrangler | `squirrel creatures get +1/+1 until end of turn` | creatures |
 | Stand or Fall | `for each defending player, separate all creatures that player controls` | all |
 | Standardize | `choose a creature type other than wall. each creature becomes that typ` | each |
 | Starstorm | `starstorm deals x damage to each creature` | each |
 | Steel Leaf Paladin | `return a green or white creature you control to its owner's hand` | or |
 | Stench of Evil | `destroy all plains. for each land destroyed this way, stench of evil d` | all |
-| Strength of Night | `creatures you control get +1/+1 until end of turn. if this spell was k` | spell creatures |
+| Strength of Night | `creatures you control get +1/+1 until end of turn. if this spell was k` | spell |
 | Stromgald Spy | `you may have defending player play with their hand revealed for as lon` | have |
 | Subterranean Spirit | `this creature deals 1 damage to each creature without flying` | each |
 | Suffocation | `suffocation deals 4 damage to the controller of the last red instant o` | spell |
@@ -701,13 +664,11 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Vug Lizard | `if this permanent came under your control since the beginning of your ` | permanent |
 | Wake of Destruction | `destroy target land and all other lands with the same name as that lan` | all other |
 | Walking Sponge | `target creature loses your choice of flying, first strike, or trample ` | or |
-| Wall of Caltrops | `if at least one other wall creature is blocking that creature and no n` | creature |
 | Wall of Nets | `exile all creatures blocked by this creature` | all creature |
 | Wall of Resistance | `if this creature was dealt damage this turn, put a +0/+1 counter on it` | creature |
 | Wall of Tombstones | `change this creature's base toughness to 1 plus the number of creature` | cards |
 | Wallop | `destroy target blue or black creature with flying` | or |
 | Wand of Ith | `target player reveals a card at random from their hand. if it's a land` | card, card, |
-| Wandering Mage | `prevent the next 1 damage that would be dealt to target cleric or wiza` | creature |
 | War Dance | `target creature gets +x/+x until end of turn, where x is the number of` | enchantment |
 | Warpath | `warpath deals 3 damage to each blocking creature and each blocked crea` | each each |
 | Wash Out | `return all permanents of the color of your choice to their owners' han` | all |
@@ -728,7 +689,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Wrath of God | `destroy all creatures. they can't be regenerated` | all |
 | Wrath of Marit Lage | `tap all red creatures` | all |
 | Yavimaya Granger | `if this permanent came under your control since the beginning of your ` | permanent |
-| Zhalfirin Commander | `target knight creature gets +1/+1 until end of turn` | creature |
 | Zombie Boa | `choose a color. whenever this creature becomes blocked by a creature o` | creature |
 | Zombie Mob | `exile all creature cards from your graveyard` | all |
 | Zoologist | `reveal the top card of your library. if it's a creature card, put it o` | card, |
