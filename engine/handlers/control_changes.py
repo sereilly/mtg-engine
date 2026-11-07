@@ -971,18 +971,21 @@ def exchange_control_of_targets(game: Game, instruction: OracleInstruction, cont
         # either of the two seats above — the sweep destroys a permanent on the
         # battlefield it is actually on.
         doomed = [aura for host in (first, second) for aura in auras_attached_to(host)]
-        for seat, player in enumerate(game.players):
-            on_this_board = {
-                aura.permanent_id
-                for aura in doomed
-                if game.controller_index_of(aura) == seat
-            }
-            if not on_this_board:
-                continue
-            for destroyed in game._destroy_swept_permanents(
-                player, lambda perm: perm.permanent_id in on_this_board
-            ):
-                game.log.append(f"{card.name} destroyed {destroyed.card.name}")
+        # One destruction (CR 603.10a): every victim looks back at the others
+        # (``Game.leaving_together``), and what they give back enters together.
+        with game.entering_together(), game.leaving_together():
+            for seat, player in enumerate(game.players):
+                on_this_board = {
+                    aura.permanent_id
+                    for aura in doomed
+                    if game.controller_index_of(aura) == seat
+                }
+                if not on_this_board:
+                    continue
+                for destroyed in game._destroy_swept_permanents(
+                    player, lambda perm: perm.permanent_id in on_this_board
+                ):
+                    game.log.append(f"{card.name} destroyed {destroyed.card.name}")
     return True, "resolved"
 
 

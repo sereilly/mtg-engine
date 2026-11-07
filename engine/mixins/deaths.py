@@ -650,8 +650,24 @@ class DeathsMixin:
         exactly when the battlefield no longer lists it, under the seat it
         last had (CR 603.10's last-known information): whichever order the
         caller removed it in, the scans see one observer set.
+
+        **…and everything else the same event has already taken off the
+        battlefield** (``leaving_together``: one state-based check, one
+        "destroy all"), under the seat each last had — "using the existence of
+        those abilities and the appearance of objects immediately prior to the
+        event" is every object the event moves, not only the one this death
+        is. A Massacre Wurm the check's first sweep took saw nothing the next
+        sweep took beside it.
         """
         observers = list(self.permanents_with_controller())
+        for gone in self.departed_in_this_event():
+            if gone is dead_permanent or any(
+                permanent is gone for _seat, permanent in observers
+            ):
+                continue
+            gone_seat = self.controller_or_last_known(gone)
+            if gone_seat is not None:
+                observers.append((gone_seat, gone))
         if dead_seat is not None and not any(
             permanent is dead_permanent for _seat, permanent in observers
         ):

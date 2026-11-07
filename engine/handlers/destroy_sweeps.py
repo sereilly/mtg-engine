@@ -98,10 +98,14 @@ def _sweep_by_type(
         if seat is not None
     }
     died: list[Permanent] = []
-    for player in game.players:
-        died.extend(game._destroy_swept_permanents(
-            player, _matches, allow_regeneration=regeneration_allowed
-        ))
+    # One destruction (CR 603.10a, ``Game.leaving_together``): every victim
+    # looks back at the others, whichever seat's were swept first, and what
+    # their leaving gives back enters together (CR 610.3d).
+    with game.entering_together(), game.leaving_together():
+        for player in game.players:
+            died.extend(game._destroy_swept_permanents(
+                player, _matches, allow_regeneration=regeneration_allowed
+            ))
     # "…where X is the number of creatures that **died this way**" (Hellfire).
     # What actually died, not what the sweep aimed at: a regenerated or
     # indestructible permanent is still there, and CR 701.8c is explicit that
@@ -147,13 +151,15 @@ def destroy_creatures_in_combat_with_source(game: Game, instruction: OracleInstr
         victims = game.creatures_in_combat_with(context.source_permanent)
     victims = list(victims or ())
     destroyed_names: list[str] = []
-    for player in game.players:
-        destroyed = game._destroy_swept_permanents(
-            player,
-            lambda p: any(p is victim for victim in victims),
-            allow_regeneration=not bypass_regen,
-        )
-        destroyed_names.extend(perm.card.name for perm in destroyed)
+    # One destruction (CR 603.10a): see ``_sweep_by_type``.
+    with game.entering_together(), game.leaving_together():
+        for player in game.players:
+            destroyed = game._destroy_swept_permanents(
+                player,
+                lambda p: any(p is victim for victim in victims),
+                allow_regeneration=not bypass_regen,
+            )
+            destroyed_names.extend(perm.card.name for perm in destroyed)
     if destroyed_names:
         game.log.append(
             f"{context.card.name} destroyed {', '.join(destroyed_names)} "
@@ -609,15 +615,19 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
         game.log.append(f"{context.card.name}: nothing to destroy")
         return True, "resolved"
     died: list[Permanent] = []
-    for perm in matched:
-        seat = game.controller_index_of(perm)
-        if seat is None:
-            continue
-        died.extend(game._destroy_swept_permanents(
-            game.players[seat],
-            lambda candidate, target=perm: candidate is target,
-            allow_regeneration=not instruction.payload.get("bypass_regeneration"),
-        ))
+    # One destruction (CR 603.10a): see ``_sweep_by_type``. One permanent at a
+    # time, so without the event a Massacre Wurm destroyed first by a Wrath of
+    # God saw none of the opponent's creatures die after it.
+    with game.entering_together(), game.leaving_together():
+        for perm in matched:
+            seat = game.controller_index_of(perm)
+            if seat is None:
+                continue
+            died.extend(game._destroy_swept_permanents(
+                game.players[seat],
+                lambda candidate, target=perm: candidate is target,
+                allow_regeneration=not instruction.payload.get("bypass_regeneration"),
+            ))
     # See `_sweep_by_type`: the record is what died, which is what a later
     # "that died this way" counts. The *objects* ride beside the number for a
     # later sentence that iterates them rather than counting them (Glyph of
@@ -689,10 +699,12 @@ def destroy_all_lands_of_type(game: Game, instruction: OracleInstruction, contex
         if seat is not None
     }
     died: list[Permanent] = []
-    for player in game.players:
-        died.extend(
-            game._destroy_swept_permanents(player, _matches, allow_regeneration=False)
-        )
+    # One destruction (CR 603.10a): see ``_sweep_by_type``.
+    with game.entering_together(), game.leaving_together():
+        for player in game.players:
+            died.extend(
+                game._destroy_swept_permanents(player, _matches, allow_regeneration=False)
+            )
     # The record every other destroy sweep keeps, and this one did not: what a
     # later sentence of the same spell counts or iterates. `destroy_all_lands`
     # and `destroy_all_matching` have written it since Hellfire; the by-type

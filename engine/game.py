@@ -463,12 +463,25 @@ class Game(
     # owed (``engine/entry_awaiting.py``). Empty between entries in every
     # game, so a ``vars()`` walker reads it the same before and after.
     entries_in_progress: list = field(default_factory=list)
-    # CR 603.6a: the records of the permanents one event is putting onto the
-    # battlefield together, while that event's caller is still handing them
-    # in (``ZoneFunnelsMixin.entering_together``). None between events and
-    # while a newcomer's own entry state is performed; never left set across
-    # a decision, so a ``vars()`` walker reads None before and after.
-    entry_batch: "list | None" = None
+    # CR 603.6a: the event (``entry_awaiting.EntryEvent``) entries are being
+    # handed to right now, while its opener — or an answer that re-joins it —
+    # is running (``ZoneFunnelsMixin.entering_together``). None between
+    # events, while the newcomers' entry states are performed, and between
+    # the answers of an event that waits on several; never left set across a
+    # decision, so a ``vars()`` walker reads None before and after.
+    entry_batch: "EntryEvent | None" = None
+    # …and every event not yet closed: the one being handed entries, and one
+    # that waits across decisions for the answers still to hand it some
+    # ("each player may put …", Show and Tell), so that the release of the
+    # object it opened under can close one its loop never came back for
+    # (``close_entry_events_of``). Empty between events.
+    open_entry_events: list = field(default_factory=list)
+    # CR 603.10a: what one event has taken off the battlefield so far, while
+    # it is open (``ControlSeamMixin.leaving_together``: one state-based
+    # check, one "destroy all") — each is an observer of every later death in
+    # it, as it last existed. None between events; never left set across a
+    # decision, so a ``vars()`` walker reads None before and after.
+    departure_batch: "list | None" = None
     # Seats controlled by a human, set by the web layer each action. Empty in
     # headless/AI play, so forced sacrifices there resolve inline without a prompt.
     interactive_seats: set[int] = field(default_factory=set)

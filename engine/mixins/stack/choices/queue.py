@@ -23,7 +23,7 @@ lists them, and ``table.py`` registers every kind.
 from __future__ import annotations
 
 from ....destruction_events import destruction_finished
-from ....entry_awaiting import awaited_entries
+from ....entry_awaiting import ENTRY_EVENT, awaited_entries
 from ....pending_choices import CHOICE_SPECS, PendingChoice, spec_for
 from ....replacement_choices import (CAUSE_SEAT, RESOLVING_TARGETS, pending_choices_for,
                                      stamp_draw_of, stamp_resolving)
@@ -208,7 +208,14 @@ class PendingChoicesMixin:
         """Drop *choice* from the queue — the answer has been applied, or the
         thing it was about is gone. Identity, not equality: two seats can owe
         the same-looking choice."""
+        before = len(self.pending_choices)
         self.pending_choices = [c for c in self.pending_choices if c is not choice]
+        # A prompt an event stamped, dropped without an answer re-joining it
+        # (CR 603.6a): if it was the last thing the event waited on, the
+        # event closes now. Inert inside the answer — the re-join closes it.
+        event = choice.data.get(ENTRY_EVENT)
+        if event is not None and len(self.pending_choices) != before:
+            self.close_entry_event_if_settled(event)
 
     def clear_pending_choices(self, kind: str, player_index: int | None = None) -> None:
         for choice in self.pending_choices_of(kind, player_index):
@@ -358,6 +365,10 @@ class PendingChoicesMixin:
                 # resolution set off while it was held (``held_triggers``) —
                 # so every one of them chooses its targets after the check.
                 with self.putting_triggers_on_stack():
+                    # An event this resolution opened whose loop never came
+                    # back for it (CR 603.6a): what it was handed enters now,
+                    # as the resolution ends, rather than never.
+                    self.close_entry_events_of(item)
                     self._rejoin_held_triggers(item)
                     # The step the resolution handed over (a spell's CR 608.2n
                     # bin) — run after the object has left the stack, so the
@@ -438,7 +449,12 @@ class PendingChoicesMixin:
             # the draws parked behind it are released here, with the object
             # they belong to still resolving, so a prompt one of *them* arms
             # holds the same object. Inert for every other prompt.
-            with self.answering_draw_prompt(choice):
+            #
+            # …and a prompt armed while an event was putting permanents onto
+            # the battlefield is answered inside that event (CR 603.6a): what
+            # the answer puts down joins the rest, and the event closes at its
+            # last answer (``ZoneFunnelsMixin.rejoining_entry_event``).
+            with self.rejoining_entry_event(choice), self.answering_draw_prompt(choice):
                 answered = apply()
         finally:
             if pushed:

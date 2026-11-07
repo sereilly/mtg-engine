@@ -41,7 +41,6 @@ modules named after the question, each the handler twin of a lowering module:
 from __future__ import annotations
 
 import dataclasses
-from contextlib import nullcontext
 from typing import TYPE_CHECKING
 
 from .. import simultaneous_damage
@@ -837,7 +836,27 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     # behind the one that stopped ("each player may ante the top card of their
     # library" — Rebirth). The loop is the last thing this handler does, which
     # is the other half of that rule.
-    run_resumable(game, seats, offer)
+    #
+    # **What the seats put onto the battlefield is one event** (CR 603.6a,
+    # 101.4): "each player may put an artifact, creature, enchantment, or land
+    # card from their hand onto the battlefield" (Show and Tell) — "after all
+    # choices are made, the cards are put onto the battlefield simultaneously"
+    # (its ruling, 2008-04-01). Each seat's answer arrives after this call
+    # has returned, so the event outlives the offers
+    # (``entering_together_through``): every answer re-joins it, and it closes
+    # once the last seat has answered — each card entering then, with the
+    # others, a Soul Warden among them gaining for each. Only for an offer to
+    # several seats whose action is one instruction with nothing nested, for
+    # ``for_each``'s reason below: a later step reading the permanent an
+    # earlier one entered would read one held for the end of the event.
+    if len(seats) > 1 and _a_single_leaf(
+        _steps(instruction, "action") + _steps(instruction, "then")
+    ):
+        game.entering_together_through(
+            lambda then: run_resumable(game, seats, offer, then=then)
+        )
+    else:
+        run_resumable(game, seats, offer)
     return True, "resolved"
 
 
@@ -1576,11 +1595,19 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     # steps may read, in a later step of the same repetition, the permanent an
     # earlier one entered ("…create a token. It gains haste"), and a
     # newcomer held for the end of the event is not there to read.
-    together = (
-        game.entering_together() if _a_single_leaf(steps) else nullcontext()
-    )
-    with together:
-        run_resumable(game, matched + [_END_OF_ITERATION], run_one)
+    #
+    # The event outlives a repetition that stops to ask ("for each creature
+    # that died this way, put a creature card from … graveyard onto the
+    # battlefield", Glyph of Reincarnation, asks a person which card each
+    # time): a ``with`` block closed at the first suspension and every later
+    # card entered at its own answer (``entering_together_through``).
+    items = matched + [_END_OF_ITERATION]
+    if _a_single_leaf(steps):
+        game.entering_together_through(
+            lambda then: run_resumable(game, items, run_one, then=then)
+        )
+    else:
+        run_resumable(game, items, run_one)
     return True, "resolved"
 
 
