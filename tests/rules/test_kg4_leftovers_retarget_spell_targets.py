@@ -101,6 +101,7 @@ _RETARGETERS = {
 }
 
 
+@pytest.mark.cr("115.7a")
 def test_the_census_covers_every_two_step_retarget_in_the_pool():
     """The table is the pool's, not a sample: every card whose program carries
     the two-step change is in it, and there are at least eight."""

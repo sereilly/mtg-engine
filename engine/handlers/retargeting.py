@@ -281,8 +281,8 @@ def _legal_new_targets(game: Game, item: StackItem, bound) -> list[dict]:
 
 def _resolving_spell(game: Game):
     """The **spell** whose resolution is running this effect (Deflection), or
-    None for an ability (Willbender's trigger: an ability is not a spell,
-    CR 113.7a) or nothing resolving."""
+    None for an ability (Willbender's trigger: a spell is a card on the stack,
+    CR 112.1) or nothing resolving."""
     resolving = game.resolving_items[-1] if getattr(game, "resolving_items", None) else None
     if resolving is None or getattr(resolving, "is_ability", False):
         return None

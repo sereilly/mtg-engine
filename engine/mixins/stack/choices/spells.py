@@ -360,7 +360,7 @@ class SpellChoicesMixin:
     def _retarget_option_seat(self, option: dict) -> "int | None":
         """Whose a retarget candidate is: a face's seat, a permanent's
         controller (through the control seam), a spell's controller (a
-        counterspell re-aimed at another spell, CR 112.2), else None."""
+        counterspell re-aimed at another spell, CR 405.4), else None."""
         if option.get("kind") == "player":
             return option.get("seat")
         if option.get("kind") == "permanent":
