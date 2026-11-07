@@ -1,24 +1,26 @@
-"""A land card a seat does not need is not worth a card (kg4 aivalue).
+"""A landcycle for a land the seat does not need is not proposed (kg4 aivalue).
 
 SCG's wave 2 saw a seat return Eternal Dragon from its graveyard in its
 upkeep for {3}{W}{W} and plainscycle it for {2} with what was left, three
 turns running (seed 11, game 1, turns 9-11), with ten lands on the table.
 Re-measured on 313bd09d the loop is the **cycle**, not the return: the
 hand chooser (``ai_hand_activations``) proposes what its rehearsal does not
-read as harmful, and a standing priced every card in hand alike
+read as harmful, and a standing prices every card in hand alike
 (``ai_rehearsal.CARD_WORTH``), so plainscycling a seven-drop the seat could
 cast next turn for its eleventh land read as a card out and a card in —
 nothing — at a flat 2.5. A graveyard-recursion value (the brief's guess)
 would have made that cycle read *better*: the Dragon in the yard would be
 worth something and the Plains still a card.
 
-The standing already prices a land on the battlefield beyond the six a seat
-is counted as needing at ``SPARE_LAND_WORTH``; a land card in hand beyond
-them is now priced the same (``ai_rehearsal.spare_lands_held``).
+The standing prices a land on the battlefield beyond the six a seat is
+counted as needing at ``SPARE_LAND_WORTH``; a search that can only find a
+land, made when the seat's lands are already more than that, now pays the
+difference (``ai_rehearsal.spare_land_find_price``, read off the seat's own
+library through ``search_matches``).
 
-Validated backwards: with the hand's lands priced as cards (the base), the
-census finds every search-cycler proposed for a spare land, and the seeded
-drive finds the return-and-cycle turn.
+Validated backwards: with the price answering 0 (the base), the census finds
+every landcycler proposed for a spare land, and the seeded drive finds the
+return-and-cycle turn.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ from unittest import mock
 
 import pytest
 
-from engine import ai_rehearsal
+from engine import ai_hand_activations, ai_rehearsal
 from engine.ai_hand_activations import choose_hand_activation_action
 from engine.ai_simulator import run_ai_simulation
 from engine.ai_weighed_cast import _effect_steps
@@ -49,8 +51,8 @@ def pool() -> dict:
     return {card.name: card for card in compilation_units(cards)}
 
 
-def _no_spare_lands(game, seat, lands_controlled=None) -> int:
-    return 0
+def _no_price(game, seat, searches) -> float:
+    return 0.0
 
 
 def _land_cyclers(pool) -> list:
@@ -122,28 +124,30 @@ def test_no_card_is_landcycled_for_a_land_the_seat_does_not_need(pool):
     assert set(found["cycled_for_a_need"]) == set(found["examined"]), found
 
 
-def test_with_hand_lands_priced_as_cards_the_census_finds_every_cycle(pool):
-    """Backwards: every land card in hand a card, as on 313bd09d."""
-    with mock.patch.object(ai_rehearsal, "spare_lands_held", _no_spare_lands):
+def test_without_the_price_the_census_finds_every_cycle(pool):
+    """Backwards: the find unpriced, as on 313bd09d."""
+    with mock.patch.object(ai_hand_activations, "spare_land_find_price", _no_price):
         found = _census(pool)
     assert set(found["cycled_for_a_spare"]) == set(found["examined"]), found
 
 
-def test_a_spare_land_in_hand_is_worth_a_spare_land(pool):
-    """The standing itself: with six lands out, a seventh in hand is worth
-    ``SPARE_LAND_WORTH``; with three out, a land in hand is a card."""
-    game = _table(pool, pool["Plains"], "Plains", 6)
-    with_land = ai_rehearsal.seat_standing(game, 0)
-    game.players[0].hand = []
-    assert with_land - ai_rehearsal.seat_standing(game, 0) == pytest.approx(
-        ai_rehearsal.SPARE_LAND_WORTH
-    )
-    game = _table(pool, pool["Plains"], "Plains", 3)
-    with_land = ai_rehearsal.seat_standing(game, 0)
-    game.players[0].hand = []
-    assert with_land - ai_rehearsal.seat_standing(game, 0) == pytest.approx(
-        ai_rehearsal.CARD_WORTH
-    )
+def test_the_price_is_the_finds_and_the_seats(pool):
+    """Priced only where every card the search can find is a land and the
+    seat's lands, the find among them, are more than it needs: a Plains at
+    six lands out, nothing at three, nothing for a search that could find a
+    creature."""
+    from engine.ai_valuation import land_searches
+
+    dragon = pool["Eternal Dragon"]
+    cycle = usable_activated_abilities(compile_card_oracle(dragon), zone=HAND)[0]
+    searches = land_searches(cycle.instruction)
+    assert searches
+    spare = ai_rehearsal.CARD_WORTH - ai_rehearsal.SPARE_LAND_WORTH
+    assert ai_rehearsal.spare_land_find_price(
+        _table(pool, dragon, "Plains", 6), 0, searches,
+    ) == pytest.approx(spare)
+    assert ai_rehearsal.spare_land_find_price(_table(pool, dragon, "Plains", 3), 0, searches) == 0
+    assert ai_rehearsal.spare_land_find_price(_table(pool, dragon, "Plains", 6), 0, ()) == 0
 
 
 # --- the board the entry names ------------------------------------------------
@@ -187,7 +191,7 @@ def test_eternal_dragon_is_not_returned_and_cycled_in_one_turn():
 
 
 @pytest.mark.full
-def test_with_hand_lands_priced_as_cards_the_seeded_games_loop():
-    with mock.patch.object(ai_rehearsal, "spare_lands_held", _no_spare_lands):
+def test_without_the_price_the_seeded_games_loop():
+    with mock.patch.object(ai_hand_activations, "spare_land_find_price", _no_price):
         _returns, loops = _drive()
     assert loops, "the base's return-and-cycle turn did not reappear"

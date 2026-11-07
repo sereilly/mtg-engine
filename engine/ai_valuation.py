@@ -1164,6 +1164,21 @@ def lowers_toughness(card: CardDefinition) -> bool:
     return False
 
 
+def land_searches(instruction: OracleInstruction | None) -> tuple:
+    """The payloads of *instruction*'s library searches, when a search is
+    the whole of what it does — "Plainscycling {2}" is "search your library
+    for a Plains card, reveal it, put it into your hand, then shuffle" — or
+    ``()``. Whether what they can find is only land is the library's to say
+    (``ai_rehearsal.spare_land_find_price``), so a typecycle for a creature
+    type and a landcycle are one shape here."""
+    if instruction is None:
+        return ()
+    steps = _effect_steps(instruction)
+    if not steps or any(step.kind != "search_library" for step in steps):
+        return ()
+    return tuple(step.payload or {} for step in steps)
+
+
 def board_lowers_toughness(game) -> bool:
     """Whether some permanent on the battlefield — any seat's, read as it is
     now (``Permanent.effective_card``, CR 613 layer 1 and 3) — carries a
@@ -1422,6 +1437,7 @@ __all__ = [
     "ALL_MEANS_EVERY_SEAT_KINDS",
     "DRAW_REPLACEMENT_ARMINGS",
     "board_lowers_toughness",
+    "land_searches",
     "lowers_toughness",
     "EVERY_PLAYER",
     "MANA_ABILITY_KINDS",

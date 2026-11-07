@@ -21,13 +21,13 @@ module's reason: the action shape is its own
 from __future__ import annotations
 
 from .activation_prohibitions import activation_prohibition
-from .ai_valuation import is_mana_ability
+from .ai_valuation import is_mana_ability, land_searches
 from .game import Game
 from .oracle import compile_card_oracle
 from .activation_zones import HAND
 from .targeting import usable_activated_abilities
 from .ai_payment import _plan_land_taps, tap_planned_lands
-from .ai_rehearsal import Rehearsal, deliberating, rehearse
+from .ai_rehearsal import Rehearsal, deliberating, rehearse, spare_land_find_price
 from .ai_actions import HandActivationAction
 from .ai_scoring import SWING_CAP, _score_activation, _worth_proposing
 
@@ -135,6 +135,18 @@ def _choose_hand_activation_action(
             land_tap_colors=tap_colors,
         )
         rehearsal = _rehearse_hand_activation(game, player_index, candidate)
+        # A landcycle for a land the seat does not need gives a card up for
+        # a spare land, which no standing prices (kg4: Eternal Dragon
+        # returned for five and plainscycled for two, turn after turn).
+        price = spare_land_find_price(
+            game, player_index, land_searches(ability.instruction),
+        )
+        if price and rehearsal is None:
+            continue
+        if price:
+            rehearsal = replace(
+                rehearsal, now=rehearsal.now - price, lasting=rehearsal.lasting - price,
+            )
         if rehearsal is not None:
             if not _worth_proposing(rehearsal):
                 continue

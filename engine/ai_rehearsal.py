@@ -231,27 +231,46 @@ def seat_standing(game, seat: int, *, now: bool = True) -> float:
     worth -= max(0, lands - LANDS_WORTH_KEEPING) * (
         PERMANENT_WORTH + LAND_WORTH - SPARE_LAND_WORTH
     )
-    # ...and so is a land **card in hand** beyond them (:func:`spare_lands_held`):
-    # it is a land drop nobody needs, not a card. Priced as a card, a cycle
-    # that traded a held spell for one read as a card out and a card in —
-    # nothing — so a seat with ten lands paid {3}{W}{W} in its upkeep to
-    # return Eternal Dragon from its graveyard and plainscycled it for a
-    # Plains with what was left, three turns running (SCG W2, seed 11; kg4).
-    worth -= spare_lands_held(game, seat, lands) * (CARD_WORTH - SPARE_LAND_WORTH)
     return worth
 
 
-def spare_lands_held(game, seat: int, lands_controlled: "int | None" = None) -> int:
-    """How many of the land cards in *seat*'s hand are beyond the
-    ``LANDS_WORTH_KEEPING`` lands a seat is counted as needing, the lands it
-    controls counted first (*lands_controlled*, or read here). A card in hand
-    is read as printed: it is a card, not a permanent (CR 109.2)."""
-    if lands_controlled is None:
-        lands_controlled = sum(
-            1 for permanent in game.controlled_by(seat) if permanent.has_type("land")
-        )
-    held = sum(1 for card in game.players[seat].hand if card.primary_type == "land")
-    return min(held, max(0, lands_controlled + held - LANDS_WORTH_KEEPING))
+def spare_land_find_price(game, seat: int, searches) -> float:
+    """What a search that can find **only land cards** in *seat*'s library
+    (*searches*: the payloads of its ``search_library`` steps,
+    ``ai_valuation.land_searches``) costs *seat* beyond what a standing reads,
+    when the land it finds is one the seat does not need: ``CARD_WORTH`` less
+    ``SPARE_LAND_WORTH``, or 0.
+
+    A standing prices a card in hand at a card whatever it is, and a land on
+    the battlefield beyond the ``LANDS_WORTH_KEEPING`` a seat needs at a
+    spare. So a landcycle — "Plainscycling {2}", a held card traded for a
+    land card — reads as a card out and a card in: nothing. A seat with ten
+    lands paid {3}{W}{W} in its upkeep to return Eternal Dragon from its
+    graveyard and plainscycled it for a Plains with what was left, three
+    turns running (SCG W2, seed 11; kg4). The find is a land drop nobody
+    needs when the lands the seat controls and holds, the find among them,
+    are more than it needs.
+
+    Priced here, on the one road that chooses a land, and not in the
+    standing for every land card in a hand: there it priced every draw a
+    rehearsal makes by the one card its reshuffled library happened to give
+    up, and a cycle for a random card at six lands became a coin flip."""
+    from .search_filters import search_matches
+
+    if not searches:
+        return 0.0
+    library = game.players[seat].library
+    finds = [
+        card for card in library
+        if any(search_matches(card, payload, game=game, owner=seat) for payload in searches)
+    ]
+    if not finds or any(card.primary_type != "land" for card in finds):
+        return 0.0
+    lands = sum(1 for permanent in game.controlled_by(seat) if permanent.has_type("land"))
+    lands += sum(1 for card in game.players[seat].hand if card.primary_type == "land")
+    if lands + 1 <= LANDS_WORTH_KEEPING:
+        return 0.0
+    return CARD_WORTH - SPARE_LAND_WORTH
 
 
 def permanent_loss(game, seat: int, permanent) -> float:
