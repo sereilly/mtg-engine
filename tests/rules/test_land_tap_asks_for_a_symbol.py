@@ -207,10 +207,10 @@ def test_the_census_names_a_hook_that_reads_the_summary_and_a_tap_that_does_not_
     first ability whatever is asked, which is what they were."""
     import engine.board_payment as board_payment
     import engine.mixins.stack.choices.payments as choices
-    import web.serialization as serialization
+    import web.offers as offers
 
     monkeypatch.setattr(board_payment, "tap_alone_symbols", lambda game, land: None)
-    monkeypatch.setattr(serialization, "tap_alone_symbols", lambda game, land: None)
+    monkeypatch.setattr(offers, "tap_alone_symbols", lambda game, land: None)
     monkeypatch.setattr(
         board_payment, "tap_alone_ability_for", lambda game, land, symbol: None
     )
