@@ -56,7 +56,7 @@ _LANDS = ("Plains", "Island", "Swamp", "Mountain", "Forest") * 3
 _EXAMINED_FLOOR = 1500
 _PROPOSED_FLOOR = 150
 #: The quick pass's one-in-N sample.
-_SAMPLE = 8
+_SAMPLE = 24
 
 
 def _table(own, other=("Grizzly Bears", "Mountain"), *, step="postcombat_main", active=0):
