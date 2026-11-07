@@ -1,4 +1,4 @@
-"""What a printed phrase says about an **ability on the stack** (CR 113.7a).
+"""What a printed phrase says about an **ability on the stack** (CR 113.1c).
 
 Its own module, below `nouns`, because an ability on the stack shares no
 vocabulary with the filter parser above it: it has no card, no type line and no
@@ -51,7 +51,7 @@ def _accept_ability_source(stream: TokenStream) -> tuple[str, ...]:
     """``from an <card type> source`` after an ability noun, or () if absent.
 
     The one adjective an ability on the stack can carry: it has no card and no
-    type line (CR 113.7a), so "artifact" here describes the *permanent the
+    type line (CR 405.1, 405.4), so "artifact" here describes the *permanent the
     ability came from*, not the ability. Consumed here rather than by the
     adjective loop below for the same reason the ability noun returns early —
     that loop asks questions of a card.

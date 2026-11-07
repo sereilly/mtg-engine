@@ -132,7 +132,7 @@ def test_undermine_follows_the_spell_past_the_seat_the_wire_sends(set_pool):
 def test_undermine_charges_the_controller_of_a_spell_somebody_else_owns(set_pool):
     """An opponent's spell of a card *you* own (cast out of your pile): the
     controller loses the life (CR 112.2) and the card goes to its owner's
-    graveyard (CR 701.6a)."""
+    graveyard as a countered spell (CR 701.6a)."""
     game = _table(set_pool, hand=["Undermine"])
     _spell_on_stack(game, set_pool, "Grizzly Bears", controller=1, owner=0)
 

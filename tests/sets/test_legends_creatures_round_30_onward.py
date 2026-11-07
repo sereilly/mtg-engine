@@ -1109,7 +1109,7 @@ def test_ayesha_tanaka_offers_only_an_artifact_sources_ability(set_pool):
     """"Counter target activated ability from an artifact source": the picker
     offers abilities, never spells, and only the ones the handler would counter.
 
-    Both halves matter. A spell on the stack is not an ability (CR 113.7a) and
+    Both halves matter. A spell on the stack is not an ability (CR 113.9) and
     a creature's ability is not from an artifact source, so an offer of either
     would be a {T} paid for a counter that then refuses its own target.
     """

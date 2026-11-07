@@ -1,5 +1,5 @@
 """Targets on the stack: which spells and abilities a phrase may aim at, and
-the gates that hold a named one to that list (CR 115.1, CR 113.7a, CR 601.2c).
+the gates that hold a named one to that list (CR 115.1, CR 115.2, CR 601.2c).
 
 A stack object is a target of its own kind — an index into the stack rather
 than a battlefield slot, an object that may be a spell or an ability (which
@@ -57,7 +57,7 @@ class StackTargetsMixin:
         ``spell_or_permanent`` is in it for its stack half (the Laces,
         Unsubstantiate): "target **spell** or creature" admits a spell and
         nothing else on the stack, and the enumeration already says so — an
-        ability is not a spell (CR 113.7a). Its permanent half is
+        ability is not a spell (CR 113.9). Its permanent half is
         :meth:`cast_target_refusal`'s.
 
         A **roles** spec with a stack role (Suffocating Blast's "target spell"
@@ -469,7 +469,7 @@ class StackTargetsMixin:
         targets: list[dict] = []
         # "Counter target **activated ability** from an artifact source" (Rust,
         # Ayesha Tanaka). A spec that asks for abilities offers abilities and
-        # nothing else: an ability is not a spell (CR 113.7a) and the two are
+        # nothing else: an ability is not a spell (CR 113.9) and the two are
         # never interchangeable targets, so this is a different list rather than
         # a wider one.
         ability_kinds = spec.get("stack_ability_kinds")
@@ -485,7 +485,7 @@ class StackTargetsMixin:
             # reverse of the engine's bottom-first list — emit the top-first index.
             targets.append({"kind": "stack", "stack_index": depth - 1 - i, "name": spell_text_card(item).name})
         # "Change the target of target spell **or ability** that targets only
-        # this creature." (Silver Wyvern.) CR 113.7a keeps the two apart, so the
+        # this creature." (Silver Wyvern.) CR 113.9 keeps the two apart, so the
         # ability half is a second list folded in rather than a widening of this
         # loop, which would have to gate every card question it asks — the same
         # shape ``also_stack`` takes for Circle of Protection's chosen source.
@@ -548,7 +548,7 @@ class StackTargetsMixin:
         self, spec: dict, ability_kinds: "list[str] | None",
         *, caster_index: int = 0, source=None,
     ) -> list[dict]:
-        """The **abilities** on the stack this spec may point at (CR 113.7a).
+        """The **abilities** on the stack this spec may point at (CR 115.2).
 
         Its own enumeration rather than a widening of the spell one above: an
         ability has no card of its own, so every narrowing a counterspell asks

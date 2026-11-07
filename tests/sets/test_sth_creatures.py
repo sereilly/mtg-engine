@@ -1108,7 +1108,7 @@ def test_w2g3_silver_wyvern_re_aims_an_activated_ability(set_pool):
     """The whole card in a game: an ability on the stack aimed at the Wyvern
     resolves at the creature beside it instead.
 
-    An ability is not a spell (CR 113.7a) and the two stack lists are the whole
+    An ability is not a spell (CR 113.9) and the two stack lists are the whole
     difference between this card and Deflection -- so this drives a real
     activated ability rather than a spell, and reads where the damage landed.
     """

@@ -221,7 +221,7 @@ def test_mages_contest_winning_does_not_counter_an_uncounterable_spell(set_pool)
 
 def test_mages_contest_cannot_be_cast_without_a_spell_to_target(set_pool):
     """CR 601.2c: no spell on the stack, no target, no cast — and an ability
-    is not a spell (CR 113.7a)."""
+    is not a spell (CR 113.9)."""
     game = _w2g3_table(set_pool)
     contest = set_pool("INV")["Mages' Contest"]
     game.players[0].hand.append(contest)

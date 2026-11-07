@@ -363,10 +363,10 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         stream.advance()
         noun = stream.peek_word()
         # "…that **ability's** controller" (Ayesha Tanaka). An ability on the
-        # stack is an object with a controller (CR 113.7a) but no card, so the
-        # word is not in `_GENERIC_NOUNS` — that set is what a *noun phrase* may
-        # head, and admitting it there would let "an ability" be parsed as a set
-        # of objects the matcher cannot test.
+        # stack is an object with a controller (CR 113.1c, 113.8) but no card
+        # (CR 405.1), so the word is not in `_GENERIC_NOUNS` — that set is what
+        # a *noun phrase* may head, and admitting it there would let "an
+        # ability" be parsed as a set of objects the matcher cannot test.
         if _heads_a_possessive(noun):
             stream.advance()
             # "that **creature's or spell's** controller" (Justice) / "that
@@ -419,8 +419,8 @@ def _heads_a_possessive(noun: str | None) -> bool:
     One reader rather than the same four-way disjunction spelled twice, which
     is what let a head noun and its alternatives drift while looking identical.
     ``ability`` is listed here and not in ``_GENERIC_NOUNS`` because an ability
-    on the stack is an object with a controller (CR 113.7a) and no card, and
-    that set is what a *noun phrase* may head (Ayesha Tanaka).
+    on the stack is an object with a controller (CR 113.1c, 113.8) and no card
+    (CR 405.1), and that set is what a *noun phrase* may head (Ayesha Tanaka).
     """
     if noun is None:
         return False

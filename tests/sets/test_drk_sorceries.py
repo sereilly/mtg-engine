@@ -248,7 +248,7 @@ def test_amnesia_empties_the_hand_of_everything_but_land(set_pool):
 
 
 def test_amnesia_reveals_the_hand_before_it_empties_it(set_pool):
-    """CR 701.16. The reveal is its own step and reaches the feed the client
+    """CR 701.20. The reveal is its own step and reaches the feed the client
     reads, not only the prose log — a discard nobody could watch is the half of
     this card that makes it verifiable."""
     game, p1, p2 = _two_seats(set_pool, "Amnesia", p2_hand=["Rag Man"])

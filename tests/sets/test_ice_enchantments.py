@@ -918,7 +918,7 @@ def test_cloak_of_confusion_lets_its_controller_trade_damage_for_a_discard(set_p
     isn't blocked, you may have it assign no combat damage this turn. If you do,
     defending player discards a card at random."
 
-    The Aura's trigger, not the creature's — CR 113.7a — so it fires from the
+    The Aura's trigger, not the creature's — CR 303.4e — so it fires from the
     attacker's attachments rather than from its own compiled program.
     """
     program = compile_card_oracle(set_pool("ICE")["Cloak of Confusion"])

@@ -2484,7 +2484,7 @@ def test_mmq_w1g5_played_by_reads_the_cast_stamp_and_not_the_controller(pool):
         "who played it is not who controls it now (CR 400.3)"
     )
     assert not subject_matches(game, reanimated, described, observer=0), (
-        "an opponent's creature that was never played (CR 701.5a)"
+        "an opponent's creature that was never played (CR 701.18b)"
     )
     assert not subject_matches(game, mine, described, observer=0), (
         "the seat half"

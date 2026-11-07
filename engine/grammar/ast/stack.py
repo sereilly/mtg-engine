@@ -71,7 +71,7 @@ class CounterAbility:
     CR 701.6a removes the object from the stack and it does nothing. Separate
     from :class:`CounterSpell` because the object is different: a spell has a
     card that goes to its owner's graveyard (CR 701.6a's second sentence), and
-    an ability on the stack has no card at all (CR 113.7a) — nothing to move
+    an ability on the stack has no card at all (CR 405.1) — nothing to move
     and nothing to exile instead.
 
     It *does* take an "unless its controller pays" clause, which this docstring
@@ -101,7 +101,7 @@ class DestroyCounteredAbilitySource:
     permanent" is not a target: the spell chose a **spell or ability**
     (CR 115.1), and the permanent is the source of whatever ability the counter
     in front of this sentence removed — which, once that ability is off the
-    stack, nothing but the counter's own record can name (CR 113.7a: an ability
+    stack, nothing but the counter's own record can name (CR 405.1: an ability
     has no card). So both halves are one back-reference, exactly as
     ``BoundPermanentActivationBan`` reads Interdict's "that permanent", and the
     lowering refuses without the producer.
@@ -316,8 +316,8 @@ class ChangeTarget:
     #: this creature." (Silver Wyvern.) CR 115.7a re-aims any object on the
     #: stack that has targets, and a spell and an ability are not two values of
     #: one description: an ability has no card, no type line and no colour
-    #: (CR 113.7a), so every narrowing an ``ObjectFilter`` carries is a question
-    #: it cannot be asked. A flag on the node, exactly as
+    #: (CR 405.1, 405.4), so every narrowing an ``ObjectFilter`` carries is a
+    #: question it cannot be asked. A flag on the node, exactly as
     #: :attr:`ReturnToZone.also_stack` is one for Unsubstantiate's "target spell
     #: or creature" — a union across two stack-object kinds that no object
     #: filter expresses.

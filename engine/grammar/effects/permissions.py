@@ -787,7 +787,7 @@ def _parse_bound_permanent_activation_ban(
     reason: every word is the rule. "Activated" is required — a ban with the
     word dropped would stop triggered and static abilities the card leaves
     alone — and the pronoun is required to be "that permanent", the restated
-    noun phrase CR 113.7a forces on a spell that targeted an ability, because
+    noun phrase CR 405.1 forces on a spell that targeted an ability, because
     an ability has no card of its own to name.
 
     Refuses without consuming, so every other sentence opening on "that" keeps

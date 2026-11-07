@@ -352,8 +352,8 @@ def test_camel_immune_to_desert_damage_while_attacking(all_cards, arn_by_name):
 
 
 def test_camel_not_immune_to_desert_damage_while_not_attacking(all_cards, arn_by_name):
-    # The shield is conditional on Camel itself attacking (CR 113.7a: another
-    # source's damage isn't affected once that condition is false).
+    # The shield is conditional on Camel itself attacking (CR 611.3a: a static
+    # ability's effect is not locked in, so it is off while Camel is not).
     desert = arn_by_name["Desert"]
     camel = arn_by_name["Camel"]
     non_attacker = Permanent(card=camel, attacking=False)

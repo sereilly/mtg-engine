@@ -965,7 +965,7 @@ def test_invoke_prejudice_taxes_a_colorless_spell(set_pool):
 
 # ---------------------------------------------------------------------------
 # Land Tax (round 21) — an intervening-if upkeep trigger over an optional
-# counted search. CR 603.4, CR 701.19, CR 701.20.
+# counted search and its shuffle. CR 603.4, CR 701.23, CR 701.24.
 # ---------------------------------------------------------------------------
 
 

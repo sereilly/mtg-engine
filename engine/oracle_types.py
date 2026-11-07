@@ -1342,9 +1342,9 @@ KEEP_FATES = frozenset({RETURN_CHOSEN_TO_HAND})
 #: countered ability came from. "**That permanent's** activated abilities can't
 #: be activated this turn" (Interdict) is the sentence that needs it, and
 #: nothing else can answer — the spell targeted the *ability*, which is off the
-#: stack by the time this clause runs (CR 113.7a gives it no card and no
-#: controller of its own), and the words name the permanent behind it rather
-#: than anything the caster chose.
+#: stack by the time this clause runs and was never a card (CR 405.1), so no
+#: zone holds anything that remembers its source, and the words name the
+#: permanent behind it rather than anything the caster chose.
 #:
 #: Its own record rather than ``LAST_TARGET_CONTROLLER`` beside it, for
 #: ``COUNTERED_SPELL_CONTROLLER``'s reason one line up: that one is a *seat* and

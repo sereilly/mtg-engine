@@ -115,7 +115,7 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         # condition was about, not one this sentence chose — so it is the bound
         # quantifier, exactly as "that spell" below is, and it reaches
         # `CounterAbility` rather than the spell node because an ability has no
-        # card to send to a graveyard (CR 113.7a).
+        # card to send to a graveyard (CR 405.1).
         #
         # Read here rather than through `parse_target_spec`, which would have to
         # admit "ability" as a noun phrase a matcher could test; it is not one,

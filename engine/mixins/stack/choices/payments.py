@@ -323,7 +323,7 @@ class PaymentChoicesMixin:
                 # as one countered by a Counterspell is.
                 self.counter_stack_object(target)
                 if data.get("countered_object") == "ability":
-                    # An ability on the stack has no card (CR 113.7a): removing
+                    # An ability on the stack has no card (CR 405.1): removing
                     # it from the stack is the whole of CR 701.6a for it, and
                     # binning `target.card` would put the *source permanent's*
                     # card in a graveyard it never left.

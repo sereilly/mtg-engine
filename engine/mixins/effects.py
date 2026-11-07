@@ -237,7 +237,7 @@ class EffectsMixin:
         # The same event watched by something attached to the damaged creature
         # rather than by the creature itself — invisible to the scan above,
         # because an Aura's ability is the Aura's and not a granted ability of
-        # its host (CR 113.7a). The same reader the combat fire sites use, so
+        # its host (CR 303.4e). The same reader the combat fire sites use, so
         # one condition kind has one meaning in both dispatch scopes.
         for seat, attachment, trig in attached_subject_triggers(
             self, permanent, {"creature_dealt_damage"}, "damaged_attached",

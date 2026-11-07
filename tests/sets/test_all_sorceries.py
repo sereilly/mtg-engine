@@ -172,7 +172,7 @@ def test_ritual_of_the_machine_honours_its_printed_exclusions(set_pool):
 # --- W2G4: library and modal ---
 """Diminishing Returns and Library of Lat-Nam.
 
-Diminishing Returns is three sentences and one of them is two piles: CR 701.19
+Diminishing Returns is three sentences and one of them is two piles: CR 701.24
 randomises a library **once**, so "their hand and graveyard into their library"
 has to be one shuffle. Written as two statements the hand's cards would be down
 among the graveyard's before the second one ran.
@@ -210,7 +210,7 @@ def _w2g4_duel(set_pool, card_name, *, interactive):
 
 
 def test_w2g4_diminishing_returns_shuffles_hand_and_graveyard_in_one_move(set_pool):
-    """One shuffle over two piles (CR 701.19). Both zones end empty and the
+    """One shuffle over two piles (CR 701.24). Both zones end empty and the
     library has grown by exactly what they held."""
     game, p1, p2 = _w2g4_duel(set_pool, "Diminishing Returns", interactive={0, 1})
     p1.hand.extend(_w2g4_deck_card(f"Held {i}") for i in range(2))

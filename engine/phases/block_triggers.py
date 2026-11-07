@@ -112,9 +112,9 @@ class BlockTriggersMixin:
             # Authority). One body, because the firing is identical: the same
             # noun phrase decides how many times it fires and the same pair
             # rides the context. What differs is only which permanent is the
-            # ability's source, and which seat controls it (CR 113.7a) — so
-            # those two travel beside the trigger rather than being re-derived
-            # below.
+            # ability's source, and which seat controls it (CR 113.7, 113.8)
+            # — so those two travel beside the trigger rather than being
+            # re-derived below.
             watchers = [
                 (blocker, controller_index, trig)
                 for trig in matching_triggers(
@@ -218,7 +218,7 @@ class BlockTriggersMixin:
             # "Whenever **enchanted creature** attacks or blocks" (Imprison) —
             # the block half of the union whose attack half fires in
             # declare_attackers_step. Something attached to the blocker, not
-            # the blocker itself: an Aura's ability is the Aura's (CR 113.7a),
+            # the blocker itself: an Aura's ability is the Aura's (CR 303.4e),
             # so it is on no `effective_card` the scan above reads.
             for seat, attachment, trig in (
                 () if already_blocking else attached_subject_triggers(
@@ -331,7 +331,7 @@ class BlockTriggersMixin:
             # dispatch scopes — the mirror of the scan in
             # `_fire_becomes_blocked_triggers`, and one body for the same
             # reason: only the ability's source and its controlling seat
-            # differ. CR 113.7a: an Aura's ability is the Aura's, controlled by
+            # differ. CR 303.4e: an Aura's ability is the Aura's, controlled by
             # the Aura's controller, so the seat is read off the attachment and
             # not borrowed from the attacker.
             watchers = [

@@ -44,7 +44,7 @@ def source_bites_target(game, instruction, context):
     card = context.card
     source = context.source_permanent
     # ``biter: "attached"`` — the permanent the source is attached to deals the
-    # damage (Farrel's Mantle). CR 113.7a leaves the ability the Aura's, so the
+    # damage (Farrel's Mantle). CR 113.7 leaves the ability the Aura's, so the
     # source is still the Aura and only the dealer moves; read off the source
     # rather than off the target, because an Aura that has fallen off has no
     # creature to bite with and must deal nothing rather than bite with itself.

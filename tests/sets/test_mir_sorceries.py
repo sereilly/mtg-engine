@@ -646,7 +646,7 @@ def test_w2g3_reign_of_terror_beats_a_regeneration_shield(set_pool):
     game.resolve_stack()
     game._settle()
 
-    assert not game.is_on_battlefield(bear), "CR 701.15c: the shield is ignored"
+    assert not game.is_on_battlefield(bear), "CR 701.19c: the shield is ignored"
     assert game.players[0].life == 18
 
 

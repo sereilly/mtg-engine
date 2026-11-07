@@ -537,7 +537,7 @@ def test_necratog_grows_by_eating_its_graveyard(set_pool):
 
 def test_zombie_scavengers_regenerates_off_its_graveyard(set_pool):
     """"Exile the top creature card of your graveyard: Regenerate this
-    creature." (CR 701.15.)"""
+    creature." (CR 701.19.)"""
     game, perm = _w1g1_board(
         set_pool, "Zombie Scavengers", [_w1g1_card("Snack", "Creature — Bear")]
     )

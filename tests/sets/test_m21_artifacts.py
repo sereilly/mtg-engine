@@ -280,7 +280,7 @@ def test_the_fourth_counter_exiles_the_tome_and_gains_four_life(set_pool):
 
 
 def test_the_state_trigger_fires_once(set_pool):
-    """CR 603.8b: it fires once and not again until the state stops matching.
+    """CR 603.8: it fires once and not again until the state stops matching.
     Remembering forever would be wrong too — the rule is forgetting — so the
     permanent records that it announced and drops the record if the count ever
     falls back."""

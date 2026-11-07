@@ -413,7 +413,7 @@ def test_phyrexian_dreadnought_totals_power_through_the_layers(set_pool):
 
 
 def test_phyrexian_dreadnought_may_be_sacrificed_to_its_own_trigger(set_pool):
-    """Nothing in CR 701.17a excludes the ability's own source, and the printed
+    """Nothing in CR 701.21a excludes the ability's own source, and the printed
     phrase says "any number of creatures" rather than "another" — so the 12/12
     on the battlefield is a legal payment for its own cost. The offer is
     takeable even on an otherwise empty board because of it."""

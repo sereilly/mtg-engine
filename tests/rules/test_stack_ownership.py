@@ -284,10 +284,10 @@ def test_end_the_turn_exiles_a_stolen_spell_into_its_owners_exile(set_pool):
     assert game.players[1].life == 20
 
 
-@pytest.mark.cr("724.1b", "113.7a")
+@pytest.mark.cr("724.1b", "405.1")
 def test_end_the_turn_exiles_no_card_for_an_ability_on_the_stack(set_pool):
     """"Exile every object on the stack" — an **ability** is an object with no
-    card (CR 113.7a), so it simply ceases to exist. The process binned
+    card (CR 405.1), so it simply ceases to exist. The process binned
     ``item.card`` for every object, which for an ability is its *source's*
     card: Prodigal Sorcerer's ping put a second Prodigal Sorcerer into exile
     while the first was still on the battlefield."""

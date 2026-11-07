@@ -122,7 +122,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # ``biter: "attached"`` — "**Enchanted creature** deals 1 damage to target
     # creature with flying" (Dizzying Gaze). The same key
     # ``source_bites_target`` has read since Farrel's Mantle and for the same
-    # reason: CR 113.7a leaves the ability the Aura's and CR 120.7 makes the
+    # reason: CR 113.7 leaves the ability the Aura's and CR 120.7 makes the
     # *host* the damage's source, so only the dealer moves. Read here rather
     # than at each of this handler's dozen `source=` call sites, because the
     # source is chosen once and spent everywhere.

@@ -1522,7 +1522,7 @@ def test_caller_of_the_hunt_offers_the_choice_to_the_picker(set_pool):
 # the controller of the Wishmonger, who under CR 602.2's "unless the object
 # specifically says otherwise" need not be the activator at all.
 # Diplomatic Escort's counter reaches either kind of object on the stack, and
-# CR 113.7a is the whole difference: the spell has a card to bin (CR 701.6a) and
+# CR 405.1 is the whole difference: the spell has a card to bin (CR 701.6a) and
 # the ability has none.
 import pytest
 
@@ -1739,7 +1739,7 @@ def test_diplomatic_escort_counters_a_spell_and_bins_its_card(set_pool):
 
 
 def test_diplomatic_escort_counters_an_ability_and_bins_nothing(set_pool):
-    """The ability half. CR 113.7a: an ability on the stack has no card, so the
+    """The ability half. CR 405.1: an ability on the stack has no card, so the
     object is removed and **nothing** moves zones.
 
     The permanent it came from is asserted still on the battlefield and its

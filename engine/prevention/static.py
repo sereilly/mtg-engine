@@ -227,7 +227,7 @@ def _spell_targets_recipient(game, source, recipient) -> bool:
     damage would be dealt there is nothing there to ask.
 
     "Spells", not abilities: an activated or triggered ability is not a spell
-    (CR 113.7a), and its damage source is the permanent it is on -- which is what
+    (CR 113.9), and its damage source is the permanent it is on -- which is what
     the first refusal below tests, because a permanent is not a spell however it
     is dealing the damage.
 

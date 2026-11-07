@@ -659,7 +659,7 @@ def test_reflecting_mirror_offers_only_spells_whose_single_target_is_you(set_poo
 
 def test_reflecting_mirror_does_not_see_an_ability_on_the_stack(set_pool):
     """"target **spell**". An activated ability on the stack is not a spell
-    (CR 113.7a), so Rod of Ruin's ping aimed at you is not offered."""
+    (CR 113.9), so Rod of Ruin's ping aimed at you is not offered."""
     game, players, _mirror = _mirror_board(set_pool, "Lightning Bolt")
     rod = _nosick(Permanent(card=set_pool("LEA")["Rod of Ruin"]))
     players[1].battlefield = [rod]

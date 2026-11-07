@@ -97,7 +97,7 @@ def _accept_targets_only(stream: TokenStream) -> "tuple[str, bool] | None":
         stream.reset(mark)
         return None
     # "target spell **or ability**" (Silver Wyvern). CR 115.7a re-aims any
-    # object on the stack that chose targets, and CR 113.7a says an ability is
+    # object on the stack that chose targets, and CR 113.9 says an ability is
     # not a spell — so this is a union across two kinds of stack object rather
     # than a wider description of one. Carried as a flag for
     # ``ReturnToZone.also_stack``'s reason: no ``ObjectFilter`` expresses it,

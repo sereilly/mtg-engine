@@ -558,7 +558,7 @@ def test_run_afoul_takes_a_flier_and_leaves_the_ground_creature(set_pool):
 
 
 def test_run_afoul_with_no_flier_takes_nothing(set_pool):
-    """The control. CR 701.21b: a player asked to sacrifice something they do
+    """The control. CR 701.21a: a player asked to sacrifice something they do
     not control sacrifices nothing — the spell still resolves, and the ground
     creature is not a consolation prize."""
     game, p1, p2, hound, singer = _run_afoul_board(set_pool)

@@ -153,7 +153,7 @@ PARSE_LAYERS = [
     # the shield lowering, so the lowering side has no module of its own to
     # fork.
     "prevented_riders",
-    # An ability on the stack (CR 113.7a) has no card and no type line, so it
+    # An ability on the stack (CR 405.1, 405.4) has no card and no type line, so it
     # shares no vocabulary with the filter parser that reads one. Below
     # `nouns`, which returns the moment one of these matches.
     "abilities",
@@ -1003,7 +1003,7 @@ LOWER_LAYERS = [
 # same family one package over — the third time the mirror has re-formed rather
 # than forked, after `prevention` and `counters`. The line is the one the
 # lowering side already drew: tapping is a keyword action on one permanent
-# (CR 701.20) and "doesn't untap during its controller's next untap step" is
+# (CR 701.26) and "doesn't untap during its controller's next untap step" is
 # what a card prints beside it, where the rest of `board` destroys, bounces,
 # sacrifices or attaches. The two families share no fragment — `parse_recipient`
 # and `parse_bound_subject` are `references` and `phrases`, one level down.
@@ -1022,7 +1022,7 @@ LOWER_LAYERS = [
 # `search` joined the parse side when `effects/library.py` reached the size
 # guard, along the boundary that module's own docstring had already drawn in
 # naming its contents "search, look-at, and the library's top". The line is
-# CR 701.19's: a *look* shows a fixed number of cards off the top and leaves the
+# CR 701.23's: a *look* shows a fixed number of cards off the top and leaves the
 # pile otherwise untouched, where a **search** walks the whole library for a
 # card the sentence describes and ends in a shuffle — and the filter,
 # destination, reveal and shuffle vocabulary that reads appears nowhere else in
@@ -1067,10 +1067,10 @@ LOWER_LAYERS = [
 # noun phrase as the rest"); like `types`' prediction one paragraph up, it was a
 # claim about a *size*, and the size changed. The line is the one the lowering
 # side already drew and it is the CR's own keyword action: destroying a
-# permanent (CR 701.7) is not sacrificing one (CR 701.17), returning one to a
+# permanent (CR 701.8) is not sacrificing one (CR 701.21), returning one to a
 # hand or phasing one out (CR 702.26), which is what `board` keeps. What travels
 # with the verb is what only the verb prints — the "unless its controller pays"
-# offer and its life half, CR 701.15c's "destroyed this way … can't be
+# offer and its life half, CR 701.19c's "destroyed this way … can't be
 # regenerated" rider, and the per-payer sweep.
 #
 # **The split moved one fragment down rather than sideways.**
@@ -1326,8 +1326,8 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # whole story of where the line is: neither parallel branch crossed it alone —
 # one added an activated ability's delayed destroy, the other a per-payer sweep
 # — and the sum did. The boundary was already there to be found. It is the CR's
-# own keyword action: destroying a permanent (CR 701.7) is not sacrificing one
-# (CR 701.17), regenerating one (CR 701.15), phasing one out (CR 702.26) or
+# own keyword action: destroying a permanent (CR 701.8) is not sacrificing one
+# (CR 701.21), regenerating one (CR 701.19), phasing one out (CR 702.26) or
 # exchanging control of it, which is what `board` keeps. The two halves share no
 # name in either direction, checked at the split. Asymmetric like `zones` and
 # `types`: the parse side stays in `effects/board.py`, where destroy is one
@@ -1359,7 +1359,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # `untap_restrictions` split out of `lowering/tapping.py` at 1,001, the round
 # Giant Oyster's fronted linked duration landed — along the boundary that
 # module's own docstring had already drawn and then argued against. The line is
-# the CR's: CR 701.20 is a keyword action a resolving effect performs now, which
+# the CR's: CR 701.26 is a keyword action a resolving effect performs now, which
 # is every production left in `tapping`, and CR 502.3 is "effects can keep one
 # or more of a player's permanents from untapping" — a continuous effect
 # (CR 611.2a) whose only observable moment is a turn-based action a turn or more

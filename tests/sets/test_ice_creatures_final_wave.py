@@ -417,7 +417,7 @@ def test_infernal_denizen_pays_its_upkeep_with_two_swamps(set_pool):
 
 
 def test_infernal_denizen_with_one_swamp_sacrifices_neither(set_pool):
-    """CR 701.17b: the printed count is indivisible. A player with one of the
+    """The printed count is read as indivisible. A player with one of the
     two Swamps cannot sacrifice two, so nothing is sacrificed and the "if you
     can't" branch is what happens instead."""
     game, denizen, _bears, _p0, _p1 = _w3g5_denizen(set_pool, swamps=1)

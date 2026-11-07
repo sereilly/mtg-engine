@@ -210,7 +210,7 @@ def test_a_search_refuses_a_card_its_restriction_excludes(set_pool):
 
 
 def test_a_search_that_can_find_nothing_can_still_be_left(set_pool):
-    """Failing to find is legal (CR 701.19b) and is the only answer available
+    """Failing to find is legal (CR 701.23b) and is the only answer available
     when nothing in the searched zones matches."""
     pool = set_pool("M21")
     p1 = PlayerState(name="P1", library=[pool["Island"], pool["Island"]])
@@ -243,7 +243,7 @@ def test_a_search_cannot_be_answered_with_a_zone_it_was_not_armed_with(set_pool)
 
 
 def test_a_graveyard_find_does_not_shuffle_the_library(set_pool):
-    """CR 701.19d and the printed "If you search your library this way,
+    """The printed "If you search your library this way,
     shuffle": a graveyard is an open zone, so randomising a library the player
     did not search would destroy information they were entitled to keep."""
     pool = set_pool("M21")

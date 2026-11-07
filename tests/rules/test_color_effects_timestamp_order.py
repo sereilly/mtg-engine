@@ -624,7 +624,7 @@ def test_w2g4_every_other_recolouring_instruction_is_stamped_when_it_resolves(
     assert game.confirm_color_set_choice(0, ["U", "R"])
     _w2g4_settle(game, None)
     assert _w2g4_colours(game, bears) == ["R", "U"]
-    # The ability's effect is no part of the Aura (CR 113.7a): it lasts.
+    # The ability's effect is no part of the Aura (CR 611.2a): it lasts.
     game.remove_from_battlefield(coat)
     game._recompute_continuous_effects()
     assert _w2g4_colours(game, bears) == ["R", "U"]

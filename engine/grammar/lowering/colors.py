@@ -376,7 +376,7 @@ def _lower_become_color(
     payload: dict[str, object] = {"target_color": node.color}
     if node.subject.filter.also_ability:
         # "target spell **or ability**" — the union the counter one family over
-        # reads (Diplomatic Escort). CR 113.7a: an ability on the stack has no
+        # reads (Diplomatic Escort). CR 405.1, 405.4: an ability on the stack has no
         # card and no colour to change, so recolouring one is not a thing this
         # sentence could mean; admitting the phrase would drop the union and
         # aim the picker at spells alone. No card prints it. Refused rather than

@@ -461,7 +461,7 @@ def stack_target_still_described(game: Game, described: dict, item) -> bool:
 
     CR 608.2b at the one place a handler can ask it: the object must still be
     on the stack, must be a spell (an ability has no card and no colour,
-    CR 113.7a) and must still be one of the printed card types — through
+    CR 405.1, 405.4) and must still be one of the printed card types — through
     ``_spell_is_one_of``, the reader the stack picker offered it with, so the
     announcement and the resolution cannot name different sets.
     """

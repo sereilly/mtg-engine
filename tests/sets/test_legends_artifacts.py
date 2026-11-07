@@ -1475,7 +1475,7 @@ def test_life_chisel_is_still_gated_to_your_upkeep(set_pool):
 
 
 def test_mirror_universe_swaps_both_life_totals(set_pool):
-    """CR 701.12c: each player gains or loses the difference. Both totals are
+    """Exchanged (CR 701.12c): each gains or loses the difference. Both totals are
     read before either moves — reading the second after the first had moved
     would copy one total onto both players."""
     mirror = Permanent(card=set_pool("LEG")["Mirror Universe"])

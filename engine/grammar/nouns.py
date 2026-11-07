@@ -219,8 +219,9 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     # "activated or triggered ability" / "activated ability" / "triggered
     # ability" (Sublime Epiphany). Read first and whole, because none of the
     # machinery below applies: an ability on the stack has no card, no type
-    # line and no permanent behind it (CR 113.7a), so every adjective the loop
-    # further down collects would be a question with no object to ask it of.
+    # line and no permanent behind it (CR 405.1, 405.4), so every adjective the
+    # loop further down collects would be a question with no object to ask it
+    # of.
     # A **local**, and the first thing the slots guard on the draft found: this
     # used to be written as `d.ability_kinds`, a field `_FilterDraft` does not
     # declare and `_build_object_filter` therefore never copies. It happened to

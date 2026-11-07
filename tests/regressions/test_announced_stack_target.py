@@ -234,7 +234,7 @@ from engine.models import Permanent as _W2G3Permanent
 from tests.helpers import _mk_card as _w2g3_mk_card
 
 #: Seat 0's lone object on the stack: the spells above, and one **ability** -
-#: which is not a spell (CR 113.7a), so "target spell" admits none of it.
+#: which is not a spell (CR 113.9), so "target spell" admits none of it.
 _W2G3_ABILITY = "Prodigal Sorcerer's ability"
 _W2G3_LONE_OBJECTS = _VICTIMS + (_W2G3_ABILITY,)
 
@@ -376,7 +376,7 @@ def test_a_bare_counter_is_aimed_at_the_topmost_spell_its_phrase_admits(_catalog
 
 def test_unsubstantiate_cannot_name_an_ability(_catalog):
     """"Return target **spell** or creature to its owner's hand." An ability is
-    not a spell (CR 113.7a) and has no card to return - named at one, the spell
+    not a spell (CR 113.9) and has no card to return - named at one, the spell
     put the *source permanent's card* into its owner's hand while the permanent
     stayed on the battlefield: a card made out of nothing. The stack half of a
     ``spell_or_permanent`` spec goes through the same gate."""

@@ -909,7 +909,7 @@ def single_spell_target(game, item) -> dict | None:
       item through the same ``target_player_index``, and beside a permanent
       index that field is a *battlefield* rather than a target.
     """
-    # An ability is not a spell (CR 113.7a) and it used to stop here, which was
+    # An ability is not a spell (CR 113.9) and it used to stop here, which was
     # right while the only readers were counterspells. It is not right for
     # CR 115.7a: an ability announced its targets at CR 602.2b exactly as a
     # spell announced them at CR 601.2c, and Silver Wyvern re-aims either. What

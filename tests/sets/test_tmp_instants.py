@@ -621,7 +621,7 @@ def test_w1g5_interdict_counters_an_ability_and_bans_its_source(set_pool):
     Both sentences, because either alone is a card doing half its job: the
     counter is what the spell targets, and the ban is a *back-reference* to the
     permanent behind the ability — an object nothing else can name once the
-    ability has left the stack (CR 113.7a).
+    ability has left the stack (CR 405.1).
 
     The spare permanent is the narrowing: CR 602.5c bans one permanent's
     abilities, not its controller's, and a ban recorded per seat would shut
