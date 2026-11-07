@@ -334,7 +334,11 @@ def test_w1g5_reinforcements_moves_chosen_creature_cards_to_the_library_top(set_
     ogre = _w1g5_lea("Hurloon Minotaur")
     p1.graveyard.extend([bear, _w1g5_lea("Forest"), ogre])
 
-    game._apply_spell_text(p1, p2, reinforcements, target_permanent_index=[0, 2])
+    # The two cards as an announcement names them: by their stamps.
+    game._apply_spell_text(
+        p1, p2, reinforcements,
+        target_graveyard_card=[game.graveyard_target_at(0, 0), game.graveyard_target_at(0, 2)],
+    )
     game._settle()
 
     assert [card.name for card in p1.library[:2]] == ["Grizzly Bears", "Hurloon Minotaur"]
@@ -630,7 +634,7 @@ def test_w2g4_misinformation_stacks_them_in_the_order_they_were_named(set_pool):
 
     game._apply_spell_text(
         game.players[0], p2, set_pool("ALL")["Misinformation"],
-        target_permanent_index=[2, 0],
+        target_graveyard_card=[game.graveyard_target_at(1, 2), game.graveyard_target_at(1, 0)],
     )
     game._settle()
 

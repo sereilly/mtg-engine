@@ -856,13 +856,16 @@ class TriggerTargetsMixin:
         if unbounded and _target_quantifier(getattr(instruction, "payload", None)) == "any_number":
             up_to = True
         division = spec.get("kind") in self._CHOOSABLE_TRIGGER_DIVIDED_KINDS
-        if division and self.departing:
+        if self.departing:
             # A dies-trigger is announced while its dying permanent is still
             # listed (``Game.departing``), and CR 603.3d puts the ability on
             # the stack *after* the event: Shambling Swarm cannot distribute
-            # its counters onto itself. Asked only of a division, the one shape
-            # that had no prompt before — the general decline for every other
-            # dies-trigger is ROADMAP's (a), and its fix is a different seam.
+            # its counters onto itself, and Blazing Effigy cannot aim its
+            # damage at itself. Asked of every shape: a default that named the
+            # dying permanent used to be redirected by its stale slot onto
+            # whatever slid into its place, and a stack object's slots are
+            # re-read off its ids now (kg4 ids part 3), so the permanent it
+            # names is the one it gets — gone, here.
             gone = {permanent.permanent_id for permanent in self.departing}
             offered = [
                 entry for entry in offered
