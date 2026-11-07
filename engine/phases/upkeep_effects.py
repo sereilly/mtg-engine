@@ -805,8 +805,8 @@ class UpkeepEffectsMixin:
         One resumable loop (``engine/resumption.py``) — the opponent, the
         pick, the sacrifice — so an interactive chooser's prompt suspends it
         and its answer brings the next step back; a seat nobody asks answers
-        as its prompt is armed (``default_at_arm``: the first opponent
-        offered, the first live land). The sacrifice is
+        as its prompt is armed (``default_at_arm``: the opponent its reader
+        names, the controller's dearest land). The sacrifice is
         ``_force_sacrifice_first_land`` handed the land chosen.
         """
         from ..handlers.permanent_choices import permanent_choice_candidates
@@ -817,6 +817,10 @@ class UpkeepEffectsMixin:
         payload = {
             "filter": {"type_filter": "land", "controller": "you"},
             "result_key": _LAND_AN_OPPONENT_CHOSE,
+            # The step behind the pick is the sacrifice below, which no
+            # compiled step states: the chooser takes the controller's dearest
+            # land (``ai_prompt_picks.permanent_pick_order``).
+            "default_prefers": "taken",
         }
         context.results[_LAND_AN_OPPONENT_CHOSE] = None
         if not permanent_choice_candidates(self, payload, context):
