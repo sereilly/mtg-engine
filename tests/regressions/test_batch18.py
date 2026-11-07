@@ -462,12 +462,31 @@ class TestLibraryOfAlexandria:
         assert resp.status_code == 200
         assert game.players[0].mana_pool.get("C") == 1
 
-    def test_client_greys_out_gated_ability(self):
+    def test_client_greys_out_gated_ability(self, arn_by_name):
+        # The client greys an ability out by the server's answer, never its
+        # own reading of the text (kg4 client): the payload's
+        # ``ability_denials`` carries the activation path's refusal, and
+        # ``abilityOptionDisabledReason`` reads it.
         from pathlib import Path
 
+        sid, session, game, lib, idx = self._library_session(arn_by_name)
+
+        def denials():
+            payload = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
+            entry = next(
+                e for e in payload["players"][0]["battlefield"]
+                if e["id"] == lib.permanent_id
+            )
+            return [d for d in (entry.get("ability_denials") or []) if d]
+
+        game.players[0].hand = [_C["Forest"]] * 3
+        assert any("seven" in d for d in denials())
+        game.players[0].hand = [_C["Forest"]] * 7
+        assert not any("seven" in d for d in denials())
+
         app_js = (Path(__file__).resolve().parent.parent.parent / "web" / "static" / "app.js").read_text(encoding="utf-8")
-        assert "abilityOptionDisabledReason" in app_js
-        assert "exactly seven cards in hand" in app_js
+        assert "function abilityOptionDisabledReason" in app_js
+        assert "card.ability_denials" in app_js
 
 
 # ---------------------------------------------------------------------------
