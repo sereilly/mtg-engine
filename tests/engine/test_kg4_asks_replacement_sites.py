@@ -55,6 +55,12 @@ _ONE_EFFECT = {
         "one effect (Dreams of the Dead's exile); a death asks it joined to "
         "the would-die and graveyard effects it meets there",
     ),
+    ("phases/untap_step.py", "resolve_untap_step"): (
+        ("would_untap",),
+        "one effect (Freyalise's Winds). Undiscovered Paradise's return was "
+        "registered here too and is not a replacement of the untap at all "
+        "(its ruling, 2004-10-04): it is the untap step's own action now",
+    ),
     ("mixins/land_tapped_for_mana.py", "_land_tapped_for_mana"): (
         ("land_mana_produced",),
         "one registration; the several producers that print it (Infernal "

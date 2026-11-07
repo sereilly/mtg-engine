@@ -12,7 +12,7 @@ aggregates and enforces them, so new restriction cards never touch it.
 """
 
 from ..aura_restrictions import aura_restriction_active
-from ..replacements import answered_restart, apply_replacements
+from ..replacements import apply_replacements
 from ..subject_filters import subject_matches
 from ..handlers.types import LAND_TYPE_UNTIL_UNTAP
 from ..handlers.tapping import (SKIP_NEXT_UNTAP_SEAT,
@@ -553,32 +553,47 @@ class UntapStepMixin:
             )
         ]
 
-    def _untap_replaced(self, permanent, player) -> bool:
-        """Whether a CR 614 effect replaces *permanent*'s untap in this step
-        (``would_untap``: Freyalise's Winds' counters, Undiscovered Paradise's
-        return to its owner's hand).
+    def _return_lands_due_back(self, player_index: int) -> None:
+        """Return to its owner's hand every permanent an ability said would go
+        back "during **your** next untap step, as you untap your permanents"
+        (Undiscovered Paradise), *player_index*'s being that step.
 
-        Two of them on one permanent — a wind counter on an Undiscovered
-        Paradise due back this step — are CR 616.1's contention, and the
-        permanent's controller chooses which applies (616.1e). The untap step
-        gives nobody priority (CR 502.4), but a player still makes the
-        choices a rule gives them in it: an interactive seat is asked, and
-        the web's beginning phase pauses on the question before the upkeep
-        (``web/turn_steps``' ``"untap_step"`` marker), as it does for the
-        untap step's type choice. Every effect of this kind replaces the
-        untap, so a permanent whose question is owed does not untap — which is
-        what it does whatever is answered — and the answer re-runs this for it
-        alone; the rest of the step's permanents untap together as they always
-        did (CR 502.3)."""
-        event = {"permanent": permanent, "player": player}
-        consumed, _ = apply_replacements(
-            self, "would_untap", event,
-            restart=answered_restart(
-                self, "would_untap", event,
-                lambda: self._untap_replaced(permanent, player),
-            ),
-        )
-        return bool(consumed)
+        **Not a replacement of the untap**, and it was registered as one (a
+        ``would_untap`` interceptor, reached only by a permanent that was
+        about to untap): "It will return even if some effect prevents you from
+        untapping it. The ability is not replacing the untapping of the land in
+        any way." and "Only returns to owner's hand if it is still on the
+        battlefield at the beginning of its controller's next untap." (its
+        rulings, 2004-10-04.) So a Paradise kept tapped — by Winter Orb's
+        limit, a "doesn't untap" Aura, Freyalise's Winds' counter (which
+        replaced its untap and took the return with it) — stayed on the
+        battlefield, and kept its marker for a step the ability never named.
+
+        The step's own action, then, at its start: every permanent so marked
+        for this player's step and still on the battlefield goes, untapped or
+        not and whoever controls it now — the marker records *whose* step
+        (``RETURN_AT_NEXT_UNTAP_SEAT``), and the card goes to its owner's hand
+        (CR 400.3). Together, as one event (CR 603.10a), and before anything
+        untaps: the rest of the step's permanents untap as they would have.
+        """
+        from ..handlers._common import return_permanent_to_owners_hand
+        from ..handlers.returns import RETURN_AT_NEXT_UNTAP_SEAT
+
+        due = [
+            permanent for permanent in self.all_permanents()
+            if permanent.metadata.get(RETURN_AT_NEXT_UNTAP_SEAT) == player_index
+        ]
+        if not due:
+            return
+        untapping = self.players[player_index]
+        with self.leaving_together():
+            for permanent in due:
+                permanent.metadata.pop(RETURN_AT_NEXT_UNTAP_SEAT, None)
+                owner = return_permanent_to_owners_hand(self, permanent, untapping)
+                self.log.append(
+                    f"{permanent.card.name} returned to {owner.name}'s hand as "
+                    f"{untapping.name} untapped"
+                )
 
     @goes_no_further(0)
     def resolve_untap_step(
@@ -655,6 +670,12 @@ class UntapStepMixin:
         if constraints["skip_all_source"] is not None:
             self.log.append(f"{player.name} skipped untap due to {constraints['skip_all_source']}")
             return 0
+
+        # "During your next untap step, as you untap your permanents, return
+        # this land to its owner's hand." (Undiscovered Paradise.) After the
+        # skip above: a skipped untap step does not happen (CR 500.11), so it
+        # is not yet the step the ability named.
+        self._return_lands_due_back(player_index)
 
         limits: dict[str, int] = dict(constraints["limits"])
         blocked = list(constraints["blocked"])
@@ -897,7 +918,16 @@ class UntapStepMixin:
             # and a replacement rather than one more skip condition above:
             # every test before this one says the permanent does not untap and
             # leaves it at that, while this one *does something else instead*.
-            if self._untap_replaced(permanent, player):
+            #
+            # No `restart` thunk: the untap step gives nobody priority
+            # (CR 502.4), so there is no moment at which a CR 616.1e choice
+            # could be answered. With one effect in contention that costs
+            # nothing, and a second would take the documented default.
+            consumed, _ = apply_replacements(
+                self, "would_untap",
+                {"permanent": permanent, "player": player},
+            )
+            if consumed:
                 continue
 
             untapping.append(permanent)

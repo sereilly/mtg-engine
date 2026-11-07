@@ -302,11 +302,6 @@ def _resume_paused_beginning_phase(session: Session) -> None:
         # phase behind it — the type the seat just named is what the step is
         # about to spend.
         _finish_untap_step(session, player_index)
-    elif marker == "untap_step":
-        # The untap step finished but for a question its turn-based action
-        # asked (CR 616.1e, ``Game._untap_replaced``); answered, the upkeep
-        # is next.
-        _resolve_upkeep_step(session, player_index)
     elif marker == "main_phase":
         session.game.enter_next_turn_phase("beginning")
 
@@ -496,24 +491,8 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
 
     _clear_untap_selection(session)
     game.resolve_untap_step(player_index)
-    if _untap_question_owed(session, player_index):
-        return False
 
     return _resolve_upkeep_step(session, player_index)
-
-
-def _untap_question_owed(session: Session, player_index: int) -> bool:
-    """Whether the untap step just resolved left its controller a CR 616.1e
-    question — two untap replacements contending for one permanent
-    (Freyalise's Winds' counters on an Undiscovered Paradise due back,
-    ``Game._untap_replaced``) — and the beginning phase is paused for it: the
-    upkeep waits for the answer (``"untap_step"``, resumed by
-    ``_resume_paused_beginning_phase``). Asked only about that question, so a
-    step that owes nothing else is not drained here."""
-    game = session.game
-    if not any(choice.kind == "effect_order" for choice in game.pending_choices):
-        return False
-    return _pause_beginning_phase(session, "untap_step", player_index)
 
 
 def _finish_untap_step(session: Session, player_index: int) -> bool:
@@ -542,8 +521,6 @@ def _finish_untap_step(session: Session, player_index: int) -> bool:
 
     _clear_untap_selection(session)
     game.resolve_untap_step(player_index)
-    if _untap_question_owed(session, player_index):
-        return False
 
     return _resolve_upkeep_step(session, player_index)
 

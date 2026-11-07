@@ -363,11 +363,13 @@ OPTIONAL_ENTRY_DISCARD = 17  # Mox Diamond
 # nothing.
 SACRIFICE_AFTER_ENTERING = 20  # Land Equilibrium
 COUNTERS_REMOVED_INSTEAD_OF_UNTAPPING = 10  # Freyalise's Winds
-# After it, and only because nothing prints both: Freyalise's Winds spends a
-# counter and leaves the permanent on the battlefield, so a land that has
-# already gone to its owner's hand has no counter left to remove. CR 616.1e
-# would put the choice to the affected player if a card ever printed the pair.
-RETURNED_TO_HAND_INSTEAD_OF_UNTAPPING = 11  # Undiscovered Paradise
+# Undiscovered Paradise's "during your next untap step, as you untap your
+# permanents, return this land to its owner's hand" sat beside it at 11 and is
+# not a replacement of the untap: "It will return even if some effect prevents
+# you from untapping it. The ability is not replacing the untapping of the land
+# in any way." (its ruling, 2004-10-04.) It is the untap step's own action
+# (``UntapStepMixin._return_lands_due_back``), so Freyalise's Winds' counter on
+# a Paradise due back no longer took the land's return away.
 # CR 106.12b's kind: what a land produces is decided while its mana ability is
 # resolving. One slot, because ``engine/land_mana_swaps.py`` answers "what does
 # this land make instead?" for every producer of the effect at once — a
