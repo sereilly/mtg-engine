@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import re
 
+from .. import simultaneous_damage
+from ..damage_redirects import event_dealing_moment
 from ..damage_source_colors import damage_source_colors
 from ..effect_ordering import affected_seat
 from ..models import PlayerState
@@ -504,6 +506,11 @@ def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
     """
     recipient = event["recipient"]
     amount = event["amount"]
+    source = event.get("source")
+    # CR 615.8: a one-use "next time" shield spent on a chunk of a
+    # simultaneous dealing is open for that source's other chunks of it
+    # (``Shield.open_for``) — the dealing is the moment it is asked about.
+    moment = event_dealing_moment(game, event)
     # The recipient's own collection, plus — when the recipient is a permanent
     # — the class-scoped shields sitting on a *seat* whose printed phrase names
     # it. A team shield covers its holder as well as the phrase ("**you** and/or
@@ -528,15 +535,15 @@ def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
     ):
         if shield.kind != kind or shield.spent:
             continue
+        if not shield.open_for(moment, source):
+            continue
         if shield.combat_only and not event.get("combat"):
             # "Prevent all **combat** damage …" (Snag): the event's own flag,
             # which no property of the source can stand in for.
             continue
         if chosen is not None and (shield.source is not None) != chosen:
             continue
-        if not _source_matches(
-            game, shield, event.get("source"), event.get("source_seat")
-        ):
+        if not _source_matches(game, shield, source, event.get("source_seat")):
             continue
         if shield.targets_recipient and not _object_targets_recipient(game, recipient):
             # Checked here rather than in `_source_matches`, and the difference
@@ -620,7 +627,10 @@ def _granted_by(kind: str, *, chosen: bool | None = None, player_only: bool = Fa
     return sources
 
 
-def _spend(game, event: dict, kind: str, *, chosen: bool | None = None, rider=None):
+def _spend(
+    game, event: dict, kind: str, *, chosen: bool | None = None, rider=None,
+    afterward=None,
+):
     """Apply the recipient's shields of *kind* to this event.
 
     Draining every matching shield rather than one is what keeps CR 615.7's
@@ -632,15 +642,25 @@ def _spend(game, event: dict, kind: str, *, chosen: bool | None = None, rider=No
     *rider* is CR 615.5's "additional effect, which may refer to the amount of
     damage that was prevented" — run after the prevention, with the shields that
     did it, never before.
+
+    *afterward* is that additional effect for a **source-keyed "next time"**
+    shield, whose one instance is everything its source deals in one
+    simultaneous dealing (CR 615.8): spent inside a dealing, the effect is
+    held for the dealing's finish and run once there with everything the
+    shield prevented in it (``simultaneous_damage.defer_afterward``) — "you
+    gain that much life" once, "deals that much damage" once. Outside a
+    dealing it runs at once, after *rider*.
     """
     remaining = event["amount"]
     prevented = 0
     used: list[Shield] = []
+    source = event.get("source")
+    moment = event_dealing_moment(game, event)
     for shield in list(_live(game, event, kind, chosen=chosen)):
         take = shield.would_prevent(remaining)
         if take <= 0:
             continue
-        shield.spend(take)
+        shield.spend(take, moment=moment, source=source)
         used.append(shield)
         prevented += take
         remaining -= take
@@ -649,6 +669,17 @@ def _spend(game, event: dict, kind: str, *, chosen: bool | None = None, rider=No
     drop_spent(event["recipient"])
     if rider is not None and prevented > 0:
         rider(game, event, used, prevented)
+    if afterward is not None and prevented > 0:
+        held = moment is not None and all(
+            shield.occasion is not None and shield.occasion.moment is moment
+            for shield in used
+        )
+        if held:
+            simultaneous_damage.defer_afterward(
+                moment, used[0], afterward, event, used, prevented,
+            )
+        else:
+            afterward(game, event, used, prevented)
     return PreventionOutcome(prevented=prevented)
 
 
@@ -1028,7 +1059,7 @@ def _reverse_damage_chosen_source(game, event: dict) -> PreventionOutcome | None
     to you this turn, prevent that damage. You gain life equal to the damage
     prevented this way." The whole instance is prevented regardless of its size
     (CR 615.8)."""
-    return _spend(game, event, PREVENT_AND_GAIN_LIFE, chosen=True, rider=_gain_prevented_life)
+    return _spend(game, event, PREVENT_AND_GAIN_LIFE, chosen=True, afterward=_gain_prevented_life)
 
 
 @prevention_effect(
@@ -1039,7 +1070,7 @@ def _reverse_damage_chosen_source(game, event: dict) -> PreventionOutcome | None
 def _reverse_damage_generic(game, event: dict) -> PreventionOutcome | None:
     """Reverse Damage cast without recording a chosen source (AI / headless):
     the next damage event from any source is prevented and gained as life."""
-    return _spend(game, event, PREVENT_AND_GAIN_LIFE, chosen=False, rider=_gain_prevented_life)
+    return _spend(game, event, PREVENT_AND_GAIN_LIFE, chosen=False, afterward=_gain_prevented_life)
 
 
 def _exile_for_prevented(game, event: dict, used: list[Shield], prevented: int) -> None:
@@ -1074,7 +1105,7 @@ def _exile_for_prevented(game, event: dict, used: list[Shield], prevented: int) 
 def _exile_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
     """Bone Mask: the whole instance from the chosen source, and then the
     library pays for it."""
-    return _spend(game, event, PREVENT_AND_EXILE, chosen=True, rider=_exile_for_prevented)
+    return _spend(game, event, PREVENT_AND_EXILE, chosen=True, afterward=_exile_for_prevented)
 
 
 @prevention_effect(
@@ -1086,7 +1117,7 @@ def _exile_prevention_chosen_source(game, event: dict) -> PreventionOutcome | No
 def _exile_prevention_generic(game, event: dict) -> PreventionOutcome | None:
     """The same shield armed without recording a chosen source (AI / headless):
     the next damage event from any source is prevented and paid for."""
-    return _spend(game, event, PREVENT_AND_EXILE, chosen=False, rider=_exile_for_prevented)
+    return _spend(game, event, PREVENT_AND_EXILE, chosen=False, afterward=_exile_for_prevented)
 
 
 def _gain_life_if_rider_colour(
@@ -1103,6 +1134,11 @@ def _gain_life_if_rider_colour(
     The life goes to the shield's holder, not to the damage's recipient: "you
     gain that much life" is the caster's sentence and the recipient may be one
     of their creatures.
+
+    Once per instance (CR 615.8): spent across a sweep's chunks, the shield
+    gains *prevented* — everything it prevented in that dealing — once, as the
+    dealing finishes (``_spend``'s *afterward*). Each chunk's prevention is
+    logged as it happens (``_log_whole_prevention``).
     """
     shield = used[0]
     holder = (
@@ -1110,11 +1146,6 @@ def _gain_life_if_rider_colour(
         if shield.filter_seat is not None
         and 0 <= shield.filter_seat < len(game.players)
         else event["recipient"]
-    )
-    recipient = event["recipient"]
-    game.log.append(
-        f"{shield.source_name or 'A shield'} prevented {prevented} damage to "
-        f"{getattr(recipient, 'name', None) or recipient.card.name}"
     )
     if not shield.rider_colors:
         game._gain_life(holder, prevented, source_name=shield.source_name)
@@ -1134,7 +1165,8 @@ def _team_prevention_chosen_source(game, event: dict) -> PreventionOutcome | Non
     """Shadowbane: the whole instance from the chosen source, wherever on this
     player's side it was headed."""
     return _spend(
-        game, event, PREVENT_TEAM, chosen=True, rider=_gain_life_if_rider_colour
+        game, event, PREVENT_TEAM, chosen=True, rider=_log_whole_prevention,
+        afterward=_gain_life_if_rider_colour,
     )
 
 
@@ -1147,7 +1179,8 @@ def _team_prevention_generic(game, event: dict) -> PreventionOutcome | None:
     """The same shield cast without recording a chosen source (AI / headless):
     the next damage event from any source is prevented."""
     return _spend(
-        game, event, PREVENT_TEAM, chosen=False, rider=_gain_life_if_rider_colour
+        game, event, PREVENT_TEAM, chosen=False, rider=_log_whole_prevention,
+        afterward=_gain_life_if_rider_colour,
     )
 
 
@@ -1175,12 +1208,13 @@ def _damage_the_source_controller(
     prevented source: "Honorable Passage deals that much damage" names itself.
     ``source_name`` is the only handle the shield keeps on it, so the shield's
     own recorded name is what a later reader sees on the log line.
+
+    Once per instance (CR 615.8): a red sweep the shield stopped across many
+    recipients sends back everything it prevented in that dealing as **one**
+    damage event, as the dealing finishes (``_spend``'s *afterward*) — not one
+    event per chunk, each of which a Circle could stop on its own.
     """
     shield = used[0]
-    game.log.append(
-        f"{shield.source_name or 'A shield'} prevented {prevented} damage to "
-        f"{recipient_label(event['recipient'])}"
-    )
     if prevented <= 0:
         return
     if shield.rider_colors and not (
@@ -1217,7 +1251,7 @@ def _reflect_prevention_chosen_source(game, event: dict) -> PreventionOutcome | 
     on the table it was headed."""
     return _spend(
         game, event, PREVENT_AND_DAMAGE_SOURCE, chosen=True,
-        rider=_damage_the_source_controller,
+        rider=_log_whole_prevention, afterward=_damage_the_source_controller,
     )
 
 
@@ -1231,7 +1265,7 @@ def _reflect_prevention_generic(game, event: dict) -> PreventionOutcome | None:
     the next damage event from any source is prevented and answered."""
     return _spend(
         game, event, PREVENT_AND_DAMAGE_SOURCE, chosen=False,
-        rider=_damage_the_source_controller,
+        rider=_log_whole_prevention, afterward=_damage_the_source_controller,
     )
 
 

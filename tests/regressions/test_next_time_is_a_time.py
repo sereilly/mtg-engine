@@ -21,12 +21,10 @@ sorts it by what it is keyed on, from the printed words alone:
   attacks, two blockers deal their damage in one combat damage step, and both
   chunks must reach the chosen target.
 * **source-keyed** — "the next time <a source> would deal damage …": CR 615.8's
-  "next instance of damage from that source". One source dealing damage to one
-  recipient deals it once per dealing, so the question does not arise; the
-  rows that may reach several recipients from one source (Penance's "deal
-  damage this turn", Shadowbane's "you and/or creatures you control") are
-  counted and left — no ruling on any of them says whether a sweep's several
-  chunks are one instance.
+  "next instance of damage from that source", which the project owner ruled
+  (2026-11-07) is everything that source deals in one simultaneous dealing.
+  Those are ``tests/regressions/test_kg4_615_next_instance_census.py``'s and
+  ``tests/rules/test_kg4_615_next_instance.py``'s, not this file's.
 
 Validated backwards: with ``uses=1`` restored in
 ``handlers/redirection.redirect_next_damage_from_source_until_eot`` the

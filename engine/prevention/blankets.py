@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import re
 
+from ..damage_redirects import event_dealing_moment
 from ..damage_source_colors import damage_source_colors
 from ..effect_ordering import source_names
 from ..models import PlayerState
@@ -807,6 +808,7 @@ def _applies_chosen_source_one_shot(game, event: dict) -> bool:
     return armed_for_event(
         event.get("source"), DAMAGE_PREVENTED_NEXT,
         combat=bool(event.get("combat")),
+        moment=event_dealing_moment(game, event),
     ) > 0
 
 
@@ -835,7 +837,8 @@ def _prevent_next_damage_from_chosen_source(game, event: dict) -> PreventionOutc
     source = event.get("source")
     amount = event["amount"]
     spend_for_event(
-        source, DAMAGE_PREVENTED_NEXT, combat=bool(event.get("combat"))
+        source, DAMAGE_PREVENTED_NEXT, combat=bool(event.get("combat")),
+        moment=event_dealing_moment(game, event),
     )
     card = getattr(source, "card", source)
     game.log.append(

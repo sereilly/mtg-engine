@@ -177,6 +177,86 @@ PREVENT_HALF = "prevent_half"
 PREVENT_FROM_TARGETING_SOURCE = "prevent_from_targeting_source"
 
 
+# ---------------------------------------------------------------------------
+# "The next time": one occasion, and how far it reaches
+# ---------------------------------------------------------------------------
+
+
+@dataclass(eq=False)
+class SharedNextTime:
+    """One "**next time**" several chunks of damage — and several records — share.
+
+    Two printed templates, and an occasion is how both say what "the next time"
+    covers once damage is dealt in chunks (one source, one recipient each, the
+    unit ``damage_events.deal_damage`` processes):
+
+    * **recipient-keyed** — "The next time damage would be dealt to this
+      creature **and/or you** this turn, that damage is dealt to any target
+      instead." (Glarecaster.) Two protected recipients and one occasion: the
+      first damage either is dealt spends it for both. And the occasion is a
+      *time*, not an instance — "If both you and this card would be dealt
+      damage at the same time, or if either you or this card would be dealt
+      damage from multiple sources at the same time, the redirection will
+      apply to both chunks of damage" (ruling 2004-10-04) — so the first use
+      opens a **moment** (``damage_redirects.damage_moment``) and every chunk
+      dealt in that same moment moves too, from any source.
+    * **source-keyed** (``by_source``) — "The next time a source of your choice
+      would deal damage this turn, prevent that damage." CR 615.8: "the next
+      instance of damage from that source, regardless of how much damage that
+      is" — and the project owner's ruling (2026-11-07) is that one instance is
+      **everything that source deals in one simultaneous dealing**: a sweep's
+      damage to every creature and player it hits, a split sentence dealt as
+      one dealing, a creature's combat damage to every recipient it assigns to
+      in one combat damage step. So the moment is the dealing
+      (``damage_redirects.dealing_moment``) and only chunks from the source that
+      opened it share it; a sourceless charge (an AI or headless announcement
+      that named no source) binds to the source it was first spent on.
+
+    A one-use shield, redirect or rider spent inside a dealing gets one of these
+    when it is spent (``Shield.spend``, ``DamageRedirect.spend``); the dealing
+    closes it as it finishes (``simultaneous_damage.finish``). Outside any
+    dealing the moment is None and the occasion closes at once.
+
+    ``eq=False``: an occasion is the same occasion only if it is the same
+    object, which is the whole point of sharing it.
+    """
+
+    #: The moment the occasion was first used at, or None while unused.
+    moment: Any = None
+    #: Used, and its moment over.
+    closed: bool = False
+    #: CR 615.8's source-keyed template: the occasion is one source's instance,
+    #: so it is open only for chunks from :attr:`source`.
+    by_source: bool = False
+    #: The source whose instance this is, once used (``by_source`` only).
+    source: Any = None
+
+    def open_at(self, moment, source=None) -> bool:
+        """Whether damage dealt at *moment* (from *source*) is still this
+        occasion's. Pure."""
+        if self.closed:
+            return False
+        if self.moment is None:
+            return True
+        if moment is None or moment is not self.moment:
+            return False
+        return not self.by_source or source is self.source
+
+    def use(self, moment, source=None) -> None:
+        """Spend the occasion at *moment*. A moment nothing can name (None) is
+        its own time, so the occasion closes at once. A moment that keeps a
+        list of the occasions opened at it (``SimultaneousDamage.occasions``)
+        is handed this one, and closes it as it finishes."""
+        if moment is None:
+            self.closed = True
+        elif self.moment is None:
+            self.moment = moment
+            self.source = source
+            opened = getattr(moment, "occasions", None)
+            if opened is not None:
+                opened.append(self)
+
+
 @dataclass
 class Shield:
     """One CR 615 shield sitting on the player or permanent it protects.
@@ -301,6 +381,13 @@ class Shield:
     #: absorbs (Temper's "+1/+1"). Empty for every shield whose rider places
     #: none, which is every other shield in the pool.
     counter: str = ""
+    #: CR 615.8's "next instance of damage from that source": a one-use shield
+    #: (``uses`` reaching 0, no point pool) spent on a chunk of a simultaneous
+    #: dealing stays open for every other chunk of that dealing from the same
+    #: source (:class:`SharedNextTime`, ``by_source``), and is spent when the
+    #: dealing finishes. Set by :meth:`spend`; None until then, and for every
+    #: shield spent outside a dealing.
+    occasion: SharedNextTime | None = None
 
     @property
     def color(self) -> str | None:
@@ -317,10 +404,22 @@ class Shield:
 
     @property
     def spent(self) -> bool:
-        """Used up (CR 615.3), so it no longer exists to be applied."""
-        return (self.uses is not None and self.uses <= 0) or (
-            self.amount is not None and self.amount <= 0
-        )
+        """Used up (CR 615.3), so it no longer exists to be applied — a
+        one-use shield still open for the rest of the dealing it was spent in
+        (:attr:`occasion`) is not, until that dealing finishes."""
+        if self.amount is not None and self.amount <= 0:
+            return True
+        if self.uses is not None and self.uses <= 0:
+            return self.occasion is None or self.occasion.closed
+        return False
+
+    def open_for(self, moment, source) -> bool:
+        """Whether this shield may apply to a chunk dealt at *moment* by
+        *source*: always while it has uses left, and once they are gone only
+        for the rest of the dealing it was spent in (CR 615.8). Pure."""
+        if self.uses is None or self.uses > 0:
+            return True
+        return self.occasion is not None and self.occasion.open_at(moment, source)
 
     def would_prevent(self, amount: int) -> int:
         """Points this shield would remove from an event of *amount*.
@@ -339,12 +438,25 @@ class Shield:
             available = min(available, self.amount)
         return max(0, available)
 
-    def spend(self, prevented: int) -> None:
-        """Charge *prevented* points against the shield. The mutating half."""
+    def spend(self, prevented: int, *, moment=None, source=None) -> None:
+        """Charge *prevented* points against the shield. The mutating half.
+
+        *moment* is the simultaneous dealing the chunk is part of
+        (``damage_redirects.dealing_moment``) and *source* its source. A
+        one-use shield's last use spent inside a dealing opens its
+        :attr:`occasion` there, and a later chunk of that instance charges no
+        further use (CR 615.8: the whole instance, whatever its size)."""
         if self.amount is not None:
             self.amount -= prevented
-        if self.uses is not None:
+        instance_open = (
+            self.occasion is not None and self.occasion.open_at(moment, source)
+            and self.occasion.moment is not None
+        )
+        if self.uses is not None and not instance_open:
             self.uses -= 1
+            if self.uses <= 0 and self.amount is None and moment is not None:
+                self.occasion = SharedNextTime(by_source=True)
+                self.occasion.use(moment, source)
         # CR 615.5: what this shield prevented, totalled here because here is
         # the one place that knows. A card whose rider reads the number
         # (Sacred Boon) is then reading the shield rather than re-deriving a
@@ -394,8 +506,9 @@ def drop_spent(recipient) -> None:
     no longer exists — the badge that outlived its pool was its own small bug
     class, fixed here by construction rather than by a clearing line per card.
     """
-    shields = shields_on(recipient)
-    shields[:] = [s for s in shields if not s.spent]
+    shields = getattr(recipient, _SHIELDS_ATTR, None)
+    if shields:
+        shields[:] = [s for s in shields if not s.spent]
 
 
 def clear_shields(recipient, lifetime: str | None = None) -> None:
