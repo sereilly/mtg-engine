@@ -16,7 +16,11 @@ declined. Taken where the copy lands off the taker and does more than it
 costs; declined where it can only hit the taker, where it does nothing
 there, or where the reply would hand it straight back.
 
-Validated backwards: the two "taken" boards fail on ``243f72df`` (declined).
+Validated backwards on ``243f72df``: Chain Lightning and Chain of Smog were
+declined there, and Chain of Acid's copy that could only hit its taker was
+taken. Chain of Acid's copy onto the caster's enchantment passed there too
+(its kept target had gone, so the stated reading let it through) and is
+kept as the invariant beside its decline.
 """
 
 from __future__ import annotations

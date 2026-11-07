@@ -396,19 +396,21 @@ def test_sylvan_library_puts_back_the_lands_it_drew(catalog_by_name):
     """"…choose two cards in your hand drawn this turn. For each of those
     cards, pay 4 life or put the card on top of your library." At 3 life the
     cards go back, and the first two drawn this turn went — the Shivan Dragon
-    its Mountains are building towards among them."""
+    its Mountains are building towards (the draw step's card) among them."""
     game = _table()
     game.players[0].life = 3
     for _ in range(3):
         _put(game, 0, catalog_by_name["Mountain"])
     _put(game, 0, catalog_by_name["Sylvan Library"])
-    game.players[0].hand = [catalog_by_name["Mountain"]] * 3
     game.players[0].library = (
         [catalog_by_name["Shivan Dragon"]] + [catalog_by_name["Mountain"]] * 2
         + [catalog_by_name["Island"]] * 5
     )
     game.players[1].library = [catalog_by_name["Island"]] * 5
     game.active_player_index = 1
+    # Not the game's first turn, whose draw step the player going first skips
+    # (CR 103.8a): the draw step's card is the first drawn this turn.
+    game.turn = 5
     game.start_turn(0)
     _drain(game)
     held = _names(game.players[0].hand)
