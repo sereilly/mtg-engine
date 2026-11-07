@@ -134,7 +134,9 @@ class TestAliBaba:
     def test_target_spec_offers_only_walls(self, arn_by_name):
         game, p1, p2, wall, bear = self._baba_game(arn_by_name)
         spec = game.activation_target_spec(0, 0)
-        assert spec["kind"] == "creature"
+        # "target Wall" is any Wall permanent (CR 109.2, 205.3m): the general
+        # picker narrowed by the flag (kg4).
+        assert spec["kind"] == "permanent"
         assert spec.get("wall_only") is True
         assert [t["name"] for t in spec["valid_targets"]] == ["Wall of Stone"]
 
