@@ -440,8 +440,14 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
             revealed_filter = parse_object_filter(stream)
         except GrammarError:
             revealed_filter = None
+        # "…as long as it's **a Zombie**" (Clutch of Undeath) names a subtype
+        # and no card type (CR 109.2: a Zombie is any permanent with the
+        # subtype), so the subtype alone is a narrowing too. Each reader
+        # decides whether it can ask it: the Aura-host test does, and the
+        # revealed-card and target-type tests refuse a phrase with no type.
         if revealed_filter is not None and (
             revealed_filter.card_types or revealed_filter.excluded_types
+            or revealed_filter.subtypes
         ):
             # "If it's a **nonland** card" (Wand of Denial) is Wand of Ith's
             # "if it **isn't** a land card" with the negation inside the noun

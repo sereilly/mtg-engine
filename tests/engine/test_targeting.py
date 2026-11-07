@@ -153,7 +153,9 @@ def test_an_aura_on_a_graveyard_card_is_not_a_battlefield_target(supported_cards
         ("Disenchant", {"kind": "permanent",
                         "filter": {"type_filter": "artifact_or_enchantment"}}),
         # Flags, each from the same place its behaviour comes from.
-        ("Animate Wall", {"kind": "creature", "enchant_wall": True}),
+        # "Enchant Wall" is any Wall permanent (CR 109.2, 205.3m): the
+        # general picker narrowed by the flag, as the gate reads it (kg4).
+        ("Animate Wall", {"kind": "permanent", "enchant_wall": True}),
         ("Feedback", {"kind": "permanent", "enchant_enchantment": True}),
         ("Word of Command", {"kind": "player", "opponents_only": True}),
         ("Blue Elemental Blast", {"kind": "stack", "stack_color_filter": "R"}),

@@ -704,6 +704,52 @@ def state_holds(perm: Permanent, word: str) -> bool:
     return bool(test and test(perm))
 
 
+def names_a_creature_type(payload: dict | None) -> bool:
+    """Whether *payload* names creature types and no card type at all.
+
+    "Destroy target **Wall**", "Sacrifice a **Goblin**", "**Goblins** you
+    control" (CR 109.2): a permanent with the subtype, which CR 205.3m gives to
+    a creature or a kindred. The parse records the subtype alone
+    (``nouns.parse_object_filter``), so a reader that used to see
+    ``type_filter: "creature"`` beside it and asked "is this narrowed to a kind
+    of permanent?" asks this instead — the answer it gave then, without the
+    implication that kept a Kindred permanent out.
+    """
+    from ..grammar.vocabulary import CREATURE_TYPES
+
+    payload = payload or {}
+    if payload.get("type_filter") or payload.get("type_filter_all"):
+        return False
+    words: list[str] = []
+    for key in ("subtype_filter", "subtype_filter_all"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            words.append(value)
+        elif isinstance(value, (list, tuple)):
+            words.extend(str(word) for word in value)
+    return bool(words) and all(word in CREATURE_TYPES for word in words)
+
+
+def creature_floor_holds(perm: Permanent, described: dict | None) -> bool:
+    """The floor a reader written for "target creature" stands on.
+
+    A creature — or, where the phrase names creature types and no card type
+    ("Regenerate target **Beast**", "Put a +1/+1 counter on target **Cat**"),
+    a permanent with one of them (CR 109.2), which CR 205.3m gives a kindred
+    as well as a creature. The subtype is asked here too, through layer 4, so
+    a gate that asks nothing else ("is there any legal target at all?") cannot
+    widen to every permanent; a reader asking its whole filter beside this asks
+    it twice, harmlessly. A description that names a card type keeps the
+    creature floor it always had.
+    """
+    if names_a_creature_type(described):
+        return permanent_matches_filter(perm, {
+            key: described[key]
+            for key in ("subtype_filter", "subtype_filter_all") if key in described
+        })
+    return perm.is_creature
+
+
 def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     """Whether *perm* satisfies a target-filter payload (the key vocabulary
     produced by ``engine.grammar.ast.ObjectFilter.to_payload``:

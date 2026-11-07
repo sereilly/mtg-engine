@@ -42,7 +42,7 @@ from .cast_prohibitions import cast_prohibition
 from .game import Game
 from .models import CardDefinition, Permanent
 from .oracle import compile_card_oracle
-from .subject_filters import subject_matches
+from .subject_filters import names_a_creature_type, subject_matches
 from .targeting import bounce_subject_filter, spec_roles
 from .ai_payment import _paying_for, _plan_land_taps
 from .face_down import face_down_card, is_morph_cost
@@ -315,9 +315,9 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
     # are preferences as much as legality — "is there something on the
     # opponent's board worth destroying" — and each reads one or two payload
     # keys, so a narrowing the key does not carry is invisible to it: Tunnel
-    # ("destroy target Wall") reads `type_filter == "creature"` and answers yes
-    # to any creature at all, then the cast path checks `wall_only` and
-    # refuses. Putting the engine's answer first can only ever skip *more*
+    # ("destroy target Wall") read `type_filter == "creature"` and answered yes
+    # to any creature at all, then the cast path checked `wall_only` and
+    # refused. Putting the engine's answer first can only ever skip *more*
     # casts, and only ones it can prove have no legal target.
     if _no_legal_cast_target(game, caster_index, card):
         return False
@@ -346,7 +346,12 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
         if kind == "destroy_target_permanent":
             type_filter = instruction.payload.get("type_filter")
             color_filter = instruction.payload.get("color_filter")
-            if type_filter or color_filter:
+            # "Destroy target **Wall**" (Tunnel) names a creature type and no
+            # card type (CR 109.2: every Wall permanent), which the parse used
+            # to record as "creature" — and the arm asks it as it asked that.
+            if type_filter or color_filter or names_a_creature_type(
+                instruction.payload
+            ):
                 # "Is there something on the opponent's board this may
                 # destroy" — the engine's own list of what the announcement
                 # may name, filtered to that seat. It was a matcher of this

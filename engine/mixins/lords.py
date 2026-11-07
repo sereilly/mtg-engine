@@ -107,7 +107,15 @@ class LordBuffsMixin:
         # Through `has_type` (CR 613 layer 4) like every other type read here,
         # so an animated Swamp is a creature before a creature anthem considers
         # it.
-        if not any(target_perm.has_type(word) for word in filt.card_types):
+        #
+        # **No card type at all** is "Other Goblins" (CR 109.2): every
+        # permanent with the subtype, which the subtype test below asks — a
+        # Kindred Enchantment — Goblin is one (CR 205.3m), and a P/T delta on a
+        # noncreature is not read (CR 208.3). The fields below narrow it as
+        # printed; an empty list is what a phrase naming no card type says.
+        if filt.card_types and not any(
+            target_perm.has_type(word) for word in filt.card_types
+        ):
             return False
         # "**Non**creature artifacts" — the exclusion, OR'd the way every other
         # negative type test in this engine is: a permanent naming any excluded

@@ -1879,9 +1879,11 @@ def test_lord_conjunction_keeps_both_halves():
     assert result.parsed and result.lowered
     kinds = [type(effect).__name__ for effect in result.node.effect.effects]
     assert kinds == ["Pump", "GainKeyword"]
+    # "Goblins" prints no card type: every Goblin permanent (CR 109.2), a
+    # Kindred one too (CR 205.3m), so the buff carries an empty type list.
     assert result.instructions[0].payload == {
         "power": 1, "toughness": 1, "subtypes": ["goblin"], "other": True,
-        "keywords": ["mountainwalk"],
+        "card_types": [], "keywords": ["mountainwalk"],
     }
 
 
@@ -5142,7 +5144,8 @@ def test_r34_a_dependent_noun_phrase_lowers_to_ordered_roles():
         "roles": [
             {
                 "role": "blocker", "kind": "object", "count": 1,
-                "filter": {"type_filter": "creature", "subtype_filter": "wall"},
+                # "target Wall" is any Wall permanent (CR 109.2).
+                "filter": {"subtype_filter": "wall"},
             },
             {
                 "role": "subject", "kind": "object", "count": 1,
