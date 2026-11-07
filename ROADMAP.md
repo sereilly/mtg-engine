@@ -443,8 +443,10 @@ one card prints this") reads as a work item long after it stopped being true.
     Effigy") - a person's answer is judged; 20 triggers print a target and
     fire on a death or a departure. The fix is to enqueue after the removal
     (wrap `_destroy_swept_permanents`' loop, and the single-permanent paths,
-    in `deferring_triggers()`) and then drop `Game.departing`; four Blazing
-    Effigy tests pin the index fallback and will move. (b) A modal trigger's
+    in `deferring_triggers()`) and then drop `Game.departing`. (Since kg4 the
+    trigger-target offer drops departing permanents for every shape, so the
+    default never names the dying Effigy, and the four Effigy tests pass as
+    written.) (b) A modal trigger's
     mode target (one in the pool). (c) A spell target a trigger chose for
     itself. (d) A cast announcement the picker has no list for (12 of 65
     targeted entry triggers on the cast road; the 15 graveyard-card ones
@@ -492,7 +494,11 @@ one card prints this") reads as a work item long after it stopped being true.
     CR 601.2c's "can the announcement be made at all?" is asked per primary
     kind only.
 
-- **Three handler paths still resolve by index alone** (re-probed
+- **One handler path still resolves by index alone**,
+  `combat.remove_creature_from_combat`, and no stale index can reach it:
+  since kg4 every resolution context re-derives its slots from the ids
+  (the two exile handlers resolve through `resolve_target_permanent`). The
+  history (re-probed
   2026-10-18; `colors.mark_text_modified` was the fourth, and round 3's
   J6 found it hitting the wrong permanent six times in six and moved it onto
   `pick_target_permanent`). True of the code, and since APC wave 2

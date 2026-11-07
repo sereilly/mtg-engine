@@ -935,7 +935,15 @@ entries, not editing dispatch**.
   still offers the player (`Game.role_seat_is_offered`, CR 608.2b).
   `target_permanent_id` is `None` or a list of ids on every
   holder (`game_types.check_target_ids` on each write), read through
-  `target_ids` / `single_chosen_id` / `first_target_id`.
+  `target_ids` / `single_chosen_id` / `first_target_id`;
+  `target_permanent_index` has the same one shape (`check_target_slots`;
+  `target_slots` / `single_slot` / `first_slot`), is consumed into ids at
+  the push (`_stamp_stack_targets`), so a stack object carries none, and
+  every resolution context re-derives it from the ids
+  (`bare_announcements.resolving_slots`). A graveyard target is its stamp
+  (`target_graveyard_card`, None or a list, `check_graveyard_stamps`), read
+  through `handlers/_targets.chosen_graveyard_slots`. The API keyword still
+  takes a slot (SET_PLAYBOOK's Known gaps).
 
 **Triggers**
 
