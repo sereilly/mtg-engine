@@ -553,7 +553,6 @@ class UntapStepMixin:
             )
         ]
 
-    @goes_no_further(0)
     def _untap_replaced(self, permanent, player) -> bool:
         """Whether a CR 614 effect replaces *permanent*'s untap in this step
         (``would_untap``: Freyalise's Winds' counters, Undiscovered Paradise's
@@ -581,6 +580,7 @@ class UntapStepMixin:
         )
         return bool(consumed)
 
+    @goes_no_further(0)
     def resolve_untap_step(
         self,
         player_index: int,
