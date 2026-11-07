@@ -338,8 +338,9 @@ class DeclareBlockersStepMixin:
     def _lock_block_declaration(self) -> None:
         """Complete the declaration of blockers where no declaration completes
         it: every defender still to declare had no legal block and was passed
-        over (CR 509.1a: their declaration is no blockers), or a driver locked
-        the blocks itself.
+        over (CR 509.1a: their declaration is no blockers), or a driver gives
+        the blocks up as nobody's (the web layer's safety valve after a
+        refused AI declaration; the simulator's combat loop).
 
         The declaration's last half, as ``declare_blockers`` makes it for the
         last defender who does declare: the attackers nobody blocked trigger

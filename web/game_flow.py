@@ -852,9 +852,11 @@ def _advance_phase(session: Session) -> None:
                     ok = declare_ai_blockers(game, defender_index)
                     if not ok:
                         # Safety valve: never let AI declaration failures deadlock combat progression.
+                        # The blocks lock as nobody's, through the engine's
+                        # completion of a declaration (CR 509.1h, 509.2a):
+                        # what that sets off goes round below.
                         game.combat_blockers = {}
-                        game.combat_blockers_locked = True
-                        game._prune_combat_state()
+                        game._lock_block_declaration()
                     # The declaration may have been made *for* this seat by
                     # another (Melee). Casting an instant afterwards is the
                     # defender's own priority action, so it is offered only to

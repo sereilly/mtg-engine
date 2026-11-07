@@ -771,8 +771,9 @@ def run_ai_combat_phase(game, seat: int, *, outcome: CombatOutcome | None = None
         if step == "declare_blockers" and not game.combat_blockers_locked:
             pending = game._pending_block_declarer()
             if pending is None:
-                game.combat_blockers_locked = True
-                game._prune_combat_state()
+                # Every defender has declared: the declaration's last half
+                # (CR 509.1h, 509.2a), the engine's, not a flag set here.
+                game._lock_block_declaration()
                 continue
             declare_ai_blockers(game, pending, outcome=outcome)
             outcome.blocks_declared |= declared_block_pairs(game, pending)

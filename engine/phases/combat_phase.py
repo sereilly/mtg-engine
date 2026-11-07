@@ -531,10 +531,12 @@ class CombatPhaseMixin:
             # after the step's priority had been given, and the window then
             # resolved it with nobody asked.
             #
-            # What still reaches here is a lock made by neither: a driver
-            # setting the flag itself (the web layer's safety valve after a
-            # refused AI declaration). Its triggers and its state-based check
-            # are made now, still before the window below.
+            # Every driver that locks the blocks itself goes through the same
+            # completion (the simulator's `run_ai_combat_phase`, the web
+            # layer's safety valve after a refused AI declaration). A lock
+            # made some other way — a test or a pasted state setting the flag
+            # — still has its triggers and state-based check made here, before
+            # the window below.
             self._lock_block_declaration()
 
         self._leave_combat_step(combat_steps, idx, allow_damage_skip)

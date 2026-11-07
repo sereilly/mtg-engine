@@ -210,3 +210,40 @@ def test_two_people_are_both_asked_when_the_defender_has_no_creature():
     assert _asked_over(served, 1, "Murk Dwellers"), (served, game.log[-20:])
     assert game.players[1].life == 16, game.log[-20:]
 
+
+
+@pytest.mark.cr("509.2a", "117.4")
+def test_a_refused_ai_declaration_still_puts_the_trigger_round_the_table(monkeypatch):
+    """The web's safety valve: an AI defender whose every declaration was
+    refused blocks with nobody (``declare_ai_blockers`` answers False —
+    stubbed here, since no shipped board makes all three refusals). The
+    blocks are locked through the engine's completion of a declaration, so
+    the person's Murk Dwellers trigger is on the stack as the person is
+    handed priority. The valve set the flag itself, and the step's leaving
+    pass then fired the trigger and resolved it unasked."""
+    import web.game_flow as game_flow
+
+    sid, session = _session(
+        "human_vs_ai", 0, host_deck_cards=_LANDS, guest_deck_cards=_LANDS,
+    )
+    game = session.game
+    (dwellers,) = _put(game, 0, ["Murk Dwellers"])
+    monkeypatch.setattr(game_flow, "declare_ai_blockers", lambda game, seat: False)
+    for _ in range(10):
+        if _state(sid)["current_step"] == "declare_attackers":
+            break
+        _act(sid, action="next_phase")
+    _act(sid, action="declare_attackers", attacker_ids=[dwellers.permanent_id], target_seat=1)
+    served = []
+    for _ in range(30):
+        state = _state(sid)
+        if state["current_turn_phase"] != "combat":
+            break
+        served.append(_row(state))
+        if state["priority_player"] == 0:
+            _act(sid, action="pass_priority")
+        else:
+            _act(sid, action="next_phase")
+
+    assert _asked_over(served, 0, "Murk Dwellers"), (served, game.log[-20:])
+    assert game.players[1].life == 16, game.log[-20:]
