@@ -344,7 +344,17 @@ def test_a_choose_one_spell_is_never_handed_two_modes(catalog_by_name):
 def test_a_mode_an_opponent_chooses_is_still_announced_with_none(catalog_by_name):
     """Fatal Lore, Misfortune, Library of Lat-Nam: the caster picks no mode,
     the engine refuses a cast that names one, and the opponent's seat answers
-    as it always has."""
+    — the mode it is measured to prefer (kg4 ``defaults``,
+    ``ai_prompt_picks.opponent_mode_pick``), whose own prompts (Fatal Lore's
+    "that player draws up to three cards") are answered in turn — and the
+    spell resolves.
+
+    The caster's rehearsal of its cast reads that same answer, so a cast the
+    opponent would turn against it is not proposed: with a 2/2 to lose and
+    three cards to gain, Fatal Lore's opponent takes the cards, and the seat
+    holding it holds it. Cast anyway, it is announced with no mode all the
+    same."""
+    proposed = {}
     for name in ("Fatal Lore", "Misfortune", "Library of Lat-Nam"):
         card = catalog_by_name[name]
         assert compile_card_oracle(card).mode_chooser is not None
@@ -354,12 +364,20 @@ def test_a_mode_an_opponent_chooses_is_still_announced_with_none(catalog_by_name
 
         action = choose_cast_action(game, 0)
 
-        assert action is not None, name
-        assert action.mode_index is None and action.mode_choices is None, name
-        result = game.cast_from_hand(0, card.name, **cast_announcement(action))
+        proposed[name] = action is not None
+        if action is not None:
+            assert action.mode_index is None and action.mode_choices is None, name
+        result = game.cast_from_hand(
+            0, card.name, **(cast_announcement(action) if action is not None else {}),
+        )
         assert result.supported, (name, result.details)
+        assert any(" chose " in line and line.endswith(f"for {card.name}") for line in game.log), name
+        for _ in range(3):
+            game.auto_resolve_pending_choices()
+            resolve_stack(game)
         assert game.stack == []
         assert game.pending_choices == [], name
+    assert proposed == {"Fatal Lore": False, "Misfortune": True, "Library of Lat-Nam": True}
 
 
 # --- The instant-speed window ----------------------------------------------------

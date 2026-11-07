@@ -561,15 +561,20 @@ class HandChoicesMixin:
         return True
 
     def _default_hand_to_library(self, choice: PendingChoice) -> None:
-        """Put the lowest-index cards back, in hand order.
+        """Put back the cards the seat least wants to hold, the one of them it
+        wants most named first — on top, drawn first
+        (``ai_prompt_picks.hand_to_library_picks``).
 
-        Lowest-index is the same stated policy ``_default_discard`` takes, and
-        for the same reason: which cards are *legal* answers is the card's
-        business and there is no restriction here, so anything past "enough of
-        them" is AI valuation rather than rules.
+        How many is the card's business (an exact count, or the whole offer of
+        an "any number"); which ones was the first cards in hand, so a
+        Brainstorm put back the two spells it had just drawn beside a fourth
+        land.
         """
+        from ....ai_prompt_picks import hand_to_library_picks
+
         count = min(int(choice.data["count"]), len(self.players[choice.player_index].hand))
-        if not self._resolve_hand_to_library(choice, list(range(count))):
+        picks = hand_to_library_picks(self, choice.player_index, count)
+        if not self._resolve_hand_to_library(choice, picks):
             self.discard_pending_choice(choice)
 
     def _default_discard(self, choice: PendingChoice) -> None:
@@ -937,17 +942,20 @@ class HandChoicesMixin:
         return True
 
     def _default_put_from_hand_choice(self, choice: PendingChoice) -> None:
-        """The stated policy: the **first** eligible card in hand order.
+        """The eligible card worth most as a permanent
+        (``ai_prompt_picks.put_from_hand_pick``), never a decline while one is
+        offered: more battlefield is what the AI plays toward, the policy
+        ``put_cards_from_hand_onto_battlefield`` states for the sweep beside
+        it.
 
-        Not a valuation — hand order is seed-deterministic, which is what AI and
-        headless play need, and it is the same policy
-        ``put_cards_from_hand_onto_battlefield`` already states for the sweep
-        beside it: more battlefield is what the AI plays toward. A seat that
-        should decline cleverly needs a weight in ``engine/ai_valuation.py``,
-        not a branch here.
+        Which card was the first in hand order, so Metamorphose's opponent put
+        a Forest onto the battlefield holding a Craw Wurm.
         """
+        from ....ai_prompt_picks import put_from_hand_pick
+
         live = self.live_put_from_hand_choices(choice)
-        if not live or not self._resolve_put_from_hand_choice(choice, live[0]):
+        pick = put_from_hand_pick(self, choice.player_index, live)
+        if pick is None or not self._resolve_put_from_hand_choice(choice, pick):
             self._resolve_put_from_hand_choice(choice, None)
 
     # -- A card brought into a hand from outside the game --------------------

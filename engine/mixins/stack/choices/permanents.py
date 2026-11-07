@@ -227,8 +227,11 @@ class PermanentChoicesMixin:
 
     def _default_untap_up_to(self, choice: PendingChoice) -> None:
         """A non-interactive seat untaps its own tapped matching permanents,
-        oldest first — its own because untapping an opponent's land is a gift,
-        and tapped ones because untapping an untapped land is a wasted pick.
+        the dearest first (``ai_prompt_picks.untap_up_to_order``, board order
+        between equals) — its own because untapping an opponent's land is a
+        gift, and tapped ones because untapping an untapped land is a wasted
+        pick. Board order was the order, so Mudslide's {2} untapped whichever
+        creature had been on the battlefield longest.
 
         With a price on each pick (Mudslide), the count is capped by what the
         *floating* mana covers — the same stated policy `_default_optional_pay`
@@ -238,10 +241,12 @@ class PermanentChoicesMixin:
         """
         amount = int(choice.data.get("amount", 0))
         filt = dict(choice.data.get("filter") or {})
-        own = [
+        from ....ai_prompt_picks import untap_up_to_order
+
+        own = untap_up_to_order(self, choice.player_index, [
             perm for perm in self.controlled_by(choice.player_index)
             if perm.tapped and permanent_matches_filter(perm, filt)
-        ]
+        ])
         cost_each = {k: v for k, v in (choice.data.get("cost_each") or {}).items() if v}
         if cost_each:
             payer = self.players[choice.player_index]
@@ -786,14 +791,19 @@ class PermanentChoicesMixin:
         return True
 
     def _default_player_choice(self, choice: PendingChoice) -> None:
-        """The stated policy: the **first** live seat offered.
-
-        Not a valuation — seat order is seed-deterministic, which is what AI and
-        headless play need. A card whose choice should be made cleverly needs a
-        weight in ``engine/ai_valuation.py``, not a branch here.
+        """The seat that benefits the chooser
+        (``ai_prompt_picks.player_choice_pick``): an opponent the card then
+        damages, the one it would damage most (Backdraft, read off the
+        program), and otherwise — "which opponent", at a table of three or
+        more — the opponent least ahead. The first live seat offered was the
+        answer, so Backdraft named its own caster whenever the caster sat
+        first.
         """
+        from ....ai_prompt_picks import player_choice_pick
+
         live = self.live_player_choices(choice)
-        if not live or not self._resolve_player_choice(choice, live[0]):
+        pick = player_choice_pick(self, choice, live)
+        if pick is None or not self._resolve_player_choice(choice, pick):
             self._record_player_choice(choice, None)
 
     def arm_cast_choice(
@@ -857,11 +867,23 @@ class PermanentChoicesMixin:
         return True
 
     def _default_cast_choice(self, choice: PendingChoice) -> None:
-        """The stated policy: the **first** cast offered, in the order they were
-        cast. Deterministic rather than clever, for ``_default_player_choice``'s
-        reason."""
+        """Where the number recorded becomes damage to the named cast's caster
+        (Backdraft's "…equal to half the damage dealt by one of those sorcery
+        spells", read off the program: ``ai_prompt_picks.
+        result_is_damage_dealt``), the cast that dealt most when its caster is
+        somebody else and least when it is the chooser
+        (``cast_choice_pick``); otherwise the first cast offered, in the order
+        they were cast. The first was the answer whatever it had dealt."""
+        from ....ai_prompt_picks import cast_choice_pick, result_is_damage_dealt
+
         options = list(choice.data.get("options") or ())
-        if not options or not self._resolve_cast_choice(choice, options[0]):
+        context = choice.data.get("_context")
+        pick = options[0] if options else None
+        if options and result_is_damage_dealt(
+            getattr(context, "card", None), str(choice.data.get("result_key") or ""),
+        ):
+            pick = cast_choice_pick(self, choice.player_index, options)
+        if pick is None or not self._resolve_cast_choice(choice, pick):
             self._record_cast_choice(choice, 0)
 
     # -- Which permanent receives a loyalty counter (Liliana's Scrounger) ----

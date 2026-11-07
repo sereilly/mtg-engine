@@ -21,8 +21,11 @@ from engine.card_loader import manifest_set_path
 #: Seed 11 until the kg2 round, when the AI began to take mulligans and its
 #: games stopped reaching a creature round with an animated Forest in it;
 #: 21 is the first after it that does (12-20 cast Balance, but no Forest
-#: was a creature when its round came).
-SEED = 36
+#: was a creature when its round came). 36 until kg4 ``defaults``, when a
+#: seat nobody asks began to give up the creatures it loses least by
+#: (``ai_prompt_picks.balance_sacrifices``) and seed 36's rounds kept their
+#: animated Forests; 37 is the first after it whose creature round takes one.
+SEED = 37
 
 
 @pytest.mark.full

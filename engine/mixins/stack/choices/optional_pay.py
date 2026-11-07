@@ -395,14 +395,19 @@ class OptionalPayChoicesMixin:
         return True
 
     def _default_reflexive_target(self, choice: PendingChoice) -> None:
-        """The stated policy: the **first** target offered.
-
-        Not a valuation — the enumerator's order is the board's order and is
-        seed-deterministic. A card whose reflexive ability should be aimed
-        cleverly needs a valuation in `engine/ai_valuation.py`, not a branch
-        here.
+        """The target the reflexive ability is best aimed at by the seat
+        choosing (``ai_prompt_picks.reflexive_target_order``): a toggle at an
+        opponent's untapped creature before one of its own tapped ones, any
+        other effect on the side it wants, the dearest there first. The first
+        target offered was the answer, so Tolarian Kraken's "tap or untap
+        target creature" paid {1} to tap the Kraken.
         """
-        for target in choice.data.get("targets") or ():
+        from ....ai_prompt_picks import reflexive_target_order
+
+        for target in reflexive_target_order(
+            self, choice.player_index, choice.data.get("_steps") or (),
+            list(choice.data.get("targets") or ()),
+        ):
             pid = target.get("permanent_id")
             if pid is not None and self._resolve_reflexive_target(choice, pid):
                 return

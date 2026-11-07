@@ -74,14 +74,22 @@ class SpellChoicesMixin:
         return True
 
     def _default_opponent_mode_choice(self, choice) -> None:
-        """The first printed mode — a stated policy, not a valuation.
+        """The mode that leaves the choosing opponent best off — the worst for
+        the caster — each printed mode rehearsed from that seat
+        (``ai_prompt_picks.opponent_mode_pick``); the first printed mode where
+        no rehearsal can be run, which was the answer whatever the board, so
+        Fatal Lore always drew its caster three cards.
 
-        The same answer ``mode_choice`` takes (``triggers.py``), and for its
-        reason: an unanswered prompt inside an announcement would hold the cast
-        open forever, and the seat that owes this one is by definition not the
-        caster, so there is nobody else to ask.
+        Answered where it is armed, for ``mode_choice``'s reason
+        (``triggers.py``): an unanswered prompt inside an announcement would
+        hold the cast open forever, and the seat that owes this one is by
+        definition not the caster, so there is nobody else to ask.
         """
-        if not self._resolve_opponent_mode_choice(choice, 0):
+        from ....ai_prompt_picks import opponent_mode_pick
+
+        if not self._resolve_opponent_mode_choice(
+            choice, opponent_mode_pick(self, choice, 0),
+        ) and not self._resolve_opponent_mode_choice(choice, 0):
             self.discard_pending_choice(choice)
 
     def confirm_modal_mode_targets(self, player_index: int, permanent_ids: list) -> bool:
@@ -146,18 +154,23 @@ class SpellChoicesMixin:
         return True
 
     def _default_modal_mode_targets(self, choice) -> None:
-        """The offered candidates in board order, up to the printed ceiling.
-
-        A stated policy rather than a valuation, and the same one
-        ``_default_permanent_set_choice`` states: seed-determinism is what AI
-        and headless play need, and a card that should choose cleverly wants a
-        weight in ``engine/ai_valuation.py`` rather than a branch here. There is
-        no *side* to decide — the printed noun phrase already narrowed the
-        candidates to one player's board — so board order is the whole policy.
+        """The dearest candidates on the side the chosen mode's effect wants,
+        up to the printed ceiling (``ai_prompt_picks.modal_mode_target_picks``)
+        — none where "up to" lets a mode that would hurt the caster's own name
+        nothing. The printed noun phrase has already narrowed the candidates to
+        one player's board; which of them was board order, so Fatal Lore's
+        caster destroyed whichever two creatures came first.
         """
+        from ....ai_prompt_picks import modal_mode_target_picks
+
         offered = list(choice.data.get("targets") or ())
         ceiling = int(choice.data.get("max_targets", 1))
-        ids = [entry["permanent_id"] for entry in offered[:ceiling]]
+        item = choice.data.get("_item")
+        ids = (
+            modal_mode_target_picks(self, choice.player_index, item, offered, ceiling)
+            if item is not None
+            else [entry["permanent_id"] for entry in offered[:ceiling]]
+        )
         if not self._resolve_modal_mode_targets(choice, ids):
             self.discard_pending_choice(choice)
 
@@ -440,13 +453,13 @@ class SpellChoicesMixin:
         return True
 
     def _default_face_down_cast(self, choice: PendingChoice) -> None:
-        """Cast the first eligible hand creature (mana value within X)."""
-        player = self.players[choice.player_index]
-        max_cmc = int(choice.data.get("max_cmc", 0))
-        index = next(
-            (i for i, c in enumerate(player.hand)
-             if c.primary_type == "creature" and int(c.cmc or 0) <= max_cmc),
-            None,
+        """Put down the eligible hand creature (mana value within X) worth most
+        once turned up (``ai_prompt_picks.face_down_cast_pick``); it was the
+        first eligible one in hand."""
+        from ....ai_prompt_picks import face_down_cast_pick
+
+        index = face_down_cast_pick(
+            self, choice.player_index, int(choice.data.get("max_cmc", 0)),
         )
         if not self._resolve_face_down_cast(choice, index if index is not None else -1):
             self.discard_pending_choice(choice)
@@ -526,14 +539,20 @@ class SpellChoicesMixin:
         return self._finish_word_of_command(pending, chosen, caster_index=caster_index)
 
     def _default_word_of_command(self, choice: PendingChoice) -> None:
-        """Force the first card in the target's hand (deterministic)."""
+        """Force the card in the target's hand that does the target least good
+        (``ai_prompt_picks.word_of_command_pick``: a spell that harms the
+        player it names, which names the target, then a land, then the
+        cheapest of the rest). It was the first card in the hand."""
+        from ....ai_prompt_picks import word_of_command_pick
+
         target = self.players[choice.data["target_index"]]
+        slot = word_of_command_pick(self, choice.data["target_index"])
         # …and its first half, for a split card: the same deterministic
         # default one level down (`castable_faces` is the card itself when
         # it has one face).
-        spell_name = castable_faces(target.hand[0])[0].name if target.hand else None
+        spell_name = castable_faces(target.hand[slot])[0].name if slot is not None else None
         if not self._resolve_word_of_command(
-            choice, 0 if target.hand else -1, defer_resolution=False,
+            choice, slot if slot is not None else -1, defer_resolution=False,
             spell_name=spell_name,
         ):
             self.discard_pending_choice(choice)

@@ -48,14 +48,16 @@ import engine.mixins.stack.choices.table  # noqa: F401  (registers every kind)
 #:   preference the program reads (a shared colour, a card the sentence tests,
 #:   a pick taken away);
 #: * ``position`` — the first option(s) in board, hand, seat or printed order
-#:   with nothing weighed. Each is a default still owed a reading by worth.
+#:   with nothing weighed. Each is a default still owed a reading by worth;
+#:   kg4 ``defaults`` gave the sixteen it found one each, and none is left
+#:   (``test_no_prompt_kind_s_default_picks_by_position``).
 _DEFAULTS: dict[str, str] = {
     "aggregate_sacrifice": "worth",       # greatest power first, up to the total
-    "balance": "position",                # the last slots of hand / board
+    "balance": "worth",                   # least loss given up (``ai_prompt_picks``)
     "bid_life": "stated",                 # no bid
     "body_choice": "stated",              # stamped at arm
     "card_type_choice": "stated",         # stamped at arm
-    "cast_choice": "position",            # Backdraft: the first spell
+    "cast_choice": "worth",               # Backdraft: the most damage at an opponent
     "choose_card_name": "stated",         # stamped at arm
     "choose_cards_in_hand": "preference", # hand order behind an entry consumer
     "color_choice": "stated",             # stamped at arm
@@ -68,7 +70,7 @@ _DEFAULTS: dict[str, str] = {
     "discard_unless_pay_life": "stated",  # pay while it is not the whole life
     "draw_becomes_counter": "stated",
     "draw_up_to": "stated",               # the whole offer
-    "effect_order": "position",           # CR 616.1: the first effect
+    "effect_order": "stated",             # CR 616.1e: ``choose_effect``, stamped at arm
     "enter_choice": "stated",             # stamped at arm
     "entry_discard_toll": "stated",
     "entry_exile": "worth",               # least mana value
@@ -77,14 +79,14 @@ _DEFAULTS: dict[str, str] = {
     "exile_hand_pile_choice": "stated",   # the whole offer
     "exiled_pile_claim": "worth",         # greatest mana value
     "exiled_card_return": "worth",        # greatest ``permanent_worth`` (Dimensional Breach)
-    "face_down_cast": "position",         # Illusionary Mask: the first creature
+    "face_down_cast": "worth",            # Illusionary Mask: the dearest creature
     "face_down_look": "stated",           # a dismissal
     "flip_again": "stated",               # no
     "graveyard_exile_pick": "worth",      # graveyard denial / price orders
     "graveyard_pick_for_price": "worth",  # least mana value
     "graveyard_pile_choice": "worth",
     "hand_reveal": "stated",              # a dismissal
-    "hand_to_library": "position",        # the first cards in hand
+    "hand_to_library": "worth",           # the cards least worth holding
     "keep_permanents": "worth",
     "lamp_draw": "stated",
     "land_type_choice": "stated",         # stamped at arm
@@ -92,14 +94,14 @@ _DEFAULTS: dict[str, str] = {
     "leng_discard": "stated",
     "library_cycle_offer": "stated",      # no
     "library_end_choice": "stated",       # top
-    "library_pile_split": "position",     # the first half
-    "linked_exile_return": "position",    # the first card
-    "look_top_pick": "preference",        # first, or greatest mana value when recorded
+    "library_pile_split": "worth",        # even, the dearer half together
+    "linked_exile_return": "worth",       # held / battlefield worth
+    "look_top_pick": "worth",             # by destination: held / battlefield worth
     "loyalty_recipient": "worth",         # fewest loyalty counters
     "madness_cast": "worth",              # ``_madness.default_madness_offer``
     "mana_color_choice": "stated",        # stamped at arm
     "mana_payment": "stated",             # pay if able
-    "modal_mode_targets": "position",     # Fatal Lore's caster: the first two
+    "modal_mode_targets": "worth",        # the dearest on the effect's side
     "mode_choice": "worth",               # rehearsed (``choose_trigger_mode``)
     "name_and_random_reveal": "stated",   # stamped at arm
     "name_and_strip": "stated",
@@ -107,7 +109,7 @@ _DEFAULTS: dict[str, str] = {
     "name_then_reveal_top": "stated",
     "number_choice": "stated",
     "opponent_damage": "worth",           # the biggest creature it kills
-    "opponent_mode_choice": "position",   # the first printed mode
+    "opponent_mode_choice": "worth",      # rehearsed from the chooser's seat
     "opponent_picks_revealed": "worth",   # mana value, by fate
     "optional_damage_redirect": "stated",
     "optional_pay": "worth",              # toll and trade readers
@@ -120,12 +122,12 @@ _DEFAULTS: dict[str, str] = {
     "permanent_set_choice": "preference",
     "pile_choice": "worth",               # ``piles.default_pile_choice``
     "pile_exile_choice": "worth",         # the smaller pile
-    "pile_search": "position",            # the first card
+    "pile_search": "worth",               # the card most worth holding
     "pile_split": "worth",                # the most even split by value
     "pile_top_draw": "stated",            # the pile while it holds a card
-    "player_choice": "position",          # the first seat offered
-    "put_from_hand_choice": "position",   # the first card
-    "reflexive_target": "position",       # the first permanent offered
+    "player_choice": "worth",             # the seat damaged most / least ahead
+    "put_from_hand_choice": "worth",      # the dearest permanent card
+    "reflexive_target": "worth",          # the toggle's / effect's side, dearest
     "reorder_library": "worth",
     "repeat_process": "stated",           # no
     "retarget_choice": "worth",           # the effect's side, dearest first
@@ -142,10 +144,10 @@ _DEFAULTS: dict[str, str] = {
     "skip_draw": "stated",
     "tap_any_number": "stated",           # the whole offer
     "target_group_order": "stated",       # the slot order, as before the prompt
-    "text_change_vocabulary": "position", # the first word
+    "text_change_vocabulary": "worth",    # rehearsed
     "trigger_target": "worth",            # the trigger's side
-    "untap_up_to": "position",            # board order, as many as affordable
-    "word_of_command": "position",        # the first card in the hand
+    "untap_up_to": "worth",               # the dearest first, then mana breadth
+    "word_of_command": "worth",           # the card that does its owner least good
 }
 
 
@@ -159,6 +161,15 @@ def test_every_prompt_kind_s_default_is_classified():
         sorted(set(_DEFAULTS) - set(CHOICE_SPECS)),
     )
     assert set(_DEFAULTS.values()) <= {"worth", "stated", "preference", "position"}
+
+
+def test_no_prompt_kind_s_default_picks_by_position():
+    """kg4 ``defaults`` gave the sixteen by-position rows a reader each
+    (``engine/ai_prompt_picks.py``; ``test_kg4_defaults_unasked_picks.py``
+    drives each one's board). A new kind whose default takes the first thing
+    offered with nothing weighed is classified ``position`` above and fails
+    here, rather than joining a list nobody reads."""
+    assert [kind for kind, how in _DEFAULTS.items() if how == "position"] == []
 
 
 # -- Strongarm Tactics --------------------------------------------------------
