@@ -246,7 +246,7 @@ def test_w1g4_willbender_re_aims_a_spell(set_pool):
 
 def test_w1g4_willbender_re_aims_an_activated_ability(set_pool):
     """"…spell **or ability**": Prodigal Sorcerer's ping is an ability on the
-    stack (CR 113.7a), and Willbender moves it off the Bears."""
+    stack (CR 113.1c), and Willbender moves it off the Bears."""
     game, placed = _w1g4_table(
         set_pool, ["fd:Willbender", "Grizzly Bears", "Island", "Island"],
         ["Prodigal Sorcerer"],

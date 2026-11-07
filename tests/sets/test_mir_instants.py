@@ -148,7 +148,7 @@ def test_disempower_still_refuses_a_creature(set_pool):
     assert game.is_on_battlefield(creature)
 
 
-# --- Round 9: the tutor cycle (CR 701.19 / 701.23) ---
+# --- Round 9: the tutor cycle (CR 701.23 / 701.24b) ---
 
 from engine.search_filters import search_matches
 
@@ -741,7 +741,7 @@ def test_dissipate_exiles_the_spell_it_counters(set_pool):
     """"Counter target spell. If that spell is countered this way, **exile it**
     instead of putting it into its owner's graveyard."
 
-    CR 614.1 replacing CR 701.5a's destination, which Memory Lapse's production
+    CR 614.1 replacing CR 701.6a's destination, which Memory Lapse's production
     already carried — written with the destination as a *verb* rather than a
     zone, because "put it into exile" is not a sentence Magic uses. One branch
     of that production rather than a second one: the "instead of … graveyard"
@@ -877,7 +877,7 @@ def test_soul_rend_actually_destroys_a_white_creature(set_pool):
     can't be regenerated."
 
     The card was *supported* and did nothing but draw its cantrip: the effect
-    line refused as a whole — CR 701.15c's rider is read by the destroy
+    line refused as a whole — CR 701.19c's rider is read by the destroy
     production only when it trails the verb directly, and the sentence layer had
     already wrapped this destroy in the "if it's white" conditional — and a
     ``spell_pattern`` whitelist marker claimed the card anyway.

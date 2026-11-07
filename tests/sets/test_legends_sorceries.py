@@ -208,7 +208,7 @@ def test_the_damage_counts_the_deaths_rather_than_the_survivors(set_pool):
 
 # ---------------------------------------------------------------------------
 # Winds of Change (round 21) — "each player shuffles the cards from their hand
-# into their library, then draws that many cards". CR 701.19, CR 121.
+# into their library, then draws that many cards". CR 701.24, CR 121.
 # ---------------------------------------------------------------------------
 
 
@@ -282,7 +282,7 @@ def test_an_empty_hand_still_shuffles_the_library_and_draws_nothing(set_pool):
 
 # ---------------------------------------------------------------------------
 # Visions (round 21) — look at the top five cards of a library you do not own,
-# then offer its owner's shuffle. CR 701.19.
+# then offer its owner's shuffle. CR 701.24.
 # ---------------------------------------------------------------------------
 
 

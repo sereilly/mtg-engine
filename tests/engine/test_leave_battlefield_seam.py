@@ -56,7 +56,7 @@ _NOT_A_BATTLEFIELD_EXIT = {
     # "…put it on top of its owner's library instead of into that player's
     # graveyard" (Memory Lapse). ``countered`` is a StackItem for the same
     # reason as the row above: a countered spell is an object on the stack
-    # (CR 701.5a), so its card was never on a battlefield to leave one, and
+    # (CR 701.6a), so its card was never on a battlefield to leave one, and
     # there is no permanent for the seam to name.
     ("handlers/stack.py", "_redirect_countered_card"),
     # The *graveyard* branch of ``shuffle_source_card_into_library``, which is

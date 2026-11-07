@@ -59,7 +59,7 @@ def test_w2g3_binding_agony_bites_the_hosts_controller(set_pool):
     Three pieces met here. The trigger's subject is the Aura's *host*, so the
     fire site scans what is attached to the damaged creature as well as the
     creature's own card — an Aura's ability is the Aura's, not a granted ability
-    of its host (CR 113.7a). And "that creature's controller" is frozen while
+    of its host (CR 303.4e). And "that creature's controller" is frozen while
     the creature is still on the battlefield, which is what makes the lethal
     case work at all: by the time this trigger resolves off the stack (CR 603.3)
     the creature is a card in a graveyard with no controller (CR 400.7).

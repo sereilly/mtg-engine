@@ -792,7 +792,7 @@ def test_basalt_golem_arms_a_delayed_sacrifice_of_what_blocked_it(set_pool):
     the *possessive* and the subject is a bare pronoun, so the reader that
     decides whether a delay binds an object -- which looks at the noun phrase's
     quantifier -- saw no binding and the entry would have armed about nothing.
-    The seat the possessive names is CR 701.17a's answer anyway (a permanent is
+    The seat the possessive names is CR 701.21a's answer anyway (a permanent is
     sacrificed by whoever controls it), so the two printed spellings are one
     instruction.
     """
@@ -843,7 +843,7 @@ def test_basalt_golem_gives_the_wall_to_the_player_who_lost_a_creature(set_pool)
 
 def test_basalt_golem_makes_no_wall_when_the_creature_is_already_gone(set_pool):
     """"**If** the player does" asks a real question even though the sacrifice
-    is not optional: CR 701.17a's action does not happen when the permanent has
+    is not optional: CR 701.21a's action does not happen when the permanent has
     already left, and the rider is what stops the token arriving anyway."""
     game, _golem, blocker, _bystander = _w2g1a_golem_blocked(set_pool)
     game.remove_from_battlefield(blocker)

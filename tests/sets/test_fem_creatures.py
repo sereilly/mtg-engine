@@ -197,7 +197,7 @@ def test_deep_spawn_prints_the_warriors_sentence_with_the_noun_written_out(set_p
 def test_deep_spawn_mills_two_to_survive_its_upkeep(set_pool):
     """"At the beginning of your upkeep, sacrifice this creature unless you mill
     two cards." An offer with a penalty, priced in cards off the library
-    (CR 701.13a) rather than in mana -- so taking it costs two cards and keeps
+    (CR 701.17a) rather than in mana -- so taking it costs two cards and keeps
     the creature."""
     spawn = Permanent(card=set_pool("FEM")["Deep Spawn"])
     game, player = _g2_game(spawn, library=[_g2_basic("Mountain")] * 5)

@@ -641,8 +641,9 @@ def test_a_token_that_ceases_to_exist_in_exile_takes_its_record(catalog_by_name)
 
 def test_an_ownership_move_out_of_exile_takes_the_record(catalog_by_name):
     """Timmerian Fiends' "put this card **from anywhere** into that player's
-    graveyard" (CR 701.12a). The locator returns a zone *name*, so the write
-    went through ``getattr(player, zone).pop(at)`` — invisible to the scan."""
+    graveyard", the far end of its ownership exchange (CR 701.12a). The locator
+    returns a zone *name*, so the write went through
+    ``getattr(player, zone).pop(at)`` — invisible to the scan."""
     from engine.handlers.ownership import _give_card_to_graveyard
 
     lotus = catalog_by_name["Black Lotus"]

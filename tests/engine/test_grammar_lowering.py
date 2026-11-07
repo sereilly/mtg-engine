@@ -1146,7 +1146,7 @@ def test_a_zone_scoped_filter_cannot_reach_a_battlefield_handler():
 
 
 # ---------------------------------------------------------------------------
-# Looking at a hand (CR 701.16)
+# Looking at a hand (CR 701.20e: a look is a reveal to one player)
 # ---------------------------------------------------------------------------
 
 
@@ -4224,7 +4224,7 @@ def test_a_destroy_delayed_to_the_end_step_is_not_the_end_of_combat_one():
 
 
 # ---------------------------------------------------------------------------
-# Milling (CR 701.13a)
+# Milling (CR 701.17a)
 # ---------------------------------------------------------------------------
 
 def test_target_player_mills_a_spelled_out_count():

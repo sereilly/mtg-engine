@@ -332,8 +332,8 @@ def _ability_on_the_stack(set_pool, source: CardDefinition, spell: str):
 
 
 def test_rust_counters_an_activated_ability_from_an_artifact(set_pool):
-    """CR 113.7a: an ability on the stack is an object, and CR 701.5a removes
-    it. Nothing else happens — there is no card to bin."""
+    """CR 113.1c: an ability on the stack is an object, and CR 701.6a removes
+    it. Nothing else happens — there is no card to bin (CR 405.1)."""
     game, _p1, p2 = _ability_on_the_stack(set_pool, _source("Test Pinger", artifact=True), "Rust")
 
     assert game.cast_from_hand(1, "Rust", target_stack_index=0).supported

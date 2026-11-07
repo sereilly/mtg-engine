@@ -34,7 +34,7 @@ Clusters covered in this batch:
   game has no cards outside the game at all, so the debug menu can now put some
   there and the zone is visible on the board.
 - Serendib Djinn: "sacrifice a land" always took the first land; the controller
-  now picks which one (CR 701.17a).
+  now picks which one (CR 701.21a).
 """
 from __future__ import annotations
 

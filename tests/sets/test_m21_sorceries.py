@@ -686,7 +686,7 @@ def test_track_down_draws_when_the_revealed_card_is_a_land(set_pool):
 
 def test_track_down_draws_nothing_for_any_other_card(set_pool):
     """The control. The reveal still happened â€” revealing moves nothing
-    (CR 701.15) â€” so the card is still on top and the hand is empty."""
+    (CR 701.20b) â€” so the card is still on top and the hand is empty."""
     game, player = _track_down_game(set_pool, "Shock")
 
     assert player.hand == []
@@ -1119,9 +1119,9 @@ def test_two_finds_cannot_share_a_slot(set_pool):
 
 
 def test_the_library_is_shuffled_when_the_finds_are_named(set_pool):
-    """CR 701.19d shuffles when the *search* is over — which is when the picks
+    """CR 701.24b shuffles once the *search* is over — which is when the picks
     are confirmed, not when the finder finishes saying where each one goes.
-    The finds are already out, so the shuffle cannot hide them."""
+    The finds are not in that shuffle, so it cannot hide them."""
     game, p1 = _cultivate_board(set_pool)
     library = [c.name for c in p1.library]
 
@@ -1188,7 +1188,7 @@ def test_finding_one_still_asks_which_slot_it_fills(set_pool):
 
 
 def test_declining_finds_nothing_and_asks_nothing(set_pool):
-    """"Up to two" — and CR 701.19b makes fail-to-find legal regardless. With
+    """"Up to two" — and CR 701.23b makes fail-to-find legal regardless. With
     no finds there is no destination question."""
     game, p1 = _cultivate_board(set_pool)
 
@@ -1252,7 +1252,7 @@ def test_cultivate_reveals_both_finds_as_one_event(set_pool):
 
 
 def test_a_partial_find_still_reveals_what_it_found(set_pool):
-    """Finding fewer is stating the rest are not there (CR 701.19b) — but the
+    """Finding fewer is stating the rest are not there (CR 701.23b) — but the
     find that was made is still shown."""
     game, p1 = _cultivate_board(set_pool)
     forest = [c.name for c in p1.library].index("Forest")

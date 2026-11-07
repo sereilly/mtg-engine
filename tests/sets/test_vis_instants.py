@@ -802,7 +802,7 @@ def test_desertion_steals_a_countered_artifact_spell(set_pool, set_cards):
 def test_desertion_bins_a_countered_spell_outside_the_named_class(set_pool, set_cards):
     """The narrowing is enforced, not decorative.
 
-    An instant is countered and takes CR 701.5a's ordinary graveyard: the
+    An instant is countered and takes CR 701.6a's ordinary graveyard: the
     destination is dropped, never the counter.
     """
     lea = {c.name: c for c in set_cards("LEA")}

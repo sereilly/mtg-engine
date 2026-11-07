@@ -215,7 +215,7 @@ def test_gift_of_the_woods_fires_on_either_side_of_the_block(set_pool):
     """"Whenever enchanted creature blocks or becomes blocked …" — one printed
     sentence naming two events (CR 509.1a and CR 509.3c), so the Aura fires
     whichever side of the block its host is on, and the life goes to *its*
-    controller (CR 113.7a) rather than the creature's."""
+    controller (CR 113.8) rather than the creature's."""
     game, attacker, _blocker, _aura = _w1g3_combat(
         set_pool, "Gift of the Woods", on_blocker=False
     )
@@ -678,7 +678,7 @@ def test_w2g4_browse_eats_its_own_library(set_pool):
 
 
 def test_w2g4_browse_looks_at_what_is_left_when_the_library_is_short(set_pool):
-    """CR 701.19-style "as many as you can": a library shorter than five is not
+    """CR 609.3-style "as many as you can": a library shorter than five is not
     an error, and the ability still resolves."""
     game, me = _w2g4_browse(set_pool, [_w2g4_card("Only Card")])
 

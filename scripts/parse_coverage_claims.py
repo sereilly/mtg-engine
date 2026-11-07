@@ -512,7 +512,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # the module the cleanup step enforces CR 402.2 with.
     ("hand_size.py", hand_size_line),
     # "Reveal the first card you draw each turn." (Rowen.) Asked of the module
-    # the draw seam enforces CR 701.16 with.
+    # the draw seam enforces CR 701.20 with.
     ("draw_reveals.py", reveals_first_draw_line),
     # Extra land plays (Fastbond). This was a literal in _MIXIN_TEXT_SCANS
     # pointing at a name-keyed count, so the sentence read as claimed for every
