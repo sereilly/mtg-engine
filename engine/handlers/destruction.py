@@ -523,10 +523,14 @@ def sacrifice_expansion_permanents(game: Game, instruction: OracleInstruction, c
         if not perm.metadata.get("is_token")
         and perm.effective_card.original_printing.lower() == wanted
     ]
-    for seat, perm in doomed:
-        game._permanent_to_graveyard(game.players[seat], perm)
+    # Through the one transition for a set sacrificed in one event (CR
+    # 701.21a, 603.10a): it is a sacrifice, so "whenever you sacrifice a
+    # permanent" hears every one — the sacrificed among them included — and
+    # Urza's Miter's "if it wasn't sacrificed" (itself an Antiquities card)
+    # reads that it was. This sweep had the transition's shape without its
+    # announcement or its record.
+    for perm in game.sacrifice_permanents([perm for _seat, perm in doomed]):
         game.log.append(f"{perm.card.name} sacrificed ({context.card.name})")
-    game.remove_all_from_battlefield([perm for _seat, perm in doomed])
     return True, "resolved"
 
 

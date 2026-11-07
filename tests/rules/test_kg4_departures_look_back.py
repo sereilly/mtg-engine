@@ -236,3 +236,21 @@ def test_an_aura_destroyed_with_its_creature_sees_it_go(order, aura):
         # "…deals damage equal to that creature's toughness to the
         # creature's controller": the Hill Giant's 3.
         assert game.players[1].life == 17
+
+
+@pytest.mark.cr("603.10a", "701.21a")
+def test_a_sylex_sweep_is_a_sacrifice_of_each():
+    """Golgothian Sylex: "Each nontoken permanent with a name originally
+    printed in the Antiquities expansion is sacrificed by its controller" —
+    one event, and a sacrifice of each: Havoc Jester (not an Antiquities card)
+    hears its controller sacrifice the Sylex, the Miter and the Ornithopter,
+    and Urza's Miter's "if it wasn't sacrificed" reads that they were."""
+    game = _table()
+    for name in ("Golgothian Sylex", "Havoc Jester", "Urza's Miter", "Ornithopter"):
+        _set_down(game, 0, name)
+    assert game.activate_permanent_ability(0, "Golgothian Sylex").supported
+    _settle(game)
+    assert [p.card.name for p in game.all_permanents()] == ["Havoc Jester"]
+    assert _resolved(game, "Havoc Jester") == 3, game.log[-12:]
+    assert game.players[1].life == 17
+    assert _resolved(game, "Urza's Miter") == 0, game.log[-12:]

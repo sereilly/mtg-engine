@@ -584,9 +584,8 @@ _NOT_DESTRUCTIONS_BY_CALLER: dict[str, str] = {
     # ("reached without the sacrifice transition") until kg4/departures, which
     # sends it through `sacrifice_permanent` once the event that took the Aura
     # is over (`ControlSeamMixin.after_this_departure`).
-    "sacrifice_expansion_permanents":
-        "Golgothian Sylex: '…is sacrificed by its controller' (CR 701.21a), "
-        "reached without the sacrifice transition",
+    # …and Golgothian Sylex's "…is sacrificed by its controller", the same
+    # (`sacrifice_permanents`, kg4/departures).
     "take_permanent_in_ownership_exchange":
         "CR 701.12 — an exchange of ownership puts the card in a graveyard",
     "put_self_into_zone":
