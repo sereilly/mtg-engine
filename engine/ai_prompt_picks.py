@@ -11,7 +11,7 @@ and each weighs the offer from the seat choosing:
 * **a card** — what it is worth to hold (``ai_scoring._score_tutor_choice``,
   the reading a search's find is weighed by: a card put back, discarded,
   found or returned to a hand), what it is worth on the battlefield
-  (``ai_rehearsal.permanent_worth`` over the card as printed, read for what
+  (``ai_standing.permanent_worth`` over the card as printed, read for what
   lasts: a card put onto the battlefield, face down or up), or its mana value
   where the chooser must not read what the card is worth to somebody else's
   hand (a divider's piles);
@@ -160,7 +160,7 @@ def _madness_is_payable(game, seat: int, card: CardDefinition) -> bool:
 def balance_sacrifices(game, seat: int, candidates, owed: int) -> list[int]:
     """The *owed* slots of *candidates* — ``(slot, permanent)`` pairs a Balance
     round counts — a seat sacrifices: the ones whose loss costs it least
-    (``ai_rehearsal.permanent_loss``), then the land that makes fewest
+    (``ai_standing.permanent_loss``), then the land that makes fewest
     colours (:func:`mana_breadth`), the later slot between equals."""
     ranked = sorted(
         candidates,
@@ -447,7 +447,7 @@ def player_choice_pick(game, choice, live: list[int]) -> int | None:
     * **"Which opponent"** — an unnamed "an opponent" at a table of three or
       more (CR 601.7a / 608.2d, ``handlers/player_choices.ask_which_opponent``):
       what that opponent then gets or decides is done for the chooser's
-      opponent, so the one least ahead (``ai_rehearsal.seat_standing``) is
+      opponent, so the one least ahead (``ai_standing.seat_standing``) is
       named — a permanent handed over, a token made or a pile chosen by the
       seat least able to turn it against the chooser.
 

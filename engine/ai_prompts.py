@@ -198,7 +198,7 @@ def _copy_target_by_side(game: Game, choice, kept: dict, answers: list) -> dict:
     ``spell_seat_side`` where a player may be named) — then the first answer on the right side: the
     opponent the seat attacks (``ai_scoring.choose_attack_target``) where a
     player is offered, else the dearest permanent there
-    (``ai_rehearsal.permanent_worth``); for a gift, the seat's own dearest
+    (``ai_standing.permanent_worth``); for a gift, the seat's own dearest
     permanent, else its own face.
 
     A floor rather than a choice: the scratch table this answers for is
@@ -407,7 +407,7 @@ def choose_exiled_card_to_return(
     exiled cards they own"), as its position; None with nothing offered.
 
     The card is going straight onto the battlefield, so it is weighed as the
-    permanent it will be (``ai_rehearsal.permanent_worth`` over the card as
+    permanent it will be (``ai_standing.permanent_worth`` over the card as
     printed, read for what lasts) rather than as a card to cast. One card
     comes back per upkeep, so the order is the whole decision and the biggest
     permanent first is the plain reading; the earliest position between equals,
@@ -864,7 +864,7 @@ def offer_trade_is_worth_taking(
       may sacrifice it. If you do, gain control of target creature that
       player controls"): taken when what changes sides is worth more than
       what is sacrificed — the target counted twice, once off the opponent's
-      standing and once onto the seat's (``ai_rehearsal.permanent_worth``,
+      standing and once onto the seat's (``ai_standing.permanent_worth``,
       read as the board will be once the turn is over) — and never for a
       target the seat already controls or that has gone.
     """
@@ -1228,7 +1228,7 @@ def exchange_picks(game: Game, player_index: int, candidates, payload: dict, con
     first pick carries the next one as ``matched_by`` and the second carries
     ``same_number_as``. A side the seat controls is given away **cheapest
     first**, a side another seat controls is taken **dearest first**
-    (``ai_rehearsal.permanent_worth``, the board as it will be once the turn
+    (``ai_standing.permanent_worth``, the board as it will be once the turn
     is over). The first pick's count is how many pairs gain the seat — its
     dearest take against its cheapest gift, then the next pair, while each
     gains; none where it is a party to neither side, or nothing gains. The
@@ -1379,7 +1379,7 @@ def choose_amount_paid(game: Game, choice) -> int:
     prompt's stated default. Always 0 where the board pays nothing.
 
     The prompt is answered part-way through the resolution that armed it,
-    where no rehearsal can be run (``ai_rehearsal.mid_resolution``), so the
+    where no rehearsal can be run (``ai_scratch_copy.mid_resolution``), so the
     answer is read, not measured. Mana spent here is not kept for the rest
     of the turn; a seat holding a spell for its second main phase is the
     case this does not weigh.

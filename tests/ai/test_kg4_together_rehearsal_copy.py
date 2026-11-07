@@ -2,7 +2,7 @@
 answers is not part of that event (CR 603.6a, ``entering_together_through``).
 
 Show and Tell's event outlives its offers: each seat's answer re-joins it and
-the last one closes it. A copy of the table (``ai_rehearsal.scratch_copy``)
+the last one closes it. A copy of the table (``ai_scratch_copy.scratch_copy``)
 taken between two answers carries the prompts that would re-join it — and the
 card the first seat already handed in, whose caller's continuation is a
 closure over the original game. So the copy's prompts carry no event (its

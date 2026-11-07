@@ -5,7 +5,7 @@ score said (W1G2: at twenty life a 2/2 chumped a 5/3 Drinker of Sorrow). A
 block that loses its blocker is now made only as part of a gang that kills an
 attacker worth more than what it kills back, or as a chump whose saved life is
 worth more than the creature on the rehearsal's own scale
-(``ai_rehearsal.life_worth`` against ``permanent_worth``).
+(``ai_standing.life_worth`` against ``permanent_worth``).
 """
 
 from __future__ import annotations

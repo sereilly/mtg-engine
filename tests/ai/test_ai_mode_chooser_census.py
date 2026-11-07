@@ -534,7 +534,7 @@ def mode_acts_on(card, index, candidate) -> bool:
 # The second half of the census: not "is the mode reached" but "is the cast
 # the larger one". Every cast here is made **by the engine, on a census
 # board** — never by ``ai_rehearsal.rehearse`` — and priced with the one
-# definition of "larger" (``ai_rehearsal.swing_worth`` over the standing of
+# definition of "larger" (``ai_standing.swing_worth`` over the standing of
 # each seat). The policy predicts with that definition; this measures with
 # it; a census that asked the scorer whether the scorer was right would
 # measure nothing.
@@ -646,7 +646,7 @@ def weighed(
     it was worth to seat 0, and whether what it moved is **still moved once
     the turn is over**.
 
-    The swing is ``ai_rehearsal.swing_worth`` of seat 0's standing swing now
+    The swing is ``ai_standing.swing_worth`` of seat 0's standing swing now
     and once the turn has run out, against the same board with nothing cast
     (*untouched_now*, *untouched_lasting*). The spell's own card is not part
     of it.
@@ -657,7 +657,7 @@ def weighed(
     the end of the turn, or more of its good is than is left). Then the
     attack, the blocks and the damage are played on a copy of the board as
     the cast left it and on a copy of it with nothing cast (*before_cast*,
-    taken before the cast: ``ai_rehearsal.scratch_copy``), each run to the
+    taken before the cast: ``ai_scratch_copy.scratch_copy``), each run to the
     end of its turn (``ai_rehearsal.run_out_the_turn``), and the swing is
     between those two — and a cast that has left nothing even then **moved
     nothing**: a pump on a creature that had no fight to decide, a shield
@@ -1602,7 +1602,7 @@ def test_the_cast_made_is_never_the_smaller_one(result):
     """**Which bullet, and at which target.** On every board the census
     builds, every bullet worth casting is cast by hand at every target the
     engine's picker offers it, and each cast is priced with the one
-    definition of "larger" (``ai_rehearsal.swing_worth`` over each seat's
+    definition of "larger" (``ai_standing.swing_worth`` over each seat's
     standing, read as the board stood and again once the turn had run out).
     The cast the policy makes — through the simulator's own executor — must
     measure as much as the best of them, and must move something if any of

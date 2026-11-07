@@ -1029,7 +1029,7 @@ class TriggerChoicesMixin:
             if getattr(item, "ability_instruction", None) is not None else ()
         )
         counter = str((divided.payload.get("counter") if divided is not None else "") or "")
-        # What `ai_target_sides.divided_shape` calls ``thresholded``: the
+        # What `ai_slot_sides.divided_shape` calls ``thresholded``: the
         # divided step is damage, measured against a toughness.
         damage = (
             divided is not None and INSTRUCTION_CATEGORIES.get(divided.kind) == "damage"

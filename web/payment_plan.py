@@ -35,7 +35,7 @@ total a cast pays is settled deep in ``cast_from_hand`` — taxes scoped to what
 the spell targets, a commander's, a kicker's symbols, a buyback's reduction,
 the split of an X — and a second assembly of it here would be the planner the
 browser just lost. Instead the announcement is rehearsed on a scratch copy
-(``ai_rehearsal.scratch_copy``, the copy the policy's own rehearsals take)
+(``ai_scratch_copy.scratch_copy``, the copy the policy's own rehearsals take)
 whose ``_pay_mana_cost`` is wrapped to note each payment it could not make:
 the engine's own ``required`` and ``PaymentPurpose``, at CR 601.2f's moment.
 Every mana payment a cast or an activation makes goes through that one

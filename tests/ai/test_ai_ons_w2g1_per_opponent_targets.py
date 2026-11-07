@@ -4,7 +4,7 @@ controls" (Blatant Thievery, ``target_roles.PER_OPPONENT_ROLE``).
 The roles walk offers each role only the permanents of the opponent it is for,
 so which one is the whole decision: the enumeration's order is the
 battlefield's, and the seat took a Swamp from a table of creatures until each
-such level was ordered by ``ai_rehearsal.permanent_worth``.
+such level was ordered by ``ai_standing.permanent_worth``.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def test_the_ai_names_each_opponents_most_valuable_permanent(set_pool):
 # "Choose any number of target players or planeswalkers. For each of them, …
 # Kaboom! deals damage … to that player or planeswalker" — every role a seat or
 # a planeswalker, so the side the walk reads is the loop body's
-# (``ai_target_sides.announced_roles_loop_side``): sideless, the chain named the
+# (``ai_slot_sides.announced_roles_loop_side``): sideless, the chain named the
 # caster's own seat first and burned it.
 
 

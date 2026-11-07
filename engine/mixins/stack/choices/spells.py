@@ -341,7 +341,7 @@ class SpellChoicesMixin:
 
     def _dearest_permanents_first(self, options, positions: list) -> list:
         """*positions* with the permanents among them dearest first
-        (``ai_rehearsal.permanent_worth``), each player left in its place.
+        (``ai_standing.permanent_worth``), each player left in its place.
 
         "…change that spell's target to another creature." (Meddle.) On the
         side the effect is worth aiming at, which permanent it lands on is

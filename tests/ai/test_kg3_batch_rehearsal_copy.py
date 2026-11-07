@@ -2,7 +2,7 @@
 battlefield is not part of that event (CR 603.6a, ``entering_together``).
 
 An event's newcomers are held until the block that opened it closes; the copy
-of the table (``ai_rehearsal.scratch_copy``) carries the open batch with it,
+of the table (``ai_scratch_copy.scratch_copy``) carries the open batch with it,
 and nothing on the copy will ever close it — so a permanent the rehearsal put
 onto the copy's battlefield joined the original's event and never arrived.
 """

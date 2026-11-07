@@ -353,7 +353,7 @@ def _spent_on_a_tap_cost_first(game: Game, seat: int):
     in: **what it costs least to have tapped first** — a creature that could
     not attack this turn anyway (summoning sick, CR 302.6, which binds the
     attack and not this cost) before one that could, then the one worth least
-    on the board once the turn is over (``ai_rehearsal.permanent_worth``),
+    on the board once the turn is over (``ai_standing.permanent_worth``),
     then board order. A creature tapped for mana neither attacks nor blocks
     until it untaps, so the cost is paid with the bodies the seat misses least.
     """

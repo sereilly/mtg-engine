@@ -202,7 +202,7 @@ def _discard_pick(game: Game, seat: int, cost) -> "int | None":
     card (`Game._discard_cost_payable`, the printed phrase's) of least mana
     value, lands first, the earliest of equals — or None for a cost that
     discards nothing, or one the hand cannot pay. A rehearsal reads a card in
-    hand as a card whatever it is (`ai_rehearsal.CARD_WORTH`), so which one
+    hand as a card whatever it is (`ai_standing.CARD_WORTH`), so which one
     pays is this policy's, and the engine's own default is the first."""
     if not cost.discard_cards:
         return None

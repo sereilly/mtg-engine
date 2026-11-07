@@ -338,7 +338,7 @@ IDLE: dict = {}
 #: stakes, and Desperate Gambit is the same flip one step on (won, the chosen
 #: source's next damage this turn is doubled; lost, it is prevented). A
 #: rehearsal's randomness is its own on purpose
-#: (``ai_rehearsal._rehearsal_seed``): it says what such a cast is *like* and
+#: (``ai_scratch_copy._rehearsal_seed``): it says what such a cast is *like* and
 #: must not say how the real flip will fall. On the seed read off the log's
 #: length their samples won and this sweep's casts, on the seed `run` fixes,
 #: lost: Game of Chaos on all three layouts and Desperate Gambit on ``own``

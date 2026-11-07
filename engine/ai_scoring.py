@@ -458,7 +458,7 @@ def _arrives_to_stay(rehearsal: Rehearsal | None) -> bool:
     took it, and once the turn is over its caster is ahead by more than the
     half a life ``HARM_FLOOR`` forgives — which a permanent still on the
     battlefield always is, worth at least the card it was
-    (``ai_rehearsal.PERMANENT_WORTH``), and one that died as it arrived is
+    (``ai_standing.PERMANENT_WORTH``), and one that died as it arrived is
     not: its card is in a graveyard and nothing it did is left.
 
     A cast nobody could rehearse (None) is proposed as it always was."""

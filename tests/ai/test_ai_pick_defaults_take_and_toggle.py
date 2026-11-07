@@ -5,7 +5,7 @@
   creature and exiles it." (Wormfang Crab.) The opponent's default was the
   first candidate in board order: the Crab's controller's first land. It is
   the dearest now (``ai_prompt_readers.pick_is_taken_from_its_controller``,
-  ``ai_rehearsal.permanent_worth``), and only where the chooser controls none
+  ``ai_standing.permanent_worth``), and only where the chooser controls none
   of the candidates.
 * **A toggle** — "Whenever a player discards a card, you may pay {1}{U}. If
   you do, you may tap or untap target permanent." (Telekinetic Bonds.) No seat

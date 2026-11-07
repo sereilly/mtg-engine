@@ -174,7 +174,7 @@ def _sacrifice_pick(game: Game, seat: int, entry: dict) -> "int | None | bool":
 
     The seat's own choice ("…of their choice"), over the offer's own list: the
     permanent whose loss its standing feels least
-    (``ai_rehearsal.permanent_loss`` — a land beyond the ones a seat needs
+    (``ai_standing.permanent_loss`` — a land beyond the ones a seat needs
     before anything it uses), the engine's deterministic order
     (``Game.sacrifice_preference_key``) between equals. Never the permanent
     making the offer or the one it is attached to, which are what the action
@@ -232,7 +232,7 @@ def _weighed(
 
     # A turn-up is weighed with the permanent at its blank's cost on both
     # copies: what it buys is the face-up creature, not its card's mana value
-    # (``ai_rehearsal.priced_as_their_blanks``).
+    # (``ai_standing.priced_as_their_blanks``).
     priced = (entry["permanent_id"],) if entry["kind"] == TURN_FACE_UP else ()
     with priced_as_their_blanks(priced):
         rehearsal = rehearse(
@@ -299,7 +299,7 @@ def _graveyard_price(game: Game, seat: int, entry: dict) -> float:
     priced as a toll prices one (``ai_prompts._toll_loss_price``) — except a
     card its owner could still cast from there (flashback, CR 702.34a), which
     that order calls a spell the seat still holds and which is priced as one:
-    a card in hand (``ai_rehearsal.CARD_WORTH``).
+    a card in hand (``ai_standing.CARD_WORTH``).
     """
     from .ai_prompt_readers import graveyard_price_order
     from .flashback import has_flashback

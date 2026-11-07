@@ -1001,7 +1001,7 @@ def _exists_to_be_given_up(permanent) -> bool:
     a Seal's or an Aura of Silence's enchantment are what a rehearsal weighs.)
 
     It is worth nothing but the ability, and the standing prices every
-    permanent at least a card (``ai_rehearsal.permanent_worth``): rehearsed,
+    permanent at least a card (``ai_standing.permanent_worth``): rehearsed,
     the Egg's {R}{G} and card were worth less than the Egg, and it was never
     cracked (sim_fingerprint ODY, ICE). Its ability keeps its flat score."""
     if permanent.is_creature or not permanent.has_type("artifact"):
@@ -1532,7 +1532,7 @@ def _choose_activation_role_targets(
         if role.get(OPTIONAL_ROLE)
     )
     # **One side per role, not one for the chain** — the derivation the cast
-    # side asks (`ai_target_sides.role_target_sides`), over this ability's own
+    # side asks (`ai_slot_sides.role_target_sides`), over this ability's own
     # roles. "Target creature with the chosen ability loses it and **another
     # target creature** gains it" (Phyrexian Splicer) is two roles on two
     # boards, and a single side — or none, the first option at each level —

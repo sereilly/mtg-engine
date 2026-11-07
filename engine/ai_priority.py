@@ -161,7 +161,7 @@ def act_at_priority(
 
     Asked only in :func:`instant_speed_window`'s moments, only where no
     resolution is part-way through (a rehearsal cannot be run there, and a
-    response nobody weighed is a guess — `ai_rehearsal.mid_resolution`), and
+    response nobody weighed is a guess — `ai_scratch_copy.mid_resolution`), and
     only once the cheap question has said there is something the seat could
     pay for (`ai_policy.holds_an_instant_it_could_pay_for`,
     `holds_an_ability_it_could_activate`); every chooser rehearses what it

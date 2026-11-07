@@ -924,7 +924,7 @@ def _gang_kills(game: Game, attacker: Permanent, members: list[Permanent]) -> bo
 def _gang_is_worth_it(game: Game, attacker: Permanent, members: list[Permanent]) -> bool:
     """Whether killing *attacker* is worth more than the blockers it can
     destroy back (:func:`_kills_back`), each read as the board will be once
-    the turn is over (``ai_rehearsal.permanent_worth``)."""
+    the turn is over (``ai_standing.permanent_worth``)."""
     lost = sum(permanent_worth(member, now=False) for member in _kills_back(game, attacker, members))
     return permanent_worth(attacker, now=False) > lost
 
@@ -939,7 +939,7 @@ def _chump_blocks(
     """Add to *assignments* the chump blocks worth making: an unblocked
     attacker blocked by a creature that dies stopping it, where the life the
     block saves is worth more than the creature
-    (``ai_rehearsal.life_worth`` against ``permanent_worth`` — the scale
+    (``ai_standing.life_worth`` against ``permanent_worth`` — the scale
     every rehearsal reads a position on, under which a point of life is
     worth more the less of it is left and the loss of the game is worth
     everything). So a 2/2 does not chump a 5/3 at twenty life, a token chumps

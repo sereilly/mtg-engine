@@ -7,8 +7,8 @@ turn, target creature with the chosen ability loses it and **another target
 creature** gains it" (Phyrexian Splicer) therefore named two of the
 activator's own creatures: {2} and a tap to move its own flying from one of
 its creatures to another. The cast side learned a side per role at Planeshift
-(`ai_target_sides.role_target_sides`); the activation side asks the same
-derivation now (`ai_target_sides.ability_role_target_sides`).
+(`ai_slot_sides.role_target_sides`); the activation side asks the same
+derivation now (`ai_slot_sides.ability_role_target_sides`).
 """
 from __future__ import annotations
 

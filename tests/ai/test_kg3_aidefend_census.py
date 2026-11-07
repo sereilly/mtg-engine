@@ -46,7 +46,7 @@ def _table(cards, boards, hands=((), ())):
     # coin flip on it (Bottle of Suleiman's) otherwise falls by whatever ran
     # before this board in the process — the census's verdict on it with it
     # (kg4/determinism). A rehearsal's own sample is seeded apart
-    # (``ai_rehearsal._rehearsal_seed``).
+    # (``ai_scratch_copy._rehearsal_seed``).
     random.seed(1337)
     players = [
         PlayerState(name=name, hand=list(hand), library=[cards["Forest"]] * 8)
@@ -261,7 +261,7 @@ def ability_census(cards, catalog):
 #: Activated before the blocks and adding none, each with why. Bottle of
 #: Suleiman flips a coin: won, a 5/5 flying Djinn that blocks; lost, 5 damage
 #: to its controller. The rehearsal's sample of the flip is its own
-#: (``ai_rehearsal._rehearsal_seed``, read off what every seat can count since
+#: (``ai_scratch_copy._rehearsal_seed``, read off what every seat can count since
 #: kg4) and won; the board's flip, on the seed ``_table`` fixes, lost. The AI
 #: weighs a flip on one sample of it, not on its odds.
 _COIN = "a coin flip: the rehearsal's sample won it, the board's flip lost it"

@@ -486,7 +486,7 @@ class PermanentChoicesMixin:
         # candidates and the step behind the pick takes the one chosen away
         # (`ai_prompt_readers.pick_is_taken_from_its_controller`, off the
         # compiled program), so its pick is the one that costs their
-        # controller most — the dearest by ``ai_rehearsal.permanent_worth``,
+        # controller most — the dearest by ``ai_standing.permanent_worth``,
         # board order between equals. Board order's first answer was the
         # Crab's controller's first land.
         #
@@ -1138,7 +1138,7 @@ class PermanentChoicesMixin:
         newer look replaces an older one rather than queueing behind it.
 
         The seat learns nothing that outlasts the prompt: there is no record of
-        what a seat has been shown, so ``ai_rehearsal.conceal_from`` redeals
+        what a seat has been shown, so ``ai_scratch_copy.conceal_from`` redeals
         the looked-at card on the looker's own rehearsal copies — the limit the
         hidden-hand looks (Glasses of Urza) already have.
         """
