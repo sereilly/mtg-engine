@@ -1350,9 +1350,11 @@ def test_w1g10_read_the_runes_draws_then_discards_one_per_card(set_pool):
     _w1g10_drain(game)
     me = game.players[0]
     assert any(line.endswith("drew 3 card(s) (Read the Runes)") for line in game.log)
-    assert len(me.hand) == 1, [c.name for c in me.hand]
+    # The three it least wants to hold (``ai_prompt_picks.discard_order``):
+    # spare Islands beside one Forest, the Shock kept.
+    assert [c.name for c in me.hand] == ["Shock"]
     assert sorted(c.name for c in me.graveyard if c.name != "Read the Runes") == [
-        "Island", "Island", "Shock",
+        "Island", "Island", "Island",
     ]
     assert [p.card.name for p in game.controlled_by(0)] == ["Grizzly Bears", "Forest"]
     assert next(i for i, line in enumerate(game.log) if line.endswith("drew 3 card(s) (Read the Runes)")) < min(

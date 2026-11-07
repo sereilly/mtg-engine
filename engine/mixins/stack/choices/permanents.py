@@ -385,19 +385,25 @@ class PermanentChoicesMixin:
         return True
 
     def _default_permanent_choice(self, choice: PendingChoice) -> None:
-        """The stated policy: the **first** live candidate in board order.
+        """The candidate the step behind the pick wants, by what each is
+        worth on the side that step works for
+        (``ai_prompt_picks.permanent_pick_order``: "…exiles it" takes
+        somebody else's dearest or the chooser's own cheapest, "put a +1/+1
+        counter on" the chooser's own dearest) — board order between equals,
+        and where the program says nothing, so a seed still reproduces a run.
+        Board order was the whole answer, so The Abyss destroyed whichever
+        creature had been out longest.
 
-        Not a valuation — board order is seed-deterministic, which is what AI
-        and headless play need. A card whose choice should be made cleverly
-        needs a weight in ``engine/ai_valuation.py``, not a branch here.
-
-        The one ordering a *payload* may ask for is ``default_prefers``: a
-        permanent state the step behind the pick would change. "That player
+        The orderings a *payload* may ask for (``default_prefers``) go on top:
+        a permanent state the step behind the pick would change. "That player
         untaps a land they control" (Rising Waters) offers every land and an
         untapped one is a legal answer that does nothing, so the default takes
-        a tapped one first. Stable, so board order still breaks every tie, and
-        a preference rather than a filter: the interactive prompt is unchanged.
+        a tapped one first. Stable, so the worth order still breaks every tie,
+        and a preference rather than a filter: the interactive prompt is
+        unchanged.
         """
+        from ....ai_prompt_picks import permanent_pick_order
+
         live = self.live_permanent_choices(choice)
         prefers = (choice.data.get("_payload") or {}).get("default_prefers")
         if prefers == "decline_unless_lethal" and choice.data.get("optional"):
@@ -419,6 +425,7 @@ class PermanentChoicesMixin:
             if not live or at_a_permanent or amount < life:
                 self._resolve_permanent_choice(choice, None)
                 return
+        live = permanent_pick_order(self, choice, live)
         if prefers == "tapped":
             live = sorted(live, key=lambda perm: not perm.tapped)
         elif prefers == "not_the_choosers":
@@ -480,38 +487,14 @@ class PermanentChoicesMixin:
                             wanted, self._effective_colors(perm)
                         ),
                     )
-        # **And a pick that takes the permanent from somebody else.** "…an
-        # opponent chooses a permanent you control other than this creature and
-        # exiles it" (Wormfang Crab): the chooser controls none of the
-        # candidates and the step behind the pick takes the one chosen away
-        # (`ai_prompt_readers.pick_is_taken_from_its_controller`, off the
-        # compiled program), so its pick is the one that costs their
-        # controller most — the dearest by ``ai_rehearsal.permanent_worth``,
-        # board order between equals. Board order's first answer was the
-        # Crab's controller's first land.
-        #
-        # **And its mirror: a pick the chooser makes among its own.** "…choose
-        # a creature you control and an opponent. Flip a coin. If you lose the
-        # flip, that opponent gains control of that creature." (Risky Move);
-        # "…gain control of target creature of an opponent's choice they
-        # control" (Preacher, the opponent choosing). The step behind takes
-        # the one chosen from the seat choosing it, so the seat gives up the
-        # one that costs it least — the cheapest by the same worth, board order
-        # between equals. Board order risked a Butcher Orgg over a Festering
-        # Goblin (Onslaught's W2G5: 5 of 24 Risky Move picks).
-        if live and getattr(context, "card", None) is not None:
-            from ....ai_prompt_readers import pick_is_taken_from_its_controller
-
-            if pick_is_taken_from_its_controller(
-                context.card, str(choice.data.get("result_key") or "")
-            ):
-                from ....ai_rehearsal import permanent_worth
-
-                controllers = {self.controller_index_of(perm) for perm in live}
-                if choice.player_index not in controllers:
-                    live = sorted(live, key=lambda perm: -permanent_worth(perm))
-                elif controllers == {choice.player_index}:
-                    live = sorted(live, key=permanent_worth)
+        # A pick that takes the permanent from somebody else — "…an opponent
+        # chooses a permanent you control other than this creature and exiles
+        # it" (Wormfang Crab) — and its mirror among the chooser's own ("…if
+        # you lose the flip, that opponent gains control of that creature",
+        # Risky Move) are the worth order above (the step reads "opponent":
+        # the Crab's controller's dearest, the chooser's own cheapest), which
+        # board order had made the Crab's controller's first land and a
+        # Butcher Orgg risked over a Festering Goblin (ONS W2G5).
         if not live or not self._resolve_permanent_choice(
             choice, live[0].permanent_id
         ):
@@ -621,13 +604,12 @@ class PermanentChoicesMixin:
         return True
 
     def _default_permanent_set_choice(self, choice: PendingChoice) -> None:
-        """The stated policy: **the seat's own permanents, in board order, up to
-        the ceiling — and nothing else, even when the ceiling is unspent.**
+        """The stated policy: **the seat's own permanents, up to the ceiling —
+        and nothing else, even when the ceiling is unspent.**
 
-        Board order rather than a valuation, which is the singular pick's rule
-        beside it and for its reason: seed-determinism is what AI and headless
-        play need, and a card that should choose cleverly wants a weight in
-        ``engine/ai_valuation.py`` rather than a branch here.
+        Which of them is the singular pick's rule beside it: by what each is
+        worth on the side the step behind the pick works for, board order
+        between equals so a seed still reproduces a run.
 
         Own-only is the half that is a *decision*, and it is deliberately not
         "own first, then others to fill". A sentence that lets a seat pick from
@@ -637,9 +619,20 @@ class PermanentChoicesMixin:
         the card never asked anyone to make. Leaving the ceiling unspent is the
         neutral answer; taking it is a valuation this has no basis for.
         """
+        from ....ai_prompt_picks import permanent_pick_order
+
         limit = int(choice.data.get("up_to", 1))
         floor = int(choice.data.get("at_least", 0) or 0)
-        live = self.live_permanent_set_choices(choice)
+        # **Which** of the seat's own, and which others fill a floor, by what
+        # each is worth on the side the step reading the picks works for
+        # (``ai_prompt_picks.permanent_pick_order``): the dearest first where
+        # that step keeps them (Raiding Party's surviving Plains, Mist of
+        # Stagnation's untaps), the cheapest first where it takes them (Bull
+        # Elephant's returned Forests, Curfew, Tangle Wire's taps) — and
+        # somebody else's dearest first where it takes those (Equipoise's
+        # phased-out lands). Board order between equals; board order was the
+        # whole answer, so Curfew returned a seat's longest-standing creature.
+        live = permanent_pick_order(self, choice, self.live_permanent_set_choices(choice))
         own = [perm for perm in live if self.controls(choice.player_index, perm)]
         payload = choice.data.get("_payload") or {}
         if payload.get("default_none") or payload.get("same_number_as") is not None:
@@ -700,10 +693,10 @@ class PermanentChoicesMixin:
             # ceiling.** "Choose a land that player controls" (Equipoise) is a
             # pick made from somebody *else's* battlefield and the card says how
             # many, so a seat that offered nothing would not be leaving a
-            # ceiling unspent — it would be declining an instruction. Filled in
-            # board order from whatever is left, which is this policy's
-            # determinism one step further rather than a valuation.
-            rest = [perm for perm in live if perm not in picks]
+            # ceiling unspent — it would be declining an instruction. Filled
+            # from whatever is left in the worth order above. By identity:
+            # ``in`` compares permanents by value.
+            rest = [perm for perm in live if not any(perm is pick for pick in picks)]
             if tapped_first:
                 rest = sorted(rest, key=lambda perm: not perm.tapped)
             picks = picks + rest[: floor - len(picks)]

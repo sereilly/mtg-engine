@@ -578,30 +578,31 @@ class HandChoicesMixin:
             self.discard_pending_choice(choice)
 
     def _default_discard(self, choice: PendingChoice) -> None:
-        """Discard the lowest-index *eligible* cards, keeping them in the
-        graveyard — the ones sparing a printed penalty first
-        (``ai_prompts.order_discard``).
+        """Discard the *eligible* cards the seat least wants to hold, keeping
+        them in the graveyard (``ai_prompt_picks.discard_order``: a payable
+        madness card first, then by ``held_worth``, the card sparing a printed
+        penalty ahead of both — ``ai_prompts.order_discard``), hand order
+        between equals. The lowest-index cards were the discard.
 
-        Lowest-index is the stated policy; which cards are candidates at all is
-        not policy but the card's printed phrase, so it is read from the same
-        list the interactive seat is offered. Re-read each time round, because
-        each discard renumbers the hand behind it.
+        Which cards are candidates at all is not policy but the card's printed
+        phrase, so it is read from the same list the interactive seat is
+        offered. Re-read each time round, because each discard renumbers the
+        hand behind it.
         """
-        from ....ai_prompts import order_discard
+        from ....ai_prompt_picks import discard_order
         from ....handlers.discards import _resolve_one_discard
 
         discarded = 0
         took: list = []
+        weighed: dict = {}
         # One event: a discard an opponent causes can put the card onto the
         # battlefield instead (Dodecapod), and every such card enters together
         # (CR 603.6a).
         with self.entering_together():
             for _ in range(int(choice.data["count"])):
-                # Hand order, except where the sentence behind tests which card
-                # went (Strongarm Tactics): the card sparing the penalty first.
-                eligible = order_discard(
+                eligible = discard_order(
                     self, choice.player_index, self.live_discard_candidates(choice),
-                    choice.data.get("_source_card"),
+                    choice.data.get("_source_card"), weighed,
                 )
                 if not eligible:
                     break
@@ -627,8 +628,9 @@ class HandChoicesMixin:
         self._after_discard_answered(choice, discarded, took)
 
     def auto_resolve_pending_discard(self) -> None:
-        """Resolve a pending discard with a default choice (the lowest-index cards,
-        kept in the graveyard). Used for AI players and headless simulation."""
+        """Resolve a pending discard with a default choice (the cards least
+        worth holding, kept in the graveyard). Used for AI players and
+        headless simulation."""
         self.auto_resolve_pending_choices(kinds=("discard",))
 
     # -- A card exiled out of a hand -----------------------------------------
@@ -1230,22 +1232,32 @@ class HandChoicesMixin:
         return True
 
     def _default_choose_cards_in_hand(self, choice: PendingChoice) -> None:
-        """The stated policy: the **first** eligible cards in hand order.
+        """The eligible cards the step behind the pick wants, by what each is
+        worth for what that step does with them
+        (``ai_prompt_picks.hand_pick_order``: put onto the battlefield, the
+        dearest there; spared by a sweep of the rest, the dearest to hold;
+        acted on otherwise, the cheapest to hold), hand order between equals
+        so a seed still reproduces a run. Hand order was the whole answer, so
+        Sylvan Library's two cards were the first two drawn.
 
-        Not a valuation — hand order is seed-deterministic, which is what AI
-        and headless play need, and it is the same policy every other pick out
-        of a hand in this file states. A seat that should choose cleverly needs
-        a weight in ``engine/ai_valuation.py``, not a branch here — and the one
-        that does is ``ai_prompts.order_hand_pick``: a pick the program then puts
-        onto the battlefield for its owner (Stronghold Gambit) takes the card
-        that sentence admits, at its superlative's extreme.
+        The program's own preferences go on top
+        (``ai_prompts.order_hand_pick``): a pick the program then puts onto the
+        battlefield for its owner (Stronghold Gambit) takes the card that
+        sentence admits, at its superlative's extreme.
         """
+        from ....ai_prompt_picks import hand_pick_order
         from ....ai_prompts import order_hand_pick
 
         context = choice.data.get("_context")
+        payload = choice.data.get("_payload") or {}
+        card = getattr(context, "card", None)
         live = order_hand_pick(
-            self, choice.player_index, self.live_choose_cards_in_hand(choice),
-            choice.data.get("_payload") or {}, getattr(context, "card", None),
+            self, choice.player_index,
+            hand_pick_order(
+                self, choice.player_index, self.live_choose_cards_in_hand(choice),
+                payload, card,
+            ),
+            payload, card,
         )
         wanted = self._how_many_cards_to_choose(choice)
         # For "any number of" that is every eligible card, which is the offer's
@@ -1256,8 +1268,10 @@ class HandChoicesMixin:
         answer = live[:wanted]
         # A slotted pick's first *wanted* candidates need not be assignable
         # (two red cards ahead of the hand's one blue), so the default is the
-        # matching itself, in hand order — ``_default_keep_permanents``' policy.
-        slotted = self.match_hand_slots(choice)
+        # matching itself, over the candidates in the order above — the
+        # matching keeps an earlier candidate wherever one can be kept, so
+        # Noxious Vapors spares each colour's dearest card.
+        slotted = self.match_hand_slots(choice, live)
         if slotted is not None:
             answer = sorted(slotted.values())
         if not self._resolve_choose_cards_in_hand(choice, answer):

@@ -245,10 +245,11 @@ def _ask_seat_to_discard(
     answered holds the hand it holds then.
 
     *inline_default* is "Each player discards a card"'s standing arrangement
-    for a seat nobody asks: it discards its first cards where the sentence
-    stands rather than queueing a prompt the resolution would wait on — the
-    discard default's policy, through the same seam and the same records, in
-    the seat's own turn.
+    for a seat nobody asks: it discards the cards it least wants to hold
+    (``ai_prompt_picks.discard_order``) where the sentence stands rather than
+    queueing a prompt the resolution would wait on — the discard default's
+    policy, through the same seam and the same records, in the seat's own
+    turn.
 
     *cause_seat* is stamped rather than left to ``arm_pending_choice``: a seat
     after the first is asked from inside the previous seat's answer, when no
@@ -259,9 +260,9 @@ def _ask_seat_to_discard(
     *source_card* is the card whose sentence this is, carried for the
     default: where the sentence behind tests which card was discarded
     (Strongarm Tactics), a seat nobody asks discards the one that spares it
-    the penalty (``ai_prompts.order_discard``).
+    the penalty (``ai_prompts.order_discard``) ahead of the rest.
     """
-    from ..ai_prompts import order_discard
+    from ..ai_prompt_picks import discard_order
 
     player = game.players[seat]
     count = min(int(count or 0), len(player.hand))
@@ -270,13 +271,16 @@ def _ask_seat_to_discard(
         return
     if inline_default and seat not in game.interactive_seats:
         took: list = []
+        weighed: dict = {}
         # One event: a discard an opponent causes can put the card onto the
         # battlefield instead (Dodecapod), and every such card enters together
         # (CR 603.6a).
         with game.entering_together():
             for _ in range(count):
                 card = player.hand[
-                    order_discard(game, seat, range(len(player.hand)), source_card)[0]
+                    discard_order(
+                        game, seat, range(len(player.hand)), source_card, weighed,
+                    )[0]
                 ]
                 game.take_card_from_hand(player, card)
                 game._discard_card(player, card, cause_seat=cause_seat)
@@ -848,8 +852,8 @@ def each_player_discards_a_card(game: Game, instruction: OracleInstruction, cont
     Who could not is recorded in the resolution scratchpad, because the
     printed rider "Each opponent who can't loses 3 life." reads it. An
     interactive seat's choice goes through the discard prompt; a
-    non-interactive seat discards its first cards, matching the existing
-    discard default.
+    non-interactive seat discards the cards it least wants to hold, the
+    discard default's order (``ai_prompt_picks.discard_order``).
 
     **How many is per seat**, and that is why it is a count spec rather than an
     amount: "a third of the cards in **their** hand" has one answer per player,
