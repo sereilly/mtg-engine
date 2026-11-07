@@ -204,6 +204,43 @@ def test_no_engine_memo_is_keyed_by_an_objects_address():
                     offenders.append(
                         f"{path.relative_to(ENGINE.parent)}:{node.lineno} {memo}"
                     )
+            # …and a memo whose **validity** is an address: a stamp built from
+            # ``id(...)`` stored in it, or compared with what it holds, under
+            # whatever key. ``ai_scoring._TUTOR_SCORES`` was such a memo — its
+            # key a constant, its stamp ``(id(game), …)`` — so a game at a
+            # freed game's address, with the same counts on it, was answered
+            # from the freed one's scores (kg4/determinism).
+            for node in ast.walk(function):
+                if isinstance(node, ast.Assign):
+                    stored = any(
+                        isinstance(target, ast.Subscript)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id in memos
+                        for target in node.targets
+                    )
+                    operands = [node.value] if stored else []
+                elif isinstance(node, ast.Compare):
+                    sides = [node.left, *node.comparators]
+                    compared = any(
+                        isinstance(side, ast.Subscript) and isinstance(side.value, ast.Name)
+                        and side.value.id in memos
+                        or isinstance(side, ast.Call) and isinstance(side.func, ast.Attribute)
+                        and isinstance(side.func.value, ast.Name)
+                        and side.func.value.id in memos
+                        for side in sides
+                    )
+                    operands = sides if compared else []
+                else:
+                    continue
+                if any(
+                    isinstance(part, ast.Call) and isinstance(part.func, ast.Name)
+                    and part.func.id == "id"
+                    or isinstance(part, ast.Name) and part.id in keyed_by_address
+                    for operand in operands for part in ast.walk(operand)
+                ):
+                    offenders.append(
+                        f"{path.relative_to(ENGINE.parent)}:{node.lineno} (stamp)"
+                    )
     assert not offenders, (
         "module-level memo keyed by id(): a freed object's address is reused, "
         "so key it by what the object *is* (copies.card_identity for a card)\n"
