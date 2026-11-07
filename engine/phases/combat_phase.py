@@ -473,8 +473,19 @@ class CombatPhaseMixin:
             while True:
                 pending = self._pending_block_declarer()
                 if pending is None:
-                    self.combat_blockers_locked = True
-                    self._prune_combat_state()
+                    # The declaration is complete with nobody left to make one
+                    # (CR 509.1h): its triggers go on the stack now, before the
+                    # active player's priority (CR 509.2a).
+                    self._lock_block_declaration()
+                    if self.interactive_seats and self.stack:
+                        # …and at a table with a person, that priority is the
+                        # table's priority exchange to give (CR 509.2, 117.4):
+                        # the step stays, as it does after a declaration, and
+                        # the next advance leaves it. Leaving it here drained
+                        # every "attacks and isn't blocked" trigger in the
+                        # step's window with nobody asked.
+                        self.start_priority_window(self.active_player_index)
+                        return
                     break
                 if self._has_any_legal_block(pending):
                     return
@@ -509,30 +520,24 @@ class CombatPhaseMixin:
                 self.resolve_combat_damage(self.active_player_index)
             return
 
-        if self.current_step == "declare_blockers":
-            # CR 509.1h: an attacking creature becomes unblocked as blocks are
-            # declared, and "whenever this creature attacks and isn't blocked"
-            # triggers then — **in this step**, so the ability resolves in the
-            # priority window below, before any combat damage is assigned.
+        if self.current_step == "declare_blockers" and not self.combat_unblocked_triggers_fired:
+            # CR 509.1h / 509.3g: "whenever this creature attacks and isn't
+            # blocked" triggers as the declaration completes, and CR 509.2a
+            # puts it on the stack before the active player's priority — so
+            # both roads that complete it fire it there: the last defender's
+            # `declare_blockers` (a Camouflage resolution is one) and the lock
+            # above, after every defender left had no legal block
+            # (`_lock_block_declaration`). This pass fired it for all three,
+            # after the step's priority had been given, and the window then
+            # resolved it with nobody asked.
             #
-            # It used to fire from inside `resolve_combat_damage`, described
-            # there as "the reliable choke point every combat flow passes
-            # through". It was reliable and it was one step too late: Floral
-            # Spuzzem's "if you do, this creature assigns no combat damage this
-            # turn" was set *after* the damage it is printed to stop, so the
-            # card destroyed an artifact and hit for two anyway.
-            #
-            # Here instead, because this line is the choke point *for the
-            # declaration*: a declaration, an auto-skipped defender with no
-            # legal block, and a Camouflage resolution all reach it, and none
-            # of them reaches the other two's code.
-            self._fire_unblocked_attack_triggers()
-            # …and the declaration's state-based check, for the same reason it
-            # is here: `declare_blockers` makes it when the last defender
-            # declares, and a defender auto-skipped after another one paid to
-            # block (CR 802.4) locks the declaration here instead, with no
-            # declaration of its own to make it (CR 704.3).
-            self._check_after_turn_based_actions()
+            # Every driver that locks the blocks itself goes through the same
+            # completion (the simulator's `run_ai_combat_phase`, the web
+            # layer's safety valve after a refused AI declaration). A lock
+            # made some other way — a test or a pasted state setting the flag
+            # — still has its triggers and state-based check made here, before
+            # the window below.
+            self._lock_block_declaration()
 
         self._leave_combat_step(combat_steps, idx, allow_damage_skip)
 

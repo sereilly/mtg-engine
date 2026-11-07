@@ -875,8 +875,8 @@ class DeclareAttackersStepMixin:
             ):
                 # "Whenever this creature attacks AND ISN'T BLOCKED" (Merchant
                 # Ship, Pirate Ship riders) can't be evaluated until blockers
-                # exist — deferred to _fire_unblocked_attack_triggers at the
-                # combat damage step.
+                # exist — deferred to _fire_unblocked_attack_triggers, as the
+                # blockers' declaration completes (CR 509.3g).
                 if "isn't blocked" in (trig.source_line or "").lower():
                     continue
                 # "Whenever this creature attacks **alone**" (Reckless Ogre).

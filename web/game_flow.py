@@ -852,9 +852,11 @@ def _advance_phase(session: Session) -> None:
                     ok = declare_ai_blockers(game, defender_index)
                     if not ok:
                         # Safety valve: never let AI declaration failures deadlock combat progression.
+                        # The blocks lock as nobody's, through the engine's
+                        # completion of a declaration (CR 509.1h, 509.2a):
+                        # what that sets off goes round below.
                         game.combat_blockers = {}
-                        game.combat_blockers_locked = True
-                        game._prune_combat_state()
+                        game._lock_block_declaration()
                     # The declaration may have been made *for* this seat by
                     # another (Melee). Casting an instant afterwards is the
                     # defender's own priority action, so it is offered only to
@@ -915,8 +917,15 @@ def _advance_phase(session: Session) -> None:
             ):
                 # The AI's turn, and the person had no legal block: their
                 # declaration is made, and CR 509.2 gives the active AI
-                # priority — its answer first (a pump on the unblocked
-                # attacker), then the person, where they flagged the step.
+                # priority — over what the declaration set off first (CR
+                # 509.2a: an attacker nobody blocked, "attacks and isn't
+                # blocked"), which goes round the table so the person is asked
+                # before it resolves (CR 117.4), as the attack declaration's
+                # triggers do (`_ai_declares_attackers`); then, with the stack
+                # empty, its answer (a pump on the unblocked attacker), then
+                # the person, where they flagged the step.
+                if _round_over_ai_objects(session, game.active_player_index):
+                    return
                 if _ai_answers_priority(session, game.active_player_index):
                     return
                 if _hold_at_flagged_step(session):
