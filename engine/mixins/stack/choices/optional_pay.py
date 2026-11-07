@@ -19,6 +19,7 @@ from ....pending_choices import ChoiceSpec, PendingChoice, optional_pay_options
 from ....resumption import run_resumable
 from ....mana_payment import plan_payment
 from ....oracle_types import OracleInstruction
+from ....game_types import as_target_slots
 
 
 class OptionalPayChoicesMixin:
@@ -381,7 +382,7 @@ class OptionalPayChoicesMixin:
         aimed = replace(
             context,
             target=self.players[seat],
-            target_permanent_index=self.battlefield_index_of(perm),
+            target_permanent_index=as_target_slots(self.battlefield_index_of(perm)),
             target_permanent_id=[permanent_id],
         )
         self.discard_pending_choice(choice)

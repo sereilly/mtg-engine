@@ -22,6 +22,7 @@ from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..resumption import run_resumable
 from ._targets import resolve_target_permanent
 from .registry import effect_handler
+from ..game_types import single_slot
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -80,7 +81,9 @@ def exchange_ante_with_top_library(game: Game, instruction: OracleInstruction, c
     if not caster.library:
         game.log.append(f"{card.name} resolved with no library card to exchange")
         return True, "resolved"
-    chosen = context.target_permanent_index if isinstance(context.target_permanent_index, int) else 0
+    chosen = single_slot(context.target_permanent_index)
+    if chosen is None:
+        chosen = 0
     if not (0 <= chosen < len(caster.ante)):
         chosen = 0
     anted = caster.ante.pop(chosen)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..game_types import single_chosen_id
+from ..game_types import single_chosen_id, single_slot
 from ..oracle_types import TAPPED_THIS_WAY_OBJECTS, X_FROM_COUNT
 from ._amounts import resolve_amount
 from ._chosen import (SHARES_CREATURE_TYPE_WITH,
@@ -1457,7 +1457,7 @@ def _restrict_untap_while_source(
         )
         return True, "resolved"
     target = game.permanent_by_id(single_chosen_id(context.target_permanent_id))
-    if target is None and isinstance(context.target_permanent_index, int):
+    if target is None and single_slot(context.target_permanent_index) is not None:
         target = game.chosen_permanent(
             context.target, context.target_permanent_index, context.target_permanent_id
         )

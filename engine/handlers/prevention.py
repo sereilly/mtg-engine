@@ -32,7 +32,7 @@ from ..shields import (
 from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
 from ..next_damage import (DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT, arm,
                            rider_key)
-from ..game_types import single_chosen_id
+from ..game_types import single_chosen_id, single_slot
 from ._amounts import resolve_amount
 from ._targets import (default_announced_permanent, divided_target_permanent,
                        names_a_target_list, recorded_permanent_ids,
@@ -117,6 +117,7 @@ def apply_prevention_shield(
     (``handlers/_targets.default_announced_permanent``), used only when nothing
     was announced.
     """
+    target_permanent_index = single_slot(target_permanent_index)
     chosen_id = (
         single_chosen_id(context.target_permanent_id)
         if context is not None else None
@@ -547,7 +548,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     if (
         object_only
         and single_chosen_id(context.target_permanent_id) is None
-        and not isinstance(context.target_permanent_index, int)
+        and single_slot(context.target_permanent_index) is None
     ):
         unannounced = default_announced_permanent(game, instruction, context)
         if unannounced is None:

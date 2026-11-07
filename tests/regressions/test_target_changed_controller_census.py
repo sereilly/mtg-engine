@@ -509,8 +509,10 @@ def test_the_sweep_finds_the_defect_on_the_tree_as_it_was(
     assert cards(found["missed"]) >= _KNOWN_MISSED, found["missed"]
     assert cards(found["differs"]) >= _KNOWN_DIFFERS, found["differs"]
     assert cards(found_triggers["missed"]) >= _KNOWN_TRIGGERS, found_triggers["missed"]
-    # Nekrataal destroyed the creature that slid into its target's old slot.
-    assert cards(found_triggers["bystander"]) >= _KNOWN_TRIGGERS, found_triggers["bystander"]
+    # Nekrataal destroyed the creature that slid into its target's old slot;
+    # a trigger's slots are re-read off its ids now (kg4 ids part 3), so with
+    # the seat left unsettled it misses and touches no bystander.
+    assert not found_triggers["bystander"], found_triggers["bystander"]
 
 
 def _print(name, tally) -> None:

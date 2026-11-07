@@ -351,5 +351,5 @@ def test_the_stack_records_identity_for_every_targeted_object():
 
     game.queue_from_hand(0, "Giant Growth", target_player_index=1, target_permanent_index=0)
     item = game.stack[-1]
-    assert item.target_permanent_index == 0
+    assert item.target_permanent_index is None
     assert item.target_permanent_id == [bear.permanent_id]

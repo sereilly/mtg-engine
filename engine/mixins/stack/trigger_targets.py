@@ -16,7 +16,7 @@ Split out of ``resolution.py`` at the 2,000-line cap, and composed onto
 
 from __future__ import annotations
 
-from ...game_types import StackItem, target_ids
+from ...game_types import StackItem, target_ids, target_slots
 from ...oracle import OracleInstruction
 from ...modal_triggers import modal_trigger_modes
 # Both owned by ``engine/targeting.py``: two callers ask whether a compiled
@@ -411,12 +411,11 @@ class TriggerTargetsMixin:
             return None
         spec, _chooser, candidates = offer
         if _names_a_graveyard_target(spec, item.ability_text):
-            # **A card in a graveyard**, named by pile and slot — the two
-            # fields a battlefield target reads as a seat and a slot there.
-            # The slot is the one the permanent spell's own stamp re-located
-            # as it resolved (``_run_stack_item_resolution``), so a card that
-            # left the pile while the spell waited arrives here as no slot at
-            # all: nothing is named any more, and the trigger chooses.
+            # **A card in a graveyard**, named by the stamp the permanent
+            # spell's push took and handed to this trigger
+            # (``target_graveyard_card``), located now: a card that left the
+            # pile while the spell waited locates to no slot at all — nothing
+            # is named any more, and the trigger chooses.
             #
             # There was no arm here, because there was no list: a graveyard
             # kind answered None above and the announcement "rode the object as
@@ -429,8 +428,9 @@ class TriggerTargetsMixin:
             # held to the same list, and no more of them than the trigger
             # prints. The pile is one seat, so "a single graveyard" holds by
             # construction.
-            slot = item.target_permanent_index
-            slots = slot if isinstance(slot, list) else [slot]
+            slots = target_slots(
+                self.chosen_graveyard_index(item.target_graveyard_card, None)
+            )
             if not slots or not all(isinstance(each, int) for each in slots):
                 return "unnamed"
             pile = self.graveyard_target_seat(item, spec)
@@ -856,13 +856,16 @@ class TriggerTargetsMixin:
         if unbounded and _target_quantifier(getattr(instruction, "payload", None)) == "any_number":
             up_to = True
         division = spec.get("kind") in self._CHOOSABLE_TRIGGER_DIVIDED_KINDS
-        if division and self.departing:
+        if self.departing:
             # A dies-trigger is announced while its dying permanent is still
             # listed (``Game.departing``), and CR 603.3d puts the ability on
             # the stack *after* the event: Shambling Swarm cannot distribute
-            # its counters onto itself. Asked only of a division, the one shape
-            # that had no prompt before — the general decline for every other
-            # dies-trigger is ROADMAP's (a), and its fix is a different seam.
+            # its counters onto itself, and Blazing Effigy cannot aim its
+            # damage at itself. Asked of every shape: a default that named the
+            # dying permanent used to be redirected by its stale slot onto
+            # whatever slid into its place, and a stack object's slots are
+            # re-read off its ids now (kg4 ids part 3), so the permanent it
+            # names is the one it gets — gone, here.
             gone = {permanent.permanent_id for permanent in self.departing}
             offered = [
                 entry for entry in offered

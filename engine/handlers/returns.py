@@ -24,16 +24,17 @@ from typing import TYPE_CHECKING
 from ..announced_creature_type import (GRAVEYARD_ANNOUNCED_CREATURE_TYPE,
                                        announced_word,
                                        with_announced_creature_type)
-from ..game_types import first_target_id
+from ..game_types import first_target_id, single_slot, target_slots
 from ..models import Permanent
 from ..oracle_types import named_no_target
 from ..search_filters import card_has_type
 from ._amounts import resolve_amount
 from ._common import return_permanent_to_owners_hand
 from ._filters import excluded_graveyard_slot, graveyard_card_matches
-from ._targets import (_resolve_graveyard_slots,
-                       frozen_that_player_seat, resolve_role_permanent,
-                       resolve_target_permanent, resolve_target_permanents)
+from ._targets import (_resolve_graveyard_slots, chosen_graveyard_slot,
+                       chosen_graveyard_slots, frozen_that_player_seat,
+                       resolve_role_permanent, resolve_target_permanent,
+                       resolve_target_permanents)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -84,20 +85,20 @@ def _return_graveyard_card_to_owners_hand(
     opponents_only = bool(instruction.payload.get("opponent_graveyard_only"))
     if opponents_only and named is caster:
         named = None
-    index = context.target_permanent_index
+    index = chosen_graveyard_slots(game, context)
     # "Return **two** target cards from an opponent's graveyard to their hand."
     # Several slots of the one named pile, resolved together by the shared
     # slot reader — each to its card before any card moves, highest first
     # (``_resolve_graveyard_slots``) — and each slot that no longer answers
     # is dropped (CR 608.2b) while the rest still return. No pile named, or
     # nothing named in it, is an announcement that named nothing: no scan.
-    if isinstance(index, list) or _names_several_cards(instruction):
+    if len(target_slots(index)) > 1 or _names_several_cards(instruction):
         if named is None:
             game.log.append(f"{context.card.name}: no card was returned from a graveyard")
             return True, "resolved"
         count = int((instruction.payload.get("targets") or {}).get("count") or 1)
         picked = _resolve_graveyard_slots(
-            named, context, count, lambda card: _eligible(card, named),
+            game, named, context, count, lambda card: _eligible(card, named),
         )
         for chosen in picked:
             game.put_card_into_hand(named, chosen)
@@ -109,6 +110,7 @@ def _return_graveyard_card_to_owners_hand(
             game.log.append(f"{context.card.name}: no card was returned from a graveyard")
         return True, "resolved"
     found = None
+    index = single_slot(index)
     if isinstance(index, int):
         if (
             named is not None
@@ -242,7 +244,7 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     # targets (CR 601.2c), so an announcement naming nothing returns nothing.
     if counted_x or (isinstance(printed_count, int) and printed_count > 1):
         picked = _resolve_graveyard_slots(
-            caster, context, printed_count, _eligible
+            game, caster, context, printed_count, _eligible
         )
         for returned_card in picked:
             game.put_card_into_hand(caster, returned_card)
@@ -264,7 +266,7 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
 
     # Honor the caster's chosen graveyard card (Rule 601.2c). Regrowth
     # (any_card) accepts any type; Raise Dead only a creature card.
-    idx = context.target_permanent_index
+    idx = chosen_graveyard_slot(game, context)
     if isinstance(idx, int) and 0 <= idx < len(caster.graveyard) and _eligible_slot(
         idx
     ):

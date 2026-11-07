@@ -590,7 +590,8 @@ def test_w2g7_every_shipped_aura_announced_by_id_alone_is_the_announcement_by_sl
             )
             if (
                 not result.supported or item is None
-                or (item.target_player_index, item.target_permanent_index) != (seat, slot)
+                or (item.target_player_index, item.target_permanent_id)
+                != (seat, [host.permanent_id])
             ):
                 wrong.append(f"{card.name}@{seat}: {result.details}")
     assert not wrong, (

@@ -135,4 +135,4 @@ def test_a_new_permanent_named_on_the_cast_is_not_asked_again():
 
     assert _state(sid)["copy_spell_target"] is None
     copy = next(item for item in reversed(game.stack) if item.is_copy)
-    assert game.permanent_at(copy.target_player_index, copy.target_permanent_index) is theirs
+    assert game.permanent_by_id(copy.target_permanent_id[0]) is theirs

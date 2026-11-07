@@ -386,7 +386,11 @@ def test_volcanic_eruption_hand_card_offers_mountain_multiselect():
     assert resp.status_code == 200
     # The spell is queued with the chosen Mountains; resolve the stack to apply it.
     item = game.stack[-1]
-    assert item.target_permanent_index == [0, 1] and item.x_value == 2
+    # The two Mountains by id (the push consumes the slots, kg4 ids part 3).
+    assert item.target_permanent_id == [
+        game.players[0].battlefield[0].permanent_id,
+        game.players[0].battlefield[1].permanent_id,
+    ] and item.x_value == 2
     game.resolve_stack()
     names = [p.card.name for p in game.players[0].battlefield]
     assert names == ["Forest"]            # both Mountains destroyed, Forest kept

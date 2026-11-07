@@ -20,7 +20,7 @@ from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.entry_choices import chosen_as_entered
 from engine.face_down import face_up_morph_cost, hidden_card_of, is_face_down
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
-from engine.game_types import target_ids
+from engine.game_types import single_slot, target_ids, target_slots
 from engine.legality import activation_target_obligation
 from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
@@ -1086,8 +1086,7 @@ def _stack_item_targets(item, game: Game) -> list[dict]:
     if placed is not None:
         return [{"kind": "permanent", "seat": owner, "index": index} for owner, index, _perm in placed]
 
-    raw = item.target_permanent_index
-    indices = raw if isinstance(raw, list) else ([raw] if isinstance(raw, int) else [])
+    indices = target_slots(item.target_permanent_index)
     if indices:
         for idx in indices:
             if isinstance(idx, int) and 0 <= idx < len(players[seat].battlefield):
@@ -1117,24 +1116,29 @@ def _serialize_stack_item(item, game: Game) -> dict:
 
     target_permanent_name = None
     target_permanent_seat = None
-    target_permanent_index = item.target_permanent_index
+    # The wire's slot field: one slot bare, several as a list — read off the
+    # holder's one shape (``game_types.target_slots``) by how many it holds.
+    slots = target_slots(item.target_permanent_index)
+    several = len(slots) > 1
+    target_permanent_index = slots if several else single_slot(slots)
     placed = _targeted_permanents_now(item, game)
     if placed is not None:
         # By id, for the reason ``_stack_item_targets`` gives: the stored slot
         # names whatever moved into it once the target left.
-        if isinstance(item.target_permanent_index, list):
+        if several:
             target_permanent_index = [index for _owner, index, _perm in placed]
         else:
             target_permanent_index = placed[0][1] if placed else None
-        if placed and not isinstance(item.target_permanent_index, list):
+        if placed and not several:
             target_permanent_seat, _index, first = placed[0]
             target_permanent_name = first.card.name
-    elif isinstance(item.target_permanent_index, int) and item.target_player_index is not None:
+    elif single_slot(slots) is not None and item.target_player_index is not None:
         p_idx = item.target_player_index
+        slot = single_slot(slots)
         if 0 <= p_idx < len(game.players):
             bf = game.players[p_idx].battlefield
-            if 0 <= item.target_permanent_index < len(bf):
-                target_permanent_name = bf[item.target_permanent_index].card.name
+            if 0 <= slot < len(bf):
+                target_permanent_name = bf[slot].card.name
                 target_permanent_seat = p_idx
 
     source_permanent_seat = None

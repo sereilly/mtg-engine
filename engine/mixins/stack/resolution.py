@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from ...game_over_guard import goes_no_further
 
-from ...bare_announcements import resolving_slots
+from ...bare_announcements import announced_slots, resolving_slots
 from ...auras import aura_enchant_clause
 from ...cast_costs import (CAST_COST_DISCARD_MANA_VALUE, KICKED,
                            KICKED_WITH, buyback_paid, kicked,
@@ -30,7 +30,7 @@ from ...face_down import revealed_as_it_moves
 from ...faces import whole_card
 from ...flashback import leaves_stack_to_exile
 from ...game_types import (OracleExecutionContext, OracleStateMachine, StackItem,
-                           first_target_id)
+                           as_target_slots, first_target_id, single_slot)
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
@@ -381,13 +381,18 @@ class StackResolutionMixin:
         # whole of the split: on the stack object it is not a target, so
         # nothing announces it as one (CR 115.10), CR 603.3d does not choose
         # over it, and CR 608.2b does not judge it.
-        if item.about_permanent_id is not None and target_permanent_id is None:
+        about_handed_over = (
+            item.about_permanent_id is not None and target_permanent_id is None
+        )
+        if about_handed_over:
             target_permanent_id = [item.about_permanent_id]
             found = self.find_permanent_by_id(item.about_permanent_id)
             if found is not None:
                 if target_idx is None:
                     target_idx = found[0]
-                target_permanent_index = self.battlefield_index_of(found[1])
+                target_permanent_index = as_target_slots(
+                    self.battlefield_index_of(found[1])
+                )
             else:
                 target_permanent_index = None
         # **The player the sentence acts on, where nothing was chosen**: the
@@ -403,12 +408,15 @@ class StackResolutionMixin:
                 target_idx = item.about_player_index
             else:
                 target_idx = self._default_opposing_seat(item.caster_index)
-        if item.activated:
-            # CR 602.2b: an activated ability's slot is re-read off the ids
-            # its announcement stamped, as a spell's is
-            # (`bare_announcements.resolving_slots`). Not for a triggered
-            # ability: its slot is re-read off the object it is about above,
-            # and a chosen one keeps the announcement's own reading.
+        if not about_handed_over:
+            # Every ability's slots are re-read off the ids stamped as it was
+            # pushed (``bare_announcements.resolving_slots``) — an activated
+            # ability's (CR 602.2b) and a triggered one's (CR 603.3d) alike, as
+            # a spell's are: the push consumed the announcement's slots into
+            # ids (``Game._stamp_stack_targets``), so the slot channel here is
+            # a cache of the ids, read on the seat the object resolves about.
+            # The object a trigger is *about* is handed over above, on its own
+            # battlefield.
             target_permanent_index = resolving_slots(
                 self, self.players[target_idx], target_permanent_index,
                 item.target_permanent_id, card=item.card,
@@ -419,7 +427,7 @@ class StackResolutionMixin:
             caster=self.players[item.caster_index],
             target=self.players[target_idx],
             card=item.card,
-            target_permanent_index=target_permanent_index,
+            target_permanent_index=as_target_slots(target_permanent_index),
             target_permanent_id=target_permanent_id,
             about_permanent_id=item.about_permanent_id,
             # The graveyard half of the same announcement, for a roles
@@ -820,17 +828,13 @@ class StackResolutionMixin:
 
     def _run_stack_item_resolution(self, item: StackItem) -> None:
         # **An index is not an identity** (ROADMAP idiom #11) and a graveyard is
-        # the zone with no identity to fall back on, so what ``_stack_push``
-        # stamped is turned back into a slot *here* — once, at the top, so every
-        # reader below (a spell, an ability, an Aura's reanimation, an
-        # enters-the-battlefield trigger) sees a live index without knowing this
-        # happened. The stamp itself is never overwritten: an item pushed back
-        # on for a pending choice re-locates from the same name next time.
+        # the zone with no identity to fall back on, so a graveyard target is
+        # read off what ``_stack_push`` stamped, by every reader, as it reads
+        # it (``handlers/_targets.chosen_graveyard_slots`` →
+        # ``Game.chosen_graveyard_index``) — never off the slot channel, which
+        # is a battlefield's and holds nothing for it.
         if item.target_graveyard_card is not None:
-            item.target_permanent_index = self.chosen_graveyard_index(
-                item.target_graveyard_card, item.target_permanent_index
-            )
-            # And which pile the slot counts into. For a graveyard target that
+            # Which pile the stamps are in. For a graveyard target that
             # *is* what `target_player_index` means, and leaving it to be
             # re-derived below is how the two halves of one choice came apart:
             # every reader defaults it differently (`1 - caster` here, the
@@ -1089,6 +1093,20 @@ class StackResolutionMixin:
         text_change_effects=(),
     ) -> None:
         caster = self.players[caster_index]
+        # The slot channel in its one shape, re-read off the ids the push
+        # stamped (``bare_announcements.announced_slots``) on the seat the
+        # spell names — its Aura's host, its Clone's model, its entry
+        # trigger's target — or, for a land play that never reached the
+        # stack, the announcement's own slots.
+        target_permanent_index = announced_slots(
+            self,
+            self.players[
+                target_player_index if target_player_index is not None
+                and 0 <= target_player_index < len(self.players)
+                else self._spell_default_seat(caster_index) % len(self.players)
+            ],
+            target_permanent_index, target_permanent_id,
+        )
         text_card = spell_text_of(card, text_change_effects)
         owner_seat = caster_index if owner_index is None else owner_index
         owner = self.players[owner_seat]
@@ -1113,7 +1131,7 @@ class StackResolutionMixin:
             ):
                 permanent.metadata["copy_target"] = (
                     target_player_index if target_player_index is not None else caster_index,
-                    target_permanent_index,
+                    single_slot(target_permanent_index),
                     first_target_id(target_permanent_id),
                 )
             # The one entry site in the engine that *is* a cast (CR 701.5a):
@@ -1278,12 +1296,17 @@ class StackResolutionMixin:
                         for value in (
                             target_player_index, target_permanent_index,
                             target_permanent_id, stack_target,
+                            target_graveyard_card,
                         )
                     )
                     self._apply_self_enters_battlefield_triggers(
                         caster_index, permanent, target_player_index,
                         target_permanent_index, target_permanent_id,
                         targets_announced=announced,
+                        # …and the card in a graveyard the cast named for it,
+                        # by the stamp the spell's push took (the stamp is the
+                        # target; there is no slot to hand over).
+                        target_graveyard_card=target_graveyard_card,
                         # "When this creature enters, counter target spell" (Mystic
                         # Snake): the spell the cast named. It was dropped here, so
                         # the trigger named nothing and countered the top of the
@@ -1296,6 +1319,7 @@ class StackResolutionMixin:
                     target_player_index,
                     target_permanent_index,
                     target_permanent_id,
+                    target_graveyard_card=target_graveyard_card,
                 )
                 # An Aura's own "when this Aura enters" trigger, for every Aura whose
                 # entry text `_apply_aura_effect` did *not* perform itself.
@@ -1492,7 +1516,9 @@ class StackResolutionMixin:
 
         def finish() -> None:
             if first_pass["ends_turn"] is None:
-                self._apply_self_resolved_hook(caster_index, card, target_idx, target_permanent_index)
+                self._apply_self_resolved_hook(
+                    caster_index, card, target_idx, single_slot(target_permanent_index),
+                )
                 pending_woc = self.pending_choice_of("word_of_command")
                 if (
                     pending_woc is not None

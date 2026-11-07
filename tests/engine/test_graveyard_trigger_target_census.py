@@ -566,7 +566,8 @@ def test_a_card_the_cast_named_stands_and_one_that_left_is_chosen_again(_pool, _
         if item is None or _prompt(game, trigger) is not None:
             findings.append(f"{label}: a card named at the cast was asked for again")
             continue
-        if not item.targets_chosen or item.target_graveyard_card.card is not named:
+        stamps = item.target_graveyard_card or [None]
+        if not item.targets_chosen or getattr(stamps[0], "card", None) is not named:
             findings.append(f"{label}: the cast's card is not the trigger's chosen target")
         _drain(game)
         if _left(before, _yards(game)) != [(named.name, seat)]:

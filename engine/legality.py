@@ -188,9 +188,9 @@ def _activated_lines(card: CardDefinition) -> list[str]:
 def cast_target_kind(card: CardDefinition) -> str:
     """The target kind of *card* cast from hand, without enumerating targets.
 
-    Exposed for the web layer's stack serialization, which needs to know which
-    zone an already-recorded target index points into — a reanimation spell's
-    ``target_permanent_index`` indexes a graveyard, not a battlefield.
+    Exposed for the web layer, which needs to know which zone a cast's target
+    is in — a reanimation spell's target is a card in a graveyard, not a
+    permanent on a battlefield.
 
     Answered entirely from the compiled program (engine/targeting.py). "none" is
     the answer for a spell that chooses nothing as it is cast, and

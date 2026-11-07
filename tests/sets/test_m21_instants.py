@@ -81,7 +81,7 @@ def test_a_plain_exile_sends_the_card_to_its_owners_exile(set_pool):
         OracleInstruction("exile_target_permanent", "", {"type_filter": "creature"}),
         OracleExecutionContext(
             caster=p1, target=p2, card=pool["Angelic Ascension"],
-            target_permanent_index=0,
+            target_permanent_index=[0],
         ),
     )
 

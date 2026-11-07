@@ -32,7 +32,8 @@ from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
 from ..simultaneous_damage import begin_sentence, deal_at_once, deal_sentence
-from ..game_types import single_chosen_id, target_ids
+from ..game_types import (single_chosen_id, single_slot, target_ids,
+                          target_slots)
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_DAMAGER_CONTROLLER,
                             X_FROM_COUNT_PER_RECIPIENT)
@@ -913,7 +914,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         )
         return True, "resolved"
     # Support multiple target indices for spells like Fireball
-    if isinstance(target_perm_idx, list):
+    if len(target_slots(target_perm_idx)) > 1:
         # `_stack_push` stamped an id per chosen index, positionally and
         # None-padded, so the two lists pair up. Resolving each through the seam
         # means a target that survived is still hit even if an earlier one died
@@ -921,7 +922,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # spell waiting on the stack is exposed to.
         ids = target_ids(context.target_permanent_id)
         chosen = []
-        for position, idx in enumerate(target_perm_idx):
+        for position, idx in enumerate(target_slots(target_perm_idx)):
             permanent_id = ids[position] if position < len(ids) else None
             found = game.chosen_permanent(target, idx, [permanent_id])
             if found is not None:
@@ -956,7 +957,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             source=source_permanent or card,
         )
         return True, "resolved"
-    if isinstance(target_perm_idx, int) or single_chosen_id(
+    if single_slot(target_perm_idx) is not None or single_chosen_id(
         context.target_permanent_id
     ) is not None:
         # Damage targets a creature permanent, not the player.

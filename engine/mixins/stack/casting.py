@@ -51,8 +51,9 @@ from ...cost_modifiers import (CostReduction, buyback_cost_reduction,
                                spell_life_tax, spell_symbol_tax)
 from ...self_cost_modifiers import self_per_target_tax
 from ...flashback import is_flashback
-from ...game_types import (SimulationResult, StackItem, as_target_ids,
-                           chosen_damage_source)
+from ...game_types import (as_graveyard_stamps, as_target_ids,
+                           as_target_slots, chosen_damage_source,
+                           SimulationResult, StackItem, target_slots)
 from ...models import CardDefinition
 from ...oracle import compile_card_oracle
 from ...oracle_types import _COLOR_WORD_TO_SYMBOL
@@ -974,7 +975,9 @@ class SpellCastingMixin:
             if "target_player_index" in named:
                 mode.target_player_index = named["target_player_index"]
             if "target_permanent_index" in named:
-                mode.target_permanent_index = named["target_permanent_index"]
+                mode.target_permanent_index = as_target_slots(
+                    named["target_permanent_index"]
+                )
             if "target_stack_item" in named:
                 mode.target_stack_item = named["target_stack_item"]
         if chosen_modes:
@@ -1397,12 +1400,12 @@ class SpellCastingMixin:
                     # stack, whoever cast it.
                     owner_index=source_seat,
                     target_player_index=target_player_index,
-                    target_permanent_index=target_permanent_index,
+                    target_permanent_index=as_target_slots(target_permanent_index),
                     target_permanent_id=as_target_ids(target_permanent_ids),
                     # A roles announcement's graveyard slots (see the top of
                     # this method); None for every other cast, whose graveyard
                     # target is stamped as the item is pushed.
-                    target_graveyard_card=role_graveyard_stamps,
+                    target_graveyard_card=as_graveyard_stamps(role_graveyard_stamps),
                     x_value=resolved_x_value,
                     target_stack_item=target_stack_item_val,
                     chosen_mode_index=mode_index,
@@ -1627,8 +1630,7 @@ class SpellCastingMixin:
         def rebased(slot):
             return slot - 1 if isinstance(slot, int) and slot > left_slot else slot
 
-        chosen = item.target_permanent_index
-        item.target_permanent_index = (
-            [rebased(slot) for slot in chosen] if isinstance(chosen, list)
-            else rebased(chosen)
-        )
+        if item.target_permanent_index is not None:
+            item.target_permanent_index = [
+                rebased(slot) for slot in target_slots(item.target_permanent_index)
+            ]

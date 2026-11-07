@@ -588,7 +588,9 @@ def evaluate_record_condition(
         # names, and the return this guards must not happen.
         from ..printed_characteristics import printed_shape
 
-        slot = context.target_permanent_index
+        from ._targets import chosen_graveyard_slot
+
+        slot = chosen_graveyard_slot(game, context)
         pile = context.caster.graveyard
         if not isinstance(slot, int) or isinstance(slot, bool) or not 0 <= slot < len(pile):
             return False

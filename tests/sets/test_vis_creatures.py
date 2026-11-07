@@ -429,7 +429,9 @@ def _w1g3c_activate(game, permanent, ability, *, caster, target=None,
     context = OracleExecutionContext(
         card=permanent.card, caster=caster, target=target or caster,
         source_permanent=permanent,
-        target_permanent_index=target_permanent_index,
+        target_permanent_index=(
+            None if target_permanent_index is None else [target_permanent_index]
+        ),
     )
     game._execute_oracle_instruction(ability.instruction, context)
     return context

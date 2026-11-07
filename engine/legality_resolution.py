@@ -1386,27 +1386,8 @@ class ResolutionTargetsMixin:
             if seat is None or seat == holder.target_player_index:
                 continue
             holder.target_player_index = seat
-            # …and the slot beside each id, for the handlers that read the
-            # slot alone (a spell's and an activation's are re-read off the
-            # ids anyway, ``bare_announcements.resolving_slots``; a trigger's
-            # are not). A blanked or departed id keeps no slot. In the shape
-            # the slot field already had, which is the shape
-            # ``announced_slots`` keeps: a one-target announcement whose ids
-            # are a list of one still has a scalar slot, and a handler that
-            # reads only an ``int`` there (Swords to Plowshares) would read a
-            # list as no slot at all and go scanning.
-            slots = []
-            for permanent_id in target_ids(holder.target_permanent_id):
-                permanent = (
-                    self.permanent_by_id(permanent_id)
-                    if isinstance(permanent_id, int) else None
-                )
-                slots.append(
-                    None if permanent is None else self.battlefield_index_of(permanent)
-                )
-            listed = isinstance(holder.target_permanent_index, (list, tuple))
-            holder.target_permanent_index = (
-                slots if listed or len(slots) > 1 else (slots[0] if slots else None)
-            )
+            # The slots are re-read off the ids against this seat as the
+            # object resolves (``bare_announcements.resolving_slots``), for a
+            # spell, an activated and a triggered ability alike.
             moved += 1
         return moved

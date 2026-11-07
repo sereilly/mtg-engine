@@ -99,6 +99,8 @@ class StackAnnouncement:
 
     caster_index: int
     target_player_index: int | None = None
+    #: The stack object's battlefield slots, in their one shape (None or a
+    #: list, ``game_types.check_target_slots``), held to it as they are frozen.
     target_permanent_index: object = None
     #: The stack object's chosen-target ids, in its one shape (None or a list
     #: of slots, ``game_types.check_target_ids``), held to it as it is frozen.
@@ -135,9 +137,16 @@ class StackAnnouncement:
     flashback: bool = False
 
     def __post_init__(self) -> None:
-        from .game_types import check_target_ids
+        from .game_types import (check_graveyard_stamps, check_target_ids,
+                                 check_target_slots)
 
         check_target_ids(self.target_permanent_id, "StackAnnouncement.target_permanent_id")
+        check_target_slots(
+            self.target_permanent_index, "StackAnnouncement.target_permanent_index"
+        )
+        check_graveyard_stamps(
+            self.target_graveyard_card, "StackAnnouncement.target_graveyard_card"
+        )
 
 
 @dataclass

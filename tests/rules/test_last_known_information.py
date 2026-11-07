@@ -91,7 +91,7 @@ def test_an_exile_freezes_the_toughness_the_sentence_behind_it_reads():
     victim.toughness_bonus = 3
     context = _context(
         game, _creature("Spell"), target=game.players[1],
-        target_permanent_index=game.battlefield_index_of(victim),
+        target_permanent_index=[game.battlefield_index_of(victim)],
         target_permanent_id=[victim.permanent_id],
     )
 
@@ -115,7 +115,7 @@ def test_the_frozen_toughness_is_what_the_life_gain_spends():
     game._put_permanent_onto_battlefield(1, victim, None)
     context = _context(
         game, _creature("Spell"), target=game.players[1],
-        target_permanent_index=game.battlefield_index_of(victim),
+        target_permanent_index=[game.battlefield_index_of(victim)],
         target_permanent_id=[victim.permanent_id],
     )
 

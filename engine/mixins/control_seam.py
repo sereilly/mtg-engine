@@ -46,7 +46,7 @@ from ..land_types import end_land_type_change, end_land_type_changes_tied_to
 from ..linked_exile import LEAVES
 from ..models import Permanent, PlayerState
 from ..source_tapped_effects import end_effects_while_tapped
-from ..game_types import GraveyardTarget, single_chosen_id
+from ..game_types import GraveyardTarget, single_chosen_id, single_slot
 from ..tokens import CREATED_WITH_PERMANENT_ID
 from ..trigger_utils import make_trigger_event, matching_triggers
 from ..turn_state import forget_controllers_upkeep
@@ -692,14 +692,15 @@ class ControlSeamMixin:
         the index exactly as before, rather than guessing slot zero — the
         multi-target list read as a single target, wrong in the direction that
         looks right. A caller holding one slot of a longer list passes it as a
-        list of one.
+        list of one. *index* is the slot channel, read the same way
+        (``game_types.single_slot``): one slot, as a list of one or bare.
         """
         named = single_chosen_id(permanent_id)
         if named is not None:
             found = self.permanent_by_id(named)
             if found is not None and self.controls(seat, found):
                 return found
-        return self.permanent_at(seat, index)
+        return self.permanent_at(seat, single_slot(index))
 
     # -- The same question one zone over -----------------------------------
     #

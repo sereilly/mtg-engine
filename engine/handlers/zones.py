@@ -24,9 +24,9 @@ from typing import TYPE_CHECKING
 from ..exiled_records import source_object
 from ..models import Permanent
 from ._filters import graveyard_card_matches
-from ._targets import (_resolve_graveyard_slots, frozen_that_player_seat,
-                       pile_owner_still_a_target, resolve_target_permanent,
-                       resolve_target_permanents)
+from ._targets import (_resolve_graveyard_slots, chosen_graveyard_slot,
+                       frozen_that_player_seat, pile_owner_still_a_target,
+                       resolve_target_permanent, resolve_target_permanents)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -99,7 +99,7 @@ def put_graveyard_cards_on_library_top(
         len(victim.graveyard) if described.get("unbounded")
         else min(int(described.get("count") or 1), len(victim.graveyard))
     )
-    picked = _resolve_graveyard_slots(victim, context, limit, _eligible)
+    picked = _resolve_graveyard_slots(game, victim, context, limit, _eligible)
     if not picked:
         game.log.append(f"{context.card.name}: no card moved out of the graveyard")
         return True, "resolved"
@@ -344,7 +344,7 @@ def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruct
     caster = context.caster
     if instruction.payload.get("any_graveyard"):
         named = context.target if context.target in game.players else None
-        idx = context.target_permanent_index
+        idx = chosen_graveyard_slot(game, context)
         if named is None or not (isinstance(idx, int) and 0 <= idx < len(named.graveyard)):
             game.log.append(f"{context.card.name}: no chosen card to bottom")
             return True, "resolved"
@@ -352,7 +352,7 @@ def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruct
     if not caster.graveyard:
         game.log.append(f"{context.card.name}: no card in the graveyard to bottom")
         return True, "resolved"
-    idx = context.target_permanent_index
+    idx = chosen_graveyard_slot(game, context)
     if not (isinstance(idx, int) and 0 <= idx < len(caster.graveyard)):
         idx = 0
     # "Put target **Rebel** card …" (Lin Sivvi, Defiant Hero). A narrowed

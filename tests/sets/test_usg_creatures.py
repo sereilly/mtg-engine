@@ -680,7 +680,7 @@ def test_w2g4_somnophore_holds_its_creature_only_while_it_is_there(set_pool):
     game.resolve_all_combat_damage(0)
     for item in game.stack:
         item.target = theirs
-        item.target_permanent_index = 0
+        item.target_permanent_index = [0]
         item.target_permanent_id = [victim.permanent_id]
     _g4b_resolve(game)
 

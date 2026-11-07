@@ -57,7 +57,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from .divided_damage import DIVIDED_TARGETS, divided_entry, divided_entry_id
-from .game_types import target_ids
+from .game_types import as_graveyard_stamps, target_ids
 from .modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
 from .text_changes import spell_text_card
 
@@ -955,16 +955,13 @@ def names_several_targets(item: "StackItem") -> bool:
 
 
 def _blank_at(value, position: int, new):
-    """*value* with *new* at *position*, keeping its scalar-or-list shape —
-    and leaving a scalar alone for any slot but the first, which is the only
-    one a scalar can be about."""
-    if isinstance(value, (list, tuple)):
-        if not 0 <= position < len(value):
-            return value
-        updated = list(value)
-        updated[position] = new
-        return updated
-    return new if position == 0 else value
+    """The list *value* with *new* at *position* — a slot past its end is left
+    alone (there is nothing there to blank)."""
+    if value is None or not 0 <= position < len(value):
+        return value
+    updated = list(value)
+    updated[position] = new
+    return updated
 
 
 def blank_illegal_targets(item: "StackItem", targets) -> int:
@@ -984,10 +981,12 @@ def blank_illegal_targets(item: "StackItem", targets) -> int:
     was destroyed beside the other.
 
     Applied to the announcement instead, once, before any instruction runs,
-    so no handler has to know: the id becomes :func:`illegal_target_id` and
-    the **index beside it becomes None**, which is the half that stops
-    ``Game.chosen_permanent`` and the plural resolvers falling back to
-    whatever sits in the slot now. A divided announcement's entry is dropped,
+    so no handler has to know: the id becomes :func:`illegal_target_id`, and
+    the slot the resolution re-reads off it (``bare_announcements.
+    resolving_slots``) is None — which is what stops ``Game.chosen_permanent``
+    and the plural resolvers falling back to whatever sits in a slot now. A
+    stack object carries no slot of its own to blank (the push consumed its
+    slots into the ids). A divided announcement's entry is dropped,
     a face included: a share the caster announced for it is simply not dealt,
     and an *even* division is made among the targets that are left — which is
     Fireball's ruling (2017-11-17: "The division involves only targets that
@@ -1043,9 +1042,6 @@ def blank_illegal_targets(item: "StackItem", targets) -> int:
         if tombstone is None:
             continue
         holder.target_permanent_id = _blank_at(ids, target.position, tombstone)
-        holder.target_permanent_index = _blank_at(
-            getattr(holder, "target_permanent_index", None), target.position, None
-        )
         blanked += 1
     if dropped:
         divided = list((getattr(item, "choices", None) or {}).get(DIVIDED_TARGETS) or ())
@@ -1101,17 +1097,16 @@ def _set_id_at(value, position: int, new: int) -> list:
     return updated
 
 
-def _set_at(value, position: int, new):
-    """*value* with *new* at *position*, keeping its scalar-or-list shape —
-    for the slot and graveyard channels, which keep both; the id channel is
-    :func:`_set_id_at`'s."""
-    if isinstance(value, list):
-        updated = list(value)
-        while len(updated) <= position:
-            updated.append(None)
-        updated[position] = new
-        return updated
-    return new
+def _set_at(value, position: int, new) -> list:
+    """The stamp channel *value* with *new* at slot *position* — a list
+    always, padded with ``None`` up to it (``game_types.check_graveyard_stamps``);
+    the id channel is :func:`_set_id_at`'s and the slot channel
+    :func:`_set_slot_at`'s."""
+    updated = list(as_graveyard_stamps(value) or [])
+    while len(updated) <= position:
+        updated.append(None)
+    updated[position] = new
+    return updated
 
 
 def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
@@ -1151,12 +1146,9 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
                 seat, permanent = game.find_permanent_by_id(pick.permanent_id)
                 item.target_player_index = seat
                 item.target_permanent_id = [pick.permanent_id]
-                item.target_permanent_index = game.battlefield_index_of(permanent)
             continue
         if channel == "graveyard":
-            index = game.graveyard_index_of(pick.stamp)
             item.target_graveyard_card = _set_at(item.target_graveyard_card, position, pick.stamp)
-            item.target_permanent_index = _set_at(item.target_permanent_index, position, index)
             item.target_player_index = pick.stamp.seat
             continue
         if channel == "divided":
@@ -1175,7 +1167,6 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
         if pick.kind == "stack":
             item.target_stack_item = pick.stack_item
             item.target_permanent_id = None
-            item.target_permanent_index = None
             continue
         if pick.kind == "player":
             # All three written together, whichever way the target points
@@ -1183,14 +1174,9 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
             # an object target by every handler that prefers it.
             item.target_player_index = pick.seat
             item.target_permanent_id = None
-            item.target_permanent_index = None
             continue
         item.target_permanent_id = _set_id_at(
             item.target_permanent_id, position, pick.permanent_id
-        )
-        item.target_permanent_index = _set_at(
-            item.target_permanent_index, position,
-            game.battlefield_index_of(game.permanent_by_id(pick.permanent_id)),
         )
 
     if item.target_permanent_id is not None:

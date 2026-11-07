@@ -213,7 +213,9 @@ def test_601_2c_target_permanent_index_announced_and_stored():
     game.queue_from_hand(0, "Paralyze", target_player_index=1, target_permanent_index=0)
 
     assert game.stack[-1].target_player_index == 1
-    assert game.stack[-1].target_permanent_index == 0
+    # Stored as the id of the permanent in that slot (CR 400.7): the push
+    # consumes the announced slot into it (kg4 ids part 3).
+    assert game.stack[-1].target_permanent_id == [p2.battlefield[0].permanent_id]
 
 
 @pytest.mark.cr("601.2c")

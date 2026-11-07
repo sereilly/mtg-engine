@@ -94,7 +94,6 @@ class TriggerChoicesMixin:
         if target is not None:
             item.target_player_index = target.get("seat")
             if target.get("kind") == "permanent":
-                item.target_permanent_index = target.get("index")
                 item.target_permanent_id = as_target_ids(self.permanent_ids_at(
                     target.get("seat"), target.get("index")
                 ))
@@ -415,8 +414,8 @@ class TriggerChoicesMixin:
             return False
         queued = self._choice_is_queued(choice)
         self.discard_pending_choice(choice)
-        item.target_graveyard_card = stamp
-        item.target_permanent_index = slot
+        item.target_graveyard_card = [stamp]
+        item.target_permanent_index = None
         item.target_player_index = stamp.seat
         item.target_permanent_id = None
         item.targets_chosen = self._trigger_target_was_a_choice()
@@ -480,7 +479,7 @@ class TriggerChoicesMixin:
         queued = self._choice_is_queued(choice)
         self.discard_pending_choice(choice)
         item.target_graveyard_card = stamps
-        item.target_permanent_index = slots
+        item.target_permanent_index = None
         item.target_player_index = seat
         item.target_permanent_id = None
         item.targets_chosen = self._trigger_target_was_a_choice()
@@ -602,7 +601,6 @@ class TriggerChoicesMixin:
         queued = self._choice_is_queued(choice)
         self.discard_pending_choice(choice)
         item.target_player_index = controller
-        item.target_permanent_index = self.battlefield_index_of(perm)
         item.target_permanent_id = [permanent_id]
         item.targets_chosen = self._trigger_target_was_a_choice()
         self.log.append(f"{card_name}: targets {perm.card.name}")

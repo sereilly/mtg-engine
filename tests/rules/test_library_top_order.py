@@ -154,9 +154,15 @@ def test_every_effect_that_puts_several_graveyard_cards_on_top_asks_the_owner():
                     _mk_card(name="One", type_line=line),
                     _mk_card(name="Two", type_line=line),
                 ]
+                seat = game.players.index(me)
+                # The two cards as the announcement names them: by their
+                # stamps (kg4 ids part 2), never by a slot.
                 handler_context = OracleExecutionContext(
                     caster=me, target=me, card=unit,
-                    target_permanent_index=[0, 1],
+                    target_graveyard_card=[
+                        game.graveyard_target_at(seat, 0),
+                        game.graveyard_target_at(seat, 1),
+                    ],
                 )
                 game._execute_oracle_instruction(step, handler_context)
 

@@ -62,6 +62,7 @@ from .offers import (_action_is_takeable, _derived_cost_is_unpayable,
                      _exiled_cards_still_in_exile, _narrow_to_takeable_actions,
                      _offered_seats, _resolved_cost, _resolved_life_cost)
 from .registry import effect_handler
+from ..game_types import as_target_slots
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -344,7 +345,7 @@ def _role_scoped(
         # two slots of one announcement may sit on two battlefields, and an
         # index read against the wrong one addresses a different permanent.
         target=game.players[seat] if seat is not None else context.target,
-        target_permanent_index=game.battlefield_index_of(permanent),
+        target_permanent_index=as_target_slots(game.battlefield_index_of(permanent)),
         target_permanent_id=[permanent.permanent_id],
         announced_targets=remembered,
         relation_seat=announced_relation_seat(game, announced, payload, entry),
@@ -407,14 +408,16 @@ def _graveyard_role_scoped(
     if not stamps:
         return context if wrapper else None
     seat = stamps[0].seat
-    indices = [game.graveyard_index_of(stamp) for stamp in stamps]
     several = len(names) > 1
+    # The cards by their stamps, which the graveyard handlers read
+    # (``_targets.chosen_graveyard_slots``); the slot channel is a
+    # battlefield's and names nothing here.
     return dataclasses.replace(
         context,
         target=game.players[seat],
-        target_permanent_index=indices if several else indices[0],
+        target_permanent_index=None,
         target_permanent_id=None,
-        target_graveyard_card=stamps if several else stamps[0],
+        target_graveyard_card=stamps,
         announced_targets=remembered,
     )
 
