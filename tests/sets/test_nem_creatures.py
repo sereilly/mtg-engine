@@ -463,7 +463,9 @@ def test_w1g5_lin_sivvi_bottoms_only_a_rebel_card(set_pool):
     spec = _w1g5_activation_spec(ability)
     assert spec["kind"] == "graveyard_creature"
     assert spec["graveyard_subtypes"] == ["rebel"]
-    assert "any_card" not in spec, "the subtype is the whole narrowing"
+    # Any card with the subtype, not a creature card of it: a Kindred card of
+    # the type is a Rebel card too (CR 205.3m; kg4 kindred2).
+    assert spec.get("any_card") is True, "the subtype is the whole narrowing"
 
     game.enforce_mana_costs = True
     me.mana_pool["C"] = 3

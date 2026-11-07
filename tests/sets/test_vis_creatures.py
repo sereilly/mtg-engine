@@ -728,8 +728,10 @@ def test_goblin_recruiter_searches_for_any_number_of_goblins(set_pool):
     vis, mir, lea = set_pool("VIS"), set_pool("MIR"), set_pool("LEA")
     program = _g5_compile(vis["Goblin Recruiter"])
     assert program.supported, program.reason
+    # "Goblin cards": any card with the subtype — a Kindred card of the type is
+    # one (CR 205.3m; kg4 kindred2) — so no card type rides the search.
     assert program.instructions[0].payload == {
-        "count": "any", "card_type": "creature", "up_to": True, "reveal": True,
+        "count": "any", "card_type": "any", "up_to": True, "reveal": True,
         "restrictions": {"subtypes": ["goblin"]}, "destination": "library_top",
     }
 
