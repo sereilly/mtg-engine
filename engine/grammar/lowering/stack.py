@@ -58,7 +58,7 @@ _COUNTER_HONOURED_FILTER_FIELDS = frozenset({
 #: The ``ObjectFilter`` fields a "spell **or ability**" union may carry beside
 #: the union itself. Everything else in :data:`_COUNTER_HONOURED_FILTER_FIELDS`
 #: is a question about a **card** — its colour, its types, its mana value, who
-#: cast it — and an ability on the stack has none (CR 113.7a), so a union
+#: cast it — and an ability on the stack has none (CR 405.1, 405.4), so a union
 #: carrying one would describe a set half of which could never be tested.
 #: ``targets_object`` survives because it asks what the object *chose*, which a
 #: spell answered at CR 601.2c and an ability at CR 602.2b — one question, both
@@ -233,7 +233,7 @@ def _lower_counter_spell(
     if filt.also_ability:
         # "Counter target spell **or ability** that targets a creature."
         # (Diplomatic Escort.) CR 701.6a counters either kind of object on the
-        # stack, and CR 113.7a is the whole of the difference: a countered
+        # stack, and CR 405.1 is the whole of the difference: a countered
         # spell's card goes to its owner's graveyard and a countered ability
         # has no card to send anywhere. **That is the only difference**, which
         # is why this stays ``counter_top_stack_spell`` rather than becoming a
@@ -379,7 +379,7 @@ def _lower_counter_spell(
     if filt.not_ability_targeted_by_same_name:
         # "…that isn't the target of an ability from another creature named ~"
         # (Goblin Artisans). Answered off the stack at resolution: the abilities
-        # aiming at that spell are objects on it (CR 113.7a), so there is
+        # aiming at that spell are objects on it (CR 113.1c), so there is
         # nothing to read off the spell itself.
         payload["not_ability_targeted_by_same_name"] = True
     if filt.cast_from_zone is not None:
@@ -662,7 +662,7 @@ def _lower_counter_ability(
     # the one the trigger's event was about, and the fire site put it on the
     # stack item's context. The same flag `counter_top_stack_spell` carries for
     # "counter it", so the handler pair answers "which object?" the same way on
-    # both sides of CR 113.7a's card/no-card divide.
+    # both sides of CR 405.1's card/no-card divide.
     if node.subject.quantifier == "that":
         payload["bound_to_trigger"] = True
     # "…from an artifact source" (Rust, Ayesha Tanaka). Payload for the reason

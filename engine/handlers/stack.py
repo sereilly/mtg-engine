@@ -279,7 +279,7 @@ def _stack_ability_kind(item) -> str | None:
     A spell is not an ability however it was put on the stack, and the test is
     the presence of an ``ability_instruction`` rather than the absence of a
     card: a triggered ability carries the source permanent's card for its
-    display name (CR 113.7a gives the ability no card of its own).
+    display name (CR 405.1 gives the ability no card of its own).
 
     Which kind is ``StackItem.ability_kind`` — how the object was put on the
     stack. This read the effect label's ``activated_`` / ``triggered_`` prefix
@@ -331,7 +331,7 @@ def counter_stack_ability(game: Game, instruction: OracleInstruction, context: O
         )
         return True, "resolved"
     # "…from an **artifact** source" (Rust). The ability has no card of its own
-    # (CR 113.7a), so the type is asked of the permanent it came from — through
+    # (CR 405.1), so the type is asked of the permanent it came from — through
     # `card_has_type`, the one reader of "does this card have this type", because
     # `primary_type` picks one type off a list and would miss an artifact
     # creature's activated ability.
@@ -347,7 +347,7 @@ def counter_stack_ability(game: Game, instruction: OracleInstruction, context: O
     # "…unless that ability's controller pays {W}" (Ayesha Tanaka). The ability
     # waits on the stack while its controller decides, exactly as a spell does
     # under Power Sink — what waits is a stack object, and an ability is one
-    # (CR 113.7a). `countered_object` is how the resolver knows not to bin a
+    # (CR 113.1c). `countered_object` is how the resolver knows not to bin a
     # card: this object has none, and `chosen.card` is the *source permanent's*
     # card, which never left the battlefield.
     cost = instruction.payload.get("unless_pays_cost")
@@ -377,7 +377,7 @@ def counter_stack_ability(game: Game, instruction: OracleInstruction, context: O
     # "**That permanent's** activated abilities can't be activated this turn."
     # (Interdict.) The permanent the countered ability came from, recorded here
     # because this is the only step that knows it: the spell targeted the
-    # ability, and an ability on the stack has no card of its own (CR 113.7a),
+    # ability, and an ability on the stack has no card of its own (CR 405.1),
     # so once it is off the stack nothing else can be asked which permanent it
     # came from.
     if chosen.source_permanent is not None:
@@ -612,7 +612,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         target = chosen if chosen is not None else game.stack[-1]
         # **The one place this engine decides which kind of object it
         # countered.** CR 701.6a counters a spell and an ability alike, and
-        # CR 113.7a is the entire difference between them: a countered spell's
+        # CR 405.1 is the entire difference between them: a countered spell's
         # card goes to its owner's graveyard, and an ability has no card at all
         # — so every step below this one is a question about a card, and
         # ``target.card`` on an ability is the *source permanent's* card, which
@@ -659,7 +659,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             # permanent." (Teferi's Response.) The record Interdict's counter
             # writes, written here for the same reason: this is the only step
             # that knows which permanent the ability came from, and once the
-            # object is off the stack nothing else can be asked (CR 113.7a).
+            # object is off the stack nothing else can be asked (CR 405.1).
             # A source that has already left the battlefield is not "a
             # permanent" any more (CR 110.1), so it is not recorded — the
             # destroy behind this would otherwise chase an id nothing holds.
@@ -823,7 +823,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # "…that isn't the target of an ability from another creature named ~"
         # (Goblin Artisans): a guard against two copies aiming at the same
         # spell. Asked of the stack, because the abilities pointing at that
-        # spell are objects on it (CR 113.7a) and nothing about the spell itself
+        # spell are objects on it (CR 113.1c) and nothing about the spell itself
         # records who is aiming at it. "Another" is by identity — an ability of
         # *this* permanent is the one now resolving, and excluding it is what
         # keeps the card from countering nothing at all.

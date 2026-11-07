@@ -934,7 +934,7 @@ class PhaseStepsMixin:
         exiled = []
         for item in self.stack:
             if item.is_ability or item.is_copy:
-                # An ability (CR 113.7a) and a copy of a spell (CR 707.10a)
+                # An ability (CR 405.1) and a copy of a spell (CR 707.10a)
                 # have no card: exiled off the stack, each simply ceases to
                 # exist. Binning ``item.card`` put the *source permanent's*
                 # card into exile beside the permanent still on the

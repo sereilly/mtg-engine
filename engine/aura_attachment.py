@@ -36,7 +36,7 @@ def attached_subject_triggers(game, host, condition_kinds, payload_key):
 
     The combat fire sites scan a creature's **own** ``effective_card``, and an
     attached Aura's abilities are not on it — an Aura's ability is the Aura's,
-    controlled by the Aura's controller (CR 113.7a), not a granted ability of
+    controlled by the Aura's controller (CR 303.4e), not a granted ability of
     its host. So an Aura printing "whenever enchanted creature attacks or
     blocks" (Imprison) is invisible to those scans, exactly as "when enchanted
     creature dies" was until ``mixins/helpers.py`` grew the branch this

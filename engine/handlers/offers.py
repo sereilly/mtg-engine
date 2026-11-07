@@ -901,7 +901,7 @@ def _offered_seats(
         # "Counter target instant or sorcery spell unless **its controller**
         # has Molten Influence deal 4 damage to them." The controller of the
         # spell this object targeted, read off the stack object itself
-        # (CR 112.2: a spell's controller is the player who cast it) rather
+        # (CR 405.4: a spell's controller is the player who cast it) rather
         # than off ``context.target``, which for an announcement that named a
         # spell and no player is whatever seat a targetless resolution
         # defaults to - the caster's opponent, even when the spell being

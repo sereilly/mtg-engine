@@ -934,7 +934,7 @@ class DeclareAttackersStepMixin:
             # watched by something attached to the attacker rather than by the
             # attacker itself — invisible to the scan above, because an Aura's
             # ability is the Aura's and not a granted ability of its host
-            # (CR 113.7a). The attack half; the blocker-side twin is in
+            # (CR 303.4e). The attack half; the blocker-side twin is in
             # declare_blockers_step.
             #
             # Both kinds in one scan, because CR 508.1 announces one

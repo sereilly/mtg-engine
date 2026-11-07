@@ -698,7 +698,7 @@ class CombatPhaseMixin:
             )
             # "At the beginning of **each** combat" (Goblin Flotilla) — the
             # unnarrowed form of the same step, and every battlefield: the
-            # ability is its own permanent's controller's (CR 113.7a) and the
+            # ability is its own permanent's controller's (CR 113.8) and the
             # step belongs to whoever's turn it is, so a defending player's
             # permanent triggers on the attacker's combat. This row had no fire
             # site at all until a card printed it, which is the shape

@@ -1319,7 +1319,7 @@ def forbid_bound_permanent_activations_this_turn(game: Game, instruction: Oracle
     The permanent is the source of the ability the sentence in front of this
     one countered, read out of the resolution's own scratchpad rather than
     described again: the spell targeted the *ability*, and by now that object is
-    off the stack with no card to ask (CR 113.7a). The lowering refuses without
+    off the stack with no card to ask (CR 405.1). The lowering refuses without
     the producer, so an empty record here means the counter found nothing to
     counter — CR 608.2 does as much as it can and the ban simply has no
     subject, which is not a failure of this handler.

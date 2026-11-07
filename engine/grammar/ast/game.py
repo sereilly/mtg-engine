@@ -873,7 +873,7 @@ class BoundPermanentActivationBan:
     CR 602.5c for one permanent, and the permanent is a back-reference rather
     than a target: the spell chose an **ability** (CR 115.1c), and by the time
     this clause runs that ability is off the stack with no card to ask which
-    permanent it came from (CR 113.7a). So the object is whatever the sentence
+    permanent it came from (CR 405.1). So the object is whatever the sentence
     in front of this one recorded, and the lowering refuses without that
     producer — with no counter in front of it the words name nothing at all.
 

@@ -258,18 +258,20 @@ class ObjectFilter:
     original_expansion: str | None = None
     zone: str = "battlefield"
     # "target **activated or triggered ability**" (Sublime Epiphany). An ability
-    # on the stack is an object (CR 113.7a/608.2) but not a spell, so it is not
-    # ``zone == "stack"`` with a type line — it has no card at all. The printed
-    # kinds are carried rather than collapsed to "an ability", because "counter
-    # target activated ability" and "counter target triggered ability" are
-    # different cards and the difference is exactly this tuple.
+    # on the stack is an object (CR 113.1c) but not a spell (CR 113.9), so it
+    # is not ``zone == "stack"`` with a type line — it has no card at all
+    # (CR 405.1). The printed kinds are carried rather than collapsed to "an
+    # ability", because "counter target activated ability" and "counter
+    # target triggered ability" are different cards and the difference is
+    # exactly this tuple.
     ability_kinds: tuple[str, ...] = ()
     # "counter target **spell or ability** that targets a creature."
     # (Diplomatic Escort.) The union across the two kinds of object on the
     # stack, which is not ``ability_kinds`` beside it: that field says "this
     # phrase names abilities and no spell", and this one says "either". CR
-    # 113.7a keeps them apart, so the difference is the whole card — a counter
-    # that read the union as the field above would decline every spell.
+    # 113.9 keeps them apart, and CR 405.1 makes the difference the whole
+    # card — a counter that read the union as the field above would decline
+    # every spell.
     #
     # On the **filter** rather than on the node, where the same printed union
     # rides ``ChangeTarget.also_ability`` one family over (Silver Wyvern).
@@ -305,9 +307,9 @@ class ObjectFilter:
     # "…activated ability **from an artifact source**" (Rust, Ayesha Tanaka).
     # A narrowing on the *permanent the ability came from*, which is the only
     # thing about an ability on the stack there is to narrow by — it has no card
-    # and no type line of its own (CR 113.7a). Beside `ability_kinds` because it
-    # is the same object's other adjective, and a tuple because "an artifact or
-    # enchantment source" is the same sentence with one more word.
+    # and no type line of its own (CR 405.1, 405.4). Beside `ability_kinds`
+    # because it is the same object's other adjective, and a tuple because "an
+    # artifact or enchantment source" is the same sentence with one more word.
     ability_source_types: tuple[str, ...] = ()
     # Whose zone, when *zone* names one ("from **your** graveyard"). "Return
     # target creature card from your graveyard" and "…from a graveyard" are

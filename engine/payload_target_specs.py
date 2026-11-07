@@ -252,7 +252,7 @@ def _counter_spec(payload: dict) -> dict:
         spec["stack_cast_from_zone"] = cast_from_zone
     if payload.get("also_ability"):
         # "Counter target spell **or ability** that targets a creature."
-        # (Diplomatic Escort.) CR 113.7a: an ability on the stack is not a
+        # (Diplomatic Escort.) CR 113.9: an ability on the stack is not a
         # spell, so the enumeration folds a second list in rather than widening
         # the first — the same key and the same reading the retarget one family
         # over already gives Silver Wyvern. Emitted only when the card prints
@@ -1165,7 +1165,7 @@ def _retarget_spec(payload: dict) -> dict:
     # Reflecting Mirror's specs stay byte-identical.
     if payload.get("current_target_type"):
         spec["stack_single_target_type"] = payload["current_target_type"]
-    # "…target spell **or ability**" (Silver Wyvern). CR 113.7a: an ability on
+    # "…target spell **or ability**" (Silver Wyvern). CR 113.9: an ability on
     # the stack is not a spell, so the enumeration folds a second list in rather
     # than widening the first — every other key here is a question about a
     # *card*, which an ability does not have. Emitted only when the card prints

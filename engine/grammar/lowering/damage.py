@@ -354,7 +354,7 @@ def _with_attached_dealer(
 
     ``biter: "attached"`` is not a new key. ``_bites`` has emitted it since
     Farrel's Mantle for the power-reading form of the same sentence, with the
-    same reasoning written down: CR 113.7a leaves the ability the Aura's, so
+    same reasoning written down: CR 113.7 leaves the ability the Aura's, so
     only the **dealer** moves. One name for one fact; what was missing is that
     a *fixed* amount never reached it.
 

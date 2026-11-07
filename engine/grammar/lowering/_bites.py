@@ -15,7 +15,7 @@ own instruction rather than an amount key.
 Who the dealer is, is the axis the kinds are named along:
 
 * ``source_bites_target`` — the ability's own source (or, on an Aura, the
-  permanent it enchants, CR 113.7a).
+  permanent it enchants, CR 113.7, 608.2h).
 * ``target_bites_target`` — two chosen targets, the biter first.
 * ``bound_bites_source`` — a permanent an earlier step of this same effect
   recorded, biting the ability's source.
@@ -366,7 +366,7 @@ def lower_bite(
     # nothing off the battlefield touches it. Its own kind rather than the
     # generic damage, because the amount is a *read* rather than a number.
     # …and on an **Aura**, whose biter is the permanent it enchants (Farrel's
-    # Mantle): the ability stays the Aura's (CR 113.7a) and the dealer is
+    # Mantle): the ability stays the Aura's (CR 113.7) and the dealer is
     # payload, because an Aura has no power to deal.
     if (
         isinstance(node.amount, ast.ThatMuch)

@@ -150,7 +150,7 @@ def _block_pair_own_creature_id(game: Game, context: OracleExecutionContext) -> 
 
     Two spellings, one question. A creature watching its own block is the
     ability's source; an Aura watching the creature it enchants is not on that
-    creature's ``effective_card`` at all (CR 113.7a), so the source is the Aura
+    creature's ``effective_card`` at all (CR 303.4e), so the source is the Aura
     and the creature is what it is attached to. Derived here rather than
     stamped by the fire sites, because both of them already record the *other*
     half and this is the same pair read from the other end.
