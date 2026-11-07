@@ -56,6 +56,26 @@ from dataclasses import dataclass
 #: handler through here; named once so the three cannot come to disagree.
 LANDS_FILTER_KEY = "could_produce_lands"
 
+#: The resolution-choices key a mana ability's activation carries the **type**
+#: its activator named on — the wire's ``mana_color`` symbol, {C} included —
+#: beside ``new_color``, which is a *colour* and so drops {C} (CR 105.1:
+#: colourless is not a colour). Read by the two "any type" branches of
+#: ``handlers/mana.add_mana_from_text`` ("…any type that a land you control
+#: could produce", Reflecting Pool; "…any type that land could produce",
+#: Benthic Explorers, Squandered Resources), for which {C} is an answer (CR
+#: 106.1b). Written by the two sites that run a mana ability inline
+#: (``mixins/stack/activation.py``, ``mixins/land_mana_taps.py``). Without it
+#: {C} named for one of those was read as nothing, and a board offering {C}
+#: and {G} made {G}.
+NAMED_MANA_TYPE = "mana_type"
+
+
+def named_mana_type(symbol) -> "str | None":
+    """*symbol* as a type a seat may name (one of CR 106.1b's six), or None."""
+    named = str(symbol or "").strip().upper()
+    return named if named in ("W", "U", "B", "R", "G", "C") else None
+
+
 #: The boards a "could produce" phrase can name. The two payload keys that carry
 #: one — ``any_color_from`` and ``any_type_from_lands`` — hold one of these.
 BOARDS: frozenset[str] = frozenset({"controlled_lands", "opponent_lands"})
@@ -405,6 +425,23 @@ def ability_colors_on_offer(game, permanent, instruction) -> "tuple[str, ...] | 
     return tuple(symbol for symbol in _OFFER_ORDER if symbol in offered)
 
 
+def types_that_land_could_produce(land) -> tuple[str, ...]:
+    """"…one mana of any type **that land** could produce" (Benthic Explorers)
+    / "…**the sacrificed land** could produce" (Squandered Resources): the
+    types the one land a cost named makes, as upper-case symbols in its own
+    order — read off its ``effective_produced_mana``, which last-known
+    information still answers once the land is gone (CR 608.2h).
+
+    One reader for the handler that adds the mana and the wire that asks which
+    type (``web/offers``), so the two cannot offer different sets. Not CR
+    106.7's fixpoint above: a derived land named this way (an opponent's
+    Reflecting Pool) answers with its printed summary.
+    """
+    if land is None:
+        return ()
+    return tuple(dict.fromkeys(str(symbol).upper() for symbol in land.effective_produced_mana))
+
+
 def types_a_land_you_control_could_produce(game, seat: int) -> frozenset[str]:
     """"…any type that a land you control could produce." (Reflecting Pool.)"""
     return mana_lands_could_produce(
@@ -432,6 +469,7 @@ __all__ = [
     "COLORS",
     "DerivedProduction",
     "LANDS_FILTER_KEY",
+    "NAMED_MANA_TYPE",
     "ability_colors_on_offer",
     "colors_a_land_an_opponent_controls_could_produce",
     "could_produce_by_seat",
@@ -440,5 +478,7 @@ __all__ = [
     "derived_producer_board",
     "lands_could_produce",
     "mana_lands_could_produce",
+    "named_mana_type",
     "types_a_land_you_control_could_produce",
+    "types_that_land_could_produce",
 ]

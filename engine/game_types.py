@@ -209,8 +209,17 @@ CHOICE_KEYS = (
     # The producer's split of "Add three mana in any combination of {R}
     # and/or {G}" (Goblin Clearcutter; Burnt Offering on a cast), announced
     # with the activation or the cast — ``mana_combination.MANA_COMBINATION``
-    # names the key, ``handlers/mana._split_mana_combination`` reads it.
+    # names the key, ``handlers/mana._split_mana_combination`` reads it — and
+    # the quantity an "Add {U} or {C}{U}" takes (Adarkar Unicorn,
+    # ``handlers/mana._pick_mana_alternative``).
     "mana_combination",
+    # The *type* a mana ability's activator named, {C} included, beside the
+    # colour ``new_color`` carries (which drops {C}, CR 105.1): an "any type"
+    # clause may be asked for {C} (CR 106.1b; Reflecting Pool, Squandered
+    # Resources) — ``mana_could_produce.NAMED_MANA_TYPE`` names the key,
+    # written by the two inline mana-ability sites and read by
+    # ``handlers/mana.add_mana_from_text``.
+    "mana_type",
 )
 
 

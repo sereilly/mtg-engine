@@ -29,6 +29,7 @@ from ...bare_announcements import (announced_fields, default_activation_target,
 from ...cost_modifiers import sacrifice_taxes
 from ...divided_damage import DIVIDED_TARGETS
 from ...mana_combination import MANA_COMBINATION, split_refusal
+from ...mana_could_produce import NAMED_MANA_TYPE, named_mana_type
 from ...targeting import GRAVEYARD_TARGET_KIND, derive_activation_spec
 from ...target_roles import ROLE_SEATS
 from ...mana_payment import answer_color_choices, is_mana_ability
@@ -864,6 +865,10 @@ class AbilityActivationMixin:
                         # channel, so a handler still need not know which path
                         # resolved it.
                         "new_color": self._chosen_mana_color(mana_color),
+                        # …and the *type* named, {C} included, which an "any
+                        # type" clause may be asked for (CR 106.1b) and the
+                        # colour above cannot carry.
+                        NAMED_MANA_TYPE: named_mana_type(mana_color),
                         # The producer's split of an "any combination" mana
                         # ability, announced with it (CR 605.3a).
                         MANA_COMBINATION: mana_combination,

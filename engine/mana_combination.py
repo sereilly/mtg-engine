@@ -26,6 +26,11 @@ Three readers:
   makes, for the wire (``web/serialization``'s ``ability_mana``), and
   :func:`cast_split_offer` the same for a **spell** a seat may cast, with the
   count its cost decides.
+
+"Add {U} or {C}{U}" (Adarkar Unicorn) is a choice between written-out
+quantities rather than a split, and is answered on the same key — the mana the
+seat takes, which must be one of them exactly (:func:`alternatives_of`,
+:func:`chosen_alternative`, read by ``handlers/mana._pick_mana_alternative``).
 """
 
 from __future__ import annotations
@@ -123,17 +128,76 @@ def cast_split_offer(game: "Game", seat: int, card) -> "dict | None":
     return offer
 
 
+def alternatives_of(instruction) -> "tuple[tuple[tuple[str, int], ...], ...] | None":
+    """The written-out quantities of the one "Add A or B" step *instruction*
+    carries ("Add {U} or {C}{U}", Adarkar Unicorn; "Add {B}{B} or {G}{G}",
+    Cadaverous Bloom) — each a ``((symbol, count), …)`` — or None."""
+    found: list = []
+    stack = [instruction]
+    while stack:
+        current = stack.pop()
+        if current is None:
+            continue
+        kind = getattr(current, "kind", None)
+        payload = getattr(current, "payload", None)
+        if kind is None or not isinstance(payload, dict):
+            if isinstance(current, (list, tuple)):
+                stack.extend(current)
+            continue
+        if kind == "add_mana_from_text" and payload.get("pips_alternatives"):
+            found.append(payload["pips_alternatives"])
+        for value in payload.values():
+            if isinstance(value, (list, tuple)) or hasattr(value, "kind"):
+                stack.append(value)
+    if len(found) != 1:
+        return None
+    return tuple(
+        tuple((str(symbol).upper(), int(count)) for symbol, count in alternative)
+        for alternative in found[0]
+    )
+
+
+def chosen_alternative(alternatives, split) -> "int | None":
+    """The index of the alternative *split* names — the mana it makes, as
+    ``{symbol: count}``, the shape a split rides in — or None when it names
+    none of them (or nothing)."""
+    wanted = normalized_split(split)
+    if not wanted:
+        return None
+    wanted = {symbol: amount for symbol, amount in wanted.items() if amount}
+    for index, alternative in enumerate(alternatives):
+        made: dict[str, int] = {}
+        for symbol, count in alternative:
+            made[str(symbol).upper()] = made.get(str(symbol).upper(), 0) + int(count)
+        if made == wanted:
+            return index
+    return None
+
+
 def split_refusal(instruction, split) -> str | None:
     """Why *split* is not a split *instruction* offers, or None when it is.
 
     Whole or not at all: only the printed symbols, no negative unit, and —
     where the count is printed — exactly that many. A count the resolution
     sizes ("X mana … where X is the sacrificed creature's mana value") is
-    checked there, where it is known (``_split_mana_combination``)."""
+    checked there, where it is known (``_split_mana_combination``).
+
+    An "Add A or B" of written-out quantities (:func:`alternatives_of`) is
+    answered on the same channel — the mana the seat takes, which must be one
+    of the alternatives exactly."""
     if split is None:
         return None
     shape = combination_of(instruction)
     if shape is None:
+        alternatives = alternatives_of(instruction)
+        if alternatives:
+            if chosen_alternative(alternatives, split) is not None:
+                return None
+            said = " or ".join(
+                "".join(("{" + symbol + "}") * count for symbol, count in alternative)
+                for alternative in alternatives
+            )
+            return f"the mana may be only {said}"
         return "this makes no mana in any combination of symbols to split"
     symbols, count = shape
     if not isinstance(split, dict):

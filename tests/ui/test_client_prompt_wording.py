@@ -48,7 +48,9 @@ def test_an_abilitys_x_is_read_off_its_activation_cost():
 def test_a_chosen_mana_ability_offers_only_the_colours_its_own_line_prints():
     body = _function("abilityManaColors")
     assert "__abilityIndex" in body and "own.length >= 2" in body
-    assert "abilityManaColors(card)" in _function("startActivationPrompt")
+    # kg4 `client3`: handed the stated entry already narrowed by the chosen
+    # cost (``abilityManaColors(card, ownMana)``).
+    assert "abilityManaColors(card, ownMana)" in _function("startActivationPrompt")
 
 
 def test_the_single_target_prompt_shows_a_binding_target_requirement():

@@ -226,9 +226,14 @@ def _restriction_suffix(spend_only) -> str:
 def _pick_mana_alternative(alternatives, context) -> tuple:
     """Which written-out quantity of a printed "or" the seat takes.
 
-    ``mana_alternative`` on the resolution's choices names an index when
-    something asked; with nothing asked the **largest** alternative is taken,
-    ties going to the one printed first.
+    The seat names it as the mana it makes — ``mana_combination`` on the
+    resolution's choices, ``{symbol: count}``, the channel a split rides
+    (``engine/mana_combination.py``, whose ``split_refusal`` refuses anything
+    but one of the alternatives before the cost is paid) — "Add {B}{B} or
+    {G}{G}" (Cadaverous Bloom) named ``{"G": 2}``. A ``mana_alternative`` index
+    was read here and written by nothing, so the client's colour fan for the
+    Bloom sent {G} and made {B}{B}. With nothing named the **largest**
+    alternative is taken, ties going to the one printed first.
 
     That default is a real choice rather than a guess. The alternatives of an
     "Add A or B" carry no cost between them and land in the same pool under the
@@ -239,8 +244,10 @@ def _pick_mana_alternative(alternatives, context) -> tuple:
     the single-symbol branch above does, would hand a non-interactive seat the
     smaller half of every such card.
     """
-    chosen = (context.choices or {}).get("mana_alternative")
-    if isinstance(chosen, int) and 0 <= chosen < len(alternatives):
+    from ..mana_combination import MANA_COMBINATION, chosen_alternative
+
+    chosen = chosen_alternative(alternatives, (context.choices or {}).get(MANA_COMBINATION))
+    if chosen is not None:
         return tuple(alternatives[chosen])
     best = max(
         range(len(alternatives)),
@@ -909,9 +916,16 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         # "any type" branches below take the first, and a colour clause handed
         # a {C} has been named no colour at all (CR 105.1), which is the
         # default's case and takes the default.
+        # The *type* the activation named rides its own key
+        # (``mana_could_produce.NAMED_MANA_TYPE``), because ``new_color`` is a
+        # colour and the inline sites' reading of the wire drops {C} from it —
+        # which left "any type" unable to be asked for {C} beside any other.
+        from ..mana_could_produce import NAMED_MANA_TYPE
+
         asked = (
             instruction.payload.get("color")
             or (context.choices or {}).get("new_color")
+            or (context.choices or {}).get(NAMED_MANA_TYPE)
         )
         named_type = (
             "C" if str(asked or "").strip().upper() == "C"
@@ -944,14 +958,13 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         any_type_from = instruction.payload.get("any_type_from")
         if any_type_from is not None:
             from ..grammar.lowering.mana import ANY_TYPE_FROM_RECORDS
+            from ..mana_could_produce import types_that_land_could_produce
 
             cost_record, printed, _ = ANY_TYPE_FROM_RECORDS[any_type_from]
             land = (context.choices or {}).get(cost_record)
-            available = tuple(dict.fromkeys(
-                str(sym).upper() for sym in (
-                    land.effective_produced_mana if land is not None else ()
-                )
-            ))
+            # The wire asks the same reader which types to offer
+            # (``web/offers._decided_ability_mana``).
+            available = types_that_land_could_produce(land)
             if not available:
                 game.log.append(f"{card.name}: {printed} produces no mana")
                 return True, "resolved"

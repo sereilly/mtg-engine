@@ -259,11 +259,14 @@ def test_the_client_asks_no_colour_of_a_fixed_output_and_offers_the_ability_s_ow
     ability's entry where there is one; the card's text and the permanent's
     summary are what is left for a permanent the server said nothing about."""
     start = app_js_function_body("startActivationPrompt")
-    assert "const ownMana = chosenAbilityMana(card);" in start
-    assert start.index("chosenAbilityMana(card)") < start.index("cardRequiresManaColorChoice(card)")
+    # kg4 `client3`: the server states every ability's mana — a board-decided
+    # one included — so the card's text is no longer read for "any color"
+    # (``cardRequiresManaColorChoice`` is gone) and the modal is asked only
+    # where the stated entry asks it.
+    assert re.search(r"const ownMana = manaForChosenCost\(\s*chosenAbilityMana\(card\)", start)
+    assert "cardRequiresManaColorChoice" not in start
     assert re.search(
-        r"const asksAnyColor = ownMana\s*\?\s*ownMana\.choice && ownMana\.symbols\.length >= 5\s*:\s*cardRequiresManaColorChoice\(card\);",
-        start,
+        r"if \(ownMana && ownMana\.choice && ownMana\.symbols\.length >= 5\)", start,
     )
     fan = app_js_function_body("abilityManaColors")
     stated = fan.index("chosenAbilityMana(card)")

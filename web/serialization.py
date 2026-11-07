@@ -39,8 +39,8 @@ from engine.cost_pickers import spec_is_a_cost
 from engine.text_changes import changed_words, spell_text_card
 
 from .offers import (
-    _ability_denial, _ability_mana_payload, _offered_mana, ability_x_payable,
-    cast_mana_offer, cast_x_payable, text_change_offer,
+    _ability_denial, _ability_mana_payload, _offered_mana, ability_text_change_offer,
+    ability_x_payable, cast_mana_offer, cast_x_payable, text_change_offer,
 )
 from .runtime import CARD_BY_NAME
 from .seats import _player_has_lost
@@ -1519,6 +1519,12 @@ def _serialize_player(
             x_payable = [ability_x_payable(game, seat, perm, ability) for ability in usable]
             if any(entry is not None for entry in x_payable):
                 perm_dict["ability_x_payable"] = x_payable
+            # The two words each ability's text change announces
+            # (``offers.ability_text_change_offer``: Balduvian Shaman), indexed
+            # like ``ability_index``; absent where no ability announces any.
+            text_change = [ability_text_change_offer(game, ability) for ability in usable]
+            if any(entry is not None for entry in text_change):
+                perm_dict["ability_text_change"] = text_change
     # …and, after them, the permanents on their way onto this seat's board
     # (``_serialize_arriving``), after the board's own so no slot a client
     # addresses an action by moves.

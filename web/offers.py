@@ -1,10 +1,12 @@
 """What one of a viewer's objects offers **right now**, as the engine answers
 it: the mana a permanent's tap names (:func:`_offered_mana`), what each mana
 ability adds and whether it asks a colour (:func:`_ability_mana`,
+:func:`_decided_ability_mana` where the board or a record decides it,
 :func:`_ability_mana_payload`), why each ability would be refused before
-anything is chosen (:func:`_ability_denial`) — and, for a card the viewer may
-cast, what its cast announces: the colour of the mana the spell adds
-(:func:`cast_mana_offer`), a text change's two words
+anything is chosen (:func:`_ability_denial`), the two words an ability's text
+change announces (:func:`ability_text_change_offer`) — and, for a card the
+viewer may cast, what its cast announces: the colour of the mana the spell
+adds (:func:`cast_mana_offer`), a text change's two words
 (:func:`text_change_offer`) and how large an X it can pay for
 (:func:`cast_x_payable`, :func:`ability_x_payable`).
 
@@ -19,11 +21,13 @@ from __future__ import annotations
 
 from engine import Game
 from engine.activation_prohibitions import activation_prohibition
-from engine.ai_text_changes import announced_text_change_mode
+from engine.ai_text_changes import ability_text_change_mode, announced_text_change_mode
 from engine.board_payment import board_can_pay, tap_alone_symbols
 from engine.cost_modifiers import cast_mana_charge
 from engine.cost_x_definitions import cost_x_is_defined
+from engine.mana_could_produce import ability_colors_on_offer, types_that_land_could_produce
 from engine.models import Permanent
+from engine.noted_mana import noted_mana
 from engine.oracle import compile_card_oracle
 from engine.oracle_types import x_spend_colors_from_text
 from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose
@@ -80,7 +84,40 @@ def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
         if tapped_for:
             kept = tuple(symbol for symbol in own if symbol in tapped_for)
             return kept + tuple(symbol for symbol in tapped_for if symbol not in kept)
-    return own
+        return own
+    # A non-land whose mana the board or a record decides (Fellwar Stone, Star
+    # Compass: the colours the lands it reads could produce; Sol Grail: the
+    # colour it chose) is shown as what it makes here, as such a land is: its
+    # summary is all five, and the badges read five beside a colour question
+    # offering two, or none.
+    narrowed = _decided_mana_summary(game, perm)
+    return narrowed if narrowed is not None else own
+
+
+def _decided_mana_summary(game: Game, perm: Permanent) -> tuple[str, ...] | None:
+    """The union of what *perm*'s mana abilities add (:func:`_ability_mana`,
+    :func:`_decided_ability_mana`) where at least one is decided by the board
+    or a record and every one is known now — else None, and the summary
+    stands. Not known now: what a cost decides (Benthic Explorers' land,
+    Charmed Pendant's milled card) and a shape neither reader states."""
+    found: set[str] = set()
+    decided = False
+    for ability in game.usable_abilities_of(perm, card=perm.effective_card):
+        instruction = getattr(ability, "instruction", None)
+        steps = _every_step(instruction)
+        adders = [step for step in steps if step.kind == "add_mana_from_text"]
+        if not adders:
+            continue
+        if any((step.payload or {}).get("colored_symbols_of_record") for step in adders):
+            return None
+        entry = _ability_mana(instruction)
+        if entry is None:
+            entry = _decided_ability_mana(game, perm, instruction)
+            decided = True
+        if entry is None or "symbols_by_cost" in entry:
+            return None
+        found |= set(entry["symbols"])
+    return tuple(_ordered(found)) if decided else None
 
 
 #: Payload keys of an add-mana step that change *how much* it makes or what the
@@ -120,10 +157,10 @@ def _ability_mana(instruction) -> dict | None:
 
     Riders that change the amount or restrict the spend are read through; a
     shape whose symbols the board or a record decides (``any_color_from``,
-    ``from_noted`` …) is None, and the client falls back to the summary — which
-    the server narrows for exactly those (:func:`_offered_mana`). A split the
-    seat chooses ("in any combination of") carries a ``combination`` entry of
-    its own: ``{"symbols": […], "count": N}``.
+    ``from_noted`` …) is None here, and :func:`_decided_ability_mana` answers
+    it with the board. A split the seat chooses ("in any combination of")
+    carries a ``combination`` entry of its own: ``{"symbols": […], "count":
+    N}``.
     """
     adders = [step for step in _effect_steps(instruction) if step.kind == "add_mana_from_text"]
     if not adders:
@@ -163,19 +200,144 @@ def _ability_mana(instruction) -> dict | None:
     return {"symbols": symbols, "choice": choice} if symbols else None
 
 
+#: CR 105.1's colours in WUBRG order, then colourless (CR 106.1b's sixth
+#: type): the order a stated symbol list is sent in.
+_SYMBOL_ORDER: tuple[str, ...] = ("W", "U", "B", "R", "G", "C")
+
+
+def _ordered(symbols) -> list[str]:
+    found = {str(symbol).upper() for symbol in symbols}
+    return [symbol for symbol in _SYMBOL_ORDER if symbol in found]
+
+
+def _every_step(instruction) -> tuple:
+    """*instruction* and every step inside it, at any depth — an offer's
+    branches included ("…unless any player pays {1}", Rhystic Cave)."""
+    from engine.mana_payment import _every_nested_step
+
+    if instruction is None:
+        return ()
+    return (instruction, *_every_nested_step(instruction))
+
+
+def _decided_ability_mana(game: Game, perm: Permanent, instruction) -> dict | None:
+    """What one activation of a mana ability adds where the ability's own
+    payload does not say — the board, a record or the cost decides it — in
+    :func:`_ability_mana`'s shape, or None for an ability with no add-mana
+    step at all.
+
+    The handler's own readings (``handlers/mana.add_mana_from_text``), so the
+    client asks exactly the question the resolution answers:
+
+    * a "could produce" clause or a colour "of a permanent you control"
+      (Fellwar Stone, Quirion Explorer, Harvester Druid, Star Compass,
+      Reflecting Pool, Meteor Crater): ``mana_could_produce.
+      ability_colors_on_offer``, CR 106.7's fixpoint over this board — the
+      set the resolution re-checks a named colour against. Empty is a real
+      answer: the ability adds nothing here;
+    * "Choose a color. Add one mana of that color" with nothing narrowing
+      the choice (Rhystic Cave): the five colours, named with the activation
+      (CR 605.3b, ``handlers/value_choices.choose_color``);
+    * a colour recorded as the permanent entered ("Add one mana of the chosen
+      color", Sol Grail, Quirion Elves) or noted by an earlier activation
+      (Jeweled Amulet, Ice Cauldron): that record, nothing to ask;
+    * the symbols of a card the cost mills (Charmed Pendant): unknown until
+      the cost is paid, nothing to ask;
+    * "…of any type **that land** could produce" (Benthic Explorers,
+      Squandered Resources): per land the cost could name, by id
+      (``symbols_by_cost``), what that land could produce — the cost is
+      chosen first, so the question is that land's (``symbols`` is their
+      union, for a client that has not chosen yet);
+    * "Add {U} or {C}{U}" (Adarkar Unicorn, Cadaverous Bloom): the written-out
+      quantities to choose between (``alternatives``, each ``{symbol:
+      count}``), answered on the activate action's ``mana_combination``.
+
+    Before this the client was told nothing for these, and fell back to the
+    card's text ("one mana of any color" — all five for a Fellwar Stone whose
+    opponent had two colours of land) or to the permanent's summary — a fan of
+    five for Sol Grail, Jeweled Amulet and Charmed Pendant, whose answers the
+    engine never read, and a fan of {B} and {G} for Cadaverous Bloom whose
+    {G} made {B}{B}.
+    """
+    steps = _every_step(instruction)
+    adders = [step for step in steps if step.kind == "add_mana_from_text"]
+    if not adders:
+        return None
+    offered = ability_colors_on_offer(game, perm, instruction)
+    if offered is not None:
+        return {"symbols": list(offered), "choice": len(offered) >= 2}
+    if len(adders) != 1:
+        return None
+    payload = adders[0].payload or {}
+    if payload.get("color_from") and any(
+        step.kind == "choose_color"
+        and not (step.payload or {}).get("among")
+        and not (step.payload or {}).get("chooser")
+        for step in steps
+    ):
+        return {"symbols": ["W", "U", "B", "R", "G"], "choice": True}
+    if payload.get("from_chosen_color"):
+        chosen = (perm.metadata or {}).get("chosen_color")
+        return {"symbols": _ordered([chosen] if chosen else ()), "choice": False}
+    if payload.get("from_noted"):
+        return {"symbols": _ordered(noted_mana(perm)), "choice": False}
+    if payload.get("colored_symbols_of_record"):
+        return {"symbols": [], "choice": False}
+    if payload.get("any_type_from") is not None:
+        by_cost = {
+            str(land.permanent_id): list(types)
+            for land in game.all_permanents()
+            if land.has_type("land") and (types := types_that_land_could_produce(land))
+        }
+        union = _ordered(symbol for types in by_cost.values() for symbol in types)
+        return {"symbols": union, "choice": len(union) >= 2, "symbols_by_cost": by_cost}
+    alternatives = payload.get("pips_alternatives")
+    if alternatives:
+        stated = [
+            {str(symbol).upper(): int(count) for symbol, count in alternative}
+            for alternative in alternatives
+        ]
+        return {
+            "symbols": _ordered(symbol for alternative in stated for symbol in alternative),
+            "choice": len(stated) >= 2,
+            "alternatives": stated,
+        }
+    return None
+
+
+def _ability_mana_entry(game: Game, perm: Permanent, ability) -> dict | None:
+    """One ``ability_mana`` entry: the payload's answer (:func:`_ability_mana`),
+    else the board's (:func:`_decided_ability_mana`), else — for an add-mana
+    step neither reads — the permanent's own summary, so that None means only
+    "this ability adds no mana" and a client can rely on it."""
+    instruction = getattr(ability, "instruction", None)
+    stated = _ability_mana(instruction)
+    if stated is not None:
+        return stated
+    decided = _decided_ability_mana(game, perm, instruction)
+    if decided is not None:
+        return decided
+    if not any(step.kind == "add_mana_from_text" for step in _every_step(instruction)):
+        return None
+    summary = _ordered(_offered_mana(game, perm))
+    return {"symbols": summary, "choice": len(summary) >= 2}
+
+
 def _ability_mana_payload(game: Game, perm: Permanent, usable) -> list | None:
     """``ability_mana`` for one of the viewer's permanents: one entry per
     usable ability, indexed like the ``ability_index`` the activate action
-    takes (so a one-ability permanent's is entry 0). None — the field is left
-    off — when no ability says anything, and when the board has changed what a
-    land offers (:func:`_offered_mana`'s swap or narrowing): there the summary
-    is the answer and an ability's printed symbols are not.
+    takes (so a one-ability permanent's is entry 0) — what that ability adds
+    and whether activating it asks (:func:`_ability_mana_entry`), or None for
+    an ability that adds no mana. The field is left off when no ability adds
+    any, and when the board has changed what a land offers
+    (:func:`_offered_mana`'s swap or narrowing): there the summary is the
+    answer and an ability's printed symbols are not.
     """
     if not usable:
         return None
     if perm.has_type("land") and set(_offered_mana(game, perm)) != set(perm.effective_produced_mana):
         return None
-    entries = [_ability_mana(getattr(ability, "instruction", None)) for ability in usable]
+    entries = [_ability_mana_entry(game, perm, ability) for ability in usable]
     return entries if any(entry is not None for entry in entries) else None
 
 
@@ -266,6 +428,32 @@ def text_change_offer(game: Game, card) -> dict | None:
     mode = announced_text_change_mode(card)
     if mode is None:
         return None
+    return _text_change_words(game, mode)
+
+
+def ability_text_change_offer(game: Game, ability) -> dict | None:
+    """:func:`text_change_offer` for one **activated ability** whose
+    activation announces the two words (CR 612 through CR 602.2b:
+    "{T}: Change the text of target white enchantment you control … by
+    replacing all instances of one color word with another", Balduvian
+    Shaman) — ``ai_text_changes.ability_text_change_mode``, the reading the
+    AI's activation names its words by — or None for every other ability.
+
+    Sent as ``ability_text_change``, indexed like ``ability_index``; the
+    activate action takes the words on ``old_color`` / ``mana_color``. The
+    client asked none, so from a browser the Shaman's ability resolved with
+    no words and changed nothing.
+    """
+    mode = ability_text_change_mode(getattr(ability, "instruction", None))
+    if mode is None:
+        return None
+    return _text_change_words(game, mode)
+
+
+def _text_change_words(game: Game, mode: str) -> dict:
+    """``{"mode", "words", "stack_words"}`` for a text change of *mode*: per
+    permanent (by id) and per spell (by top-first stack index), the words of
+    the mode's vocabularies its text writes now."""
     kinds = TEXT_CHANGE_MODE_KINDS[mode]
 
     def written(holder) -> list[str]:
