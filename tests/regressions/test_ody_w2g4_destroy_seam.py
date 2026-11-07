@@ -1024,6 +1024,9 @@ def _own_nodes(function):
         pending.extend(ast.iter_child_nodes(node))
 
 
+# A whole-pool census plus every scenario (26-35 s on every kg4 quick pass):
+# the full pass's, and every run that names this file.
+@pytest.mark.full
 def test_every_seam_call_site_in_the_engine_was_reached_by_a_game(census, by_name):
     """The floor that is not a number: the destroy seams are called from a
     known set of functions, and each one of them destroyed something in a
