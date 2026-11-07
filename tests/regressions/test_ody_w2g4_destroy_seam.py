@@ -400,8 +400,8 @@ def _play_out(game) -> None:
 
 
 #: Every mark a turn step acts on for a delayed destruction — and the delayed
-#: sacrifice beside them, which leaves by the same sweep and must not be
-#: announced.
+#: sacrifice beside them, which the end step performs in the same moment and
+#: which must not be announced as a destruction.
 _DELAYED_KEYS = frozenset({
     "destroy_at_end_of_combat", "destroy_at_next_end_step",
     "destroy_if_did_not_attack_eot", "destroy_if_attacked_eot",
@@ -1130,9 +1130,10 @@ def test_a_move_to_the_graveyard_that_is_not_a_destruction_is_not_announced(by_n
     assert [p.life for p in game.players] == [20, 20]
 
 
-def test_a_delayed_sacrifice_rides_the_destroy_sweep_and_is_not_one(by_name):
-    """"Sacrifice it at the beginning of the next end step" leaves through the
-    end step's sweep beside the destructions; CR 701.21a."""
+def test_a_delayed_sacrifice_beside_the_destroy_sweep_is_not_one(by_name):
+    """"Sacrifice it at the beginning of the next end step" is performed by the
+    end step beside the destructions, and is a sacrifice (CR 701.21a), never a
+    destruction."""
     game = _watching_duel(by_name)
     bears = _put(game, by_name, 0, "Grizzly Bears")
     bears.metadata["sacrifice_at_next_end_step"] = True

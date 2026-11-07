@@ -65,6 +65,11 @@ _REVIEWED = {
         "own event; the engine performs them in one sweep rather than one "
         "stack object each, which is a shortcut of its own."
     ),
+    ("phases/end_step.py", "_begin_end_step", "sacrifice_permanent"): (
+        "each \"sacrifice it at the beginning of the next end step\" mark is "
+        "its own delayed triggered ability (CR 603.7), so each sacrifice is "
+        "its own event, as the cleanup step's flash-Aura sacrifices are."
+    ),
     ("phases/end_step.py", "_begin_end_step", "remove_from_battlefield"): (
         "Rakalite's \"return this artifact to its owner's hand at the beginning "
         "of the next end step\": each is its own delayed triggered ability "

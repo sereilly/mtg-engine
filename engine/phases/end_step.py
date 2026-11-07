@@ -16,7 +16,7 @@ no seat.
 """
 
 from ..delayed_triggers import fire_delayed_triggers
-from ..destruction_events import NOT_A_DESTRUCTION, delayed_destruction_cause
+from ..destruction_events import delayed_destruction_cause
 from ..models import Permanent
 from ..turn_state import (DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
                           marked_for_this_turn)
@@ -197,7 +197,8 @@ class EndStepMixin:
                     return cause
             return delayed_destruction_cause(permanent, marks[0] if marks else "")
 
-        # **Two sweeps, because a sacrifice is not a destruction.** This was one
+        # **A sacrifice is not a destruction**, so the delayed sacrifices below
+        # are not this sweep's. This was one
         # sweep with regeneration and indestructibility both switched off, and
         # its own comment named the reason and the fix: the flags conflated
         # CR 701.21a's sacrifice — which no replacement effect and no
@@ -217,17 +218,32 @@ class EndStepMixin:
                 cause=_delayed_eot_cause,
             ):
                 destroyed_names.append(permanent.card.name)
-        for controller in self.players:
-            for permanent in self._destroy_swept_permanents(
-                controller, _delayed_eot_sacrifice,
-                allow_regeneration=False, respect_indestructible=False,
-                # CR 701.21a: "Sacrificing a permanent doesn't destroy it."
-                cause=NOT_A_DESTRUCTION,
-            ):
-                destroyed_names.append(permanent.card.name)
 
         for name in destroyed_names:
             self.log.append(f"{name} was destroyed at end step")
+
+        # "Sacrifice it at the beginning of the next end step." (Krovikan
+        # Elementalist, Celestial Sword, Goblin Ski Patrol.) **A sacrifice**,
+        # through CR 701.21a's one transition: it was the destruction sweep
+        # above with its protections switched off (and ``NOT_A_DESTRUCTION``,
+        # so nothing called it destroyed), which also meant nothing called it
+        # sacrificed — no "whenever you sacrifice a permanent" heard it (Havoc
+        # Jester), and Urza's Miter's "if it wasn't sacrificed" offered its
+        # draw for an artifact that was. Each mark is its own delayed
+        # triggered ability (CR 603.7), so each sacrifice is its own event,
+        # as the cleanup step's flash-Aura sacrifices are.
+        marked = [
+            permanent for permanent in self.all_permanents()
+            if _delayed_eot_sacrifice(permanent)
+        ]
+        for permanent in marked:
+            seat = self.controller_index_of(permanent)
+            if seat is None or self.sacrifice_permanent(permanent) is None:
+                continue
+            self.log.append(
+                f"{self.players[seat].name} sacrificed {permanent.card.name} "
+                "at end step"
+            )
 
         # "Return this artifact to its owner's hand at the beginning of the
         # next end step." (Rakalite.) The bounce twin of the destruction sweep
