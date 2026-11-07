@@ -69,9 +69,14 @@ _ONE_EFFECT = {
 _DECLINED = {
     ("mixins/zone_funnels.py", "_begin_entry"): (
         ("would_enter_battlefield",),
-        "Containment Priest, Worms of the Earth, the Alliances lands' tolls, "
-        "Land Equilibrium on one entry: the entry seam's callers read False "
-        "as 'replaced' and run their tails at once",
+        "Land Equilibrium beside an Alliances land's unpayable toll (or "
+        "Containment Priest beside a toll on an uncast creature): the entry "
+        "seam's callers read False as 'replaced' and run their tails at "
+        "once, and Land Equilibrium's effect does not replace the entry "
+        "(the land still enters), so a suspended entry is not 'did not "
+        "enter' whatever is answered. (Worms of the Earth is a CR 614.17 "
+        "'can't', never a contender — 614.17c — and its order 0 already "
+        "says so.)",
     ),
 }
 
