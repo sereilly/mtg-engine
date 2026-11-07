@@ -30,7 +30,7 @@ from ..events import emit
 from ..models import PlayerState
 from ..pending_choices import spec_for
 from ..replacement_choices import DRAW_OF
-from ..replacements import apply_replacements
+from ..replacements import answered_restart, apply_replacements
 from ..replacements.zone_changes import TOP_OF_LIBRARY_DISCARD_TEXT
 from ..oracle import compile_card_oracle
 from ..trigger_utils import (battlefield_triggers, bound_event_seat,
@@ -525,15 +525,58 @@ class DrawsAndDiscardsMixin:
         on top of its library and the cycling ability drew it again.
         """
         cause = self.discard_cause_seat(cause_seat)
+        self.discarded_card_destination(player, card, cause, as_cost=as_cost)
+        # The card **has been discarded** whichever way its destination is
+        # settled (CR 701.9a), and even while its player is still choosing it
+        # (CR 616.1e): announced once, here, never by the destination's re-run.
+        self._announce_discard_triggers(player, card, cause_seat=cause_seat)
+        self.announce_discard(player, card)
+
+    def discarded_card_destination(
+        self, player: PlayerState, card, cause: int | None, *,
+        as_cost: bool = False, leng_declined: bool = False,
+    ) -> None:
+        """Where a discarded card goes: its player's graveyard, unless a CR 614
+        effect sends it elsewhere — Dodecapod onto the battlefield, madness
+        into exile, Library of Leng onto the library (``discard``), Forbidden
+        Crypt into exile, Legacy Weapon into the library (``put_into_graveyard``).
+
+        **One CR 616.1 process over all of them.** They are modifying the same
+        event — a card on its way from a hand to a graveyard — and the
+        discarding player chooses which applies first (616.1e): Library of
+        Leng or madness on a card taken at random, Dodecapod or Forbidden
+        Crypt on a Dodecapod an opponent made them discard. An interactive seat
+        is asked; every other seat takes the ``discard`` kind's effects first,
+        then the graveyard's (``apply_replacements``' *joined*), the order the
+        two sets were asked in before they were one. The card is in no zone
+        while the question is owed (CR 701.9c's own arrangement for Library of
+        Leng's answer), and the answer re-runs this — not the discard, which
+        has happened and been announced.
+
+        *cause* is the seat whose spell or ability caused the discard (already
+        settled, ``discard_cause_seat``). *leng_declined* is a discard whose
+        player has already been offered Library of Leng's library top and
+        declined it (CR 614.5: an effect gets one opportunity at an event): the
+        chosen-discard seam, whose prompt offers the top as one of its answers,
+        and the Library's own answer of "graveyard".
+        """
+        event = {
+            "player": player, "card": card, "cause_seat": cause,
+            "as_cost": as_cost, "leng_declined": leng_declined,
+        }
         consumed, _ = apply_replacements(
-            self, "discard",
-            {"player": player, "card": card, "cause_seat": cause,
-             "as_cost": as_cost},
+            self, "discard", event,
+            joined=(("put_into_graveyard", self.graveyard_event(player, card)),),
+            restart=answered_restart(
+                self, "discard", event,
+                lambda: self.discarded_card_destination(
+                    player, card, cause, as_cost=as_cost,
+                    leng_declined=leng_declined,
+                ),
+            ),
         )
         if not consumed:
             self.put_card_into_graveyard(player, card)
-        self._announce_discard_triggers(player, card, cause_seat=cause_seat)
-        self.announce_discard(player, card)
 
     def announce_discard(self, player: PlayerState, card) -> None:
         """CR 701.9a: a discard happened, for the permanents that watch one.

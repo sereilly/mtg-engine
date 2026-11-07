@@ -29,10 +29,11 @@ from ..destruction_events import (RESOLVING, announce_destroyed,
                                   destruction_finished)
 from ..delayed_triggers import fire_delayed_triggers
 from ..events import emit, trigger_subject_matches
+from ..faces import whole_card
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN
-from ..replacements import apply_replacements
+from ..replacements import answered_restart, apply_replacements
 from ..regeneration import regeneration_replaces_destruction
 from ..trigger_utils import (battlefield_triggers, make_trigger_event,
                              matching_triggers)
@@ -114,26 +115,54 @@ class DeathsMixin:
             self._remove_aura_effects(permanent)
         # CR 614 would-die replacements (Disintegrate's "exile it instead"):
         # a consumed event never reaches the graveyard, so no dies-triggers fire.
+        #
+        # **One CR 616.1 process for the whole move**, not one per spelling.
+        # The death is also the wider event the graveyard is one destination
+        # of — "if the creature **would leave the battlefield**, exile it
+        # instead" (Dreams of the Dead) — and, for a card, a move into a
+        # graveyard — "if a card would be put into your graveyard from
+        # anywhere, exile that card instead" (Forbidden Crypt) — and every one
+        # of those effects is modifying the same event. 616.1f's example is
+        # exactly Forbidden Crypt beside Gravebane Zombie: "its controller
+        # decides which replacement to apply first". Asked one kind after
+        # another, the would-die effect always won; joined, the controller is
+        # asked (an interactive seat) or takes the order the kinds were asked
+        # in (every other seat). A token's card goes to no graveyard (CR
+        # 111.7), so a token is not asked about the graveyard's effects.
+        is_token = bool(permanent.metadata.get("is_token", False))
+        # CR 400.3: the card goes to its owner's graveyard, which differs from
+        # the controller's when the permanent was stolen (Control Magic).
+        owner_idx = self.owner_index_of(permanent)
+        owner = self.players[owner_idx] if owner_idx is not None else player
+        joined = [(
+            "would_leave_battlefield",
+            self.leaving_battlefield_event(permanent, player, "graveyard"),
+        )]
+        if not is_token:
+            joined.append((
+                "put_into_graveyard",
+                self.graveyard_event(
+                    owner, whole_card(permanent.card), from_zone="battlefield",
+                    from_battlefield=permanent,
+                ),
+            ))
+        dying = {"player": player, "permanent": permanent}
+        # The question can wait for its answer because every effect in this
+        # set sends the permanent somewhere other than a graveyard (CR 614.6):
+        # a death that suspends is reported as no death (False), which is what
+        # it will be whatever is answered, and the answer re-runs the whole
+        # move — the permanent is off the battlefield by then, in no zone, the
+        # way a discarded card waits for Library of Leng's answer.
         consumed, _ = apply_replacements(
-            self, "would_die", {"player": player, "permanent": permanent}
+            self, "would_die", dying, joined=tuple(joined),
+            restart=answered_restart(
+                self, "would_die", dying,
+                lambda: self._permanent_to_graveyard(player, permanent),
+            ),
         )
         if consumed:
             return False
-        # …and the wider event the graveyard is one destination of: "if the
-        # creature **would leave the battlefield**, exile it instead" (Dreams of
-        # the Dead). A second contention set at the same moment rather than a
-        # widening of the one above, because the two are different printed
-        # effects — a death is one of four ways a permanent leaves — and no card
-        # in the pool carries both. Asked after it for the same reason it is
-        # asked at all: the narrower reading is the one a card printed about
-        # dying means.
-        if self._leaving_battlefield_replaced(permanent, player, "graveyard"):
-            return False
-        if not permanent.metadata.get("is_token", False):
-            # CR 400.3: the card goes to its owner's graveyard, which differs
-            # from the controller's when the permanent was stolen (Control Magic).
-            owner_idx = self.owner_index_of(permanent)
-            owner = self.players[owner_idx] if owner_idx is not None else player
+        if not is_token:
             # Through the one graveyard seam, so "if a card would be put into
             # your graveyard from anywhere" sees a death like every other move.
             # A diverted card means **nothing died** (CR 700.4: dying is being

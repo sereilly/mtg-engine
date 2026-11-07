@@ -88,8 +88,9 @@ behaviour, and every list is kept sorted by it, so the order those modules
 import in decides nothing.
 """
 
-from .registry import (REPLACEMENTS, ReplacementOutcome, apply_replacements,
-                       order_prompt_asker, replacement_candidates,
+from .registry import (REPLACEMENTS, ReplacementOutcome, answered_restart,
+                       apply_replacements, order_prompt_asker,
+                       replacement_candidates,
                        replacement_effect, take_replaced, was_replaced)
 from . import (  # noqa: F401  (each registers its interceptors)
     damage,
@@ -107,6 +108,7 @@ __all__ = [
     "REPLACEMENTS",
     "REPLACEMENT_LINES",
     "ReplacementOutcome",
+    "answered_restart",
     "apply_replacements",
     "order_prompt_asker",
     "replacement_candidates",

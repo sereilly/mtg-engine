@@ -267,8 +267,13 @@ def _applies_leng_discard(game, payload: dict) -> bool:
     """"If **an effect** causes you to discard a card" — so not a discard paid
     as a cost (Library of Leng, 2004-10-04: "costs aren't effects"), which the
     discard seam marks ``as_cost``. Cycling is the one every cycling card in
-    the pool pays."""
-    if payload.get("as_cost"):
+    the pool pays.
+
+    And not a discard whose player has already been offered the library top
+    and declined it (``leng_declined``): the Library's "you may" was its one
+    opportunity at the event (CR 614.5), and what is re-asked after a decline
+    is every *other* effect still applicable (CR 616.1f)."""
+    if payload.get("as_cost") or payload.get("leng_declined"):
         return False
     return game._player_controls_text(payload["player"], TOP_OF_LIBRARY_DISCARD_TEXT)
 
@@ -299,10 +304,11 @@ def _top_of_library_instead_of_graveyard(game, payload: dict) -> ReplacementOutc
             player_index=game.players.index(player),
             options=("top of library", "graveyard"),
             default_option=0,
-            # What generated it, for the answer's log line.
+            # What generated it, for the answer's log line; and who caused
+            # the discard, which a declined offer's re-ask needs (Dodecapod).
             data={"card": card, "source_names": source_names(
                 _leng_discard_sources(game, payload)
-            )},
+            ), "cause_seat": payload.get("cause_seat")},
         ),
     )
     if suspended:
@@ -328,14 +334,18 @@ def _resolve_leng_discard(game, choice: ReplacementChoice, option_index: int) ->
     else:
         # The Library applied and its "you may" was declined, so the event is
         # still a discard into the graveyard — and CR 616.1f re-asks every
-        # replacement that has not yet applied to it. Madness has not
-        # (CR 614.5 keeps the Library itself from applying again).
-        from ..madness import exile_madness_card
-
-        if exile_madness_card(game, player, card):
-            return 0
-        game.put_card_into_graveyard(player, card)
-        game.log.append(f"{player.name} put discarded {card.name} into their graveyard")
+        # replacement that has not yet applied to it: madness, Dodecapod,
+        # Forbidden Crypt, Legacy Weapon (CR 614.5 keeps the Library itself
+        # from applying again). Through the discard's own destination, so the
+        # re-ask is the same process — asked of an interactive seat when two
+        # still apply — and not a list of the ones somebody remembered here.
+        before = len(player.graveyard)
+        game.discarded_card_destination(
+            player, card, choice.data.get("cause_seat"), leng_declined=True,
+        )
+        # By arrival, not by membership: every copy of a card is one object.
+        if len(player.graveyard) > before and player.graveyard[-1] is card:
+            game.log.append(f"{player.name} put discarded {card.name} into their graveyard")
     return 0
 
 

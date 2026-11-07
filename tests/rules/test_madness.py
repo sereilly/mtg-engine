@@ -223,9 +223,14 @@ def test_702_35a_the_discard_still_happens_for_every_watcher():
 def test_616_1_madness_and_library_of_leng_contend_for_one_discard():
     """Library of Leng and madness both replace where one discarded card goes.
 
-    * A discard nobody is asked about takes the default — madness first, the
-      order the discarding player would choose (the exile is what offers the
-      cheap cast), after which the Library has no graveyard move left.
+    * A forced discard at a seat nobody asks takes the default — madness
+      first, the order the discarding player would choose (the exile is what
+      offers the cheap cast), after which the Library has no graveyard move
+      left.
+    * The same discard at an interactive seat is put to it (CR 616.1e, round
+      kg4 `asks`: it used to take the default there too), and each answer is
+      what happens: madness first exiles it; the Library first offers its
+      "you may".
     * A chosen discard that sends the card to the top of the library has
       applied the Library first, and madness then has nothing to replace.
     * The same discard sent to the graveyard declined the Library's "you may",
@@ -235,11 +240,31 @@ def test_616_1_madness_and_library_of_leng_contend_for_one_discard():
     search = _card("Obsessive Search")
 
     game = _two_seats(
-        {"battlefield": [Permanent(card=leng)], "hand": [search]}, interactive=(0,),
+        {"battlefield": [Permanent(card=leng)], "hand": [search]}, interactive=(),
     )
     _discard_from_hand(game, 0, search)
     assert any(held is search for held in game.players[0].exile)
     assert game.stack and game.stack[-1].card is search
+
+    for first in ("madness", "Library of Leng"):
+        game = _two_seats(
+            {"battlefield": [Permanent(card=leng)], "hand": [search]},
+            interactive=(0,),
+        )
+        _discard_from_hand(game, 0, search)
+        asked = game.pending_choice_of("effect_order", 0)
+        assert asked is not None and asked.data["event_kind"] == "discard"
+        assert not game.players[0].exile and not game.players[0].graveyard
+        option = next(
+            index for index, text in enumerate(asked.data["options"]) if first in text
+        )
+        assert game.resolve_pending_choice("effect_order", 0, option_index=option)
+        if first == "madness":
+            assert any(held is search for held in game.players[0].exile)
+            assert any(item.card is search for item in game.stack)
+        else:
+            assert game.pending_leng_discards
+            assert not game.players[0].exile
 
     for to_library, expected in ((True, "library"), (False, "exile")):
         game = _two_seats(
