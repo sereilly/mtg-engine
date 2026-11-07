@@ -4,7 +4,10 @@ The prompt defaults in ``mixins/stack/choices`` answer for every seat that is
 not asked (``engine/pending_choices.py``'s third part), and sixteen of them
 took the first thing offered — the first card in a hand, the first seat, the
 first printed mode, the first permanent on a board — with nothing weighed
-(kg3's census, ``tests/regressions/test_kg3_choosers_unasked_defaults.py``).
+(kg3's census, ``tests/regressions/test_kg3_choosers_unasked_defaults.py``),
+and four more took it behind a preference (a discard, a permanent picked for
+a resolving effect, several of them, cards picked out of a hand; kg4
+``defaults2``).
 Each reader here is the one a default asks instead, named for its prompt kind,
 and each weighs the offer from the seat choosing:
 
@@ -16,7 +19,13 @@ and each weighs the offer from the seat choosing:
   where the chooser must not read what the card is worth to somebody else's
   hand (a divider's piles);
 * **a permanent** — ``permanent_worth`` / ``permanent_loss``, on the side the
-  effect wants (``ai_target_sides``);
+  effect wants (``ai_target_sides``) — for a pick a resolving effect records,
+  the side of the step that reads the record (:func:`recorded_pick_side`);
+* **cards out of a hand for a later step** — by what that step does with
+  them (:func:`hand_pick_fate`), and a discard by what is least worth
+  holding (:func:`discard_order`);
+* **a copy of the spell offered to its target** (the Chains) — rehearsed,
+  taking it against declining it (:func:`copy_offer_pick`);
 * **a seat** — which one the sentence behind the choice harms or hands
   something, read off the compiled program;
 * **a mode or a vocabulary** — rehearsed (``ai_rehearsal.rehearse``), each
