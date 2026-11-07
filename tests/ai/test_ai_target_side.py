@@ -477,13 +477,21 @@ def test_bullwhip_pings_the_opponents_creature_not_the_biggest_on_either_board(s
 def test_power_matrix_pumps_the_ais_own_creature(set_pool):
     """"{T}: Target creature gets +1/+1 and gains flying, first strike, and
     trample until end of turn." — a pump and a grant. The fallback gave them
-    to the opponent's Craw Wurm."""
+    to the opponent's Craw Wurm. Which creature is the question, so the
+    rehearsed "moves nothing" gate every ability meets since kg4
+    (``ai_abilities._moves_something``: a pump with no fight to spend it in)
+    is off."""
+    from unittest import mock
+
+    from engine import ai_abilities
+
     game = _w3g4_board(
         mine=[set_pool("MMQ")["Power Matrix"], _mk_creature_card("Own Bear", 2, 2)],
         theirs=[set_pool("LEA")["Craw Wurm"]],
     )
 
-    _w3g4_play_activations(game, 0, _w3g4_report(), 1, 1)
+    with mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True):
+        _w3g4_play_activations(game, 0, _w3g4_report(), 1, 1)
 
     bear, wurm = _w3g4_on_board(game, "Own Bear"), _w3g4_on_board(game, "Craw Wurm")
     assert (bear.effective_power, bear.effective_toughness) == (3, 3)

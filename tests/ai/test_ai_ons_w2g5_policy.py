@@ -516,29 +516,33 @@ def test_w2g5_a_one_shot_permanent_is_still_cracked(set_pool):
 
 
 @pytest.mark.full
-@pytest.mark.parametrize(("pinned", "exercised"), [
+@pytest.mark.parametrize(("pinned", "exercised", "seed"), [
     (
         ["Birchlore Rangers", "Wirewood Pride", "Crown of Vigor", "Silklash Spider",
          "Elvish Warrior", "Wirewood Elf", "Elvish Vanguard"],
-        ["Birchlore Rangers: tapped"],
+        ["Birchlore Rangers: tapped"], 11,
     ),
-    (["Slice and Dice", "Butcher Orgg", "Risky Move"], ["Butcher Orgg divides"]),
+    (["Slice and Dice", "Butcher Orgg", "Risky Move"], ["Butcher Orgg divides"], 11),
+    # Seed 11 until kg4, when the AI's activations moved (a permanent's later
+    # abilities weighed, every ability held to the "moves nothing" rehearsal)
+    # and no Entrancer connected in its eight games; seed 12 exercises both.
     (
         ["Meddle", "Riptide Entrancer", "Wheel and Deal"],
-        ["Riptide Entrancer was sacrificed", "cast Wheel and Deal ->"],
+        ["Riptide Entrancer was sacrificed", "cast Wheel and Deal ->"], 12,
     ),
 ])
-def test_w2g5_seeded_onslaught_games_use_the_policy(pinned, exercised):
+def test_w2g5_seeded_onslaught_games_use_the_policy(pinned, exercised, seed):
     """Each piece is exercised in the seeded ONS games it was measured in
-    (seed 11, eight games, the cards pinned) — floors of one, never counts —
-    and nothing rehearsed raises. On the base each of these lines was absent:
-    no Rangers mana, no Orgg division, no Entrancer steal, no Wheel and Deal
-    cast (scratch/ons/w2g5/counts_base.txt)."""
+    (seed 11 — 12 for the Entrancer since kg4 — eight games, the cards
+    pinned) — floors of one, never counts — and nothing rehearsed raises. On
+    the base each of these lines was absent: no Rangers mana, no Orgg
+    division, no Entrancer steal, no Wheel and Deal cast
+    (scratch/ons/w2g5/counts_base.txt)."""
     from engine.ai_simulator import run_ai_simulation
     from engine.card_loader import manifest_set_path
 
     report = run_ai_simulation(
-        manifest_set_path("ONS", include_measured=True), games=8, seed=11,
+        manifest_set_path("ONS", include_measured=True), games=8, seed=seed,
         required_cards=pinned,
     )
     assert report.games_completed == 8

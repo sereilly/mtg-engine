@@ -198,8 +198,8 @@ def _abilities_weighed(game: Game, permanent) -> list:
     has been — and **every later ability that is not a mana ability**, each by
     its index. This read the first alone, so a permanent's second ability was
     never activated by an AI seat in either window: Pemmin's Aura's flying
-    behind its untap, a Kjeldoran Knight's "+0/+2" in front of a burn spell
-    behind its "+1/+0", the Jungle Troll's second regeneration (179
+    behind its untap, Morphling's shroud in front of the burn spell aimed at
+    it behind its untap, Mazemind Tome's draw behind its scry (179
     permanents in the shipped pool print two or more non-mana abilities,
     kg4). A later ability is proposed only where a rehearsal of it says it
     pays (``_land_ability_worth``, asked of every indexed ability), so
