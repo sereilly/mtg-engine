@@ -7,7 +7,7 @@ a real number with a real letter — and CR 701.15 is **Goad**.
 
 Visions' wave 4 audited every CR citation in ``engine/`` and ``web/`` against
 ``MagicCompRules.txt`` and rewrote **185** of them. Almost none was a typo. The
-CR shipped in this repo is the April 17, 2026 edition, which inserted
+CR shipped in this repo then was the April 17, 2026 edition, which inserted
 ``701.4 Behold`` and ``701.11 Triple`` into the alphabetical keyword-action
 block; everything after them shifted, some by one and some by four, and the
 comments were written against the older numbering. So ``701.7`` (then Destroy,
@@ -42,6 +42,7 @@ from __future__ import annotations
 import io
 import re
 import tokenize
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -120,9 +121,25 @@ def _prose_lines(path: Path) -> set[int]:
     return out
 
 
+#: Where 701 citations are read. ``tests/`` and ``scripts/`` joined at kg4: the
+#: Visions audit had covered ``engine/`` and ``web/``, and 44 citations in the
+#: other two still carried the numbering from before Behold and Triple — 701.19
+#: for searching, 701.17 for sacrificing, 701.5a for countering, a test's
+#: docstring read exactly as the engine's is.
+SCANNED = ("engine", "web", "scripts", "tests")
+
+
+@lru_cache(maxsize=1)
 def _sites():
-    """``(relpath, line, citation, rule number, lines)`` per 701 citation."""
-    for base in ("engine", "web"):
+    """``(relpath, line, citation, rule number, lines)`` per 701 citation.
+
+    Read once per process: both tests below walk the same four trees, and
+    tokenizing ``tests/`` is most of the cost."""
+    return tuple(_scan_sites())
+
+
+def _scan_sites():
+    for base in SCANNED:
         for path in sorted((ROOT / base).rglob("*.py")):
             if "__pycache__" in path.parts:
                 continue
