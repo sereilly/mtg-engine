@@ -84,7 +84,40 @@ def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
         if tapped_for:
             kept = tuple(symbol for symbol in own if symbol in tapped_for)
             return kept + tuple(symbol for symbol in tapped_for if symbol not in kept)
-    return own
+        return own
+    # A non-land whose mana the board or a record decides (Fellwar Stone, Star
+    # Compass: the colours the lands it reads could produce; Sol Grail: the
+    # colour it chose) is shown as what it makes here, as such a land is: its
+    # summary is all five, and the badges read five beside a colour question
+    # offering two, or none.
+    narrowed = _decided_mana_summary(game, perm)
+    return narrowed if narrowed is not None else own
+
+
+def _decided_mana_summary(game: Game, perm: Permanent) -> tuple[str, ...] | None:
+    """The union of what *perm*'s mana abilities add (:func:`_ability_mana`,
+    :func:`_decided_ability_mana`) where at least one is decided by the board
+    or a record and every one is known now — else None, and the summary
+    stands. Not known now: what a cost decides (Benthic Explorers' land,
+    Charmed Pendant's milled card) and a shape neither reader states."""
+    found: set[str] = set()
+    decided = False
+    for ability in game.usable_abilities_of(perm, card=perm.effective_card):
+        instruction = getattr(ability, "instruction", None)
+        steps = _every_step(instruction)
+        adders = [step for step in steps if step.kind == "add_mana_from_text"]
+        if not adders:
+            continue
+        if any((step.payload or {}).get("colored_symbols_of_record") for step in adders):
+            return None
+        entry = _ability_mana(instruction)
+        if entry is None:
+            entry = _decided_ability_mana(game, perm, instruction)
+            decided = True
+        if entry is None or "symbols_by_cost" in entry:
+            return None
+        found |= set(entry["symbols"])
+    return tuple(_ordered(found)) if decided else None
 
 
 #: Payload keys of an add-mana step that change *how much* it makes or what the

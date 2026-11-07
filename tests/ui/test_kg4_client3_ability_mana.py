@@ -190,16 +190,21 @@ _OPPONENT_READERS = ("Fellwar Stone", "Quirion Explorer")
 @pytest.mark.parametrize("name", _OPPONENT_READERS)
 def test_an_opponent_s_lands_are_the_question_on_two_boards(name):
     sid, game, placed = _session([name], ["Mountain", "Swamp"])
-    (entry,) = _payload(sid, placed[name])["ability_mana"]
+    payload = _payload(sid, placed[name])
+    (entry,) = payload["ability_mana"]
     assert entry == {"symbols": ["B", "R"], "choice": True}
+    # …and the summary a player reads off its badges says the same.
+    assert payload["produced_mana"] == ["B", "R"]
     response = _activate(sid, placed[name], mana_color="R")
     assert response.status_code == 200, response.text
     assert game.players[0].mana_pool["R"] == 1
 
     # The other board: an opponent with no land offers nothing (CR 106.7).
     sid, game, placed = _session([name, "Forest"], [])
-    (entry,) = _payload(sid, placed[name])["ability_mana"]
+    payload = _payload(sid, placed[name])
+    (entry,) = payload["ability_mana"]
     assert entry == {"symbols": [], "choice": False}
+    assert payload["produced_mana"] == []
     response = _activate(sid, placed[name])
     assert response.status_code == 200, response.text
     assert sum(game.players[0].mana_pool.values()) == 0
@@ -228,6 +233,8 @@ def test_a_chosen_colour_and_a_noted_type_are_not_asked():
     grail = placed["Sol Grail"]
     chosen = grail.metadata["chosen_color"]
     assert _payload(sid, grail)["ability_mana"] == [{"symbols": [chosen], "choice": False}]
+    # Its badges say the colour it chose, not the five it could have.
+    assert _payload(sid, grail)["produced_mana"] == [chosen]
     elves = _payload(sid, placed["Quirion Elves"])["ability_mana"]
     assert elves == [
         {"symbols": ["G"], "choice": False},
@@ -237,10 +244,11 @@ def test_a_chosen_colour_and_a_noted_type_are_not_asked():
     assert _payload(sid, placed["Jeweled Amulet"])["ability_mana"] == [
         None, {"symbols": [], "choice": False},
     ]
-    # The milled card decides, after the cost: nothing to ask.
-    assert _payload(sid, placed["Charmed Pendant"])["ability_mana"] == [
-        {"symbols": [], "choice": False},
-    ]
+    # The milled card decides, after the cost: nothing to ask — and its
+    # summary, every colour it could make, stands.
+    pendant = _payload(sid, placed["Charmed Pendant"])
+    assert pendant["ability_mana"] == [{"symbols": [], "choice": False}]
+    assert len(pendant["produced_mana"]) == 5
 
     response = _activate(sid, grail)
     assert response.status_code == 200, response.text

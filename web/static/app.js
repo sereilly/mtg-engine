@@ -15413,6 +15413,11 @@ function renderActivationPrompt() {
         title.textContent = `Choose the new ${noun} for ${pendingManaColor.cardName}`;
         body.textContent = `Select the ${noun} to replace it with.`;
       }
+    } else if ((pendingManaColor.colorOptions || []).some((option) => option.symbol === "C")) {
+      // "Any type" (Squandered Resources' painland): {C} is a type, not a
+      // colour (CR 105.1, 106.1b), so the question is the mana's type.
+      title.textContent = `Choose the mana for ${pendingManaColor.cardName}`;
+      body.textContent = "Select the type of mana this ability should generate.";
     } else {
       title.textContent = `Choose mana color for ${pendingManaColor.cardName}`;
       body.textContent = "Select the mana color this ability should generate.";
