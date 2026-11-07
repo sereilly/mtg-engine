@@ -39,7 +39,9 @@ from ..enter_effects import ENTERED_BATTLEFIELD_TURN
 from ..events import emit
 from ..linked_exile import UNTAPPED
 from ..models import Permanent
-from ..phasing_locks import phase_out_forbidden
+from ..phasing_locks import (PHASED_OUT_UNTIL_SOURCE_LEAVES,
+                             phase_in_source_id, phase_out_forbidden,
+                             taps_as_it_phases_in, waits_for_its_source)
 from ..source_tapped_effects import (break_pending_durations,
                                      end_effects_while_tapped)
 from ..unspent_mana import seats_keeping_unspent_mana
@@ -351,12 +353,23 @@ class GameHelpersMixin:
         # again for every *other* way a permanent phases out. Until Spatial
         # Binding this read had **no writer anywhere in the engine**, so a
         # restriction arriving would have been half enforced.
-        arriving = list(player.phased_out)
+        # A permanent phased out "until this enchantment leaves the
+        # battlefield" (Oubliette) is not part of this event: "it won't phase
+        # in during its controller's untap step as normal. Rather, it phases
+        # in immediately after Oubliette leaves the battlefield" (2020-08-07;
+        # :meth:`phase_in_what_waited_for`).
+        arriving = [
+            perm for perm in player.phased_out
+            if not waits_for_its_source(self, perm)
+        ]
         self.phase_in_for(seat, permanents=arriving)
         for perm in leaving:
             self.phase_out_permanent(perm)
 
-    def phase_in_for(self, seat: int, *, permanents: list[Permanent] | None = None) -> None:
+    def phase_in_for(
+        self, seat: int, *, permanents: list[Permanent] | None = None,
+        tapped: tuple = (),
+    ) -> list[Permanent]:
         """CR 702.26c: phased-out permanents *seat* controls phase in — the same
         object, no new permanent_id, no enters-the-battlefield anything. A
         ``phase_in_blocked`` marker (Teferi, Timeless Voyager's rider) holds a
@@ -368,13 +381,22 @@ class GameHelpersMixin:
         list are equal by value and a membership test would phase in the wrong
         one — the same reason the control seam bans ``.remove()`` on a
         battlefield.
+
+        *tapped* are those that phase in tapped ("Tap that creature as it
+        phases in this way", Oubliette) — set as they arrive, not tapped once
+        there: "abilities that trigger when a creature becomes tapped won't
+        trigger when the creature phases in tapped" (2020-08-07). Whatever
+        phases in, by any road, is no longer waiting for a source
+        (``phasing_locks.PHASED_OUT_UNTIL_SOURCE_LEAVES``). Returns those that
+        phased in.
         """
         player = self.players[seat]
         if not player.phased_out:
-            return
+            return []
         chosen = (
             None if permanents is None else {id(perm) for perm in permanents}
         )
+        tapping = {id(perm) for perm in tapped}
         staying: list[Permanent] = []
         returning: list[Permanent] = []
         for perm in player.phased_out:
@@ -386,12 +408,53 @@ class GameHelpersMixin:
                 continue
             perm.metadata.pop("phased_out", None)
             perm.metadata.pop("phase_in_blocked", None)
+            perm.metadata.pop(PHASED_OUT_UNTIL_SOURCE_LEAVES, None)
+            if id(perm) in tapping:
+                perm.tapped = True
             player.battlefield.append(perm)
             returning.append(perm)
-            self.log.append(f"{perm.card.name} phased in")
+            self.log.append(
+                f"{perm.card.name} phased in"
+                + (", tapped" if id(perm) in tapping else "")
+            )
         player.phased_out = staying
         self._recompute_continuous_effects()
         self._announce_phasing("phases_in", returning)
+        return returning
+
+    def phase_in_what_waited_for(self, departed: list[Permanent]) -> None:
+        """CR 610.3's second one-shot effect, made "immediately after the
+        specified event", for a phase-out: every permanent phased out "until
+        this enchantment leaves the battlefield" (Oubliette) whose source is in
+        *departed* phases in — "immediately after Oubliette leaves the
+        battlefield" (2020-08-07), on whatever road it left by — the creature
+        tapped, what phased out with it attached (CR 702.26g). Simultaneous
+        leavings make simultaneous returns (CR 610.3d): one call for the lot,
+        from the one transition out (``remove_all_from_battlefield``).
+        """
+        gone = {
+            perm.permanent_id: perm for perm in departed
+            if perm.permanent_id is not None
+        }
+        if not gone or not any(player.phased_out for player in self.players):
+            return
+        for seat, player in enumerate(self.players):
+            waiting = [
+                perm for perm in player.phased_out
+                if phase_in_source_id(perm) in gone
+            ]
+            if not waiting:
+                continue
+            tapped = tuple(perm for perm in waiting if taps_as_it_phases_in(perm))
+            sources = {
+                gone[phase_in_source_id(perm)].card.name for perm in waiting
+            }
+            arrived = self.phase_in_for(seat, permanents=waiting, tapped=tapped)
+            if arrived:
+                self.log.append(
+                    f"{', '.join(perm.card.name for perm in arrived)} phased back in "
+                    f"({', '.join(sorted(sources))} left the battlefield)"
+                )
 
     #: The joined kind a phasing announcement makes **beside** its own. "When
     #: this creature **phases out or leaves the battlefield**, mill three cards"

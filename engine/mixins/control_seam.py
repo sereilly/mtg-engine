@@ -1320,6 +1320,13 @@ class ControlSeamMixin:
         with self.entering_together():
             for perm in removed:
                 self.return_linked_exile(perm, "left the battlefield", LEAVES)
+        # "…phases out **until this enchantment leaves the battlefield**"
+        # (Oubliette): the phase-in twin of the exile return above, here for
+        # its reason — this is the one transition out, so the creature comes
+        # back whether its source was destroyed, bounced or exiled. A name-
+        # keyed hook on the graveyard path did this alone, so a bounced
+        # Oubliette kept its creature for ever.
+        self.phase_in_what_waited_for(removed)
         # "Target land becomes a Forest **until this creature leaves the
         # battlefield**." (Gaea's Liege, Graceful Antelope.) The window's
         # sweep, here for the reason the exile return above is: this is the

@@ -128,14 +128,6 @@ _REVIEWED = {
      "sacrifice_permanent"): (
         "a scan for the one land to sacrifice; it returns after one."
     ),
-    ("handlers/phasing.py", "phase_out_target_creature_until_source_leaves",
-     "remove_all_from_battlefield"): (
-        "Oubliette's \"target creature phases out\": what is attached phases "
-        "out with it (CR 702.26h), a phasing and not a departure (CR 702.26d) "
-        "— though this handler performs it as a removal, which its name-keyed "
-        "hook undoes by putting the same objects back "
-        "(``card_hooks._oubliette_leaves``), a shortcut of its own."
-    ),
 }
 
 

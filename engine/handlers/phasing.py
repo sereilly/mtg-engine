@@ -6,7 +6,8 @@ pair or every permanent a phrase names, for as long as its source stays; the
 simultaneous swap Time and Tide prints; and the "can't phase out" prohibition.
 A phased-out permanent has not changed zones (CR 702.26d): the machinery is
 ``Game.phase_out_permanent``, and the object phases back in at its controller's
-next untap step.
+next untap step — or, phased out until its source leaves (Oubliette), as the
+source leaves (``Game.phase_in_what_waited_for``).
 
 Split out of ``zones.py`` at the 2,000-line cap's split round. Nothing here
 moves a card between zones.
@@ -17,7 +18,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..linked_exile import until_leaves_has_ended
-from ..models import Permanent
+from ..phasing_locks import bind_phase_in_to_source
 from ._targets import resolve_target_permanent
 from .registry import effect_handler
 
@@ -46,28 +47,28 @@ def phase_out_target_creature_until_source_leaves(game: Game, instruction: Oracl
     if target_perm is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    owner_index = game.controller_index_of(target_perm)
-    if owner_index is None:
+    # **A phasing, through the one phase-out transition** (CR 702.26d: not a
+    # zone change). It was a removal — ``remove_from_battlefield`` with the
+    # attachments torn off beside it — undone by a name-keyed hook putting the
+    # same objects back: so Dual Nature's "whenever a nontoken creature leaves
+    # the battlefield" fired as the creature phased out, and Control Magic on
+    # it was torn down, its creature phasing back in under its owner (both
+    # contrary to Oubliette's 2020-08-07 rulings: "Phasing out doesn't cause
+    # any 'leaves the battlefield' abilities to trigger", "Each Aura and
+    # Equipment attached to a permanent that's phasing out also phases out.
+    # They will phase in with that permanent and still be attached to it").
+    # ``phase_out_permanent`` takes what is attached along (CR 702.26g) and
+    # asks the "can't phase out" lock; what differs from every other phase-out
+    # is only *when it phases in*, which is the record below.
+    riding = [
+        perm for perm in (target_perm.metadata.get("attached_auras") or [])
+        if game.is_on_battlefield(perm)
+    ]
+    if not game.phase_out_permanent(target_perm):
         return True, "resolved"
-    # By identity throughout: ``list.remove`` compares by value, and Permanent is
-    # a dataclass with generated __eq__, so it takes the first *equal* permanent
-    # — an opponent's identically-stated copy of the same card — rather than the
-    # one that was chosen.
-    owner_player = game.players[owner_index]
-    game.remove_from_battlefield(target_perm)
-    # Auras/Equipment attached to the phased creature phase out with it (CR 702.26h).
-    attachments: list[tuple[int, Permanent]] = []
-    for seat, player in enumerate(game.players):
-        leaving = [
-            perm for perm in game.controlled_by(seat)
-            if perm.metadata.get("attached_to") is target_perm
-        ]
-        if leaving:
-            game.remove_all_from_battlefield(leaving)
-            attachments.extend((seat, perm) for perm in leaving)
-    source_permanent.metadata["phased_out_permanent"] = target_perm
-    source_permanent.metadata["phased_out_owner_index"] = owner_index
-    source_permanent.metadata["phased_out_attachments"] = attachments
+    bind_phase_in_to_source(target_perm, source_permanent, tapped=True)
+    for perm in riding:
+        bind_phase_in_to_source(perm, source_permanent, tapped=False)
     game.log.append(f"{card.name} phases {target_perm.card.name} out")
     return True, "resolved"
 

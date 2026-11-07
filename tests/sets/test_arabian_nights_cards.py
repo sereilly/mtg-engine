@@ -1352,7 +1352,7 @@ def test_old_man_of_the_sea_reverts_when_it_leaves(arn_by_name):
 
 
 # ===========================================================================
-# Oubliette — scoped phasing (exile-and-return linked to the source)
+# Oubliette — phased out (CR 702.26) until its source leaves
 # ===========================================================================
 
 def test_oubliette_phases_out_target_creature(arn_by_name):
@@ -1367,8 +1367,7 @@ def test_oubliette_phases_out_target_creature(arn_by_name):
 
     assert result.supported
     assert camel_perm not in p2.battlefield
-    oubliette_perm = p1.battlefield[0]
-    assert oubliette_perm.metadata.get("phased_out_permanent") is camel_perm
+    assert any(perm is camel_perm for perm in p2.phased_out)
 
 
 def test_oubliette_returns_creature_tapped_when_it_leaves(arn_by_name):
@@ -1382,7 +1381,7 @@ def test_oubliette_returns_creature_tapped_when_it_leaves(arn_by_name):
     game.cast_from_hand(0, "Oubliette", target_player_index=1, target_permanent_index=0)
     oubliette_perm = p1.battlefield[0]
 
-    p1.battlefield.remove(oubliette_perm)
+    game.remove_from_battlefield(oubliette_perm)
     game._permanent_to_graveyard(p1, oubliette_perm)
 
     assert camel_perm in p2.battlefield

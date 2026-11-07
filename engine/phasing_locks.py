@@ -22,6 +22,11 @@ permanent that leaves and comes back is a new one and is not the one the spell
 named. A phase-out is *not* a zone change (CR 702.26b), so a permanent already
 phased out keeps its lock and its id — which is what a card printing "can't
 phase in" would need, and is not what Spatial Binding asks for.
+
+**And the phase-in that waits for its source** ("phases out until this
+enchantment leaves the battlefield", Oubliette): the same kind of record on the
+same object, ended by an event rather than a step — see
+:data:`PHASED_OUT_UNTIL_SOURCE_LEAVES`.
 """
 
 from __future__ import annotations
@@ -82,6 +87,57 @@ def phase_out_forbidden(permanent) -> bool:
     if isinstance(locks, list):
         return bool(locks)
     return bool(locks)
+
+
+#: "Target creature phases out **until this enchantment leaves the
+#: battlefield**. Tap that creature as it phases in this way." (Oubliette.)
+#: The phase-in's own record, the other half of this module's subject: a
+#: permanent phased out this way "doesn't phase in during its controller's
+#: untap step as normal. Rather, it phases in immediately after Oubliette
+#: leaves the battlefield" (Oubliette, 2020-08-07). On the phased-out
+#: permanent — and on each Aura and Equipment that phased out with it
+#: indirectly (CR 702.26g), which phases in with it — as
+#: ``{"source_id": …, "tapped": …}``: the source by id (CR 400.7: a source
+#: that leaves and comes back is a new object, and this one has left), and
+#: whether the permanent is tapped as it phases in (the creature, not what
+#: rides on it). Read by the untap step's phasing event, which leaves it out,
+#: and by the one transition off the battlefield, which phases it in when its
+#: source leaves (``Game.phase_in_what_waited_for``).
+PHASED_OUT_UNTIL_SOURCE_LEAVES = "phased_out_until_source_leaves"
+
+
+def bind_phase_in_to_source(
+    permanent: "Permanent", source: "Permanent", *, tapped: bool
+) -> None:
+    """Record that *permanent*, phased out, phases in when *source* leaves the
+    battlefield (and not at its controller's untap step)."""
+    permanent.metadata[PHASED_OUT_UNTIL_SOURCE_LEAVES] = {
+        "source_id": source.permanent_id,
+        "tapped": bool(tapped),
+    }
+
+
+def phase_in_source_id(permanent) -> int | None:
+    """The id of the source *permanent*'s phase-in waits for, or None."""
+    entry = getattr(permanent, "metadata", {}).get(PHASED_OUT_UNTIL_SOURCE_LEAVES)
+    return entry.get("source_id") if isinstance(entry, dict) else None
+
+
+def waits_for_its_source(game, permanent) -> bool:
+    """Whether *permanent* is held out until a source that **has not left**
+    leaves — on the battlefield, or phased out itself, which is not leaving
+    (CR 702.26d; ``linked_exile.until_leaves_source``). A source already gone
+    holds nothing: the phase-in happened as it left, or, if no road told the
+    transition, the permanent phases in as any other does."""
+    from .linked_exile import until_leaves_source
+
+    source_id = phase_in_source_id(permanent)
+    return source_id is not None and until_leaves_source(game, source_id) is not None
+
+
+def taps_as_it_phases_in(permanent) -> bool:
+    entry = getattr(permanent, "metadata", {}).get(PHASED_OUT_UNTIL_SOURCE_LEAVES)
+    return isinstance(entry, dict) and bool(entry.get("tapped"))
 
 
 def expire_phase_out_locks(

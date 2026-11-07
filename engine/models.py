@@ -492,9 +492,9 @@ class Permanent:
     # Stamped at construction and **re-stamped as the permanent enters the
     # battlefield** (``Game._put_permanent_onto_battlefield``): CR 400.7 makes a
     # returning permanent a new object, and re-stamping is what makes that true
-    # for the one path that puts the *same* Permanent object back (Oubliette's
-    # scoped phase-out). Last field on purpose — tests construct ``Permanent``
-    # positionally.
+    # for a caller that puts the *same* Permanent object back. (A phase-in is
+    # not an entry, CR 702.26d, and keeps the id.) Last field on purpose —
+    # tests construct ``Permanent`` positionally.
     #
     # ``compare=False``: :class:`Permanent` equality is value equality, and
     # several call sites still depend on that (the AI simulator compares
