@@ -74,10 +74,17 @@ def _the_object_itself(game, payload: dict) -> list:
 )
 def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
     """Disintegrate-style: "if it would die this turn, exile it instead." The
-    permanent never reaches the graveyard, so no dies-triggers fire (CR 614)."""
+    permanent never reaches the graveyard, so no dies-triggers fire (CR 614).
+    The card goes to its **owner's** exile pile, as Dreams of the Dead's
+    does: ``payload["player"]`` is the controller, which is not the owner
+    the moment the creature was stolen (CR 108.3; kg4)."""
     permanent = payload["permanent"]
     if not permanent.metadata.get("is_token", False):
-        game.put_card_into_exile(payload["player"], permanent.card)
+        owner_index = game.owner_index_of(permanent)
+        owner = game.players[
+            owner_index if owner_index is not None else game.players.index(payload["player"])
+        ]
+        game.put_card_into_exile(owner, permanent.card)
     game.log.append(f"{permanent.card.name} was exiled instead of dying")
     return ReplacementOutcome(replaced=True)
 
