@@ -1117,10 +1117,12 @@ def _w1g3_zone(cards):
 
 def test_w1g3_noxious_vapors_keeps_one_card_of_each_colour_and_every_land(set_pool):
     """The whole sentence, with nobody asked (the stated default: a maximum
-    keep, in hand order). A keeps one red card of three and the one blue card,
-    and the Forest, which is no colour and is not a nonland card; the second
-    Lightning Bolt, the Shivan Dragon and the colourless Sol Ring go. B keeps
-    the green Bears and the Swamp and loses the Black Lotus."""
+    keep, each colour's dearest card to hold first — ``ai_prompt_picks.
+    hand_pick_order``, kg4 ``defaults2``; it was hand order). A keeps one red
+    card of three (the Shivan Dragon) and the one blue card, and the Forest,
+    which is no colour and is not a nonland card; both Lightning Bolts and the
+    colourless Sol Ring go. B keeps the green Bears and the Swamp and loses
+    the Black Lotus."""
     game, _card = _w1g3_vapors_table(
         set_pool,
         ["Lightning Bolt", "Lightning Bolt", "Counterspell", "Forest", "Sol Ring",
@@ -1133,9 +1135,9 @@ def test_w1g3_noxious_vapors_keeps_one_card_of_each_colour_and_every_land(set_po
     _w1g3_resolve_stack(game)
 
     assert result.supported, result.details
-    assert _w1g3_zone(mine.hand) == ["Counterspell", "Forest", "Lightning Bolt"]
+    assert _w1g3_zone(mine.hand) == ["Counterspell", "Forest", "Shivan Dragon"]
     assert _w1g3_zone(mine.graveyard) == [
-        "Lightning Bolt", "Noxious Vapors", "Shivan Dragon", "Sol Ring",
+        "Lightning Bolt", "Lightning Bolt", "Noxious Vapors", "Sol Ring",
     ]
     assert _w1g3_zone(theirs.hand) == ["Grizzly Bears", "Swamp"]
     assert _w1g3_zone(theirs.graveyard) == ["Black Lotus"]

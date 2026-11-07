@@ -192,8 +192,8 @@ def _answer_seat(game: Game, answer: dict) -> "int | None":
 
 def _copy_target_by_side(game: Game, choice, kept: dict, answers: list) -> dict:
     """Where a seat nobody asks aims a copy **inside a rehearsal**, where no
-    answer can be measured: *kept*, unless *kept* is on the wrong side of the
-    table for what the copy does (``ai_target_sides.spell_target_side``, else
+    answer can be measured: *kept*, unless *kept* is gone or on the wrong
+    side of the table for what the copy does (``ai_target_sides.spell_target_side``, else
     ``spell_seat_side`` where a player may be named) — then the first answer on the right side: the
     opponent the seat attacks (``ai_scoring.choose_attack_target``) where a
     player is offered, else the dearest permanent there
@@ -215,9 +215,14 @@ def _copy_target_by_side(game: Game, choice, kept: dict, answers: list) -> dict:
         # to the player it names says whose side it is for.
         wanted = spell_seat_side(card)
     kept_seat = _answer_seat(game, kept)
-    if wanted is None or kept_seat is None:
+    if wanted is None:
         return kept
-    if (kept_seat == seat) == (wanted == "you"):
+    # A kept target that has gone (the permanent its original destroyed:
+    # "Destroy target noncreature permanent. Then that permanent's controller
+    # may copy this spell", Chain of Acid) is no side at all — the copy kept
+    # there is countered (CR 608.2b) — so any answer on the right side beats
+    # it.
+    if kept_seat is not None and (kept_seat == seat) == (wanted == "you"):
         return kept
     hostile = wanted == "opponent"
     right = [
@@ -983,20 +988,62 @@ def _accept_copies_this_spell(steps) -> bool:
     return False
 
 
+def offer_buys_a_copy_offer(entry: dict) -> bool:
+    """Whether *entry*'s accept branch copies the spell only through an offer
+    of its own behind it — "…may pay {R}{R}. If the player does, they may
+    copy this spell" (Chain Lightning), "…may sacrifice a land of their
+    choice. If the player does, they may copy this spell" (Chain of Vapor):
+    what the price buys is the copy offer that follows."""
+    steps = tuple(entry.get("_on_accept") or ())
+    return _accept_copies_this_spell(steps) and not any(
+        getattr(step, "kind", None) == "copy_this_spell" for step in steps
+    )
+
+
+def copy_offer_answer(game: Game, choice) -> "tuple[bool, str] | None":
+    """What a seat nobody asks answers an offer that copies the resolving
+    spell (the Chains): ``(True, "")`` to take it, ``(False, why)`` to
+    decline it, or None where it is no copy offer, or one nothing here
+    declines, and the standing policy answers.
+
+    Weighed where it can be (``ai_prompt_picks.copy_offer_pick``: taking it,
+    price and copy, rehearsed against declining it, the copy aimed by its own
+    default and the other seat's reply to it weighed too). Where nothing can
+    weigh it — an interactive seat answered for, a scratch table past the
+    first reply — the stated reading (:func:`copy_offer_turns_on_its_taker`)
+    declines a copy whose kept target is the taker's."""
+    entry = choice.data
+    if not _accept_copies_this_spell(entry.get("_on_accept")):
+        return None
+    if choice.player_index not in game.interactive_seats:
+        from .ai_prompt_picks import copy_offer_pick
+
+        taken = copy_offer_pick(game, choice)
+        if taken is not None:
+            return (True, "") if taken else (
+                False, "the copy is not worth what taking it costs",
+            )
+    if copy_offer_turns_on_its_taker(game, choice.player_index, entry):
+        return False, "the copy would be aimed at them"
+    return None
+
+
 def copy_offer_turns_on_its_taker(game: Game, player_index: int, entry: dict) -> bool:
     """Whether a seat nobody asks would, by taking "…**they may copy this
-    spell** and may choose a new target for that copy", aim the copy at itself.
+    spell** and may choose a new target for that copy", aim the copy at itself
+    — read off the copy's **kept** target: the stated reading
+    :func:`copy_offer_answer` falls back to where the offer cannot be weighed.
 
     The Onslaught Chains (Chain of Smog: "Target player discards two cards.
     That player may copy this spell …"). The copy offer is free, so the
-    standing policy takes it as a gift — and the copy-target default is to keep
-    the original's target (``_default_copy_spell_target``), which for the
-    player the spell was aimed at is **that same player**: the AI discarded its
-    own hand two cards at a time and was offered the copy again by every copy,
-    without end. A copy whose kept target is the taker's own seat or a
-    permanent it controls is declined; every other copy offer keeps the
-    standing policy. Re-aiming the copy cleverly is a valuation this does not
-    make (the default's own docstring says where one belongs).
+    standing policy takes it as a gift — and a copy that keeps the original's
+    target is aimed, for the player the spell was aimed at, at **that same
+    player**: the AI discarded its own hand two cards at a time and was
+    offered the copy again by every copy, without end. A copy whose kept
+    target is the taker's own seat or a permanent it controls is declined;
+    every other copy offer keeps the standing policy. Where the offer can be
+    weighed, the copy's measured target decides instead
+    (``ai_prompt_picks.copy_offer_pick``).
     """
     if not _accept_copies_this_spell(entry.get("_on_accept")):
         return False
@@ -1147,12 +1194,14 @@ def optional_pay_may_tap_lands(game: Game, player_index: int, entry: dict) -> bo
       the seat's own turn they are what it casts with, so a gift is taken only
       when no spell in hand could be cast with them now — the same question
       ``ai_policy.choose_cast_action`` answers, asked of the same candidates.
-    * **And only a gift the seat's own object offers.** An offer another
-      seat's spell makes this one ("that player may pay {R}{R}. If the player
-      does, they may copy this spell", Chain Lightning) is priced by a card
-      somebody else chose to cast, and what accepting does is left to defaults
-      this policy cannot value — the copy keeps its original target, which is
-      the payer's own creature. Those keep the floating-mana rule.
+    * **And only a gift the seat's own object offers** — or a copy of another
+      seat's spell. An offer another seat's spell makes this one is priced by
+      a card somebody else chose to cast, and what accepting does is left to
+      defaults this policy cannot value; those keep the floating-mana rule.
+      A copy of the spell ("that player may pay {R}{R}. If the player does,
+      they may copy this spell", Chain Lightning) is the exception: what it
+      buys is weighed (``ai_prompt_picks.copy_offer_pick``), so its price is
+      a gift's.
     * **A toll whose whole penalty is a little life is the one toll priced
       against the lands** (:func:`_life_only_toll`). "Whenever a player draws a
       card, that player loses 2 life unless they pay {2}" (Phyrexian Tyranny)
@@ -1185,7 +1234,9 @@ def optional_pay_may_tap_lands(game: Game, player_index: int, entry: dict) -> bo
             return True
         return not _hand_could_use_mana(game, player_index)
     context = entry.get("_context")
-    if getattr(context, "caster", None) is not game.players[player_index]:
+    if getattr(context, "caster", None) is not game.players[player_index] and not (
+        _accept_copies_this_spell(entry.get("_on_accept"))
+    ):
         return False
     if game.active_player_index != player_index:
         return True

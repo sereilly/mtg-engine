@@ -46,7 +46,9 @@ import engine.mixins.stack.choices.table  # noqa: F401  (registers every kind)
 #:   the whole offer, a number, a value stamped when the prompt was armed;
 #: * ``preference`` — the first option in board / hand order, behind a
 #:   preference the program reads (a shared colour, a card the sentence tests,
-#:   a pick taken away);
+#:   a pick taken away). kg4 ``defaults2`` weighed the last four (discard,
+#:   permanent_choice, permanent_set_choice, choose_cards_in_hand), and none
+#:   is left (``test_no_prompt_kind_s_default_picks_by_position``);
 #: * ``position`` — the first option(s) in board, hand, seat or printed order
 #:   with nothing weighed. Each is a default still owed a reading by worth;
 #:   kg4 ``defaults`` gave the sixteen it found one each, and none is left
@@ -59,14 +61,14 @@ _DEFAULTS: dict[str, str] = {
     "card_type_choice": "stated",         # stamped at arm
     "cast_choice": "worth",               # Backdraft: the most damage at an opponent
     "choose_card_name": "stated",         # stamped at arm
-    "choose_cards_in_hand": "preference", # hand order behind an entry consumer
+    "choose_cards_in_hand": "worth",      # by what the step behind does with them (``ai_prompt_picks``)
     "color_choice": "stated",             # stamped at arm
     "color_set_choice": "stated",         # stamped at arm
     "commander_zone_change": "stated",    # a CR 614 replacement's default
     "copy_spell_target": "worth",
     "counter_distribution": "worth",      # all onto its own greatest-power creature
     "creature_type_choice": "stated",     # stamped at arm
-    "discard": "preference",              # hand order behind the tested card
+    "discard": "worth",                   # madness, then held worth, behind the tested card
     "discard_unless_pay_life": "stated",  # pay while it is not the whole life
     "draw_becomes_counter": "stated",
     "draw_up_to": "stated",               # the whole offer
@@ -118,8 +120,8 @@ _DEFAULTS: dict[str, str] = {
     "outside_game_pick": "worth",
     "pay_any_amount": "worth",
     "pay_life_to_save": "stated",
-    "permanent_choice": "preference",     # board order behind program reads, worth on a taken pick
-    "permanent_set_choice": "preference",
+    "permanent_choice": "worth",          # the reading step's side, then ``permanent_worth``
+    "permanent_set_choice": "worth",      # the same, own-only up to the ceiling
     "pile_choice": "worth",               # ``piles.default_pile_choice``
     "pile_exile_choice": "worth",         # the smaller pile
     "pile_search": "worth",               # the card most worth holding
@@ -168,8 +170,11 @@ def test_no_prompt_kind_s_default_picks_by_position():
     (``engine/ai_prompt_picks.py``; ``test_kg4_defaults_unasked_picks.py``
     drives each one's board). A new kind whose default takes the first thing
     offered with nothing weighed is classified ``position`` above and fails
-    here, rather than joining a list nobody reads."""
+    here, rather than joining a list nobody reads — and so does one that
+    takes the first behind a preference (kg4 ``defaults2`` weighed the last
+    four: ``test_kg4_defaults2_unasked_picks.py``)."""
     assert [kind for kind, how in _DEFAULTS.items() if how == "position"] == []
+    assert [kind for kind, how in _DEFAULTS.items() if how == "preference"] == []
 
 
 # -- Strongarm Tactics --------------------------------------------------------

@@ -1559,10 +1559,12 @@ def test_declining_the_payment_taps_nothing_and_makes_no_copy(
 def test_a_non_interactive_payer_answers_every_prompt_itself(
     set_pool, catalog_by_name
 ):
-    """A prompt an AI never answers is a hang, not a failing assertion. The
-    stated default for the payment is to spend mana already floating and never
-    tap a land for an optional cost, so a seat with two untapped Mountains and
-    an empty pool declines — and the drain leaves nothing behind.
+    """A prompt an AI never answers is a hang, not a failing assertion: the
+    drain leaves nothing behind. The payment is a copy of the spell, whose
+    worth is weighed (kg4 ``defaults2``), so its price is a gift's: on P1's
+    turn P2's two Mountains are idle, they pay {R}{R}, and the copy goes at
+    P1, who has no land to send it back with. It was declined while the
+    offer was priced by the floating-mana rule alone.
     """
     game, players = _r36_chain(set_pool, catalog_by_name)
 
@@ -1570,26 +1572,29 @@ def test_a_non_interactive_payer_answers_every_prompt_itself(
         0, "Chain Lightning", target_player_index=1, target_permanent_index=0
     )
     game.auto_resolve_pending_choices()
+    game.resolve_stack()
 
     assert result.supported, result.details
     assert game.pending_choices == []
     assert game.stack == []
-    assert players[0].life == 20
+    assert players[0].life == 17, game.log
+    assert all(perm.tapped for perm in _r36_mountains(players[1]))
 
 
-def test_a_non_interactive_payer_declines_a_copy_aimed_at_its_own_creature(
+def test_a_non_interactive_payer_never_aims_the_copy_at_its_own_creature(
     set_pool, catalog_by_name
 ):
-    """The copy's target default is the one answer that changes nothing
-    (CR 707.10's offer is optional, so keeping the target is a real answer) —
-    and for Chain Lightning the kept target is always the payer's own seat or
-    permanent. So a seat nobody asks does not pay {R}{R} for a copy that would
-    finish its own 4/4 (``ai_prompts.copy_offer_turns_on_its_taker``, ONS
-    W1G10: the Chains' copy offers made a headless target hurt itself, and
-    Chain of Smog's without end).
-
-    This used to assert the opposite — the floating mana spent and the Angel
-    killed by its controller's own copy.
+    """A seat nobody asks takes the copy offer only where the measured answer
+    lands the copy off it and does more than taking it costs
+    (``ai_prompt_picks.copy_offer_pick``, kg4 ``defaults2``). Here P2 spends
+    its floating {R}{R} and the copy goes at P1, who has no red to send it
+    back: P1 takes 3 and P2's Angel keeps the 3 the original dealt it. Before
+    the offer was weighed it was declined (ONS W1G10: the copy kept its
+    target, so a headless target hurt itself, and Chain of Smog's without
+    end); before that, the floating mana was spent and the Angel killed by
+    its controller's own copy. The copy declined because it could only hit
+    its taker, or would come straight back, is
+    ``tests/regressions/test_kg4_defaults2_chain_copy_offers.py``.
     """
     leg = set_pool("LEG")
     p1 = PlayerState(name="P1", life=20)
@@ -1607,11 +1612,11 @@ def test_a_non_interactive_payer_declines_a_copy_aimed_at_its_own_creature(
     game.resolve_stack()
     game.check_state_based_actions()
 
-    assert p2.mana_pool.get("R", 0) == 2, "the floating mana was not spent"
-    assert p1.life == 20
+    assert p2.mana_pool.get("R", 0) == 0, "the floating mana paid for the copy"
+    assert p1.life == 17, game.log
     assert [p.card.name for p in p2.battlefield] == ["Serra Angel"], game.log
     assert p2.battlefield[0].damage_marked == 3
-    assert not any("copied Chain Lightning" in line for line in game.log), game.log
+    assert any("P2 copied Chain Lightning" in line for line in game.log), game.log
 
 
 # ---------------------------------------------------------------------------

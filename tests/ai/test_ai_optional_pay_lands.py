@@ -94,9 +94,12 @@ def test_a_gift_on_the_seats_own_turn_keeps_mana_a_spell_could_use(set_pool):
 def test_the_weight_reads_toll_turn_and_offerer_not_card(set_pool):
     """The answers the weight gives, asked directly: any toll; a gift the
     seat's own object offers, on another seat's turn; never a gift another
-    seat's spell offers it (Chain Lightning's copy, whose default keeps the
-    payer's own creature as the target)."""
+    seat's spell offers it whose worth nothing measures — except a copy of
+    that spell (Chain Lightning's), whose worth the copy offer's own reader
+    rehearses (``ai_prompt_picks.copy_offer_pick``, kg4 ``defaults2``)."""
     from types import SimpleNamespace
+
+    from engine.oracle_types import OracleInstruction
 
     game = _duel(set_pool, [])
     own = SimpleNamespace(caster=game.players[0])
@@ -105,6 +108,10 @@ def test_the_weight_reads_toll_turn_and_offerer_not_card(set_pool):
     assert optional_pay_may_tap_lands(game, 0, {"cost": {"generic": 1}, "_context": own})
     assert not optional_pay_may_tap_lands(
         game, 0, {"cost": {"R": 2}, "_context": theirs}
+    )
+    copy = OracleInstruction("may", "", {"action": (OracleInstruction("copy_this_spell", "", {}),)})
+    assert optional_pay_may_tap_lands(
+        game, 0, {"cost": {"R": 2}, "_context": theirs, "_on_accept": (copy,)}
     )
     game.active_player_index = 0
     assert optional_pay_may_tap_lands(

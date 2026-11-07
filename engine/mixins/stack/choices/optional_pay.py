@@ -839,8 +839,7 @@ class OptionalPayChoicesMixin:
         # One link of an "unless any player pays" chain asks the effect's own
         # controller too, and paying is only right for the seat the unpaid
         # branch hurts (`ai_prompts.chained_toll_declined`).
-        from ....ai_prompts import (chained_toll_declined,
-                                    copy_offer_turns_on_its_taker,
+        from ....ai_prompts import (chained_toll_declined, copy_offer_answer,
                                     offer_buys_own_drawback,
                                     returned_aura_lands_on_wrong_side)
 
@@ -861,17 +860,18 @@ class OptionalPayChoicesMixin:
                 f"{player.name} declined {entry['card_name']} "
                 "(it buys a drawback to their own permanent)"
             )
-        # …and a copy of a spell aimed at the seat taking it (the Onslaught
-        # Chains): the copy keeps its target by default, so the gift would be
-        # the spell again, at its taker (`ai_prompts.copy_offer_turns_on_its_taker`).
-        elif floating is not None and copy_offer_turns_on_its_taker(
-            self, choice.player_index, entry
-        ):
-            floating = None
-            self.log.append(
-                f"{player.name} declined {entry['card_name']} "
-                "(the copy would be aimed at them)"
-            )
+        # …and a copy of the spell (the Chains): taken where taking it — the
+        # price and the copy, aimed by the copy's own default — measures
+        # better than declining, the other seat's reply included; declined
+        # where it does not (`ai_prompts.copy_offer_answer`). Weighed, it is
+        # the whole answer: no rule below second-guesses it.
+        elif floating is not None and (
+            copied := copy_offer_answer(self, choice)
+        ) is not None:
+            taken, why = copied
+            if not taken:
+                floating = None
+                self.log.append(f"{player.name} declined {entry['card_name']} ({why})")
         # …and an Aura returned onto a host the effect names (the Dragon
         # Auras), where that host is on the side the Aura works against
         # (`ai_prompts.returned_aura_lands_on_wrong_side`).

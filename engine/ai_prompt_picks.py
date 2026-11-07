@@ -461,13 +461,23 @@ def _every_step(instructions):
                 yield from _every_step(value)
 
 
-def _program_roots(card) -> list:
-    program = compile_card_oracle(card)
-    return [
-        *program.instructions,
-        *(a.instruction for a in program.activated_abilities if a.instruction is not None),
-        *(t.instruction for t in program.triggered_abilities if t.instruction is not None),
-    ]
+def _every_program_step(card) -> list:
+    """Every step of *card*'s program — each ability's, each printed mode's
+    (CR 700.2: a modal spell's record is written by whichever mode was
+    chosen), and everything nested under each — through the valuation seam
+    that walks a program (``ai_weighed_cast._walk_program``)."""
+    from .ai_weighed_cast import _walk_program
+
+    compiled = compile_card_oracle(card)
+    roots = [*_walk_program(compiled)]
+    roots += [mode.instruction for mode in compiled.modes if mode.instruction is not None]
+    seen: set[int] = set()
+    steps = []
+    for step in _every_step(roots):
+        if id(step) not in seen:
+            seen.add(id(step))
+            steps.append(step)
+    return steps
 
 
 def _names_record(value, result_key: str) -> bool:
@@ -485,28 +495,27 @@ def record_readers(
     card, result_key: str, producers=_PICK_PRODUCERS, default_key: str | None = None,
 ) -> list:
     """``(step, key)`` for every step of *card*'s program that reads the
-    record *result_key* under the payload key *key* — in the abilities that
-    write that record (a step of *producers* naming it as its
-    ``result_key``, or naming none where the producer's own default is
-    *default_key*), other picks sharing it and conditions asking about it
-    ("if it shares a color with that permanent") left out."""
+    record *result_key* under the payload key *key* — where a step of
+    *producers* writes that record (naming it as its ``result_key``, or
+    naming none where the producer's own default is *default_key*), other
+    picks sharing it and conditions asking about it ("if it shares a color
+    with that permanent") left out."""
     if card is None or not result_key:
         return []
+    steps = _every_program_step(card)
+    if not any(
+        step.kind in producers
+        and ((step.payload or {}).get("result_key") or default_key) == result_key
+        for step in steps
+    ):
+        return []
     readers = []
-    for root in _program_roots(card):
-        steps = list(_every_step((root,)))
-        if not any(
-            step.kind in producers
-            and ((step.payload or {}).get("result_key") or default_key) == result_key
-            for step in steps
-        ):
+    for step in steps:
+        if step.kind in producers:
             continue
-        for step in steps:
-            if step.kind in producers:
-                continue
-            for key, value in (step.payload or {}).items():
-                if key != "condition" and _names_record(value, result_key):
-                    readers.append((step, key))
+        for key, value in (step.payload or {}).items():
+            if key != "condition" and _names_record(value, result_key):
+                readers.append((step, key))
     return readers
 
 
@@ -580,28 +589,34 @@ def recorded_pick_order(game, chooser: int, permanents: list, side: str | None) 
     return sorted(permanents, key=rank)
 
 
+#: The ``default_prefers`` values that state the pick's side themselves: a
+#: pick an engine step makes rather than a printed one ("taken": "sacrifice a
+#: land of an opponent's choice", Demonic Hordes), and the lowering's own
+#: preference for an Aura that works against its host ("not_the_choosers":
+#: "that player attaches this Aura to a land of their choice", Kudzu).
+_STATED_AGAINST = frozenset({"taken", "not_the_choosers"})
+
+
+def permanent_pick_side(game, chooser: int, payload: dict, context, result_key: str) -> str | None:
+    """:func:`recorded_pick_side` for a prompt's pick, or the side the
+    payload's own preference states (:data:`_STATED_AGAINST`)."""
+    if (payload or {}).get("default_prefers") in _STATED_AGAINST:
+        return "opponent"
+    return recorded_pick_side(game, chooser, context, result_key)
+
+
 def permanent_pick_order(game, choice, live: list) -> list:
     """*live* — a ``permanent_choice`` / ``permanent_set_choice`` prompt's
-    candidates — in the order a seat nobody asks picks them: by the side of
-    the step that reads the record (:func:`recorded_pick_side`), or, for a
-    pick an engine step makes rather than a printed one, the side its arm
-    site states (``default_prefers: "taken"``: "sacrifice a land of an
-    opponent's choice", Demonic Hordes) — and the side the lowering's own
-    preference already states (``"not_the_choosers"``: "that player attaches
-    this Aura to a land of their choice", Kudzu, whose Aura destroys its
-    land). Board order was the order, so The Abyss destroyed whichever
-    creature had been out longest and Drop of Honey whichever tied creature
-    came first."""
-    chooser = choice.player_index
+    candidates — in the order a seat nobody asks picks them: by the side the
+    pick is for (:func:`permanent_pick_side`). Board order was the order, so
+    The Abyss destroyed whichever creature had been out longest and Drop of
+    Honey whichever tied creature came first."""
     payload = choice.data.get("_payload") or {}
-    if payload.get("default_prefers") in ("taken", "not_the_choosers"):
-        side = "opponent"
-    else:
-        side = recorded_pick_side(
-            game, chooser, choice.data.get("_context"),
-            str(choice.data.get("result_key") or payload.get("result_key") or ""),
-        )
-    return recorded_pick_order(game, chooser, live, side)
+    side = permanent_pick_side(
+        game, choice.player_index, payload, choice.data.get("_context"),
+        str(choice.data.get("result_key") or payload.get("result_key") or ""),
+    )
+    return recorded_pick_order(game, choice.player_index, live, side)
 
 
 # -- Cards the resolution records out of a hand ------------------------------
@@ -918,11 +933,109 @@ def text_change_vocabulary_pick(game, choice, stated: str) -> str:
     return stated if picked is None else picked
 
 
+# -- A copy of the spell offered to its target --------------------------------
+#
+# "…they may copy this spell and may choose a new target for that copy" (the
+# Chains). What the copy does is what its new target is, which is the copy
+# default's own measured answer (``ai_prompts.choose_copy_target``); what
+# taking it costs is its price — and whatever the other seat then does with
+# the copy offer *its* copy makes, which may be to send it straight back.
+
+
+def _copy_table_record(table, *, create: bool = False) -> "dict | None":
+    """What one scratch table a copy offer is being weighed on has spent of
+    the copy offers made there: the seats owed the copy their price bought
+    (``bought``) and how many replies may still be weighed (``replies``) —
+    None for a table no copy offer is being weighed on (a cast's rehearsal,
+    a copy target's), whose copy offers the stated reading answers. Kept in
+    the deliberation the table belongs to, with the table itself held, so
+    the key cannot be reused while it is read."""
+    from . import ai_rehearsal
+
+    cache = ai_rehearsal._DELIBERATION.get()
+    if cache is None:
+        return None
+    slot = ("copy_offers", id(table))
+    if create:
+        cache.setdefault(slot, {"table": table, "bought": set(), "replies": 1})
+    return cache.get(slot)
+
+
+def _mark_bought(table, choice) -> None:
+    """Where *choice* was an offer whose price buys a copy offer of its own
+    behind it (``ai_prompts.offer_buys_a_copy_offer``), record on *table*
+    that its seat takes that copy: paying for it is the plan."""
+    from .ai_prompts import offer_buys_a_copy_offer
+
+    if offer_buys_a_copy_offer(choice.data):
+        record = _copy_table_record(table)
+        if record is not None:
+            record["bought"].add(choice.player_index)
+
+
+def _weighed_copy_offer(game, choice) -> "bool | None":
+    """Taking the copy offer *choice* — its price paid and the copy it buys —
+    against declining it, each rehearsed (on a table cut loose from the
+    resolution offering it): True only where taking leaves the seat strictly
+    further ahead, None where nothing can be rehearsed."""
+
+    def answer(table, held, accept: bool) -> bool:
+        _copy_table_record(table, create=True)
+        if not table._resolve_optional_pay(held, accept):
+            return False
+        if accept:
+            _mark_bought(table, held)
+        return True
+
+    return _rehearsed_best(
+        game, choice.player_index, choice, [False, True], answer,
+        label=f"{choice.data.get('card_name') or 'a spell'} (the copy offer)",
+        detach="abstract",
+    )
+
+
+def copy_offer_pick(game, choice) -> "bool | None":
+    """Whether a seat nobody asks takes a copy offer (True), declines it
+    (False), or None where nothing weighs it and the stated reading
+    (``ai_prompts.copy_offer_turns_on_its_taker``) answers.
+
+    Outside a rehearsal: :func:`_weighed_copy_offer`. Inside one, on a scratch
+    table a copy offer is being weighed on: the copy a rehearsed price bought
+    is taken; the **first** copy offer another seat is made there is weighed
+    one level down (:func:`_one_level_deeper`) — the reply the taker must
+    expect, a Chain sent straight back; every other is left to the stated
+    reading, which declines it, so a chain on a scratch table ends. On any
+    other scratch table (a cast's rehearsal, a copy target's) the stated
+    reading answers too: a copy target measured with the taker free to copy
+    again read keeping the copy on itself as worth a second copy, and the
+    chain never ended. The copy offer took no weighing at all before: its
+    stated reading declined every Chain's copy, whose kept target is always
+    the taker's."""
+    if not rehearsing():
+        return _weighed_copy_offer(game, choice)
+    record = _copy_table_record(game)
+    if record is None:
+        return None
+    seat = choice.player_index
+    if seat in record["bought"]:
+        record["bought"].discard(seat)
+        return True
+    if _DEEPER.get() or record["replies"] <= 0:
+        return None
+    record["replies"] -= 1
+    with _one_level_deeper():
+        taken = _weighed_copy_offer(game, choice)
+    if taken:
+        _mark_bought(game, choice)
+    return taken
+
+
 __all__ = [
     "balance_discards",
     "balance_sacrifices",
     "battlefield_worth",
     "cast_choice_pick",
+    "copy_offer_pick",
     "discard_order",
     "face_down_cast_pick",
     "hand_pick_fate",
@@ -937,6 +1050,7 @@ __all__ = [
     "modal_mode_target_picks",
     "opponent_mode_pick",
     "permanent_pick_order",
+    "permanent_pick_side",
     "pile_search_pick",
     "player_choice_pick",
     "put_from_hand_pick",

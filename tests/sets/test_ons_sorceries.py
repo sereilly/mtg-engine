@@ -745,7 +745,9 @@ def test_w1g10_chain_of_smog_a_headless_target_does_not_copy_it_at_itself(set_po
     may choose a new target for that copy." The copy offer is free, and the
     copy keeps its target unless re-aimed — so a seat nobody asks, taking it,
     aimed the copy at itself and was offered again by every copy, discarding
-    its own hand without end. It declines that copy now."""
+    its own hand without end. The offer is weighed now
+    (``ai_prompt_picks.copy_offer_pick``): aimed at the empty-handed caster
+    the copy does nothing, so it is declined."""
     game = _w1g10_table(set_pool, seats=2)
     game.players[0].hand.append(set_pool("ONS")["Chain of Smog"])
     game.players[1].hand.extend(
@@ -760,7 +762,7 @@ def test_w1g10_chain_of_smog_a_headless_target_does_not_copy_it_at_itself(set_po
     assert not game.stack and not game.pending_choices
     assert len(game.players[1].hand) == 2, game.log
     assert not any("copied Chain of Smog" in line for line in game.log), game.log
-    assert "P2 declined Chain of Smog (the copy would be aimed at them)" in game.log
+    assert "P2 declined Chain of Smog (the copy is not worth what taking it costs)" in game.log
 
 
 def test_w1g10_chain_of_acid_copied_and_copied_back(set_pool):

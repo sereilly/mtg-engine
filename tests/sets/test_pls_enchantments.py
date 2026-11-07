@@ -1982,8 +1982,12 @@ def test_w1g7_warped_devotion_sees_itself_returned(set_pool):
     table.cast_from_hand(1, "Boomerang", target_permanent_ids=[devotion.permanent_id])
     _w1g7_settle(table)
 
-    assert _w1g7_names(table.players[0].graveyard) == ["Forest"]
-    assert _w1g7_names(table.players[0].hand) == ["Warped Devotion"]
+    # The trigger fired: its controller discarded one of the two cards it
+    # then held (which one is the discard default's, kg4 ``defaults2``).
+    held = _w1g7_names(table.players[0].hand)
+    gone = _w1g7_names(table.players[0].graveyard)
+    assert len(gone) == 1 and len(held) == 1, (held, gone)
+    assert sorted(held + gone) == ["Forest", "Warped Devotion"]
 
 
 def test_w1g7_warped_devotion_triggers_once_per_permanent_in_a_sweep(set_pool):
