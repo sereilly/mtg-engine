@@ -65,6 +65,25 @@ controls", Heart of Bogardan), whose ``sequence`` carries
 of the sources it names (:attr:`SimultaneousDamage.dealers`). Anything else is
 a dealing of one chunk, announced whole as it is dealt.
 
+**A split sentence is dealt as one loop over its chunks** (:func:`begin_sentence`,
+:func:`deal_sentence`). CR 616.1's last sentence: "If two or more players have
+to make these choices at the same time, choices are made in APNAP order (see
+rule 101.4)" — and every chunk of one dealing is dealt at the same time, so
+every affected player's questions about the whole sentence are asked before the
+next player's. A sweep already deals its own recipients in APNAP order, but a
+sentence of two sweeps, or of a sweep and a player, asked step by step — the
+active player and then the other about Disorder's white creatures, and then
+both again about themselves. So while a split sentence's steps run, the
+dealing *collects* (:attr:`SimultaneousDamage.agenda`): each chunk that joins
+it is recorded at the two damage seams (``Game._mark_damage_on_permanent``,
+``Game._deal_damage_to_player``) with its recipient, instead of being dealt,
+and each loop's last step (:func:`deal_at_once`'s *then*, a sweep's summary)
+waits beside them. Once every step has run, the chunks are dealt in APNAP order
+of the seat each one's question goes to — within one seat in the order the
+steps produced them, the printed order (CR 101.4c) — then the loops' last
+steps, then the finish. The recipient is the one the handler resolved, read at
+the seam, so no second copy of what a step's recipient key means is kept here.
+
 **What is not one dealing**, each with its reason: the combat damage step's
 first-strike and regular passes (CR 510.4: two steps, two dealings); Mana
 Clash's flips ("Each point of damage is dealt separately", its ruling,
@@ -232,6 +251,15 @@ class SimultaneousDamage:
     #: Damaged player's seat -> the creatures that dealt it combat damage, for
     #: the batched "one or more … deal combat damage to a player" triggers.
     damagers_by_defender: dict[int, list] = field(default_factory=dict)
+    #: While a split damage sentence's steps run (:func:`begin_sentence`): each
+    #: chunk that joins this dealing, as ``(recipient, deal)`` — *deal* is the
+    #: damage seam's own call, made again once every step has run — in the
+    #: order the steps produced them. None for every other dealing, and once
+    #: :func:`deal_sentence` starts dealing them.
+    agenda: list | None = None
+    #: The last steps (*then*) of the loops that ran while :attr:`agenda` was
+    #: collecting, run after the collected chunks have been dealt.
+    closers: list = field(default_factory=list)
 
     def joins(self, *, combat: bool, source) -> bool:
         """Whether a chunk with this *combat* flag and *source* is part of
@@ -302,11 +330,20 @@ def deal_at_once(
 
     The items are dealt in APNAP order of the seat each one's question goes to
     (CR 616.1's last sentence, ``effect_ordering.in_apnap_order``; *affected*
-    maps an item to its recipient where the item is something else)."""
+    maps an item to its recipient where the item is something else).
+
+    Inside a split sentence still collecting (:func:`begin_sentence`) the loop
+    runs as ever, but each item's chunk is collected at the damage seam rather
+    than dealt, so *then* waits with them (:attr:`SimultaneousDamage.closers`)
+    instead of reporting damage not dealt yet."""
     from .effect_ordering import in_apnap_order
     from .resumption import run_resumable
 
     dealing = begin(game, combat=False, source=source, sources=sources)
+    held = game.simultaneous_damage if dealing is None else None
+    if then is not None and held is not None and held.agenda is not None:
+        held.closers.append(then)
+        then = None
 
     def last() -> None:
         finish(game, dealing)
@@ -315,6 +352,60 @@ def deal_at_once(
 
     run_resumable(
         game, in_apnap_order(game, items, affected=affected), step, then=last,
+    )
+
+
+def begin_sentence(game, *, source) -> SimultaneousDamage | None:
+    """Open the dealing of one split damage sentence by *source* (a
+    ``sequence`` marked ``oracle_types.ONE_DEALING``), collecting its chunks
+    until :func:`deal_sentence` — or None when a dealing is already open: the
+    sentence's chunks then join that one, collected there if it is collecting
+    (and dealt by its opener), otherwise dealt as each step reaches them. No
+    road to that is known — a split sentence resolves from the stack or an
+    activation, after any dealing that fired it has finished — so the last
+    branch is a fallback that keeps the damage, not an ordering anyone gets."""
+    dealing = begin(game, combat=False, source=source)
+    if dealing is not None:
+        dealing.agenda = []
+    return dealing
+
+
+def collect(game, recipient, deal, *, combat: bool, source) -> bool:
+    """Record a chunk for its split sentence's one APNAP-ordered loop instead
+    of dealing it: True when the open dealing is collecting
+    (:func:`begin_sentence`) and the chunk joins it, and then the caller — one
+    of the two damage seams — returns at once, as it does for an event that
+    stopped to ask (nothing has happened; *deal* is the call made again, its
+    ``then`` with it). False: deal it now."""
+    dealing = joined(game, combat=combat, source=source)
+    if dealing is None or dealing.agenda is None:
+        return False
+    dealing.agenda.append((recipient, deal))
+    return True
+
+
+def deal_sentence(game, dealing: SimultaneousDamage | None) -> None:
+    """Deal a split sentence's collected chunks as one resumable loop, in APNAP
+    order of the seat each one's CR 616.1 question goes to (CR 616.1's last
+    sentence, 101.4) — the printed order within a seat (CR 101.4c) — then the
+    last steps of the loops that collected them, then finish the dealing.
+
+    The last step of the sentence's own loop (``control_flow.sequence``), so,
+    like every resumable loop, the last thing its caller does: a chunk whose
+    event stops to ask takes the chunks behind it with it, and the dealing
+    stays open across the answer. *dealing* None — the sentence joined one
+    already open — does nothing."""
+    from .effect_ordering import in_apnap_order
+    from .resumption import run_resumable
+
+    if dealing is None:
+        return
+    chunks, dealing.agenda = dealing.agenda or [], None
+    closers, dealing.closers = dealing.closers, []
+    ordered = in_apnap_order(game, chunks, affected=lambda chunk: chunk[0])
+    run_resumable(
+        game, [deal for _recipient, deal in ordered] + closers,
+        lambda step: step(), then=lambda: finish(game, dealing),
     )
 
 

@@ -2005,7 +2005,9 @@ def test_115_3_two_instances_of_target_may_each_name_the_same_creature(catalog_b
     The opponent's instance is a queued decision rather than a second slot in
     the announcement, which is why seat 1 has to be interactive here: a headless
     seat takes the kind's deterministic default and never gets the chance to
-    name the creature the activator already named.
+    name the creature the activator already named. Both instances are one
+    damage sentence, dealt at once (CR 608.2f) once both are chosen, so nothing
+    is dealt while the opponent's choice is owed.
     """
     witches = _nosick(Permanent(card=catalog_by_name["Cuombajj Witches"]))
     victim = Permanent(card=catalog_by_name["Hill Giant"])  # 3/3, so it survives
@@ -2019,7 +2021,7 @@ def test_115_3_two_instances_of_target_may_each_name_the_same_creature(catalog_b
     ).supported, game.log
     game.resolve_stack()
 
-    assert victim.damage_marked == 1, "the activator's instance"
+    assert victim.damage_marked == 0, "nothing dealt before the second target is chosen"
     pending = game.pending_opponent_damage
     assert pending is not None and pending["chooser_index"] == 1, game.log
 

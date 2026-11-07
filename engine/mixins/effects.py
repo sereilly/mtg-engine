@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 
+from .. import simultaneous_damage
 from ..color_changes import change_color
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..aura_restrictions import aura_restriction_active
@@ -161,7 +162,6 @@ class EffectsMixin:
         two creatures used to trigger twice, for each blocker's share.
         *source* is what dealt the chunk, which is how a sweep's dealing knows
         its own chunks (``engine/simultaneous_damage.py``)."""
-        from .. import simultaneous_damage
 
         dealing = simultaneous_damage.joined(self, combat=combat, source=source)
         if dealing is not None:
@@ -602,7 +602,21 @@ class EffectsMixin:
         knows better than ``damage_events.damage_source_seat`` can: a card in
         exile has no controller, and CR 108.4a makes its owner the answer to
         anything that asks — which only the handler that found the card in its
-        owner's exile knows (Selfless Exorcist). Absent, the event derives it."""
+        owner's exile knows (Selfless Exorcist). Absent, the event derives it.
+
+        A chunk of a split damage sentence still collecting is recorded rather
+        than dealt (``simultaneous_damage.collect``), and this same call is
+        made again when the sentence deals its chunks in APNAP order."""
+        if simultaneous_damage.collect(
+            self, permanent,
+            lambda: self._mark_damage_on_permanent(
+                permanent, amount, source=source, combat=combat, then=then,
+                restart=restart, asks=asks, unpreventable=unpreventable,
+                cant_be_prevented=cant_be_prevented, source_seat=source_seat,
+            ),
+            combat=combat, source=source,
+        ):
+            return 0
         # Illusionary Mask: turn a face-down creature face up when damage would
         # be dealt to it or it would deal damage (before prevention, CR 613/614).
         if amount > 0:
@@ -679,7 +693,6 @@ class EffectsMixin:
         spell's) — added to the dealing's tally, which gains each source's
         total once the dealing's damage is all dealt: one life-gain event per
         lifelink source (CR 702.15e; ``engine/simultaneous_damage.py``)."""
-        from .. import simultaneous_damage
 
         source = event.get("source")
         combat = bool(event.get("combat"))
@@ -1080,6 +1093,17 @@ class EffectsMixin:
         # unpreventable damage (Whippoorwill, Lava Burst) gets through, and
         # protection contends under CR 616.1 with whatever else applies.
         #
+        # A chunk of a split damage sentence still collecting waits for the
+        # sentence's one APNAP-ordered loop (``simultaneous_damage.collect``).
+        if simultaneous_damage.collect(
+            self, target,
+            lambda: self._deal_damage_to_player(
+                target, amount, source, then=then, restart=restart, asks=asks,
+                cant_be_prevented=cant_be_prevented, combat=combat,
+            ),
+            combat=combat, source=source,
+        ):
+            return 0
         # Illusionary Mask: a face-down creature that would deal damage (e.g.
         # unblocked combat damage to a player) is turned face up first.
         if amount > 0:

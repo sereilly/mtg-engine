@@ -57,9 +57,10 @@ _NOT_ONE_DEALING = {
         "considered a separate time this source deals damage\"",
 }
 
-#: The names a function opens a dealing by (``handlers/damage.py`` imports
-#: ``begin`` as ``begin_dealing``).
-_OPENERS = {"begin", "begin_dealing"}
+#: The names a function opens a dealing by: ``begin``, and the split
+#: sentence's ``begin_sentence`` (kg4 `dealings`), which ``handlers/damage.py``
+#: imports by name.
+_OPENERS = {"begin", "begin_dealing", "begin_sentence"}
 
 
 def _opens_a_dealing(function) -> bool:

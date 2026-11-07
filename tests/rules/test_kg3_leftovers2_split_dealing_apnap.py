@@ -7,12 +7,12 @@ deals 2 damage to any target and 3 damage to you") one simultaneous dealing
 (``oracle_types.ONE_DEALING``) — and left its steps dealt, and so asked, in
 printed order: the target's controller before the active player.
 
-``handlers/control_flow.sequence`` now deals a marked sequence's steps in
-APNAP order of the player each one affects, where every step names exactly one
-recipient it can say before it runs (the chosen target, "you", "itself",
-"target player"); a step dealing to several (a sweep, "each player") keeps
-the printed order for the whole sentence. Within one seat the printed order
-stands (CR 101.4c).
+``handlers/control_flow.sequence`` now deals a marked sequence's chunks in
+APNAP order of the player each one affects (kg3 ordered the steps where each
+named one recipient; kg4 `dealings` collects every chunk at the damage seams
+and deals them as one loop, so a sweep or "each player" in the sentence is
+ordered with the rest — ``tests/rules/test_kg4_dealings_split_sentence_apnap.py``).
+Within one seat the printed order stands (CR 101.4c).
 
 Measured backwards on 90bef6d1: P1 was asked first.
 """

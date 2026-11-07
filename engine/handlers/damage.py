@@ -31,9 +31,7 @@ from ..destruction_events import mark_delayed_destruction
 from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
-from ..simultaneous_damage import begin as begin_dealing
-from ..simultaneous_damage import deal_at_once
-from ..simultaneous_damage import finish as finish_dealing
+from ..simultaneous_damage import begin_sentence, deal_at_once, deal_sentence
 from ..game_types import single_chosen_id, target_ids
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_DAMAGER_CONTROLLER,
@@ -1512,6 +1510,15 @@ def deal_damage_and_opponent_choice(game: Game, instruction: OracleInstruction, 
     asks, *deals* its damage the moment it is armed. Written as two statements,
     the second was dealt before the first one's answer. The opponent half is
     itself a loop (which opponent, then the prompt), nested in this one's step.
+
+    **And one split sentence** (``simultaneous_damage.begin_sentence``): both
+    halves' chunks are collected and dealt together once the opponent has
+    chosen, in APNAP order of the seats their CR 616.1 questions go to
+    (CR 616.1's last sentence). The first half was dealt — and asked about —
+    before the opponent chose, so on its controller's turn the defender was
+    asked before the active player; the ruling (2020-11-10: "An opponent can't
+    target a creature they control with hexproof") makes the pick a target,
+    chosen before any of the damage is dealt.
     """
     from .player_choices import ask_which_opponent
 
@@ -1541,13 +1548,14 @@ def deal_damage_and_opponent_choice(game: Game, instruction: OracleInstruction, 
         )
 
     # One sentence, one source: the two halves are one dealing (CR 608.2f), so
-    # "whenever this creature deals damage" sees 2 once. It stays open across
-    # the opponent's answer, and the loop's last step finishes it.
-    dealing = begin_dealing(game, combat=False, source=damage_dealer(context))
+    # "whenever this creature deals damage" sees 2 once. It stays open —
+    # collecting — across the opponent's answer, and the loop's last step
+    # deals both halves and finishes it.
+    dealing = begin_sentence(game, source=damage_dealer(context))
     run_resumable(
         game, [lambda: deal_damage(game, instruction, context), opponents_half],
         lambda half: half(),
-        then=lambda: finish_dealing(game, dealing),
+        then=lambda: deal_sentence(game, dealing),
     )
     return True, "resolved"
 

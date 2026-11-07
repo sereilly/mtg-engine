@@ -141,11 +141,13 @@ def _ping(game, sorcerer: Permanent, target, permanent=None) -> None:
 def _witches_default(game):
     """``effects._apply_opponent_damage_choice`` through the prompt's default:
     the activator's opponent is not asked, so its pick (the activator's face —
-    nothing of theirs would die to 1) is dealt as it is armed, inside the
-    handler, after the first half."""
+    nothing of theirs would die to 1) is made as it is armed, inside the
+    handler, after the first half — and both halves, one split sentence, are
+    then dealt in APNAP order (kg4 `dealings`): the activator's face, the
+    active player's, first."""
     witches = _put(game, 0, "Cuombajj Witches")
     _arm_two(game.players[0])
-    return [game.players[1], game.players[0]], 1, lambda: _execute(
+    return [game.players[0], game.players[1]], 0, lambda: _execute(
         game, "Cuombajj Witches",
         _instruction("Cuombajj Witches", "deal_damage_and_opponent_choice"),
         target=game.players[1], source_permanent=witches,
