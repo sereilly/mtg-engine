@@ -293,11 +293,15 @@ def text_change_offer(game: Game, card) -> dict | None:
 _X_CEILING = 30
 
 
-def _largest_payable_x(game: Game, seat: int, prices, purpose, *, pool_only: bool) -> int:
+def _largest_payable_x(
+    game: Game, seat: int, prices, purpose, *, pool_only: bool, known: int = 0,
+) -> int:
     """The largest X for which some price ``prices(X)`` yields is payable —
-    from the pool alone, or with every source *seat* could tap — or 0."""
-    best = 0
-    for x in range(_X_CEILING + 1):
+    from the pool alone, or with every source *seat* could tap — or 0.
+    *known* is an X already known to be payable (the pool's, for the board's
+    search: what the pool pays the board pays), searched up from."""
+    best = known
+    for x in range(known + 1 if known else 0, _X_CEILING + 1):
         if not any(
             board_can_pay(
                 game, seat, required, purpose=purpose, nonland_sources=True,
@@ -312,11 +316,11 @@ def _largest_payable_x(game: Game, seat: int, prices, purpose, *, pool_only: boo
 
 def _x_payable_by(game: Game, seat: int, prices, purpose, colors) -> dict:
     """``{"pool", "board", "colors"}`` for one X announcement (see
-    :func:`x_payable`)."""
+    :func:`cast_x_payable`)."""
     if not game.enforce_mana_costs:
         return {"pool": _X_CEILING, "board": _X_CEILING, "colors": list(colors)}
     pool = _largest_payable_x(game, seat, prices, purpose, pool_only=True)
-    board = max(pool, _largest_payable_x(game, seat, prices, purpose, pool_only=False))
+    board = _largest_payable_x(game, seat, prices, purpose, pool_only=False, known=pool)
     return {"pool": pool, "board": board, "colors": list(colors)}
 
 

@@ -31,7 +31,7 @@ from engine.card_loader import load_catalog
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
-from tests.helpers import app_js_function_body, client, run_app_js, stable_sample
+from tests.helpers import app_js_function_body, client, resolve_stack, run_app_js, stable_sample
 from web.app import store
 from web.serialization import _ability_denial
 
@@ -274,8 +274,7 @@ def test_a_tapped_monolith_untaps_through_the_route(small):
         "permanent_id": monolith.permanent_id, "ability_index": 1,
     })
     assert done.status_code == 200, done.text
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert not monolith.tapped
 
 
