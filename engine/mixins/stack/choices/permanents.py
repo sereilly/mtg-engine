@@ -1131,7 +1131,7 @@ class PermanentChoicesMixin:
         newer look replaces an older one rather than queueing behind it.
 
         The seat learns nothing that outlasts the prompt: there is no record of
-        what a seat has been shown, so ``ai_rehearsal.conceal_from`` redeals
+        what a seat has been shown, so ``ai_scratch_copy.conceal_from`` redeals
         the looked-at card on the looker's own rehearsal copies — the limit the
         hidden-hand looks (Glasses of Urza) already have.
         """

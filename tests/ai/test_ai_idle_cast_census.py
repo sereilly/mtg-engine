@@ -60,7 +60,8 @@ import pytest
 from engine import Game, PlayerState
 from engine import ai_simulator
 from engine.ai_policy import choose_cast_action
-from engine.ai_rehearsal import CARD_WORTH, scratch_copy, standings
+from engine.ai_scratch_copy import scratch_copy
+from engine.ai_standing import CARD_WORTH, standings
 from engine.oracle import compile_card_oracle
 from tests.ai import test_ai_mode_chooser_census as modes
 from tests.helpers import full_census, stable_part
@@ -337,7 +338,7 @@ IDLE: dict = {}
 #: stakes, and Desperate Gambit is the same flip one step on (won, the chosen
 #: source's next damage this turn is doubled; lost, it is prevented). A
 #: rehearsal's randomness is its own on purpose
-#: (``ai_rehearsal._rehearsal_seed``): it says what such a cast is *like* and
+#: (``ai_scratch_copy._rehearsal_seed``): it says what such a cast is *like* and
 #: must not say how the real flip will fall. On the seed read off the log's
 #: length their samples won and this sweep's casts, on the seed `run` fixes,
 #: lost: Game of Chaos on all three layouts and Desperate Gambit on ``own``

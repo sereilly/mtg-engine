@@ -34,7 +34,7 @@ from .models import Permanent
 from .ai_combat_triggers import (attack_is_worth_its_trigger, block_is_worth_its_trigger,
                                  expected_attack_damage)
 from .ai_compelled_blocks import compelled_blocks, fight_outcome
-from .ai_rehearsal import life_worth, permanent_worth
+from .ai_standing import life_worth, permanent_worth
 from .ai_scoring import choose_attack_target, _permanent_value
 from .combat_assignment import combat_damage_assigned_by
 
@@ -924,7 +924,7 @@ def _gang_kills(game: Game, attacker: Permanent, members: list[Permanent]) -> bo
 def _gang_is_worth_it(game: Game, attacker: Permanent, members: list[Permanent]) -> bool:
     """Whether killing *attacker* is worth more than the blockers it can
     destroy back (:func:`_kills_back`), each read as the board will be once
-    the turn is over (``ai_rehearsal.permanent_worth``)."""
+    the turn is over (``ai_standing.permanent_worth``)."""
     lost = sum(permanent_worth(member, now=False) for member in _kills_back(game, attacker, members))
     return permanent_worth(attacker, now=False) > lost
 
@@ -939,7 +939,7 @@ def _chump_blocks(
     """Add to *assignments* the chump blocks worth making: an unblocked
     attacker blocked by a creature that dies stopping it, where the life the
     block saves is worth more than the creature
-    (``ai_rehearsal.life_worth`` against ``permanent_worth`` — the scale
+    (``ai_standing.life_worth`` against ``permanent_worth`` — the scale
     every rehearsal reads a position on, under which a point of life is
     worth more the less of it is left and the loss of the game is worth
     everything). So a 2/2 does not chump a 5/3 at twenty life, a token chumps

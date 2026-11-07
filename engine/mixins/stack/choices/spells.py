@@ -341,7 +341,7 @@ class SpellChoicesMixin:
 
     def _dearest_permanents_first(self, options, positions: list) -> list:
         """*positions* with the permanents among them dearest first
-        (``ai_rehearsal.permanent_worth``), each player left in its place.
+        (``ai_standing.permanent_worth``), each player left in its place.
 
         "…change that spell's target to another creature." (Meddle.) On the
         side the effect is worth aiming at, which permanent it lands on is
@@ -352,7 +352,7 @@ class SpellChoicesMixin:
         among the options keeps its slot — which face beats which creature is
         a trade this does not price.
         """
-        from ....ai_rehearsal import permanent_worth
+        from ....ai_standing import permanent_worth
 
         slots = [
             index for index, position in enumerate(positions)

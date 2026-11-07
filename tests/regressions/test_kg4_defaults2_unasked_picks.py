@@ -30,7 +30,7 @@ from __future__ import annotations
 from engine import Game, PlayerState
 from engine.ai_prompt_picks import mana_breadth, permanent_pick_side, recorded_pick_side
 from engine.ai_prompt_readers import discard_spares_a_penalty
-from engine.ai_rehearsal import permanent_worth
+from engine.ai_standing import permanent_worth
 from engine.card_loader import load_catalog
 from engine.faces import compilation_units
 from engine.game_types import OracleExecutionContext

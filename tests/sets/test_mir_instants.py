@@ -1791,7 +1791,7 @@ def test_ebony_charm_exiles_nothing_when_it_names_nothing(set_pool):
 def test_ebony_charms_graveyard_mode_is_aimed_at_an_opponents_pile_by_an_ai_seat(set_pool):
     """The AI's side of naming graveyard slots. Taking cards out of a
     graveyard is a denial, so the chooser names an opponent's pile
-    (`ai_target_sides.several_target_slot_sides`) rather than the own-pile-first
+    (`ai_slot_sides.several_target_slot_sides`) rather than the own-pile-first
     default every other several-card graveyard spell takes — which here would
     empty the caster's."""
     from engine.ai_targets import _choose_several_targets

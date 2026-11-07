@@ -34,7 +34,7 @@ amount it cannot read (Ebonblade Reaper's "half your life"): each is left out
 rather than guessed.
 
 The price is set against what the declaration buys, on the rehearsal's own
-scale (``ai_rehearsal.life_worth``, ``permanent_worth``): the damage that
+scale (``ai_standing.life_worth``, ``permanent_worth``): the damage that
 reaches the defender (:func:`attack_is_worth_its_trigger`), or the damage a
 block stops and the attacker it kills (:func:`block_is_worth_its_trigger`).
 """
@@ -45,7 +45,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .ai_compelled_blocks import fight_outcome
-from .ai_rehearsal import life_worth, permanent_worth
+from .ai_standing import life_worth, permanent_worth
 from .combat_assignment import combat_damage_assigned_by
 from .trigger_utils import matching_triggers
 

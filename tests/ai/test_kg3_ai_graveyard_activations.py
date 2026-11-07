@@ -198,7 +198,7 @@ def test_an_upkeep_ability_is_not_proposed_in_the_main_phase():
 
 def test_a_land_the_seat_needs_is_not_given_up_for_the_card():
     """The other half of Whiteout's board: with two lands, the land is worth
-    more than the card it buys back (`ai_rehearsal.seat_standing`), and the
+    more than the card it buys back (`ai_standing.seat_standing`), and the
     rehearsal says so."""
     game = _board(graveyard=["Whiteout"], lands=["Snow-Covered Forest", "Forest"])
 

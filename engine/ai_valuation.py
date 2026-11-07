@@ -42,15 +42,18 @@ rest is one subject a module:
 * ``ai_weighed_cast`` — the floor: the cast being weighed (its mode, the
   permission it is cast under), the casts a seat may weigh beyond its hand,
   and the walkers every reader opens a program with;
-* ``ai_target_sides`` — which side of the table a target, a seat, a slot or
-  a role belongs on;
-* ``ai_rehearsal`` — **the one measure**: what a seat's position is worth and
-  what one cast does to it, found by carrying the cast out on a scratch copy
-  of the game. It is in this family and not beside the weights because two
-  readers have to agree on it — the cast policy, which predicts with it, and
-  the mode census, which measures with it — and because it is the same move
-  as everything else here: the compiled program read for what it does, this
-  time by running it;
+* ``ai_target_sides`` — which side of the table a target or a seat belongs
+  on, and ``ai_slot_sides`` the same for each slot or role of an
+  announcement that names several, and what a divided spell divides;
+* ``ai_standing`` — **the one measure**: what a seat's position is worth;
+  and ``ai_rehearsal``, what one cast does to it, found by carrying the cast
+  out on a scratch copy of the game (``ai_scratch_copy``: the copy, cut
+  loose from a resolution and dealt what its seat cannot see). They are in
+  this family and not beside the weights because two readers have to agree
+  on them — the cast policy, which predicts with them, and the mode census,
+  which measures with them — and because it is the same move as everything
+  else here: the compiled program read for what it does, this time by
+  running it;
 * ``ai_prompt_readers`` — what a choice the rules leave to a player does (an
   offer's price, a toll's branches, a chosen colour, name, number or pile).
 
@@ -1169,7 +1172,7 @@ def land_searches(instruction: OracleInstruction | None) -> tuple:
     the whole of what it does — "Plainscycling {2}" is "search your library
     for a Plains card, reveal it, put it into your hand, then shuffle" — or
     ``()``. Whether what they can find is only land is the library's to say
-    (``ai_rehearsal.spare_land_find_price``), so a typecycle for a creature
+    (``ai_standing.spare_land_find_price``), so a typecycle for a creature
     type and a landcycle are one shape here."""
     if instruction is None:
         return ()

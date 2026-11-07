@@ -120,7 +120,7 @@ def test_a_seeded_run_holds_for_its_driver_and_raises_no_rehearsal():
     when the driver was asked (the subject exercised, a floor of one), no
     state-based check was made while a resolution waited on its answer, and
     no rehearsal raised — the rehearsal copies carry the driver
-    (``ai_rehearsal.scratch_copy``), so they hold too."""
+    (``ai_scratch_copy.scratch_copy``), so they hold too."""
     from engine import ai_rehearsal, ai_simulator
     from engine.card_loader import manifest_set_paths
 

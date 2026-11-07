@@ -14,7 +14,7 @@ and each weighs the offer from the seat choosing:
 * **a card** — what it is worth to hold (``ai_scoring._score_tutor_choice``,
   the reading a search's find is weighed by: a card put back, discarded,
   found or returned to a hand), what it is worth on the battlefield
-  (``ai_rehearsal.permanent_worth`` over the card as printed, read for what
+  (``ai_standing.permanent_worth`` over the card as printed, read for what
   lasts: a card put onto the battlefield, face down or up), or its mana value
   where the chooser must not read what the card is worth to somebody else's
   hand (a divider's piles);
@@ -41,8 +41,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-from .ai_rehearsal import (deliberating, permanent_loss, permanent_worth,
-                           rehearse, rehearsing, seat_standing)
+from .ai_rehearsal import deliberating, rehearse, rehearsing
+from .ai_standing import permanent_loss, permanent_worth, seat_standing
 from .ai_scoring import _score_tutor_choice
 from .models import CardDefinition, Permanent
 from .oracle import compile_card_oracle
@@ -200,7 +200,7 @@ def _madness_is_payable(game, seat: int, card: CardDefinition) -> bool:
 def balance_sacrifices(game, seat: int, candidates, owed: int) -> list[int]:
     """The *owed* slots of *candidates* — ``(slot, permanent)`` pairs a Balance
     round counts — a seat sacrifices: the ones whose loss costs it least
-    (``ai_rehearsal.permanent_loss``), then the land that makes fewest
+    (``ai_standing.permanent_loss``), then the land that makes fewest
     colours (:func:`mana_breadth`), the later slot between equals."""
     ranked = sorted(
         candidates,
@@ -581,7 +581,7 @@ def recorded_pick_order(game, chooser: int, permanents: list, side: str | None) 
     working on *side* (:func:`recorded_pick_side`).
 
     Against what is picked: somebody else's first, the dearest of them first
-    (``ai_rehearsal.permanent_worth``, then the land making most colours,
+    (``ai_standing.permanent_worth``, then the land making most colours,
     :func:`mana_breadth`) — then the chooser's own, the cheapest first. For
     it: the chooser's own first, the dearest first — then somebody else's,
     the cheapest first. Board order between equals, and where the program
@@ -792,7 +792,7 @@ def player_choice_pick(game, choice, live: list[int]) -> int | None:
     * **"Which opponent"** — an unnamed "an opponent" at a table of three or
       more (CR 601.7a / 608.2d, ``handlers/player_choices.ask_which_opponent``):
       what that opponent then gets or decides is done for the chooser's
-      opponent, so the one least ahead (``ai_rehearsal.seat_standing``) is
+      opponent, so the one least ahead (``ai_standing.seat_standing``) is
       named — a permanent handed over, a token made or a pile chosen by the
       seat least able to turn it against the chooser.
 

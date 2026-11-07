@@ -94,7 +94,7 @@ def card_divided_target_description(
     is not cosmetic. ``targets["count"]`` already means "this description names
     a list of *permanents*" to three readers that were written before a divided
     description could carry a number — ``handlers/damage``'s several-targets
-    branch, ``ai_target_sides._several_target_instruction`` and the graveyard
+    branch, ``ai_slot_sides._several_target_instruction`` and the graveyard
     picker — and the first of those sits above the divided branch in the same
     function, so a divided description carrying a ``count`` was silently
     resolved as an "up to N target creatures" and dealt nothing at all.

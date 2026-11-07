@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from .models import CardDefinition
 from .oracle import OracleInstruction, compile_card_oracle
 from .ai_weighed_cast import _effect_steps, _walk_program
-from .ai_rehearsal import permanent_worth
+from .ai_standing import permanent_worth
 
 
 def _reads_chosen_creature_type(value) -> bool:

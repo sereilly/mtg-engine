@@ -6,7 +6,7 @@ turns running (seed 11, game 1, turns 9-11), with ten lands on the table.
 Re-measured on 313bd09d the loop is the **cycle**, not the return: the
 hand chooser (``ai_hand_activations``) proposes what its rehearsal does not
 read as harmful, and a standing prices every card in hand alike
-(``ai_rehearsal.CARD_WORTH``), so plainscycling a seven-drop the seat could
+(``ai_standing.CARD_WORTH``), so plainscycling a seven-drop the seat could
 cast next turn for its eleventh land read as a card out and a card in —
 nothing — at a flat 2.5. A graveyard-recursion value (the brief's guess)
 would have made that cycle read *better*: the Dragon in the yard would be
@@ -15,7 +15,7 @@ worth something and the Plains still a card.
 The standing prices a land on the battlefield beyond the six a seat is
 counted as needing at ``SPARE_LAND_WORTH``; a search that can only find a
 land, made when the seat's lands are already more than that, now pays the
-difference (``ai_rehearsal.spare_land_find_price``, read off the seat's own
+difference (``ai_standing.spare_land_find_price``, read off the seat's own
 library through ``search_matches``).
 
 Validated backwards: with the price answering 0 (the base), the census finds
@@ -29,7 +29,7 @@ from unittest import mock
 
 import pytest
 
-from engine import ai_hand_activations, ai_rehearsal
+from engine import ai_hand_activations, ai_standing
 from engine.ai_hand_activations import choose_hand_activation_action
 from engine.ai_simulator import run_ai_simulation
 from engine.ai_weighed_cast import _effect_steps
@@ -142,12 +142,12 @@ def test_the_price_is_the_finds_and_the_seats(pool):
     cycle = usable_activated_abilities(compile_card_oracle(dragon), zone=HAND)[0]
     searches = land_searches(cycle.instruction)
     assert searches
-    spare = ai_rehearsal.CARD_WORTH - ai_rehearsal.SPARE_LAND_WORTH
-    assert ai_rehearsal.spare_land_find_price(
+    spare = ai_standing.CARD_WORTH - ai_standing.SPARE_LAND_WORTH
+    assert ai_standing.spare_land_find_price(
         _table(pool, dragon, "Plains", 6), 0, searches,
     ) == pytest.approx(spare)
-    assert ai_rehearsal.spare_land_find_price(_table(pool, dragon, "Plains", 3), 0, searches) == 0
-    assert ai_rehearsal.spare_land_find_price(_table(pool, dragon, "Plains", 6), 0, ()) == 0
+    assert ai_standing.spare_land_find_price(_table(pool, dragon, "Plains", 3), 0, searches) == 0
+    assert ai_standing.spare_land_find_price(_table(pool, dragon, "Plains", 6), 0, ()) == 0
 
 
 # --- the board the entry names ------------------------------------------------

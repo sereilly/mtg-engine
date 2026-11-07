@@ -20,7 +20,7 @@ from unittest import mock
 import pytest
 
 from engine import Game, PlayerState
-from engine import ai_policy, ai_rehearsal, ai_scoring
+from engine import ai_policy, ai_rehearsal, ai_scoring, ai_scratch_copy
 from engine.ai_actions import cast_announcement
 from engine.ai_policy import choose_cast_action
 from engine.card_loader import load_cards, manifest_set_paths
@@ -61,7 +61,7 @@ class _Counted:
 
     def __init__(self) -> None:
         self.tally: Counter = Counter()
-        real_copy = ai_rehearsal.scratch_copy_with
+        real_copy = ai_scratch_copy.scratch_copy_with
         real_untouched = ai_rehearsal._untouched
         real_rehearse = ai_rehearsal._rehearse
 
@@ -80,7 +80,7 @@ class _Counted:
             return real_rehearse(*args, **asked)
 
         self.patches = [
-            mock.patch.object(ai_rehearsal, "scratch_copy_with", copy),
+            mock.patch.object(ai_scratch_copy, "scratch_copy_with", copy),
             mock.patch.object(ai_rehearsal, "_untouched", untouched),
             mock.patch.object(ai_rehearsal, "_rehearse", rehearse),
         ]

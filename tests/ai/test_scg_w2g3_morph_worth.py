@@ -3,11 +3,11 @@ mana value (SCG W2G3).
 
 W1G5: the special-action chooser rehearses a turn-up (CR 702.37e) and reads
 the standing, which prices each permanent's cost as CR 613 reads it
-(``ai_rehearsal.permanent_worth``) — the face-down blank's is 0 (CR 708.2a),
+(``ai_standing.permanent_worth``) — the face-down blank's is 0 (CR 708.2a),
 the face-up card's its own. So every turn-up read as its card's whole mana
 value gained, and the AI turned up Scornful Egotist (a 1/1 for {7}{U}) for
 its {U} to shrink a 2/2. The turn-up is now rehearsed with the permanent at
-its blank's cost on both copies (``ai_rehearsal.priced_as_their_blanks``).
+its blank's cost on both copies (``ai_standing.priced_as_their_blanks``).
 
 And Mischievous Quanar's "{3}{U}{U}: Turn this creature face down." was
 scored flat (2.5, ``ai_abilities``) and activated every main phase with no

@@ -1,6 +1,6 @@
 """What the AI does with three Judgment cards whose value no standing reads.
 
-``ai_rehearsal.seat_standing`` counts life, a hand and a board. Three of
+``ai_standing.seat_standing`` counts life, a hand and a board. Three of
 Judgment's odd ones trade in what it does not count, and each was played
 against its own seat in seeded games until the policy was told:
 

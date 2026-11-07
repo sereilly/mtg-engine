@@ -28,7 +28,7 @@ entry state starts until it is on the battlefield. What the record answers:
   owed suspension (``PendingChoicesMixin.owed_suspensions``), so "return it to
   the battlefield, then it gains haste" stops at the entry and resumes once
   the permanent is there;
-* **that no copy may be made of the table** (``ai_rehearsal.held_for_an_answer``):
+* **that no copy may be made of the table** (``ai_scratch_copy.held_for_an_answer``):
   ``finish`` is a closure over this game.
 
 **Permanents one event puts onto the battlefield enter together** (CR

@@ -2,7 +2,7 @@
 answers is not part of that event (CR 603.6a, ``entering_together_through``).
 
 Show and Tell's event outlives its offers: each seat's answer re-joins it and
-the last one closes it. A copy of the table (``ai_rehearsal.scratch_copy``)
+the last one closes it. A copy of the table (``ai_scratch_copy.scratch_copy``)
 taken between two answers carries the prompts that would re-join it — and the
 card the first seat already handed in, whose caller's continuation is a
 closure over the original game. So the copy's prompts carry no event (its
@@ -13,7 +13,7 @@ copy may be cut loose from the table at all (``held_for_an_answer``).
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.ai_rehearsal import held_for_an_answer, scratch_copy
+from engine.ai_scratch_copy import held_for_an_answer, scratch_copy
 from engine.card_loader import load_catalog
 from engine.entry_awaiting import ENTRY_EVENT
 

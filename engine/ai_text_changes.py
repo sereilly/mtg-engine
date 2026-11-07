@@ -39,7 +39,7 @@ from .ai_actions import (
     _announced_steps,
     _cast_spec,
 )
-from .ai_rehearsal import CARD_WORTH
+from .ai_standing import CARD_WORTH
 from .ai_weighed_cast import SPELL_TYPES
 from .game import Game
 from .models import CardDefinition
@@ -281,7 +281,7 @@ def aimed_worth(
     census: "_Census | None" = None,
 ) -> float:
     """What rewriting *old* to *new* on *permanent* is worth to *caster*,
-    beyond anything a standing reads (``ai_rehearsal.seat_standing``): the
+    beyond anything a standing reads (``ai_standing.seat_standing``): the
     change in what its words are aimed at (:func:`_aim`) — and, where the word
     is a land's own type, the change in what every other permanent's land
     words are aimed at (a swampwalk the opponent's new Swamp now reaches)."""

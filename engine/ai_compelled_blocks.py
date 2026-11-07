@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .ai_rehearsal import permanent_worth
+from .ai_standing import permanent_worth
 from .ai_weighed_cast import _effect_steps
 from .combat_assignment import combat_damage_assigned_by
 
@@ -76,7 +76,7 @@ def compelled_block_worth(game: "Game", attacker: "Permanent", blocker: "Permane
     """What *blocker* blocking *attacker* is worth to *attacker*'s seat.
 
     A creature killed is its worth gained; the attacker killed is its worth
-    lost (``ai_rehearsal.permanent_worth``, read as the board will be once
+    lost (``ai_standing.permanent_worth``, read as the board will be once
     the turn is over). A block that kills neither is :data:`_STALEMATE`, and a
     blocker that cannot block the attacker at all (no flying against a flier)
     is a creature untapped to block somebody else — **unless the attacker can
@@ -127,13 +127,13 @@ def _shed_for_the_block(game: "Game", attacker: "Permanent", blocker: "Permanent
     tapped attacker, nothing the activation prohibitions refuse, a cost the
     engine's gate and the board can pay. The ability is the engine's own,
     activated and resolved on a scratch copy cut loose from whatever is
-    resolving (``ai_rehearsal._detach``) and asked the engine's own question
+    resolving (``ai_scratch_copy._detach``) and asked the engine's own question
     (``_can_block_attacker``) — so what it sheds is whatever its program
     says, never a keyword named here."""
     import random
 
     from .activation_prohibitions import activation_prohibition
-    from .ai_rehearsal import _detach, scratch_copy
+    from .ai_scratch_copy import _detach, scratch_copy
     from .ai_valuation import hampers_its_own_source, is_mana_ability
     from .board_payment import board_can_pay
 
@@ -212,9 +212,9 @@ def _ganged_on(game: "Game", attacker: "Permanent", blocker: "Permanent") -> boo
 
 def _evasion_damage_worth(game: "Game", attacker: "Permanent", blocker: "Permanent") -> float:
     """What the combat damage *attacker* deals unblocked is worth to its seat
-    against *blocker*'s controller (``ai_rehearsal.life_worth``) — the price
+    against *blocker*'s controller (``ai_standing.life_worth``) — the price
     of shedding the evasion that kept it unblocked."""
-    from .ai_rehearsal import life_worth
+    from .ai_standing import life_worth
 
     defender = game.players[game.controller_index_of(blocker)]
     damage = combat_damage_assigned_by(attacker)

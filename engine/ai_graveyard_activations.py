@@ -38,7 +38,8 @@ from .activation_prohibitions import activation_prohibition
 from .activation_zones import GRAVEYARD, ability_functions_from
 from .ai_actions import GraveyardActivationAction
 from .ai_payment import _plan_land_taps, tap_planned_lands
-from .ai_rehearsal import Rehearsal, deliberating, permanent_worth, rehearse
+from .ai_rehearsal import Rehearsal, deliberating, rehearse
+from .ai_standing import permanent_worth
 from .ai_scoring import SWING_CAP, _score_activation, _worth_proposing
 from .ai_target_sides import ability_seat_side, ability_target_side
 from .ai_valuation import is_mana_ability
@@ -201,7 +202,7 @@ def _discard_pick(game: Game, seat: int, cost) -> "int | None":
     card (`Game._discard_cost_payable`, the printed phrase's) of least mana
     value, lands first, the earliest of equals — or None for a cost that
     discards nothing, or one the hand cannot pay. A rehearsal reads a card in
-    hand as a card whatever it is (`ai_rehearsal.CARD_WORTH`), so which one
+    hand as a card whatever it is (`ai_standing.CARD_WORTH`), so which one
     pays is this policy's, and the engine's own default is the first."""
     if not cost.discard_cards:
         return None

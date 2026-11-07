@@ -10,12 +10,12 @@ division a seat nobody asks makes — counters, or damage (``damage=True``):
 spread where a share kills first, or the creature it would hurt least.
 
 What a divided spell divides — its shape — is the compiled program's
-(``ai_target_sides.divided_shape``).
+(``ai_slot_sides.divided_shape``).
 """
 
 from __future__ import annotations
 
-from .ai_target_sides import divided_shape
+from .ai_slot_sides import divided_shape
 from .divided_damage import EACH, spread_shares
 from .game import Game
 from .models import CardDefinition
@@ -50,7 +50,7 @@ def choose_divided_targets(
     action the game then rejects.
 
     **Which board the shares land on is derived, never named**:
-    ``ai_target_sides.divided_shape`` reads the sign of the counter the compiled
+    ``ai_slot_sides.divided_shape`` reads the sign of the counter the compiled
     program places, so Bounty of the Hunt's ``+1/+1`` goes on the caster's own
     creatures and Contagion's ``-2/-1`` on the opponent's, and a card printed
     tomorrow with either template is aimed correctly the day it is ingested.
@@ -130,7 +130,7 @@ def choose_divided_targets(
     if exact is not None and len(shape.slot_sides) == exact:
         # The targets are not interchangeable (Captain's Maneuver: the first is
         # spared, the second takes the damage), so each is taken from the board
-        # its own slot names — `ai_target_sides.DividedShape.slot_sides`. Which
+        # its own slot names — `ai_slot_sides.DividedShape.slot_sides`. Which
         # candidate on that board is this module's weight, and it is the one
         # every divided spell has: the first the enumeration offers, a player's
         # face where the printed noun admits one. So the caster's own face is
@@ -332,7 +332,7 @@ def least_harmed_permanent(
     (CR 603.3d), on its controller's own board, and there the whole total
     goes on one creature. One that survives it if there is one (the
     sturdiest); otherwise the one worth least
-    (``ai_rehearsal.permanent_worth``). The offer's first was a Savannah
+    (``ai_standing.permanent_worth``). The offer's first was a Savannah
     Lions, killed beside a Hill Giant that would have lived through it.
 
     Damage the same way (Scourge's rehearsal): Skirk Volcanist turned face up
@@ -367,7 +367,7 @@ def _toughness_step(counter: str, *, damage: bool = False) -> int:
 def _shrink_ranking(game: Game, permanent_ids, step: int, deathtouch: bool = False):
     """``(counters to kill, -worth, offer position, permanent_id)`` for each
     of *permanent_ids* still on the battlefield."""
-    from .ai_rehearsal import permanent_worth
+    from .ai_standing import permanent_worth
 
     for position, permanent_id in enumerate(permanent_ids):
         permanent = game.permanent_by_id(permanent_id)

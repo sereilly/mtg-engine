@@ -12,7 +12,7 @@ shares; this is what it is a preference *for*.
 The wants are symbol dicts, read off what the seat itself can see (CR 400.2:
 its own hand; CR 708.5: its own face-down permanents; the public graveyards
 and exile) and nothing else — so the AI's rehearsal copy, which conceals
-another seat's hand (``ai_rehearsal.conceal_from``), reads the same wants of
+another seat's hand (``ai_scratch_copy.conceal_from``), reads the same wants of
 the seat it plans for, and the web's auto-tap reads a person's own hand on
 their behalf:
 

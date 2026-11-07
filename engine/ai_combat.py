@@ -245,15 +245,15 @@ def _division_among_defenders(game, attacker_slot: int, attacker) -> "dict | Non
     can kill — blocking or not, which is the offer's whole point ("You can use
     the ability to divide damage even if it is not blocked", ruling
     2004-10-04) — is taken, most worth per point of lethal damage first, while
-    what it is worth (``ai_rehearsal.permanent_worth``) is more than the same
-    damage to the player's face (``ai_rehearsal.life_worth``, which makes the
+    what it is worth (``ai_standing.permanent_worth``) is more than the same
+    damage to the player's face (``ai_standing.life_worth``, which makes the
     last points dear); whatever is left goes to the player. A creature the
     damage would not reach (protection, a shield) and a player it would not
     reach are never named. None where the division is what the attacker would
     do anyway (an unblocked attacker sending everything to the player), and
     for an attack on a planeswalker, whose loyalty this has no price for.
     """
-    from .ai_rehearsal import life_worth, permanent_worth
+    from .ai_standing import life_worth, permanent_worth
     from .combat_assignment import DEFENDING_PLAYER_SHARE
 
     if game.combat_attacked_planeswalkers.get(attacker_slot) is not None:
@@ -429,12 +429,12 @@ def _division_costing_least(game, attacker, blockers: dict, damage: int) -> tupl
       attacker's colour, a shield — ``_would_be_prevented``) takes everything.
     * Otherwise **one**: a creature already assigned lethal damage can be
       assigned the rest as well, so all of it goes on the one worth least
-      (``ai_rehearsal.permanent_worth``) and every other blocker lives. The
+      (``ai_standing.permanent_worth``) and every other blocker lives. The
       engine's default walked the blockers in slot order assigning lethal
       damage to each — the most deaths the power allows, which is what an
       *attacker* wants.
     """
-    from .ai_rehearsal import permanent_worth
+    from .ai_standing import permanent_worth
 
     division = {slot: 0 for slot in blockers}
     if damage <= 0 or not blockers:
@@ -466,13 +466,13 @@ def _defender_takes_the_damage_itself(
     The attacker's own question (`_offer_is_better_declined`) from the other
     chair, in the valuation's own units: taken when keeping the damage on the
     blockers would cost a creature (*dying*) worth more than the life it
-    costs to take it (``ai_rehearsal.life_worth``, which makes the last
+    costs to take it (``ai_standing.life_worth``, which makes the last
     points dear and a loss of the game unaffordable) — or costs nothing to
     take at all, because it would not reach the player. Kept on the blockers
     when none of them dies of it, and for an attack on a planeswalker, whose
     loyalty this has no price for.
     """
-    from .ai_rehearsal import life_worth, permanent_worth
+    from .ai_standing import life_worth, permanent_worth
 
     if not dying or game.combat_attacked_planeswalkers.get(attacker_slot) is not None:
         return False

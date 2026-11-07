@@ -105,15 +105,9 @@ from engine.ai_scoring import SPELL_BASE_SCORE, SWING_CAP
 from engine.ai_actions import cast_announcement
 from engine.ai_policy import choose_cast_action
 from engine.ai_payment import tap_planned_lands
-from engine.ai_rehearsal import (
-    CARD_WORTH,
-    position_digest,
-    same_position,
-    scratch_copy,
-    standing_swing,
-    standings,
-    swing_worth,
-)
+from engine.ai_rehearsal import position_digest, same_position
+from engine.ai_scratch_copy import scratch_copy
+from engine.ai_standing import CARD_WORTH, standing_swing, standings, swing_worth
 from engine.ai_weighed_cast import permitted_casts
 from engine.damage_events import DAMAGED_THIS_GAME
 from engine.mixins._constants import phases_after
@@ -181,7 +175,7 @@ NOT_TRICKS = frozenset({"Sleight of Hand", "Dark Ritual", "Terror"})
 #: the share they would otherwise fall in is not what keeps them honest.
 UNPINNED = frozenset({"Threaten", "Debt of Loyalty"})
 #: A trick whose verdict is a coin flip's, sampled by the rehearsal
-#: (``ai_rehearsal._rehearsal_seed``): swept every run, since a reseed is
+#: (``ai_scratch_copy._rehearsal_seed``): swept every run, since a reseed is
 #: what moves it (kg4/determinism; see `LOSSES`).
 COINS = frozenset({"Desperate Gambit"})
 ALWAYS = TRICKS | NOT_TRICKS | UNPINNED | COINS
@@ -589,7 +583,7 @@ HELD: dict = {
 }
 #: Desperate Gambit flips a coin: won, the chosen source's next damage this
 #: turn is doubled; lost, it is prevented. A rehearsal's randomness is its own
-#: on purpose (``ai_rehearsal._rehearsal_seed``) — it says what such a cast is
+#: on purpose (``ai_scratch_copy._rehearsal_seed``) — it says what such a cast is
 #: *like* and must not say how the real flip will fall. On the seed read off
 #: the log's length its sample won on the open, lethal and wall boards and
 #: this census's cast, on its own seed, lost: pinned idle, a loss and priced

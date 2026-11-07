@@ -112,7 +112,7 @@ def test_w2g5_a_crown_is_sacrificed_when_it_is_the_lethal_point(set_pool):
 def test_w2g5_shepherd_of_rot_drains_only_from_ahead(set_pool, life, activated):
     """Two Zombies on the table, so each player loses two. Worth it only to the
     seat whose two points are worth less than the opponent's
-    (`ai_rehearsal.life_worth` is concave)."""
+    (`ai_standing.life_worth` is concave)."""
     game = _w2g5_board(
         set_pool, ["Shepherd of Rot", "Gluttonous Zombie", "Swamp"], ["Grizzly Bears"],
         life=life,

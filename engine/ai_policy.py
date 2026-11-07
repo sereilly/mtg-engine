@@ -282,7 +282,7 @@ def choose_madness_cast(
     **Weighed in the abstract** (`_IN_THE_ABSTRACT`), because the question is
     asked part-way through the madness trigger's own resolution, where no
     copy of the table can be taken as it stands
-    (``ai_rehearsal.mid_resolution``). The copy that is taken owes nothing,
+    (``ai_scratch_copy.mid_resolution``). The copy that is taken owes nothing,
     and the permission travels with it because it is stored on the game.
 
     No timing gate: CR 608.2g makes the cast during a resolution, where a

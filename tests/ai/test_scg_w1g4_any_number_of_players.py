@@ -6,7 +6,7 @@ The chain is Wheel and Deal's optional seat roles with the caster admitted
 walk took the caster's own seat first — first in seat order at seat 0, and the
 only seat a later role could follow at the last seat — so Cabal Conditioning
 named its own caster at seat 0 and was never cast at seat 1. The side is now
-the seat reading of the loop's body (``ai_target_sides.announced_roles_loop_side``):
+the seat reading of the loop's body (``ai_slot_sides.announced_roles_loop_side``):
 a life gain is a gift and names the caster, a discard a denial and names the
 opponents, and the prefix walk then weighs how many of them.
 """

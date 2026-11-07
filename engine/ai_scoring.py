@@ -42,14 +42,14 @@ from .ai_target_sides import (
     spell_target_side,
 )
 from .ai_rehearsal import (
-    CARD_WORTH,
     Rehearsal,
     deliberating,
     priced_by_the_fight,
-    public_counts,
     rehearse,
     rehearsing,
 )
+from .ai_scratch_copy import public_counts
+from .ai_standing import CARD_WORTH
 from .ai_valuation import (
     board_lowers_toughness,
     cards_drawn_by_controller,
@@ -458,7 +458,7 @@ def _arrives_to_stay(rehearsal: Rehearsal | None) -> bool:
     took it, and once the turn is over its caster is ahead by more than the
     half a life ``HARM_FLOOR`` forgives — which a permanent still on the
     battlefield always is, worth at least the card it was
-    (``ai_rehearsal.PERMANENT_WORTH``), and one that died as it arrived is
+    (``ai_standing.PERMANENT_WORTH``), and one that died as it arrived is
     not: its card is in a graveyard and nothing it did is left.
 
     A cast nobody could rehearse (None) is proposed as it always was."""

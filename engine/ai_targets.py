@@ -33,16 +33,18 @@ import re
 
 from .ai_weighed_cast import SPELL_TYPES
 from .ai_target_sides import (
-    announced_roles_loop_side,
     best_counted_target_seat,
     entry_trigger_target_side,
     host_effect_side,
-    role_target_sides,
-    several_target_slot_sides,
     spell_denies_its_own_target,
     spell_target_side,
 )
-from .ai_rehearsal import permanent_worth
+from .ai_slot_sides import (
+    announced_roles_loop_side,
+    role_target_sides,
+    several_target_slot_sides,
+)
+from .ai_standing import permanent_worth
 from .ai_prompt_readers import (
     exiles_a_graveyard_target,
     graveyard_denial_order,
@@ -457,7 +459,7 @@ def _choose_role_targets(
     list.
 
     **Which of a role's legal answers is a valuation, per role**
-    (``ai_target_sides.role_target_sides``). Taking the first option at each level
+    (``ai_slot_sides.role_target_sides``). Taking the first option at each level
     was the whole policy, and the first option is the first board in seat
     order: Withdraw returned two of its caster's own creatures, Fumarole
     destroyed its caster's creature and land, Lunge burned its caster's
@@ -491,7 +493,7 @@ def _choose_role_targets(
     sides = role_target_sides(card, offers)
     # "Choose any number of target players or planeswalkers. For each of them,
     # … deals damage …" (Kaboom!): every role is aimed where the loop's body
-    # says, seats included (``ai_target_sides.announced_roles_loop_side``) —
+    # says, seats included (``ai_slot_sides.announced_roles_loop_side``) —
     # read as sideless, the walk named the caster's own seat first.
     looped = announced_roles_loop_side(card)
     if looped is not None and not any(sides):
@@ -737,7 +739,7 @@ def _role_chain(
         # candidate is on the board the role is for, so which one is the whole
         # decision — and the enumeration's order is the battlefield's, which
         # puts the lands first: the seat took a Swamp from a table of
-        # creatures. The most valuable first (``ai_rehearsal.permanent_worth``,
+        # creatures. The most valuable first (``ai_standing.permanent_worth``,
         # what a permanent is worth to whoever controls it), stable.
         candidates = sorted(
             candidates,
@@ -1200,7 +1202,7 @@ def _target_candidates(game: Game, legal: list[dict], order: list[int]) -> list[
 def _distinct_targets(game: Game, candidates: list[tuple]) -> list[tuple]:
     """*candidates* with look-alikes dropped — two untapped Forests are one
     question — and at most `TARGETS_WEIGHED` of them kept: the first in
-    order, then the dearest (``ai_rehearsal.permanent_worth``) and the
+    order, then the dearest (``ai_standing.permanent_worth``) and the
     frailest, since the target a spell does most at is as often the one it
     can just kill as the one worth most."""
     seen: set = set()
