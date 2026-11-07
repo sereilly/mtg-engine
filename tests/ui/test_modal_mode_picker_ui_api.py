@@ -77,7 +77,9 @@ def test_w2g2_a_mode_is_sent_the_picker_its_own_sentence_prints():
     _state, card = _w2g2_hand_card(sid, "Chaos Charm")
     modes = card["modes"]
 
-    assert [mode["target_kind"] for mode in modes] == ["creature", "creature", "creature"]
+    # "target Wall" is any Wall permanent (CR 109.2, 205.3m): the general
+    # picker, which the client routes to its permanent prompt (kg4).
+    assert [mode["target_kind"] for mode in modes] == ["permanent", "creature", "creature"]
     names = [
         sorted(target["name"] for target in mode["valid_targets"]) for mode in modes
     ]
