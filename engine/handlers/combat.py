@@ -229,13 +229,25 @@ def _take_permanent_out_of_combat(
         return False
     seat = game.controller_index_of(perm)
     if seat == game.active_player_index and idx in game.combat_attackers:
+        # CR 702.22h: whatever blocks it blocks the rest of its band, and goes
+        # on doing so once it has gone.
+        game._keep_band_blocks_past({idx})
         game.combat_attackers.pop(idx, None)
         game.combat_attacked_planeswalkers.pop(idx, None)
-        game.combat_bands = [band for band in game.combat_bands if idx not in band]
+        # CR 702.22f: "An attacking creature that's removed from combat is
+        # also removed from the band it was in" — it, and not the band: this
+        # dropped every band it was in, so a band of three that lost one
+        # member stopped spreading its blocks to the other two. A band left
+        # with one creature is no band (``_prune_combat_state``'s rule).
+        game.combat_bands = [
+            kept for band in game.combat_bands
+            if len(kept := [member for member in band if member != idx]) >= 2
+        ]
         for blocker_map in game.combat_blockers.values():
             for blocked in blocker_map.values():
                 if idx in blocked:
                     blocked.remove(idx)
+        game._apply_band_block_propagation()
         # CR 506.4c: it stops being an attacking creature — the per-permanent
         # state has to agree with the pruned maps, or a filter asking
         # "attacking" between now and end of combat gets a different answer

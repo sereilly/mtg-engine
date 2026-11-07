@@ -145,10 +145,9 @@ def test_declare_blockers_and_damage_skipped_when_no_attackers():
     ok, _ = game.declare_attackers(0, [])
     assert ok
 
-    # With no attackers, the declare blockers and combat damage steps make no
-    # block/damage decisions and combat proceeds to end of combat. (The engine
-    # passes through these steps as no-ops rather than literally removing them.)
-    game.advance_combat_phase()
+    # With no attackers the declare blockers and combat damage steps are
+    # skipped: leaving the declare attackers step enters the end of combat
+    # step, and neither skipped step is entered on the way.
     game.advance_combat_phase()
     assert game.current_step == "end_of_combat"
     assert game.combat_blockers == {}

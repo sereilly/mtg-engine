@@ -108,15 +108,17 @@ def _combat_after_blockers(game: "Game", caster_index: int) -> bool:
     precombat main phase, which is before the declaration and not during combat.
 
     Where the point *is* -- the declare blockers step's arrival, per CR 509.1's
-    turn-based action -- is stated once, in the sibling, and never here. One
-    artifact of the engine's step model rides along with that: CR 508.8 skips
-    the declare blockers step outright when nothing attacked, so the window this
-    card names does not exist in that combat at all, and the engine keeps the
-    step. The difference is confined to a window in which no priority is given.
+    turn-based action -- is stated once, in the sibling, and never here. And
+    where it is *not*: CR 508.8 skips the declare blockers step outright when
+    nothing attacked, and "the spell may not be cast during that combat phase"
+    (CR 506.8f) -- the end of combat step that follows a skipped step is not
+    after blockers were declared, though it is past the point the sibling
+    reads (``Game.combat_skips_blocks_and_damage``).
     """
     return (
         game.current_turn_phase == "combat"
         and not _before_blockers_are_declared(game, caster_index)
+        and not game.combat_skips_blocks_and_damage()
     )
 
 

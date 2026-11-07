@@ -234,6 +234,10 @@ class DeclareAttackersStepMixin:
             return False, named_refusal
 
         self.combat_attackers = dict(per_attacker_defender)
+        # CR 508.8's record: whether any creature was declared as an attacker,
+        # kept apart from the map above because the map lets go of a creature
+        # removed from combat and the declaration stands.
+        self.combat_creatures_attacked = bool(per_attacker_defender)
         self.combat_attacked_planeswalkers = dict(per_attacker_walker)
         self.combat_defending_player_index = self._resolve_defending_player_index()
         self.combat_blockers = {}

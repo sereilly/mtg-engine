@@ -310,8 +310,9 @@ def test_declare_attackers_step_complete_follows_its_attack_trigger():
 
 
 def test_a_step_cr_508_8_skips_is_not_said_to_have_completed():
-    """No creature attacked: CR 508.8 skips the declare blockers step, which
-    is said once, with the attack's reason, and not then called complete."""
+    """No creature attacked: CR 508.8 skips the declare blockers and combat
+    damage steps, which is said once, with the attack's reason, and neither is
+    then called complete."""
     game = _table(mine=["Plains"], theirs=["Grizzly Bears"])
     game._close_current_priority_step()
     for _ in range(4):
@@ -320,7 +321,8 @@ def test_a_step_cr_508_8_skips_is_not_said_to_have_completed():
         game.advance_combat_phase()
 
     assert "P1 has no valid attackers" in game.log, game.log[-6:]
-    assert "No attackers; declare blockers step skipped (508.8)" in game.log, game.log[-6:]
+    skipped = "No attackers; declare blockers and combat damage steps skipped (508.8)"
+    assert game.log.count(skipped) == 1, game.log[-6:]
     assert "Declare attackers step complete: 0 creature(s) attacking" in game.log
     assert not any(line.startswith("Declare blockers step complete") for line in game.log)
     assert not any("has no valid blockers" in line for line in game.log)

@@ -47,6 +47,19 @@ def _to_declare_attackers(game: Game) -> None:
     game.advance_combat_phase()  # declare_attackers
 
 
+def _to_declare_blockers(game: Game, p1: PlayerState) -> None:
+    """Seat 0 attacks with a Bear, so the combat has a declare blockers step
+    (CR 508.8 skips it when nobody attacks)."""
+    bear = Permanent(card=_CATALOG["Grizzly Bears"])
+    _nosick(bear)
+    p1.battlefield.append(bear)
+    _to_declare_attackers(game)
+    ok, why = game.declare_attackers(0, [0])
+    assert ok, why
+    game.advance_combat_phase()  # declare_blockers
+    assert game.current_step == "declare_blockers"
+
+
 # ---------------------------------------------------------------------------
 # 506.8 — the restriction binds before its point and refuses after it
 # ---------------------------------------------------------------------------
@@ -93,12 +106,13 @@ def test_506_8_the_ending_phase_is_also_past_the_combat_damage_step():
 def test_506_8_only_during_the_declare_blockers_step():
     """False Orders — "only during the declare blockers step". Declare
     attackers is the step before, and is refused."""
-    game, _p1, _p2 = _duel()
+    game, p1, _p2 = _duel()
     _to_declare_attackers(game)
 
     assert _denial(game, 0, "False Orders") == "can only be cast during the declare blockers step"
 
-    game.advance_combat_phase()  # declare_blockers
+    game, p1, _p2 = _duel()
+    _to_declare_blockers(game, p1)
 
     assert _denial(game, 0, "False Orders") is None
 
@@ -107,12 +121,13 @@ def test_506_8_only_during_the_declare_blockers_step():
 def test_506_8_only_during_combat_before_blockers_are_declared():
     """Blaze of Glory — the window closes once blockers are declared, which is
     a different point from the declare blockers step beginning."""
-    game, _p1, _p2 = _duel()
+    game, p1, _p2 = _duel()
     _to_declare_attackers(game)
 
     assert _denial(game, 0, "Blaze of Glory") is None
 
-    game.advance_combat_phase()  # declare_blockers
+    game, p1, _p2 = _duel()
+    _to_declare_blockers(game, p1)
     game.combat_blockers_locked = True
 
     assert _denial(game, 0, "Blaze of Glory") == (
@@ -135,7 +150,8 @@ def test_506_8c_only_during_combat_is_the_whole_combat_phase_on_any_turn():
     assert check_cast_timing(game, 0, text) is None
     assert check_cast_timing(game, 1, text) is None
 
-    game.advance_combat_phase()  # declare_blockers
+    game.advance_combat_phase()  # end_of_combat: nobody attacked (CR 508.8)
+    assert game.current_step == "end_of_combat"
     assert check_cast_timing(game, 0, text) is None
 
     game.current_turn_phase = "postcombat_main"

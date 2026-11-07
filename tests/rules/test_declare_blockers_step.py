@@ -928,8 +928,10 @@ def test_509_1a_an_effect_may_move_the_choices_to_another_player():
 def test_509_1a_the_substitution_lasts_only_as_long_as_its_combat():
     """"…block **this combat**". The chooser is combat-scoped state, so the next
     combat phase asks the defending player again."""
-    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
-    _to_declare_blockers(game, [])
+    # An attack, so the combat has a declare blockers step (CR 508.8).
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    game = Game(players=[PlayerState(name="P1", battlefield=[attacker]), PlayerState(name="P2")])
+    _to_declare_blockers(game, [0])
     game.combat_block_chooser = 0
     assert game.block_chooser_index(1) == 0
 

@@ -1235,6 +1235,13 @@ class ControlSeamMixin:
             # scans of what leaves after them in it.
             if zone_change and self.departure_batch is not None:
                 self.departure_batch.extend(removed)
+            if self.combat_bands:
+                # The spread of each band's blocks, from the pairs as they now
+                # stand (CR 702.22h): the renumbered spread still names a
+                # blocker re-pointed at the member it was spread onto, and a
+                # spread with no band behind it stops the damage step for a
+                # division nobody owes.
+                self._apply_band_block_propagation()
         # Only for the permanents that were really there: `targets` is what the
         # caller asked about and `removed` is what left, and a trigger announced
         # for a permanent already off the battlefield would fire on nothing.
@@ -1390,6 +1397,11 @@ class ControlSeamMixin:
             return index - sum(1 for slot in gone if slot < index)
 
         attacker_seat = self.active_player_index
+        # CR 702.22h: a departing attacker's blockers keep blocking the rest of
+        # its band — re-pointed while every slot still means what it meant.
+        self._keep_band_blocks_past(
+            [slot for slot in vacated.get(attacker_seat) or () if slot in self.combat_attackers]
+        )
         # Snapshot the attacker->defender map before anything is rewritten; the
         # blocker-seat lookups below read it.
         blocker_seat_of = {

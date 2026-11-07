@@ -500,6 +500,14 @@ def choose_defender_damage_assignment(game, defender_index: int) -> tuple[dict, 
     whose "as though it weren't blocked" the defending player takes
     (`_defender_takes_the_damage_itself`) — one answer per attacker, never
     some of each.
+
+    **A trampler is kept on its blockers too.** All of its damage to the
+    creatures blocking it is legal for the seat that assigns it (CR 510.1c;
+    CR 702.19b's excess is "assigned as its controller chooses among those
+    blocking creatures and the player"), and in front of one blocker with
+    more than lethal damage to assign, that blocker dies either way — so the
+    excess is the whole decision, and none of it to this seat is the least
+    it can cost. The engine's default sent it here: the attacker's split.
     """
     active = game.active_player_index
     divisions: dict[int, dict[int, int]] = {}

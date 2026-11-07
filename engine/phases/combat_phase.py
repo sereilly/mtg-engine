@@ -18,8 +18,37 @@ from ..events import emit
 from ..models import Permanent
 from ..resumption import run_resumable
 
+#: The steps CR 508.8 skips when no creature is declared as an attacker or put
+#: onto the battlefield attacking.
+_SKIPPED_WITHOUT_ATTACKERS = frozenset({"declare_blockers", "combat_damage"})
+
 
 class CombatPhaseMixin:
+    def combat_skips_blocks_and_damage(self) -> bool:
+        """Whether this combat skips — or skipped — its declare blockers and
+        combat damage steps (CR 508.8): the attack is settled and no creature
+        was declared as an attacker or put onto the battlefield attacking.
+
+        False until the declare attackers step's declaration is made (the
+        question has no answer yet), and False for a combat whose only
+        attacker was removed from combat afterwards (CR 506.4 does not unmake
+        a declaration). Something attacking now was declared or put onto the
+        battlefield attacking, whatever road wrote it, so it answers False too.
+
+        One answer for the three readers of "did this combat have those
+        steps": the step walk (``_leave_combat_step``), and CR 506.8f's
+        "only during combat after blockers are declared" for a spell
+        (``cast_restrictions``) and an ability (``activation_restrictions``,
+        CR 506.8g) — the end of combat step follows a skipped declare blockers
+        step as well as a real one, and only the second is "after blockers are
+        declared".
+        """
+        return (
+            self.combat_attackers_locked
+            and not self.combat_creatures_attacked
+            and not self.combat_attackers
+        )
+
     def combat_defending_players(self) -> set[int]:
         """CR 802.2: every player currently a defending player this combat — i.e.
         named as the target of at least one declared attacker. Empty before
@@ -455,11 +484,6 @@ class CombatPhaseMixin:
                 # The step goes on (CR 509.1: this defender declares no
                 # blockers), so nothing here says it was skipped.
                 self.log.append(f"{defender_name} has no valid blockers")
-        if self.current_step == "declare_blockers" and self.combat_blockers_locked and not self.combat_attackers:
-            # CR 508.8's reason, which is the attack's and not a defender's:
-            # "has no valid blockers" named the defender for a step that no
-            # creature attacked into.
-            self.log.append("No attackers; declare blockers step skipped (508.8)")
         if self.current_step == "combat_damage" and not self.combat_damage_resolved:
             # Awaiting a damage assignment — with one exception, which is the
             # second combat damage step (CR 510.4) when it has nothing in it
@@ -524,15 +548,16 @@ class CombatPhaseMixin:
         the declaration has its own line ("… declared N attacker(s)"), and a
         creature removed from combat in the window is no longer attacking.
 
-        A declare blockers step CR 508.8 skipped (nothing attacked) says so
-        as it is entered, and is not then said to have completed.
+        A declare blockers step CR 508.8 skips (nothing attacked) is never
+        entered (:meth:`_leave_combat_step`), so it is never said to have
+        completed; one that is entered completes, attackers left in it or not.
         """
         if self.current_step == "declare_attackers":
             self.log.append(
                 "Declare attackers step complete: "
                 f"{len(self.combat_attackers)} creature(s) attacking"
             )
-        elif self.current_step == "declare_blockers" and self.combat_attackers:
+        elif self.current_step == "declare_blockers":
             blocking = sum(len(m) for m in self.combat_blockers.values())
             self.log.append(
                 f"Declare blockers step complete: {blocking} creature(s) blocking"
@@ -556,8 +581,23 @@ class CombatPhaseMixin:
                 self.hold_step_open()
                 return
         self._log_declaration_step_complete()
-        self._on_step_or_phase_end("combat", self.current_step)
+        leaving = self.current_step
+        self._on_step_or_phase_end("combat", leaving)
         next_idx = idx + 1
+        if leaving == "declare_attackers" and self.combat_skips_blocks_and_damage():
+            # CR 508.8: nothing was declared as an attacker or put onto the
+            # battlefield attacking, so the declare blockers and combat damage
+            # steps are skipped — neither is entered, neither gives priority,
+            # and nothing triggers "in" either; the end of combat step is
+            # next (CR 511). Since kg3 the log said so and the engine entered
+            # both steps anyway, running both priority windows.
+            first_skipped = next_idx
+            while next_idx < len(combat_steps) and combat_steps[next_idx] in _SKIPPED_WITHOUT_ATTACKERS:
+                next_idx += 1
+            if next_idx > first_skipped:
+                self.log.append(
+                    "No attackers; declare blockers and combat damage steps skipped (508.8)"
+                )
         if next_idx >= len(combat_steps):
             self.enter_next_turn_phase("combat")
             return
@@ -722,6 +762,7 @@ class CombatPhaseMixin:
         self.combat_attackers_locked = False
         self.combat_blockers_locked = False
         self.combat_unblocked_triggers_fired = False
+        self.combat_creatures_attacked = False
         for permanent in self.all_permanents():
             permanent.attacking = False
             permanent.defending_player_index = None
@@ -754,6 +795,10 @@ class CombatPhaseMixin:
             if not attacker.is_creature:
                 continue
             valid_attackers[attacker_idx] = defending_idx
+        if len(valid_attackers) < len(self.combat_attackers):
+            # CR 702.22h: what blocked a departing band member goes on
+            # blocking the members staying (``_keep_band_blocks_past``).
+            self._keep_band_blocks_past(set(self.combat_attackers) - set(valid_attackers))
         self.combat_attackers = valid_attackers
 
         # An attacker that left combat takes its planeswalker target with it.

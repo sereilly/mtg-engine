@@ -313,8 +313,14 @@ def board(card, placements=(), *, window=None, grave=(), stack=None):
         # (kg3/aidefend, ``ai_rehearsal.pays_before_the_blocks``). Seat 0 has
         # nothing on a "combat" board to block with.
         game.advance_combat_phase()
-        assert game.current_step == "declare_blockers", game.current_step
-        game.declare_blockers(ME, {})
+        if attackers:
+            assert game.current_step == "declare_blockers", game.current_step
+            game.declare_blockers(ME, {})
+        else:
+            # Nothing attacked (the bait is not a creature): CR 508.8 skips the
+            # declare blockers step, and the window after the attack is the
+            # end of combat's.
+            assert game.current_step == "end_of_combat", game.current_step
     elif window == "attack":
         game.start_turn(ME)
         game._close_current_priority_step()
@@ -328,8 +334,12 @@ def board(card, placements=(), *, window=None, grave=(), stack=None):
         ]
         game.declare_attackers(ME, attackers, defending_player_index=OPP)
         game.advance_combat_phase()
-        assert game.current_step == "declare_blockers", game.current_step
-        game.declare_blockers(OPP, {})
+        if attackers:
+            assert game.current_step == "declare_blockers", game.current_step
+            game.declare_blockers(OPP, {})
+        else:
+            # CR 508.8, as above.
+            assert game.current_step == "end_of_combat", game.current_step
         # The turn's draw is not part of the board: one card in hand, as on
         # every other.
         game.players[ME].hand[:] = [card]

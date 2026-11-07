@@ -204,15 +204,19 @@ def test_a_defending_player_who_assigns_is_asked_and_their_answer_is_held():
 
 
 @pytest.mark.cr("702.22j", "702.19b")
-def test_a_defender_nobody_sits_in_keeps_the_default_split():
+def test_a_defender_nobody_sits_in_is_not_asked_and_keeps_it_on_the_blocker():
+    """Nobody sits in the defending seat, so the step is not stopped for it
+    (``trample_assignments_to_ask``); that seat's own chooser answers as the
+    step is dealt, and keeps all six on the bander — which dies of the two it
+    would have been dealt anyway — rather than taking four (kg4: it kept the
+    engine's default, the attacker's split)."""
     game, _beast, (bander,) = _combat(
         _trampler(), [_creature("Bander", 1, 2, "Banding")], interactive=(0,),
     )
 
-    assert game.defender_assignments_owed(1) == []
     assert game.trample_assignments_to_ask() == []
     assert game.combat_damage_resolved
-    assert game.players[1].life == 16
+    assert game.players[1].life == 20
     assert not game.is_on_battlefield(bander)
 
 

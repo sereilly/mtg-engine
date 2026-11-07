@@ -59,7 +59,7 @@ _CLASSES = {
 _STRUCTURE = re.compile(
     r"^(?:Resolved (?:first strike )?combat damage"
     r"|Declare (?:attackers|blockers) step complete: .*"
-    r"|No attackers; declare blockers step skipped \(508\.8\))$"
+    r"|No attackers; declare blockers and combat damage steps skipped \(508\.8\))$"
 )
 
 #: A token's CR 111.4 name ("Insect Token"), which no card in the pool carries.

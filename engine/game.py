@@ -382,6 +382,13 @@ class Game(
     # three reach, so the firing hangs off that and this flag is what keeps a
     # second `advance_combat_phase` at the same step from firing again.
     combat_unblocked_triggers_fired: bool = False
+    # CR 508.8: "If no creatures are declared as attackers or put onto the
+    # battlefield attacking, skip the declare blockers and combat damage
+    # steps." Whether either happened this combat — the record, not the live
+    # map: ``combat_attackers`` lets go of an attacker removed from combat
+    # (CR 506.4), which does not unmake its declaration, and that combat
+    # keeps both steps. Read through ``combat_skips_blocks_and_damage``.
+    combat_creatures_attacked: bool = False
     # Banding (CR 702.22). ``combat_bands`` holds the attacking bands declared this
     # combat (each a list of attacker indices). ``combat_band_blocks`` maps an
     # attacker index to the blocker indices that block it via band propagation
