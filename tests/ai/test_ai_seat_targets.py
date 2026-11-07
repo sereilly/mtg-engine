@@ -185,15 +185,19 @@ def test_the_ai_proposes_its_gifts_at_itself(pool, by_name):
     target this turn") is not proposed on this idle table at all since LGN C2
     (``ai_valuation.shields_only``: rehearsed, and nothing is coming), so its
     aim is read with that gate off — the seat is chosen before the moment is
-    weighed."""
+    weighed — and since kg4 with the rehearsed "moves nothing" gate off too
+    (``ai_abilities._moves_something``). A later ability of the same
+    permanent, weighed since kg4 (Samite Archer's ping beside its shield), is
+    not the gift this asks about."""
     proposed = 0
     for card, index, ability in seat_abilities(pool):
         if index != 0 or ability_seat_side(ability.instruction) != "you":
             continue
         game, _source = _table(by_name, card)
-        with mock.patch.object(ai_abilities, "shields_only", lambda instruction: False):
+        with mock.patch.object(ai_abilities, "shields_only", lambda instruction: False), \
+                mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True):
             action = choose_activation_action(game, 0)
-        if action is None or action.permanent_name != card.name:
+        if action is None or action.permanent_name != card.name or action.ability_index is not None:
             continue
         proposed += 1
         assert action.target_player_index == 0, (card.name, action)

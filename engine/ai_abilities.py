@@ -65,9 +65,12 @@ from .cost_pickers import spec_is_a_cost
 from .ai_payment import _plan_land_taps, tap_planned_lands
 from .ai_rehearsal import Rehearsal, deliberating, rehearse
 from .ai_weighed_cast import _effect_steps
-from .ai_actions import ActivationAction
+from .ai_actions import ActivationAction, activation_announcement
+from .ai_text_changes import (WORTH_FLOOR, ability_text_change_mode,
+                              ability_text_change_worth, ranked_word_choices)
 from .ai_scoring import (
     choose_attack_target,
+    _leaves_nothing,
     _score_activation,
     _worth_proposing,
 )
@@ -144,16 +147,19 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             held = permanent.tapped or game._is_summoning_sick(permanent)
             if held and not at_instant_speed:
                 continue
-            # One the instant-speed chooser has rehearsed and turned down this
-            # time it was asked (`ai_policy.choose_instant_speed_activation`),
-            # so the next-best is the one proposed.
-            if permanent.permanent_id in set_aside:
-                continue
             # Stripped of its abilities (CR 305.7): the engine refuses each.
             if game.lost_abilities_refusal(permanent) is not None:
                 continue
             for ability_index, ability in _abilities_weighed(game, permanent):
                 if held and ability.cost.requires_tap:
+                    continue
+                # One the instant-speed chooser has rehearsed and turned down
+                # this time it was asked (`ai_policy.
+                # choose_instant_speed_activation`), so the next-best is the
+                # one proposed — **that ability**, not its permanent: the set
+                # held permanents, so a regeneration shield behind a turned-down
+                # pump on the same creature was never asked.
+                if (permanent.permanent_id, ability_index) in set_aside:
                     continue
                 candidate = _activation_candidate(
                     game, player_index, permanent_index, permanent,
@@ -188,27 +194,39 @@ def _abilities_weighed(game: Game, permanent) -> list:
     every main phase and the engine ran it — a free repeatable draw for a card
     that was never discarded, on eight of Urza's Saga's creatures.
 
-    For anything but a land, the **first** ability, unindexed (the action
+    For anything but a land, the **first** ability unindexed (the action
     names none and the engine takes the first it can pay for), as it always
-    has been. For a land, **every ability that is not a mana ability**, each
-    by its index — CR 605.1a asked of the engine's own predicate
+    has been — and **every later ability that is not a mana ability**, each by
+    its index. This read the first alone, so a permanent's second ability was
+    never activated by an AI seat in either window: Pemmin's Aura's flying
+    behind its untap, Morphling's shroud in front of the burn spell aimed at
+    it behind its untap, Mazemind Tome's draw behind its scry (179
+    permanents in the shipped pool print two or more non-mana abilities,
+    kg4). A later ability is proposed only where a rehearsal of it says it
+    pays (``_land_ability_worth``, asked of every indexed ability), so
+    a permanent whose first ability was what it always did keeps doing it.
+
+    For a land, **every ability that is not a mana ability**, each by its
+    index — CR 605.1a asked of the engine's own predicate
     (``mana_payment.is_mana_ability``), which reads a painland's "Add {W} or
     {U}. This land deals 1 damage to you." as the mana ability it is.
     """
     from .mana_payment import is_mana_ability as is_cr_mana_ability
 
     usable = game.usable_abilities_of(permanent)
+    later = [
+        (index, ability)
+        for index, ability in enumerate(usable)
+        if ability.instruction is not None and not is_cr_mana_ability(ability)
+    ]
     # A land now (CR 613 layer 4), as every other reader of a permanent's
     # type here asks: a Mishra's Factory animated is still a land, and a
     # land is what the payment planner taps for mana.
     if not permanent.has_type("land"):
         first = next(iter(usable), None)
-        return [] if first is None else [(None, first)]
-    return [
-        (index, ability)
-        for index, ability in enumerate(usable)
-        if ability.instruction is not None and not is_cr_mana_ability(ability)
-    ]
+        head = [] if first is None else [(None, first)]
+        return head + [(index, ability) for index, ability in later if index > 0]
+    return later
 
 
 def _activation_candidate(
@@ -239,8 +257,21 @@ def _activation_candidate(
     # Volrath's Dungeon): a drawback printed for an opponent to pay for (CR
     # 602.1b), skipped (`ai_valuation.harms_its_own_source`). A **hamper** that
     # leaves it in play (Swooping Talon shedding flying) is rehearsed below.
+    #
+    # **Except at instant speed**, where the same effect is a **rescue**: a
+    # Quicksilver Wall returned to its owner's hand in front of the Terror
+    # aimed at it, an Ivory Gargoyle exiled out of it, a Fleeting Image
+    # bounced off a lethal block. Only a rehearsal of what is coming tells
+    # the rescue from the self-inflicted loss — the same bounce with nothing
+    # coming is a permanent traded for a card — and every instant-speed
+    # proposal is rehearsed (``ai_policy.choose_instant_speed_activation``),
+    # so it is proposed there and the rehearsal disposes.
     hampers = hampers_its_own_source(ability.instruction)
-    if harms_its_own_source(ability.instruction) and not hampers:
+    rescue = (
+        harms_its_own_source(ability.instruction) and not hampers
+        and _AT_INSTANT_SPEED.get()
+    )
+    if harms_its_own_source(ability.instruction) and not hampers and not rescue:
         return None
     # An effect that lands on **the permanent its source is attached to**
     # ("Enchanted creature …"): whose that permanent is, against the side the
@@ -505,7 +536,7 @@ def _activation_candidate(
         for word in _keyword_walk_order(game, ability):
             target_role_refs = _choose_activation_role_targets(
                 game, player_index, permanent_index, side=side,
-                chosen_keyword=word,
+                ability_index=spec_index, chosen_keyword=word,
             )
             if target_role_refs is not None:
                 chosen_keyword = word
@@ -515,6 +546,29 @@ def _activation_candidate(
             # every role or the activation is refused with nothing paid,
             # and the gate would refuse it.
             return None
+    # "{T}: Change the text of target white enchantment you control … by
+    # replacing all instances of one color word with another" (Balduvian
+    # Shaman, CR 612 through CR 602.2b). The activation announces the two
+    # words beside its target, and this chooser named neither: the engine
+    # took the strongest permanent and no words, the handler logged "had no
+    # effect", and a rehearsal of that read nothing to propose. The object
+    # and the words are weighed together, as the cast side weighs them
+    # (`ai_text_changes.ranked_word_choices`), and the best few rehearsed
+    # (:func:`_text_change_activation`).
+    word_choices: list = []
+    text_mode = ability_text_change_mode(ability.instruction)
+    if text_mode is not None and target_permanent_index is None and not target_role_refs:
+        word_choices = ranked_word_choices(
+            game, player_index,
+            game.activation_target_spec(
+                player_index, permanent_index, ability_index=spec_index,
+            ).get("valid_targets") or [],
+            text_mode,
+        )
+        if not word_choices:
+            return None
+        target = word_choices[0].seat
+        target_permanent_index = word_choices[0].permanent_index
     object_kinds = {"creature", "artifact", "land", "permanent", "planeswalker"}
     if (
         target_permanent_index is None
@@ -806,6 +860,8 @@ def _activation_candidate(
         return _sized_x_activation(
             game, player_index, permanent, ability, candidate, x_symbols,
         )
+    if word_choices:
+        return _text_change_activation(game, player_index, candidate, word_choices)
     # A land's ability, an ability whose whole effect is what its own source
     # is until end of turn (a Mistform's "becomes the creature type of your
     # choice"), and an ability whose whole effect is a replacement armed for a
@@ -822,8 +878,12 @@ def _activation_candidate(
     # activator (Shepherd of Rot, `reaches_both_sides`), a 1 -> 1 rewrite
     # (Riptide Mangler, `_OWN_REWRITE_KINDS`) and a shield (LGN C2: Deftblade
     # Elite in both main phases, `ai_valuation.shields_only`).
+    #
+    # And (kg4) every ability named by its index: a land's, and a non-land's
+    # later ability (`_abilities_weighed`), which nothing had ever weighed —
+    # and a rescue at instant speed (above).
     if (
-        ability_index is not None or hampers
+        ability_index is not None or hampers or rescue
         or _sets_only_what_its_source_is(ability.instruction)
         or waits_on_a_later_draw(ability.instruction) or shields_only(ability.instruction)
         or (
@@ -839,6 +899,18 @@ def _activation_candidate(
         worth = _land_ability_worth(game, player_index, candidate)
         if worth is None:
             return None
+        return candidate
+    # **And every other ability** (kg4): proposed only where carried out on a
+    # copy it moves something that lasts without leaving the seat worse off
+    # (`_moves_something`) — in the main phase; at instant speed every
+    # proposal is rehearsed by its caller, and held to more. Not a one-shot
+    # given up (`_exists_to_be_given_up`: the Mossfire Egg), whose flat score
+    # is kept for the reason that function gives — the standing prices the
+    # permanent at least a card, so a rehearsal would never crack it.
+    if _gives_up_its_source(ability.cost) and _exists_to_be_given_up(permanent):
+        return candidate
+    if not _AT_INSTANT_SPEED.get() and not _moves_something(game, player_index, candidate):
+        return None
     return candidate
 
 
@@ -956,17 +1028,26 @@ def _sets_only_what_its_source_is(instruction) -> bool:
 
 def _rehearse_activation(
     game: Game, seat: int, action: ActivationAction,
-    *, through_combat: bool = False,
+    *, through_combat: bool = False, cost_neutral: bool = False,
 ) -> Rehearsal | None:
     """What activating *action* would do, carried out on a scratch copy of
     the game (``ai_rehearsal.rehearse``) the way `activate_chosen_ability`
     carries it out — the planned lands tapped, the ability put on the stack —
     against the same copy with the same lands tapped and nothing activated.
     *through_combat* fights the turn's combat on both copies first, for an
-    ability whose good is gone by the end of the turn."""
+    ability whose good is gone by the end of the turn.
+
+    *cost_neutral* also taps the source on the copy with nothing activated
+    when the ability's cost is {T}: what is read is then what the **effect**
+    did, the question :func:`_moves_something` asks — a "{T}: … until end of
+    turn" whose source stays tapped is otherwise a change that lasts, and a
+    creature tapped is a body missing *now*, neither of which the effect
+    did."""
 
     def perform(table):
         return _queue_activation(table, seat, action)
+
+    source_taps = cost_neutral and _taps_its_source(game, seat, action)
 
     def paid_for(table, _carried) -> None:
         pool = table.players[seat].mana_pool
@@ -974,9 +1055,13 @@ def _rehearse_activation(
         tap_planned_lands(table, seat, action)
         pool.clear()
         pool.update(floating)
+        if source_taps:
+            source = table.permanent_at(seat, action.permanent_index)
+            if source is not None:
+                source.tapped = True
 
-    taps = bool(action.land_tap_indices)
-    return rehearse(
+    taps = bool(action.land_tap_indices) or source_taps
+    rehearsal = rehearse(
         game, seat, perform, spell_name=None, leaves_hand=False,
         label=f"{action.permanent_name}'s ability",
         key=(
@@ -988,14 +1073,89 @@ def _rehearse_activation(
             ("keyword", action.chosen_keyword) if action.chosen_keyword else ()
         ) + (
             ("x", action.x_value) if action.x_value is not None else ()
-        ) + (("through_combat",) if through_combat else ()),
+        ) + (
+            ("words", action.old_color, action.new_color)
+            if action.old_color or action.new_color else ()
+        ) + (("through_combat",) if through_combat else ()) + (
+            ("source_tapped",) if source_taps else ()
+        ),
         without=paid_for if taps else None,
         without_key=(
             ("paid", action.land_tap_indices, action.land_tap_colors)
+            + ((("source_tapped", seat, action.permanent_index),) if source_taps else ())
             if taps else None
         ),
         through_combat=through_combat,
     )
+    return _with_the_words_aimed(game, seat, action, rehearsal)
+
+
+def _taps_its_source(game: Game, seat: int, action: ActivationAction) -> bool:
+    """Whether the ability *action* names (on the seat's own permanent) has
+    {T} in its cost."""
+    if action.source_controller_index is not None:
+        return False
+    source = game.permanent_at(seat, action.permanent_index)
+    usable = game.usable_abilities_of(source) if source is not None else []
+    index = action.ability_index or 0
+    return 0 <= index < len(usable) and bool(getattr(usable[index].cost, "requires_tap", False))
+
+
+def _with_the_words_aimed(
+    game: Game, seat: int, action: ActivationAction, rehearsal: "Rehearsal | None",
+) -> "Rehearsal | None":
+    """*rehearsal* of a text-changing ability with what its two words aim at
+    added (``ai_text_changes.ability_text_change_worth``): a Circle of
+    Protection's colour is a standing's same number whichever word it names,
+    as on the cast side (``ai_scoring._rehearse_announcement``)."""
+    from dataclasses import replace
+
+    if rehearsal is None or not rehearsal.accepted or not (
+        action.old_color and action.new_color
+    ):
+        return rehearsal
+    source = game.permanent_at(
+        seat if action.source_controller_index is None else action.source_controller_index,
+        action.permanent_index,
+    )
+    usable = game.usable_abilities_of(source) if source is not None else []
+    index = action.ability_index or 0
+    if not 0 <= index < len(usable):
+        return rehearsal
+    named = game.permanent_at(action.target_player_index, action.target_permanent_index)
+    now, lasting = ability_text_change_worth(
+        game, seat, usable[index].instruction, game.permanent_id_of(named),
+        action.old_color, action.new_color,
+    )
+    if not (now or lasting):
+        return rehearsal
+    return replace(rehearsal, now=rehearsal.now + now, lasting=rehearsal.lasting + lasting)
+
+
+def _text_change_activation(
+    game: Game, seat: int, candidate: ActivationAction, choices: list,
+) -> ActivationAction | None:
+    """*candidate* aimed at the best of *choices* (``ai_text_changes.
+    ObjectChoice``: a permanent and the two words for it), or None when none
+    is worth making: each rehearsed with its words aimed
+    (:func:`_land_ability_worth`), the one leaving the seat furthest ahead
+    once the turn is over taken, and only at or above the floor a text
+    change cast is held to (``ai_text_changes.WORTH_FLOOR``) — every change of
+    a word that is written reads as *a* change."""
+    from dataclasses import replace
+
+    best: ActivationAction | None = None
+    best_worth = WORTH_FLOOR - 1e-9
+    for choice in choices:
+        aimed = replace(
+            candidate, target_player_index=choice.seat,
+            target_permanent_index=choice.permanent_index,
+            old_color=choice.old_color, new_color=choice.new_color,
+        )
+        worth = _land_ability_worth(game, seat, aimed)
+        if worth is not None and worth > best_worth:
+            best, best_worth = aimed, worth
+    return best
 
 
 def _queue_activation(table: Game, seat: int, action: ActivationAction):
@@ -1003,16 +1163,7 @@ def _queue_activation(table: Game, seat: int, action: ActivationAction):
     leaves it there for the table to answer (CR 117.3c)."""
     planned = tap_planned_lands(table, seat, action)
     return table.queue_permanent_ability(
-        seat,
-        planned.permanent_name,
-        target_player_index=planned.target_player_index,
-        permanent_index=planned.permanent_index,
-        target_permanent_index=planned.target_permanent_index,
-        target_role_refs=planned.target_role_refs,
-        ability_index=planned.ability_index,
-        cost_hand_index=planned.cost_hand_index,
-        chosen_keyword=planned.chosen_keyword,
-        x_value=planned.x_value,
+        seat, planned.permanent_name, **activation_announcement(planned),
     )
 
 
@@ -1035,21 +1186,124 @@ def _land_ability_worth(
     Unlike a cast, an ability nobody could rehearse is not proposed — no land
     ability was before, and "could not be weighed" is no reason to start.
     """
-    from .ai_rehearsal import (blocks_still_to_come, combat_is_still_to_come,
-                               priced_by_the_fight)
-
     rehearsal = _rehearse_activation(game, seat, action)
     if rehearsal is None or not (rehearsal.accepted and rehearsal.changed):
         return None
-    if priced_by_the_fight(rehearsal.now, rehearsal.lasting, rehearsal.fleeting) and (
-        combat_is_still_to_come(game, seat) or blocks_still_to_come(game)
-    ):
-        fought = _rehearse_activation(game, seat, action, through_combat=True)
-        if fought is not None and fought.accepted:
-            rehearsal = fought
-    if not _worth_proposing(rehearsal) or rehearsal.lasting <= 0.0:
+    rehearsal = _read_through_the_fight(game, seat, action, rehearsal)
+    if rehearsal is None or not _worth_proposing(rehearsal) or rehearsal.lasting <= 0.0:
         return None
     return rehearsal.lasting
+
+
+def _moves_something(game: Game, seat: int, action: ActivationAction) -> bool:
+    """Whether *action* — an ability the main-phase chooser would propose by
+    its flat score alone — is one to propose: the cast rule (CLAUDE.md, "a
+    cast that moves nothing, or leaves its caster worse off, is not
+    proposed"; ``ai_scoring._worth_proposing``), asked of the activation
+    carried out on a copy (:func:`_rehearse_activation`) and read through the
+    fight where its good is gone by the end of the turn
+    (:func:`_read_through_the_fight`).
+
+    **Every ability, not the shapes named.** The chooser rehearsed a land's
+    ability, a hamper, a rewrite of its source, an armed draw, a shield, a
+    source given up and an effect reaching both sides, each because a seat had
+    been seen spending its mana on one for nothing; every other ability was
+    proposed at its flat 2.5 whatever it did — a firebreathing pump in the
+    second main phase, a "{T}: Untap target land" with every land untapped, a
+    "can't block" on a creature with nothing to block, a looter's draw with
+    nothing to discard (kg4: `tests/ai/test_kg4_aiact_moves_nothing.py`).
+    An ability nobody could rehearse is proposed as it always was.
+
+    Read **cost-neutral** (:func:`_rehearse_activation`): the {T} the cost
+    pays is on both copies, so what is judged is the effect — the cost is
+    this chooser's other floors' to price, as it always was. And an ability
+    that turns its own source into an Aura (the Licids) is asked only whether
+    it moves something that lasts: what such an Aura is worth is the
+    restriction it puts on its host ("can't attack"), which no standing
+    reads, against the creature its source stops being, which one does."""
+    rehearsal = _rehearse_activation(game, seat, action, cost_neutral=True)
+    if rehearsal is None:
+        return True
+    if rehearsal.accepted and rehearsal.changed:
+        rehearsal = _read_through_the_fight(
+            game, seat, action, rehearsal, cost_neutral=True,
+        )
+        if rehearsal is None:
+            return False
+    if rehearsal.accepted and rehearsal.changed and _becomes_an_aura(game, seat, action):
+        return not _leaves_nothing(rehearsal)
+    return _worth_proposing(rehearsal)
+
+
+def _becomes_an_aura(game: Game, seat: int, action: ActivationAction) -> bool:
+    """Whether the ability *action* names turns its own source into an Aura
+    (``ai_valuation.source_becomes_an_aura``)."""
+    source = game.permanent_at(seat, action.permanent_index)
+    usable = game.usable_abilities_of(source) if source is not None else []
+    index = action.ability_index or 0
+    return 0 <= index < len(usable) and source_becomes_an_aura(usable[index].instruction)
+
+
+def _read_through_the_fight(
+    game: Game, seat: int, action: ActivationAction, rehearsal: Rehearsal,
+    *, cost_neutral: bool = False,
+) -> "Rehearsal | None":
+    """*rehearsal* read again **with the fight fought** where its good is gone
+    by the end of the turn (``ai_rehearsal.priced_by_the_fight``) and a
+    combat or a declared attack's blocks are ahead — or None for an ability
+    that **can wait for the blocks** (:func:`_waits_for_the_blocks`).
+
+    Made in the seat's own main phase before its combat, an ability whose
+    worth is the fight is made there only for a **declaration it changes**
+    (``Rehearsal.declarations_changed``): a manland animated to attack, a
+    creature shielded so that it attacks at all, a blocker tapped or told it
+    cannot block, a block deterred. One under which the attack and the blocks
+    are the same as without it can be made in the declare-blockers step, with
+    the blocks known (``ai_priority.instant_speed_window``'s ``"combat"``) —
+    and there only where it pays. Zealous Inquisitor's redirect was bought in the first
+    main phase wherever the fight it was read through went better for it, and
+    the mana was spent whether or not anything then blocked it (SCG Phase 5).
+    """
+    from .ai_rehearsal import (blocks_still_to_come, combat_is_still_to_come,
+                               priced_by_the_fight)
+
+    precombat = combat_is_still_to_come(game, seat)
+    if priced_by_the_fight(rehearsal.now, rehearsal.lasting, rehearsal.fleeting) and (
+        precombat or blocks_still_to_come(game)
+    ):
+        fought = _rehearse_activation(
+            game, seat, action, through_combat=True, cost_neutral=cost_neutral,
+        )
+        if fought is not None and fought.accepted:
+            if precombat and not fought.declarations_changed and _waits_for_the_blocks(
+                game, seat, action,
+            ):
+                return None
+            rehearsal = fought
+    return rehearsal
+
+
+def _waits_for_the_blocks(game: Game, seat: int, action: ActivationAction) -> bool:
+    """Whether *action*'s ability could as well be activated in the coming
+    declare-blockers step: its source is the seat's own permanent, its cost
+    taps nothing of its own (an attacker is tapped, CR 508.1f, and a {T}
+    ability of one that did not attack is one an untapped creature's body
+    spends), and its line prints no timing restriction (CR 602.5b: "Activate
+    only as a sorcery", "only during your upkeep") — read off the ability the
+    action names, so it names no card."""
+    from .activation_restrictions import prints_activation_restriction
+
+    if action.source_controller_index is not None:
+        return False
+    source = game.permanent_at(seat, action.permanent_index)
+    usable = game.usable_abilities_of(source) if source is not None else []
+    index = action.ability_index or 0
+    if not 0 <= index < len(usable):
+        return False
+    ability = usable[index]
+    if getattr(ability.cost, "requires_tap", False):
+        return False
+    return not prints_activation_restriction(ability.source_line or "")
 
 
 #: The largest X `_sized_x_activation` rehearses. Each size is a copy of the
@@ -1103,9 +1357,10 @@ def _sized_x_activation(
     return best
 
 
-#: Permanents `choose_activation_action` passes over, by ``permanent_id``:
-#: the ones `ai_policy.choose_instant_speed_activation` has rehearsed and turned down in
-#: the one decision it is making.
+#: Abilities `choose_activation_action` passes over, as ``(permanent_id,
+#: ability_index)`` (the index as `_abilities_weighed` gives it, None for a
+#: non-land's first): the ones `ai_policy.choose_instant_speed_activation` has
+#: rehearsed and turned down in the one decision it is making.
 _ACTIVATIONS_SET_ASIDE: ContextVar[frozenset] = ContextVar(
     "ai_activations_set_aside", default=frozenset(),
 )
@@ -1289,12 +1544,14 @@ def _choose_activation_role_targets(
     # The permanent as it **is** (``effective_card``), which is the card the
     # picker three lines up compiled: read off the printed one, a Clone of a
     # Splicer was offered the Splicer's two roles and given a side for neither.
+    #
+    # **The ability at *ability_index***, the one the picker above was asked
+    # about: this read the first, which every ability this walk was asked for
+    # was until a permanent's later abilities were weighed (kg4).
     source = game.permanent_at(player_index, permanent_index)
     said = source.effective_card if source is not None else None
-    ability = (
-        next(iter(usable_activated_abilities(compile_card_oracle(said))), None)
-        if said is not None else None
-    )
+    usable = usable_activated_abilities(compile_card_oracle(said)) if said is not None else []
+    ability = usable[ability_index] if 0 <= ability_index < len(usable) else None
     sides = ability_role_target_sides(said, ability) if ability is not None else ()
 
     def ref_of(pick: dict) -> "dict | None":

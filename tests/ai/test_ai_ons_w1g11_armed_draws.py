@@ -48,9 +48,14 @@ def test_a_word_is_not_armed_in_a_main_phase_with_no_draw_to_meet(set_pool):
 
 def test_the_gate_is_what_stops_it(set_pool, monkeypatch):
     """Backwards: with the predicate switched off the chooser proposes the
-    Word again — the defect this file is about, on a tree where it exists."""
+    Word again — the defect this file is about, on a tree where it exists.
+    Since kg4 every ability the named shapes do not rehearse meets the
+    rehearsed "moves nothing" gate (``ai_abilities._moves_something``), a
+    second layer that also passes over the idle Word, so the backwards
+    reading switches both off."""
     game = _main_phase_with_a_word(set_pool)
     monkeypatch.setattr(ai_abilities, "waits_on_a_later_draw", lambda _instruction: False)
+    monkeypatch.setattr(ai_abilities, "_moves_something", lambda *args, **kwargs: True)
 
     action = choose_activation_action(game, 0)
 

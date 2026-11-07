@@ -117,6 +117,14 @@ def _census(*, flat: bool = False) -> dict:
         stack.enter_context(mock.patch.object(
             ai_abilities, "shields_only", (lambda instruction: False) if flat else weighed,
         ))
+        if flat:
+            # Backwards means the flat score, so the rehearsed "moves
+            # nothing" gate every other ability meets since kg4
+            # (`ai_abilities._moves_something`) — a second layer that also
+            # passes over an idle shield — is off too.
+            stack.enter_context(mock.patch.object(
+                ai_abilities, "_moves_something", lambda *args, **kwargs: True,
+            ))
         for code, seed, games, pinned in RUNS:
             report = ai_simulator.run_ai_simulation(
                 manifest_set_path(code), games=games, seed=seed, max_turns=14,

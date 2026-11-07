@@ -33,7 +33,7 @@ from .ai_scoring import SWING_CAP, _score_activation, _worth_proposing
 
 
 def choose_hand_activation_action(
-    game: Game, player_index: int
+    game: Game, player_index: int, *, at_instant_speed: bool = False,
 ) -> HandActivationAction | None:
     """The best ability this seat can activate from its **hand**, or None.
 
@@ -57,13 +57,74 @@ def choose_hand_activation_action(
     to each creature" was cycled whatever it did to the seat's own board (ONS
     W1G3). A harmful candidate is not proposed and the swing is added to the
     score; a plain cycle measures nothing and keeps its score.
+
+    **A cycle whose own trigger has nothing to act on is held** at sorcery
+    speed (:func:`_cycle_trigger_finds_nothing`): "When you cycle this card,
+    you may counter target spell" (Decree of Silence, Complicate) in a main
+    phase with an empty stack is six mana for a card, and the counter it
+    carries is spent on nothing — the seat cycled Decree of Silence so
+    (SCG W1G2). Held, it is weighed again **at instant speed**
+    (*at_instant_speed*, ``ai_priority.act_at_priority``), where only a
+    proposal whose rehearsal leaves the seat ahead once the turn is over is
+    made: the Decree in response to an opponent's spell, a Death Pulse's
+    -1/-1 at the end of the opponent's turn. A plain cycle — a card out and
+    a card in — is never one there, and keeps its main phase.
     """
     with deliberating():
-        return _choose_hand_activation_action(game, player_index)
+        return _choose_hand_activation_action(
+            game, player_index, at_instant_speed=at_instant_speed,
+        )
+
+
+def holds_a_hand_ability(game: Game, player_index: int) -> bool:
+    """Whether *player_index*'s hand holds a card with an ability it could
+    activate from there (the reader `Game.activate_from_hand` gates on) whose
+    mana its board can pay — the cheap question asked before the dear one at
+    instant speed, by `ai_priority.act_at_priority`, as
+    ``ai_policy.holds_an_ability_it_could_activate`` is for the battlefield."""
+    from .mixins.stack.card_activation import hand_activation_cost
+
+    player = game.players[player_index]
+    for card in player.hand:
+        from_hand = usable_activated_abilities(compile_card_oracle(card), zone=HAND)
+        if not from_hand or from_hand[0].instruction is None:
+            continue
+        if not game.enforce_mana_costs:
+            return True
+        required = hand_activation_cost(game, player_index, card, from_hand[0])[0]
+        if not any(required.values()) or _plan_land_taps(game, player, required) is not None:
+            return True
+    return False
+
+
+def _cycle_trigger_finds_nothing(game: Game, player_index: int, card) -> bool:
+    """Whether *card* prints a "When you cycle this card" trigger
+    (``self_cycled``) that names a target and finds none now — the engine's
+    own enumeration of what the trigger could choose (CR 603.3d: a trigger
+    with no legal target is removed from the stack, so what it does is lost).
+
+    Read off the compiled program and asked of the engine, so it names no
+    card: Decree of Silence and Complicate find no spell on an empty stack,
+    Decree of Savagery no creature on an empty board; Slice and Dice, which
+    names no target, always has something to do."""
+    from .targeting import derive_instruction_spec
+
+    for trigger in compile_card_oracle(card).triggered_abilities:
+        if trigger.condition.kind != "self_cycled" or trigger.instruction is None:
+            continue
+        spec = derive_instruction_spec([trigger.instruction])
+        if not isinstance(spec, dict) or spec.get("kind") in (None, "none", "modal"):
+            continue
+        if not game._enumerate_targets(
+            player_index, card, spec, for_cast=False,
+            ability_instruction=trigger.instruction, triggered=True,
+        ):
+            return True
+    return False
 
 
 def _choose_hand_activation_action(
-    game: Game, player_index: int,
+    game: Game, player_index: int, *, at_instant_speed: bool = False,
 ) -> HandActivationAction | None:
     """:func:`choose_hand_activation_action` inside its deliberation."""
     from dataclasses import replace
@@ -90,6 +151,11 @@ def _choose_hand_activation_action(
         # step; the same floor `ai_abilities.choose_activation_action` keeps
         # one zone over.
         if is_mana_ability(ability.instruction):
+            continue
+        # A cycle whose trigger has nothing to act on now waits for a moment
+        # it has (see the docstring) — at sorcery speed; at instant speed the
+        # rehearsal below says what it does.
+        if not at_instant_speed and _cycle_trigger_finds_nothing(game, player_index, card):
             continue
 
         # Any cost beyond mana and the discard the zone read is derived from is
@@ -147,6 +213,14 @@ def _choose_hand_activation_action(
             rehearsal = replace(
                 rehearsal, now=rehearsal.now - price, lasting=rehearsal.lasting - price,
             )
+        if at_instant_speed and (
+            rehearsal is None or not _worth_proposing(rehearsal)
+            or rehearsal.lasting <= 0.0
+        ):
+            # At instant speed only what leaves the seat ahead once the turn
+            # is over, as `ai_policy.choose_instant_speed_activation` asks of
+            # a permanent's ability — and nothing nobody could weigh.
+            continue
         if rehearsal is not None:
             if not _worth_proposing(rehearsal):
                 continue
@@ -157,6 +231,19 @@ def _choose_hand_activation_action(
         if best is None or candidate.score > best.score:
             best = candidate
     return best
+
+
+def activate_chosen_hand_ability(game: Game, seat: int, action: HandActivationAction):
+    """Carry out *action* on *game*: the planned lands tapped and the ability
+    activated from the hand — ``Game.activate_from_hand``, the **queue** form,
+    which leaves it on the stack for the table to answer (CR 117.3c). The
+    engine's result. The executor the rehearsal and the instant-speed answer
+    (`ai_priority.act_at_priority`) share."""
+    planned = tap_planned_lands(game, seat, action)
+    return game.activate_from_hand(
+        seat, planned.card_name,
+        ability_index=planned.ability_index, hand_index=planned.hand_index,
+    )
 
 
 def _rehearse_hand_activation(
@@ -174,11 +261,7 @@ def _rehearse_hand_activation(
     the cycle set off."""
 
     def perform(table):
-        planned = tap_planned_lands(table, seat, action)
-        return table.activate_from_hand(
-            seat, planned.card_name,
-            ability_index=planned.ability_index, hand_index=planned.hand_index,
-        )
+        return activate_chosen_hand_ability(table, seat, action)
 
     def paid_for(table, _carried) -> None:
         pool = table.players[seat].mana_pool

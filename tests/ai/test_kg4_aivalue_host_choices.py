@@ -133,7 +133,11 @@ def test_a_host_trade_is_removal_on_their_x1_and_never_kills_its_own(pool):
 
 def test_without_the_reading_the_census_finds_the_base(pool):
     """Backwards: the host trade read by its category, as on 313bd09d."""
-    with mock.patch.object(ai_target_sides, "host_effect_by_the_moment", lambda i: False), \
+    # kg4/aiact's every-ability rehearsal (`ai_abilities._moves_something`)
+    # is a second layer that holds these proposals back too; the base's
+    # reading reappears only with both off.
+    with mock.patch.object(ai_abilities, "_moves_something", lambda *a, **k: True), \
+            mock.patch.object(ai_target_sides, "host_effect_by_the_moment", lambda i: False), \
             mock.patch.object(ai_abilities, "host_effect_by_the_moment", lambda i: False), \
             mock.patch.object(ai_target_sides, "_side_steps", _effect_steps):
         found = _census(pool)
@@ -196,7 +200,11 @@ def test_a_choice_of_hampers_is_aimed_at_the_opponent(pool):
 
 def test_with_the_modes_shut_walking_sponge_aims_at_its_own_angel(pool):
     """Backwards: the choice read as one step, as on 313bd09d."""
-    with mock.patch.object(ai_target_sides, "_side_steps", _effect_steps):
+    # kg4/aiact's every-ability rehearsal (`ai_abilities._moves_something`)
+    # is a second layer that holds these proposals back too; the base's
+    # reading reappears only with both off.
+    with mock.patch.object(ai_target_sides, "_side_steps", _effect_steps), \
+            mock.patch.object(ai_abilities, "_moves_something", lambda *a, **k: True):
         game = _choice_board(pool, "Walking Sponge")
         action = choose_activation_action(game, 0)
     assert action is not None and action.target_player_index == 0

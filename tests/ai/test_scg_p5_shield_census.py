@@ -122,7 +122,13 @@ def _census(pool) -> dict:
                 ) is not None
             else:
                 action = choose_instant_speed_activation(game, 0)
-                proposed = action is not None and action.permanent_index == 0
+                # *This* ability: since kg4 a permanent's later abilities are
+                # weighed too, and Samite Archer's ping at the opponent's end
+                # step is not its shield.
+                proposed = (
+                    action is not None and action.permanent_index == 0
+                    and (action.ability_index or 0) == index
+                )
             if proposed:
                 found["idle"].append((card.name, index, window))
     return found
@@ -137,12 +143,16 @@ def test_no_shield_or_redirect_is_bought_with_nothing_coming():
 
 @pytest.mark.full
 def test_with_the_redirects_scored_flat_the_census_finds_zealous_inquisitor():
-    """Backwards: ``shields_only`` reading the shields alone, as on 43a45e81."""
+    """Backwards: ``shields_only`` reading the shields alone, as on 43a45e81
+    — and since kg4 with the rehearsed "moves nothing" gate off too
+    (``ai_abilities._moves_something``), a second layer that also passes over
+    an idle redirect."""
     def shields_alone(instruction):
         steps = _effect_steps(instruction) if instruction is not None else ()
         return bool(steps) and all(step.kind in SHIELD_KINDS for step in steps)
 
-    with mock.patch("engine.ai_abilities.shields_only", shields_alone):
+    with mock.patch("engine.ai_abilities.shields_only", shields_alone), \
+            mock.patch("engine.ai_abilities._moves_something", lambda *args, **kwargs: True):
         found = _census(_pool())
     idle = {name for name, _index, window in found["idle"] if window == "main phase 2"}
     # (Shield Dancer is not among them: "target attacking creature" has no

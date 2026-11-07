@@ -13,7 +13,8 @@ from .ai_policy import (
     choose_cast_action,
     choose_land_drop,
 )
-from .ai_actions import cast_announcement, spell_being_cast, zone_being_cast_from
+from .ai_actions import (activation_announcement, cast_announcement, spell_being_cast,
+                         zone_being_cast_from)
 from .ai_abilities import choose_activation_action
 from .ai_foreign_activations import choose_foreign_activation_action
 from .ai_hand_activations import choose_hand_activation_action
@@ -261,6 +262,14 @@ class SimulationReport:
     #: the priority windows (`_answer_priority`). A pool printing one that
     #: reads empty here is that coming back.
     activations_from_graveyard: Counter[str] = field(default_factory=Counter)
+    #: Abilities activated from a card **in its owner's hand** at instant
+    #: speed (CR 113.6j — a cycle whose trigger pays then: Decree of Silence
+    #: in response to a spell), by the card. **Empty in every run before the
+    #: kg4 round**: the hand was asked in its owner's main phase alone, so a
+    #: cycle's "you may counter target spell" was spent on an empty stack.
+    #: Counted by `_answer_priority`; the main phase's cycles are its own log
+    #: lines.
+    activations_from_hand_at_instant_speed: Counter[str] = field(default_factory=Counter)
 
     @property
     def ok(self) -> bool:
@@ -424,16 +433,7 @@ def _execute_foreign_activation(
     # The action as it reads once it is paid for — see `tap_planned_lands`.
     action = tap_planned_lands(game, active, action)
     result = game.activate_permanent_ability(
-        active,
-        action.permanent_name,
-        target_player_index=action.target_player_index,
-        permanent_index=action.permanent_index,
-        target_permanent_index=action.target_permanent_index,
-        target_role_refs=action.target_role_refs,
-        chosen_keyword=action.chosen_keyword,
-        ability_index=action.ability_index,
-        source_controller_index=action.source_controller_index,
-        x_value=action.x_value,
+        active, action.permanent_name, **activation_announcement(action),
     )
     _resolve_pending_choices(game)
     report.interaction_count += 1
@@ -696,24 +696,13 @@ def _play_activations(
     activation_action = None if game.is_game_over() else choose_activation_action(game, active)
     if activation_action is not None:
         activation_action = tap_planned_lands(game, active, activation_action)
+        # The whole announcement, from the one place an action becomes one
+        # (`ai_actions.activation_announcement`): the targets, a "Choose
+        # flying, …" word, the card a "Discard a card" cost takes, which
+        # ability, an X, a text change's two words.
         result = game.activate_permanent_ability(
-            active,
-            activation_action.permanent_name,
-            target_player_index=activation_action.target_player_index,
-            permanent_index=activation_action.permanent_index,
-            target_permanent_index=activation_action.target_permanent_index,
-            target_role_refs=activation_action.target_role_refs,
-            # The word a "Choose flying, …" cost announces, when the policy
-            # named one (`ai_abilities._keyword_walk_order`).
-            chosen_keyword=activation_action.chosen_keyword,
-            # Which card a "Discard a card" cost takes, when the policy named
-            # one (a card with madness, `ai_abilities._madness_discard_index`).
-            cost_hand_index=activation_action.cost_hand_index,
-            # Which ability: a land's non-mana ability is named by its index
-            # (its first is the mana ability the engine would otherwise take);
-            # None, the engine's first, for everything else.
-            ability_index=activation_action.ability_index,
-            x_value=activation_action.x_value,  # an "{X}…:" cost's, if sized
+            active, activation_action.permanent_name,
+            **activation_announcement(activation_action),
         )
         _resolve_pending_choices(game)
         report.interaction_count += 1
@@ -1026,6 +1015,8 @@ def _answer_priority(
         return _record_activation(game, seat, act, report, game_index, turn)
     if act.kind == "graveyard":
         return _record_graveyard_activation(game, seat, act, report, game_index, turn)
+    if act.kind == "hand":
+        return _record_hand_activation(game, seat, act, report, game_index, turn)
     card, action, result = act.card, act.action, act.result
     when = _when_at_priority(game, act.answering, act.in_combat)
     modes_named = _modes_named(card, action)
@@ -1075,6 +1066,28 @@ def _record_activation(
         ] += 1
         return False
     report.activations_at_instant_speed[act.window] += 1
+    return True
+
+
+def _record_hand_activation(
+    game: Game, seat: int, act: PriorityAct, report: SimulationReport,
+    game_index: int, turn: int,
+) -> bool:
+    """Record an ability of a card in *seat*'s hand `act_at_priority`
+    activated: True when it went on the stack."""
+    action, result = act.action, act.result
+    report.log_lines.append(
+        f"G{game_index} T{turn} {game.players[seat].name} "
+        f"activate {action.card_name} from hand -> {result.details} "
+        f"[{_when_at_priority(game, act.answering, act.in_combat)}]"
+    )
+    if not result.supported:
+        report.refused_instant_activations[
+            f"{action.card_name} (from hand): {result.details}"
+        ] += 1
+        return False
+    report.activations_at_instant_speed[act.window] += 1
+    report.activations_from_hand_at_instant_speed[action.card_name] += 1
     return True
 
 

@@ -110,22 +110,36 @@ class ObjectChoice:
     new_color: "str | None" = None
 
 
+def _text_change_step(instructions):
+    """The first text-change step among *instructions*, nested steps
+    included, or None."""
+    for instruction in instructions:
+        if instruction.kind == TEXT_CHANGE_KIND:
+            return instruction
+        for key in ("steps", "then", "else", "action", "effect"):
+            nested = (instruction.payload or {}).get(key)
+            if isinstance(nested, (list, tuple)):
+                found = _text_change_step([step for step in nested if hasattr(step, "kind")])
+                if found is not None:
+                    return found
+    return None
+
+
 def text_change_instruction(card: CardDefinition):
     """*card*'s text-change step as the candidate being built resolves it,
     or None for a card that changes no text."""
-    def walk(instructions):
-        for instruction in instructions:
-            if instruction.kind == TEXT_CHANGE_KIND:
-                return instruction
-            for key in ("steps", "then", "else", "action", "effect"):
-                nested = (instruction.payload or {}).get(key)
-                if isinstance(nested, (list, tuple)):
-                    found = walk([step for step in nested if hasattr(step, "kind")])
-                    if found is not None:
-                        return found
-        return None
+    return _text_change_step(_announced_steps(card, compile_card_oracle(card)))
 
-    return walk(_announced_steps(card, compile_card_oracle(card)))
+
+def ability_text_change_mode(instruction) -> "str | None":
+    """The mode of an **activated ability**'s text change when its
+    activation announces the words (`ANNOUNCED_MODES`, CR 612 through CR
+    602.2b: Balduvian Shaman's "replacing all instances of one color word
+    with another"), else None — the ability's twin of
+    :func:`announced_text_change_mode`."""
+    step = _text_change_step([instruction]) if instruction is not None else None
+    mode = (step.payload or {}).get("mode") if step is not None else None
+    return mode if mode in ANNOUNCED_MODES else None
 
 
 def announced_text_change_mode(card: CardDefinition) -> "str | None":
@@ -376,6 +390,71 @@ def _stack_slots(game: Game, entries: list[dict]) -> list[int]:
     return sorted(slots, reverse=True)
 
 
+def ranked_word_choices(
+    game: Game, caster: int, entries: list[dict], mode: str,
+) -> "list[ObjectChoice]":
+    """The permanents among *entries* (the engine's own enumeration, the
+    picker's vocabulary) a text change of *mode* is worth naming, each with
+    the pair of words that aims best there (:func:`aimed_worth`), the largest
+    aims first — the best :data:`OBJECTS_REHEARSED` of them, for the caller
+    to rehearse. Empty when no word on any of them aims at anything.
+
+    One ranking for both ways a text change is announced: a cast
+    (:func:`choose_object_or_spell`) and an activated ability
+    (``ai_abilities._text_change_activation``: Balduvian Shaman)."""
+    census = _Census(game)
+    ranked: list[tuple[float, int, ObjectChoice]] = []
+    for entry in entries:
+        if entry.get("kind") != "permanent":
+            continue
+        permanent = game.permanent_at(entry["seat"], entry["index"])
+        permanent_id = game.permanent_id_of(permanent)
+        if not isinstance(permanent_id, int):
+            continue
+        weighed = [
+            (aimed_worth(game, caster, permanent, mode, old, new, census), old, new)
+            for old, new in word_pairs(game, caster, permanent, mode, on_stack=False)
+        ]
+        if not weighed:
+            continue
+        aim, old, new = max(weighed, key=lambda row: row[0])
+        if aim > 0.0:
+            ranked.append((aim, -len(ranked), ObjectChoice(
+                entry["seat"], entry["index"], [permanent_id], old_color=old, new_color=new,
+            )))
+    return [
+        choice for _aim, _order, choice
+        in sorted(ranked, key=lambda row: row[:2], reverse=True)[:OBJECTS_REHEARSED]
+    ]
+
+
+def ability_text_change_worth(
+    game: Game, seat: int, instruction, permanent_id: "int | None",
+    old: "str | None", new: "str | None",
+) -> "tuple[float, float]":
+    """``(now, lasting)``: what an activated ability's text change naming
+    *old* → *new* on the permanent *permanent_id* is worth to *seat* that a
+    standing cannot see (:func:`aimed_worth`) — :func:`text_change_worth`'s
+    twin for an ability, read off its *instruction* rather than a card.
+    ``(0, 0)`` where no words or no permanent are named."""
+    mode = ability_text_change_mode(instruction)
+    if mode is None or not old or not new or permanent_id is None:
+        return 0.0, 0.0
+    permanent = game.permanent_by_id(permanent_id)
+    if permanent is None:
+        return 0.0, 0.0
+    worth = aimed_worth(game, seat, permanent, mode, old.upper(), new.upper())
+    step = _text_change_step([instruction])
+    if (step.payload or {}).get("duration") == UNTIL_END_OF_TURN:
+        return worth, 0.0
+    return worth, worth
+
+
+#: What a text change must be worth, read and aimed together, to be made: the
+#: floor a cast is held to (`_WORTH_FLOOR`), named for an ability's chooser.
+WORTH_FLOOR = _WORTH_FLOOR
+
+
 def choose_object_or_spell(
     game: Game, caster: int, card: CardDefinition, preferred_seat: int,
     *, x_value: "int | None" = None,
@@ -455,29 +534,7 @@ def choose_object_or_spell(
                 )),
                 ObjectChoice(item.caster_index, stack_index=slot, old_color=old, new_color=new),
             )
-    census = _Census(game)
-    ranked: list[tuple[float, int, ObjectChoice]] = []
-    for entry in entries:
-        if entry.get("kind") != "permanent":
-            continue
-        permanent = game.permanent_at(entry["seat"], entry["index"])
-        permanent_id = game.permanent_id_of(permanent)
-        if not isinstance(permanent_id, int):
-            continue
-        weighed = [
-            (aimed_worth(game, caster, permanent, mode, old, new, census), old, new)
-            for old, new in word_pairs(game, caster, permanent, mode, on_stack=False)
-        ]
-        if not weighed:
-            continue
-        aim, old, new = max(weighed, key=lambda row: row[0])
-        if aim > 0.0:
-            ranked.append((aim, -len(ranked), ObjectChoice(
-                entry["seat"], entry["index"], [permanent_id], old_color=old, new_color=new,
-            )))
-    for _aim_worth, _order, choice in sorted(ranked, key=lambda row: row[:2], reverse=True)[
-        :OBJECTS_REHEARSED
-    ]:
+    for choice in ranked_word_choices(game, caster, entries, mode):
         consider(
             _rehearsed(game, caster, card, announced(
                 choice.seat, index=choice.permanent_index, ids=choice.permanent_ids,
@@ -494,9 +551,13 @@ __all__ = [
     "AIMED_WORTH",
     "ANNOUNCED_MODES",
     "ObjectChoice",
+    "WORTH_FLOOR",
+    "ability_text_change_mode",
+    "ability_text_change_worth",
     "aimed_worth",
     "announced_text_change_mode",
     "choose_object_or_spell",
+    "ranked_word_choices",
     "rules_words",
     "text_change_instruction",
     "text_change_worth",

@@ -110,16 +110,26 @@ def test_the_ai_never_untaps_a_persons_creature_with_its_own_aura(set_pool):
 def test_the_untap_is_spent_on_the_ais_own_tapped_creature_only(set_pool):
     """The same Aura on the AI's own creature: untapping it when it is tapped
     is the card working; untapping it when it is untapped moves nothing, and
-    is not proposed."""
+    is not proposed. (Since kg4 the Aura's later abilities are weighed too:
+    its "{U}: Enchanted creature gains flying until end of turn" over a
+    Warchief that cannot block a flier may be — the untap, its first, is
+    what this asks about.)"""
     cards = _cards(set_pool)
     game = _table(cards, ["Pemmin's Aura", "Grizzly Bears", "Island", "Island"],
                   ["Krosan Warchief"])
     attach_aura(_on(game, 0, "Pemmin's Aura"), _on(game, 0, "Grizzly Bears"))
     game._recompute_continuous_effects()
     _main_phase(game)
-    assert choose_activation_action(game, 0) is None
+    idle = choose_activation_action(game, 0)
+    assert idle is None or idle.ability_index is not None, idle
 
+    # Tapped, in the main phase after combat: before it, an untap that
+    # changes neither the attack nor the blocks waits for them since kg4
+    # (`ai_abilities._read_through_the_fight`); after it, it is the creature
+    # standing ready to block.
     _on(game, 0, "Grizzly Bears").tapped = True
+    game._set_phase_and_step("postcombat_main", "postcombat_main")
+    game.turn_phases_remaining = ["ending"]
     action = choose_activation_action(game, 0)
     assert action is not None and action.permanent_name == "Pemmin's Aura"
     action = tap_planned_lands(game, 0, action)

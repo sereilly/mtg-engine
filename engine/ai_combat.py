@@ -86,6 +86,11 @@ class CombatOutcome:
     #: combat (``ai_rehearsal.Rehearsal.blocks_added``): an action taken before
     #: the blocks is taken for a block it adds.
     blocks_declared: set[tuple[int, int]] = field(default_factory=set)
+    #: ``permanent_id`` of every attacker this driver declared — the attack
+    #: side's twin, compared the same way (``Rehearsal.declarations_changed``):
+    #: an action taken before the attack is taken for an attack or a block it
+    #: changes, and one that changes neither can wait for the blocks.
+    attackers_declared: set[int] = field(default_factory=set)
 
 
 def declared_block_pairs(game, defender_index: int) -> set[tuple[int, int]]:
@@ -757,6 +762,11 @@ def run_ai_combat_phase(game, seat: int, *, outcome: CombatOutcome | None = None
             declare_ai_attackers(game, seat, outcome=outcome)
             outcome.attacks_declared += 1
             outcome.attackers += len(game.combat_attackers)
+            outcome.attackers_declared |= {
+                attacker.permanent_id
+                for slot in game.combat_attackers
+                if (attacker := game.permanent_at(game.active_player_index, slot)) is not None
+            }
             continue
         if step == "declare_blockers" and not game.combat_blockers_locked:
             pending = game._pending_block_declarer()

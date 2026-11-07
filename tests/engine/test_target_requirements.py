@@ -236,10 +236,18 @@ def test_an_ai_seat_aims_its_burn_at_the_flagbearer_and_holds_its_pump():
 def test_an_ai_seat_aims_an_any_target_ability_at_the_flagbearer():
     """…and the activation half: a pinger the policy would have pointed at the
     opposing face names the Flagbearer's slot instead, and the engine takes
-    the activation."""
+    the activation. Where it is aimed is the question, so the rehearsed
+    "moves nothing" gate every ability meets since kg4
+    (``ai_abilities._moves_something``: a point of damage the Flagbearer
+    survives, gone at cleanup) is off."""
+    from unittest import mock
+
+    from engine import ai_abilities
+
     game, _mine, theirs = _duel([_PINGER], [_bannerman()])
     bearer = theirs[0]
-    action = choose_activation_action(game, 0)
+    with mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True):
+        action = choose_activation_action(game, 0)
     assert action is not None
     assert (action.target_player_index, action.target_permanent_index) == (
         1, game.battlefield_index_of(bearer),

@@ -24,7 +24,7 @@ from unittest import mock
 
 import pytest
 
-from engine import ai_valuation
+from engine import ai_abilities, ai_valuation
 from engine.ai_abilities import choose_activation_action
 from engine.ai_valuation import (
     ALL_MEANS_EVERY_MATCH_KINDS,
@@ -261,7 +261,11 @@ def test_no_both_sides_pump_is_activated_where_it_helps_only_the_other_side():
 
 def test_without_the_seat_reading_the_census_finds_what_the_base_did():
     """Backwards: ``all`` unread, as on 313bd09d."""
-    with mock.patch.object(ai_valuation, "pumps_every_seat", lambda step: False):
+    # kg4/aiact's every-ability rehearsal (`ai_abilities._moves_something`)
+    # is a second layer that holds these proposals back too; the base's
+    # reading reappears only with both off.
+    with mock.patch.object(ai_valuation, "pumps_every_seat", lambda step: False), \
+            mock.patch.object(ai_abilities, "_moves_something", lambda *a, **k: True):
         found = _main_phase_census(_pool())
     assert {"Bone Flute", "Fyndhorn Pollen", "Thran Weaponry"} <= set(
         found["for_the_opponent"]

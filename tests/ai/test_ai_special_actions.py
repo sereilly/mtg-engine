@@ -159,7 +159,11 @@ def test_the_offer_is_not_weighed_with_no_combat_ahead(set_pool):
     # began to take mulligans (kg2), which changed its games; seed 7 takes it
     # twice (4, 5 and 6 never do).
     ("JUD", "Lost in Thought", 7),
-    ("TMP", "Volrath's Curse", 6),
+    # TMP seed 6 until kg4, when the AI's activations moved (a permanent's
+    # later abilities weighed, every ability held to the "moves nothing"
+    # rehearsal) and its two games stopped reaching the offer; 7 never does,
+    # 8 takes it once.
+    ("TMP", "Volrath's Curse", 8),
 ])
 def test_a_seeded_run_takes_the_offer(code, aura, seed):
     """A seeded run with the Aura pinned into both decks: a seat bought its

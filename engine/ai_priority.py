@@ -28,6 +28,11 @@ from .ai_graveyard_activations import (
     choose_graveyard_activation_action,
     holds_a_graveyard_ability,
 )
+from .ai_hand_activations import (
+    activate_chosen_hand_ability,
+    choose_hand_activation_action,
+    holds_a_hand_ability,
+)
 from .ai_policy import (
     activate_chosen_ability,
     cast_chosen_instant,
@@ -113,7 +118,8 @@ class PriorityAsk:
 @dataclass(frozen=True)
 class PriorityAct:
     """What :func:`act_at_priority` did: ``kind`` is ``"cast"``,
-    ``"activate"`` or ``"graveyard"``; ``action`` the chooser's action;
+    ``"activate"``, ``"hand"`` (an ability of a card in the hand — a cycle)
+    or ``"graveyard"``; ``action`` the chooser's action;
     ``result`` the engine's answer; ``card`` the spell cast (a cast only);
     ``answering`` the top of the stack as the seat acted (None on an empty
     stack); ``in_combat`` / ``off_turn`` where the seat acted."""
@@ -138,10 +144,19 @@ def act_at_priority(
     """*seat* has priority: cast what
     `ai_policy.choose_combat_instant_cast_action` chooses or, with no spell
     worth casting, activate what `ai_policy.choose_instant_speed_activation`
-    chooses, then an ability of a card in the graveyard
+    chooses, then an ability of a card in the hand
+    (`ai_hand_activations.choose_hand_activation_action`: a cycle whose
+    trigger pays now — Decree of Silence's counter in response to a spell),
+    then one of a card in the graveyard
     (`ai_graveyard_activations.choose_graveyard_activation_action`) — and
     carry it out through the executor each chooser shares. None when nothing
     was done.
+
+    The hand was not asked here at all (ROADMAP: "from-hand (cycling)
+    activations are not asked at instant speed"), so a cycle's trigger was
+    spent wherever the main phase spent it: Decree of Silence cycled with no
+    spell to counter. Not before the blocks (``"declare_attackers"``): a
+    cycle adds no block.
 
     Asked only in :func:`instant_speed_window`'s moments, only where no
     resolution is part-way through (a rehearsal cannot be run there, and a
@@ -181,6 +196,11 @@ def act_at_priority(
             if activation is not None:
                 result = activate_chosen_ability(game, seat, activation)
                 return PriorityAct(window, "activate", activation, result, **where)
+        if window != "declare_attackers" and holds_a_hand_ability(game, seat):
+            cycle = choose_hand_activation_action(game, seat, at_instant_speed=True)
+            if cycle is not None:
+                result = activate_chosen_hand_ability(game, seat, cycle)
+                return PriorityAct(window, "hand", cycle, result, **where)
         return _from_graveyard(game, seat, window, where)
     card, result = cast_chosen_instant(game, seat, action)
     return PriorityAct(window, "cast", action, result, card=card, **where)

@@ -42,10 +42,11 @@ proposals the engine accepted are the same 896 and 1,021 before and after.
 from __future__ import annotations
 
 import random
+from unittest import mock
 
 import pytest
 
-from engine import Game, PlayerState, ai_simulator
+from engine import Game, PlayerState, ai_abilities, ai_simulator
 from engine.ai_abilities import choose_activation_action
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
@@ -178,10 +179,18 @@ def rows() -> dict:
     # The population is found here, not at import: finding it compiles the
     # whole pool, ~19 s that every collection paid — each xdist worker and
     # each IDE discovery — whether or not it ran this module.
-    return {
-        card.name: {"poor": run(card, False), "rich": run(card, True)}
-        for card in population()
-    }
+    #
+    # The cost gate is this census's question, so the rehearsed "moves
+    # nothing" gate the main-phase chooser asks of every ability since kg4
+    # (`ai_abilities._moves_something`) is switched off: on these boards it
+    # holds back most of what is proposed (a tap of the opponent's creature in
+    # a main phase with no fight), and then the cost gate is asked of
+    # nothing.
+    with mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True):
+        return {
+            card.name: {"poor": run(card, False), "rich": run(card, True)}
+            for card in population()
+        }
 
 
 def test_the_census_examines_what_it_says(rows):

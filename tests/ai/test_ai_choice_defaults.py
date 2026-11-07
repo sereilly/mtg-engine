@@ -148,8 +148,10 @@ def test_w2g6_an_activated_shield_is_not_raised_against_its_own_controller(_w2g6
     a main phase with nothing coming is not proposed at all
     (``ai_valuation.shields_only``, rehearsed — the subject of
     ``test_lgn_c2_shield_activations``), so the aim is read with that gate
-    off."""
-    with mock.patch.object(ai_abilities, "shields_only", lambda instruction: False):
+    off — and since kg4 with the rehearsed "moves nothing" gate every other
+    ability meets off too (``ai_abilities._moves_something``)."""
+    with mock.patch.object(ai_abilities, "shields_only", lambda instruction: False), \
+            mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True):
         examined = _w2g6_shields_aimed(_w2g6_pool)
     assert examined >= 6, f"only {examined} activated source-of-choice shields were proposed"
 

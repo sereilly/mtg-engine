@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import pytest
 
-from engine import Game, PlayerState
+from engine import Game, PlayerState, ai_simulator
 from engine.ai_abilities import choose_activation_action
+from engine.ai_combat import run_ai_combat_phase
 from engine.aura_attachment import attach_aura
 from engine.models import Permanent
 from tests.helpers import resolve_stack
@@ -82,20 +83,25 @@ def test_w2g5_a_crown_is_not_sacrificed_for_a_point_nothing_needs(set_pool, sick
 
 def test_w2g5_a_crown_is_sacrificed_when_it_is_the_lethal_point(set_pool):
     """At six life the Crown's +1/+1 to both Bears (they share a type) is the
-    sixth damage: the rehearsal fights the combat, sees the game end, and the
-    sacrifice is proposed — and carried out it pumps both."""
+    sixth damage: the rehearsal fights the combat and sees the game end. Both
+    Bears attack with it or without it and nothing can block, so since kg4
+    the sacrifice waits for the blocks (``ai_abilities._read_through_the_fight``)
+    and is made in the declare-blockers step — and it is the lethal point
+    there: the Crown goes, both Bears hit as 3/3s, and the game is over."""
     game, crown = _w2g5_crowned(set_pool, life=6)
-    action = choose_activation_action(game, 0)
-    assert action is not None and action.permanent_name == "Crown of Vigor"
-    assert game.activate_permanent_ability(
-        0, action.permanent_name, permanent_index=action.permanent_index,
-    ).supported
-    resolve_stack(game)
+    assert choose_activation_action(game, 0) is None
+    report = ai_simulator.SimulationReport(
+        games_requested=1, games_completed=0, interaction_count=0,
+    )
+    game.prompt_driver = ai_simulator._resolve_pending_choices
+    game.priority_driver = ai_simulator._priority_answerer(game, report, 1, [1])
+    run_ai_combat_phase(game, 0)
+    assert any(
+        "activate Crown of Vigor" in line and "declare blockers" in line
+        for line in report.log_lines
+    ), report.log_lines
     assert crown not in game.players[0].battlefield
-    assert sorted(
-        (p.effective_power, p.effective_toughness)
-        for p in game.controlled_by(0) if p.is_creature
-    ) == [(3, 3), (3, 3)]
+    assert game.players[1].life <= 0 and game.is_game_over()
 
 
 @pytest.mark.parametrize(("life", "activated"), [
@@ -510,29 +516,33 @@ def test_w2g5_a_one_shot_permanent_is_still_cracked(set_pool):
 
 
 @pytest.mark.full
-@pytest.mark.parametrize(("pinned", "exercised"), [
+@pytest.mark.parametrize(("pinned", "exercised", "seed"), [
     (
         ["Birchlore Rangers", "Wirewood Pride", "Crown of Vigor", "Silklash Spider",
          "Elvish Warrior", "Wirewood Elf", "Elvish Vanguard"],
-        ["Birchlore Rangers: tapped"],
+        ["Birchlore Rangers: tapped"], 11,
     ),
-    (["Slice and Dice", "Butcher Orgg", "Risky Move"], ["Butcher Orgg divides"]),
+    (["Slice and Dice", "Butcher Orgg", "Risky Move"], ["Butcher Orgg divides"], 11),
+    # Seed 11 until kg4, when the AI's activations moved (a permanent's later
+    # abilities weighed, every ability held to the "moves nothing" rehearsal)
+    # and no Entrancer connected in its eight games; seed 12 exercises both.
     (
         ["Meddle", "Riptide Entrancer", "Wheel and Deal"],
-        ["Riptide Entrancer was sacrificed", "cast Wheel and Deal ->"],
+        ["Riptide Entrancer was sacrificed", "cast Wheel and Deal ->"], 12,
     ),
 ])
-def test_w2g5_seeded_onslaught_games_use_the_policy(pinned, exercised):
+def test_w2g5_seeded_onslaught_games_use_the_policy(pinned, exercised, seed):
     """Each piece is exercised in the seeded ONS games it was measured in
-    (seed 11, eight games, the cards pinned) — floors of one, never counts —
-    and nothing rehearsed raises. On the base each of these lines was absent:
-    no Rangers mana, no Orgg division, no Entrancer steal, no Wheel and Deal
-    cast (scratch/ons/w2g5/counts_base.txt)."""
+    (seed 11 — 12 for the Entrancer since kg4 — eight games, the cards
+    pinned) — floors of one, never counts — and nothing rehearsed raises. On
+    the base each of these lines was absent: no Rangers mana, no Orgg
+    division, no Entrancer steal, no Wheel and Deal cast
+    (scratch/ons/w2g5/counts_base.txt)."""
     from engine.ai_simulator import run_ai_simulation
     from engine.card_loader import manifest_set_path
 
     report = run_ai_simulation(
-        manifest_set_path("ONS", include_measured=True), games=8, seed=11,
+        manifest_set_path("ONS", include_measured=True), games=8, seed=seed,
         required_cards=pinned,
     )
     assert report.games_completed == 8

@@ -12,7 +12,9 @@ derivation now (`ai_target_sides.ability_role_target_sides`).
 """
 from __future__ import annotations
 
-from engine import Game, PlayerState
+from unittest import mock
+
+from engine import Game, PlayerState, ai_abilities
 from engine.ai_abilities import choose_activation_action
 from engine.ai_simulator import SimulationReport, _play_activations
 from engine.card_loader import load_cards, manifest_set_paths
@@ -112,8 +114,13 @@ def test_every_role_an_activation_names_is_on_the_board_its_step_wants():
             game.players[seat].graveyard.extend(_POOL[n] for n in _GRAVE)
         game.auto_resolve_pending_choices()
 
-        action = choose_activation_action(game, 0)
-        if action is None or action.permanent_name != name:
+        # The aim is the question, on a board with no fight in it: the
+        # rehearsed "moves nothing" gate (kg4, `ai_abilities._moves_something`)
+        # is off, and only the first ability — the one whose roles are read
+        # above — is counted.
+        with mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True):
+            action = choose_activation_action(game, 0)
+        if action is None or action.permanent_name != name or action.ability_index is not None:
             continue
         proposed += 1
         refs = action.target_role_refs or []

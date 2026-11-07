@@ -15,7 +15,8 @@ from fastapi import HTTPException
 
 from engine.ai_combat import declare_ai_blockers
 
-from engine.ai_actions import cast_announcement, spell_being_cast, zone_being_cast_from
+from engine.ai_actions import (activation_announcement, cast_announcement, spell_being_cast,
+                               zone_being_cast_from)
 from engine.ai_policy import (
     choose_cast_action,
     choose_combat_instant_cast_action,
@@ -319,22 +320,12 @@ def _ai_step(session: Session) -> bool:
     if activation_action is not None:
         spent.add("battlefield")
         activation_action = tap_planned_lands(game, seat, activation_action)
+        # The whole announcement (`engine.ai_actions.activation_announcement`):
+        # the targets, a "Choose flying, …" word, a discard's card, which
+        # ability, an X, a text change's two words.
         result = activate(
-            seat,
-            activation_action.permanent_name,
-            target_player_index=activation_action.target_player_index,
-            permanent_index=activation_action.permanent_index,
-            target_permanent_index=activation_action.target_permanent_index,
-            target_role_refs=activation_action.target_role_refs,
-            cost_hand_index=activation_action.cost_hand_index,
-            # The word a "Choose flying, …" cost announces, when the policy
-            # named one (Phyrexian Splicer, `ai_abilities._keyword_walk_order`).
-            chosen_keyword=activation_action.chosen_keyword,
-            # A land's non-mana ability by its index; None (the engine's
-            # first) for everything else — see `ai_abilities._abilities_weighed`.
-            ability_index=activation_action.ability_index,
-            # The X an "{X}…:" cost announces, when the policy sized one.
-            x_value=activation_action.x_value,
+            seat, activation_action.permanent_name,
+            **activation_announcement(activation_action),
         )
         if has_human_opponent and _hand_priority_round(session, seat, result):
             return False
@@ -388,13 +379,8 @@ def _ai_step(session: Session) -> bool:
         spent.add("foreign")
         foreign_activation = tap_planned_lands(game, seat, foreign_activation)
         result = activate(
-            seat,
-            foreign_activation.permanent_name,
-            target_player_index=foreign_activation.target_player_index,
-            permanent_index=foreign_activation.permanent_index,
-            target_permanent_index=foreign_activation.target_permanent_index,
-            ability_index=foreign_activation.ability_index,
-            source_controller_index=foreign_activation.source_controller_index,
+            seat, foreign_activation.permanent_name,
+            **activation_announcement(foreign_activation),
         )
         if has_human_opponent and _hand_priority_round(session, seat, result):
             return False

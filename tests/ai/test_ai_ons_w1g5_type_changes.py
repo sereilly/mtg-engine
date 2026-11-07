@@ -17,13 +17,13 @@ from __future__ import annotations
 
 import pytest
 
-from engine import Game, PlayerState
+from engine import Game, PlayerState, ai_simulator
 from engine.ai_abilities import choose_activation_action
+from engine.ai_combat import run_ai_combat_phase
 from engine.ai_prompt_readers import resolution_creature_type_preference
 from engine.ai_simulator import run_ai_simulation
 from engine.card_loader import manifest_set_path
 from engine.models import Permanent
-from tests.helpers import resolve_stack
 
 
 @pytest.mark.parametrize(("name", "expected"), [
@@ -78,24 +78,31 @@ def test_a_mistform_with_no_type_worth_joining_is_not_activated(set_pool, catalo
     assert choose_activation_action(game, 0) is None
 
 
-def test_a_mistform_joins_a_lords_tribe_before_it_attacks(set_pool, catalog_by_name):
+def test_a_mistform_joins_a_lords_tribe_for_the_attack(set_pool, catalog_by_name):
     """Beside Lord of Atlantis, with an empty board across the table, the
     Dreamer made a Merfolk attacks as a 3/2 rather than a 2/1 — what the
-    rehearsal reads through the fight — so the activation is proposed, and
-    carried out it makes the Dreamer a Merfolk."""
+    rehearsal reads through the fight. The attack is the same either way, so
+    since kg4 the change waits for the blocks (``ai_abilities.
+    _read_through_the_fight``: a fight it changes no declaration of), and is
+    made in the declare-blockers step: the Dreamer is a Merfolk when it deals
+    its damage."""
     game = _w1g5_board(
         set_pool, catalog_by_name, ["Mistform Dreamer", "Lord of Atlantis"],
     )
-    action = choose_activation_action(game, 0)
-    assert action is not None and action.permanent_name == "Mistform Dreamer"
+    assert choose_activation_action(game, 0) is None
+    report = ai_simulator.SimulationReport(
+        games_requested=1, games_completed=0, interaction_count=0,
+    )
+    game.prompt_driver = ai_simulator._resolve_pending_choices
+    game.priority_driver = ai_simulator._priority_answerer(game, report, 1, [1])
     dreamer = next(p for p in game.controlled_by(0) if p.card.name == "Mistform Dreamer")
-    game.enforce_mana_costs = False
-    assert game.activate_permanent_ability(
-        0, action.permanent_name, permanent_index=action.permanent_index,
-    ).supported
-    resolve_stack(game)
+    run_ai_combat_phase(game, 0)
+    assert any(
+        "activate Mistform Dreamer" in line and "declare blockers" in line
+        for line in report.log_lines
+    ), report.log_lines
     assert dreamer.has_type("merfolk") and not dreamer.has_type("illusion")
-    assert (dreamer.effective_power, dreamer.effective_toughness) == (3, 2)
+    assert game.players[1].life <= 20 - 3, game.players[1].life
 
 
 @pytest.mark.full
