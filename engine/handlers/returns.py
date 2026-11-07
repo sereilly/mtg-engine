@@ -1257,8 +1257,10 @@ def return_attached_permanent_to_hand(game: Game, instruction: OracleInstruction
 #: Whose untap step a permanent is waiting to be returned to hand during
 #: ("**During your next untap step**, as you untap your permanents, return this
 #: land to its owner's hand" — Undiscovered Paradise). A seat index on the
-#: permanent, written by the ability that armed it and read by the CR 614
-#: ``would_untap`` replacement in `engine/replacements/permanents.py`.
+#: permanent, written by the ability that armed it and read by the untap step
+#: (``UntapStepMixin._return_lands_due_back``) — not by a ``would_untap``
+#: replacement, which it was: the return does not replace the untap (the
+#: card's ruling, 2004-10-04).
 #:
 #: The seat is recorded rather than left implicit, unlike ``skip_next_untap``'s
 #: unseated default beside it: that clause says "its controller's next untap
@@ -1273,8 +1275,11 @@ def return_self_instead_of_untapping(game: Game, instruction: OracleInstruction,
     """"During your next untap step, as you untap your permanents, return this
     land to its owner's hand." (Undiscovered Paradise.)
 
-    This step only **arms** the effect; the return happens a step later, inside
-    the untap step, through the ``would_untap`` replacement. Performing it here
+    This step only **arms** the effect; the return happens later, as the
+    untap step it names begins (``UntapStepMixin._return_lands_due_back``),
+    whether or not the land would untap: "It will return even if some effect
+    prevents you from untapping it. The ability is not replacing the untapping
+    of the land in any way." (its ruling, 2004-10-04.) Performing it here
     would be an ordinary self-bounce and the land would never produce the mana
     its own ability just added.
 
@@ -1293,6 +1298,7 @@ def return_self_instead_of_untapping(game: Game, instruction: OracleInstruction,
         return True, "resolved"
     source.metadata[RETURN_AT_NEXT_UNTAP_SEAT] = game.players.index(context.caster)
     game.log.append(
-        f"{context.card.name} will return to its owner's hand instead of untapping"
+        f"{context.card.name} will return to its owner's hand during "
+        f"{context.caster.name}'s next untap step"
     )
     return True, "resolved"

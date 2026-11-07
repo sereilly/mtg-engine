@@ -363,11 +363,13 @@ OPTIONAL_ENTRY_DISCARD = 17  # Mox Diamond
 # nothing.
 SACRIFICE_AFTER_ENTERING = 20  # Land Equilibrium
 COUNTERS_REMOVED_INSTEAD_OF_UNTAPPING = 10  # Freyalise's Winds
-# After it, and only because nothing prints both: Freyalise's Winds spends a
-# counter and leaves the permanent on the battlefield, so a land that has
-# already gone to its owner's hand has no counter left to remove. CR 616.1e
-# would put the choice to the affected player if a card ever printed the pair.
-RETURNED_TO_HAND_INSTEAD_OF_UNTAPPING = 11  # Undiscovered Paradise
+# Undiscovered Paradise's "during your next untap step, as you untap your
+# permanents, return this land to its owner's hand" sat beside it at 11 and is
+# not a replacement of the untap: "It will return even if some effect prevents
+# you from untapping it. The ability is not replacing the untapping of the land
+# in any way." (its ruling, 2004-10-04.) It is the untap step's own action
+# (``UntapStepMixin._return_lands_due_back``), so Freyalise's Winds' counter on
+# a Paradise due back no longer took the land's return away.
 # CR 106.12b's kind: what a land produces is decided while its mana ability is
 # resolving. One slot, because ``engine/land_mana_swaps.py`` answers "what does
 # this land make instead?" for every producer of the effect at once — a
@@ -624,8 +626,74 @@ def _recorded_order(game, kind: str, seat: int | None) -> tuple[str, ...] | None
     return getattr(game, "effect_order_answers", {}).get((kind, seat))
 
 
+#: How far a joined event's default orders sit behind the event's own, one
+#: step per joined event in the order the caller names them — so a seat
+#: nobody asks takes every effect of the event's own kind first, then the
+#: first joined kind's, and so on: the order the separate contention sets
+#: were asked in before they were one (:func:`apply_replacements`'s
+#: *joined*). Wider than any kind's own order band.
+JOINED_ORDER_STEP = 1000
+
+
+def _joined_candidates(game, event: dict, joined) -> list[Candidate]:
+    """The candidates of the events *joined* to *event*, each asked about and
+    applied to its own payload, and each marking *event* consumed when it
+    consumes its own."""
+
+    def apply(g, e, candidate: Candidate, own: dict) -> None:
+        candidate.apply(g, own)
+        if take_replaced(own):
+            e[REPLACED] = True
+
+    found: list[Candidate] = []
+    for place, (kind, own) in enumerate(joined, start=1):
+        for c in replacement_candidates(kind, game, own):
+            found.append(Candidate(
+                # Prefixed: one function may be registered under two kinds,
+                # and a recorded answer names exactly one candidate.
+                key=f"{kind}:{c.key}",
+                order=c.order + place * JOINED_ORDER_STEP,
+                applies=lambda g, _e, c=c, own=own: c.applies(g, own),
+                apply=lambda g, e, c=c, own=own: apply(g, e, c, own),
+                label=c.label,
+                prevents_or_redirects=c.prevents_or_redirects,
+                prevents=c.prevents,
+                amount_role=c.amount_role,
+                sources=None if c.sources is None else (
+                    lambda g, _e, c=c, own=own: c.sources(g, own)
+                ),
+            ))
+    return found
+
+
+def answered_restart(
+    game, kind: str, payload: dict, rerun: Callable[[], Any],
+) -> Callable[[], None]:
+    """*rerun* as :func:`apply_replacements`' *restart*, forgetting the
+    answer it was re-run with once it is done.
+
+    The answer (``Game.effect_order_answers``, keyed by the event's kind and
+    the affected seat) is spent by the first contended round the re-run
+    reaches. A re-run that reaches none — the board changed while the question
+    was owed, and fewer than two effects still apply — would otherwise leave
+    it behind to answer the next contention of that kind for that seat, which
+    nobody asked. For an event whose re-run cannot be parked behind another
+    prompt (a death, a move into a graveyard, a discard's destination); a
+    draw's can, and keeps its answer until it is drawn."""
+    seat = affected_seat(game, payload.get("recipient") or payload.get("player"))
+
+    def restart() -> None:
+        try:
+            rerun()
+        finally:
+            getattr(game, "effect_order_answers", {}).pop((kind, seat), None)
+
+    return restart
+
+
 def apply_replacements(
-    game, kind: str, payload: dict, *, restart: Callable[[], Any] | None = None
+    game, kind: str, payload: dict, *, restart: Callable[[], Any] | None = None,
+    joined: tuple = (),
 ) -> tuple[bool, dict]:
     """Run *kind*'s interceptors over the event under CR 616.1.
 
@@ -646,12 +714,26 @@ def apply_replacements(
 
     Damage events should go through ``engine/damage_events.py`` instead, which
     contends these against the event's prevention shields as one set.
+
+    *joined* is ``((kind, payload), …)``: events this registry spells
+    separately that are **one event** to CR 616.1. A permanent dying is a
+    ``would_die`` event, a ``would_leave_battlefield`` one and — its card on
+    the way to a graveyard — a ``put_into_graveyard`` one, and 616.1f's own
+    example is a creature that "would die, instead shuffle it into its owner's
+    library" beside "if a card would be put into a graveyard from anywhere,
+    instead exile it": "its controller decides which replacement to apply
+    first". Asked one kind after another, the first kind's effect always won.
+    Joined, every applicable effect of every spelling is one contention set,
+    each asked about and applied to its own payload; the affected seat is
+    *payload*'s and the recorded answer is *kind*'s. A seat nobody asks keeps
+    the order the sets were asked in (:data:`JOINED_ORDER_STEP`).
     """
     seat = affected_seat(game, payload.get("recipient") or payload.get("player"))
     trace = apply_in_order(
         game,
         payload,
-        replacement_candidates(kind, game, payload),
+        replacement_candidates(kind, game, payload)
+        + _joined_candidates(game, payload, joined),
         chooser_index=seat,
         stop=was_replaced,
         ask=None if restart is None else order_prompt_asker(kind, restart),

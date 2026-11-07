@@ -553,6 +553,48 @@ class UntapStepMixin:
             )
         ]
 
+    def _return_lands_due_back(self, player_index: int) -> None:
+        """Return to its owner's hand every permanent an ability said would go
+        back "during **your** next untap step, as you untap your permanents"
+        (Undiscovered Paradise), *player_index*'s being that step.
+
+        **Not a replacement of the untap**, and it was registered as one (a
+        ``would_untap`` interceptor, reached only by a permanent that was
+        about to untap): "It will return even if some effect prevents you from
+        untapping it. The ability is not replacing the untapping of the land in
+        any way." and "Only returns to owner's hand if it is still on the
+        battlefield at the beginning of its controller's next untap." (its
+        rulings, 2004-10-04.) So a Paradise kept tapped — by Winter Orb's
+        limit, a "doesn't untap" Aura, Freyalise's Winds' counter (which
+        replaced its untap and took the return with it) — stayed on the
+        battlefield, and kept its marker for a step the ability never named.
+
+        The step's own action, then, at its start: every permanent so marked
+        for this player's step and still on the battlefield goes, untapped or
+        not and whoever controls it now — the marker records *whose* step
+        (``RETURN_AT_NEXT_UNTAP_SEAT``), and the card goes to its owner's hand
+        (CR 400.3). Together, as one event (CR 603.10a), and before anything
+        untaps: the rest of the step's permanents untap as they would have.
+        """
+        from ..handlers._common import return_permanent_to_owners_hand
+        from ..handlers.returns import RETURN_AT_NEXT_UNTAP_SEAT
+
+        due = [
+            permanent for permanent in self.all_permanents()
+            if permanent.metadata.get(RETURN_AT_NEXT_UNTAP_SEAT) == player_index
+        ]
+        if not due:
+            return
+        untapping = self.players[player_index]
+        with self.leaving_together():
+            for permanent in due:
+                permanent.metadata.pop(RETURN_AT_NEXT_UNTAP_SEAT, None)
+                owner = return_permanent_to_owners_hand(self, permanent, untapping)
+                self.log.append(
+                    f"{permanent.card.name} returned to {owner.name}'s hand as "
+                    f"{untapping.name} untapped"
+                )
+
     @goes_no_further(0)
     def resolve_untap_step(
         self,
@@ -628,6 +670,12 @@ class UntapStepMixin:
         if constraints["skip_all_source"] is not None:
             self.log.append(f"{player.name} skipped untap due to {constraints['skip_all_source']}")
             return 0
+
+        # "During your next untap step, as you untap your permanents, return
+        # this land to its owner's hand." (Undiscovered Paradise.) After the
+        # skip above: a skipped untap step does not happen (CR 500.11), so it
+        # is not yet the step the ability named.
+        self._return_lands_due_back(player_index)
 
         limits: dict[str, int] = dict(constraints["limits"])
         blocked = list(constraints["blocked"])

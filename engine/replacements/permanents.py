@@ -29,9 +29,7 @@ from ..replacement_choices import (
 from .registry import (COUNTERS_REMOVED_INSTEAD_OF_UNTAPPING,
                        EXILE_INSTEAD_OF_ENTERING, EXTRA_PLUS1_COUNTER,
                        LANDS_CANT_ENTER, LAND_MANA_SUBSTITUTION,
-                       OPTIONAL_ENTRY_DISCARD,
-                       RETURNED_TO_HAND_INSTEAD_OF_UNTAPPING,
-                       SACRIFICE_AFTER_ENTERING, UNPAYABLE_ENTRY_COST,
+                       OPTIONAL_ENTRY_DISCARD, SACRIFICE_AFTER_ENTERING, UNPAYABLE_ENTRY_COST,
                        UNPAYABLE_ENTRY_SACRIFICE, ReplacementOutcome,
                        replacement_effect)
 
@@ -94,16 +92,27 @@ def _one_more_plus1_counter(game, payload: dict) -> ReplacementOutcome | None:
     A *modifying* replacement, not a consuming one: the event still happens,
     with a bigger number. Returning ``new_amount`` would be the shape damage
     uses, but this event's quantity is ``count`` — so the payload is written
-    directly and nothing is consumed, which is also what keeps a second
-    Mentor from being skipped (CR 616.1f re-asks the rest against the raised
-    count, and each applies once).
+    directly and nothing is consumed.
+
+    **One more for each Mentor.** Each copy is its own effect and each
+    applies once (CR 616.1f) — "If you control two Conclave Mentors, the
+    number of +1/+1 counters put on a creature is two plus the original
+    number. Three Conclave Mentors add three, and so on." (its ruling,
+    2020-06-23). One registration stands for every copy, as the damage
+    multipliers' does (``_multiply_damage_dealt``), so it adds one per source;
+    it added one in all, and two Mentors put two counters where the card
+    puts three. The copies' order changes nothing (each adds one), so there
+    is no choice between them to put to anybody.
     """
-    payload["count"] = int(payload.get("count", 0)) + 1
+    sources = _extra_plus1_counter_sources(game, payload)
+    extra = max(1, len(sources))
+    payload["count"] = int(payload.get("count", 0)) + extra
     permanent = payload.get("permanent")
     name = getattr(getattr(permanent, "card", None), "name", "a creature")
-    by = ", ".join(source_names(_extra_plus1_counter_sources(game, payload)))
+    by = ", ".join(source_names(sources))
     game.log.append(
-        f"{name} gets one more +1/+1 counter" + (f" ({by})" if by else "")
+        f"{name} gets {'one more +1/+1 counter' if extra == 1 else f'{extra} more +1/+1 counters'}"
+        + (f" ({by})" if by else "")
     )
     return ReplacementOutcome()
 
@@ -804,56 +813,6 @@ def _remove_counters_instead_of_untapping(
         return None
     game.log.append(
         f"{permanent.card.name} does not untap; {removed} counter(s) removed instead"
-    )
-    return ReplacementOutcome(replaced=True)
-
-
-def _applies_return_instead_of_untapping(game, payload: dict) -> bool:
-    from ..handlers.returns import RETURN_AT_NEXT_UNTAP_SEAT
-
-    permanent = payload.get("permanent")
-    if permanent is None:
-        return False
-    seat = permanent.metadata.get(RETURN_AT_NEXT_UNTAP_SEAT)
-    if not isinstance(seat, int):
-        return False
-    # "**Your** next untap step": the step the ability's controller takes, which
-    # is not automatically the one this permanent's current controller takes.
-    # A land stolen in between waits for the step the card named.
-    player = payload.get("player")
-    return player is not None and game.players.index(player) == seat
-
-
-@replacement_effect(
-    "would_untap", RETURNED_TO_HAND_INSTEAD_OF_UNTAPPING,
-    applies=_applies_return_instead_of_untapping, sources=_the_entering_permanent,
-    label="Return it to its owner's hand as it would untap",
-)
-def _return_to_hand_instead_of_untapping(
-    game, payload: dict
-) -> ReplacementOutcome | None:
-    """Undiscovered Paradise: "During your next untap step, as you untap your
-    permanents, return this land to its owner's hand."
-
-    A genuine CR 614 replacement rather than a delayed triggered ability, and
-    the difference is the card: the untap step gives nobody priority (CR 502.4),
-    so a delayed ability would fire at the upkeep — after the land had already
-    untapped — and hand its controller a free untapped land every turn.
-
-    The marker is cleared as it fires. It names *one* untap step (CR 611.2a),
-    and the permanent that comes back is a new object anyway (CR 400.7), so
-    nothing carries it forward.
-    """
-    from ..handlers._common import return_permanent_to_owners_hand
-    from ..handlers.returns import RETURN_AT_NEXT_UNTAP_SEAT
-
-    permanent = payload["permanent"]
-    permanent.metadata.pop(RETURN_AT_NEXT_UNTAP_SEAT, None)
-    owner = return_permanent_to_owners_hand(
-        game, permanent, payload.get("player")
-    )
-    game.log.append(
-        f"{permanent.card.name} does not untap; returned to {owner.name}'s hand"
     )
     return ReplacementOutcome(replaced=True)
 

@@ -52,7 +52,7 @@ from ..graveyard_order import record_graveyard_arrival
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN, EXILED_BY_SEAT
 from ..pending_choices import spec_for
-from ..replacements import apply_replacements
+from ..replacements import answered_restart, apply_replacements
 from ..replacements.permanents import apply_entry_riders
 from ..tokens import is_token_card
 
@@ -419,13 +419,26 @@ class ZoneFunnelsMixin:
         # graveyard from anywhere…") has to read the object as it last existed
         # (CR 613: a copy of it has the sentence, and one that lost its
         # abilities does not). It rides the event; nothing here reads it.
+        #
+        # CR 616.1e: Legacy Weapon under Forbidden Crypt, or under Yawgmoth's
+        # Will's turn, is two effects replacing one move, and the card's owner
+        # chooses which applies. The answer can wait because every effect of
+        # this kind sends the card somewhere else (CR 614.6): a move that
+        # suspends reports False — the card did not arrive — which is what it
+        # will be whatever is answered, and the re-run (with the card already
+        # whole, so it is not revealed twice) puts it where the answer says.
+        event = self.graveyard_event(
+            seat, card, from_zone=from_zone, from_battlefield=from_battlefield,
+        )
         consumed, _ = apply_replacements(
-            self,
-            "put_into_graveyard",
-            {
-                "player": self.players[seat], "card": card,
-                "from_zone": from_zone, "permanent": from_battlefield,
-            },
+            self, "put_into_graveyard", event,
+            restart=answered_restart(
+                self, "put_into_graveyard", event,
+                lambda: self.put_card_into_graveyard(
+                    seat, card, from_zone=from_zone,
+                    from_battlefield=from_battlefield,
+                ),
+            ),
         )
         if consumed:
             return False
@@ -489,6 +502,36 @@ class ZoneFunnelsMixin:
         )
         return True
 
+    def graveyard_event(
+        self, owner, card, *, from_zone=None, from_battlefield=None,
+    ) -> dict:
+        """The ``put_into_graveyard`` event *card*'s move into *owner*'s
+        graveyard raises (CR 614 — Forbidden Crypt, Legacy Weapon): the seat
+        whose pile it is, the card as it would land there (already whole,
+        CR 709.4 and 708.9), the zone it left and the permanent it was.
+
+        One builder, read by :meth:`put_card_into_graveyard` and by the two
+        events CR 616.1 treats as the same move — a permanent dying and a card
+        being discarded — which join this one's effects to their own
+        contention set (``apply_replacements``' *joined*), so the predicates
+        are asked about the event the seam would raise and no other."""
+        return {
+            "player": self.players[self._owner_seat(owner)], "card": card,
+            "from_zone": from_zone, "permanent": from_battlefield,
+        }
+
+    def leaving_battlefield_event(self, permanent, owner, destination: str) -> dict:
+        """The ``would_leave_battlefield`` event *permanent*'s move to
+        *destination* raises (Dreams of the Dead) — built once, for
+        :meth:`_leaving_battlefield_replaced` and for a death, which joins it
+        (``_move_permanent_to_graveyard``)."""
+        return {
+            "player": owner if isinstance(owner, PlayerState)
+            else self.players[self._owner_seat(owner)],
+            "permanent": permanent,
+            "destination": destination,
+        }
+
     def _leaving_battlefield_replaced(self, permanent, owner, destination: str) -> bool:
         """CR 614.6 for a permanent on its way off the battlefield — whether a
         replacement sent it somewhere other than *destination*.
@@ -511,14 +554,15 @@ class ZoneFunnelsMixin:
         """
         if permanent is None:
             return False
+        # No `restart`: one effect of this kind exists (Dreams of the Dead's
+        # exile), and a contention needs two — the hand and the library have no
+        # replacements of their own for it to meet. A death, the one
+        # destination where it does meet others, asks it joined to them.
+        # ``tests/engine/test_kg4_asks_replacement_sites.py`` fails the day a
+        # second is registered.
         consumed, _ = apply_replacements(
             self, "would_leave_battlefield",
-            {
-                "player": owner if isinstance(owner, PlayerState)
-                else self.players[self._owner_seat(owner)],
-                "permanent": permanent,
-                "destination": destination,
-            },
+            self.leaving_battlefield_event(permanent, owner, destination),
         )
         return bool(consumed)
 
