@@ -24,7 +24,6 @@ import pytest
 from engine.card_loader import load_catalog
 from engine.models import Permanent
 from tests.helpers import client, seat_plays_first
-from web.app import store
 
 _CARDS = {card.name: card for card in load_catalog()}
 _LANDS = [{"name": name, "count": 8} for name in ("Plains", "Island", "Swamp", "Mountain", "Forest")]
