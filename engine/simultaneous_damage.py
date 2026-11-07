@@ -260,6 +260,23 @@ class SimultaneousDamage:
     #: The last steps (*then*) of the loops that ran while :attr:`agenda` was
     #: collecting, run after the collected chunks have been dealt.
     closers: list = field(default_factory=list)
+    #: CR 615.8: one instance of damage from a source is everything it deals
+    #: in this dealing. Each source-keyed "next time" shield or redirect spent
+    #: on one of its chunks opened a ``shields.SharedNextTime`` here
+    #: (``SharedNextTime.use`` appends it), open for that source's other
+    #: chunks and closed as the dealing finishes.
+    occasions: list = field(default_factory=list)
+    #: The same rule for the riders a source carries
+    #: (``engine/next_damage.py``, Desperate Gambit and Impulsive Maneuvers):
+    #: each ``(source, key)`` whose rider this dealing has spent, which the
+    #: source's other chunks carry without spending another.
+    next_time_riders: list = field(default_factory=list)
+    #: CR 615.5's "the rest of the effect takes place immediately afterward",
+    #: for a source-keyed shield spent across this dealing's chunks: one entry
+    #: per shield (``[shield, effect, first chunk's event, shields used,
+    #: total prevented]``), run once, with the total, as the dealing finishes
+    #: (Shadowbane's life, Honorable Passage's damage back).
+    afterward: list = field(default_factory=list)
 
     def joins(self, *, combat: bool, source) -> bool:
         """Whether a chunk with this *combat* flag and *source* is part of
@@ -310,6 +327,10 @@ def begin(game, *, combat: bool, source=None, sources=()) -> SimultaneousDamage 
                 if not any(dealer is known for known in open_dealing.dealers)
             )
         return None
+    if open_dealing is not None:
+        # Abandoned: whatever "next time" it opened is over with it, or the
+        # records would stay neither open nor spent until the cleanup step.
+        _close_occasions(game, open_dealing)
     dealing = SimultaneousDamage(combat=combat, dealers=() if combat else dealers)
     game.simultaneous_damage = dealing
     return dealing
@@ -471,6 +492,9 @@ def finish(game, dealing: SimultaneousDamage | None) -> None:
     if dealing is None or getattr(game, "simultaneous_damage", None) is not dealing:
         return
     game.simultaneous_damage = None
+    # CR 615.8: the instance each source-keyed "next time" was spent on is
+    # over — its source's next damage is dealt normally.
+    _close_occasions(game, dealing)
     from .delayed_triggers import fire_delayed_totals
     from .events import emit
 
@@ -534,3 +558,33 @@ def finish(game, dealing: SimultaneousDamage | None) -> None:
     for seat in game.apnap_seats(by_seat, include_lost=True):
         for row in by_seat[seat]:
             game._gain_life(game.players[seat], row.amount, source_name="lifelink")
+    # CR 615.5, after the damage: each source-keyed shield's additional effect
+    # once, for everything it prevented in this dealing (one instance,
+    # CR 615.8), in the order the shields were first spent.
+    for _shield, effect, event, used, prevented in dealing.afterward:
+        effect(game, event, used, prevented)
+
+
+def defer_afterward(dealing: SimultaneousDamage, shield, effect, event, used, prevented: int) -> None:
+    """Hold a source-keyed shield's CR 615.5 additional effect for the end of
+    *dealing*, adding *prevented* to what it has already prevented there."""
+    for entry in dealing.afterward:
+        if entry[0] is shield and entry[1] is effect:
+            entry[4] += prevented
+            return
+    dealing.afterward.append([shield, effect, dict(event), list(used), prevented])
+
+
+def _close_occasions(game, dealing: SimultaneousDamage) -> None:
+    """Close every "next time" occasion *dealing* opened, and forget the
+    records that are spent by it."""
+    if not dealing.occasions:
+        return
+    for occasion in dealing.occasions:
+        occasion.closed = True
+    dealing.occasions = []
+    from . import damage_redirects, shields
+
+    for holder in (*game.players, *game.all_permanents()):
+        shields.drop_spent(holder)
+        damage_redirects.drop_spent(holder)

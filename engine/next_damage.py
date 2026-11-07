@@ -105,31 +105,59 @@ def rider_key(key: str, *, combat_only: bool = False) -> str:
     return _COMBAT_ONLY[key] if combat_only else key
 
 
-def armed_for_event(source: Any, key: str, *, combat: bool) -> int:
+def _spent_in(moment: Any, source: Any, key: str, *, combat: bool) -> bool:
+    """Whether the dealing *moment* has already spent one of *source*'s riders
+    of *key*'s kind (or, for combat damage, its combat-narrowed twin). Pure.
+
+    CR 615.8 / CR 614: "the next time that source would deal damage" is one
+    **instance**, and one instance of damage from a source is everything it
+    deals in one simultaneous dealing (the project owner's ruling,
+    2026-11-07) — so a rider spent on one chunk of a dealing carries over to
+    the source's other chunks of it (``SimultaneousDamage.next_time_riders``),
+    and the dealing's finish is the end of it. *moment* is the dealing
+    (``damage_redirects.dealing_moment``), None outside one."""
+    spent = getattr(moment, "next_time_riders", None)
+    if not spent:
+        return False
+    keys = (key, _COMBAT_ONLY[key]) if combat else (key,)
+    return any(held is source and spent_key in keys for held, spent_key in spent)
+
+
+def armed_for_event(source: Any, key: str, *, combat: bool, moment: Any = None) -> int:
     """How many riders of *key*'s kind answer to **this** damage event. Pure.
 
     The unnarrowed rider answers to every event; the combat-narrowed one only
-    to combat damage. The interceptors' predicate half.
+    to combat damage. The interceptors' predicate half. A rider spent on an
+    earlier chunk of the dealing *moment* still answers (:func:`_spent_in`).
     """
     count = armed(source, key)
     if combat:
         count += armed(source, _COMBAT_ONLY[key])
+    if _spent_in(moment, source, key, combat=combat):
+        count += 1
     return count
 
 
-def spend_for_event(source: Any, key: str, *, combat: bool) -> None:
+def spend_for_event(source: Any, key: str, *, combat: bool, moment: Any = None) -> None:
     """Charge one rider of *key*'s kind against this event. The mutating half.
 
     The combat-narrowed rider first where both are armed and the event is
     combat damage: it is the one that could not have applied to anything else,
     so spending it leaves the wider rider for the source's next damage of any
     kind — the order its controller would choose (CR 616.1e).
+
+    Inside a dealing (*moment*) the rider is spent once for the whole of it:
+    the first chunk charges it and records it on the dealing, and the source's
+    later chunks of that dealing charge nothing (:func:`_spent_in`).
     """
+    if _spent_in(moment, source, key, combat=combat):
+        return
     narrowed = _COMBAT_ONLY[key]
-    if combat and armed(source, narrowed) > 0:
-        spend(source, narrowed)
-    else:
-        spend(source, key)
+    charged = narrowed if combat and armed(source, narrowed) > 0 else key
+    spend(source, charged)
+    spent = getattr(moment, "next_time_riders", None)
+    if spent is not None:
+        spent.append((source, charged))
 
 
 def arm(source: Any, key: str, times: int = 1) -> bool:

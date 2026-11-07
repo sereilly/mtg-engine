@@ -1085,11 +1085,12 @@ def redirect_source_damage_to_target_until_eot(
     recipient, so the record watches this source's damage to anyone —
     ``any_recipient``, found by ``source_keyed_redirects`` and hung off the
     caster because it has nothing else to hang off, as Reflect Damage's is. Its
-    "next time" is a **time**, not a chunk (CR 615.8; Mirrorwood Treefolk's
-    ruling, 2004-10-04, read for the instance form): a creature blocked by two
-    deals both blockers its combat damage at once (CR 510.2), and both move —
-    the shared occasion Glarecaster's records use, closed by the combat damage
-    step's tail (``end_simultaneous_redirects``).
+    "next time" is CR 615.8's **instance** — everything the source deals in
+    one simultaneous dealing (the project owner's ruling, 2026-11-07): a
+    creature blocked by two deals both blockers its combat damage at once
+    (CR 510.2), and both move. A ``by_source`` occasion, opened at the
+    dealing's first chunk and closed as the dealing finishes
+    (``simultaneous_damage.finish``).
     """
     payload = instruction.payload
     caster = context.caster
@@ -1128,7 +1129,7 @@ def redirect_source_damage_to_target_until_eot(
             new_recipient=new_recipient,
             source=source,
             uses=None if uses == 1 else uses,
-            occasion=SharedNextTime() if uses == 1 else None,
+            occasion=SharedNextTime(by_source=True) if uses == 1 else None,
             combat_only=bool(payload.get("combat_only")),
             any_recipient=True,
             source_name=card_name or None,

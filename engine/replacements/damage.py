@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 
 from ..effect_ordering import CAP, MULTIPLIER
-from ..damage_redirects import _is_permanent
+from ..damage_redirects import _is_permanent, event_dealing_moment
 from ..next_damage import (DAMAGE_DOUBLED_NEXT, armed_for_event,
                            spend_for_event)
 from .registry import (
@@ -1135,6 +1135,7 @@ def _applies_next_damage_doubled(game, payload: dict) -> bool:
     return armed_for_event(
         payload.get("source"), DAMAGE_DOUBLED_NEXT,
         combat=bool(payload.get("combat")),
+        moment=event_dealing_moment(game, payload),
     ) > 0
 
 
@@ -1178,7 +1179,8 @@ def _double_next_damage_from_chosen_source(
     source = payload.get("source")
     amount = int(payload["amount"])
     spend_for_event(
-        source, DAMAGE_DOUBLED_NEXT, combat=bool(payload.get("combat"))
+        source, DAMAGE_DOUBLED_NEXT, combat=bool(payload.get("combat")),
+        moment=event_dealing_moment(game, payload),
     )
     card = getattr(source, "card", source)
     game.log.append(
