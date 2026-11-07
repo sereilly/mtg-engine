@@ -19,6 +19,7 @@ report lists it).
 """
 from __future__ import annotations
 
+import random
 import re
 from dataclasses import replace
 
@@ -41,6 +42,12 @@ _BASIC = {"W": "Plains", "U": "Island", "B": "Swamp", "R": "Mountain", "G": "For
 
 
 def _table(cards, boards, hands=((), ())):
+    # The real game's randomness on a fixed seed, as every board is built: a
+    # coin flip on it (Bottle of Suleiman's) otherwise falls by whatever ran
+    # before this board in the process — the census's verdict on it with it
+    # (kg4/determinism). A rehearsal's own sample is seeded apart
+    # (``ai_rehearsal._rehearsal_seed``).
+    random.seed(1337)
     players = [
         PlayerState(name=name, hand=list(hand), library=[cards["Forest"]] * 8)
         for name, hand in zip(("AI-A", "AI-B"), hands)
@@ -251,6 +258,16 @@ def ability_census(cards, catalog):
     return rows
 
 
+#: Activated before the blocks and adding none, each with why. Bottle of
+#: Suleiman flips a coin: won, a 5/5 flying Djinn that blocks; lost, 5 damage
+#: to its controller. The rehearsal's sample of the flip is its own
+#: (``ai_rehearsal._rehearsal_seed``, read off what every seat can count since
+#: kg4) and won; the board's flip, on the seed ``_table`` fixes, lost. The AI
+#: weighs a flip on one sample of it, not on its odds.
+_COIN = "a coin flip: the rehearsal's sample won it, the board's flip lost it"
+_ADDED_NOTHING = {"Bottle of Suleiman": _COIN}
+
+
 def test_every_ability_activated_before_the_blocks_adds_a_block(ability_census):
     """The window's own rule held on the real board: each ability the AI
     activated in the declare-attackers step left the defender declaring a
@@ -264,7 +281,7 @@ def test_every_ability_activated_before_the_blocks_adds_a_block(ability_census):
         name for (name, _line), row in activated.items()
         if not row["blocks"] - row["control_blocks"]
     )
-    assert added_nothing == [], added_nothing
+    assert added_nothing == sorted(_ADDED_NOTHING), added_nothing
     shapes = {row["shape"] for row in activated.values()}
     assert {"token", "animate", "evasion_self", "evasion", "untap_self", "remove_flying"} <= shapes
     assert all(not row["raised"] for row in ability_census.values())

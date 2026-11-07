@@ -92,6 +92,8 @@ ALWAYS = frozenset({
     # regeneration whose delayed steal is bound to its target is aimed
     # across the table (``ai_target_sides._spent_on_the_earlier_target``).
     "Drain Power", "Debt of Loyalty",
+    # Coin flips, whose verdict is the rehearsal's sample (kg4; see `LOSSES`).
+    "Game of Chaos", "Desperate Gambit",
 })
 
 #: A cast is a loss when it leaves its caster this much worse off: half a
@@ -332,21 +334,17 @@ IDLE: dict = {}
 #: Casts still proposed that leave their caster worse off, each with why.
 #:
 #: Game of Chaos flips a coin for a point of life each way and doubles the
-#: stakes. A rehearsal's randomness is its own on purpose
+#: stakes, and Desperate Gambit is the same flip one step on (won, the chosen
+#: source's next damage this turn is doubled; lost, it is prevented). A
+#: rehearsal's randomness is its own on purpose
 #: (``ai_rehearsal._rehearsal_seed``): it says what such a cast is *like* and
-#: must not say how the real flip will fall. Its sample won; this sweep's
-#: cast, on the seed `run` fixes, lost.
-#:
-#: Desperate Gambit is the same flip one step on: won, the chosen source's
-#: next damage this turn is doubled; lost, it is prevented. The rehearsal's
-#: attacker hit for four and this sweep's for none.
-_COIN = "a coin flip: the rehearsal's sample won it, the cast lost it"
-LOSSES: dict = {
-    ("Game of Chaos", None, "empty"): _COIN,
-    ("Game of Chaos", None, "own"): _COIN,
-    ("Game of Chaos", None, "mirror"): _COIN,
-    ("Desperate Gambit", None, "own"): _COIN,
-}
+#: must not say how the real flip will fall. On the seed read off the log's
+#: length their samples won and this sweep's casts, on the seed `run` fixes,
+#: lost: Game of Chaos on all three layouts and Desperate Gambit on ``own``
+#: were pinned here until kg4. On the seed read off what every seat can
+#: count, each sample loses and neither is proposed — both still swept every
+#: run (`ALWAYS`), since a reseed is what moves them.
+LOSSES: dict = {}
 
 #: Casts that name the caster's own permanent with a better twin opposite.
 OWN_GOALS: dict = {}

@@ -180,7 +180,11 @@ NOT_TRICKS = frozenset({"Sleight of Hand", "Dark Ritual", "Terror"})
 #: (``ai_target_sides._spent_on_the_earlier_target``). Swept every run, so
 #: the share they would otherwise fall in is not what keeps them honest.
 UNPINNED = frozenset({"Threaten", "Debt of Loyalty"})
-ALWAYS = TRICKS | NOT_TRICKS | UNPINNED
+#: A trick whose verdict is a coin flip's, sampled by the rehearsal
+#: (``ai_rehearsal._rehearsal_seed``): swept every run, since a reseed is
+#: what moves it (kg4/determinism; see `LOSSES`).
+COINS = frozenset({"Desperate Gambit"})
+ALWAYS = TRICKS | NOT_TRICKS | UNPINNED | COINS
 
 
 def board(card, name: str) -> Game:
@@ -586,14 +590,13 @@ HELD: dict = {
 #: Desperate Gambit flips a coin: won, the chosen source's next damage this
 #: turn is doubled; lost, it is prevented. A rehearsal's randomness is its own
 #: on purpose (``ai_rehearsal._rehearsal_seed``) — it says what such a cast is
-#: *like* and must not say how the real flip will fall. The rehearsal's
-#: sample won it; this census's cast, on its own seed, lost.
-_COIN = "a coin flip: the rehearsal's sample won it, the cast lost it"
-IDLE: dict = {("Desperate Gambit", None, "wall"): _COIN}
-LOSSES: dict = {
-    ("Desperate Gambit", None, "open"): _COIN,
-    ("Desperate Gambit", None, "lethal"): _COIN,
-}
+#: *like* and must not say how the real flip will fall. On the seed read off
+#: the log's length its sample won on the open, lethal and wall boards and
+#: this census's cast, on its own seed, lost: pinned idle, a loss and priced
+#: there until kg4. On the seed read off what every seat can count, the
+#: sample loses on every board and the gamble is not proposed (`COINS`).
+IDLE: dict = {}
+LOSSES: dict = {}
 #: Soul Burn, "Spend only black and/or red mana on X. Soul Burn deals X
 #: damage to any target. You gain life equal to the damage dealt, but not
 #: more than the amount of {B} spent on X": the policy announces the X its
@@ -608,11 +611,7 @@ SMALLER: dict = {
         for board in ("after", "bare", "open", "rival", "sick", "wall")
     },
 }
-PRICED: dict = {
-    ("Desperate Gambit", None, "open"): _COIN,
-    ("Desperate Gambit", None, "lethal"): _COIN,
-    ("Desperate Gambit", None, "wall"): _COIN,
-}
+PRICED: dict = {}
 
 SWEPT = ALWAYS | {
     key[0] for pins in (HELD, IDLE, LOSSES, SMALLER, PRICED) for key in pins
