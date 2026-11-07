@@ -279,13 +279,21 @@ def test_a_filter_land_whose_cost_is_floating_is_sent_as_it_is_clicked():
     whose first step is "press OK to start paying". With the {1} already in the
     pool that step decides nothing, so a fixed-output mana ability the pool
     covers goes out on the click; with an empty pool the step is what lets the
-    player tap for it."""
+    player tap for it.
+
+    Whether the pool covers it is the server's answer since kg4: the click is
+    sent through ``sendAction``, whose payment preview raises "insufficient
+    mana" without a request when the pool is short — and that refusal opens
+    the paying step. The client judged it with its own ``manaPoolCanPayCost``
+    (``tests/ui/test_kg4_client_activation_payment.py``)."""
     start = app_js_function_body("startActivationPrompt")
     assert re.search(
-        r"const fixedManaPaidFromPool =\s*!!ownMana && !ownMana\.choice\s*&& manaPoolCanPayCost\(",
+        r"const fixedManaAbility = !!ownMana && !ownMana\.choice && shouldPromptForActivationCost\(activationCost\);",
         start,
     )
-    assert "if (!shouldPromptForActivationCost(activationCost) || fixedManaPaidFromPool) {" in start
+    sent = start.index("if (fixedManaAbility) {")
+    assert start.index("sendAction(directBody)", sent) < start.index("isManaRefusal(e.message)", sent)
+    assert "manaPoolCanPayCost(" not in start
 
 
 # --- One listener per Confirm ------------------------------------------------

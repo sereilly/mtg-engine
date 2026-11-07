@@ -452,6 +452,64 @@ class ActivationChecksMixin:
                 )
         return divided_targets
 
+    @staticmethod
+    def _loyalty_delta(ability, x_value) -> int:
+        """How many loyalty counters a loyalty ability's cost puts on (+) or
+        takes off (-) — an announced X for "+X"/"-X" (CR 606.4), zero when
+        none is announced."""
+        return (
+            ability.cost.loyalty_x_sign * int(x_value or 0)
+            if ability.cost.loyalty_x_sign is not None
+            else ability.cost.loyalty
+        )
+
+    def loyalty_activation_refusal(
+        self, controller_index, permanent, ability, *, program=None, x_value=None,
+    ) -> str | None:
+        """Why a loyalty ability may not be activated now, or None (None too
+        for an ability that is not a loyalty ability).
+
+        CR 606.3: only during a main phase of its controller's own turn with
+        the stack empty — unless the permanent itself widens the window ("You
+        may activate loyalty abilities of ~ on any player's turn any time you
+        could cast an instant", Teferi, Master of Time) — and only once each
+        turn for each permanent, which no widening touches. CR 606.6: a
+        negative cost needs at least that many counters on it; "-X" announced
+        as nothing is zero, always payable.
+
+        Pure. Asked by the activation path (``_activation_window``) and by the
+        wire's per-ability refusals (``ability_denials``,
+        ``web/serialization``), so a menu greys exactly the loyalty abilities
+        a click would be refused for — the client kept its own copy of these
+        three rules.
+        """
+        if not ability.cost.is_loyalty:
+            return None
+        if program is None:
+            program = compile_card_oracle(self.playable_card_of(permanent))
+        any_time = LOYALTY_ANY_TIME_STATIC in program.static_lines
+        if not any_time and not (
+            self.active_player_index == controller_index
+            and self.current_turn_phase in ("precombat_main", "postcombat_main")
+            and not self.stack
+        ):
+            return (
+                f"{permanent.card.name}'s loyalty abilities can only be activated "
+                "during a main phase of your turn with the stack empty (CR 606.3)"
+            )
+        if permanent.metadata.get("loyalty_ability_used_turn") == self.turn:
+            return (
+                f"a loyalty ability of {permanent.card.name} has already been "
+                "activated this turn (CR 606.3)"
+            )
+        delta = self._loyalty_delta(ability, x_value)
+        if delta < 0 and int(permanent.metadata.get("loyalty_counters", 0)) < -delta:
+            return (
+                f"{permanent.card.name} does not have enough loyalty counters "
+                "to pay that cost (CR 606.6)"
+            )
+        return None
+
     def _activation_window(
         self, *, ability, controller_index, permanent, program, x_value,
     ):
@@ -570,34 +628,12 @@ class ActivationChecksMixin:
         # CR 606.6: a negative cost needs at least that many counters on it.
         loyalty_delta = 0
         if ability.cost.is_loyalty:
-            any_time = LOYALTY_ANY_TIME_STATIC in program.static_lines
-            if not any_time and not (
-                self.active_player_index == controller_index
-                and self.current_turn_phase in ("precombat_main", "postcombat_main")
-                and not self.stack
-            ):
-                details = (
-                    f"{permanent.card.name}'s loyalty abilities can only be activated "
-                    "during a main phase of your turn with the stack empty (CR 606.3)"
-                )
-                return refuse(permanent.card.name, "unsupported", details)
-            if permanent.metadata.get("loyalty_ability_used_turn") == self.turn:
-                details = (
-                    f"a loyalty ability of {permanent.card.name} has already been "
-                    "activated this turn (CR 606.3)"
-                )
-                return refuse(permanent.card.name, "unsupported", details)
-            loyalty_delta = (
-                ability.cost.loyalty_x_sign * int(x_value or 0)
-                if ability.cost.loyalty_x_sign is not None
-                else ability.cost.loyalty
+            details = self.loyalty_activation_refusal(
+                controller_index, permanent, ability, program=program, x_value=x_value,
             )
-            if loyalty_delta < 0 and int(permanent.metadata.get("loyalty_counters", 0)) < -loyalty_delta:
-                details = (
-                    f"{permanent.card.name} does not have enough loyalty counters "
-                    "to pay that cost (CR 606.6)"
-                )
+            if details is not None:
                 return refuse(permanent.card.name, "unsupported", details)
+            loyalty_delta = self._loyalty_delta(ability, x_value)
 
         # **One question, asked of one table** (``engine/activation_
         # prohibitions.py``, CR 602.5): the board-wide bans (Cursed Totem,

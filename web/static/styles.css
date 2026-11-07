@@ -1764,6 +1764,36 @@ h2.targeting-valid {
   z-index: 2;
 }
 
+/* A cost the board changed (web/serialization `cost_reduced` /
+   `cost_increased`): the badge is the charged cost, ringed so it never reads
+   like the printed one — green cheaper, red dearer, amber both at once. The
+   preview says what it was changed from (castPriceNote). */
+.card-mana-cost--reduced,
+.card-mana-cost--increased,
+.card-mana-cost--changed {
+  padding: 1px 3px 2px;
+  border-radius: 9px;
+}
+
+.card-mana-cost--reduced {
+  background: rgba(20, 83, 45, 0.88);
+  box-shadow: 0 0 0 1.5px #4ade80, 0 0 6px rgba(74, 222, 128, 0.75);
+}
+
+.card-mana-cost--increased {
+  background: rgba(127, 29, 29, 0.88);
+  box-shadow: 0 0 0 1.5px #f87171, 0 0 6px rgba(248, 113, 113, 0.75);
+}
+
+.card-mana-cost--changed {
+  background: rgba(120, 53, 15, 0.88);
+  box-shadow: 0 0 0 1.5px #fbbf24, 0 0 6px rgba(251, 191, 36, 0.75);
+}
+
+.preview-price-reduced { color: #86efac; }
+.preview-price-increased { color: #fca5a5; }
+.preview-price-changed { color: #fcd34d; }
+
 .card-hidden {
   background: #1a1a2e;
 }

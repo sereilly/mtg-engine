@@ -772,7 +772,17 @@ function renderCombatOverlay(state = currentState) {
   }
 }
 
+// Whether a permanent has *keyword* (lower case) **now**: the server's
+// `keywords`, which are the layers' answer (web/serialization's
+// `_effective_keywords` — an Aura's grant in, a layer-6 removal out). This
+// read the printed text, so the combat damage dialog and the damage effects
+// gave a Grizzly Bears under Rancor no trample and a creature that had lost
+// its trample still had it. The text is read only for a bare card the server
+// sent no keyword list with.
 function cardHasKeyword(card, keyword) {
+  if (Array.isArray(card?.keywords)) {
+    return card.keywords.some((word) => String(word).toLowerCase() === keyword);
+  }
   return String(card?.oracle_text || "").toLowerCase().includes(keyword);
 }
 
@@ -15379,17 +15389,23 @@ function renderActivationPrompt() {
     return;
   }
   const manaRequirement = pendingActivation.manaRequirement || {};
-  const canPay = me ? manaPoolCanPayCost(me.mana_pool, manaRequirement) : false;
+  // Whether the pool pays is the server's answer (`attemptPendingActivation`
+  // sends through `sendAction`, whose payment preview raises "insufficient
+  // mana" without sending): this prompt judged it with its own reading of
+  // the printed cost (`manaPoolCanPayCost`), which knows no hybrid symbol, no
+  // spending restriction and no cost an effect changed. What the engine asked
+  // the pool for, when the preview said, is "Needed".
+  const charged = autoTapChargedCost(pendingActivation.shortPlan);
 
   title.textContent = `Pay activation cost for ${pendingActivation.cardName}`;
   body.textContent = pendingActivation.awaitingApproval
     ? "Press OK to start paying this activation cost."
-    : canPay
-      ? "Cost is covered. The activation will be submitted automatically."
+    : pendingActivation.trying
+      ? "Checking whether your mana pool pays it…"
       : "Use board actions to generate the missing mana, then this prompt will complete the activation automatically.";
   steps.innerHTML = [
     `<div>Cost: ${renderSymbolsInline(pendingActivation.activationCost || "none")}</div>`,
-    `<div>Needed: ${formatManaSymbolsHtml(manaRequirement)}</div>`,
+    `<div>Needed: ${charged ? renderSymbolsInline(charged) : formatManaSymbolsHtml(manaRequirement)}</div>`,
     `<div>Current mana: ${me ? currentManaHtml(me.mana_pool) : "Unknown"}</div>`,
     `<div>Action: ${pendingActivation.awaitingApproval ? "press OK to start paying, then click lands or other mana sources." : "click lands or other mana sources, then wait for the activation to resolve."}</div>`,
   ].join("");
@@ -15400,40 +15416,56 @@ function renderActivationPrompt() {
   customOkBtn.disabled = true;
 }
 
+// Send the activation the "Pay activation cost" prompt is waiting to pay for,
+// once the pool pays it — and whether it does is asked of the server, never
+// judged here. `sendAction` previews every paying action first
+// (`previewPayingAction`, `POST …/payment_plan`): a pool that pays sends it,
+// and one that cannot raises "insufficient mana" without a request, which
+// leaves the prompt up saying what is still owed. Asked again only when
+// something the answer depends on changes (`autoTapStateKey`: the pool, what
+// is tapped, the log), so a poll that changed nothing asks nothing.
 async function attemptPendingActivation() {
   if (!pendingActivation || seat === null) return;
   if (pendingActivation.awaitingApproval || pendingActivation.nothingToChoose) {
     renderActivationPrompt();
     return;
   }
-  const me = getCurrentPlayerState();
-  if (!me) return;
-
-  if (!manaPoolCanPayCost(me.mana_pool, pendingActivation.manaRequirement)) {
-    renderActivationPrompt();
-    return;
-  }
-
   const pending = pendingActivation;
-  pendingActivation = null;
+  const key = autoTapStateKey();
+  if (pending.trying || pending.triedKey === key) return;
+  pending.triedKey = key;
+  pending.trying = true;
   renderActivationPrompt();
-  updateActionHint(`Submitting activation for ${pending.cardName}...`);
 
+  const activateBody = withPermanentId(
+    {
+      seat,
+      action: "activate",
+      permanent_name: pending.cardName,
+      permanent_index: pending.permanentIndex,
+      target_seat: pending.targetSeat,
+    },
+    "permanent_id", seat, pending.permanentIndex,
+  );
+  if (Number.isInteger(pending.abilityIndex)) activateBody.ability_index = pending.abilityIndex;
   try {
-    const activateBody = withPermanentId(
-      {
-        seat,
-        action: "activate",
-        permanent_name: pending.cardName,
-        permanent_index: pending.permanentIndex,
-        target_seat: pending.targetSeat,
-      },
-      "permanent_id", seat, pending.permanentIndex,
-    );
-    if (Number.isInteger(pending.abilityIndex)) activateBody.ability_index = pending.abilityIndex;
     await sendAction(activateBody);
+    pending.trying = false;
+    if (pendingActivation === pending) pendingActivation = null;
+    renderActivationPrompt();
     updateActionHint(`Activated ${pending.cardName}.`);
   } catch (e) {
+    pending.trying = false;
+    if (pendingActivation === pending && isManaRefusal(e.message)) {
+      pending.shortPlan = e.paymentPlan || null;
+      renderActivationPrompt();
+      // The board may have moved while the preview was out (a land tapped
+      // by hand): ask again for the state now on the table.
+      attemptPendingActivation();
+      return;
+    }
+    if (pendingActivation === pending) pendingActivation = null;
+    renderActivationPrompt();
     updateActionHint(e.message, true);
   }
 }
@@ -15716,142 +15748,27 @@ function getActivatedAbilityOptions(card) {
   return options;
 }
 
-// Mirror of the engine's per-ability activation gates (queue_permanent_ability):
-// given one ability's text, the reason it can't be activated RIGHT NOW, or null.
-// Used to grey menu buttons and to fail fast before a doomed request.
-function activationTimingDisabledReason(lineText) {
-  const line = (lineText || "").toLowerCase();
-  if (!currentState || seat === null) return null;
-  const myTurn = currentState.current_turn === seat;
-  const phase = currentState.current_turn_phase;
-  const step = currentState.current_step;
-
-  if (line.includes("activate only during your upkeep") && !(myTurn && step === "upkeep")) {
-    return "Can only be activated during your upkeep.";
-  }
-  if (line.includes("only during your turn") && !myTurn) {
-    return "Can only be activated during your turn.";
-  }
-  if (line.includes("activate only as a sorcery")) {
-    const stackEmpty = !(currentState.stack || []).length;
-    if (!(myTurn && currentState.current_phase === "main" && stackEmpty)) {
-      return "Can only be activated as a sorcery (your main phase, empty stack).";
-    }
-  }
-  if (line.includes("activate only during the end of combat step") && step !== "end_of_combat") {
-    return "Can only be activated during the end of combat step.";
-  }
-  if (
-    line.includes("activate only during combat")
-    && !line.includes("end of combat")
-    && phase !== "combat"
-  ) {
-    return "Can only be activated during combat.";
-  }
-  if (line.includes("activate only during an opponent's turn, before attackers are declared")) {
-    const combat = getCombatState(currentState);
-    const beforeAttackers =
-      phase === "beginning"
-      || phase === "precombat_main"
-      || (
-        phase === "combat"
-        && (step === "beginning_of_combat" || step === "declare_attackers")
-        && !combat?.attackers_locked
-      );
-    if (myTurn || !beforeAttackers) {
-      return "Can only be activated during an opponent's turn, before attackers are declared.";
-    }
-  }
-  return null;
-}
-
-// Every reason one ability line can't be activated right now: the engine's
-// activation-timing gates plus the non-timing cost restrictions (Library of
-// Alexandria's exact hand size, Jandor's Ring's "discard the last card you drew
-// this turn" additional cost). Null when it is activatable.
-function abilityLineDisabledReason(line) {
-  if (/activate only if you have exactly seven cards in hand/i.test(line || "")) {
-    const handCount = Number(getCurrentPlayerState()?.hand_count ?? getCurrentPlayerState()?.hand?.length ?? 0);
-    if (handCount !== 7) {
-      return `Requires exactly seven cards in hand (you have ${handCount}).`;
-    }
-  }
-  if (/discard the last card you drew this turn/i.test(line || "")) {
-    if (!getCurrentPlayerState()?.has_last_drawn_card) {
-      return "No card you drew this turn is still in hand to discard.";
-    }
-  }
-  return activationTimingDisabledReason(line);
-}
-
-// Why one loyalty ability of `card` can't be activated right now, or null.
-// Mirrors the engine's gate in mixins/stack/activation.py, so a button this
-// greys out and a request the engine would refuse are the same set: the
-// sorcery-speed window and the once-per-turn limit (CR 606.3) rule out every
-// ability on the permanent, and a minus cost bigger than the loyalty on it
-// rules out that one (CR 606.6). The two pieces of state a client can't derive
-// — whether a loyalty ability was already used this turn, and whether the card
-// widens its own timing window — ride along on the permanent payload.
-//
-// The whole-permanent halves are also refused up front, before the menu opens,
-// so in practice this answers the per-ability half. Both stay here because
-// resolveAbilityChoice checks this one function before sending anything, and a
-// mirror missing a rule the engine has is how a button starts promising more
-// than the engine will do.
-function loyaltyAbilityDisabledReason(card, opt) {
-  const cost = opt?.loyalty;
-  if (!cost || !currentState || seat === null) return null;
-
-  if (!card?.loyalty_any_time) {
-    const myTurn = currentState.current_turn === seat;
-    const stackEmpty = !(currentState.stack || []).length;
-    if (!(myTurn && currentState.current_phase === "main" && stackEmpty)) {
-      return "Loyalty abilities can only be activated during a main phase of your turn with the stack empty (CR 606.3).";
-    }
-  }
-  if (card?.loyalty_ability_used_this_turn) {
-    return "This planeswalker has already activated a loyalty ability this turn (CR 606.3).";
-  }
-  // "−X" is affordable at X = 0 whatever the loyalty is; the X prompt caps the
-  // value at the counters actually on the permanent.
-  if (cost.delta !== null && cost.delta < 0) {
-    const loyalty = currentLoyaltyOf(card);
-    if (loyalty < -cost.delta) {
-      return `Not enough loyalty: this ability costs ${-cost.delta} and ${normalizeCardName(card)} has ${loyalty} (CR 606.6).`;
-    }
-  }
-  return null;
-}
-
-// CR 602.5, the server's answer: why ability `abilityIndex` of `card` may not
-// be activated right now, or null. `ability_denials` is the engine's own
-// refusal (`activation_prohibition`, the table the activation path refuses
-// from) per usable ability, by the index the activate action takes — every
-// printed "Activate only …" clause, threshold included, and what another
-// permanent forbids (City of Solitude, Null Rod) — where the text mirror
-// below knows six. Each is the whole sentence the route refuses with.
-function serverAbilityDenial(card, abilityIndex) {
-  return abilityProhibitionOf(card, abilityIndex);
-}
-
-// Per-option gate for the multi-ability menu.
+// Per-option gate for the multi-ability menu: the server's answer
+// (`ability_denials`, see `abilityProhibitionOf`) and nothing else. What
+// forbids an ability outright — a Cursed Totem, a Null Rod, a City of
+// Solitude on another player's turn — is a fact about the board no reading of
+// the ability's own line finds, and the line's own "Activate only …" clause,
+// a loyalty ability's window (CR 606.3, 606.6) and a cost the board cannot
+// pay are the engine's answers too. This client kept a copy of each (six of
+// the timing clauses read off the text, Library of Alexandria's hand size,
+// Jandor's Ring's last-drawn card, the loyalty rules); the copies are gone.
 function abilityOptionDisabledReason(opt, card) {
-  // The server's answer first (CR 602.5): what forbids this ability outright
-  // — a Cursed Totem, a Null Rod, a City of Solitude on another player's turn
-  // — is a fact about the board, and no reading of the ability's own line
-  // finds it. The click was offered and then refused with a 400.
-  const prohibited = abilityProhibitionOf(card, opt?.index);
-  if (prohibited) return prohibited;
-  if (opt?.loyalty) return loyaltyAbilityDisabledReason(card, opt);
-  return abilityLineDisabledReason(opt.line);
+  return abilityProhibitionOf(card, opt?.index);
 }
 
 // CR 602.5 as the server answers it: why the ability at `abilityIndex` of this
 // permanent may not be activated **now**, in the engine's own sentence, or
-// null — `serverAbilityDenial`'s answer (`ability_denials`, one entry per
-// usable ability in the order `ability_index` counts them, absent when nothing
-// is denied). A permanent with one ability is clicked with no index, which is
-// its ability 0.
+// null — `ability_denials`, one entry per usable ability in the order
+// `ability_index` counts them, absent when nothing is denied: the activation
+// path's refusals before anything is chosen (web/serialization's
+// `_ability_denial`: the loyalty window, the prohibition table with every
+// printed "Activate only …" clause, a cost the board cannot pay). A permanent
+// with one ability is clicked with no index, which is its ability 0.
 function abilityProhibitionOf(card, abilityIndex = null) {
   if (!card || typeof card !== "object") return null;
   const listed = Array.isArray(card.ability_denials) ? card.ability_denials : null;
@@ -16151,22 +16068,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
-  // Activation gates (Jade Statue's combat-only, Illusionary Mask's
-  // sorcery-speed, Jandor's Ring's discard cost, ...): fail fast with the reason
-  // instead of a doomed request.
-  // The server's denial first (`ability_denials`): it is the engine's own
-  // refusal for this ability, so no picker opens for an activation that would
-  // be refused once its target had been chosen.
-  {
-    const serverReason = serverAbilityDenial(card, abilityIndex);
-    const gateReason = serverReason ? null : abilityLineDisabledReason(card?.oracle_text);
-    if (serverReason || gateReason) {
-      SFX.onError();
-      // The server's denial is already the whole sentence, card name and all.
-      updateActionHint(serverReason || `${cardName}: ${gateReason}`, true);
-      return;
-    }
-  }
 
   // A "Discard a card:" activation cost (Seasoned Hallowblade) is paid from
   // hand, so it takes the same prompt the cast-side additional cost does. It
@@ -16658,10 +16559,44 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // the "press OK to start paying" step below would be a second click that
   // decides nothing. With the cost not yet in the pool that step is what lets
   // the player tap for it.
-  const fixedManaPaidFromPool =
-    !!ownMana && !ownMana.choice
-    && manaPoolCanPayCost(getCurrentPlayerState()?.mana_pool || {}, parseManaCostSymbols(activationCost));
-  if (!shouldPromptForActivationCost(activationCost) || fixedManaPaidFromPool) {
+  // Whether the pool covers it is the server's answer: `sendAction` previews
+  // the activation and raises "insufficient mana" without sending when the
+  // pool is short, and that is the cue for the paying step below.
+  const fixedManaAbility = !!ownMana && !ownMana.choice && shouldPromptForActivationCost(activationCost);
+  if (fixedManaAbility) {
+    const directBody = withPermanentId(
+      {
+        seat,
+        action: "activate",
+        permanent_name: cardName,
+        permanent_index: permanentIndex,
+        target_seat: targetSeat,
+      },
+      "permanent_id", seat, permanentIndex,
+    );
+    if (Number.isInteger(abilityIndex)) directBody.ability_index = abilityIndex;
+    sendAction(directBody)
+      .then(() => updateActionHint(`Activated ${cardName}.`))
+      .catch((e) => {
+        if (!isManaRefusal(e.message)) {
+          updateActionHint(e.message, true);
+          return;
+        }
+        pendingActivation = {
+          cardName,
+          permanentIndex,
+          targetSeat,
+          activationCost,
+          manaRequirement: parseManaCostSymbols(activationCost),
+          awaitingApproval: true,
+          abilityIndex,
+          shortPlan: e.paymentPlan || null,
+        };
+        renderActivationPrompt();
+      });
+    return;
+  }
+  if (!shouldPromptForActivationCost(activationCost)) {
     const directBody = withPermanentId(
       {
         seat,
@@ -21392,6 +21327,34 @@ function faceDownPreviewLines(card) {
   return lines;
 }
 
+// Which way the board moves what this card's cast is charged, from the
+// server's two flags (`cost_increased` / `cost_reduced`, web/serialization's
+// `_cast_price` over `cost_modifiers.cast_mana_charge`): "reduced",
+// "increased", "changed" for both at once (a generic tax beside a coloured
+// discount), or null for a badge that is the printed cost. The badge drew the
+// charged cost with nothing to tell it from the printed one, so a Goblin
+// Brigand under a Goblin Warchief read {R} as though the card printed it.
+function castPriceChange(card) {
+  if (!card || typeof card !== "object") return null;
+  const up = card.cost_increased === true;
+  const down = card.cost_reduced === true;
+  if (up && down) return "changed";
+  if (down) return "reduced";
+  if (up) return "increased";
+  return null;
+}
+
+// The preview's line for a changed price: what the cast is charged now and
+// what that was changed from (`cost_before_modifiers`: the printed cost, or
+// the alternative cost a permission charges). Empty for an unchanged one.
+function castPriceNote(card) {
+  const changed = castPriceChange(card);
+  if (!changed) return "";
+  const before = card.cost_before_modifiers || card.printed_mana_cost || "";
+  const how = { reduced: "reduced", increased: "increased", changed: "changed" }[changed];
+  return `Costs ${card.mana_cost || "{0}"} to cast now (${how} from ${before || "{0}"}).`;
+}
+
 function showCardPreview(card) {
   card = faceDownPreviewCard(card);
   _cancelPendingPreviewHide();
@@ -21417,6 +21380,8 @@ function showCardPreview(card) {
     sections.push("👑 Commander - this is the designated commander card");
   }
   for (const line of faceDownPreviewLines(card)) sections.push(renderSymbolsInline(line));
+  const priceNote = castPriceNote(card);
+  if (priceNote) sections.push(`<span class="preview-price-${castPriceChange(card)}">${renderSymbolsInline(priceNote)}</span>`);
   if (keywordLabel) sections.push(renderSymbolsInline(keywordLabel));
   // Above the rules text, beside the keywords: "the chosen color" in the text
   // below reads against the line that says which colour that is.
@@ -21865,6 +21830,8 @@ function createCardElement(card, options = {}) {
   if (!hidden && showManaCost && typeof card === "object" && card.mana_cost) {
     const costEl = document.createElement("div");
     costEl.className = "card-mana-cost";
+    const changed = castPriceChange(card);
+    if (changed) costEl.classList.add(`card-mana-cost--${changed}`);
     costEl.innerHTML = renderSymbolsInline(card.mana_cost);
     wrapper.appendChild(costEl);
   }
@@ -25581,14 +25548,35 @@ function playHandArrivalFlights(flights, state, viewerSeat) {
   });
 }
 
+// Whether *incoming* is older than the state on screen, so rendering it would
+// step the board back: a slow HTTP response arriving after a faster
+// SSE-prompted fetch has already shown something newer.
+//
+// By the server's `revision` (web/events: one more at every change a route
+// announces) when both carry one and they differ. The log's length was the
+// only version this had, and it is not one across games: a rematch, a
+// restart and an undo each start a shorter log. Each of those was let
+// through only by the event that named it (`rematch_start`, `undo`), so a
+// seat that missed that event — its stream reconnecting, or the next event
+// replacing it in the server's one-slot queue — discarded the new game at
+// every fetch and sat on the finished game's Defeat screen, "Waiting for
+// opponent…", while the new game waited on it (driven at kg4). Between two
+// payloads of one revision (a fetch that only settled what the game owed)
+// the log's length still decides.
+function stateIsStale(incoming, current) {
+  if (!incoming || !current) return false;
+  const newer = incoming.revision;
+  const shown = current.revision;
+  if (Number.isInteger(newer) && Number.isInteger(shown) && newer !== shown) return newer < shown;
+  const incomingLogLen = Array.isArray(incoming.log) ? incoming.log.length : -1;
+  const currentLogLen = Array.isArray(current.log) ? current.log.length : -1;
+  return incomingLogLen < currentLogLen;
+}
+
 function renderState(state, { skipStaleCheck = false } = {}) {
-  // Discard stale responses: when a slow HTTP response arrives after a faster SSE+getState
-  // has already applied newer state, log length is monotonically increasing so we can use
-  // it as a version guard to avoid regressing currentState.
-  // (skipStaleCheck is set for undo, which intentionally produces a shorter log.)
-  const incomingLogLen = Array.isArray(state?.log) ? state.log.length : -1;
-  const currentLogLen = Array.isArray(currentState?.log) ? currentState.log.length : -1;
-  if (!skipStaleCheck && incomingLogLen < currentLogLen) return;
+  // Discard stale responses (`stateIsStale`). skipStaleCheck is set where the
+  // caller knows its state is the newest: its own undo or rematch response.
+  if (!skipStaleCheck && stateIsStale(state, currentState)) return;
   // The re-ask back-off (`retryAutoAdvanceAfterFlight`) counts unchanged renders.
   noteStateForRefetchBackoff(state);
   // Kicked from a still-open lobby: our seat is no longer joined (we lost the
@@ -26556,6 +26544,17 @@ function initCardPreviewHover() {
     if (event.relatedTarget && event.relatedTarget.closest?.(".card")) return;
     scheduleHidePreview();
   });
+
+  // A drag ends the hover. HTML5 drag and drop sends no mouseover or mouseout
+  // while it lasts, and a drag-cast re-renders the hand, so the card the
+  // preview was showing is gone without ever being left: the preview stayed
+  // up over the seat's graveyard and exile piles until some other card was
+  // hovered (Scourge's Phase 5). Captured on the document, because the drop
+  // lands on the canvas and the dragged element may no longer be in the page
+  // to receive its own dragend.
+  for (const type of ["dragstart", "drop", "dragend"]) {
+    document.addEventListener(type, () => clearCardPreview(), true);
+  }
 }
 
 async function getState(skipStaleCheck = false) {

@@ -145,11 +145,11 @@ def test_only_the_viewer_s_own_permanents_carry_denials(cards):
 
 def test_the_client_reads_the_denial_before_it_opens_a_picker():
     menu = app_js_function_body("abilityOptionDisabledReason")
-    # The reader is ``abilityProhibitionOf`` (``serverAbilityDenial`` is the
-    # same answer): one list, ``ability_denials``, asked before anything else.
+    # The reader is ``abilityProhibitionOf``: one list, ``ability_denials``,
+    # asked before anything else.
     assert "abilityProhibitionOf(card, opt?.index)" in menu
     start = app_js_function_body("startActivationPrompt")
-    gate = start.index("serverAbilityDenial(card, abilityIndex)")
+    gate = start.index("abilityProhibitionOf(card, abilityIndex)")
     # Before every cost prompt and every target picker of the cascade.
     assert gate < start.index("startActivationDiscardCostPrompt(")
     assert gate < start.index("startCastGraveyardCreatureTargetPrompt(")

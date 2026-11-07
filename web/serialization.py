@@ -905,10 +905,12 @@ def _mark_pickers_that_owe_nothing(perm_dict: dict, usable: list) -> None:
         top["requires_target"] = False
 
 
-def _cast_price(card, game, caster_index, from_zone: str) -> tuple[str, bool, bool]:
-    """``(the cost the UI shows, increased?, reduced?)`` for a cast of *card*
-    by *caster_index* out of *from_zone* — the mana the payment will ask for
-    before X is announced, written as the card prints a cost.
+def _cast_price(card, game, caster_index, from_zone: str) -> tuple[str, bool, bool, str]:
+    """``(the cost the UI shows, increased?, reduced?, the cost before the
+    modifiers)`` for a cast of *card* by *caster_index* out of *from_zone* —
+    the mana the payment will ask for before X is announced, written as the
+    card prints a cost, and the cost the increases and reductions were applied
+    to (the printed one, or the alternative cost a permission charges).
 
     CR 601.2f over the mana cost the cast is charged: the card's own
     (``cost_modifiers.cast_mana_charge``), or, for a graveyard copy this seat
@@ -929,7 +931,7 @@ def _cast_price(card, game, caster_index, from_zone: str) -> tuple[str, bool, bo
     """
     printed = card.mana_cost or ""
     if game is None or caster_index is None or card.primary_type == "land" or face_cards(card):
-        return printed, False, False
+        return printed, False, False, printed
     from engine.cost_modifiers import cast_mana_charge
     from engine.mana_payment import mana_cost_label
 
@@ -948,11 +950,11 @@ def _cast_price(card, game, caster_index, from_zone: str) -> tuple[str, bool, bo
     base = game._parse_mana_cost(charged_printed, x_value=0)
     keys = set(base) | set(owed)
     if all(int(base.get(k, 0)) == int(owed.get(k, 0)) for k in keys):
-        return charged_printed, False, False
+        return charged_printed, False, False, charged_printed
     increased = any(int(owed.get(k, 0)) > int(base.get(k, 0)) for k in keys)
     reduced = any(int(owed.get(k, 0)) < int(base.get(k, 0)) for k in keys)
     label = "{X}" * x_symbols + (mana_cost_label(owed) if any(owed.values()) else "")
-    return label or "{0}", increased, reduced
+    return label or "{0}", increased, reduced, charged_printed or "{0}"
 
 
 def _serialize_card(
@@ -989,7 +991,7 @@ def _serialize_card(
     # says the cast costs, and whether to ask for an X (an X spell flashed back
     # for a cost with no X in it has X = 0, CR 107.3b). The increases **and the
     # reductions** in force are folded in (``_cast_price``).
-    effective_cost, increased, reduced = _cast_price(card, game, caster_index, from_zone)
+    effective_cost, increased, reduced, before = _cast_price(card, game, caster_index, from_zone)
     serialized = _card_preview(card)
     serialized.update({
         "mana_cost": effective_cost,
@@ -999,6 +1001,12 @@ def _serialize_card(
         # The other direction (a Warchief, a Medallion, Edgewalker): the
         # badge is cheaper than the card prints.
         "cost_reduced": reduced,
+        # What those two compare against: the cost the increases and
+        # reductions in force were applied to — the printed one, or the
+        # alternative cost a permission charges (a flashback cost). The badge
+        # is coloured by the two flags and the preview says "{R}, reduced
+        # from {2}{R}", so a reduced badge no longer reads like a printed one.
+        "cost_before_modifiers": before,
         # The card's colours as its seat's statics leave them (CR 613.1e):
         # under its owner's Celestial Dawn a nonland card off the battlefield
         # is white, and the hand drew it in its printed colours. A preview
@@ -1431,6 +1439,32 @@ def _hand_revealed_to_viewer(game: Game, viewer_seat: int | None, seat: int) -> 
     return False
 
 
+def _ability_denial(game: Game, seat: int, perm, ability) -> str | None:
+    """Why *ability* of *perm* would be refused if *seat* activated it now,
+    before anything is chosen or paid — the activation path's own sentence —
+    or None.
+
+    The path's checks in its order, each the predicate the path asks: a
+    loyalty ability's window (CR 606.3, 606.6,
+    ``Game.loyalty_activation_refusal``), the prohibition table (CR 602.5,
+    ``activation_prohibition``), and a cost paid in something other than mana
+    that the board cannot pay (CR 601.2h, ``Game.unpayable_activation_cost``,
+    with no X announced — the smallest X, so nothing payable is denied). The
+    client kept a copy of each: the six "Activate only …" windows read off
+    the ability's text (``activationTimingDisabledReason``), Library of
+    Alexandria's hand size, Jandor's Ring's last-drawn card and the loyalty
+    rules. Not here: what depends on a choice still to be made (a target, an
+    X) and the {T} symbol's refusals, which the permanent's own flags say.
+    """
+    details = game.loyalty_activation_refusal(seat, perm, ability)
+    if details is not None:
+        return details
+    found = activation_prohibition(game, seat, perm, ability)
+    if found is not None:
+        return found.details
+    return game.unpayable_activation_cost(seat, perm, ability)
+
+
 def _exile_payload(
     game: Game, player: PlayerState, viewer_seat: int | None, seat: int
 ) -> list:
@@ -1461,15 +1495,9 @@ def _exile_payload(
     pile written directly (a test, the Debug Menu's state injection), where it
     is the best a shared object allows.
     """
-    from engine.linked_exile import face_down_exiled_cards
-
-    owed: dict[int, int] = {}
-    for card in face_down_exiled_cards(game, seat, viewer_seat):
-        owed[id(card)] = owed.get(id(card), 0) + 1
     payload: list = []
-    for card in player.exile:
-        if owed.get(id(card), 0) > 0:
-            owed[id(card)] -= 1
+    for card, hidden in zip(player.exile, exile_hidden_flags(game, player, viewer_seat, seat)):
+        if hidden:
             payload.append("<hidden>")
             continue
         payload.append(
@@ -1477,6 +1505,32 @@ def _exile_payload(
             else _serialize_card(card, game, owner_seat=seat)
         )
     return payload
+
+
+def exile_hidden_flags(
+    game: Game, player: PlayerState, viewer_seat: int | None, seat: int
+) -> list[bool]:
+    """Per position of *player*'s exile, whether *viewer_seat* is shown it as
+    ``<hidden>`` (:func:`_exile_payload`'s reading, CR 406.3).
+
+    Its own function because two readers need the same answer by position: the
+    payload, and the Debug Menu's paste (``web/debug_actions``), which reads a
+    pasted ``<hidden>`` as "the object this viewer was shown a card back for"
+    and keeps it — the text names no card, and a paste that rebuilt the pile
+    from names deleted every face-down card in it.
+    """
+    from engine.linked_exile import face_down_exiled_cards
+
+    owed: dict[int, int] = {}
+    for card in face_down_exiled_cards(game, seat, viewer_seat):
+        owed[id(card)] = owed.get(id(card), 0) + 1
+    flags: list[bool] = []
+    for card in player.exile:
+        hidden = owed.get(id(card), 0) > 0
+        if hidden:
+            owed[id(card)] -= 1
+        flags.append(hidden)
+    return flags
 
 
 def _serialize_arriving(game: Game, seat: int) -> list[dict]:
@@ -1570,25 +1624,19 @@ def _serialize_player(
             _mark_pickers_that_owe_nothing(perm_dict, usable)
             # CR 602.5: why each usable ability may not be activated **now**,
             # in the engine's own words, or None — indexed like the
-            # ``ability_index`` the activate action takes. One predicate
-            # (``engine/activation_prohibitions.py``), the one the activation
-            # path refuses with, so a menu built from this greys out exactly
-            # what a click would be refused for: the ability's own printed
-            # restriction (Barbarian Ring's threshold, whose payload was
-            # identical at six and at seven cards in the graveyard and whose
-            # picker opened either way), and what another permanent forbids —
-            # a City of Solitude on an opponent's turn, a Null Rod, an
-            # Interdict. Present only when some ability is denied, which is
-            # nearly no permanent on any poll.
-            denials = [
-                activation_prohibition(game, seat, perm, ability)
-                for ability in usable
-            ]
+            # ``ability_index`` the activate action takes. The activation
+            # path's own predicates (``_ability_denial``), so a menu built from
+            # this greys out exactly what a click would be refused for: the
+            # ability's own printed restriction (Barbarian Ring's threshold,
+            # whose payload was identical at six and at seven cards in the
+            # graveyard and whose picker opened either way), what another
+            # permanent forbids — a City of Solitude on an opponent's turn, a
+            # Null Rod, an Interdict — a loyalty ability's window, and a cost
+            # the board cannot pay. Present only when some ability is denied,
+            # which is nearly no permanent on any poll.
+            denials = [_ability_denial(game, seat, perm, ability) for ability in usable]
             if any(found is not None for found in denials):
-                perm_dict["ability_denials"] = [
-                    found.details if found is not None else None
-                    for found in denials
-                ]
+                perm_dict["ability_denials"] = denials
             # What each ability adds and whether activating it asks for a
             # colour (:func:`_ability_mana`) - the per-ability fact behind the
             # permanent-wide ``produced_mana`` summary.

@@ -594,7 +594,7 @@ def get_card_target_spec(
 @one_request_at_a_time
 def set_raw_state(session_id: str, req: RawStateRequest):
     session = _require_session(session_id)
-    _apply_raw_state(session, req.state)
+    _apply_raw_state(session, req.state, viewer_seat=req.seat)
     _notify_session_change(session.id, "raw_state")
     return build_state(session, viewer_seat=req.seat)
 
