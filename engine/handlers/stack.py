@@ -25,7 +25,8 @@ from ..counter_conditions import (cant_be_countered,
 from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
                               StackAnnouncement, is_live, record_exiled_card,
                               record_in_context)
-from ..game_types import StackItem, as_target_ids, as_target_slots, target_ids
+from ..game_types import (as_graveyard_stamps, as_target_ids, as_target_slots,
+                          StackItem, target_ids)
 from ..faces import is_face, spell_named, whole_card
 from ..flashback import leaves_stack_to_exile
 from ..mana_payment import mana_cost_label, total_pips
@@ -60,7 +61,7 @@ def _stack_announcement(item: StackItem) -> StackAnnouncement:
         target_player_index=item.target_player_index,
         target_permanent_index=as_target_slots(item.target_permanent_index),
         target_permanent_id=as_target_ids(item.target_permanent_id),
-        target_graveyard_card=item.target_graveyard_card,
+        target_graveyard_card=as_graveyard_stamps(item.target_graveyard_card),
         x_value=item.x_value,
         chosen_mode_index=item.chosen_mode_index,
         chosen_modes=item.chosen_modes,
@@ -240,7 +241,7 @@ def put_exiled_card_onto_stack_as_copy(game: Game, instruction: OracleInstructio
         target_player_index=announcement.target_player_index,
         target_permanent_index=as_target_slots(announcement.target_permanent_index),
         target_permanent_id=as_target_ids(announcement.target_permanent_id),
-        target_graveyard_card=announcement.target_graveyard_card,
+        target_graveyard_card=as_graveyard_stamps(announcement.target_graveyard_card),
         x_value=announcement.x_value,
         # A **copy** of the original spell (CR 707.2): its choices, and not a
         # colour an effect gave the original while it was on the stack

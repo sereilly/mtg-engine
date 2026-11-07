@@ -822,17 +822,13 @@ class StackResolutionMixin:
 
     def _run_stack_item_resolution(self, item: StackItem) -> None:
         # **An index is not an identity** (ROADMAP idiom #11) and a graveyard is
-        # the zone with no identity to fall back on, so what ``_stack_push``
-        # stamped is turned back into a slot *here* — once, at the top, so every
-        # reader below (a spell, an ability, an Aura's reanimation, an
-        # enters-the-battlefield trigger) sees a live index without knowing this
-        # happened. The stamp itself is never overwritten: an item pushed back
-        # on for a pending choice re-locates from the same name next time.
+        # the zone with no identity to fall back on, so a graveyard target is
+        # read off what ``_stack_push`` stamped, by every reader, as it reads
+        # it (``handlers/_targets.chosen_graveyard_slots`` →
+        # ``Game.chosen_graveyard_index``) — never off the slot channel, which
+        # is a battlefield's and holds nothing for it.
         if item.target_graveyard_card is not None:
-            item.target_permanent_index = as_target_slots(self.chosen_graveyard_index(
-                item.target_graveyard_card, item.target_permanent_index
-            ))
-            # And which pile the slot counts into. For a graveyard target that
+            # Which pile the stamps are in. For a graveyard target that
             # *is* what `target_player_index` means, and leaving it to be
             # re-derived below is how the two halves of one choice came apart:
             # every reader defaults it differently (`1 - caster` here, the
@@ -1283,12 +1279,17 @@ class StackResolutionMixin:
                         for value in (
                             target_player_index, target_permanent_index,
                             target_permanent_id, stack_target,
+                            target_graveyard_card,
                         )
                     )
                     self._apply_self_enters_battlefield_triggers(
                         caster_index, permanent, target_player_index,
                         target_permanent_index, target_permanent_id,
                         targets_announced=announced,
+                        # …and the card in a graveyard the cast named for it,
+                        # by the stamp the spell's push took (the stamp is the
+                        # target; there is no slot to hand over).
+                        target_graveyard_card=target_graveyard_card,
                         # "When this creature enters, counter target spell" (Mystic
                         # Snake): the spell the cast named. It was dropped here, so
                         # the trigger named nothing and countered the top of the
@@ -1301,6 +1302,7 @@ class StackResolutionMixin:
                     target_player_index,
                     target_permanent_index,
                     target_permanent_id,
+                    target_graveyard_card=target_graveyard_card,
                 )
                 # An Aura's own "when this Aura enters" trigger, for every Aura whose
                 # entry text `_apply_aura_effect` did *not* perform itself.

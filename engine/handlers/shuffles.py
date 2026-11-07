@@ -220,7 +220,7 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
             else min(int(described_targets.get("count") or 1), len(player.graveyard))
         )
         picked = _resolve_graveyard_slots(
-            player, context, limit,
+            game, player, context, limit,
             lambda card: graveyard_card_matches(
                 instruction.payload, card, game=game, owner=player,
             ),

@@ -22,8 +22,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..color_changes import forget_spell_color_change, recolor_spell
-from ..game_types import (StackItem, as_target_ids, as_target_slots,
-                          single_chosen_id)
+from ..game_types import (as_graveyard_stamps, as_target_ids, as_target_slots,
+                          single_chosen_id, StackItem)
 from ..resumption import run_resumable
 from ._targets import triggering_spell
 from .registry import effect_handler
@@ -291,7 +291,7 @@ def _copy_of_spell(copied: StackItem, controller_index: int) -> StackItem:
         # Its own list: a slot CR 608.2b blanks on one is not blanked on the
         # other.
         target_permanent_id=as_target_ids(copied.target_permanent_id),
-        target_graveyard_card=copied.target_graveyard_card,
+        target_graveyard_card=as_graveyard_stamps(copied.target_graveyard_card),
         x_value=copied.x_value,
         # The copy has the original's choices, so this is one assignment
         # rather than one per choice the original made.

@@ -28,7 +28,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 from ..continuous import next_timestamp
-from ..game_types import as_target_ids, target_ids
+from ..game_types import as_graveyard_stamps, as_target_ids, target_ids
 from ..events import emit
 from ..oracle import compile_card_oracle
 from ..targeting import graveyard_target_spec
@@ -124,6 +124,7 @@ class TargetAnnouncementsMixin:
             item.target_player_index = None
             item.target_permanent_index = None
             item.target_permanent_id = None
+            item.target_graveyard_card = None
             item.target_stack_item = None
             announced_at_cast = False
         elif announced_at_cast and self._trigger_target_candidates(
@@ -553,7 +554,12 @@ class TargetAnnouncementsMixin:
             # where re-stamping from no slot would leave no target at all and a
             # handler free to scan for a stand-in.
             if stamped is not None or item.target_graveyard_card is None:
-                item.target_graveyard_card = stamped
+                item.target_graveyard_card = as_graveyard_stamps(stamped)
+            # The slot was the announcement's address for the card, and the
+            # stamp is the card: from here on a graveyard target is read off
+            # the stamp (``Game.chosen_graveyard_index``), and the slot
+            # channel — a battlefield's — holds nothing for it.
+            item.target_permanent_index = None
             return
         if item.target_permanent_id is not None:
             # The caller already knows the identities. The web layer does: it

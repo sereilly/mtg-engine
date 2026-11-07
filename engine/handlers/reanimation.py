@@ -25,10 +25,10 @@ from ..replacements.zone_changes import EXILE_ON_LEAVING_BATTLEFIELD
 from ..resumption import run_resumable
 from ..search_filters import card_has_any_type, card_has_type
 from ._filters import _card_matches_filter, graveyard_card_matches
-from ._targets import (_resolve_graveyard_slots, resolve_role_graveyard_card,
-                       resolve_role_permanent, roles_still_legal)
+from ._targets import (_resolve_graveyard_slots, chosen_graveyard_slot,
+                       resolve_role_graveyard_card, resolve_role_permanent,
+                       roles_still_legal)
 from .registry import effect_handler
-from ..game_types import as_target_slots, single_slot
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -133,7 +133,7 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # "…from a graveyard" (Liliana, Waker of the Dead's emblem) widens the source
     # to the chosen player's graveyard; "under your control" is already how
     # _reanimate_creature_to_battlefield puts it into play for the caster.
-    idx = single_slot(context.target_permanent_index)
+    idx = chosen_graveyard_slot(game, context)
     # "Return target **artifact** card from your graveyard to the battlefield."
     # (Argivian Restoration.) Which kind of card comes back is the sentence's
     # own word and rides the payload; "creature" is what every printing before
@@ -581,7 +581,7 @@ def reanimate_aura_onto_source(game: Game, instruction: OracleInstruction, conte
         context.results[REANIMATED_PERMANENTS] = ()
         return True, "resolved"
     spec = dict(instruction.payload)
-    idx = single_slot(context.target_permanent_index)
+    idx = chosen_graveyard_slot(game, context)
     if not (
         isinstance(idx, int)
         and 0 <= idx < len(caster.graveyard)
@@ -1213,14 +1213,11 @@ def reanimate_announced_cards(game: Game, instruction: OracleInstruction, contex
     # ``_run_stack_item_resolution`` re-located are stale by one past it — and
     # a target that *was* the card exiled (its ruling, 2004-10-04: "it gets
     # exiled and does not get returned") must answer gone rather than name
-    # whatever slid into its slot. ``chosen_graveyard_index`` is the one
-    # re-location; with no stamps it keeps the slots as they were.
-    stamps = getattr(context, "target_graveyard_card", None)
-    if stamps is not None:
-        context.target_permanent_index = as_target_slots(game.chosen_graveyard_index(
-            stamps, context.target_permanent_index,
-        ))
-    picked = _resolve_graveyard_slots(caster, context, len(caster.graveyard), _eligible)
+    # whatever slid into its slot. The slots are the stamps', located as the
+    # cards are taken (``_targets.chosen_graveyard_slots``).
+    picked = _resolve_graveyard_slots(
+        game, caster, context, len(caster.graveyard), _eligible,
+    )
     # "…return the chosen cards": one event (CR 603.6a).
     with game.entering_together():
         for card in picked:

@@ -35,8 +35,9 @@ from ..tokens import CREATED_TOKEN_RESULT_KEY, tokens_created_with
 from ._amounts import resolve_amount
 from ._filters import (_card_matches_filter, graveyard_card_matches,
                        graveyard_slots_matching, permanent_matches_filter)
-from ._targets import (_resolve_graveyard_slots, frozen_that_player_seat,
-                       resolve_target_permanent, resolve_target_permanents)
+from ._targets import (_resolve_graveyard_slots, chosen_graveyard_slot,
+                       frozen_that_player_seat, resolve_target_permanent,
+                       resolve_target_permanents)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -718,7 +719,7 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
     # re-read from the exile pile at the next step — where another effect's
     # exile would answer for this one.
     context.results["exiled_cards"] = []
-    index = single_slot(context.target_permanent_index)
+    index = chosen_graveyard_slot(game, context)
     if not (isinstance(index, int) and 0 <= index < len(owner.graveyard)):
         # Honour the choice, else take the first legal one — the same fallback
         # pick_target_permanent uses, so a stale choice does not fizzle an
@@ -855,7 +856,7 @@ def _exile_announced_graveyard_slots(
     count = instruction.payload.get("count")
     wanted = int(context.x_value or 0) if count == "x" else int(count or 1)
     taken = [] if holder is None else _resolve_graveyard_slots(
-        holder, context, wanted,
+        game, holder, context, wanted,
         lambda card: graveyard_card_matches(
             instruction.payload, card, game=game, owner=holder,
         ),

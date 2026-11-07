@@ -31,7 +31,6 @@ from ..turn_state import started_the_turn
 from ._conditions import _compare_count
 from ._filters import (_card_matches_filter, permanent_matches_filter,
                        recorded_card_owner)
-from ..game_types import single_slot
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -589,7 +588,9 @@ def evaluate_record_condition(
         # names, and the return this guards must not happen.
         from ..printed_characteristics import printed_shape
 
-        slot = single_slot(context.target_permanent_index)
+        from ._targets import chosen_graveyard_slot
+
+        slot = chosen_graveyard_slot(game, context)
         pile = context.caster.graveyard
         if not isinstance(slot, int) or isinstance(slot, bool) or not 0 <= slot < len(pile):
             return False

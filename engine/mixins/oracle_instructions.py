@@ -500,6 +500,7 @@ class OracleInstructionsMixin:
         target_player_index: int | None,
         target_permanent_index: int | None = None,
         target_permanent_id: list[int | None] | None = None,
+        target_graveyard_card=None,
     ) -> bool:
         """Attach a resolving Aura to what it targeted, and run its enter text.
 
@@ -599,13 +600,17 @@ class OracleInstructionsMixin:
                 caster_player = self.players[caster_index]
                 # The player chooses which creature card in a graveyard to target
                 # (Rule 601.2c). target_player_index identifies the graveyard's
-                # owner and target_permanent_index is the index into that graveyard.
+                # owner, and the card is the one the cast stamped
+                # (*target_graveyard_card*), located in that graveyard now.
+                graveyard_slot = single_slot(
+                    self.chosen_graveyard_index(target_graveyard_card, None)
+                )
                 if (
-                    isinstance(target_permanent_index, int)
-                    and 0 <= target_permanent_index < len(target_player.graveyard)
-                    and target_player.graveyard[target_permanent_index].primary_type == "creature"
+                    isinstance(graveyard_slot, int)
+                    and 0 <= graveyard_slot < len(target_player.graveyard)
+                    and target_player.graveyard[graveyard_slot].primary_type == "creature"
                 ):
-                    revived_card = target_player.graveyard.pop(target_permanent_index)
+                    revived_card = target_player.graveyard.pop(graveyard_slot)
                     revived_owner_index = target_idx
                 else:
                     # Fallback (e.g. AI with no explicit choice): search graveyards,

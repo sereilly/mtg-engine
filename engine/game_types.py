@@ -421,10 +421,43 @@ def first_slot(value) -> "int | None":
     return slots[0] if slots and type(slots[0]) is int else None
 
 
+# **A graveyard target's stamps** ride the same holders under
+# ``target_graveyard_card``, in the same one shape: None, or a list with one
+# :class:`GraveyardTarget` (or None) per slot. The stamp *is* the target — the
+# slot channel never holds a graveyard slot — and a reader locates each card
+# now through ``Game.chosen_graveyard_index``
+# (``handlers/_targets.chosen_graveyard_slots``).
+
+
+def check_graveyard_stamps(value, holder: str = "target_graveyard_card") -> None:
+    """Raise unless *value* is the stamp channel's one shape: None, or a list
+    of ``GraveyardTarget`` and None."""
+    if value is None:
+        return
+    if type(value) is not list or any(
+        entry is not None and not isinstance(entry, GraveyardTarget)
+        for entry in value
+    ):
+        raise TypeError(
+            f"{holder} is None or a list of GraveyardTarget stamps (one card "
+            f"is [stamp]); got {value!r}"
+        )
+
+
+def as_graveyard_stamps(value) -> "list | None":
+    """*value* — one stamp or several — in the stamp channel's shape."""
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    return [value]
+
+
 #: The target channels a holder guards, each with its shape check.
 _GUARDED_CHANNELS = {
     "target_permanent_id": check_target_ids,
     "target_permanent_index": check_target_slots,
+    "target_graveyard_card": check_graveyard_stamps,
 }
 
 
@@ -499,13 +532,14 @@ class StackItem(_TargetIdsGuard):
     # 115.7). The object a triggered ability is about is not a target and is
     # never here — ``about_permanent_id`` below.
     target_permanent_id: list[int | None] | None = None
-    # The same target when the chosen index is a slot in a *graveyard* rather
-    # than on a battlefield (CR 601.2c). A card there has no ``permanent_id`` to
-    # stamp, so the identity is a :class:`GraveyardTarget`. Same shape as the
-    # index beside it (one, a list, or None), for the same reason: a graveyard
-    # index is a position in a list, and anything leaving that zone in response
-    # renumbers every later slot exactly as the battlefield does.
-    target_graveyard_card: "GraveyardTarget | list[GraveyardTarget | None] | None" = None
+    # The target when it is a card in a *graveyard* rather than a permanent
+    # (CR 601.2c). A card there has no ``permanent_id`` to stamp, so the
+    # identity is a :class:`GraveyardTarget`: None or a list, one stamp per
+    # slot (``check_graveyard_stamps``). A graveyard index is a position in a
+    # list, and anything leaving that zone in response renumbers every later
+    # slot exactly as the battlefield does — so the stamp is the target, and
+    # the slot channel above never holds a graveyard slot.
+    target_graveyard_card: "list[GraveyardTarget | None] | None" = None
     ability_instruction: OracleInstruction | None = None
     ability_effect_kind: str | None = None
     source_permanent: Permanent | None = None
@@ -808,14 +842,13 @@ class OracleExecutionContext(_TargetIdsGuard):
     # from ``StackItem.target_graveyard_card`` unchanged (see there for why a
     # graveyard needs its own identity at all).
     #
-    # A one-target graveyard spell never needed it: the resolution re-locates
-    # the stamp into ``target_permanent_index`` before any handler runs, and
-    # ``target`` says whose pile. A **roles** announcement can mix the two
-    # zones — Goblin Welder names an artifact on a battlefield and an artifact
-    # card in a graveyard — and then the index alone cannot say which slot
-    # counts into which list, nor whose graveyard the second one is. So the
-    # stamps travel, positionally, in role order, with ``None`` in every slot
-    # whose object is a permanent.
+    # Every graveyard handler reads its card here, located now
+    # (``handlers/_targets.chosen_graveyard_slots``); ``target`` says whose
+    # pile. A **roles** announcement can mix the two zones — Goblin Welder
+    # names an artifact on a battlefield and an artifact card in a graveyard —
+    # and the stamps then travel positionally, in role order, with ``None`` in
+    # every slot whose object is a permanent. None or a list
+    # (``check_graveyard_stamps``).
     target_graveyard_card: object = None
     x_value: int | None = None
     source_permanent: Permanent | None = None

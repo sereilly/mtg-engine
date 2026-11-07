@@ -57,7 +57,8 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from .divided_damage import DIVIDED_TARGETS, divided_entry, divided_entry_id
-from .game_types import as_target_slots, target_ids, target_slots
+from .game_types import (as_graveyard_stamps, as_target_slots, target_ids,
+                         target_slots)
 from .modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
 from .text_changes import spell_text_card
 
@@ -1099,17 +1100,16 @@ def _set_id_at(value, position: int, new: int) -> list:
     return updated
 
 
-def _set_at(value, position: int, new):
-    """*value* with *new* at *position*, keeping its scalar-or-list shape —
-    for the graveyard channel, which keeps both; the id channel is
-    :func:`_set_id_at`'s and the slot channel :func:`_set_slot_at`'s."""
-    if isinstance(value, list):
-        updated = list(value)
-        while len(updated) <= position:
-            updated.append(None)
-        updated[position] = new
-        return updated
-    return new
+def _set_at(value, position: int, new) -> list:
+    """The stamp channel *value* with *new* at slot *position* — a list
+    always, padded with ``None`` up to it (``game_types.check_graveyard_stamps``);
+    the id channel is :func:`_set_id_at`'s and the slot channel
+    :func:`_set_slot_at`'s."""
+    updated = list(as_graveyard_stamps(value) or [])
+    while len(updated) <= position:
+        updated.append(None)
+    updated[position] = new
+    return updated
 
 
 def _set_slot_at(value, position: int, new) -> list:
@@ -1164,11 +1164,7 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
                 )
             continue
         if channel == "graveyard":
-            index = game.graveyard_index_of(pick.stamp)
             item.target_graveyard_card = _set_at(item.target_graveyard_card, position, pick.stamp)
-            item.target_permanent_index = _set_slot_at(
-                item.target_permanent_index, position, index
-            )
             item.target_player_index = pick.stamp.seat
             continue
         if channel == "divided":

@@ -22,9 +22,8 @@ from typing import TYPE_CHECKING
 from ..exiled_records import records_for_cards
 from ..linked_exile import exiled_cards_for_the_log, linked_entries
 from ..search_filters import card_has_type
-from ._targets import frozen_that_player_seat
+from ._targets import chosen_graveyard_slot, frozen_that_player_seat
 from .registry import effect_handler
-from ..game_types import single_slot
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -346,7 +345,7 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
                 return False
             return True
 
-        index = single_slot(context.target_permanent_index)
+        index = chosen_graveyard_slot(game, context)
         chosen = None
         if isinstance(index, int) and 0 <= index < len(caster.graveyard):
             candidate = caster.graveyard[index]

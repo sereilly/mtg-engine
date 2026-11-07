@@ -137,11 +137,15 @@ class StackAnnouncement:
     flashback: bool = False
 
     def __post_init__(self) -> None:
-        from .game_types import check_target_ids, check_target_slots
+        from .game_types import (check_graveyard_stamps, check_target_ids,
+                                 check_target_slots)
 
         check_target_ids(self.target_permanent_id, "StackAnnouncement.target_permanent_id")
         check_target_slots(
             self.target_permanent_index, "StackAnnouncement.target_permanent_index"
+        )
+        check_graveyard_stamps(
+            self.target_graveyard_card, "StackAnnouncement.target_graveyard_card"
         )
 
 

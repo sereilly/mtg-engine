@@ -18,7 +18,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 from ...extra_triggers import additional_triggers
-from ...game_types import StackItem, as_target_slots
+from ...game_types import as_graveyard_stamps, as_target_slots, StackItem
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
@@ -70,6 +70,11 @@ class TriggeredAbilitiesMixin:
         # this creature enters, counter target spell", Mystic Snake). By
         # identity, as ``StackItem.target_stack_item`` always is.
         target_stack_item: StackItem | None = None,
+        # …and the **card in a graveyard** a permanent spell named for its
+        # entry trigger ("When this creature enters, return target creature
+        # card from your graveyard", Gravedigger), as the spell's push stamped
+        # it — the stamp is the target (``StackItem.target_graveyard_card``).
+        target_graveyard_card=None,
         # The target fields above are a **choice** its controller made out of
         # the ability's own list before the object existed — the upkeep step's
         # target prompt, answered ahead of ``resolve_upkeep`` and held there to
@@ -115,6 +120,7 @@ class TriggeredAbilitiesMixin:
                 x_value=x_value,
                 announced_at_cast=announced_at_cast,
                 target_stack_item=target_stack_item,
+                target_graveyard_card=target_graveyard_card,
                 targets_chosen=targets_chosen,
                 delayed=delayed,
             ))
@@ -152,6 +158,7 @@ class TriggeredAbilitiesMixin:
             from_the_cast = announced_at_cast and instance == 0
             if announced_at_cast and not from_the_cast:
                 target_player_index = target_permanent_index = target_permanent_id = None
+                target_graveyard_card = None
             self._stack_push(
                 StackItem(
                     card=stack_card,
@@ -159,6 +166,7 @@ class TriggeredAbilitiesMixin:
                     target_player_index=target_player_index,
                     target_permanent_index=as_target_slots(target_permanent_index),
                     target_permanent_id=target_permanent_id,
+                    target_graveyard_card=as_graveyard_stamps(target_graveyard_card),
                     target_stack_item=target_stack_item,
                     x_value=x_value,
                     ability_instruction=instruction,
@@ -399,6 +407,7 @@ class TriggeredAbilitiesMixin:
         *,
         targets_announced: bool = True,
         target_stack_item: StackItem | None = None,
+        target_graveyard_card=None,
     ) -> None:
         """Put a just-entered permanent's own "when this enters" triggered
         abilities on the stack (CR 603.6a, CR 603.3).
@@ -510,7 +519,7 @@ class TriggeredAbilitiesMixin:
             value is not None
             for value in (
                 target_player_index, target_permanent_index, target_permanent_id,
-                target_stack_item,
+                target_stack_item, target_graveyard_card,
             )
         )
         announcement_spent = False
@@ -550,6 +559,8 @@ class TriggeredAbilitiesMixin:
                 )
                 if target_stack_item is not None:
                     event["target_stack_item"] = target_stack_item
+                if target_graveyard_card is not None:
+                    event["target_graveyard_card"] = target_graveyard_card
             # CR 603.4: an ability whose "if" is false as the event occurs does
             # not trigger at all. Asked here as well as at the push, because
             # only a trigger that *fired* spends the announcement: one whose
@@ -585,6 +596,7 @@ class TriggeredAbilitiesMixin:
             target_permanent_index=as_target_slots(event.get("target_permanent_index")),
             x_value=event.get("x_value"),
             target_permanent_id=event.get("target_permanent_id"),
+            target_graveyard_card=as_graveyard_stamps(event.get("target_graveyard_card")),
             ability_instruction=event["instruction"],
             ability_effect_kind=event["effect_kind"],
             source_permanent=event["source_permanent"],

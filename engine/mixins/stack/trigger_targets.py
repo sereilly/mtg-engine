@@ -411,12 +411,11 @@ class TriggerTargetsMixin:
             return None
         spec, _chooser, candidates = offer
         if _names_a_graveyard_target(spec, item.ability_text):
-            # **A card in a graveyard**, named by pile and slot — the two
-            # fields a battlefield target reads as a seat and a slot there.
-            # The slot is the one the permanent spell's own stamp re-located
-            # as it resolved (``_run_stack_item_resolution``), so a card that
-            # left the pile while the spell waited arrives here as no slot at
-            # all: nothing is named any more, and the trigger chooses.
+            # **A card in a graveyard**, named by the stamp the permanent
+            # spell's push took and handed to this trigger
+            # (``target_graveyard_card``), located now: a card that left the
+            # pile while the spell waited locates to no slot at all — nothing
+            # is named any more, and the trigger chooses.
             #
             # There was no arm here, because there was no list: a graveyard
             # kind answered None above and the announcement "rode the object as
@@ -429,7 +428,9 @@ class TriggerTargetsMixin:
             # held to the same list, and no more of them than the trigger
             # prints. The pile is one seat, so "a single graveyard" holds by
             # construction.
-            slots = target_slots(item.target_permanent_index)
+            slots = target_slots(
+                self.chosen_graveyard_index(item.target_graveyard_card, None)
+            )
             if not slots or not all(isinstance(each, int) for each in slots):
                 return "unnamed"
             pile = self.graveyard_target_seat(item, spec)

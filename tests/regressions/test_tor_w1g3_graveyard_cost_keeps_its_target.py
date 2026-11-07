@@ -112,8 +112,8 @@ def test_every_graveyard_cost_activation_keeps_the_card_it_targeted():
             game, target, above = _board(card, ability, spec)
             costs = {"cost_graveyard_indices": list(range(above))} if named_costs else {}
             item = _activate(game, card, index, above, **costs)
-            stamp = item.target_graveyard_card
-            named = getattr(stamp, "card", None)
+            stamps = item.target_graveyard_card or [None]
+            named = getattr(stamps[0], "card", None)
             if named is not target:
                 findings.append(
                     f"{card.name} ({'named' if named_costs else 'default'} cost): "

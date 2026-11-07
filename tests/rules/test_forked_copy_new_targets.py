@@ -31,7 +31,8 @@ import pytest
 from engine import Game, PlayerState, load_cards
 from engine.card_loader import manifest_set_paths
 from engine.faces import compilation_units
-from engine.game_types import ChosenMode, OracleExecutionContext, StackItem
+from engine.game_types import (ChosenMode, GraveyardTarget, OracleExecutionContext,
+                               StackItem)
 from engine.models import Permanent
 from engine.color_changes import spell_color_change
 from engine.oracle import compile_card_oracle
@@ -162,12 +163,12 @@ def test_707_10_a_forked_copy_carries_every_decision_made_for_the_original(
     """A card in a graveyard and the several modes of a "choose one or more"
     are decisions in channels of their own. Fork's copy left both behind."""
     game, me, _you, bolt, _bears = _table(catalog_by_name, interactive=False)
-    bolt.target_graveyard_card = object()
+    bolt.target_graveyard_card = [GraveyardTarget(seat=0, card=bolt.card)]
     bolt.chosen_modes = (ChosenMode(index=0), ChosenMode(index=2))
 
     copy = _fork(game, me, catalog_by_name)
 
-    assert copy.target_graveyard_card is bolt.target_graveyard_card
+    assert copy.target_graveyard_card == bolt.target_graveyard_card
     assert copy.chosen_modes == bolt.chosen_modes
 
 

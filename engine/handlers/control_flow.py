@@ -408,14 +408,16 @@ def _graveyard_role_scoped(
     if not stamps:
         return context if wrapper else None
     seat = stamps[0].seat
-    indices = [game.graveyard_index_of(stamp) for stamp in stamps]
     several = len(names) > 1
+    # The cards by their stamps, which the graveyard handlers read
+    # (``_targets.chosen_graveyard_slots``); the slot channel is a
+    # battlefield's and names nothing here.
     return dataclasses.replace(
         context,
         target=game.players[seat],
-        target_permanent_index=indices,
+        target_permanent_index=None,
         target_permanent_id=None,
-        target_graveyard_card=stamps if several else stamps[0],
+        target_graveyard_card=stamps,
         announced_targets=remembered,
     )
 

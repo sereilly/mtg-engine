@@ -415,8 +415,8 @@ class TriggerChoicesMixin:
             return False
         queued = self._choice_is_queued(choice)
         self.discard_pending_choice(choice)
-        item.target_graveyard_card = stamp
-        item.target_permanent_index = [slot]
+        item.target_graveyard_card = [stamp]
+        item.target_permanent_index = None
         item.target_player_index = stamp.seat
         item.target_permanent_id = None
         item.targets_chosen = self._trigger_target_was_a_choice()
@@ -480,7 +480,7 @@ class TriggerChoicesMixin:
         queued = self._choice_is_queued(choice)
         self.discard_pending_choice(choice)
         item.target_graveyard_card = stamps
-        item.target_permanent_index = slots
+        item.target_permanent_index = None
         item.target_player_index = seat
         item.target_permanent_id = None
         item.targets_chosen = self._trigger_target_was_a_choice()

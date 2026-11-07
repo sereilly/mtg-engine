@@ -36,7 +36,8 @@ from typing import TYPE_CHECKING, Callable, Sequence
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
-from ..game_types import first_slot, first_target_id, target_ids, target_slots
+from ..game_types import (first_slot, first_target_id, single_slot,
+                          target_ids, target_slots)
 from ..oracle_types import named_no_target
 from ..models import Permanent, PlayerState
 from ._filters import graveyard_card_matches
@@ -1402,7 +1403,28 @@ def target_ordinal(index: int) -> str:
     return f"number {index + 1}"
 
 
-def _resolve_graveyard_slots(caster, context, count, eligible):
+def chosen_graveyard_slots(game: Game, context: OracleExecutionContext) -> list:
+    """Where each card in a graveyard the announcement named sits **now** —
+    read off its stamp (``context.target_graveyard_card``, the identity
+    ``Game._stamp_stack_targets`` recorded, CR 601.2c) through
+    ``Game.chosen_graveyard_index``, never off the slot channel, which is a
+    battlefield's. A stamp whose card has gone, or may no longer be targeted
+    (Ground Seal), answers None for its slot (CR 608.2b); no stamp at all is
+    an announcement that named no card in a graveyard, and answers ``[]``.
+    """
+    stamps = getattr(context, "target_graveyard_card", None)
+    if stamps is None:
+        return []
+    return target_slots(game.chosen_graveyard_index(stamps, None))
+
+
+def chosen_graveyard_slot(game: Game, context: OracleExecutionContext) -> "int | None":
+    """The one graveyard slot a one-card announcement named, now — or None
+    (:func:`chosen_graveyard_slots`, read as ``single_slot`` reads one)."""
+    return single_slot(chosen_graveyard_slots(game, context))
+
+
+def _resolve_graveyard_slots(game, caster, context, count, eligible):
     """The cards *count* chosen graveyard slots name, removed from the graveyard.
 
     **An index is not an identity** (ROADMAP idiom #11), and a graveyard is the
@@ -1420,8 +1442,12 @@ def _resolve_graveyard_slots(caster, context, count, eligible):
     back, not two. A slot that is out of range or names an ineligible card is
     dropped (CR 608.2b) and the rest of the effect still happens; an empty
     answer is a legal outcome of "up to N".
+
+    The slots are the stamps' (:func:`chosen_graveyard_slots`), located as
+    this runs — after any earlier step of the same resolution has taken a
+    card out of the pile (Celestial Gatekeeper's "exile it, then return …").
     """
-    slots = target_slots(context.target_permanent_index)
+    slots = chosen_graveyard_slots(game, context)
     graveyard = caster.graveyard
     seen: set[int] = set()
     resolved: list[tuple[int, object]] = []
