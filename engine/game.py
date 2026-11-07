@@ -794,6 +794,16 @@ class Game(
     # waits on a prompt, which is the honest answer both times: nothing is
     # running.
     resolving_items: list = field(default_factory=list)
+    # The stack objects whose legal targets are being enumerated from
+    # **outside** their own resolution, pushed and popped around one
+    # enumeration (``_enumerate_targets(stack_item=…)``): a retarget's
+    # candidates (CR 115.7a), a copy's new targets (CR 707.10c). The fourth
+    # fact of the kind above, for the question ``resolving_items`` answers only
+    # for the object resolving: which stack object a bare ``CardDefinition``
+    # handed to the legality predicate names, so its colour is the object's
+    # (a Lace, Fork's red) rather than the card's
+    # (``object_colors.spell_colors``). Empty outside an enumeration.
+    judged_stack_items: list = field(default_factory=list)
     # Permanents on their way to a graveyard **right now**: pushed and popped
     # around ``_permanent_to_graveyard``, which announces a dies-trigger while
     # the dying permanent is still listed on its battlefield. A target that

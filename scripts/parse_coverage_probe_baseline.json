@@ -354,13 +354,6 @@
   ]
  },
  {
-  "card": "Bladewing the Risen",
-  "clause": "you may return target dragon permanent card from your graveyard to the battlefield",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
   "card": "Blazing Effigy",
   "clause": "it deals x damage to target creature, where x is 3 plus the amount of damage dealt to this creature this turn by other sources named blazing effigy",
   "ignored": [
@@ -435,13 +428,6 @@
   "clause": "target player discards two cards. if this spell was kicked, that player discards three cards instead",
   "ignored": [
    "spell"
-  ]
- },
- {
-  "card": "Bog Glider",
-  "clause": "search your library for a mercenary permanent card with mana value 2 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
   ]
  },
  {
@@ -566,48 +552,6 @@
   ]
  },
  {
-  "card": "Cateran Brute",
-  "clause": "search your library for a mercenary permanent card with mana value 2 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Cateran Enforcer",
-  "clause": "search your library for a mercenary permanent card with mana value 4 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Cateran Kidnappers",
-  "clause": "search your library for a mercenary permanent card with mana value 3 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Cateran Overlord",
-  "clause": "search your library for a mercenary permanent card with mana value 6 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Cateran Persuader",
-  "clause": "search your library for a mercenary permanent card with mana value 1 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Cateran Slaver",
-  "clause": "search your library for a mercenary permanent card with mana value 5 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
   "card": "Cavern Harpy",
   "clause": "return a blue or black creature you control to its owner's hand",
   "ignored": [
@@ -625,8 +569,7 @@
   "card": "Celestial Gatekeeper",
   "clause": "exile it, then return up to two target bird and/or cleric permanent cards from your graveyard to the battlefield",
   "ignored": [
-   "and/or",
-   "permanent"
+   "and/or"
   ]
  },
  {
@@ -937,24 +880,10 @@
   ]
  },
  {
-  "card": "Defiant Falcon",
-  "clause": "search your library for a rebel permanent card with mana value 3 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
   "card": "Defiant Vanguard",
   "clause": "at end of combat, destroy it and all creatures it blocked this turn",
   "ignored": [
    "all"
-  ]
- },
- {
-  "card": "Defiant Vanguard",
-  "clause": "search your library for a rebel permanent card with mana value 4 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
   ]
  },
  {
@@ -1023,13 +952,6 @@
   ]
  },
  {
-  "card": "Didgeridoo",
-  "clause": "you may put a minotaur permanent card from your hand onto the battlefield",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
   "card": "Dimensional Breach",
   "clause": "exile all permanents. for as long as any of those cards remain exiled, at the beginning of each player's upkeep, that player returns one of the exiled cards they own to the battlefield",
   "ignored": [
@@ -1084,13 +1006,6 @@
   "clause": "it deals 2 damage to each creature with flying",
   "ignored": [
    "each"
-  ]
- },
- {
-  "card": "Dragonstorm",
-  "clause": "search your library for a dragon permanent card, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
   ]
  },
  {
@@ -1681,13 +1596,6 @@
   ]
  },
  {
-  "card": "Goblin Lackey",
-  "clause": "you may put a goblin permanent card from your hand onto the battlefield",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
   "card": "Goblin Lookout",
   "clause": "goblin creatures get +2/+0 until end of turn",
   "ignored": [
@@ -1740,13 +1648,6 @@
  {
   "card": "Goblin War Buggy",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {1}{r}",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Goblin Wizard",
-  "clause": "you may put a goblin permanent card from your hand onto the battlefield",
   "ignored": [
    "permanent"
   ]
@@ -2487,13 +2388,6 @@
   ]
  },
  {
-  "card": "Lin Sivvi, Defiant Hero",
-  "clause": "search your library for a rebel permanent card with mana value x or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
   "card": "Living Death",
   "clause": "each player exiles all creature cards from their graveyard, then sacrifices all creatures they control, then puts all cards they exiled this way onto the battlefield",
   "ignored": [
@@ -2812,13 +2706,6 @@
   "clause": "destroy all creatures target player controls. for each creature that died this way, that player creates two 1/1 red goblin creature tokens",
   "ignored": [
    "all"
-  ]
- },
- {
-  "card": "Moggcatcher",
-  "clause": "search your library for a goblin permanent card, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
   ]
  },
  {
@@ -3414,66 +3301,10 @@
   ]
  },
  {
-  "card": "Ramosian Captain",
-  "clause": "search your library for a rebel permanent card with mana value 4 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Ramosian Commander",
-  "clause": "search your library for a rebel permanent card with mana value 5 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Ramosian Lieutenant",
-  "clause": "search your library for a rebel permanent card with mana value 3 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Ramosian Sergeant",
-  "clause": "search your library for a rebel permanent card with mana value 2 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Ramosian Sky Marshal",
-  "clause": "search your library for a rebel permanent card with mana value 6 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
   "card": "Rapid Decay",
   "clause": "exile up to three target cards from a single graveyard",
   "ignored": [
    "target"
-  ]
- },
- {
-  "card": "Rathi Assassin",
-  "clause": "search your library for a mercenary permanent card with mana value 3 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Rathi Fiend",
-  "clause": "search your library for a mercenary permanent card with mana value 3 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Rathi Intimidator",
-  "clause": "search your library for a mercenary permanent card with mana value 2 or less, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
   ]
  },
  {
@@ -3849,13 +3680,6 @@
   ]
  },
  {
-  "card": "Seahunter",
-  "clause": "search your library for a merfolk permanent card, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
   "card": "Season of the Witch",
   "clause": "destroy all untapped creatures that didn't attack this turn, except for creatures that couldn't attack",
   "ignored": [
@@ -4054,14 +3878,6 @@
   ]
  },
  {
-  "card": "Skirk Drill Sergeant",
-  "clause": "you may pay {2}{r}. if you do, reveal the top card of your library. if it's a goblin permanent card, put it onto the battlefield. otherwise, put it into your graveyard",
-  "ignored": [
-   "permanent",
-   "card,"
-  ]
- },
- {
   "card": "Skirk Volcanist",
   "clause": "it deals 3 damage divided as you choose among one, two, or three target creatures",
   "ignored": [
@@ -4095,13 +3911,6 @@
   "clause": "all lands gain shroud until end of turn",
   "ignored": [
    "all"
-  ]
- },
- {
-  "card": "Skyshroud Poacher",
-  "clause": "search your library for an elf permanent card, put it onto the battlefield, then shuffle",
-  "ignored": [
-   "permanent"
   ]
  },
  {
@@ -5067,13 +4876,6 @@
   ]
  },
  {
-  "card": "Willow Priestess",
-  "clause": "you may put a faerie permanent card from your hand onto the battlefield",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
   "card": "Winding Wurm",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {4}{g}",
   "ignored": [
@@ -5148,13 +4950,6 @@
   "clause": "target knight creature gets +1/+1 until end of turn",
   "ignored": [
    "creature"
-  ]
- },
- {
-  "card": "Zirilan of the Claw",
-  "clause": "search your library for a dragon permanent card, put that card onto the battlefield, then shuffle. that dragon gains haste until end of turn. exile it at the beginning of the next end step",
-  "ignored": [
-   "permanent"
   ]
  },
  {

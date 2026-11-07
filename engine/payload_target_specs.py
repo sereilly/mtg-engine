@@ -808,6 +808,11 @@ def _reanimation_spec(payload: dict) -> dict | None:
     # which is what every printing before this one said.
     if payload.get("card_type"):
         spec["card_type"] = payload["card_type"]
+    # "target Dragon **permanent** card" (Bladewing the Risen): CR 110.4a's
+    # union, handed over in the key ``graveyard_card_matches`` reads as an OR
+    # — the type the handler re-checks the chosen card against.
+    if payload.get("card_types"):
+        spec["card_types"] = list(payload["card_types"])
     colors = tuple(payload.get("colors") or ())
     if colors:
         spec["graveyard_colors"] = list(colors)

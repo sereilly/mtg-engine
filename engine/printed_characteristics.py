@@ -252,6 +252,7 @@ def _printed_abilities_cached(
         colors=(), color_identity=(), keywords=keywords, produced_mana=(), raw={},
     )
     abilities = {kw.lower() for kw in keywords}
+    hexproof_from_printed = bare_hexproof_printed = False
     for instruction in compile_card_oracle(card).instructions:
         # **A keyword line, and nothing else.** "Does this line give *this
         # permanent* this keyword?" is a question about the line's subject, and
@@ -296,6 +297,32 @@ def _printed_abilities_cached(
             # but a fixture card built from oracle text alone has only this.
             if landwalk_requirement(part) is not None:
                 abilities.add(part)
+            # "Hexproof from blue" (Sporeweb Weaver, CR 702.11d): the ability
+            # is named by its quality, one per colour, which is the word
+            # ``_can_be_targeted`` asks for ("hexproof from blue"). The same
+            # split the keyword-line gate admits it by
+            # (``keyword_lines``: colour words joined by "and" / "and from").
+            if part.startswith("hexproof from "):
+                hexproof_from_printed = True
+                for quality in re.split(
+                    r"\band from\b|\band\b", part[len("hexproof from "):]
+                ):
+                    if quality.strip():
+                        abilities.add(f"hexproof from {quality.strip()}")
+            elif part == "hexproof":
+                bare_hexproof_printed = True
+    # **The ingested field names the family, not the ability.** Scryfall lists
+    # a "hexproof from blue" creature under both "Hexproof from" and
+    # "Hexproof" — CR 702.11d's last sentence, "a 'hexproof from [quality]'
+    # ability is a hexproof ability" — and seeded as written that "Hexproof"
+    # was bare hexproof (CR 702.11b): Sporeweb Weaver and Garruk's Harbinger
+    # could be targeted by no spell or ability an opponent controlled, of any
+    # colour, while the shield their text prints was never in the set at all.
+    # Dropped only where the text prints the narrower ability and not the
+    # bare one beside it.
+    if hexproof_from_printed and not bare_hexproof_printed:
+        abilities.discard("hexproof")
+        abilities.discard("hexproof from")
     return frozenset(abilities)
 
 

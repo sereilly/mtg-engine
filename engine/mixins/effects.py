@@ -48,7 +48,7 @@ from ..trigger_utils import (iter_triggered_abilities, make_trigger_event,
 from ..damage_redirects import source_matches
 from ..destruction_events import (RESOLVING, announce_destroyed,
                                   destruction_finished)
-from ..search_filters import card_has_type
+from ..search_filters import card_has_any_type
 
 
 def _damage_word_matches(trig, combat: bool) -> bool:
@@ -1301,7 +1301,7 @@ class EffectsMixin:
         target: PlayerState | None = None,
         target_permanent_index: int | None = None,
         card_filter=None,
-        card_type: str = "creature",
+        card_type: "str | tuple[str, ...]" = "creature",
         entering_as=None,
         then=None,
     ) -> "Permanent | None":
@@ -1358,8 +1358,9 @@ class EffectsMixin:
             # Restoration) would not see Clay Statue, whose line reads "Artifact
             # Creature". One reader for the whole engine, in
             # ``engine/search_filters.py``, so the next caller cannot spell it a
-            # fourth way.
-            if not card_has_type(card, card_type):
+            # fourth way. A union ("a Dragon **permanent** card", CR 110.4a)
+            # is any of its words (``card_has_any_type``).
+            if not card_has_any_type(card, card_type):
                 return False
             return card_filter is None or card_filter(card, owner=owner)
 

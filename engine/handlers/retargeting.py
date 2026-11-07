@@ -180,6 +180,10 @@ def _legal_new_targets(game: Game, item: StackItem, bound) -> list[dict]:
         ability_instruction=ability_instruction,
         ability_source=item.source_permanent,
         source_permanent=item.source_permanent,
+        # Judged as the object it is now: this runs inside the *retargeting*
+        # effect's resolution, so without the object named the legality below
+        # would read the spell's printed colour, not the Lace's.
+        stack_item=item,
     )
     candidates: list[dict] = []
     for entry in entries:
