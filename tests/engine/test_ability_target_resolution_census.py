@@ -1091,10 +1091,10 @@ def test_the_entry_trigger_census_goes_red_without_the_rule(monkeypatch):
     for road in ("put", "cast"):
         for name in _KNOWN_ENTRY_TRIGGERS:
             assert f"{name} [{road}] [untargetable]" in said, said
-    # …and the bystander: put onto the battlefield, the Drake's trigger also
-    # holds the slot its picker chose from, and with the target gone the slot
-    # named the creature beside it.
-    assert "Gilded Drake [put] [left]: resolved onto ['bystander'" in said, said
+    # The bystander is no longer reachable even with the rule switched off: a
+    # trigger's slots are re-read off its ids as it resolves (kg4 ids part 3),
+    # so with the Drake's target gone no slot names the creature beside it.
+    assert "resolved onto ['bystander'" not in said, said
 
 
 # ---------------------------------------------------------------------------

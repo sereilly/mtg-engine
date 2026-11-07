@@ -10,8 +10,9 @@ from ..divided_damage import divided_entry_id
 from ..event_durations import end_event_durations
 from ..cast_costs import kicked
 from ..events import emit
-from ..game_types import (OracleExecutionContext, OracleStateMachine,
-                          as_target_slots, single_slot, target_ids)
+from ..game_types import (as_target_slots, OracleExecutionContext,
+                          OracleStateMachine, single_chosen_id, single_slot,
+                          target_ids)
 from ..handlers import EFFECT_HANDLERS
 from ..handlers._amounts import count_from_payload
 from ..handlers._common import apply_damage_to_creature
@@ -527,6 +528,16 @@ class OracleInstructionsMixin:
         # An Aura has one target (CR 303.4a): its one slot, read off the slot
         # channel whichever arity it arrived in.
         target_permanent_index = single_slot(target_permanent_index)
+        # **Whether the cast named a host at all**, asked of both channels: the
+        # slot is re-read off the id (``_resolve_card``), so a host that left
+        # while the Aura waited is a named host with no slot — and every
+        # branch below must find it gone (the Aura is binned, CR 303.4g /
+        # 608.2b), never take "no slot" for "nothing named" and scan for a
+        # stand-in.
+        named = (
+            target_permanent_index is not None
+            or single_chosen_id(target_permanent_id) is not None
+        )
         program = compile_card_oracle(aura_permanent.effective_card)
         text = program.normalized_text
         # The enchant clause is asked of the *printed* text: it is a line,
@@ -570,7 +581,7 @@ class OracleInstructionsMixin:
         _nouns = enchant_clause_nouns(_clause) if _clause else ()
         _chosen = (
             self.chosen_permanent(target_player, target_permanent_index, target_permanent_id)
-            if isinstance(target_permanent_index, int) else None
+            if named else None
         )
 
         def _enchants(noun: str) -> bool:
@@ -669,7 +680,7 @@ class OracleInstructionsMixin:
             # while the spell was on the stack), do not attach — the caller moves the
             # unattached Aura to the graveyard.
             target_creature = None
-            if isinstance(target_permanent_index, int):
+            if named:
                 candidate = self.chosen_permanent(
                     target_player, target_permanent_index, target_permanent_id
                 )
@@ -828,13 +839,13 @@ class OracleInstructionsMixin:
 
         elif _enchants("land"):
             target_land = None
-            if target_permanent_index is not None:
+            if named:
                 candidate = self.chosen_permanent(
                     target_player, target_permanent_index, target_permanent_id
                 )
                 if candidate is not None and candidate.has_type("land"):
                     target_land = candidate
-            if target_land is None and target_permanent_index is None:
+            if target_land is None and not named:
                 target_land = next(
                     (p for p in self.controlled_by(target_player) if p.has_type("land")),
                     None,
@@ -893,7 +904,7 @@ class OracleInstructionsMixin:
             self.log.append(f"{aura_permanent.card.name} enchants {target_land.card.name}")
         elif _enchants("wall"):
             target_wall = None
-            if isinstance(target_permanent_index, int):
+            if named:
                 candidate = self.chosen_permanent(
                     target_player, target_permanent_index, target_permanent_id
                 )
@@ -924,7 +935,7 @@ class OracleInstructionsMixin:
             target_player = self.players[target_idx]
 
             target_artifact = None
-            if target_permanent_index is not None:
+            if named:
                 candidate = self.chosen_permanent(
                     target_player, target_permanent_index, target_permanent_id
                 )
@@ -935,7 +946,7 @@ class OracleInstructionsMixin:
                 # target" here and went to the graveyard.
                 if candidate is not None and candidate.has_type("artifact"):
                     target_artifact = candidate
-            if target_artifact is None and target_permanent_index is None:
+            if target_artifact is None and not named:
                 target_artifact = next(
                     (
                         perm
@@ -980,13 +991,13 @@ class OracleInstructionsMixin:
             target_player = self.players[target_idx]
 
             target_enchantment = None
-            if target_permanent_index is not None:
+            if named:
                 candidate = self.chosen_permanent(
                     target_player, target_permanent_index, target_permanent_id
                 )
                 if candidate is not None and candidate.has_type("enchantment"):
                     target_enchantment = candidate
-            if target_enchantment is None and target_permanent_index is None:
+            if target_enchantment is None and not named:
                 target_enchantment = next(
                     (
                         perm
@@ -1019,13 +1030,13 @@ class OracleInstructionsMixin:
             # this is the general attach, not a replacement for them.
             noun = aura_enchant_noun(aura_permanent.effective_card)
             chosen = None
-            if target_permanent_index is not None:
+            if named:
                 candidate = self.chosen_permanent(
                     target_player, target_permanent_index, target_permanent_id
                 )
                 if candidate is not None and permanent_matches_enchant_noun(candidate, noun):
                     chosen = candidate
-            elif target_permanent_index is None:
+            elif not named:
                 chosen = next(
                     (
                         perm

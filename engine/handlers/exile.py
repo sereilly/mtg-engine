@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 from ..exiled_records import record_exiled_card
 from ..face_down import revealed_as_it_moves
 from ..faces import whole_card
-from ..game_types import first_target_id, single_slot
+from ..game_types import first_target_id
 from ..linked_exile import link_exiled_card
 from ..models import Permanent
 from ..oracle_types import (EXILED_BY_SEAT, EXILED_CARDS_WITH_OWNERS,
@@ -51,19 +51,12 @@ def exile_target_creature_until_eot(game: Game, instruction: OracleInstruction, 
     target = context.target
     card = context.card
     # 610.3: zone-change one-shot "until" EOT; second one-shot returns at cleanup
-    target_perm_idx = single_slot(context.target_permanent_index)
-    exiled_perm: Permanent | None = None
-    if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
-        candidate = target.battlefield[target_perm_idx]
-        if candidate.is_creature:
-            exiled_perm = candidate
-            game.remove_from_battlefield(candidate)
-    if exiled_perm is None:
-        for perm in list(game.controlled_by(target)):
-            if perm.is_creature:
-                exiled_perm = perm
-                game.remove_from_battlefield(perm)
-                break
+    # The chosen creature through the one resolver — by id, then by the slot
+    # re-read off it, and a scan only where nothing was named: a target that
+    # has left is not replaced (CR 608.2b), which a slot read alone did.
+    exiled_perm: Permanent | None = resolve_target_permanent(game, context)
+    if exiled_perm is not None:
+        game.remove_from_battlefield(exiled_perm)
     if exiled_perm is not None:
         landed = game.put_card_into_exile(target, exiled_perm.card)
         owner_idx = game.players.index(target)
@@ -1081,19 +1074,10 @@ def exile_creature_gain_life_equal_to_power(game: Game, instruction: OracleInstr
     target = context.target
     card = context.card
     # Swords to Plowshares: exile target creature; its controller gains life = its power
-    target_perm_idx = single_slot(context.target_permanent_index)
-    exiled_perm: Permanent | None = None
-    if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
-        candidate = target.battlefield[target_perm_idx]
-        if candidate.is_creature:
-            exiled_perm = candidate
-            game.remove_from_battlefield(candidate)
-    if exiled_perm is None:
-        for perm in list(game.controlled_by(target)):
-            if perm.is_creature:
-                exiled_perm = perm
-                game.remove_from_battlefield(perm)
-                break
+    # The chosen creature through the one resolver (see the handler above).
+    exiled_perm: Permanent | None = resolve_target_permanent(game, context)
+    if exiled_perm is not None:
+        game.remove_from_battlefield(exiled_perm)
     if exiled_perm is not None:
         game.put_card_into_exile(target, exiled_perm.card)
         life_gain = exiled_perm.effective_power

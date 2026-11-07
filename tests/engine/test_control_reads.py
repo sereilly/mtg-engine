@@ -323,10 +323,6 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # announced by id named no slot, so it rewrote whichever permanent stood
     # first (tests/regressions/test_text_change_target_identity.py).
     "engine/handlers/combat.py": 2,
-    # Both moved from `zones.py` with their handlers when that module was
-    # split at the 2,000-line cap: `exile_target_creature_until_eot` and
-    # `exile_creature_gain_life_equal_to_power`.
-    "engine/handlers/exile.py": 2,
     # `engine/handlers/damage.py` left this table at Weatherlight's second
     # wave. Its one read was the divided-damage list resolving a target by
     # battlefield slot -- and it was not a combat map, it was the bug this

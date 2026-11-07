@@ -12,7 +12,7 @@ with the side of the table each aims at.
 from __future__ import annotations
 
 from .... import piles
-from ....game_types import as_target_ids, as_target_slots
+from ....game_types import as_target_ids
 from ....pending_choices import ChoiceSpec, PendingChoice
 from ....trigger_order import ORDER_TRIGGERS, apply_trigger_order, order_is_open
 
@@ -94,7 +94,6 @@ class TriggerChoicesMixin:
         if target is not None:
             item.target_player_index = target.get("seat")
             if target.get("kind") == "permanent":
-                item.target_permanent_index = as_target_slots(target.get("index"))
                 item.target_permanent_id = as_target_ids(self.permanent_ids_at(
                     target.get("seat"), target.get("index")
                 ))
@@ -602,7 +601,6 @@ class TriggerChoicesMixin:
         queued = self._choice_is_queued(choice)
         self.discard_pending_choice(choice)
         item.target_player_index = controller
-        item.target_permanent_index = as_target_slots(self.battlefield_index_of(perm))
         item.target_permanent_id = [permanent_id]
         item.targets_chosen = self._trigger_target_was_a_choice()
         self.log.append(f"{card_name}: targets {perm.card.name}")

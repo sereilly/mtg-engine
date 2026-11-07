@@ -312,9 +312,11 @@ def test_a_blanked_slot_keeps_its_place_in_the_announcement():
     game = _w2g3_table()
     bear = _w2g3_put(game, 1, _W2G3_BEAR)
     ox = _w2g3_put(game, 1, _W2G3_OX)
+    # As a pushed object holds it: its permanents by id, and no slot of its
+    # own (kg4 ids part 3 — the slots are re-read off the ids).
     item = StackItem(
         card=_W2G3_TOTEM, caster_index=0, target_player_index=1,
-        target_permanent_index=[0, 1], x_value=None,
+        target_permanent_index=None, x_value=None,
         target_permanent_id=[bear.permanent_id, ox.permanent_id],
     )
 
@@ -324,7 +326,6 @@ def test_a_blanked_slot_keeps_its_place_in_the_announcement():
 
     assert blanked == 1
     assert item.target_permanent_id == [illegal_target_id(bear.permanent_id), ox.permanent_id]
-    assert item.target_permanent_index == [None, 1]
     assert game.permanent_by_id(item.target_permanent_id[0]) is None, "it names nothing"
     context = OracleExecutionContext(
         caster=game.players[0], target=game.players[1], card=_W2G3_TOTEM,

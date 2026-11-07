@@ -64,7 +64,7 @@ def test_115_1_target_permanent_declared_when_spell_put_on_stack():
 
     game.queue_from_hand(0, "Shatter", target_player_index=1, target_permanent_index=0)
 
-    assert game.stack[0].target_permanent_index == [0]
+    assert game.stack[0].target_permanent_id == [p2.battlefield[0].permanent_id]
 
 
 def test_115_1_target_unchanged_without_explicit_effect():
@@ -111,7 +111,7 @@ def test_115_1a_sorcery_with_target_creature_stores_permanent_target():
 
     item = game.stack[0]
     assert item.card.primary_type == "sorcery"
-    assert item.target_permanent_index == [0]
+    assert item.target_permanent_id == [p2.battlefield[0].permanent_id]
 
 
 def test_115_1a_triggered_ability_target_does_not_make_card_targeted():
@@ -176,7 +176,7 @@ def test_115_1b_enchant_artifact_aura_stores_target_permanent_index():
     assert result.supported
     item = game.stack[0]
     assert item.target_player_index == 1
-    assert item.target_permanent_index == [0]
+    assert item.target_permanent_id == [p2.battlefield[0].permanent_id]
 
 
 def test_115_1b_enchant_artifact_attaches_to_chosen_artifact_not_first():
@@ -327,7 +327,7 @@ def test_115_1b_aura_spell_stores_enchant_target():
     assert result.supported
     item = game.stack[0]
     assert item.target_player_index == 1
-    assert item.target_permanent_index == [0]
+    assert item.target_permanent_id == [p2.battlefield[0].permanent_id]
 
 
 def test_115_1b_aura_permanent_has_no_target_after_resolution():
@@ -476,7 +476,7 @@ def test_115_2_permanent_on_battlefield_is_legal_target():
     result = game.queue_from_hand(0, "Terror", target_player_index=1, target_permanent_index=0)
 
     assert result.supported
-    assert game.stack[0].target_permanent_index == [0]
+    assert game.stack[0].target_permanent_id == [p2.battlefield[0].permanent_id]
 
 
 def test_115_2_targeting_player_and_permanent_simultaneously():
@@ -499,7 +499,7 @@ def test_115_2_targeting_player_and_permanent_simultaneously():
     assert result.supported
     item = game.stack[0]
     assert item.target_player_index == 1
-    assert item.target_permanent_index == [0]
+    assert item.target_permanent_id == [p2.battlefield[0].permanent_id]
 
 
 # ---------------------------------------------------------------------------
@@ -608,7 +608,7 @@ def test_115_4_any_target_spell_can_target_creature():
     game.queue_from_hand(0, "Lightning Bolt", target_player_index=1, target_permanent_index=0)
     item = game.stack[-1]
     assert item.target_player_index == 1
-    assert item.target_permanent_index == [0]
+    assert item.target_permanent_id == [p2.battlefield[0].permanent_id]
 
     # After resolution the creature is dealt lethal damage and leaves the battlefield
     game.resolve_stack()
@@ -949,8 +949,8 @@ def test_115_9b_target_current_state_used_when_checking():
 
     item = game.stack[0]
     # Target index still points to the correct permanent (current state is used)
-    assert item.target_permanent_index == [0]
-    assert p2.battlefield[item.target_permanent_index[0]].effective_toughness == 7
+    assert item.target_permanent_id == [p2.battlefield[0].permanent_id]
+    assert game.permanent_by_id(item.target_permanent_id[0]).effective_toughness == 7
 
 
 def test_115_9c_targets_only_checks_number_of_distinct_targets():

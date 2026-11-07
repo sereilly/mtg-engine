@@ -17,8 +17,8 @@ arity through ``as_target_slots``, and readers ask ``target_slots`` /
 * the accessors' answers;
 * no shape check on a holder's slot field left anywhere in ``engine/`` or
   ``web/`` (a static census with a floor on what it read);
-* a driven game: a one-target spell announced by slot puts a one-slot list on
-  the stack, and resolves on the permanent it named.
+* a driven game: a one-target spell announced by slot resolves on the
+  permanent it named.
 """
 
 from __future__ import annotations
@@ -152,10 +152,11 @@ def test_no_reader_asks_a_holders_slot_field_for_its_shape():
 # ---------------------------------------------------------------------------
 
 
-def test_a_one_slot_announcement_rides_the_stack_as_a_list_and_lands():
-    """``target_permanent_index=1`` named at the cast is ``[1]`` on the stack
-    object (with the id stamped beside it), and the Bolt resolves on the
-    creature in that slot — not its neighbour, not the player."""
+def test_a_one_slot_announcement_is_stamped_as_an_id_and_lands():
+    """``target_permanent_index=1`` named at the cast is consumed into the id
+    of the creature in that slot as the Bolt is pushed (part 3: the stack
+    object keeps no slot), and the Bolt resolves on that creature — not its
+    neighbour, not the player."""
     from engine import Game, PlayerState
     from engine.models import Permanent
 
@@ -172,7 +173,7 @@ def test_a_one_slot_announcement_rides_the_stack_as_a_list_and_lands():
     )
     assert result.supported, result.details
     item = game.stack[-1]
-    assert item.target_permanent_index == [1]
+    assert item.target_permanent_index is None
     assert item.target_permanent_id == [giant.permanent_id]
     resolve_stack(game)
     assert giant.damage_marked == 3

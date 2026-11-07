@@ -189,7 +189,11 @@ def _w2g6_graveyard_row(game, asked, item, card, printed) -> None:
     assert game.pending_choices == [asked], "a refused answer leaves it owed"
     assert game.confirm_trigger_target(0, seat=pile, graveyard_indices=slots[:printed])
     assert item.target_player_index == pile
-    assert item.target_permanent_index == slots[:printed]
+    # The cards ride as stamps (kg4 ids part 2), located here now.
+    assert item.target_permanent_index is None
+    assert [
+        game.graveyard_index_of(stamp) for stamp in item.target_graveyard_card
+    ] == slots[:printed]
     assert game.pending_choices == []
 
 

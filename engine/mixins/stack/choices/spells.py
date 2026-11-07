@@ -13,7 +13,6 @@ from __future__ import annotations
 from .... import madness as _madness
 from ....face_down import MASK_FACE_DOWN, face_down_card
 from ....faces import castable_faces, is_multi_face, spell_named
-from ....game_types import as_target_slots, single_chosen_id, single_slot
 from ....grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ....models import Permanent
 from ....pending_choices import ChoiceSpec, PendingChoice
@@ -135,7 +134,6 @@ class SpellChoicesMixin:
             _replace(
                 mode,
                 target_permanent_id=list(ids),
-                target_permanent_index=[offered[pid]["permanent_index"] for pid in ids],
                 # One seat when every target sits on one battlefield, which is
                 # every card in the pool that reaches here; several leaves the
                 # mode's seat alone and the ids do the addressing, which is what
@@ -781,7 +779,6 @@ class SpellChoicesMixin:
         before = chosen_targets(self, copy_item)
         if match.get("kind") == "player":
             copy_item.target_player_index = match.get("seat")
-            copy_item.target_permanent_index = None
             copy_item.target_permanent_id = None
             label = self.players[match["seat"]].name
         else:
@@ -789,9 +786,6 @@ class SpellChoicesMixin:
             if perm is None:
                 return False
             copy_item.target_player_index = self.controller_index_of(perm)
-            copy_item.target_permanent_index = as_target_slots(
-                self.battlefield_index_of(perm)
-            )
             copy_item.target_permanent_id = [perm.permanent_id]
             label = perm.card.name
         self.discard_pending_choice(choice)
@@ -847,24 +841,13 @@ class SpellChoicesMixin:
         # creature's controller: the answer that changes nothing moved the
         # copy (Chain Lightning, 3 to the face where it had been aimed at a
         # creature).
+        # The copy is on the stack already (pushed unannounced), so its
+        # permanent, if it names one, is named by id (``_stamp_stack_targets``).
         held_now = chosen_targets(self, copy_item) or ()
         if len(held_now) == 1 and held_now[0].kind == "permanent":
             current = {"permanent_id": held_now[0].permanent_id}
-        elif copy_item.target_permanent_index is None:
-            current = {"seat": copy_item.target_player_index}
         else:
-            # The id is what the answer is checked against, and a cast that
-            # never stamped one still has a slot — resolved through the control
-            # seam rather than left as None, which would make "keep the
-            # original" silently fall through to "take the first offered".
-            held = single_chosen_id(copy_item.target_permanent_id)
-            if held is None:
-                perm = self.permanent_at(
-                    copy_item.target_player_index,
-                    single_slot(copy_item.target_permanent_index),
-                )
-                held = self.permanent_id_of(perm) if perm is not None else None
-            current = {"permanent_id": held}
+            current = {"seat": copy_item.target_player_index}
         # A seat nobody asks takes the measured answer; an interactive seat's
         # offer taken by default (a drain, an abandoned seat) declines, as the
         # graveyard-or-spell offer's does (``_default_retarget_choice``).

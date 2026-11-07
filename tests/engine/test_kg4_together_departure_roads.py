@@ -116,14 +116,6 @@ _REVIEWED = {
     ("mixins/effects.py", "_destroy_target_permanent", "_do_destroy"): (
         "a fallback scan for the first legal permanent; it returns after one."
     ),
-    ("handlers/exile.py", "exile_target_creature_until_eot",
-     "remove_from_battlefield"): (
-        "a fallback scan for the first creature; it breaks after one."
-    ),
-    ("handlers/exile.py", "exile_creature_gain_life_equal_to_power",
-     "remove_from_battlefield"): (
-        "a fallback scan for the first creature; it breaks after one."
-    ),
     ("phases/upkeep_step.py", "_force_sacrifice_first_land",
      "sacrifice_permanent"): (
         "a scan for the one land to sacrifice; it returns after one."

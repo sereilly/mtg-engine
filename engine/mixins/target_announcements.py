@@ -537,6 +537,8 @@ class TargetAnnouncementsMixin:
                 mode.target_permanent_id = as_target_ids(self.permanent_ids_at(
                     seat, mode.target_permanent_index
                 ))
+            # Consumed into the ids, as the item's own are below.
+            mode.target_permanent_index = None
         spec = graveyard_target_spec(
             item.card,
             compile_card_oracle(item.card),
@@ -589,6 +591,7 @@ class TargetAnnouncementsMixin:
             # back into the engine — which is why no game ever showed this and
             # every headless caller did.
             self._settle_announced_target_seat(item)
+            item.target_permanent_index = None
             return
         seat = item.target_player_index
         if seat is None:
@@ -598,6 +601,13 @@ class TargetAnnouncementsMixin:
             item.target_permanent_id = as_target_ids(
                 self.permanent_ids_at(seat, item.target_permanent_index)
             )
+        # **The slots are consumed into the ids here.** A slot is a position
+        # in a list that renumbers while the object waits (CR 400.7), so from
+        # the push on a stack object names its permanents by id alone; every
+        # resolution re-reads the slots off the ids
+        # (``bare_announcements.resolving_slots``), and nothing keeps a second
+        # copy that could go stale.
+        item.target_permanent_index = None
 
     def announced_target_seat(self, permanent_ids) -> int | None:
         """The seat an announcement made by ``permanent_id`` already names, or

@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..divided_damage import DIVIDED_TARGETS, divided_entry, stamped_entry
-from ..game_types import StackItem, as_target_slots, single_chosen_id, single_slot
+from ..game_types import StackItem, single_chosen_id
 from ..resumption import run_resumable
 from ..text_changes import spell_text_card
 from .registry import effect_handler
@@ -399,7 +399,6 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
             return True, "resolved"
         item.target_stack_item = other
         item.target_permanent_id = None
-        item.target_permanent_index = None
         from ..stack_targets import stack_object_label
 
         game.log.append(
@@ -419,9 +418,6 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
         seat, permanent = found
         item.target_player_index = seat
         item.target_permanent_id = [permanent.permanent_id]
-        item.target_permanent_index = as_target_slots(
-            game.battlefield_index_of(permanent)
-        )
         # "Target spell or permanent" re-aimed from a spell (Hydroblast): the
         # stack reference goes as the id arrives, as ``apply_target_change``
         # writes it.
@@ -438,7 +434,7 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
             share = divided_entry(divided[0])[2] if len(divided) == 1 else None
             item.choices[DIVIDED_TARGETS] = [
                 stamped_entry(
-                    seat, single_slot(item.target_permanent_index), share,
+                    seat, game.battlefield_index_of(permanent), share,
                     single_chosen_id(item.target_permanent_id),
                 )
             ]
@@ -458,7 +454,6 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
         return True, "resolved"
     item.target_player_index = seat
     item.target_permanent_id = None
-    item.target_permanent_index = None
     divided = (item.choices or {}).get(DIVIDED_TARGETS)
     if divided:
         # CR 115.7f keeps the division unchanged, so the one surviving target

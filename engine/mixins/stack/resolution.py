@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from ...game_over_guard import goes_no_further
 
-from ...bare_announcements import resolving_slots
+from ...bare_announcements import announced_slots, resolving_slots
 from ...auras import aura_enchant_clause
 from ...cast_costs import (CAST_COST_DISCARD_MANA_VALUE, KICKED,
                            KICKED_WITH, buyback_paid, kicked,
@@ -381,7 +381,10 @@ class StackResolutionMixin:
         # whole of the split: on the stack object it is not a target, so
         # nothing announces it as one (CR 115.10), CR 603.3d does not choose
         # over it, and CR 608.2b does not judge it.
-        if item.about_permanent_id is not None and target_permanent_id is None:
+        about_handed_over = (
+            item.about_permanent_id is not None and target_permanent_id is None
+        )
+        if about_handed_over:
             target_permanent_id = [item.about_permanent_id]
             found = self.find_permanent_by_id(item.about_permanent_id)
             if found is not None:
@@ -405,12 +408,15 @@ class StackResolutionMixin:
                 target_idx = item.about_player_index
             else:
                 target_idx = self._default_opposing_seat(item.caster_index)
-        if item.activated:
-            # CR 602.2b: an activated ability's slot is re-read off the ids
-            # its announcement stamped, as a spell's is
-            # (`bare_announcements.resolving_slots`). Not for a triggered
-            # ability: its slot is re-read off the object it is about above,
-            # and a chosen one keeps the announcement's own reading.
+        if not about_handed_over:
+            # Every ability's slots are re-read off the ids stamped as it was
+            # pushed (``bare_announcements.resolving_slots``) — an activated
+            # ability's (CR 602.2b) and a triggered one's (CR 603.3d) alike, as
+            # a spell's are: the push consumed the announcement's slots into
+            # ids (``Game._stamp_stack_targets``), so the slot channel here is
+            # a cache of the ids, read on the seat the object resolves about.
+            # The object a trigger is *about* is handed over above, on its own
+            # battlefield.
             target_permanent_index = resolving_slots(
                 self, self.players[target_idx], target_permanent_index,
                 item.target_permanent_id, card=item.card,
@@ -1087,9 +1093,20 @@ class StackResolutionMixin:
         text_change_effects=(),
     ) -> None:
         caster = self.players[caster_index]
-        # The slot channel in its one shape, whether it came off a stack
-        # object or straight from a land play's announcement.
-        target_permanent_index = as_target_slots(target_permanent_index)
+        # The slot channel in its one shape, re-read off the ids the push
+        # stamped (``bare_announcements.announced_slots``) on the seat the
+        # spell names — its Aura's host, its Clone's model, its entry
+        # trigger's target — or, for a land play that never reached the
+        # stack, the announcement's own slots.
+        target_permanent_index = announced_slots(
+            self,
+            self.players[
+                target_player_index if target_player_index is not None
+                and 0 <= target_player_index < len(self.players)
+                else self._spell_default_seat(caster_index) % len(self.players)
+            ],
+            target_permanent_index, target_permanent_id,
+        )
         text_card = spell_text_of(card, text_change_effects)
         owner_seat = caster_index if owner_index is None else owner_index
         owner = self.players[owner_seat]

@@ -95,7 +95,9 @@ def test_the_announcement_is_held_to_what_was_offered(pool):
     assert game.confirm_trigger_target(0, seat=1, graveyard_indices=[0, 2])
 
     item = game.stack[-1]
-    assert item.target_player_index == 1 and item.target_permanent_index == [0, 2]
+    # The cards are named by their stamps (kg4 ids part 2), located here now.
+    assert item.target_player_index == 1 and item.target_permanent_index is None
+    assert [game.graveyard_index_of(stamp) for stamp in item.target_graveyard_card] == [0, 2]
     assert [target.stamp.card.name for target in chosen_targets(game, item)] == [
         "Lightning Bolt", "Giant Growth",
     ]
@@ -213,4 +215,6 @@ def test_the_wire_offers_the_pile_and_takes_several_slots():
     })
     assert answered.status_code == 200, answered.text
     item = game.stack[-1]
-    assert item.target_player_index == 1 and item.target_permanent_index == [0, 1]
+    # The cards are named by their stamps (kg4 ids part 2), located here now.
+    assert item.target_player_index == 1 and item.target_permanent_index is None
+    assert [game.graveyard_index_of(stamp) for stamp in item.target_graveyard_card] == [0, 1]
