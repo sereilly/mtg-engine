@@ -25,11 +25,12 @@ def test_the_ai_deflects_a_counterspell_onto_another_spell():
     )
     assert report.games_completed == report.games_requested == 6
     assert report.interaction_count > 0
+    # The report's lines are indented under their game's header.
     re_aimed = [
         line for line in report.log_lines
-        if line.startswith("Deflection: Counterspell now targets")
+        if line.strip().startswith("Deflection: Counterspell now targets")
     ]
-    assert re_aimed, [line for line in report.log_lines if line.startswith("Deflection")][:10]
+    assert re_aimed, [line for line in report.log_lines if "Deflection" in line][:10]
     assert not report.issues, report.issues[:5]
     assert not report.refused_casts, report.refused_casts
     assert not report.rehearsals_raised, report.rehearsals_raised
