@@ -2684,22 +2684,6 @@ function activatedAbilityRequiresTargetStackSpell(card) { return specKind(card) 
 // different kinds in dependency order (Sorrow's Path).
 function activatedAbilityRequiresTargetRoles(card) { return specKind(card) === "roles"; }
 
-function cardRequiresManaColorChoice(card) {
-  if (!card || typeof card === "string") return false;
-  const text = (card.oracle_text || "").toLowerCase();
-  // A *mana* colour, named as the mana is made. "The color of your choice"
-  // (Mother of Runes, Feat of Resistance, Alchor's Tomb, Dream Coat) is not
-  // asked here any more: CR 608.2d makes it a choice announced while the effect
-  // is applied, after the opponent has responded, so the engine asks it at
-  // resolution through the color_choice / color_set_choice prompts — and
-  // sending a colour with the activation was a choice the player had to make
-  // before they could see what they were answering.
-  return (
-    text.includes("any one color")
-    || text.includes("one mana of any color")
-  );
-}
-
 // The colours a **cast** names for the mana its spell adds — "Add X mana of
 // any one color" (Metamorphosis, Traitorous Greed) — as the server states it
 // (`cast_mana`, web/offers.cast_mana_offer: what the spell's own resolution
@@ -2734,15 +2718,32 @@ function castTextChange(card) {
   return offer && typeof offer === "object" && typeof offer.mode === "string" ? offer : null;
 }
 
+// The text change an **activated ability** announces (CR 612 through CR
+// 602.2b: "{T}: Change the text of target white enchantment you control … by
+// replacing all instances of one color word with another", Balduvian
+// Shaman), as the server states it per ability (`ability_text_change`,
+// web/offers.ability_text_change_offer — `castTextChange`'s shape), indexed
+// like `ability_index`; null for an ability that announces no words. The
+// activate body carries the two words as the cast's does (`old_color`,
+// `mana_color`). Nothing asked them, so from a browser the Shaman's ability
+// went out naming no word and changed nothing.
+function activationTextChange(card) {
+  if (!card || typeof card !== "object" || !Array.isArray(card.ability_text_change)) return null;
+  const index = Number.isInteger(card.__abilityIndex) ? card.__abilityIndex : 0;
+  const offer = card.ability_text_change[index];
+  return offer && typeof offer === "object" && typeof offer.mode === "string" ? offer : null;
+}
+
 // The words a text change could replace on its target — a permanent by its
 // id, or a spell by its top-first stack index — as `MANA_COLOR_OPTIONS`
 // entries (a word is addressed by its colour letter: W is white and Plains).
 // The server's reading of the target's text now (`text_changes.words_written`:
 // whole words in every form the change rewrites, after any earlier change); it
 // replaced `landWordOptionsForTarget` / `landWordOptionsForSpell`, substring
-// reads of the land words alone.
-function textChangeWordOptions(card, { permanentId = null, stackIndex = null } = {}) {
-  const offer = castTextChange(card);
+// reads of the land words alone. The offer is the cast's, or the ability's
+// (`abilityOffer`, `activationTextChange`) where an activation asks.
+function textChangeWordOptions(card, { permanentId = null, stackIndex = null } = {}, abilityOffer = null) {
+  const offer = abilityOffer || castTextChange(card);
   if (!offer) return [];
   const words = permanentId !== null && permanentId !== undefined
     ? offer.words?.[String(permanentId)]
@@ -2790,10 +2791,26 @@ function textChangeWordLabel(symbol, mode) {
 // fan cannot ask for. The server states it on the ability's `ability_mana`
 // entry as `combination: {symbols, count}` and takes the answer as
 // `mana_combination` ({symbol: count}). null for every other ability.
+//
+// "Add {U} or {C}{U}" (Adarkar Unicorn), "Add {B}{B} or {G}{G}" (Cadaverous
+// Bloom): a choice between **written-out quantities**, which the server
+// states as `alternatives` ([{symbol: count}, …]) and takes on the same
+// `mana_combination` field — so it is this chooser with exactly those splits
+// (`splits`). A colour fan asked it before: {C} could not be clicked at all,
+// and the Bloom's {G} made {B}{B}.
 function chosenAbilityCombination(card) {
   if (!card || typeof card === "string" || !Array.isArray(card.ability_mana)) return null;
   const index = Number.isInteger(card.__abilityIndex) ? card.__abilityIndex : 0;
-  const combination = card.ability_mana[index]?.combination;
+  const entry = card.ability_mana[index];
+  const alternatives = Array.isArray(entry?.alternatives) ? entry.alternatives : null;
+  if (alternatives && alternatives.length >= 2) {
+    const splits = alternatives.map((alternative) => Object.fromEntries(
+      Object.entries(alternative || {}).map(([symbol, n]) => [String(symbol).toUpperCase(), Number(n)]),
+    ));
+    const symbols = [...new Set(splits.flatMap((split) => Object.keys(split)))];
+    return { symbols, count: null, splits };
+  }
+  const combination = entry?.combination;
   if (!combination || !Array.isArray(combination.symbols) || !combination.symbols.length) return null;
   const count = Number(combination.count);
   if (!Number.isInteger(count) || count < 1) return null;
@@ -2912,12 +2929,69 @@ function askCastManaSplit(split) {
   });
 }
 
+// An empty `symbols` is an answer too: the ability adds nothing on this board
+// (a Fellwar Stone whose opponent has no land, CR 106.7) or what it adds is
+// decided as it resolves (Charmed Pendant's milled card) — either way there is
+// nothing to ask. `symbolsByCost` is what each permanent a cost could name
+// would make it add ("…any type that land could produce", Benthic Explorers):
+// see `manaForChosenCost`.
 function chosenAbilityMana(card) {
   if (!card || typeof card === "string" || !Array.isArray(card.ability_mana)) return null;
   const index = Number.isInteger(card.__abilityIndex) ? card.__abilityIndex : 0;
   const entry = card.ability_mana[index];
-  if (!entry || !Array.isArray(entry.symbols) || !entry.symbols.length) return null;
-  return { symbols: entry.symbols.map((symbol) => String(symbol).toUpperCase()), choice: entry.choice === true };
+  if (!entry || !Array.isArray(entry.symbols)) return null;
+  const stated = {
+    symbols: entry.symbols.map((symbol) => String(symbol).toUpperCase()),
+    choice: entry.choice === true,
+  };
+  if (entry.symbols_by_cost && typeof entry.symbols_by_cost === "object") {
+    stated.symbolsByCost = entry.symbols_by_cost;
+  }
+  return stated;
+}
+
+// Whether the server said the chosen ability adds **no mana**: the permanent
+// carries `ability_mana` and this ability's entry is null (a Jeweled Amulet's
+// "{1}, {T}: Put a charge counter…", Diamond Kaleidoscope's token, Soldevi
+// Excavations' scry). The permanent's colour summary is not this ability's,
+// and a fan built from it asked a colour of an ability that makes no mana.
+function abilityAddsNoMana(card) {
+  if (!card || typeof card === "string" || !Array.isArray(card.ability_mana)) return false;
+  const index = Number.isInteger(card.__abilityIndex) ? card.__abilityIndex : 0;
+  return card.ability_mana[index] == null;
+}
+
+// The stated mana once the cost is chosen: the symbols the server lists for
+// the one permanent the cost named (`symbolsByCost[id]`), where the ability's
+// mana is decided by it — "Untap a tapped land an opponent controls: Add one
+// mana of any type that land could produce" (Benthic Explorers), "Sacrifice a
+// land: …the sacrificed land could produce" (Squandered Resources). With no
+// single permanent named, the stated union.
+function manaForChosenCost(stated, costPermanentId) {
+  if (!stated?.symbolsByCost || !Number.isInteger(costPermanentId)) return stated;
+  const listed = stated.symbolsByCost[String(costPermanentId)];
+  const symbols = (Array.isArray(listed) ? listed : []).map((symbol) => String(symbol).toUpperCase());
+  return { symbols, choice: symbols.length >= 2 };
+}
+
+// The one permanent an activation's announced cost names, by id, or null: the
+// stash `resumeActivationAfterCost` keeps for this permanent and ability.
+function answeredCostPermanentId(permanentIndex, abilityIndex) {
+  if (!activationCostAnswered(permanentIndex, abilityIndex)) return null;
+  const fields = pendingActivationCost.fields || {};
+  if (Number.isInteger(fields.cost_permanent_id)) return fields.cost_permanent_id;
+  const ids = Array.isArray(fields.cost_permanent_ids) ? fields.cost_permanent_ids : [];
+  return ids.length === 1 && Number.isInteger(ids[0]) ? ids[0] : null;
+}
+
+// The options a stated symbol list offers, colourless included: "any type"
+// (Reflecting Pool beside a Mishra's Factory, Benthic Explorers untapping a
+// land that makes {C}) can be answered {C} (CR 106.1b), which
+// `MANA_COLOR_OPTIONS` — the five colours — leaves out.
+function manaOptionsFor(symbols) {
+  const wanted = (symbols || []).map((symbol) => String(symbol).toUpperCase());
+  return [...MANA_COLOR_OPTIONS, { symbol: "C", label: "Colorless" }]
+    .filter((option) => wanted.includes(option.symbol));
 }
 
 function getDualLandColors(card) {
@@ -2932,13 +3006,18 @@ function getDualLandColors(card) {
 // of "{T}: Add {C}." — a question whose answer the engine then ignored. Where
 // the line prints its symbols, only those are offered; a line that prints none
 // ("any color") keeps the permanent's list.
-function abilityManaColors(card) {
+function abilityManaColors(card, statedMana = undefined) {
   // The payload's own answer for this ability, where the server gave one
   // (`ability_mana`): its symbols if activating it asks for a colour, and no
-  // colours at all — no fan — if its output is fixed. Below is what is left
-  // for a permanent the server said nothing about.
-  const stated = chosenAbilityMana(card);
+  // colours at all — no fan — if its output is fixed, or if it adds no mana.
+  // Below is what is left for a permanent the server said nothing about: a
+  // land whose tap the board changed (a Deep Water, a Harvest Mage), whose
+  // `produced_mana` is the server's answer.
+  // `statedMana` is that entry already narrowed by the chosen cost
+  // (`manaForChosenCost`), where the caller has one.
+  const stated = statedMana === undefined ? chosenAbilityMana(card) : statedMana;
   if (stated) return stated.choice && stated.symbols.length >= 2 ? stated.symbols : null;
+  if (abilityAddsNoMana(card)) return null;
   const produced = getDualLandColors(card);
   if (!produced || !Number.isInteger(card?.__abilityIndex)) return produced;
   const line = String(card.oracle_text || "");
@@ -15289,18 +15368,22 @@ function renderActivationPrompt() {
   }
 
   if (pendingManaColor?.combination) {
-    const { symbols, count } = pendingManaColor.combination;
+    const { symbols, count, splits } = pendingManaColor.combination;
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
     title.textContent = `Choose the mana for ${pendingManaColor.cardName}`;
+    // An "or" of written-out quantities (`splits`, Adarkar Unicorn) offers
+    // exactly those; a split offers every way to divide `count`.
     setSymbolsHtml(
       body,
-      `It adds ${count} mana in any combination of ${symbols.map((symbol) => `{${symbol}}`).join(" and/or ")}. Choose the split.`,
+      Array.isArray(splits)
+        ? `It adds ${splits.map((split) => manaSplitText(split)).join(" or ")}. Choose which.`
+        : `It adds ${count} mana in any combination of ${symbols.map((symbol) => `{${symbol}}`).join(" and/or ")}. Choose the split.`,
     );
     steps.innerHTML = [
       `<div>${pendingManaColor.castResolve ? "Spell" : "Ability"}: ${renderSymbolsInline(pendingManaColor.oracleText || "Activated mana ability")}</div>`,
-      `<div class="prompt-choice-row">${manaSplits(symbols, count).map(
+      `<div class="prompt-choice-row">${(Array.isArray(splits) ? splits : manaSplits(symbols, count)).map(
         (split) => `<button type="button" class="prompt-choice-btn" data-mana-split="${escapeHtml(manaSplitKey(split))}">`
           + `${renderSymbolsInline(manaSplitText(split))}</button>`,
       ).join("")}</div>`,
@@ -16480,25 +16563,35 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     renderActivationPrompt();
     return;
   }
-  const ownMana = chosenAbilityMana(card);
-  const asksAnyColor = ownMana
-    ? ownMana.choice && ownMana.symbols.length >= 5
-    : cardRequiresManaColorChoice(card);
-  if (asksAnyColor) {
+  // The question is the server's (`ability_mana`, web/offers): which symbols
+  // this ability can be asked for on this board — narrowed by the board
+  // (Fellwar Stone: the colours an opponent's lands could produce), by a
+  // record (Sol Grail's chosen colour: nothing to ask), or by the permanent
+  // its cost named (Benthic Explorers' untapped land). This read the card's
+  // text for "one mana of any color" where the server said nothing, so a
+  // Fellwar Stone whose opponent had a Mountain and a Swamp offered all five.
+  const ownMana = manaForChosenCost(
+    chosenAbilityMana(card), answeredCostPermanentId(permanentIndex, abilityIndex),
+  );
+  if (ownMana && ownMana.choice && ownMana.symbols.length >= 5) {
+    const anyOptions = manaOptionsFor(ownMana.symbols);
     pendingManaColor = {
       cardName,
       permanentIndex,
       targetSeat,
       oracleText: card.oracle_text || "",
       abilityIndex,
+      // The five colours are the modal's own list; "any type" adds {C}.
+      colorOptions: anyOptions.length === MANA_COLOR_OPTIONS.length
+        && anyOptions.every((option) => option.symbol !== "C") ? undefined : anyOptions,
     };
     renderActivationPrompt();
     return;
   }
 
-  const dualColors = abilityManaColors(card);
+  const dualColors = abilityManaColors(card, ownMana);
   if (dualColors) {
-    const colorOptions = MANA_COLOR_OPTIONS.filter((o) => dualColors.includes(o.symbol));
+    const colorOptions = manaOptionsFor(dualColors);
     pendingManaColor = {
       cardName,
       permanentIndex,
@@ -16662,6 +16755,28 @@ function resolvePendingManaColor(manaColor) {
     };
     const fromWord = textChangeWordLabel(pending.fromColor, pending.textMode);
     const toWord = textChangeWordLabel(manaColor, pending.textMode);
+    if (pending.activation) {
+      // An activated ability's words (Balduvian Shaman): the activate body,
+      // and a cost the pool cannot cover opens the auto-tap as the activate
+      // path's own send does.
+      updateActionHint(`Activating ${pending.cardName} (${fromWord} → ${toWord})...`);
+      sendAction(actionBody)
+        .then(() => updateActionHint(`Activated ${pending.cardName}: replaced ${fromWord} with ${toWord}.`))
+        .catch((e) => {
+          if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+            pendingAutoTap = {
+              card: pending.card,
+              cardName: pending.cardName,
+              cost: getActivatedAbilityCost(pending.card, pending.abilityIndex),
+              actionBody,
+            };
+            renderActivationPrompt();
+            return;
+          }
+          updateActionHint(e.message, true);
+        });
+      return;
+    }
     updateActionHint(`Casting ${pending.cardName} (${fromWord} → ${toWord})...`);
     sendAction(actionBody)
       .then(() => {
@@ -16679,6 +16794,9 @@ function resolvePendingManaColor(manaColor) {
 
   const colorBody = withPermanentId(
     {
+      // A cost already picked on the board (the land Squandered Resources
+      // sacrifices) rides in the body it would have been sent in.
+      ...(pending.extraFields || {}),
       seat,
       action: "activate",
       permanent_name: pending.cardName,
@@ -20182,6 +20300,32 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
         renderActivationPrompt();
         return;
       }
+      // "Sacrifice a land: Add one mana of any type the sacrificed land could
+      // produce" (Squandered Resources): the land is picked, and which type it
+      // makes is asked of **that** land's types (`symbols_by_cost`) — the
+      // cost body rides along. This sent the sacrifice with no type at all,
+      // and the engine's default took the first of them alphabetically.
+      const costMana = manaForChosenCost(
+        chosenAbilityMana({
+          ...pending.card,
+          __abilityIndex: Number.isInteger(pending.abilityIndex) ? pending.abilityIndex : 0,
+        }),
+        costBody.cost_permanent_id,
+      );
+      if (costMana?.choice && costMana.symbols.length >= 2) {
+        pendingManaColor = {
+          cardName: pending.cardName,
+          permanentIndex: pending.sourcePermanentIndex,
+          targetSeat: seat,
+          oracleText: pending.card?.oracle_text || "",
+          abilityIndex: pending.abilityIndex,
+          colorOptions: manaOptionsFor(costMana.symbols),
+          extraFields: costBody,
+        };
+        renderActivationPrompt();
+        updateActionHint(`Choose the mana ${pending.cardName} adds.`);
+        return;
+      }
       updateActionHint(`Activating ${pending.cardName}...`);
       sendAction(costBody)
         .then(() => updateActionHint(`Activated ${pending.cardName}.`))
@@ -20221,6 +20365,41 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
           target_permanent_index: selectedPermanentIndex,
         };
     if (Number.isInteger(pending.abilityIndex)) activateBody.ability_index = pending.abilityIndex;
+    // A text change the ability announces (Balduvian Shaman): the target is
+    // chosen, now its two words — the "from" word one the target's text
+    // writes now (the server's `ability_text_change` words), then the "to"
+    // word — as the cast path asks them (`kind: "cast"`, `activation`).
+    const abilityTextChange = pending.__sourceStage ? null : activationTextChange(pending.card);
+    if (abilityTextChange) {
+      const noun = textChangeNoun(abilityTextChange.mode);
+      const targetPerm = currentState?.players?.[selectedTarget]?.battlefield?.[selectedPermanentIndex];
+      const fromOptions = targetPerm && typeof targetPerm === "object"
+        ? textChangeWordOptions(pending.card, { permanentId: targetPerm.id }, abilityTextChange)
+        : [];
+      if (!fromOptions.length) {
+        updateActionHint(
+          `${targetPerm?.name || "That permanent"} has no ${noun} in its text for ${pending.cardName} to replace.`,
+          true,
+        );
+        return;
+      }
+      pendingManaColor = {
+        kind: "cast",
+        activation: true,
+        step: "from",
+        fromColor: null,
+        textMode: abilityTextChange.mode,
+        cardName: pending.cardName,
+        card: pending.card,
+        abilityIndex: pending.abilityIndex,
+        castActionBody: activateBody,
+        oracleText: pending.card?.oracle_text || "",
+        colorOptions: fromOptions,
+      };
+      renderActivationPrompt();
+      updateActionHint(`Choose the ${noun} to replace in ${targetPerm.name}'s text.`);
+      return;
+    }
     updateActionHint(`Activating ${pending.cardName}...`);
     sendAction(activateBody)
       .then(() => updateActionHint(`Activated ${pending.cardName}.`))

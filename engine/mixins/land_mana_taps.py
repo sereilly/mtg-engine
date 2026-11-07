@@ -26,6 +26,7 @@ import dataclasses
 
 from ..keywords import abilities_lost_at
 from ..mana_payment import answer_color_choices
+from ..mana_could_produce import NAMED_MANA_TYPE, named_mana_type
 from ..game_types import OracleExecutionContext
 from ..oracle import compile_card_oracle
 
@@ -748,7 +749,12 @@ class LandManaTapsMixin:
                         # {R} or {G}. This land deals 1 damage to you." lowers to a
                         # ``sequence`` whose nested add step never sees it, and asked
                         # for {G} would make the first printed alternative.
-                        choices={"new_color": self._chosen_mana_color(chosen_color)},
+                        # And the type, {C} included: "any type" may be asked
+                        # for it (``mana_could_produce.NAMED_MANA_TYPE``).
+                        choices={
+                            "new_color": self._chosen_mana_color(chosen_color),
+                            NAMED_MANA_TYPE: named_mana_type(chosen_color),
+                        },
                     ),
                 )
             else:
