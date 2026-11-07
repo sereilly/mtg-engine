@@ -574,20 +574,22 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
             else None
         )
         returned = []
-        for role in targets_desc.get("roles") or ():
-            perm = resolve_role_permanent(
-                game, context, instruction.payload, role.get("role")
-            )
-            if perm is None or not game.is_on_battlefield(perm):
-                continue
-            if not subject_matches(
-                game, perm, role.get("filter") or {},
-                observer=observer, source=context.source_permanent,
-            ):
-                continue
-            owner = return_permanent_to_owners_hand(game, perm, context.caster)
-            returned.append(perm)
-            game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
+        # One sentence, one event (CR 603.10a, ``Game.leaving_together``).
+        with game.entering_together(), game.leaving_together():
+            for role in targets_desc.get("roles") or ():
+                perm = resolve_role_permanent(
+                    game, context, instruction.payload, role.get("role")
+                )
+                if perm is None or not game.is_on_battlefield(perm):
+                    continue
+                if not subject_matches(
+                    game, perm, role.get("filter") or {},
+                    observer=observer, source=context.source_permanent,
+                ):
+                    continue
+                owner = return_permanent_to_owners_hand(game, perm, context.caster)
+                returned.append(perm)
+                game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
         if not returned:
             game.log.append(f"{context.card.name}: nothing was returned")
         return True, "resolved"
@@ -634,9 +636,11 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
                 that_player=that_player,
             ),
         )
-        for perm in chosen:
-            owner = return_permanent_to_owners_hand(game, perm, context.caster)
-            game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
+        # One sentence, one event (CR 603.10a, ``Game.leaving_together``).
+        with game.entering_together(), game.leaving_together():
+            for perm in chosen:
+                owner = return_permanent_to_owners_hand(game, perm, context.caster)
+                game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
         if not chosen:
             game.log.append(f"{_source_name(context)}: no permanents to return")
         return True, "resolved"
@@ -864,13 +868,19 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
         and (host_id is None or _was_attached_to(perm, host_id))
     ]
     returned: list[str] = []
-    for perm in matched:
-        if not game.is_on_battlefield(perm):
-            # It went with something else this same sweep removed — a token
-            # ceasing to exist, an Aura falling off. Nothing left to return.
-            continue
-        return_permanent_to_owners_hand(game, perm, context.caster)
-        returned.append(perm.card.name)
+    # One event (CR 603.10a, ``Game.leaving_together``): "return all creatures"
+    # returns them at once, so each leaves-the-battlefield or returned-to-hand
+    # ability among them sees every other go — a Warped Devotion returned
+    # first by Upheaval still triggers for the rest — and what their leaving
+    # gives back enters together (CR 610.3d).
+    with game.entering_together(), game.leaving_together():
+        for perm in matched:
+            if not game.is_on_battlefield(perm):
+                # It went with something else this same sweep removed — a token
+                # ceasing to exist, an Aura falling off. Nothing left to return.
+                continue
+            return_permanent_to_owners_hand(game, perm, context.caster)
+            returned.append(perm.card.name)
     game.log.append(
         f"{context.card.name} returned {', '.join(returned)} to hand"
         if returned else f"{context.card.name}: nothing to return"
@@ -964,19 +974,22 @@ def return_all_owned_artifacts_to_hand(game: Game, instruction: OracleInstructio
     """
     owner_index = game.players.index(context.target)
     returned = 0
-    for player in game.players:
-        for permanent in list(player.battlefield):
-            if not permanent.has_type("artifact"):
-                continue
-            if game.owner_index_of(permanent) != owner_index:
-                continue
-            # Identity, not value: two untapped Moxen of the same name are ``==``.
-            game.remove_from_battlefield(permanent)
-            game.put_card_into_hand(
-                owner_index, permanent.card, from_battlefield=permanent
-            )
-            game._remove_aura_effects(permanent)
-            returned += 1
+    # One event (CR 603.10a; ``return_all_matching``'s reason).
+    with game.entering_together(), game.leaving_together():
+        for player in game.players:
+            for permanent in list(player.battlefield):
+                if not permanent.has_type("artifact"):
+                    continue
+                if game.owner_index_of(permanent) != owner_index:
+                    continue
+                # Identity, not value: two untapped Moxen of the same name are
+                # ``==``.
+                game.remove_from_battlefield(permanent)
+                game.put_card_into_hand(
+                    owner_index, permanent.card, from_battlefield=permanent
+                )
+                game._remove_aura_effects(permanent)
+                returned += 1
     game.log.append(f"Returned {returned} artifact(s) to {context.target.name}'s hand")
     return True, "resolved"
 
@@ -1161,17 +1174,20 @@ def return_recorded_permanents_to_hand(game: Game, instruction: OracleInstructio
     if isinstance(recorded, int) or isinstance(recorded, Permanent):
         recorded = (recorded,)
     returned: list[str] = []
-    for entry in recorded:
-        perm = (
-            entry if isinstance(entry, Permanent)
-            else game.permanent_by_id(entry) if isinstance(entry, int)
-            else None
-        )
-        if perm is None or not game.is_on_battlefield(perm):
-            continue
-        name = perm.card.name
-        return_permanent_to_owners_hand(game, perm, context.caster)
-        returned.append(name)
+    # "Return **those** lands" is one action (CR 603.10a,
+    # ``Game.leaving_together``).
+    with game.entering_together(), game.leaving_together():
+        for entry in recorded:
+            perm = (
+                entry if isinstance(entry, Permanent)
+                else game.permanent_by_id(entry) if isinstance(entry, int)
+                else None
+            )
+            if perm is None or not game.is_on_battlefield(perm):
+                continue
+            name = perm.card.name
+            return_permanent_to_owners_hand(game, perm, context.caster)
+            returned.append(name)
     game.log.append(
         f"{context.card.name} returned {', '.join(returned)} to hand"
         if returned else f"{context.card.name}: nothing was returned to hand"

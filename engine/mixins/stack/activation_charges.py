@@ -1070,34 +1070,38 @@ class ActivationChargesMixin:
         # Pay the chosen sacrifice (CR 601.2h) — the creature is gone before the
         # ability goes on the stack, so Hobblefiend's counter lands on a board
         # that has already lost it.
-        if sacrifice_cost_permanent is not None:
-            name = sacrifice_cost_permanent.card.name
-            self.sacrifice_permanent(sacrifice_cost_permanent)
-            self.log.append(
-                f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
-            )
-        # …and the second half of a conjoined sacrifice (Viscerid Drone), paid
-        # at the same moment: CR 602.2b puts every cost of an activation at one
-        # point, so a board that changed between the two would not be able to
-        # pay half of it.
-        if sacrifice_also_permanent is not None:
-            name = sacrifice_also_permanent.card.name
-            self.sacrifice_permanent(sacrifice_also_permanent)
-            self.log.append(
-                f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
-            )
-        # …and the "any number of" set beside it (Sword of the Ages), paid the
-        # same way and at the same moment. Each is sacrificed by identity — an
-        # index held across the removals would name whichever permanent slid
-        # into the slot — and the list survives on the resolution's choices,
-        # because by the time the effect reads their total power they are cards
-        # in a graveyard (CR 608.2h).
-        for victim in sacrifice_cost_set:
-            name = victim.card.name
-            self.sacrifice_permanent(victim)
-            self.log.append(
-                f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
-            )
+        # The printed sacrifice is one cost — "a creature and a Swamp" (Viscerid
+        # Drone), "any number of" (Sword of the Ages) — so one event (CR 603.10a,
+        # ``leaving_together``).
+        with self.leaving_together():
+            if sacrifice_cost_permanent is not None:
+                name = sacrifice_cost_permanent.card.name
+                self.sacrifice_permanent(sacrifice_cost_permanent)
+                self.log.append(
+                    f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
+                )
+            # …and the second half of a conjoined sacrifice (Viscerid Drone), paid
+            # at the same moment: CR 602.2b puts every cost of an activation at one
+            # point, so a board that changed between the two would not be able to
+            # pay half of it.
+            if sacrifice_also_permanent is not None:
+                name = sacrifice_also_permanent.card.name
+                self.sacrifice_permanent(sacrifice_also_permanent)
+                self.log.append(
+                    f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
+                )
+            # …and the "any number of" set beside it (Sword of the Ages), paid the
+            # same way and at the same moment. Each is sacrificed by identity — an
+            # index held across the removals would name whichever permanent slid
+            # into the slot — and the list survives on the resolution's choices,
+            # because by the time the effect reads their total power they are cards
+            # in a graveyard (CR 608.2h).
+            for victim in sacrifice_cost_set:
+                name = victim.card.name
+                self.sacrifice_permanent(victim)
+                self.log.append(
+                    f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
+                )
 
         # "Exile the top card of your library" — paid here with the rest
         # (CR 602.2b puts every cost at one moment), and the cards recorded on
@@ -1257,21 +1261,22 @@ class ActivationChargesMixin:
         # …and the chosen return, paid at the same moment and through the same
         # seam (CR 601.2h): the permanents the payer picked go to their owners'
         # hands before the ability goes on the stack.
-        for returned_for_cost in return_cost_permanents:
-            owner_seat = self.owner_index_of(returned_for_cost)
-            name = returned_for_cost.card.name
-            self.remove_from_battlefield(returned_for_cost)
-            self.put_card_into_hand(
-                self.players[
-                    owner_seat if owner_seat is not None else controller_index
-                ],
-                returned_for_cost.card,
-                from_battlefield=returned_for_cost,
-            )
-            self.log.append(
-                f"{controller.name} returned {name} to its owner's hand "
-                f"to activate {permanent.card.name}"
-            )
+        with self.entering_together(), self.leaving_together():
+            for returned_for_cost in return_cost_permanents:
+                owner_seat = self.owner_index_of(returned_for_cost)
+                name = returned_for_cost.card.name
+                self.remove_from_battlefield(returned_for_cost)
+                self.put_card_into_hand(
+                    self.players[
+                        owner_seat if owner_seat is not None else controller_index
+                    ],
+                    returned_for_cost.card,
+                    from_battlefield=returned_for_cost,
+                )
+                self.log.append(
+                    f"{controller.name} returned {name} to its owner's hand "
+                    f"to activate {permanent.card.name}"
+                )
 
         # …and the host of an Aura that eats what it enchants (Betrothed of
         # Fire), paid at the same moment as every other cost and before the
@@ -1368,13 +1373,16 @@ class ActivationChargesMixin:
             )
             return landed
         taken = []
-        for chosen in objects:
-            owner_index = self.owner_index_of(chosen)
-            card = chosen.card
-            self.remove_from_battlefield(chosen)
-            taken.append(self.put_card_into_exile(
-                owner_index if owner_index is not None else controller_index, card,
-            ))
+        # One cost, one event (CR 603.10a, ``leaving_together``).
+        with self.entering_together(), self.leaving_together():
+            for chosen in objects:
+                owner_index = self.owner_index_of(chosen)
+                card = chosen.card
+                self.remove_from_battlefield(chosen)
+                taken.append(self.put_card_into_exile(
+                    owner_index if owner_index is not None else controller_index,
+                    card,
+                ))
         self.log.append(
             f"{controller.name} exiled "
             + ", ".join(card.name for card in taken)

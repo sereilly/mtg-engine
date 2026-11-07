@@ -31,7 +31,8 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 
-from ..aura_attachment import auras_attached_to, detach_aura
+from ..aura_attachment import (auras_attached_to, detach_aura,
+                               left_attached_to)
 from ..control import (base_controller, change_control, control_changes,
                        end_control_change, last_controller,
                        set_last_controller, has_control_change,
@@ -49,6 +50,20 @@ from ..game_types import GraveyardTarget, single_chosen_id
 from ..tokens import CREATED_WITH_PERMANENT_ID
 from ..trigger_utils import make_trigger_event, matching_triggers
 from ..turn_state import forget_controllers_upkeep
+
+
+def _sacrifice_what_it_held(game, aura: Permanent, attached: Permanent) -> None:
+    """Animate Dead's "that creature's controller sacrifices it", performed
+    once the event that took the Aura is over (``after_this_departure``): a
+    creature that event moved is not on the battlefield to sacrifice."""
+    controller_index = game.controller_index_of(attached)
+    if controller_index is None:
+        return
+    controller = game.players[controller_index]
+    if game.sacrifice_permanent(attached) is not None:
+        game.log.append(
+            f"{controller.name} sacrificed {attached.card.name} ({aura.card.name} left the battlefield)"
+        )
 
 
 class ControlSeamMixin:
@@ -112,15 +127,15 @@ class ControlSeamMixin:
         # controller sacrifices it." Sacrificing isn't destroying, so
         # regeneration and other destruction replacements can't affect it
         # (CR 701.21a).
+        #
+        # Once the event that took the Aura is over (``after_this_departure``):
+        # it is a leaves-the-battlefield trigger, and a creature the same event
+        # moved — Upheaval, Apocalypse — is not on the battlefield to sacrifice
+        # by then. Through the one sacrifice transition, so "whenever you
+        # sacrifice a permanent" hears it and Urza's Miter's "if it wasn't
+        # sacrificed" reads it.
         if aura.metadata.get("sacrifice_attached_on_leave"):
-            controller_index = self.controller_index_of(attached)
-            if controller_index is not None:
-                controller = self.players[controller_index]
-                self.remove_from_battlefield(attached)
-                self._permanent_to_graveyard(controller, attached)
-                self.log.append(
-                    f"{controller.name} sacrificed {attached.card.name} ({aura.card.name} left the battlefield)"
-                )
+            self.after_this_departure(_sacrifice_what_it_held, aura, attached)
 
     def _holding_seat(self, permanent: Permanent) -> int | None:
         """The seat whose battlefield list physically holds *permanent*, or None.
@@ -851,20 +866,52 @@ class ControlSeamMixin:
         the first never saw the opponent's creatures the next one took.
 
         Re-entrant: a block opened inside an open one is the same event.
+
+        What a departure leaves for afterwards (:meth:`after_this_departure`)
+        runs once the outermost block closes, outside the event.
         """
         if self.departure_batch is not None:
             yield
             return
         self.departure_batch = []
+        self.departure_aftermath = []
         try:
             yield
-        finally:
+        except BaseException:
             self.departure_batch = None
+            self.departure_aftermath = None
+            raise
+        self.departure_batch = None
+        aftermath, self.departure_aftermath = self.departure_aftermath, None
+        for then, args in aftermath or ():
+            then(self, *args)
 
     def departed_in_this_event(self) -> list:
         """What the open departure event (``leaving_together``) has taken off
         the battlefield so far — empty outside one."""
         return list(self.departure_batch or ())
+
+    def after_this_departure(self, then, *args) -> None:
+        """Run ``then(game, *args)`` once the open departure event is over —
+        at once when none is open.
+
+        For a leaves-the-battlefield ability the engine performs inline
+        instead of putting it on the stack (CR 603.6c): Animate Dead's "When
+        this Aura leaves the battlefield, that creature's controller
+        sacrifices it". Performed the moment the Aura came off, it reached a
+        creature the same event was about to move: an Upheaval that returned
+        the Aura first put the creature in a graveyard instead of a hand, and
+        an Apocalypse put its card in a graveyard and in exile at once. The
+        trigger resolves after the event, by when the creature is wherever the
+        event sent it.
+
+        A function and its arguments rather than a closure, so a deep copy of
+        the game (the AI's rehearsal) holds its own objects, not this game's.
+        """
+        if self.departure_aftermath is None:
+            then(self, *args)
+            return
+        self.departure_aftermath.append((then, args))
 
     def remove_from_battlefield(
         self, permanent: Permanent, *, zone_change: bool = True
@@ -1007,6 +1054,19 @@ class ControlSeamMixin:
             perm for perm in self.all_permanents()
             if perm.metadata.get("attached_to") is not None
         ] if zone_change else []
+        # …and what the same departure event has already taken off the
+        # battlefield (CR 603.10a: these abilities look back in time, "using
+        # the existence of those abilities and the appearance of objects
+        # immediately prior to the event"). An Aura one removal of the event
+        # took was detached as it left (``detach_aura`` keeps the host as
+        # ``last_attached_to``), and a token's maker taken first has no id the
+        # battlefield answers to — so a Funeral March returned ahead of its
+        # creature by one Upheaval never saw the creature go. Read once, with
+        # the seat each last had (CR 608.2h).
+        earlier = [
+            (gone, self.controller_or_last_known(gone))
+            for gone in self.departed_in_this_event()
+        ] if zone_change else []
         # CR 702.26d: a phase-out triggers none of these, so none of them is
         # gathered. Written as an empty scan rather than a branch around the
         # loop, so the loop below stays the one reading of what leaving
@@ -1081,14 +1141,33 @@ class ControlSeamMixin:
             # "attached" are asked because both exist — the list an Aura joins
             # and the single slot an Equipment sets.
             attached_context = {"event_subject_controller": seat}
-            observers: list[Permanent] = list(auras_attached_to(perm))
+            observers: list[tuple[Permanent, int | None]] = [
+                (aura, self.controller_index_of(aura))
+                for aura in auras_attached_to(perm)
+            ]
             for other in attachments:
                 if other.metadata.get("attached_to") is perm and not any(
-                    other is already for already in observers
+                    other is already for already, _ in observers
                 ):
-                    observers.append(other)
-            for observer in observers:
-                observer_seat = self.controller_index_of(observer)
+                    observers.append((other, self.controller_index_of(other)))
+            for gone, gone_seat in earlier:
+                if left_attached_to(gone, perm) and not any(
+                    gone is already for already, _ in observers
+                ):
+                    observers.append((gone, gone_seat))
+            # …and an Aura this same removal takes, torn down by its caller
+            # before the removal was made (a destruction sweep's
+            # ``_permanent_to_graveyard``): leaving with its creature, it saw
+            # the creature go (CR 603.6e).
+            for other in targets:
+                if (
+                    other is not perm
+                    and other.has_type("aura")
+                    and left_attached_to(other, perm)
+                    and not any(other is already for already, _ in observers)
+                ):
+                    observers.append((other, self.controller_index_of(other)))
+            for observer, observer_seat in observers:
                 if observer_seat is None:
                     continue
                 for trig in matching_triggers(
@@ -1113,12 +1192,21 @@ class ControlSeamMixin:
             # Read here, before the rebuild, for the reason the scan above is:
             # by the time the batch is enqueued the maker may have left in the
             # same sweep, and its seat would be unaskable.
-            creator = self.permanent_by_id(
-                perm.metadata.get(CREATED_WITH_PERMANENT_ID)
-            )
+            maker_id = perm.metadata.get(CREATED_WITH_PERMANENT_ID)
+            creator = self.permanent_by_id(maker_id)
             creator_seat = (
                 self.controller_index_of(creator) if creator is not None else None
             )
+            if creator is None and maker_id is not None:
+                # A maker the same event took first (CR 603.10a), by the id it
+                # had — CR 400.7 gives whatever comes back a new one.
+                creator, creator_seat = next(
+                    (
+                        (gone, gone_seat) for gone, gone_seat in earlier
+                        if gone.permanent_id == maker_id
+                    ),
+                    (None, None),
+                )
             if creator_seat is None:
                 continue
             for trig in matching_triggers(

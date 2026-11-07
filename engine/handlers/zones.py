@@ -156,19 +156,23 @@ def put_target_on_library_top(game: Game, instruction: OracleInstruction, contex
             ),
         )
         moved: list[str] = []
-        for perm in chosen:
-            if not game.is_on_battlefield(perm):
-                continue
-            owner_idx = game.owner_index_of(perm)
-            owner = (
-                game.players[owner_idx] if owner_idx is not None else context.caster
-            )
-            game.remove_from_battlefield(perm)
-            game._remove_aura_effects(perm)
-            game.put_card_into_library(
-                owner, perm.card, "top", from_battlefield=perm
-            )
-            moved.append(perm.card.name)
+        # One sentence, one event (CR 603.10a, ``Game.leaving_together``), and
+        # what the leavings give back enters together (CR 610.3d).
+        with game.entering_together(), game.leaving_together():
+            for perm in chosen:
+                if not game.is_on_battlefield(perm):
+                    continue
+                owner_idx = game.owner_index_of(perm)
+                owner = (
+                    game.players[owner_idx] if owner_idx is not None
+                    else context.caster
+                )
+                game.remove_from_battlefield(perm)
+                game._remove_aura_effects(perm)
+                game.put_card_into_library(
+                    owner, perm.card, "top", from_battlefield=perm
+                )
+                moved.append(perm.card.name)
         game.log.append(
             f"{context.card.name} put {', '.join(moved)} on top of their "
             "owners' libraries"
@@ -255,19 +259,23 @@ def put_all_matching_on_library_top(game: Game, instruction: OracleInstruction, 
         )
     ]
     tucked: list[str] = []
-    for perm in matched:
-        if not game.is_on_battlefield(perm):
-            # It went with something else this same sweep removed — a token
-            # ceasing to exist, an Aura falling off its host.
-            continue
-        owner_idx = game.owner_index_of(perm)
-        owner = game.players[owner_idx] if owner_idx is not None else context.caster
-        game.remove_from_battlefield(perm)
-        game._remove_aura_effects(perm)
-        game.put_card_into_library(
-            owner, perm.card, "top", from_battlefield=perm
-        )
-        tucked.append(perm.card.name)
+    # One event (CR 603.10a; ``returns.return_all_matching``'s reason).
+    with game.entering_together(), game.leaving_together():
+        for perm in matched:
+            if not game.is_on_battlefield(perm):
+                # It went with something else this same sweep removed — a token
+                # ceasing to exist, an Aura falling off its host.
+                continue
+            owner_idx = game.owner_index_of(perm)
+            owner = (
+                game.players[owner_idx] if owner_idx is not None else context.caster
+            )
+            game.remove_from_battlefield(perm)
+            game._remove_aura_effects(perm)
+            game.put_card_into_library(
+                owner, perm.card, "top", from_battlefield=perm
+            )
+            tucked.append(perm.card.name)
     game.log.append(
         f"{context.card.name} put {', '.join(tucked)} on top of their owners' libraries"
         if tucked else f"{context.card.name}: nothing to put on a library"

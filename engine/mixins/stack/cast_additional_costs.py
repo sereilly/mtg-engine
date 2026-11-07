@@ -1039,22 +1039,25 @@ class AdditionalCastCostsMixin:
                 # Re-enumerated per victim, never sliced off one list: each
                 # sacrifice removes a permanent, and a list held across that
                 # holds an object the board no longer has.
-                for _ in range(max(1, cost.sacrifice_count)):
-                    candidates = self._additional_cost_candidates(caster_index, cost)
-                    if not candidates:
-                        break  # gated above; a board that changed since is a no-op
-                    chosen = claim(candidates)
-                    name = chosen.card.name
-                    if self.sacrifice_permanent(chosen) is not None:
-                        # The **first**, which is "the sacrificed creature" a
-                        # spell reads back (Soul Exchange). No card in the pool
-                        # reads one back out of a counted cost, and recording
-                        # the last would answer a different question than the
-                        # singular cost has always answered.
-                        sacrificed = sacrificed or chosen
-                        self.log.append(
-                            f"{caster.name} sacrificed {name} to cast {card.name}"
-                        )
+                # One cost, one event (CR 603.10a, ``leaving_together``):
+                # "sacrifice two creatures" sacrifices them at once.
+                with self.leaving_together():
+                    for _ in range(max(1, cost.sacrifice_count)):
+                        candidates = self._additional_cost_candidates(caster_index, cost)
+                        if not candidates:
+                            break  # gated above; a board that changed since is a no-op
+                        chosen = claim(candidates)
+                        name = chosen.card.name
+                        if self.sacrifice_permanent(chosen) is not None:
+                            # The **first**, which is "the sacrificed creature" a
+                            # spell reads back (Soul Exchange). No card in the pool
+                            # reads one back out of a counted cost, and recording
+                            # the last would answer a different question than the
+                            # singular cost has always answered.
+                            sacrificed = sacrificed or chosen
+                            self.log.append(
+                                f"{caster.name} sacrificed {name} to cast {card.name}"
+                            )
             if cost.return_filter is not None:
                 # "…return **X** Swamps you control to their owner's hand."
                 # (Infernal Harvest.) Re-enumerated per victim, never sliced
@@ -1066,18 +1069,19 @@ class AdditionalCastCostsMixin:
                 # a cost payment exactly as they see a spell's bounce.
                 from ...handlers._common import return_permanent_to_owners_hand
 
-                for _ in range(cost.returned_count(x_value)):
-                    candidates = self._additional_cost_candidates(
-                        caster_index, cost, giving_up="return"
-                    )
-                    if not candidates:
-                        break  # gated above; a board that changed since is a no-op
-                    chosen = claim(candidates)
-                    name = chosen.card.name
-                    return_permanent_to_owners_hand(self, chosen, caster)
-                    self.log.append(
-                        f"{caster.name} returned {name} to hand to cast {card.name}"
-                    )
+                with self.entering_together(), self.leaving_together():
+                    for _ in range(cost.returned_count(x_value)):
+                        candidates = self._additional_cost_candidates(
+                            caster_index, cost, giving_up="return"
+                        )
+                        if not candidates:
+                            break  # gated above; a board that changed since is a no-op
+                        chosen = claim(candidates)
+                        name = chosen.card.name
+                        return_permanent_to_owners_hand(self, chosen, caster)
+                        self.log.append(
+                            f"{caster.name} returned {name} to hand to cast {card.name}"
+                        )
             if cost.sacrifice_all_filter is not None:
                 # "…, sacrifice **all** permanents you control." (Kaervek's
                 # Spite.) Snapshotted by identity before the loop, never
@@ -1094,12 +1098,14 @@ class AdditionalCastCostsMixin:
                 victims = self._additional_cost_candidates(
                     caster_index, cost, giving_up="sacrifice_all"
                 )
-                for victim in victims:
-                    name = victim.card.name
-                    if self.sacrifice_permanent(victim) is not None:
-                        self.log.append(
-                            f"{caster.name} sacrificed {name} to cast {card.name}"
-                        )
+                # "…all permanents you control" at once: one event (CR 603.10a).
+                with self.leaving_together():
+                    for victim in victims:
+                        name = victim.card.name
+                        if self.sacrifice_permanent(victim) is not None:
+                            self.log.append(
+                                f"{caster.name} sacrificed {name} to cast {card.name}"
+                            )
             life = cost.life_charged(x_value)
             if life:
                 caster.life -= life

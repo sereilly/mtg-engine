@@ -486,6 +486,13 @@ class Game(
     # it, as it last existed. None between events; never left set across a
     # decision, so a ``vars()`` walker reads None before and after.
     departure_batch: "list | None" = None
+    # …and what has to wait until it is over: a leaves-the-battlefield ability
+    # the engine performs inline rather than putting on the stack (Animate
+    # Dead's "that creature's controller sacrifices it",
+    # ``ControlSeamMixin.after_this_departure``) acts once the event's last
+    # removal is made, so it never reaches a creature the same event moved.
+    # None between events, like the batch beside it.
+    departure_aftermath: "list | None" = None
     # Seats controlled by a human, set by the web layer each action. Empty in
     # headless/AI play, so forced sacrifices there resolve inline without a prompt.
     interactive_seats: set[int] = field(default_factory=set)

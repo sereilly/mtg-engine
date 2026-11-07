@@ -784,12 +784,15 @@ class PermanentStateMixin:
                 if perm is not permanent
                 and subject_matches(self, perm, swept, observer=caster_index)
             ]
-            for perm in doomed:
-                if self.sacrifice_permanent(perm) is not None:
-                    self.log.append(
-                        f"{self.players[caster_index].name} sacrificed "
-                        f"{perm.card.name} as {permanent.card.name} entered"
-                    )
+            # "…all lands you control" at once: one event (CR 603.10a,
+            # ``leaving_together``).
+            with self.leaving_together():
+                for perm in doomed:
+                    if self.sacrifice_permanent(perm) is not None:
+                        self.log.append(
+                            f"{self.players[caster_index].name} sacrificed "
+                            f"{perm.card.name} as {permanent.card.name} entered"
+                        )
             break
 
         # "As this enchantment enters, **discard your hand**." (Heightened

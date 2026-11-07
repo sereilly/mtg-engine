@@ -703,12 +703,14 @@ class CardActivationMixin:
                 + ", ".join(p.card.name for p in tap_cost_permanents)
                 + " to pay its cost"
             )
-        for sacrifice_victim in sacrifice_victims:
-            self.sacrifice_permanent(sacrifice_victim)
-            self.log.append(
-                f"{controller.name} sacrificed {sacrifice_victim.card.name} "
-                f"to activate {card.name}"
-            )
+        # One cost, one event (CR 603.10a, ``leaving_together``).
+        with self.leaving_together():
+            for sacrifice_victim in sacrifice_victims:
+                self.sacrifice_permanent(sacrifice_victim)
+                self.log.append(
+                    f"{controller.name} sacrificed {sacrifice_victim.card.name} "
+                    f"to activate {card.name}"
+                )
         for discarded in discard_cost_cards:
             # Out of the hand by identity (one copy), then discarded — the
             # battlefield door's two lines (``take_card_from_hand``).

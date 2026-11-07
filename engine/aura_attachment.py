@@ -509,3 +509,21 @@ def detach_aura(aura, target) -> None:
         # was. `handlers/_targets.attached_host` reads this back, and only
         # while the host itself is still on the battlefield.
         aura.metadata["last_attached_to"] = target
+
+
+def left_attached_to(attachment, host) -> bool:
+    """Whether *attachment* — a permanent that has left the battlefield — was
+    attached to *host* as it left: its live record, or the one
+    :func:`detach_aura` kept as it went (``last_attached_to``).
+
+    For an ability that looks back in time (CR 603.10a): "when enchanted
+    creature leaves the battlefield" (Funeral March) triggers when the Aura and
+    its creature leave in one event, whichever of them the engine took first.
+    A live record naming another host wins over the kept one, so an Equipment
+    moved since is not read as still on the first. By identity: a Permanent
+    compares by value.
+    """
+    live = attachment.metadata.get("attached_to")
+    if live is not None:
+        return live is host
+    return attachment.metadata.get("last_attached_to") is host
