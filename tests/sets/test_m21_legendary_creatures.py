@@ -551,7 +551,7 @@ def test_a_counted_damage_goes_through_the_one_evaluator(set_pool):
     assert instruction.kind == "deal_damage"
     assert instruction.payload["x_from_count"] == {
         "zone": "battlefield", "owner": "you",
-        "filter": {"type_filter": "creature", "subtype_filter": "dog"},
+        "filter": {"subtype_filter": "dog"},  # "Dogs": any Dog permanent
     }
 
 

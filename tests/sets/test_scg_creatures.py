@@ -675,7 +675,7 @@ def test_w1g3_krosan_warchief_regenerates_a_beast_and_offers_only_beasts(
     warchief_card = set_pool("SCG")["Krosan Warchief"]
     (ability,) = _w1g3_compile(warchief_card).activated_abilities
     spec = _w1g3_activation_spec(ability)
-    assert spec["kind"] == "creature" and spec.get("filter") == {"subtype_filter": "beast"}
+    assert spec["kind"] == "permanent" and spec.get("filter") == {"subtype_filter": "beast"}
 
     game = _w1g3_table(catalog_by_name)
     warchief = _w1g3_put(game, 0, warchief_card)

@@ -301,7 +301,7 @@ def test_tower_of_coireall_carries_the_printed_noun(set_pool):
     ability = program.activated_abilities[0]
     assert ability.instruction.kind == "grant_cant_be_blocked_by_until_eot"
     assert ability.instruction.payload["blocker_filter"] == {
-        "type_filter": "creature",
+        # "Walls" is the subtype alone (CR 109.2); a blocker is a creature.
         "subtype_filter": "wall",
     }
 

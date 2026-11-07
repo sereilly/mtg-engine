@@ -180,7 +180,7 @@ def test_jovens_tools_carries_the_printed_blocker_class(set_pool):
     [ability] = program.activated_abilities
     assert ability.instruction.kind == "grant_cant_be_blocked_except_by_until_eot"
     assert ability.instruction.payload["allowed_blockers"] == [
-        {"type_filter": "creature", "subtype_filter": "wall"}
+        {"subtype_filter": "wall"}  # the bare type is the subtype (CR 109.2)
     ]
 
 
@@ -206,7 +206,7 @@ def test_jovens_tools_lets_only_the_named_blockers_through(set_pool):
     game._settle()
     assert result.supported, result.details
     assert granted_blocker_whitelists(attacker) == (
-        [{"type_filter": "creature", "subtype_filter": "wall"}],
+        [{"subtype_filter": "wall"}],
     )
 
     game._close_current_priority_step()

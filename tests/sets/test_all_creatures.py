@@ -589,8 +589,8 @@ def test_wandering_mage_cannot_pay_with_no_creature_to_shrink(set_pool):
         "{B}, Put a -1/-1 counter on a Wall you control: Draw a card."
     )
     assert cost.put_counter == "-1/-1"
-    assert cost.put_counter_filter == {
-        "type_filter": "creature", "subtype_filter": "wall",
+    assert cost.put_counter_filter == {  # a bare type names a Wall permanent (CR 109.2)
+        "subtype_filter": "wall",
     }
 
 
