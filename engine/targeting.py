@@ -834,10 +834,14 @@ def single_spell_target(game, item) -> dict | None:
     (CR 115.9a / CR 115.9c), or None when it chose several, chose something this
     engine cannot re-aim, or the count cannot be established.
 
-    ``{"kind": "player", "seat": n}`` or ``{"kind": "permanent",
-    "permanent_id": n}`` — a descriptor rather than a bare seat, because the two
-    answers are the same question ("what is this spell's one target?") and a
-    reader that could only say "player" is a reader Deflection cannot use.
+    ``{"kind": "player", "seat": n}``, ``{"kind": "permanent",
+    "permanent_id": n}`` or ``{"kind": "stack", "stack_item": item}`` — a
+    descriptor rather than a bare seat, because the answers are the same
+    question ("what is this spell's one target?") and a reader that could only
+    say "player" is a reader Deflection cannot use. Each reader narrows to the
+    kinds its card prints: "that target is a creature" (Meddle) and "targets
+    only a single permanent or player" (Radiate) refuse a spell target through
+    ``legality._single_target_is``.
 
     "Target spell with a single target" is asked twice of every card that
     prints it — by the picker in front of the cast and by the handler at
@@ -856,10 +860,16 @@ def single_spell_target(game, item) -> dict | None:
     So every way of *not* being a lone player target is checked first, and only
     then is the seat believed:
 
-    * a **graveyard** card or another **stack object** rules the question out at
-      once: neither is a target this engine's retarget can offer a replacement
-      for, and an under-offer is a narrower card while an over-offer is a card
-      re-aiming spells it was never allowed to;
+    * a **graveyard** card rules the question out at once: it is not a target
+      this engine's retarget can offer a replacement for, and an under-offer is
+      a narrower card while an over-offer is a card re-aiming spells it was
+      never allowed to;
+    * another **stack object** is counted through
+      ``stack_targets.chosen_targets`` — the one reader of what an object
+      chose — and is the answer only when it is the *only* target: a
+      Counterspell aimed at a Shock is "a spell with a single target"
+      (CR 115.9a counts the targets chosen, whatever they are), and
+      Suffocating Blast's spell beside its creature is two;
     * a **modal** spell announces its targets per mode (CR 115.8, CR 700.2), and
       ``derive_cast_spec`` answers about mode 0 alone;
     * a **divided** spell records every target it chose in ``divided_targets``,
@@ -896,7 +906,7 @@ def single_spell_target(game, item) -> dict | None:
     if getattr(item, "target_graveyard_card", None) is not None:
         return None
     if getattr(item, "target_stack_item", None) is not None:
-        return None
+        return _lone_stack_target(game, item)
 
     seats = range(len(game.players))
     divided = (getattr(item, "choices", None) or {}).get(DIVIDED_TARGETS)
@@ -937,6 +947,27 @@ def single_spell_target(game, item) -> dict | None:
     if spec.get("max_targets") not in (None, 1):
         return None
     return {"kind": "player", "seat": int(seat)}
+
+
+def _lone_stack_target(game, item) -> dict | None:
+    """:func:`single_spell_target`'s answer for an object aimed at another
+    object on the stack: ``{"kind": "stack", "stack_item": that object}`` when
+    that is the one target it chose (CR 115.9a), else None.
+
+    Counted by ``stack_targets.chosen_targets``, which reads each announcement
+    off the channel its spec names — so a roles announcement naming a spell and
+    a creature (Suffocating Blast) is two targets, and a stack reference that
+    is not a target at all (an object a resolution carries for other reasons)
+    is none. By identity: a stack object compares by value.
+    """
+    from .stack_targets import chosen_targets
+
+    chosen = chosen_targets(game, item)
+    if not chosen or len(chosen) != 1 or chosen[0].kind != "stack":
+        return None
+    if chosen[0].stack_item is None or chosen[0].stack_item is item:
+        return None
+    return {"kind": "stack", "stack_item": chosen[0].stack_item}
 
 
 def single_player_target(game, item) -> int | None:
