@@ -121,7 +121,8 @@ def test_the_state_based_check_waits_for_the_last_answer(catalog_by_name):
 
     assert game.stack == []
     assert game.waiting_prompt() is None
-    assert "Recall finished resolving and moved to graveyard" in game.log
+    # One closing line, wherever the card went ("Exile Recall").
+    assert sum(line.startswith("Recall finished resolving") for line in game.log) == 1
 
 
 @pytest.mark.cr("602.2b", "608.2")

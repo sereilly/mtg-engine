@@ -22,7 +22,9 @@ from ..replacement_choices import (
 )
 from ..resumption import run_resumable
 from ..search_filters import card_has_type
-from .draws import QUEUED_EXCLUDES, draws_behind, queued_excludes
+from ..effect_ordering import source_names
+from .draws import (LAMP_DRAW, QUEUED_EXCLUDES, draw_charge_source, draws_behind,
+                    queued_excludes)
 from .registry import (DRAW_LOOKING_AT_TOP, DRAW_REVEALED_AND_TAXED,
                        DRAW_REVEALED_UNLESS_PAID, DRAW_REVEALS_TOP,
                        DRAW_REVEALS_UNTIL_KIND, ReplacementOutcome,
@@ -225,10 +227,9 @@ def _applies_lamp_draw(game, payload: dict) -> bool:
 
 
 def _lamp_draw_sources(game, payload: dict) -> list:
-    """Nothing: the armed look is the seat and a number
-    (``Game.lamp_draw_replacements``), so the card that armed it (Aladdin's
-    Lamp) is not on the record to name. Pure."""
-    return []
+    """The card that armed this seat's look (Aladdin's Lamp), as its handler
+    recorded it beside ``Game.lamp_draw_replacements``. Pure."""
+    return draw_charge_source(game, LAMP_DRAW, game.players.index(payload["player"]))
 
 
 @replacement_effect(
@@ -243,6 +244,8 @@ def _look_at_top_cards_and_draw_one(game, payload: dict) -> ReplacementOutcome |
     anything, in which case the draw happens normally (CR 614.1)."""
     player = payload["player"]
     player_index = game.players.index(player)
+    by = ", ".join(source_names(_lamp_draw_sources(game, payload)))
+    game.draw_charge_sources.pop((LAMP_DRAW, player_index), None)
     x = game.lamp_draw_replacements.pop(player_index)
     x = min(int(x), len(player.library))
     if x <= 0:
@@ -263,7 +266,7 @@ def _look_at_top_cards_and_draw_one(game, payload: dict) -> ReplacementOutcome |
     if suspended:
         game.log.append(
             f"{player.name} looks at the top {x} card(s) of their library instead "
-            "of drawing"
+            "of drawing" + (f" ({by})" if by else "")
         )
     payload["drawn"] = drawn
     return ReplacementOutcome(replaced=True)

@@ -128,9 +128,16 @@ def test_the_payload_is_three_public_fields_and_serialises():
     payload = _payload(game, 0)
 
     assert [(option["kind"], option["name"]) for option in payload["options"]] == [
-        ("keep", "Leave the targets as they are"), ("stack", "Test Shock"),
+        ("keep", "Leave the targets as they are"), ("stack", "P0's Test Shock"),
     ]
-    assert all(set(option) == {"index", "name", "kind"} for option in payload["options"])
+    # A spell also says where it is on the stack as the client shows it and
+    # whose it is (``stack_index``, ``seat``, both public, as trigger_target's
+    # spell candidates carry them) — still nothing of the engine's descriptor.
+    assert all(
+        set(option) == {"index", "name", "kind"}
+        | ({"stack_index", "seat"} if option["kind"] == "stack" else set())
+        for option in payload["options"]
+    ), payload["options"]
     assert json.loads(json.dumps(payload)) == payload
 
     game = _table(hands=([_RAISE], []), yards=((_BEAR, _OGRE), ()))

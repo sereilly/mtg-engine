@@ -42,8 +42,8 @@ def test_interceptors_run_in_order_and_can_modify_amount():
 
     kind = "_test_ordering"
     try:
-        replacement_effect(kind, 20, applies=lambda game, payload: True)(second)
-        replacement_effect(kind, 10, applies=lambda game, payload: True)(first)
+        replacement_effect(kind, 20, applies=lambda game, payload: True, label="Probe 1", sources=lambda game, event: [])(second)
+        replacement_effect(kind, 10, applies=lambda game, payload: True, label="Probe 2", sources=lambda game, event: [])(first)
         consumed, payload = apply_replacements(None, kind, {"amount": 5})
         assert not consumed
         assert payload["amount"] == 4
@@ -68,8 +68,8 @@ def test_consuming_interceptor_stops_the_chain():
 
     kind = "_test_consume"
     try:
-        replacement_effect(kind, 10, applies=lambda game, payload: True)(consumer)
-        replacement_effect(kind, 20, applies=lambda game, payload: True)(never_reached)
+        replacement_effect(kind, 10, applies=lambda game, payload: True, label="Probe 3", sources=lambda game, event: [])(consumer)
+        replacement_effect(kind, 20, applies=lambda game, payload: True, label="Probe 4", sources=lambda game, event: [])(never_reached)
         consumed, payload = apply_replacements(None, kind, {"amount": 1})
         assert consumed
         assert calls == ["consumer"]
@@ -98,9 +98,10 @@ def test_616_1f_an_interceptor_is_re_asked_against_what_the_last_one_left():
 
     kind = "_test_re_ask"
     try:
-        replacement_effect(kind, 10, applies=lambda game, payload: True)(halve)
+        replacement_effect(kind, 10, applies=lambda game, payload: True, label="Probe 5", sources=lambda game, event: [])(halve)
         replacement_effect(
-            kind, 20, applies=lambda game, payload: payload["amount"] > 3
+            kind, 20, applies=lambda game, payload: payload["amount"] > 3,
+            label="Probe above three", sources=lambda game, event: [],
         )(only_above_three)
         consumed, payload = apply_replacements(None, kind, {"amount": 4})
         assert not consumed
@@ -137,11 +138,11 @@ def test_616_1_a_duplicate_order_within_a_kind_is_rejected():
     real ambiguity and surfaces at import rather than as a rare misplay."""
     kind = "_test_duplicate"
     try:
-        replacement_effect(kind, 10, applies=lambda game, payload: True)(
+        replacement_effect(kind, 10, applies=lambda game, payload: True, label="Probe 6", sources=lambda game, event: [])(
             lambda game, payload: None
         )
         with pytest.raises(ValueError, match="already used"):
-            replacement_effect(kind, 10, applies=lambda game, payload: True)(
+            replacement_effect(kind, 10, applies=lambda game, payload: True, label="Probe 7", sources=lambda game, event: [])(
                 lambda game, payload: None
             )
         assert len(REPLACEMENTS[kind]) == 1, (
@@ -238,7 +239,12 @@ def test_616_1e_the_affected_player_is_asked_which_effect_applies_first():
 
     prompts = game.pending_choices_of("effect_order", 0)
     assert len(prompts) == 1
-    assert sorted(prompts[0].data["options"]) == ["Aladdin's Lamp", "Ring of Ma'rûf"]
+    # What each does; no card beside it, because this table armed both
+    # charges by hand (``Game.draw_charge_sources`` holds nothing).
+    assert sorted(prompts[0].data["options"]) == [
+        "Look at the top cards and draw one of them instead",
+        "Put a card you own from outside the game into your hand instead",
+    ]
     assert drawn == 0, "the draw waits for the answer"
 
 
@@ -266,7 +272,7 @@ def test_616_1e_the_answer_decides_which_effect_is_spent():
     game._draw_with_replacements(p1, 1)
     lamp = next(
         i for i, o in enumerate(game.pending_choices_of("effect_order", 0)[0].data["options"])
-        if o == "Aladdin's Lamp"
+        if o == "Look at the top cards and draw one of them instead"
     )
 
     assert game.resolve_pending_choice("effect_order", 0, option_index=lamp) is True
@@ -386,7 +392,9 @@ def test_a_draw_replacement_can_decline_the_draw_it_created():
     def applies(game, payload):
         return 99 not in (payload.get("exclude_sources") or ())
 
-    @replacement_effect("draw", 9001, applies=applies)
+    @replacement_effect(
+        "draw", 9001, applies=applies, label="A probe draw", sources=lambda game, event: [],
+    )
     def _probe_draw_again(game, payload):
         seen.append(tuple(payload.get("exclude_sources") or ()))
         game._draw_with_replacements(payload["player"], 1, exclude_sources=(99,))

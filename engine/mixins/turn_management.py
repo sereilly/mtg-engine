@@ -320,6 +320,7 @@ class TurnManagementMixin:
         self.armed_draw_replacements = []
         # Ring of Ma'rûf's armed replacement likewise lasts only "this turn".
         self.outside_game_draw_replacements = set()
+        self.draw_charge_sources = {}
         # The second-draw sweep's once-per-turn memory (Mystic Skyfish), and the
         # per-draw sweep's (Lorescale Coatl). Both read
         # ``cards_drawn_this_turn``, which is emptied in the loop below, so both

@@ -101,7 +101,10 @@ def test_a_replaced_gain_contends_with_lich_where_a_ban_does_not():
     game._gain_life(game.players[0], 2)
     (order,) = [c for c in game.pending_choices if c.kind == "effect_order"]
     assert game.resolve_pending_choice(
-        "effect_order", 0, option_index=order.data["options"].index("Gain no life instead"),
+        "effect_order", 0, option_index=next(
+            i for i, option in enumerate(order.data["options"])
+            if option.startswith("Gain no life instead")
+        ),
     )
     assert game.players[0].hand == [] and game.players[0].life == 20
     # The ban (CR 119.7): no replacement over the gain does anything.

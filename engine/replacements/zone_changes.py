@@ -22,6 +22,7 @@ from __future__ import annotations
 import random
 import re
 
+from ..effect_ordering import source_names
 from ..hand_locks import lock_card_in_hand
 from ..models import Permanent
 from ..replacement_choices import (

@@ -112,7 +112,7 @@ def _willbender_over_a_shock(set_pool):
     })
     assert turned.status_code == 200, turned.text
     (candidate,) = _state(sid, 0)["trigger_target"]["candidates"]
-    assert candidate["name"] == "Shock"
+    assert candidate["name"] == "Host's Shock"
     aimed = _post(sid, {
         "seat": 0, "action": "trigger_target_confirm",
         "target_stack_index": candidate["stack_index"],

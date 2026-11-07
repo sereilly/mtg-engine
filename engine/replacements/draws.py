@@ -202,12 +202,24 @@ def _applies_outside_game_draw(game, payload: dict) -> bool:
     return game.players.index(payload["player"]) in game.outside_game_draw_replacements
 
 
+#: ``Game.draw_charge_sources`` keys: which of the two seat-keyed draw
+#: charges a recorded arming card belongs to.
+LAMP_DRAW = "lamp_draw"
+OUTSIDE_GAME_DRAW = "outside_game_draw"
+
+
+def draw_charge_source(game, kind: str, seat: int) -> list:
+    """The card that armed *seat*'s *kind* draw charge (Aladdin's Lamp, Ring
+    of Ma'rûf), as its handler recorded it, or nothing for a charge armed
+    without one. Pure."""
+    named = (getattr(game, "draw_charge_sources", {}) or {}).get((kind, seat))
+    return [named] if named else []
+
+
 def _outside_game_draw_sources(game, payload: dict) -> list:
-    """Nothing: the record of an armed draw from outside the game is the
-    seat alone (``Game.outside_game_draw_replacements``, a set of seats read
-    as one across the suite), so the card that armed it (Ring of Ma'rûf) is
-    not on it to name. Pure."""
-    return []
+    """The card that armed this seat's draw from outside the game (Ring of
+    Ma'rûf). Pure."""
+    return draw_charge_source(game, OUTSIDE_GAME_DRAW, game.players.index(payload["player"]))
 
 
 @replacement_effect(
@@ -226,11 +238,16 @@ def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | Non
     """
     player = payload["player"]
     player_index = game.players.index(player)
+    by = ", ".join(source_names(_outside_game_draw_sources(game, payload)))
     game.outside_game_draw_replacements.discard(player_index)
+    game.draw_charge_sources.pop((OUTSIDE_GAME_DRAW, player_index), None)
     available = game._outside_game_choices(player_index)
     remaining = payload["count"] - 1
     if not available:
-        game.log.append(f"{player.name} has no cards outside the game to take")
+        game.log.append(
+            f"{player.name} has no cards outside the game to take"
+            + (f" ({by})" if by else "")
+        )
         draws_behind(game, player, remaining, queued_excludes(payload))
         payload["drawn"] = 0
         return ReplacementOutcome(replaced=True)

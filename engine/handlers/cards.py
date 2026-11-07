@@ -255,6 +255,9 @@ def arm_lamp_draw_replacement(game: Game, instruction: OracleInstruction, contex
     caster = context.caster
     x = max(1, int(context.x_value or 0))
     game.lamp_draw_replacements[game.players.index(caster)] = x
+    from ..replacements.draws import LAMP_DRAW
+
+    game.draw_charge_sources[(LAMP_DRAW, game.players.index(caster))] = context.card.name
     game.log.append(
         f"{context.card.name}: {caster.name}'s next draw this turn looks at the top {x} card(s) instead"
     )
@@ -268,6 +271,11 @@ def arm_outside_game_draw_replacement(game: Game, instruction: OracleInstruction
     Game._draw_with_replacements at the next draw."""
     caster = context.caster
     game.outside_game_draw_replacements.add(game.players.index(caster))
+    from ..replacements.draws import OUTSIDE_GAME_DRAW
+
+    game.draw_charge_sources[(OUTSIDE_GAME_DRAW, game.players.index(caster))] = (
+        context.card.name
+    )
     game.log.append(
         f"{context.card.name}: instead of {caster.name}'s next draw this turn, they put "
         "a card they own from outside the game into their hand"

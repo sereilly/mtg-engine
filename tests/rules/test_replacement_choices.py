@@ -191,6 +191,7 @@ def test_614_1_a_new_interactive_replacement_needs_only_two_registrations():
         "discard",
         99,
         applies=lambda game, payload: game._player_controls_text(payload["player"], text),
+        label="Exile it instead", sources=lambda game, event: [],
     )
     def _exile_instead(game, payload):
         player = payload["player"]

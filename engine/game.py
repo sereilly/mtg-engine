@@ -705,6 +705,12 @@ class Game(
     # you own from outside the game into your hand". Consumed by that player's
     # next draw; cleared at end of turn alongside lamp_draw_replacements.
     outside_game_draw_replacements: set = field(default_factory=set)
+    # The card that armed each of the two charges above, keyed
+    # ``(LAMP_DRAW | OUTSIDE_GAME_DRAW, seat)`` (``replacements.draws``): what
+    # CR 616.1e's ``effect_order`` option and the replacement's log line name.
+    # Written by the arming handler, dropped as the charge is spent, cleared at
+    # end of turn with the charges. A charge armed without one names nothing.
+    draw_charge_sources: dict = field(default_factory=dict)
     # "The next time you would draw a card this turn, instead <effect>."
     # (Mangara's Tome; Onslaught's Words print "<effect> instead".) The
     # general form of the two above: each entry is {"player_index",
