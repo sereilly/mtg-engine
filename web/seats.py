@@ -173,13 +173,26 @@ def _hold_priority_for_human(session: Session) -> bool:
     priority), and once they passed, the AI held priority with the blocks
     still to come. False, and the step waits for the declaration as it would
     unflagged; the hold is made once the blocks are in.
+
+    **Priority goes round in turn order until a person holds it** (CR
+    117.3d): at a table of three or more the seat after the active AI may be
+    another AI, which passes it on in turn. The hold passed once and answered
+    True, so a person flagging any step of an AI's turn in a free-for-all
+    left priority with the second AI — a seat no request drives — and the
+    game stopped there. And **if every player still in the game has then
+    passed in succession** with nothing on the stack (CR 117.4: the step
+    ends; a person who has left the game is skipped, CR 800.4), nothing was
+    handed to anybody: False, and the caller leaves the step, rather than
+    stopping with priority back at the active AI to hand it round once more.
     """
     game = session.game
     human_seat = next(
         (
             s
             for s in range(len(game.players))
-            if s != game.active_player_index and _seat_type(session, s) == "human"
+            if s != game.active_player_index
+            and _seat_type(session, s) == "human"
+            and not game.players[s].lost
         ),
         None,
     )
@@ -191,8 +204,13 @@ def _hold_priority_for_human(session: Session) -> bool:
         return False
     if game.priority_player_index != game.active_player_index:
         game.start_priority_window(game.active_player_index)
-    game.pass_priority(game.active_player_index)
-    return True
+    result = game.pass_priority(game.active_player_index)
+    for _ in range(len(game.players)):
+        holder = game.priority_player_index
+        if result != "passed" or holder is None or _seat_type(session, holder) == "human":
+            break
+        result = game.pass_priority(holder)
+    return result != "all_passed_empty"
 
 
 def _ai_should_hold(session: Session, step: str) -> bool:
