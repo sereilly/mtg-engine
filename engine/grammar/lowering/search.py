@@ -34,9 +34,11 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
 from ._common import (
+    CREATURE_TYPE_CARD_ONTO_BATTLEFIELD,
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
+    creature_type_card,
     search_slot,
     search_subtype_restriction,
 )
@@ -149,6 +151,15 @@ def _lower_search_library(
         else filt.card_types[0] if filt.card_types
         else "any"
     )
+    # "Search your library for a **Goblin** card, put it onto the
+    # battlefield": a creature type with no card type is any card with the
+    # subtype (``nouns.parse_object_filter``), a Kindred instant among them,
+    # which CR 400.4a would leave in the library and the flow would put onto
+    # the battlefield. No card in the pool prints the sentence ("a Goblin
+    # **permanent** card", Moggcatcher, is what the pool prints, and is read);
+    # it refuses rather than playing the instant.
+    if to_battlefield and creature_type_card(filt):
+        raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
     restrictions: dict[str, object] = {}
     if filt.named is not None:
         restrictions["named"] = filt.named
@@ -293,6 +304,14 @@ def _lower_search_library(
                 "a search for one card per description names a place for each",
                 node=node,
             )
+        # A description naming a creature type and no card type, where a find
+        # may land on the battlefield, refuses for the single find's reason
+        # above (CR 400.4a).
+        if (
+            to_battlefield
+            or any(zone.name == "battlefield" for zone in node.extra_destinations)
+        ) and any(creature_type_card(described) for described in node.one_of_each):
+            raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
         restrictions[ONE_OF_EACH] = [
             search_slot(described, node) for described in node.one_of_each
         ]

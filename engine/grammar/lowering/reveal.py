@@ -63,11 +63,13 @@ from ...subject_filters import SOURCE_RESOLVED_CARD_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    CREATURE_TYPE_CARD_ONTO_BATTLEFIELD,
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
     _targets_only,
+    creature_type_card,
     dropped_narrowings,
     search_slot,
 )
@@ -124,6 +126,11 @@ def _lower_reveal_until(
         raise LoweringError(
             "the reveal cannot test this restriction on a card", node=node,
         )
+    # "…until you reveal a **Goblin** card. Put that card onto the
+    # battlefield": the run stops on a Kindred instant of the type too, which
+    # CR 400.4a would leave where it is. No card in the pool prints it.
+    if node.destination == "battlefield" and creature_type_card(filt):
+        raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
     return (
         OracleInstruction(
             "reveal_until_match", "",
@@ -246,6 +253,13 @@ def _lower_reveal_top_sorting_by_filter(
             "the sorted reveal cannot test this restriction on a card",
             node=node,
         )
+    # "…puts all **Goblin** cards revealed this way onto the battlefield" (Clear
+    # the Land's sentence with a creature type): any card with the subtype
+    # (CR 205.3m) — and a Kindred instant among them is a match CR 400.4a
+    # leaves where it is, in the library, which is neither of the two places
+    # this sort puts a card. No card in the pool prints the shape; it refuses.
+    if node.match_zone == "battlefield" and creature_type_card(node.filter):
+        raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
     count = _amount_payload(node.count)
     if not isinstance(count, int) or count <= 0:
         raise LoweringError(
@@ -448,6 +462,11 @@ def _lower_reveal_top_opponent_chooses(
                 node=node,
             )
         payload["pick_filter"] = picked
+        # "…chooses a **Goblin** card from among them. Put that card onto the
+        # battlefield": a Kindred instant of the type is a legal pick CR 400.4a
+        # would leave in the library. No card in the pool prints it.
+        if node.fate == "battlefield" and creature_type_card(node.pick):
+            raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
     if node.rest_fate is not None:
         if node.rest_fate != "graveyard":
             raise LoweringError(

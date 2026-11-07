@@ -23,6 +23,7 @@ import dataclasses
 
 from .. import ast
 from ..errors import LoweringError
+from ..vocabulary import CREATURE_TYPES
 
 def _filter_payload(
     filt: ast.ObjectFilter, *, carried_separately: frozenset[str] = frozenset()
@@ -617,6 +618,34 @@ def search_subtype_restriction(filt: ast.ObjectFilter) -> dict:
     if len(filt.subtypes) > 1 and filt.subtype_match == "any":
         return {"any_subtypes": list(filt.subtypes)}
     return {"subtypes": list(filt.subtypes)}
+
+
+#: The refusal every road that would put a :func:`creature_type_card` onto the
+#: battlefield raises (CR 400.4a).
+CREATURE_TYPE_CARD_ONTO_BATTLEFIELD = (
+    "a creature-type card put onto the battlefield may be a Kindred instant or "
+    "sorcery, which CR 400.4a leaves where it is"
+)
+
+
+def creature_type_card(filt: ast.ObjectFilter) -> bool:
+    """Whether *filt* is a **card** phrase naming a creature type and no card
+    type — "a **Goblin** card", "all **Zombie** cards".
+
+    Any card with the subtype (CR 109.2a), a creature's or a kindred's
+    (CR 205.3m, 308.2), which is what every hand, library and graveyard reader
+    takes it as. Asked by the roads that would put such a card **onto the
+    battlefield**: there CR 400.4a — "If an instant or sorcery card would enter
+    the battlefield, it remains in its previous zone" — says what happens to a
+    Kindred instant of the type, and no handler they lower to says it, so they
+    refuse (:data:`CREATURE_TYPE_CARD_ONTO_BATTLEFIELD`). No card in the pool
+    prints the shape; "a Goblin **permanent** card" (CR 110.4a's union) is the
+    sentence real cards print, and is read.
+    """
+    return bool(
+        filt.is_card and not filt.card_types and filt.subtypes
+        and all(word in CREATURE_TYPES for word in filt.subtypes)
+    )
 
 
 def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:

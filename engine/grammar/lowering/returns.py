@@ -967,7 +967,11 @@ def _lower_return_to_zone(
             # one is a card this engine has not got. Regrowth's untyped "target
             # card" still has no lowering here — claiming it would silently
             # narrow the player's choice to whatever the handler happened to
-            # scan for.
+            # scan for. Nor has "target **Zombie** card": it names no card type
+            # (``nouns.parse_object_filter``; a Kindred card of the type is one,
+            # CR 205.3m), and a Kindred instant of the type is a legal target
+            # CR 400.4a would leave in the graveyard — no reading of the
+            # handler's says that, and no card in the pool prints the shape.
             if filt.card_types not in _REANIMABLE_CARD_TYPES:
                 raise LoweringError(
                     "the reanimation handler only moves permanent cards",

@@ -930,7 +930,19 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     # Wizard), which has recorded CR 110.4a's union above: a creature type is
     # a creature's *or a kindred's* (CR 205.3m), so the printed "permanent" is
     # a wider set than "creature" the day a Kindred card is in the pool.
-    if d.subtypes and not d.card_types and all(s in CREATURE_TYPES for s in d.subtypes):
+    #
+    # **Nor after any card head** ("search your library for a Goblin card",
+    # Goblin Matron; "return target Zombie card from your graveyard", Lord of
+    # the Undead). CR 109.2a: a description with the word "card" means a card
+    # matching it in the stated zone, and what it matches is the subtype — a
+    # Kindred Sorcery — Goblin is a Goblin card (CR 205.3m, 308.2) and no
+    # creature card. The phrase names no card type, so none is recorded; each
+    # reader takes "any card" with the subtype. A permanent the bare subtype
+    # names on the battlefield ("destroy target Wall") keeps the implication.
+    if (
+        d.subtypes and not d.card_types and not d.is_card
+        and all(s in CREATURE_TYPES for s in d.subtypes)
+    ):
         d.card_types.append("creature")
 
     return _build_object_filter(d)
