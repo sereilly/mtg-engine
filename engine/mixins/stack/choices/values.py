@@ -970,17 +970,16 @@ class ValueChoicesMixin:
         return True
 
     def _default_text_change_vocabulary(self, choice: PendingChoice) -> None:
-        """The stated policy: the **first** offered vocabulary, which is the
-        colour word.
-
-        Not a valuation — the order is the one
-        ``live_text_change_vocabularies`` builds and is seed-deterministic. A
-        seat that should weigh a type-line rewrite against a colour one needs a
-        weight in ``engine/ai_valuation.py``, not a branch here.
+        """The vocabulary whose rewrite leaves the chooser best off, each
+        rehearsed (``ai_prompt_picks.text_change_vocabulary_pick``); the first
+        offered — the colour word — between equals or where nothing can be
+        rehearsed, which was the answer however the two rewrites differed.
         """
+        from ....ai_prompt_picks import text_change_vocabulary_pick
+
         options = list(choice.data.get("options") or ())
         if not options or not self._resolve_text_change_vocabulary(
-            choice, options[0]
+            choice, text_change_vocabulary_pick(self, choice, options[0])
         ):
             self.discard_pending_choice(choice)
 

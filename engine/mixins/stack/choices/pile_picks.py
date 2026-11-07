@@ -396,19 +396,22 @@ class PileChoicesMixin:
         return True
 
     def _default_library_pile_split(self, choice: PendingChoice) -> None:
-        """The stated policy: **split as evenly as possible**, in the order the
-        cards came off the library.
+        """**Split evenly, the dearer half together**
+        (``ai_prompt_picks.library_pile_split``).
 
-        Neutral rather than optimal, and deliberately so. The division is the
-        one decision in this card that is genuinely adversarial - a divider who
-        knows the pile can make both halves bad - and there is no valuation
-        here that would not be a guess about what the *other* seat wants. An
-        even split is the answer that neither hands the controller their pick
-        nor denies it.
+        The division is the one decision in this card that is genuinely
+        adversarial - the divider is the controller's opponent, and the
+        controller searches whichever pile it does not exile. Even sizes tell
+        a blind chooser nothing; the dearer half in one pile means that
+        whichever it keeps, half the time it searches only the weakest cards
+        — never worse for the divider than the halves in library order, which
+        was the split, and which handed the searcher a random half of the
+        best cards either way.
         """
+        from ....ai_prompt_picks import library_pile_split
+
         cards = list(choice.data.get("_cards") or ())
-        half = len(cards) // 2
-        if not self._resolve_library_pile_split(choice, list(range(half))):
+        if not self._resolve_library_pile_split(choice, library_pile_split(cards)):
             self.discard_pending_choice(choice)
 
     def confirm_pile_exile_choice(self, player_index: int, pile_index: int) -> bool:
@@ -511,15 +514,19 @@ class PileChoicesMixin:
         return True
 
     def _default_pile_search(self, choice: PendingChoice) -> None:
-        """The stated policy: take the **first** card in the pile.
+        """Take the card the searcher most wants to hold
+        (``ai_prompt_picks.pile_search_pick``), as a library search's find is
+        chosen; it was the first card in the pile.
 
-        Lowest index is the house policy for a pick with no printed
-        restriction, and failing to find is deliberately not the default here:
-        the search is the whole reason the ability was activated, and a seat
-        that declined it would have paid a cost for a shuffle.
+        Failing to find is deliberately not the default here: the search is
+        the whole reason the ability was activated, and a seat that declined
+        it would have paid a cost for a shuffle.
         """
+        from ....ai_prompt_picks import pile_search_pick
+
         pile = list(choice.data.get("_pile") or ())
-        if not self._resolve_pile_search(choice, 0 if pile else None):
+        pick = pile_search_pick(self, int(choice.data["owner_index"]), pile)
+        if not self._resolve_pile_search(choice, pick):
             self.discard_pending_choice(choice)
 
     # -- Two face-up piles (CR 700.3: Fact or Fiction and its siblings) ------
@@ -634,17 +641,26 @@ class PileChoicesMixin:
         return True
 
     def _default_linked_exile_return(self, choice: PendingChoice) -> None:
-        """The stated policy: the **first** eligible entry.
+        """The eligible entry worth most where it is going
+        (``ai_prompt_picks.linked_exile_return_pick``): to a hand, the card the
+        seat most wants to hold (Gustha's Scepter); to the battlefield, the one
+        worth most as a permanent (Purgatory). It was the first eligible entry.
 
-        Lowest position is the same policy ``_default_discard`` takes, and for
-        the same reason — which entries are eligible at all is the printed
-        phrase's business and is read off the list the interactive seat is
-        offered, and anything past "one of them" is AI valuation rather than
-        rules. A pile this seat owns nothing in is a prompt with no answer, so
-        it simply comes off the queue.
+        Which entries are eligible at all is the printed phrase's business and
+        is read off the list the interactive seat is offered. A pile this seat
+        owns nothing in is a prompt with no answer, so it simply comes off the
+        queue.
         """
+        from ....ai_prompt_picks import linked_exile_return_pick
+        from ....linked_exile import linked_entries
+
         live = self.live_linked_exile_return_choices(choice)
-        if live and self._resolve_linked_exile_return(choice, live[0]):
+        pick = linked_exile_return_pick(
+            self, choice.player_index,
+            linked_entries(choice.data.get("_source_permanent")), live,
+            str(choice.data.get("zone", "hand")),
+        )
+        if pick is not None and self._resolve_linked_exile_return(choice, pick):
             return
         self.discard_pending_choice(choice)
 

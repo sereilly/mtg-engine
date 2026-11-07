@@ -329,8 +329,12 @@ class LibraryChoicesMixin:
         return True
 
     def _default_look_top_pick(self, choice: PendingChoice) -> None:
-        """A non-interactive seat keeps the first card it *may* keep, and takes
-        nothing when the phrase names none of them.
+        """A non-interactive seat names the eligible card worth most where it
+        is going (``ai_prompt_picks.look_top_pick``: the card it most wants to
+        hold into its hand, the one it least wants to the bottom; out of
+        another seat's library, the dearest out of its reach), and takes
+        nothing when the phrase names none of them. It was the first eligible
+        card, so an Impulse kept a land on top of a spell.
 
         The exception is an optional pick that **exiles from the chooser's own
         library** (Ancestral Knowledge): "any number" includes none, and there
@@ -339,6 +343,8 @@ class LibraryChoicesMixin:
         up-to-N maximum and the modal first mode; Sealed Fate's exile is not
         optional and empties somebody else's library, so it is untouched.
         """
+        from ....ai_prompt_picks import look_top_pick
+
         exiles_own = (
             choice.data.get("pick_destination") == "exile"
             and self.look_top_pile_index(choice) == choice.player_index
@@ -348,7 +354,11 @@ class LibraryChoicesMixin:
                 self.discard_pending_choice(choice)
             return
         eligible = self.live_look_top_candidates(choice)
-        keep = eligible[0] if eligible else None
+        pile_seat = self.look_top_pile_index(choice)
+        keep = look_top_pick(
+            self, choice.player_index, pile_seat, self.players[pile_seat].library,
+            eligible, str(choice.data.get("pick_destination") or "hand"),
+        )
         if eligible and choice.data.get("_record_pick") is not None:
             # "…You gain life equal to that card's mana value." (Reviving
             # Vapors.) The one printing where the sentence itself says which

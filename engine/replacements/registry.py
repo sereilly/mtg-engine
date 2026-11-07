@@ -592,6 +592,12 @@ def order_prompt_asker(kind: str, restart: Callable[[], Any]) -> Callable:
             event_kind=kind,
             options=[c.label or c.key for c in applicable],
             _keys=[c.key for c in applicable],
+            # What the affected player would have been answered with had
+            # nobody asked (``choose_effect``: a multiplier before the cap it
+            # contends with, every other effect by its order) — the answer
+            # the prompt's own default gives, so a seat that stops answering
+            # is not handed the first option instead.
+            _default_key=choose_effect(game, chooser_index, applicable).key,
             _restart=restart,
         )
         game.log.append(

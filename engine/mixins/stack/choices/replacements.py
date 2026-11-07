@@ -381,10 +381,20 @@ class ReplacementChoicesMixin:
         return True
 
     def _default_effect_order(self, choice: PendingChoice) -> None:
-        """The documented default (the first option, which the asker listed in
-        default order). Reached when a seat stops being interactive with the
-        prompt still queued."""
-        self._resolve_effect_order(choice, 0)
+        """The answer a seat nobody asks takes where it stands
+        (``effect_ordering.choose_effect``, stamped as the prompt was armed:
+        ``_default_key``). Reached when a seat stops being interactive with the
+        prompt still queued.
+
+        It was the first option, read as "the asker listed them in default
+        order" — which the asker does not: it lists them in registration order,
+        and on the one round where ``choose_effect`` overrides that order (a
+        damage multiplier contending with a cap, CR 616.1e) the first option
+        was the cap, and a defaulted Divine Presence beside Furnace of Rath
+        took 6 where every seat nobody asked took 3."""
+        keys = list(choice.data.get("_keys") or ())
+        wanted = choice.data.get("_default_key")
+        self._resolve_effect_order(choice, keys.index(wanted) if wanted in keys else 0)
 
 
 # ---------------------------------------------------------------------------

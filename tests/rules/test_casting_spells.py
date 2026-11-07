@@ -1507,22 +1507,27 @@ def test_700_2e_the_answer_is_the_mode_that_resolves():
 
 @pytest.mark.cr("700.2e")
 def test_700_2e_a_non_interactive_chooser_answers_where_the_offer_stands():
-    """A stated policy — the first printed mode — rather than a valuation. An
-    unanswered prompt inside an announcement would hold the cast open forever,
-    which is what would happen to every AI and headless game."""
+    """Answered where the offer stands — an unanswered prompt inside an
+    announcement would hold the cast open forever, which is what would happen
+    to every AI and headless game — with the mode the choosing opponent is
+    measured to prefer, the worse one for the caster (kg4 ``defaults``,
+    ``ai_prompt_picks.opponent_mode_pick``; it was the first printed mode
+    whatever the board): 3 life to a caster at 20 is worth less than a card,
+    and to a caster at 4 more."""
     lore = _mk_card(
         "Opponent Chooses Default Test",
         "Sorcery",
         "An opponent chooses one —\n• You draw a card.\n• You gain 3 life.",
     )
-    p1 = PlayerState(name="P1", hand=[lore], library=[lore] * 3)
-    game = Game(players=[p1, PlayerState(name="P2")])
-    game.interactive_seats = {0}
+    for life, preferred in ((20, 1), (4, 0)):
+        p1 = PlayerState(name="P1", hand=[lore], library=[lore] * 3, life=life)
+        game = Game(players=[p1, PlayerState(name="P2")])
+        game.interactive_seats = {0}
 
-    game.queue_from_hand(0, "Opponent Chooses Default Test")
+        game.queue_from_hand(0, "Opponent Chooses Default Test")
 
-    assert game.pending_choices == []
-    assert game.stack[-1].chosen_mode_index == 0
+        assert game.pending_choices == []
+        assert game.stack[-1].chosen_mode_index == preferred, life
 
 
 @pytest.mark.cr("700.2e", "601.2c", "601.2i")

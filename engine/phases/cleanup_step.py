@@ -131,9 +131,17 @@ class CleanupStepMixin:
                 elif defer_discard_selection:
                     cleanup_completed = False
                 else:
-                    for _ in range(excess):
-                        discarded = active_player.hand.pop(0)
-                        self._discard_card(active_player, discarded)
+                    # Nobody named the cards: the ones the player least wants
+                    # to hold (``ai_prompt_picks.hand_size_discards``), hand
+                    # order between equals — it was the first cards in hand.
+                    from ..ai_prompt_picks import hand_size_discards
+
+                    hand = active_player.hand
+                    for discarded in [
+                        hand[slot] for slot in hand_size_discards(self, player_index, excess)
+                    ]:
+                        if self.take_card_from_hand(active_player, discarded):
+                            self._discard_card(active_player, discarded)
                     self.log.append(f"{active_player.name} discarded {excess} card(s) in cleanup")
 
         # "Target player skips their next combat phase **this turn**." (Moment

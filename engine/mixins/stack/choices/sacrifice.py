@@ -864,18 +864,24 @@ class SacrificeChoicesMixin:
         return True
 
     def _default_balance(self, choice: PendingChoice) -> None:
-        """Keep the lowest-slot permanents and cards: give up the last ones
-        the round counts."""
+        """Give up what the seat loses least by: the cards it least wants to
+        hold and the permanents whose loss costs it least
+        (``ai_prompt_picks.balance_discards`` / ``balance_sacrifices``), the
+        later slot between equals. It gave up the last slots the round
+        counted, so a seat sacrificed whichever creature it had cast last."""
+        from ....ai_prompt_picks import balance_discards, balance_sacrifices
+
         plan = choice.data["plan"]
         stage = choice.data.get("stage")
         owed = int(plan.get(stage, 0)) if stage else 0
-        player = self.players[choice.player_index]
         picks: dict = {"lands": [], "creatures": [], "hand": []}
         if owed and stage == "hand":
-            picks["hand"] = list(range(len(player.hand)))[-owed:]
+            picks["hand"] = balance_discards(self, choice.player_index, owed)
         elif owed and stage in ("lands", "creatures"):
-            slots = [slot for slot, _perm in self.balance_candidates(choice.player_index, stage)]
-            picks[stage] = slots[-owed:]
+            picks[stage] = balance_sacrifices(
+                self, choice.player_index,
+                self.balance_candidates(choice.player_index, stage), owed,
+            )
         if not self._resolve_balance(choice, picks["lands"], picks["creatures"], picks["hand"]):
             self.discard_pending_choice(choice)
             # A default that could not be given is still an answer the round
