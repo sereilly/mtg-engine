@@ -240,3 +240,7 @@ def test_the_client_prices_no_x_itself():
     ):
         assert deleted not in source, deleted
     assert "liveXPayable(pendingCastX)" in app_js_function_body("renderActivationPrompt")
+    # An X above the pool's is the payment step's to tap for: the send's mana
+    # refusal opens it (it was a hint, and the cast dropped).
+    assert app_js_function_body("resolvePendingCastX").count("offerAutoTapForX(") == 2
+    assert "pendingAutoTap = " in app_js_function_body("offerAutoTapForX")

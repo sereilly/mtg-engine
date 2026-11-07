@@ -20435,10 +20435,13 @@ function resolvePendingCastX(xValue) {
   // see `confirmRoleTargets`); X is the one thing it lacked.
   if (pending.rolesBody) {
     updateActionHint(`Casting ${pending.cardName} with X = ${selectedX}...`);
-    sendAction({ ...pending.rolesBody, seat, x_value: selectedX })
+    const rolesBody = { ...pending.rolesBody, seat, x_value: selectedX };
+    sendAction(rolesBody)
       .then(() => updateActionHint(`Cast ${pending.cardName} with X = ${selectedX}.`))
-      .catch((e) => updateActionHint(e.message, true))
-      .finally(() => clearPendingHandCast());
+      .catch((e) => offerAutoTapForX(pending, rolesBody, e))
+      .finally(() => {
+        if (!pendingAutoTap) clearPendingHandCast();
+      });
     return;
   }
 
@@ -20524,8 +20527,29 @@ function resolvePendingCastX(xValue) {
     .then(() => updateActionHint(
       `${pending.castAction === "activate" ? "Activated" : "Cast"} ${pending.cardName} with X = ${selectedX}.`,
     ))
-    .catch((e) => updateActionHint(e.message, true))
-    .finally(() => clearPendingHandCast());
+    .catch((e) => offerAutoTapForX(pending, body, e))
+    .finally(() => {
+      if (!pendingAutoTap) clearPendingHandCast();
+    });
+}
+
+// An X the pool alone cannot pay is still one the board can (the prompt
+// offers up to `x_payable.board`): a mana refusal opens the payment step every
+// other send opens, with the body — X and targets — kept for the auto-tap.
+// It was reported as a hint and the cast dropped, so every X above the
+// pool's was a dead button.
+function offerAutoTapForX(pending, body, error) {
+  if (!isManaRefusal(error?.message)) {
+    updateActionHint(error?.message || String(error), true);
+    return;
+  }
+  pendingAutoTap = pending.castAction === "activate"
+    ? {
+      card: pending.card, cardName: pending.cardName,
+      cost: getActivatedAbilityCost(pending.card, pending.activateAbilityIndex), actionBody: body,
+    }
+    : { card: pending.card, cardName: pending.cardName, actionBody: body };
+  renderActivationPrompt();
 }
 
 function normalizeCardName(card) {
