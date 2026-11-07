@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**433 / 641 tracked rules covered (67%)** — 3446 tests, 0 unannotated.
+**433 / 641 tracked rules covered (67%)** — 3463 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -120,7 +120,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **101.1** Whenever a card’s text directly contradicts these rules, the card takes precedence. The card over... *(1 tests)*
 - [x] **101.2** When a rule or effect allows or directs something to happen, and another effect states that it ca... *(3 tests)*
 - [x] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ... *(2 tests)*
-- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(38 tests, subrules bc)*
+- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(44 tests, subrules bc)*
 
 ### 102. Players
 
@@ -693,10 +693,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(28 tests, subrules acde)*
-- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(44 tests, subrules abcde)*
+- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(45 tests, subrules abcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(14 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
-- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(26 tests, subrules a)*
+- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(35 tests, subrules a)*
 - [x] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60... *(1 tests)*
 - [x] **603.12** A resolving spell or ability may allow or instruct a player to take an action and create a trigge... *(2 tests)*
 
@@ -755,7 +755,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **610.1** A one-shot effect does something just once and doesn’t have a duration. Examples include dealing ... *(10 tests)*
 - [ ] **610.2** Some one-shot effects create a delayed triggered ability, which instructs a player to do somethin...
-- [x] **610.3** Some one-shot effects cause an object to change zones “until” a specified event occurs. A second ... *(17 tests, subrules bcd)*
+- [x] **610.3** Some one-shot effects cause an object to change zones “until” a specified event occurs. A second ... *(18 tests, subrules bcd)*
 - [ ] **610.4** Some one-shot effects cause a permanent to phase out “until” a specified event occurs. A second o...
 - [ ] **610.5** Some static abilities create one-shot effects that cause spells a player casts to gain an ability...
 
@@ -868,7 +868,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.18** Play *(6 tests, subrules ab)*
 - [x] **701.19** Regenerate *(29 tests, subrules abc)*
 - [x] **701.20** Reveal *(12 tests, subrules ab)*
-- [x] **701.21** Sacrifice *(23 tests, subrules a)*
+- [x] **701.21** Sacrifice *(29 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(26 tests, subrules abd)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*
@@ -899,7 +899,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
 - [x] **702.24** Cumulative Upkeep *(33 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
-- [x] **702.26** Phasing *(20 tests, subrules adfgim)*
+- [x] **702.26** Phasing *(25 tests, subrules adfgim)*
 - [x] **702.27** Buyback *(15 tests, subrules a)*
 - [x] **702.28** Shadow *(6 tests, subrules abc)*
 - [x] **702.29** Cycling *(35 tests, subrules abcef)*
