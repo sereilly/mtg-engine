@@ -54,10 +54,6 @@ _REVIEWED = {
      "_resolve_search_library"): (
         "a fallback that tries findable cards until one is taken, then returns."
     ),
-    ("handlers/phasing.py", "phase_out_target_creature_until_source_leaves",
-     "remove_all_from_battlefield"): (
-        "phasing out (``zone_change=False``) gives back no linked exile."
-    ),
     ("mixins/game_ending.py", "_state_based_pass",
      "remove_all_from_battlefield"): (
         "one pass of the state-based check (CR 704.3: one event), extracted so "
