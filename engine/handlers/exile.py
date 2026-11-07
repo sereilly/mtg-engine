@@ -359,8 +359,10 @@ def exile_created_token(game: Game, instruction: OracleInstruction, context: Ora
         if not gone:
             game.log.append(f"{context.card.name}: the tokens it named are gone")
             return True, "resolved"
-        for perm in gone:
-            _exile_one_created_token(game, context, perm)
+        # "Exile **them**" is one action (CR 603.10a, ``Game.leaving_together``).
+        with game.leaving_together():
+            for perm in gone:
+                _exile_one_created_token(game, context, perm)
         return True, "resolved"
     if instruction.payload.get("created_with_source"):
         made = tokens_created_with(game, context.source_permanent)
@@ -451,26 +453,30 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
         # Each one to its **owner's** exile, read before its own removal: the
         # loop is one resolution and a controller read after the fact has
         # nobody left to ask.
-        for perm in chosen:
-            controller_index = game.controller_index_of(perm)
-            owner_index = game.owner_index_of(perm)
-            game.remove_from_battlefield(perm)
-            if owner_index is None:
-                owner_index = controller_index if controller_index is not None else 0
-            landed = game.put_card_into_exile(owner_index, perm.card)
-            # "When this creature enters, exile two target lands. When this
-            # creature leaves the battlefield, return **the exiled cards** to
-            # the battlefield under their owners' control." (Petradon.) The
-            # one-target branch below has always recorded its card as exiled
-            # *with* the ability's source (CR 607.2a); the several-target one
-            # did not, so a second linked ability had an empty pile to read.
-            # A token is not recorded: CR 111.8 ends its existence as it
-            # leaves, and there is no card for "the exiled cards" to name.
-            if context.source_permanent is not None and not perm.metadata.get(
-                "is_token"
-            ):
-                link_exiled_card(context.source_permanent, landed, owner_index)
-            game.log.append(f"{card.name} exiled {perm.card.name}")
+        # …and one event (CR 603.10a, ``Game.leaving_together``): "exile two
+        # target creatures" exiles them at once, and what their leaving gives
+        # back enters together (CR 610.3d).
+        with game.entering_together(), game.leaving_together():
+            for perm in chosen:
+                controller_index = game.controller_index_of(perm)
+                owner_index = game.owner_index_of(perm)
+                game.remove_from_battlefield(perm)
+                if owner_index is None:
+                    owner_index = controller_index if controller_index is not None else 0
+                landed = game.put_card_into_exile(owner_index, perm.card)
+                # "When this creature enters, exile two target lands. When this
+                # creature leaves the battlefield, return **the exiled cards** to
+                # the battlefield under their owners' control." (Petradon.) The
+                # one-target branch below has always recorded its card as exiled
+                # *with* the ability's source (CR 607.2a); the several-target one
+                # did not, so a second linked ability had an empty pile to read.
+                # A token is not recorded: CR 111.8 ends its existence as it
+                # leaves, and there is no card for "the exiled cards" to name.
+                if context.source_permanent is not None and not perm.metadata.get(
+                    "is_token"
+                ):
+                    link_exiled_card(context.source_permanent, landed, owner_index)
+                game.log.append(f"{card.name} exiled {perm.card.name}")
         # No `last_target_controller`: the key names *the* controller, and
         # a several-target exile has one per permanent. A later step reading it
         # would silently act on whichever one happened to be written last, so
@@ -1264,8 +1270,16 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
             # to give back.
             if source_permanent is not None and owner_idx is not None:
                 link_exiled_card(source_permanent, card, owner_idx)
-        game._remove_aura_effects(perm)
     game.remove_all_from_battlefield(victims)
+    # What each attachment applied ends (CR 611.3) once the sweep is made, not
+    # before it: an Aura torn down ahead of the removal had left its host
+    # before the one transition asked what the host was carrying, so a
+    # Funeral March exiled with its creature never saw it go (CR 603.10a);
+    # and Animate Dead's sacrifice, made then, reached a creature the sweep
+    # was about to exile — its card went to a graveyard and to exile both.
+    # The transition tears an Aura down itself; an Equipment is this line's.
+    for perm in victims:
+        game._remove_aura_effects(perm)
     context.results[EXILED_THIS_WAY_OBJECTS] = victims
     context.results[EXILED_THIS_WAY] = len(victims)
     context.results["exiled_cards"] = exiled_cards

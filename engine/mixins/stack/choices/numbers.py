@@ -225,15 +225,18 @@ class NumberChoicesMixin:
                 from ....tokens import tokens_created_with
 
                 owned = tokens_created_with(self, permanent)[:value]
-                for token in owned:
-                    owner_index = self.owner_index_of(token)
-                    self.remove_from_battlefield(token)
-                    # Into exile like any other exiled permanent (CR 400.3,
-                    # owner's zone); CR 111.7's sweep in game_ending.py takes
-                    # the token card out of it, so nothing here special-cases
-                    # the fact that it is a token.
-                    if owner_index is not None:
-                        self.put_card_into_exile(owner_index, token.card)
+                # "Exile any number of tokens" is one action, one event
+                # (CR 603.10a, ``leaving_together``).
+                with self.leaving_together():
+                    for token in owned:
+                        owner_index = self.owner_index_of(token)
+                        self.remove_from_battlefield(token)
+                        # Into exile like any other exiled permanent (CR 400.3,
+                        # owner's zone); CR 111.7's sweep in game_ending.py
+                        # takes the token card out of it, so nothing here
+                        # special-cases the fact that it is a token.
+                        if owner_index is not None:
+                            self.put_card_into_exile(owner_index, token.card)
                 results = choice.data.get("results")
                 if results is not None:
                     results["trigger_count"] = len(owned)

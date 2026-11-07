@@ -984,16 +984,18 @@ class AlternativeCastCostsMixin:
             # How many is ``sacrificed_count``: the printed count, or the
             # announced X ("Sacrifice X Mountains", Firecat Blitz) — the one
             # reader the gate above counted against.
-            for _ in range(cost.sacrificed_count(x_value)):
-                candidates = self._additional_cost_candidates(caster_index, cost)
-                if not candidates:
-                    break  # gated above; a board that changed since is a no-op
-                victim = pick(candidates)
-                name = victim.card.name
-                if self.sacrifice_permanent(victim) is not None:
-                    self.log.append(
-                        f"{caster.name} sacrificed {name} to {why}"
-                    )
+            # One cost, one event (CR 603.10a, ``leaving_together``).
+            with self.leaving_together():
+                for _ in range(cost.sacrificed_count(x_value)):
+                    candidates = self._additional_cost_candidates(caster_index, cost)
+                    if not candidates:
+                        break  # gated above; a board that changed since is a no-op
+                    victim = pick(candidates)
+                    name = victim.card.name
+                    if self.sacrifice_permanent(victim) is not None:
+                        self.log.append(
+                            f"{caster.name} sacrificed {name} to {why}"
+                        )
         if cost.return_filter is not None:
             # "…return **two Islands you control** to their owner's hand."
             # (Gush.) Re-enumerated per permanent, never sliced off one list:
@@ -1005,18 +1007,19 @@ class AlternativeCastCostsMixin:
             # see a cost payment exactly as they see a spell's bounce.
             from ...handlers._common import return_permanent_to_owners_hand
 
-            for _ in range(max(1, cost.return_count)):
-                candidates = self._additional_cost_candidates(
-                    caster_index, cost, giving_up="return"
-                )
-                if not candidates:
-                    break  # gated above; a board that changed since is a no-op
-                giving = pick(candidates)
-                name = giving.card.name
-                return_permanent_to_owners_hand(self, giving, caster)
-                self.log.append(
-                    f"{caster.name} returned {name} to hand to {why}"
-                )
+            with self.entering_together(), self.leaving_together():
+                for _ in range(max(1, cost.return_count)):
+                    candidates = self._additional_cost_candidates(
+                        caster_index, cost, giving_up="return"
+                    )
+                    if not candidates:
+                        break  # gated above; a board that changed since is a no-op
+                    giving = pick(candidates)
+                    name = giving.card.name
+                    return_permanent_to_owners_hand(self, giving, caster)
+                    self.log.append(
+                        f"{caster.name} returned {name} to hand to {why}"
+                    )
         if cost.tap_count:
             # "…**tap an untapped creature you control**…" (Orim's Cure.)
             # Through ``Game.tap_permanent``, never a metadata poke: tapping is

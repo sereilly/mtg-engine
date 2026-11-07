@@ -365,21 +365,81 @@ def moved_card_trigger_events(game: Game, event: Event) -> list[dict]:
     ]
 
 
+#: The events whose abilities **look back in time** (CR 603.10a): "leaves-the-
+#: battlefield abilities, abilities that trigger when a player sacrifices a
+#: permanent, … and abilities that trigger when an object that all players can
+#: see is put into a hand or library". Such an ability triggers if it existed
+#: "immediately prior to the event", so a permanent the same event has already
+#: taken off the battlefield is one of its observers
+#: (:func:`_looking_back_observers`). The death scans ask the same question
+#: through ``DeathsMixin._death_observers``; these are the kinds announced
+#: through this bus.
+LOOKS_BACK_IN_TIME = frozenset({
+    # "Whenever a nontoken creature leaves the battlefield" (Dual Nature).
+    "matching_permanent_leaves_battlefield",
+    # "Whenever a permanent is returned to a player's hand" (Warped Devotion:
+    # "This card can trigger on itself being returned to a player's hand").
+    "permanent_returned_to_hand",
+    # "Whenever you sacrifice a permanent" (Havoc Jester: "triggers when you
+    # sacrifice it. If you sacrifice other permanents at the same time, it
+    # triggers for them as well").
+    "you_sacrifice_permanent",
+})
+
+
+def _looking_back_observers(game: Game, event: Event):
+    """``(seat, permanent, trig)`` for every permanent the open departure event
+    (``Game.leaving_together``) has already taken off the battlefield whose
+    ability answers *event* — when *event* is one that looks back in time.
+
+    CR 603.10a: the game uses "the existence of those abilities and the
+    appearance of objects immediately prior to the event", so an observer the
+    event moved first still sees the rest of it. The engine performs one event
+    as several removals one after another (a sweep returns one permanent at a
+    time), and a Warped Devotion returned ahead of the creatures beside it saw
+    none of them go. Each is asked under the seat it last had (CR 608.2h), and
+    scoped by the event's players exactly as the battlefield scan is.
+    """
+    if event.kind not in LOOKS_BACK_IN_TIME:
+        return
+    from .trigger_utils import matching_triggers
+
+    scoped = list(event.players) if event.players is not None else None
+    for gone in game.departed_in_this_event():
+        seat = game.controller_or_last_known(gone)
+        if seat is None:
+            continue
+        if scoped is not None and not any(
+            game.players[seat] is player for player in scoped
+        ):
+            continue
+        for trig in matching_triggers(
+            gone.effective_card, condition_kinds={event.kind},
+        ):
+            yield seat, gone, trig
+
+
 def collect(game: Game, event: Event) -> list[dict]:
     """Every trigger that fires for *event*, as enqueueable event dicts.
 
     Separate from :func:`emit` so callers that need to inspect or augment the
     batch before it goes on the stack can, and so this is testable without a
     stack.
+
+    The battlefield, and — for an event that looks back in time
+    (:data:`LOOKS_BACK_IN_TIME`) — whatever the open departure event has
+    already taken off it (:func:`_looking_back_observers`).
     """
     predicate = EVENT_FILTERS.get(event.kind)
     events: list[dict] = []
-    for controller_index, permanent, trig in iter_triggered_abilities(
+    observers = list(iter_triggered_abilities(
         game,
         condition_kinds={event.kind},
         players=list(event.players) if event.players is not None else None,
         first_match_only=False,
-    ):
+    ))
+    observers.extend(_looking_back_observers(game, event))
+    for controller_index, permanent, trig in observers:
         # A permanent never triggers off its own departure-style events unless
         # the event says so; the subject check keeps "whenever a creature dies"
         # from firing on the dying creature itself where that is not intended.

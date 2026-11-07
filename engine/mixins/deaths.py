@@ -493,20 +493,28 @@ class DeathsMixin:
         # Resolved before the removal, because afterwards there is no
         # battlefield to read it off.
         controller = self.players[seat]
-        if self.remove_from_battlefield(permanent) is None:
-            return None
-        # "…**if it wasn't sacrificed**, you may pay {3}." (Urza's Miter.) How a
-        # permanent left is not derivable from where it ended up — a sacrifice
-        # and a destruction both put it in the same graveyard — so the one
-        # sacrifice transition records it, and the death dispatcher reads it
-        # back as last-known information (CR 608.2h). Set before the graveyard
-        # move, because that is what announces the death.
-        permanent.metadata["was_sacrificed"] = True
-        self._permanent_to_graveyard(controller, permanent)
-        # Announced after the permanent has gone, so a trigger that reads the
-        # board sees the board the sacrifice left behind (CR 603.10 — the
-        # trigger looks back at a game state that already happened).
-        emit(self, "you_sacrifice_permanent", subject=permanent, seat=seat)
+        # One departure event (``leaving_together``; the same event as the
+        # caller's when one is open): "whenever you sacrifice a permanent"
+        # looks back in time (CR 603.10a), so the permanent sacrificed is an
+        # observer of its own sacrifice — Havoc Jester "triggers when you
+        # sacrifice it" — and the announcement below, made once it has gone,
+        # asks what the event has taken off the battlefield.
+        with self.leaving_together():
+            if self.remove_from_battlefield(permanent) is None:
+                return None
+            # "…**if it wasn't sacrificed**, you may pay {3}." (Urza's Miter.)
+            # How a permanent left is not derivable from where it ended up — a
+            # sacrifice and a destruction both put it in the same graveyard —
+            # so the one sacrifice transition records it, and the death
+            # dispatcher reads it back as last-known information (CR 608.2h).
+            # Set before the graveyard move, because that is what announces the
+            # death.
+            permanent.metadata["was_sacrificed"] = True
+            self._permanent_to_graveyard(controller, permanent)
+            # Announced after the permanent has gone, so a trigger that reads
+            # the board sees the board the sacrifice left behind (CR 603.10 —
+            # the trigger looks back at a game state that already happened).
+            emit(self, "you_sacrifice_permanent", subject=permanent, seat=seat)
         return permanent
 
     def sacrifice_permanents(self, permanents) -> list[Permanent]:
@@ -536,14 +544,18 @@ class DeathsMixin:
             if seat is None or any(permanent is listed for listed, _ in doomed):
                 continue
             doomed.append((permanent, seat))
-        for permanent, seat in doomed:
-            # Before the graveyard move, which is what announces the death —
-            # see :meth:`sacrifice_permanent`.
-            permanent.metadata["was_sacrificed"] = True
-            self._permanent_to_graveyard(self.players[seat], permanent)
-        self.remove_all_from_battlefield([permanent for permanent, _ in doomed])
-        for permanent, seat in doomed:
-            emit(self, "you_sacrifice_permanent", subject=permanent, seat=seat)
+        # One departure event, so each announcement below — made once all of
+        # them have gone — still has every one of them as an observer
+        # (CR 603.10a; :meth:`sacrifice_permanent`).
+        with self.leaving_together():
+            for permanent, seat in doomed:
+                # Before the graveyard move, which is what announces the death
+                # — see :meth:`sacrifice_permanent`.
+                permanent.metadata["was_sacrificed"] = True
+                self._permanent_to_graveyard(self.players[seat], permanent)
+            self.remove_all_from_battlefield([permanent for permanent, _ in doomed])
+            for permanent, seat in doomed:
+                emit(self, "you_sacrifice_permanent", subject=permanent, seat=seat)
         return [permanent for permanent, _ in doomed]
 
     def _destroy_swept_permanents(

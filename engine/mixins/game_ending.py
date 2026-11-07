@@ -1220,8 +1220,13 @@ class GameEndingMixin:
         # here changes 2-player behavior.
         if len(self.players) >= 3:
             newly_lost = [i for i, p in enumerate(self.players) if p.lost and i not in previously_lost]
-            for idx in newly_lost:
-                self._eliminate_player(idx)
+            # Players who lost to one check leave at once, so what they take
+            # with them is one departure event (CR 603.10a,
+            # ``leaving_together``) — the check that lost them the game was
+            # one event (CR 704.3).
+            with self.entering_together(), self.leaving_together():
+                for idx in newly_lost:
+                    self._eliminate_player(idx)
 
         # CR 407.2: at the end of the game the winner becomes the owner of every
         # card in the ante zone. A player can become the sole survivor here

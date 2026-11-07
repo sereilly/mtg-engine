@@ -816,7 +816,10 @@ def _seat_scoped_filter(
     """"Whenever **you** gain life / draw your second card / sacrifice a
     permanent" — only the acting seat's own permanents."""
     seat = event.payload.get("seat")
-    return seat is not None and game.controller_index_of(permanent) == seat
+    # Last-known for an observer that has left in the same event (CR 603.10a:
+    # Havoc Jester "triggers when you sacrifice it"), the control seam's
+    # answer for one still on a battlefield.
+    return seat is not None and game.controller_or_last_known(permanent) == seat
 
 
 @event_filter("land_played")
@@ -1110,9 +1113,13 @@ def _subject_led_filter(
     permanent on the board, which is why the compiler refuses one it cannot
     test rather than admitting an empty filter here.
     """
+    # The seat it **last** had, which is the seat it has while on a
+    # battlefield: an observer the same departure event has already taken off
+    # it still sees the rest of the event (CR 603.10a, ``events.
+    # LOOKS_BACK_IN_TIME``), and has no controller to ask by then (CR 608.2h).
     return trigger_subject_matches(
         game, trig, _SUBJECT_LED_FILTER_KEYS[event.kind], event.subject,
-        observer=game.controller_index_of(permanent), source=permanent,
+        observer=game.controller_or_last_known(permanent), source=permanent,
     )
 
 

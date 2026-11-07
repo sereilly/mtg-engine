@@ -154,8 +154,11 @@ class SacrificeChoicesMixin:
         ):
             return False
         self.discard_pending_choice(choice)
-        for perm in chosen:
-            self.sacrifice_permanent(perm)
+        # "Sacrifice any number of …" is one action, so one event: each
+        # sacrifice looks back at the rest (CR 603.10a, ``leaving_together``).
+        with self.leaving_together():
+            for perm in chosen:
+                self.sacrifice_permanent(perm)
         self.log.append(
             f"{choice.data.get('card_name', 'An effect')}: "
             + (", ".join(perm.card.name for perm in chosen) or "nothing")
@@ -572,12 +575,16 @@ class SacrificeChoicesMixin:
             ]
             plans.append((choice, kept, rest))
             doomed.extend(rest)
-        self.sacrifice_permanents(doomed)
-        for choice, kept, rest in plans:
-            if rest is None:
-                self._return_the_chosen(choice, kept)
-            else:
-                self._log_the_rest_sacrificed(choice, kept, rest)
+        # Every seat's half of the one sentence is one event (CR 603.10a,
+        # ``leaving_together``): the sacrifices, and "return those lands" for
+        # every seat at once.
+        with self.entering_together(), self.leaving_together():
+            self.sacrifice_permanents(doomed)
+            for choice, kept, rest in plans:
+                if rest is None:
+                    self._return_the_chosen(choice, kept)
+                else:
+                    self._log_the_rest_sacrificed(choice, kept, rest)
 
     def _return_the_chosen(self, choice: PendingChoice, chosen: list) -> None:
         """What was chosen goes to its owner's hand; the rest stays.
@@ -597,8 +604,9 @@ class SacrificeChoicesMixin:
 
         player = self.players[choice.player_index]
         reason = choice.data.get("reason", "Effect")
-        for perm in chosen:
-            return_permanent_to_owners_hand(self, perm, fallback_owner=player)
+        with self.entering_together(), self.leaving_together():
+            for perm in chosen:
+                return_permanent_to_owners_hand(self, perm, fallback_owner=player)
         where = "its owner's hand" if len(chosen) == 1 else "their owners' hands"
         self.log.append(
             f"{player.name} returned "
@@ -954,22 +962,26 @@ class SacrificeChoicesMixin:
         if up_to:
             self._record_sacrifice_count(count_onto, 0)
             return
-        for _ in range(count):
-            valid = self._sacrifice_candidate_indices(player, filter, exclude)
-            if not valid:
-                return
-            # `default_sacrifice_pick`'s docstring already named this as one of
-            # the three callers of the one rule; it was in fact a fourth copy,
-            # carrying the "keep the game-loser for last" half and neither the
-            # smallest-first half nor the id tiebreak. Two seats owing the same
-            # sacrifice through different paths would have given it up
-            # differently, which is what the shared rule exists to stop.
-            perm = self.default_sacrifice_pick(
-                [self.permanent_at(player, i) for i in valid]
-            )
-            _record_sacrificed_card(record, player_index, perm)
-            self.sacrifice_permanent(perm)
-            self.log.append(f"{player.name} sacrificed {perm.card.name} ({reason})")
+        # "Sacrifice two creatures" is one action, so one event (CR 603.10a,
+        # ``leaving_together``): picked one at a time on the board each pick
+        # leaves, and each sacrifice looks back at the rest.
+        with self.leaving_together():
+            for _ in range(count):
+                valid = self._sacrifice_candidate_indices(player, filter, exclude)
+                if not valid:
+                    return
+                # `default_sacrifice_pick`'s docstring already named this as one of
+                # the three callers of the one rule; it was in fact a fourth copy,
+                # carrying the "keep the game-loser for last" half and neither the
+                # smallest-first half nor the id tiebreak. Two seats owing the same
+                # sacrifice through different paths would have given it up
+                # differently, which is what the shared rule exists to stop.
+                perm = self.default_sacrifice_pick(
+                    [self.permanent_at(player, i) for i in valid]
+                )
+                _record_sacrificed_card(record, player_index, perm)
+                self.sacrifice_permanent(perm)
+                self.log.append(f"{player.name} sacrificed {perm.card.name} ({reason})")
 
     def arm_forced_sacrifice(
         self,
@@ -1259,12 +1271,17 @@ class SacrificeChoicesMixin:
         # cards in a graveyard with no computed characteristics at all
         # (CR 613.1), and Dracoplasm's whole size is their sum.
         total_power = total_toughness = 0
-        for perm in [self.permanent_at(player, i) for i in sorted(chosen, reverse=True)]:
-            total_power += int(perm.effective_power)
-            total_toughness += int(perm.effective_toughness)
-            _record_sacrificed_card(record, player_index, perm)
-            self.sacrifice_permanent(perm)
-            removed.append(perm.card.name)
+        # One answer, one event (CR 603.10a, ``leaving_together``); the
+        # state-based check below is the next event, outside it.
+        with self.leaving_together():
+            for perm in [
+                self.permanent_at(player, i) for i in sorted(chosen, reverse=True)
+            ]:
+                total_power += int(perm.effective_power)
+                total_toughness += int(perm.effective_toughness)
+                _record_sacrificed_card(record, player_index, perm)
+                self.sacrifice_permanent(perm)
+                removed.append(perm.card.name)
         for name in reversed(removed):
             self.log.append(f"{player.name} sacrificed {name} ({reason})")
         self.discard_pending_choice(choice)
