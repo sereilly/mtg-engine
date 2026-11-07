@@ -45,7 +45,7 @@ from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, dropped_narrowings, _describe_several_targets,
     _describe_targets, _filter_payload, _is_source, _is_target,
     _names_several_targets, _restrictions_beyond, _targets_only,
-    graveyard_position_payload, refuse_untestable
+    battlefield_card_types, graveyard_position_payload, refuse_untestable
 )
 
 
@@ -885,7 +885,17 @@ def _lower_put_onto_battlefield(
             # (CR 613.1 leaves a card in a graveyard nothing else), and that
             # line names the subtype, so the two readers ask one question.
             payload["graveyard_subtypes"] = list(filt.subtypes)
-            if not filt.card_types:
+            # …except a **creature** type, which a Kindred card of any type
+            # carries too (CR 205.3m; ``nouns.parse_object_filter`` names no
+            # card type for "a Zombie card"): searched by that word, a Kindred
+            # instant would be put onto the battlefield, which CR 400.4a
+            # forbids. CR 110.4a's union with the subtype is what can arrive
+            # (``battlefield_card_types``), on the union key the handler reads.
+            # No card in the pool prints the shape; the real pool's Zombie
+            # creature cards answer it exactly as they did.
+            if not filt.card_types and battlefield_card_types(filt):
+                payload["card_types"] = list(battlefield_card_types(filt))
+            elif not filt.card_types:
                 payload["card_type"] = filt.subtypes[0]
         if node.attached_to_source:
             # "…onto the battlefield under your control **attached to this

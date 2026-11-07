@@ -68,6 +68,7 @@ from ._common import (
     _describe_targets,
     _restrictions_beyond,
     _targets_only,
+    battlefield_card_types,
     dropped_narrowings,
     search_slot,
 )
@@ -244,6 +245,22 @@ def _lower_reveal_top_sorting_by_filter(
     if described is None:
         raise LoweringError(
             "the sorted reveal cannot test this restriction on a card",
+            node=node,
+        )
+    # "Put all **Goblin** cards revealed this way onto the battlefield": any
+    # card with the subtype (CR 205.3m) — and a Kindred instant among them is a
+    # match CR 400.4a leaves where it is, in the library, which is neither of
+    # the two places this sort puts a card. No card in the pool prints the
+    # shape; it refuses rather than putting an instant onto the battlefield or
+    # sending a match to the rest.
+    if (
+        node.match_zone == "battlefield"
+        and not node.filter.card_types
+        and battlefield_card_types(node.filter)
+    ):
+        raise LoweringError(
+            "a revealed creature-type card the sort puts onto the battlefield "
+            "may be one CR 400.4a leaves in the library",
             node=node,
         )
     count = _amount_payload(node.count)

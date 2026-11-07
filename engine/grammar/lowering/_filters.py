@@ -23,6 +23,7 @@ import dataclasses
 
 from .. import ast
 from ..errors import LoweringError
+from ..vocabulary import CREATURE_TYPES, PERMANENT_CARD_TYPES
 
 def _filter_payload(
     filt: ast.ObjectFilter, *, carried_separately: frozenset[str] = frozenset()
@@ -617,6 +618,26 @@ def search_subtype_restriction(filt: ast.ObjectFilter) -> dict:
     if len(filt.subtypes) > 1 and filt.subtype_match == "any":
         return {"any_subtypes": list(filt.subtypes)}
     return {"subtypes": list(filt.subtypes)}
+
+
+def battlefield_card_types(filt: ast.ObjectFilter) -> tuple[str, ...]:
+    """The card types a card phrase names when what it names is put **onto the
+    battlefield** — a search's find or a reanimation's card.
+
+    The printed types wherever the phrase prints one. A phrase naming a
+    creature type and no card type ("a **Goblin** card") is any card with the
+    subtype (CR 109.2a; a creature's or a kindred's, CR 205.3m), and of those
+    CR 400.4a lets only a permanent card arrive — "If an instant or sorcery
+    card would enter the battlefield, it remains in its previous zone" — so
+    what the move can put there is CR 110.4a's union narrowed by the subtype,
+    the reading "a Goblin **permanent** card" prints outright. Empty for an
+    untyped "card" with no creature type, which names no type at all.
+    """
+    if filt.card_types:
+        return tuple(filt.card_types)
+    if filt.subtypes and all(word in CREATURE_TYPES for word in filt.subtypes):
+        return tuple(PERMANENT_CARD_TYPES)
+    return ()
 
 
 def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:

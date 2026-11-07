@@ -37,6 +37,7 @@ from ._common import (
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
+    battlefield_card_types,
     search_slot,
     search_subtype_restriction,
 )
@@ -149,6 +150,16 @@ def _lower_search_library(
         else filt.card_types[0] if filt.card_types
         else "any"
     )
+    # "Search your library for a **Goblin** card, put it onto the
+    # battlefield": a creature type with no card type is any card with the
+    # subtype (``nouns.parse_object_filter``), and CR 400.4a keeps an instant
+    # or sorcery one off the battlefield — so the find is CR 110.4a's union
+    # with the subtype (``battlefield_card_types``), and a search of a hidden
+    # zone for a stated quality need not find the rest (CR 701.23b). No card in
+    # the pool prints the sentence; without this the parse's "any card" would
+    # put a Kindred instant onto the battlefield.
+    if to_battlefield and not filt.card_types and battlefield_card_types(filt):
+        card_type = battlefield_card_types(filt)
     restrictions: dict[str, object] = {}
     if filt.named is not None:
         restrictions["named"] = filt.named
@@ -293,9 +304,21 @@ def _lower_search_library(
                 "a search for one card per description names a place for each",
                 node=node,
             )
-        restrictions[ONE_OF_EACH] = [
-            search_slot(described, node) for described in node.one_of_each
-        ]
+        # A description naming a creature type and no card type, where a find
+        # may land on the battlefield, is the permanent union for the reason
+        # the single find's is above (CR 400.4a).
+        lands_on_battlefield = to_battlefield or any(
+            zone.name == "battlefield" for zone in node.extra_destinations
+        )
+        slots = []
+        for described in node.one_of_each:
+            slot = search_slot(described, node)
+            if lands_on_battlefield and not described.card_types and (
+                battlefield_card_types(described)
+            ):
+                slot["card_type"] = battlefield_card_types(described)
+            slots.append(slot)
+        restrictions[ONE_OF_EACH] = slots
     # One entry per find, in the printed order: how many are found and where each
     # goes are the same fact, so a card that names two destinations cannot lower
     # to a search that finds one.

@@ -49,6 +49,7 @@ from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_OWNER,
                       _EVENT_SUBJECT_OWNERS, _EVENT_SUBJECT_PLAYERS)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
+    battlefield_card_types,
     chargeable_card_filter,
     _filter_payload,
     _is_enchanted,
@@ -667,6 +668,14 @@ def lower_described_return(
             raise LoweringError(
                 "the sweep reanimation cannot read this card phrase", node=node
             )
+        # "…return all **Zombie** cards from your graveyard to the
+        # battlefield": a creature type with no card type is any card with the
+        # subtype (CR 205.3m), and CR 400.4a leaves an instant or sorcery one
+        # where it is — in the graveyard, which is where a card the sweep does
+        # not take stays. So the sweep takes CR 110.4a's union with the subtype
+        # (``battlefield_card_types``), exactly. No card in the pool prints it.
+        if not scoped.card_types and battlefield_card_types(scoped):
+            swept = {**swept, "type_filter": list(battlefield_card_types(scoped))}
         # "…to the battlefield **tapped**." (Planar Birth.) CR 110.5b — the
         # ability saying otherwise — carried only when the word was printed, so
         # every payload written before this stays byte-identical.
