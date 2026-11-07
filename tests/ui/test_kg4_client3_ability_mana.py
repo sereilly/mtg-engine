@@ -28,7 +28,7 @@ the cost names (``symbols_by_cost``), and the alternatives (``alternatives``,
 answered on ``mana_combination``, which ``mana_combination.split_refusal``
 holds to one of them). An entry is None only for an ability that adds no mana.
 
-Backwards on the base: the census finds 19 add-mana abilities with no entry,
+Backwards on the base: the census finds 17 add-mana abilities with no entry,
 the Bloom's {"G": 2} is refused ("makes no mana in any combination"), and the
 client asks Fellwar Stone for five colours.
 """
@@ -127,7 +127,12 @@ def test_every_ability_that_adds_mana_is_stated():
     """Pool-wide: each usable activated ability with an add-mana step, put on a
     board, has an ``ability_mana`` entry — and the ones the payload alone
     cannot read are answered by the board's reader, not by the summary."""
-    from web.offers import _ability_mana, _ability_mana_payload, _decided_ability_mana
+    from web import offers
+    from web.offers import _ability_mana, _ability_mana_payload
+
+    # Read by name so the census runs, and names what it finds, on a tree
+    # without the board's reader.
+    decided_reader = getattr(offers, "_decided_ability_mana", None)
 
     sid, game, _placed = _session()
     # Nobody answers, so an "as it enters" choice is stamped and the permanent
@@ -151,7 +156,11 @@ def test_every_ability_that_adds_mana_is_stated():
             continue
         on_board = game.usable_abilities_of(permanent, card=permanent.effective_card)
         entries = _ability_mana_payload(game, permanent, on_board)
-        guarded = entries is None and permanent.has_type("land")
+        # A land whose tap the board changed is answered by its summary
+        # (``_ability_mana_payload``'s guard); every other permanent states.
+        guarded = permanent.has_type("land") and set(offers._offered_mana(game, permanent)) != set(
+            permanent.effective_produced_mana
+        )
         for index, ability in enumerate(on_board):
             if not _adds_mana(ability):
                 if entries is not None:
@@ -162,8 +171,8 @@ def test_every_ability_that_adds_mana_is_stated():
                 if not guarded:
                     unstated.append((unit.name, ability.source_line))
                 continue
-            if _ability_mana(ability.instruction) is None:
-                if _decided_ability_mana(game, permanent, ability.instruction) is not None:
+            if _ability_mana(ability.instruction) is None and decided_reader is not None:
+                if decided_reader(game, permanent, ability.instruction) is not None:
                     decided.add(unit.name)
         game.remove_from_battlefield(permanent)
     assert examined >= 300, examined
