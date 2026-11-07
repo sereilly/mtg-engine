@@ -328,6 +328,11 @@ def test_the_sweep_names_a_reader_with_a_list_of_its_own(session, monkeypatch):
 
     monkeypatch.setattr(ai_abilities, "activation_prohibition", lambda *args: None)
     monkeypatch.setattr(web.serialization, "activation_prohibition", lambda *args: None)
+    # Since kg4 every ability the AI proposes is rehearsed first
+    # (`ai_abilities._moves_something`), and a rehearsal of what the engine
+    # refuses reads a refusal — a second layer that also holds these back, so
+    # the backwards reading switches it off too.
+    monkeypatch.setattr(ai_abilities, "_moves_something", lambda *args, **kwargs: True)
 
     _counts, disagreements = _sweep(session)
 
