@@ -63,12 +63,13 @@ from ...subject_filters import SOURCE_RESOLVED_CARD_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    CREATURE_TYPE_CARD_ONTO_BATTLEFIELD,
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
     _targets_only,
-    battlefield_card_types,
+    creature_type_card,
     dropped_narrowings,
     search_slot,
 )
@@ -247,22 +248,13 @@ def _lower_reveal_top_sorting_by_filter(
             "the sorted reveal cannot test this restriction on a card",
             node=node,
         )
-    # "Put all **Goblin** cards revealed this way onto the battlefield": any
-    # card with the subtype (CR 205.3m) — and a Kindred instant among them is a
-    # match CR 400.4a leaves where it is, in the library, which is neither of
-    # the two places this sort puts a card. No card in the pool prints the
-    # shape; it refuses rather than putting an instant onto the battlefield or
-    # sending a match to the rest.
-    if (
-        node.match_zone == "battlefield"
-        and not node.filter.card_types
-        and battlefield_card_types(node.filter)
-    ):
-        raise LoweringError(
-            "a revealed creature-type card the sort puts onto the battlefield "
-            "may be one CR 400.4a leaves in the library",
-            node=node,
-        )
+    # "…puts all **Goblin** cards revealed this way onto the battlefield" (Clear
+    # the Land's sentence with a creature type): any card with the subtype
+    # (CR 205.3m) — and a Kindred instant among them is a match CR 400.4a
+    # leaves where it is, in the library, which is neither of the two places
+    # this sort puts a card. No card in the pool prints the shape; it refuses.
+    if node.match_zone == "battlefield" and creature_type_card(node.filter):
+        raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
     count = _amount_payload(node.count)
     if not isinstance(count, int) or count <= 0:
         raise LoweringError(

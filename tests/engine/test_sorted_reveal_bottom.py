@@ -52,9 +52,11 @@ def test_the_sentence_lowers_to_the_sorted_reveal_with_a_bottom_rest():
     assert compiled.usable, compiled
     (instruction,) = compiled.instructions
     assert instruction.kind == "reveal_top_sorting_by_filter"
+    # "Goblin cards" names the subtype and no card type: a Kindred card of the
+    # type is one too (CR 205.3m; tests/rules/test_kg4_kindred2_subtype_card.py).
     assert instruction.payload == {
         "amount": 4,
-        "filter": {"type_filter": "creature", "subtype_filter": "goblin"},
+        "filter": {"subtype_filter": "goblin"},
         "match_zone": "hand",
         "rest_zone": "library_bottom",
     }

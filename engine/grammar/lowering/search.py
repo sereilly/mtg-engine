@@ -34,10 +34,11 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
 from ._common import (
+    CREATURE_TYPE_CARD_ONTO_BATTLEFIELD,
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
-    battlefield_card_types,
+    creature_type_card,
     search_slot,
     search_subtype_restriction,
 )
@@ -152,14 +153,13 @@ def _lower_search_library(
     )
     # "Search your library for a **Goblin** card, put it onto the
     # battlefield": a creature type with no card type is any card with the
-    # subtype (``nouns.parse_object_filter``), and CR 400.4a keeps an instant
-    # or sorcery one off the battlefield — so the find is CR 110.4a's union
-    # with the subtype (``battlefield_card_types``), and a search of a hidden
-    # zone for a stated quality need not find the rest (CR 701.23b). No card in
-    # the pool prints the sentence; without this the parse's "any card" would
-    # put a Kindred instant onto the battlefield.
-    if to_battlefield and not filt.card_types and battlefield_card_types(filt):
-        card_type = battlefield_card_types(filt)
+    # subtype (``nouns.parse_object_filter``), a Kindred instant among them,
+    # which CR 400.4a would leave in the library and the flow would put onto
+    # the battlefield. No card in the pool prints the sentence ("a Goblin
+    # **permanent** card", Moggcatcher, is what the pool prints, and is read);
+    # it refuses rather than playing the instant.
+    if to_battlefield and creature_type_card(filt):
+        raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
     restrictions: dict[str, object] = {}
     if filt.named is not None:
         restrictions["named"] = filt.named
@@ -305,20 +305,16 @@ def _lower_search_library(
                 node=node,
             )
         # A description naming a creature type and no card type, where a find
-        # may land on the battlefield, is the permanent union for the reason
-        # the single find's is above (CR 400.4a).
-        lands_on_battlefield = to_battlefield or any(
-            zone.name == "battlefield" for zone in node.extra_destinations
-        )
-        slots = []
-        for described in node.one_of_each:
-            slot = search_slot(described, node)
-            if lands_on_battlefield and not described.card_types and (
-                battlefield_card_types(described)
-            ):
-                slot["card_type"] = battlefield_card_types(described)
-            slots.append(slot)
-        restrictions[ONE_OF_EACH] = slots
+        # may land on the battlefield, refuses for the single find's reason
+        # above (CR 400.4a).
+        if (
+            to_battlefield
+            or any(zone.name == "battlefield" for zone in node.extra_destinations)
+        ) and any(creature_type_card(described) for described in node.one_of_each):
+            raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
+        restrictions[ONE_OF_EACH] = [
+            search_slot(described, node) for described in node.one_of_each
+        ]
     # One entry per find, in the printed order: how many are found and where each
     # goes are the same fact, so a card that names two destinations cannot lower
     # to a search that finds one.

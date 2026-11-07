@@ -42,13 +42,13 @@ each reader's own road:
 Each beside the real pool's own answer: a creature card of the type is still
 found, and a card of neither the type nor a Kindred of it is not.
 
-Onto the battlefield, no card in the pool prints the phrase, so the sentences
-are invented in shapes real cards print with a card type: a search, a
-targeted reanimation from your graveyard and from any graveyard, a sweep
-reanimation. CR 400.4a keeps an instant or sorcery card off the battlefield,
-so each reads CR 110.4a's union with the subtype (as "<type> permanent card"
-does); Clear the Land's sorted reveal, which has nowhere to leave such a
-match, refuses instead.
+Onto the battlefield no card in the pool prints the phrase ("a Goblin
+**permanent** card" is what the pool prints, and is read). A Kindred instant
+of the type is a "<type> card" that CR 400.4a leaves where it is, which none
+of the handlers says, so each road refuses the shape — a search, a targeted
+reanimation from your graveyard and from any graveyard, a sweep reanimation,
+Clear the Land's sorted reveal — where it used to read a creature card. The
+same sentences with "creature card" are still read.
 
 The readers of "<creature type> spell(s)" never paired the subtype with the
 creature type (each asks ``object_creature_types.card_creature_types``); they
@@ -412,93 +412,42 @@ def test_conspicuous_snoop_has_a_kindred_goblin_artifacts_activated_abilities():
     assert granted_top_abilities(game, snoop) == ()
 
 
-# --- onto the battlefield: CR 110.4a's union with the subtype ----------------
+# --- onto the battlefield: refused ------------------------------------------
 #
-# No card in the pool puts a "<creature type> card" onto the battlefield, so
-# these are invented sentences, each in a shape a real card prints with a
-# card type. A creature type alone names any card with it, and CR 400.4a
-# ("If an instant or sorcery card would enter the battlefield, it remains in
-# its previous zone") is why each reads it as the permanent union: the
-# Kindred artifact arrives, the creature card arrives as it always did.
-
-ZOMBIE_IDOL = _kindred("Test Zombie Idol", "Kindred Artifact — Zombie", "", "{2}", ())
+# No card in the pool puts a "<creature type> card" onto the battlefield; the
+# pool prints "a Goblin **permanent** card" (CR 110.4a's union, read since
+# kg4 targets). A creature type alone names any card with it, a Kindred instant
+# among them, and CR 400.4a ("If an instant or sorcery card would enter the
+# battlefield, it remains in its previous zone") is what happens to that one —
+# which no handler these roads lower to says. So each road refuses the shape,
+# where on the base it read a creature card; the same sentence printing
+# "creature card" is still read. Invented sentences, each in a shape a real
+# card prints with a card type.
 
 
 def _sorcery(name: str, text: str) -> CardDefinition:
     return _kindred(name, "Sorcery", text)
 
 
-@pytest.mark.cr("110.4a", "205.3m", "400.4a", "701.23b")
-@pytest.mark.parametrize("found", ["Test Goblin Lantern", "Raging Goblin"])
-def test_a_search_putting_a_goblin_card_onto_the_battlefield_finds_permanents(found):
-    summons = _sorcery(
-        "Test Goblin Summons",
-        "Search your library for a Goblin card, put it onto the battlefield, then shuffle.",
-    )
-    game = _duel(hand=[summons], interactive=True,
-                 library=[GOBLIN_RITE, GOBLIN_LANTERN, _POOL["Raging Goblin"],
-                          _POOL["Grizzly Bears"]])
-    assert game.cast_from_hand(0, "Test Goblin Summons").supported
-    game.resolve_top_of_stack()
-    assert game.pending_choice_of("search_library", 0) is not None, game.log[-4:]
-    assert not _pick(game, "Grizzly Bears")
-    assert _pick(game, found), game.log[-4:]
-    _settle(game)
-    assert any(p.card.name == found for p in game.controlled_by(0)), game.log[-6:]
-
-
-@pytest.mark.cr("110.4a", "205.3m", "400.4a")
-@pytest.mark.parametrize("text", [
+_ONTO_THE_BATTLEFIELD = (
+    "Search your library for a Goblin card, put it onto the battlefield, then shuffle.",
     "Return target Zombie card from your graveyard to the battlefield.",
     "Put target Zombie card from a graveyard onto the battlefield under your control.",
-])
-@pytest.mark.parametrize("returned", ["Test Zombie Idol", "Scathe Zombies"])
-def test_a_reanimation_of_a_zombie_card_returns_a_zombie_permanent_card(text, returned):
-    rites = _sorcery("Test Zombie Rites", text)
-    graveyard = [_POOL["Grizzly Bears"], ZOMBIE_IDOL, _POOL["Scathe Zombies"]]
-    game = _duel(hand=[rites], graveyard=graveyard)
-    slot = _names(graveyard).index(returned)
-    offered = {t["name"] for t in game.cast_target_spec(0, rites)["valid_targets"]}
-    assert "Grizzly Bears" not in offered and returned in offered, offered
-    assert game.cast_from_hand(
-        0, "Test Zombie Rites", target_player_index=0, target_permanent_index=slot,
-    ).supported, game.log[-4:]
-    _settle(game)
-    assert any(p.card.name == returned for p in game.controlled_by(0)), game.log[-6:]
+    "Return all Zombie cards from your graveyard to the battlefield.",
+    _POOL["Clear the Land"].oracle_text.replace("land cards", "Goblin cards"),
+)
 
 
-@pytest.mark.cr("110.4a", "205.3m", "400.4a")
-def test_a_sweep_returning_all_zombie_cards_leaves_the_kindred_instant_behind():
-    """Every Zombie card a permanent can be comes back together; the Kindred
-    instant stays in the graveyard, which is where CR 400.4a leaves it."""
-    uprising = _sorcery(
-        "Test Zombie Uprising",
-        "Return all Zombie cards from your graveyard to the battlefield.",
-    )
-    game = _duel(hand=[uprising],
-                 graveyard=[ZOMBIE_TRICK, ZOMBIE_IDOL, _POOL["Scathe Zombies"],
-                            _POOL["Grizzly Bears"]])
-    assert game.cast_from_hand(0, "Test Zombie Uprising").supported
-    _settle(game)
-    assert {"Test Zombie Idol", "Scathe Zombies"} <= {p.card.name for p in game.controlled_by(0)}
-    assert _names(game.players[0].graveyard)[:2] == ["Test Zombie Trick", "Grizzly Bears"]
-
-
-@pytest.mark.cr("205.3m", "400.4a")
-@pytest.mark.parametrize("noun, supported", [("Goblin", False), ("land", True)])
-def test_a_sort_putting_revealed_goblin_cards_onto_the_battlefield_refuses(noun, supported):
-    """Clear the Land's sentence with a creature type for the card type:
-    "Each player reveals the top five cards of their library, puts all Goblin
-    cards revealed this way onto the battlefield tapped, and exiles the rest."
-    A Kindred instant among them is a match CR 400.4a leaves in the library,
-    which neither half of the sort can say, so the line is reported rather than
-    played wrong. The printed card (land cards) is untouched."""
+@pytest.mark.cr("109.2a", "205.3m", "400.4a")
+@pytest.mark.parametrize("text", _ONTO_THE_BATTLEFIELD)
+def test_a_creature_type_card_put_onto_the_battlefield_refuses(text):
     from engine.oracle import compile_card_oracle
 
-    text = _POOL["Clear the Land"].oracle_text.replace("land cards", f"{noun} cards")
-    assert f"{noun} cards revealed" in text
-    program = compile_card_oracle(_sorcery(f"Test {noun} Mustering", text))
-    assert program.supported is supported, program.reason
+    program = compile_card_oracle(_sorcery("Test Kindred Muster", text))
+    assert not program.supported, program
+    for word in ("Goblin", "Zombie"):
+        text = text.replace(f"{word} card", f"{word} creature card")
+    assert compile_card_oracle(_sorcery("Test Creature Muster", text)).supported, text
 
 
 # --- the spell readers, which already asked the subtype alone ----------------

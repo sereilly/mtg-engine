@@ -28,7 +28,7 @@ from ._described_returns import (_graveyard_to_hand_payload,
                                  _reads_no_return_restriction)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_targets, _is_target,
-    _restrictions_beyond, _describe_several_card_targets, battlefield_card_types,
+    _restrictions_beyond, _describe_several_card_targets,
     _describe_several_targets, _names_several_targets, testable_filter_payload,
     describe_independent_target_roles,
 )
@@ -967,17 +967,12 @@ def _lower_return_to_zone(
             # one is a card this engine has not got. Regrowth's untyped "target
             # card" still has no lowering here — claiming it would silently
             # narrow the player's choice to whatever the handler happened to
-            # scan for.
-            #
-            # "Return target **Zombie** card …" names no card type at all
-            # (``nouns.parse_object_filter``: a Kindred card of the type is one,
-            # CR 205.3m), and what CR 400.4a lets it put onto the battlefield is
-            # CR 110.4a's union with the subtype (``battlefield_card_types``) —
-            # read as "a Zombie **permanent** card" is. The one difference: a
-            # Kindred instant of the type is a legal target that would stay in
-            # the graveyard, and the union does not offer it.
-            reanimated_types = battlefield_card_types(filt)
-            if reanimated_types not in _REANIMABLE_CARD_TYPES:
+            # scan for. Nor has "target **Zombie** card": it names no card type
+            # (``nouns.parse_object_filter``; a Kindred card of the type is one,
+            # CR 205.3m), and a Kindred instant of the type is a legal target
+            # CR 400.4a would leave in the graveyard — no reading of the
+            # handler's says that, and no card in the pool prints the shape.
+            if filt.card_types not in _REANIMABLE_CARD_TYPES:
                 raise LoweringError(
                     "the reanimation handler only moves permanent cards",
                     node=node,
@@ -1015,13 +1010,13 @@ def _lower_return_to_zone(
             # ``graveyard_card_matches``/``card_has_type``, which is CR 205.2a's
             # answer — an Artifact Creature card in a graveyard *is* an artifact
             # card, and `primary_type` says it is only a creature one.
-            if len(reanimated_types) > 1:
+            if len(filt.card_types) > 1:
                 # CR 110.4a's union (the only one the gate above admits):
                 # "a Dragon **permanent** card" is any of the six, not
                 # whichever of them a list happens to put first.
-                payload["card_types"] = list(reanimated_types)
-            elif reanimated_types[0] != "creature":
-                payload["card_type"] = reanimated_types[0]
+                payload["card_types"] = list(filt.card_types)
+            elif filt.card_types[0] != "creature":
+                payload["card_type"] = filt.card_types[0]
             # "target **Dragon** permanent card" (Bladewing the Risen), lifted
             # out of the blanket refusal above. Emitted only when printed, so
             # every reanimation before it keeps a byte-identical payload.

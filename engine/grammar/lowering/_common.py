@@ -32,9 +32,10 @@ event froze.
 from .. import ast
 from ..errors import LoweringError
 
-from ._filters import (_PAYLOAD_HONOURED_FILTER_FIELDS, _filter_payload,
-                       _restrictions_beyond, battlefield_card_types,
-                       chargeable_card_filter,
+from ._filters import (CREATURE_TYPE_CARD_ONTO_BATTLEFIELD,
+                       _PAYLOAD_HONOURED_FILTER_FIELDS, _filter_payload,
+                       _restrictions_beyond, chargeable_card_filter,
+                       creature_type_card,
                        chargeable_tap_filter, dropped_narrowings,
                        graveyard_position_payload, is_mana_value_x,
                        refuse_untestable, search_slot,
