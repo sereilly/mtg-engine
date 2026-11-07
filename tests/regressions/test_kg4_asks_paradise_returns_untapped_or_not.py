@@ -109,11 +109,13 @@ def test_a_paradise_another_player_took_still_returns_at_the_step_named():
     game = _table(False)
     paradise = _tap_paradise_for_mana(game)
     change_control(paradise, 1, source="test")
-    game._recompute_continuous_effects()
+    game._sync_control()
+    assert any(permanent is paradise for permanent in game.controlled_by(1))
 
     game.begin_turn_bookkeeping(1)
     game.resolve_untap_step(1)
     assert game.is_on_battlefield(paradise), "not the step the ability named"
+    assert not paradise.tapped, "its new controller's step untaps it"
 
     game.begin_turn_bookkeeping(0)
     game.resolve_untap_step(0)
