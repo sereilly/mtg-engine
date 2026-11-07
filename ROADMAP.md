@@ -1329,11 +1329,8 @@ one card prints this") reads as a work item long after it stopped being true.
     same way" is one more rider beside `discard_same_way`; the bespoke
     `balance` prompt, its client modal and `tests/ui/test_balance_ui_api.py`
     go dead. Keeps and discards happen as each seat answers rather than at
-    once (the Rites, Last Rites). A "next time" rider is spent per damage
-    *event*, so a trampling or multi-blocked attacker under Impulsive
-    Maneuvers or Desperate Gambit has only its first event doubled or
-    prevented (CR 510.2: `next_damage.spend` per event; a per-pass settle in
-    `combat_damage_step.finish()`).
+    once (the Rites, Last Rites). (A "next time" rider covers its source's
+    whole dealing since kg4/615 — CR 615.8, the owner's ruling.)
   * *Replacements and what they are called.* With a draw-replacement offer
     pending, a draw from an empty library does not lose until a later check
     (`phases/draw_step.py` runs its state-based check while the offer is

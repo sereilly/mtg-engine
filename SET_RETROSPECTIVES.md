@@ -1750,7 +1750,9 @@ process state, the log and wire leftovers, the client leftovers, the Debug Menu 
 pop, the GET flood's trigger, and the Krosan Warchief, reproduced with every
 request body captured — six identical Pemmin's Auras spent the instant-speed
 chooser's three proposals before it reached the Warchief). CR 615.8 stays:
-no ruling settles it, re-fetched the day. The AI leftovers' named parts were
+no ruling settles it, re-fetched the day — and the owner then settled it
+(2026-11-07: a source-keyed "next time" is everything its source deals in
+one dealing), built as kg4/615 and merged after the round's gate. The AI leftovers' named parts were
 taken by four groups and the entry is rewritten to what they measured and
 left. `target_permanent_index` drained at
 its holders (one shape; a graveyard target its stamp; a stack object named by
@@ -1799,7 +1801,8 @@ round's rules.
 
 *Known gaps:*
 - **Drained:** thirteen of sixteen, and the later waves' own finds.
-- **Rewritten:** CR 615.8 (re-fetched); AI leftovers (to what kg4's AI
+- **Rewritten:** CR 615.8 (re-fetched, then settled by the owner's ruling
+  and drained by kg4/615, leaving four readings beside it); AI leftovers (to what kg4's AI
   groups measured and left); `target_permanent_index` (to its API keyword).
 - **Added:** CR 616.1e for an entry, land mana and a chosen discard; a
   second AI seat at a flagged step and Camouflage's simulator stall;

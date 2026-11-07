@@ -1062,23 +1062,35 @@ drained the colour-blind planner with a test on the neighbouring board (the
 Angel already face down), and Legions' Phase 5 found Onslaught's own board
 (the Angel cast face down) still stranding its turn-up.
 
-- **Whether a sweep is one "next instance of damage from that source"
-  (CR 615.8) is read but not settled.** CR 615.8 never defines "instance".
-  Every ruling on a "next time" card is about the recipient-keyed template
-  (Mirrorwood Treefolk and Glarecaster, 2004-10-04: a time covers every chunk)
-  or a numeric source-keyed one (Harm's Way, 2009-10-01: "just 2" of a
-  Pyroclasm's simultaneous damage, not 2 per recipient). kg3 read the rulings
-  of all 56 "the next time … would deal damage" cards; kg4 re-fetched the
-  seven source-keyed ones (Penance, both Pilgrims, Shadowbane, Reflect
-  Damage, Desperate Gambit, Impulsive Maneuvers) and Harm's Way on
-  2026-11-06 and read 18 more source-keyed cards' rulings: none says.
-  *Clears:* an official ruling. Part, if it comes: a source-keyed `uses=1`
-  record (`shields.Shield`, `DamageRedirect`, Desperate Gambit's and
-  Impulsive Maneuvers' replacements) spent at a moment stays open for the
-  rest of the dealing (the `SharedNextTime` shape, closed by
-  `simultaneous_damage.finish`);
-  `tests/regressions/test_kg3_events_next_instance_open.py` names the cards.
-
+- **Four "next time" readings left beside CR 615.8's ruling.** kg4 settled
+  CR 615.8 by the owner's ruling (2026-11-07): a source-keyed "next time" is
+  one instance — everything its source deals in one simultaneous dealing
+  (`damage_redirects.dealing_moment`, `shields.SharedNextTime` `by_source`,
+  closed by `simultaneous_damage.finish`;
+  `tests/regressions/test_kg4_615_next_instance_census.py`). Left, each
+  measured by kg4/615:
+  - Jade Monolith and Eye for an Eye keep legacy single-recipient records
+    (the `redirect_damage_to_player` metadata pair; `PlayerState.mirror_damage_*`),
+    spent per chunk; they meet a second chunk only when one dealing hits
+    their one recipient twice (Cuombajj Witches naming one object twice).
+    Part: move them onto `DamageRedirect` and a rider record; the census
+    exempts them by name and fails if either reaches several recipients.
+  - Dark Sphere's "half" and Forcefield's "all but 1" are computed per
+    chunk; across a split sentence's two chunks at one recipient the share
+    should be of the instance's total (`Shield.would_prevent` needs the
+    running total).
+  - The recipient-keyed template keeps `damage_moment` (the resolving
+    object), wider than a dealing: Illuminate kicked with {2}{R} moves its
+    second sentence's damage to Glarecaster's controller too, and Mana
+    Clash moves every flip's damage against its ruling ("each point of
+    damage is dealt separately"). Part: `occasion_moment` always uses the
+    dealing; then `COMBAT_DEALING` and `end_simultaneous_redirects` go
+    (`scratch/kg4/615/probe_recipient.py`).
+  - Kicked Magma Burst is one divided instruction, so one dealing; whether
+    its kicker sentence is a second instance belongs to whoever owns the
+    division lowering.
+  *Clears:* a prevention round (the first two, the third), a lowering
+  round (the fourth).
 - **The API still announces a battlefield target by slot, and three zones
   share that keyword.** kg4's `ids` drained the holders: on every holder the
   slot channel is None or a list (`check_target_slots`, read through

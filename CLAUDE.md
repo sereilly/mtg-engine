@@ -647,6 +647,16 @@ entries, not editing dispatch**.
   — delayed ones included — is announced once, for that end's total. A new
   loop dealing damage to several recipients goes through `deal_at_once`
   (`tests/engine/test_kg3_dealings_one_dealing_census.py`).
+- **A source-keyed "next time" is one instance — everything its source deals
+  in one simultaneous dealing** (CR 615.8; the owner's ruling, 2026-11-07): a
+  one-use `Shield`, `DamageRedirect` or `next_damage` rider spent on a chunk
+  of an open dealing (`damage_redirects.dealing_moment`) opens a
+  `shields.SharedNextTime` (`by_source`) there — open for that source's other
+  chunks, closed by `simultaneous_damage.finish` — and a source-keyed shield's
+  CR 615.5 additional effect runs once, with the total, as the dealing
+  finishes (`prevention.shields._spend(afterward=)`). Two printed sentences
+  are two instances (CR 608.2c); CR 615.7's numeric shields stay per point;
+  the recipient-keyed template (Glarecaster) keeps `damage_moment`.
 - `engine/destruction_events.py` — a destruction (CR 701.8) is one event,
   announced where it is decided (after indestructible, regeneration and a land's
   shield decline) and carrying its cause; a sacrifice or a state-based move to
