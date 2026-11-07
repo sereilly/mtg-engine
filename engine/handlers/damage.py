@@ -1011,7 +1011,11 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             if instruction.payload.get("no_regen"):
                 target_perm.metadata["cant_be_regenerated_this_turn"] = True
             if instruction.payload.get("exile_if_dies"):
-                target_perm.metadata["exile_if_dies_this_turn"] = True
+                # The marker's value names the card whose effect it is, for
+                # CR 616.1e's option (``zone_changes.recorded_name``).
+                target_perm.metadata["exile_if_dies_this_turn"] = (
+                    getattr(context.card, "name", None) or True
+                )
         _record_damage_recipient(context, target_perm)
         apply_damage_to_creature(
             game, target_perm, damage, source_permanent or card,
@@ -1042,7 +1046,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             if instruction.payload.get("no_regen"):
                 victim.metadata["cant_be_regenerated_this_turn"] = True
             if instruction.payload.get("exile_if_dies"):
-                victim.metadata["exile_if_dies_this_turn"] = True
+                victim.metadata["exile_if_dies_this_turn"] = (
+                    getattr(context.card, "name", None) or True
+                )
         _record_damage_recipient(context, victim)
         apply_damage_to_creature(
             game, victim, damage, source_permanent or card,
@@ -1587,7 +1593,11 @@ def grant_damage_riders_until_eot(game: Game, instruction: OracleInstruction, co
         creature.metadata[DAMAGE_DENIES_REGENERATION] = True
         granted.append("can't be regenerated")
     if instruction.payload.get("exile_if_dies"):
-        creature.metadata[DAMAGE_EXILES_INSTEAD] = True
+        # Named, so the rider it hands what the creature damages names the
+        # card too (``damage_events._apply_dealer_riders``).
+        creature.metadata[DAMAGE_EXILES_INSTEAD] = (
+            getattr(context.card, "name", None) or True
+        )
         granted.append("is exiled if it would die")
     if granted:
         game.log.append(

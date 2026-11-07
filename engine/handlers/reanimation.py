@@ -516,7 +516,10 @@ def _complete_reanimation(
     # and it lives on the permanent rather than on the card because a
     # `CardDefinition` is shared between every copy of a card in a deck.
     if reanimated is not None and instruction.payload.get("exile_on_leave"):
-        reanimated.metadata[EXILE_ON_LEAVING_BATTLEFIELD] = True
+        # Named, for CR 616.1e's option (``zone_changes.recorded_name``).
+        reanimated.metadata[EXILE_ON_LEAVING_BATTLEFIELD] = (
+            getattr(context.card, "name", None) or True
+        )
     # What this step put onto the battlefield, for the sentences that name it
     # afterwards ("that creature gains …"). By id, like every other producer:
     # the permanent may leave between two steps of one resolution, and a

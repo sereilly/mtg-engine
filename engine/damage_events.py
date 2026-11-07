@@ -302,8 +302,12 @@ def _apply_dealer_riders(game, source, recipient) -> None:
     if not recipient.is_creature:
         return
     for on_dealer, on_victim in _DEALER_RIDERS:
-        if source.metadata.get(on_dealer):
-            recipient.metadata[on_victim] = True
+        # The dealer's value, not ``True``: the exile rider's names the card
+        # that granted it (Runesword), which the victim's would-die option
+        # names (``replacements.zone_changes.recorded_name``).
+        granted = source.metadata.get(on_dealer)
+        if granted:
+            recipient.metadata[on_victim] = granted
     # The same rider printed as a *standing* ability rather than stamped by a
     # resolving one ("Creatures dealt damage by this creature this turn can't be
     # regenerated this turn" — what Bone Shaman grants itself). A marker cannot

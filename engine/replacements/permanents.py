@@ -883,10 +883,19 @@ def _applies_land_mana_substitution(game, payload: dict) -> bool:
 
 
 def _land_mana_substitution_sources(game, payload: dict) -> list:
-    """Nothing: ``land_mana_swaps.swapped_production`` answers with the symbol
-    a land makes instead and not with what said so, so there is no card on the
-    answer to name. Pure."""
-    return []
+    """What makes the land produce something else for this event: the
+    permanent whose static says so (Infernal Darkness, Pulse of Llanowar) or
+    the card that armed the seat's record (Deep Water, Harvest Mage), as
+    ``land_mana_swaps.swapped_production`` answers it — the one answer the
+    replacement applies, so the option names what will win. Pure."""
+    from ..land_mana_swaps import swapped_production
+
+    found = swapped_production(
+        game, payload["land"], tapper=_land_mana_tapper(game, payload),
+    )
+    if found is None or found.produced is None or found.source is None:
+        return []
+    return [found.source]
 
 
 @replacement_effect(

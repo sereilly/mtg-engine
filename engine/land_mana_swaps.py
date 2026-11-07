@@ -52,7 +52,7 @@ it without applying anything.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 
 from .oracle_types import MANA_COLOR_OF_CHOICE
@@ -222,6 +222,13 @@ class ManaSubstitution:
     #: controller as the observer, because "you" in a static is CR 109.5's
     #: controller of the permanent printing it.
     lands: "dict | None" = None
+    #: What says so, for CR 616.1e's ``effect_order`` option: the permanent
+    #: whose static this is (:func:`static_substitution_for`), or the name the
+    #: per-seat record carries (``LandManaSwap.source_name``) — None on a
+    #: clause read off a line alone (:func:`substitution_line`). Not part of
+    #: what the clause *is*, so it takes no part in equality, and a
+    #: ``Permanent`` (which does not hash) never reaches the hash.
+    source: object = field(default=None, compare=False)
 
 
 #: "If a land is tapped for mana, it produces <mana> instead of any other
@@ -421,7 +428,7 @@ def static_substitution_for(game, land) -> "ManaSubstitution | None":
                 # this land, so this static says nothing about it.
                 continue
             if substitution.land_type is None or land.has_type(substitution.land_type):
-                return substitution
+                return replace(substitution, source=source)
     return None
 
 
@@ -516,6 +523,7 @@ def swapped_production(
         found = ManaSubstitution(
             produced=_color_of_choice(requested, land), land_type=None,
             replaces_amount=found.replaces_amount, colors_only=found.colors_only,
+            source=found.source,
         )
     for record in swaps_on(game.players[seat]):
         if not subject_matches(game, land, record.lands, observer=seat):
@@ -537,6 +545,7 @@ def swapped_production(
                 produced=symbol, land_type=None,
                 replaces_amount=record.replaces_amount,
                 colors_only=record.colors_only,
+                source=record.source_name,
             )
     return found
 

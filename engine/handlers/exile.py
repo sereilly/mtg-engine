@@ -1116,7 +1116,12 @@ def exile_graveyard_arrivals_this_turn(game: Game, instruction: OracleInstructio
     Swept with the rest of the turn (``turn_management``'s cleanup loop), which
     is CR 514.2 and the same place every other "this turn" record forgets.
     """
-    context.caster.exile_cards_bound_for_graveyard_this_turn = True
+    # The arming card's name rather than ``True``: CR 616.1e's option names
+    # it beside a second graveyard replacement (Legacy Weapon's shuffle),
+    # ``zone_changes._graveyard_exile_sources``.
+    context.caster.exile_cards_bound_for_graveyard_this_turn = (
+        getattr(context.card, "name", None) or True
+    )
     game.log.append(
         f"{context.caster.name}'s cards will be exiled instead of going to "
         "their graveyard this turn"

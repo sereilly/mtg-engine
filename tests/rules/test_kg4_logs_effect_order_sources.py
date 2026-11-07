@@ -215,9 +215,10 @@ def test_a_face_down_source_is_named_as_every_seat_sees_it():
 
 @pytest.mark.cr("616.1e")
 def test_an_effect_whose_record_keeps_no_card_shows_its_label_alone():
-    """A source reader that finds nothing — a marker that records no arming
-    card (Disintegrate's "exile it instead") — leaves the option as the label,
-    never "Label ()"."""
+    """A source reader that finds nothing — here a permanent carrying no
+    would-die marker at all, so Disintegrate's reader has no name to read
+    (``zone_changes.recorded_name``) — leaves the option as the label, never
+    "Label ()"."""
     for kind, candidate in _registrations():
         if candidate.key == "_exile_instead_of_dying":
             bears = Permanent(card=_C["Grizzly Bears"])
