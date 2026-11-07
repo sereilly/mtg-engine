@@ -47,7 +47,8 @@ _ONE_EFFECT = {
     ),
     ("mixins/effects.py", "place_plus1_counters"): (
         ("plus1_counters",),
-        "one effect (Conclave Mentor)",
+        "one effect (Conclave Mentor), standing for every copy: each adds "
+        "one, so their order changes nothing",
     ),
     ("mixins/zone_funnels.py", "_leaving_battlefield_replaced"): (
         ("would_leave_battlefield",),

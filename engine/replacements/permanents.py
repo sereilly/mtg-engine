@@ -94,16 +94,27 @@ def _one_more_plus1_counter(game, payload: dict) -> ReplacementOutcome | None:
     A *modifying* replacement, not a consuming one: the event still happens,
     with a bigger number. Returning ``new_amount`` would be the shape damage
     uses, but this event's quantity is ``count`` — so the payload is written
-    directly and nothing is consumed, which is also what keeps a second
-    Mentor from being skipped (CR 616.1f re-asks the rest against the raised
-    count, and each applies once).
+    directly and nothing is consumed.
+
+    **One more for each Mentor.** Each copy is its own effect and each
+    applies once (CR 616.1f) — "If you control two Conclave Mentors, the
+    number of +1/+1 counters put on a creature is two plus the original
+    number. Three Conclave Mentors add three, and so on." (its ruling,
+    2020-06-23). One registration stands for every copy, as the damage
+    multipliers' does (``_multiply_damage_dealt``), so it adds one per source;
+    it added one in all, and two Mentors put two counters where the card
+    puts three. The copies' order changes nothing (each adds one), so there
+    is no choice between them to put to anybody.
     """
-    payload["count"] = int(payload.get("count", 0)) + 1
+    sources = _extra_plus1_counter_sources(game, payload)
+    extra = max(1, len(sources))
+    payload["count"] = int(payload.get("count", 0)) + extra
     permanent = payload.get("permanent")
     name = getattr(getattr(permanent, "card", None), "name", "a creature")
-    by = ", ".join(source_names(_extra_plus1_counter_sources(game, payload)))
+    by = ", ".join(source_names(sources))
     game.log.append(
-        f"{name} gets one more +1/+1 counter" + (f" ({by})" if by else "")
+        f"{name} gets {'one more +1/+1 counter' if extra == 1 else f'{extra} more +1/+1 counters'}"
+        + (f" ({by})" if by else "")
     )
     return ReplacementOutcome()
 
