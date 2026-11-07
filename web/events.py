@@ -3,7 +3,25 @@
 Everything else in the API is polled. A lobby, or a second browser watching the
 same table, learns that a session changed through
 :func:`_notify_session_change`, which fans a one-line payload out to whatever
-queues :func:`_stream_session_events` is holding open.
+streams :func:`_stream_session_events` is holding open.
+
+**A route that notifies runs on a worker thread.** Every game route is a plain
+``def``, which FastAPI runs in its threadpool, and each stream's queue belongs
+to the event loop the stream runs on. ``asyncio.Queue`` is not thread-safe: a
+``put_nowait`` from a worker thread hands the waiting ``get`` its value
+without waking the loop, so the stream sat in its selector until something
+else woke it — another request, or the stream's own 30-second keepalive
+timeout. So every hand-off is scheduled on the stream's own loop
+(``loop.call_soon_threadsafe``), which writes the loop's wake-up pipe; called
+from the loop itself it is the same call.
+
+**One undelivered event per stream, and it remembers every reason.** A stream
+that has not yet sent its last event is given the next one in its place — one
+re-fetch answers both — but a reason is something a client acts on (the
+"Match Restarting" banner is ``match_restart``'s), so an event given in
+another's place carries every reason since the last one sent (``reasons``),
+the newest as ``reason``. The state itself never depends on an event arriving: a client
+orders payloads by ``revision`` (below) and re-fetches on reconnect.
 """
 
 from __future__ import annotations
@@ -13,7 +31,35 @@ import json
 from collections import defaultdict
 
 
-_session_event_queues: dict[str, set[asyncio.Queue[dict[str, str]]]] = defaultdict(set)
+class _Stream:
+    """One open stream: its loop, and the event it has not sent yet (or
+    None). Touched only on the loop's own thread."""
+
+    __slots__ = ("loop", "pending", "ready")
+
+    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
+        self.loop = loop
+        self.pending: dict | None = None
+        self.ready = asyncio.Event()
+
+    def offer(self, reason: str) -> None:
+        """Hold *reason* for the next send, beside any reason not yet sent:
+        ``{"reason": …}`` alone, or — once two have waited together —
+        ``reasons`` too, oldest first."""
+        if self.pending is None:
+            self.pending = {"reason": reason}
+        else:
+            earlier = self.pending.get("reasons") or [self.pending["reason"]]
+            self.pending = {"reason": reason, "reasons": [*earlier, reason]}
+        self.ready.set()
+
+    def take(self) -> dict | None:
+        event, self.pending = self.pending, None
+        self.ready.clear()
+        return event
+
+
+_session_streams: dict[str, set[_Stream]] = defaultdict(set)
 
 #: How many changes each session has announced: one more at every
 #: :func:`_notify_session_change`, whoever is listening. Served on every state
@@ -22,9 +68,9 @@ _session_event_queues: dict[str, set[asyncio.Queue[dict[str, str]]]] = defaultdi
 #: version across games — a rematch or a restart starts a new, shorter one,
 #: and so does an undo — and the client's stale-response guard, which
 #: compared lengths, discarded the new game for any seat that missed the
-#: event naming the reset (a stream reconnecting, or the one-slot queue below
-#: replacing that event with the next one). That seat sat on the finished
-#: game's Defeat screen, fetching a discarded state at every event.
+#: event naming the reset (a stream reconnecting, or an undelivered event
+#: replaced by the next one). That seat sat on the finished game's Defeat
+#: screen, fetching a discarded state at every event.
 _session_revisions: dict[str, int] = defaultdict(int)
 
 
@@ -34,40 +80,41 @@ def session_revision(session_id: str) -> int:
 
 
 def _notify_session_change(session_id: str, reason: str) -> None:
+    """Count the change (synchronously: the payload the calling route builds
+    next carries the new ``revision``) and hand *reason* to every open
+    stream, on that stream's own loop."""
     _session_revisions[session_id] += 1
-    queues = _session_event_queues.get(session_id)
-    if not queues:
+    streams = _session_streams.get(session_id)
+    if not streams:
         return
-
-    event = {"reason": reason}
-    for queue in tuple(queues):
-        if queue.full():
-            try:
-                queue.get_nowait()
-            except asyncio.QueueEmpty:
-                pass
+    for stream in tuple(streams):
         try:
-            queue.put_nowait(event)
-        except asyncio.QueueFull:
-            continue
+            stream.loop.call_soon_threadsafe(stream.offer, reason)
+        except RuntimeError:
+            # The loop has closed (a test's portal, a server shutting down):
+            # nobody is listening on it any more.
+            streams.discard(stream)
 
 
 async def _stream_session_events(session_id: str):
-    queue: asyncio.Queue[dict[str, str]] = asyncio.Queue(maxsize=1)
-    _session_event_queues[session_id].add(queue)
+    stream = _Stream(asyncio.get_running_loop())
+    _session_streams[session_id].add(stream)
     try:
         yield ": connected\n\n"
         while True:
             try:
-                event = await asyncio.wait_for(queue.get(), timeout=30)
+                await asyncio.wait_for(stream.ready.wait(), timeout=30)
             except asyncio.TimeoutError:
                 yield ": keepalive\n\n"
                 continue
+            event = stream.take()
+            if event is None:
+                continue
             yield f"event: state\ndata: {json.dumps(event)}\n\n"
     finally:
-        queues = _session_event_queues.get(session_id)
-        if queues is None:
+        streams = _session_streams.get(session_id)
+        if streams is None:
             return
-        queues.discard(queue)
-        if not queues:
-            _session_event_queues.pop(session_id, None)
+        streams.discard(stream)
+        if not streams:
+            _session_streams.pop(session_id, None)

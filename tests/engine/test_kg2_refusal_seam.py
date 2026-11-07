@@ -470,9 +470,10 @@ def test_a_refused_land_tap_answers_the_tapper_and_writes_nothing(catalog_by_nam
         0, "Forest", "Q", permanent_id=forest.permanent_id,
     ) == "'Q' is not a mana symbol"
     forest.tapped = True
+    # CR 107.5, in the activation path's sentence (``tap_symbol_refusal``).
     assert game.tap_land_for_mana_or_refusal(
         0, "Forest", permanent_id=forest.permanent_id,
-    ) == "failed to tap land for mana"
+    ) == "Forest is already tapped"
     assert not game.tap_land_for_mana(0, "Forest", permanent_id=forest.permanent_id)
     assert game.log == before
     forest.tapped = False

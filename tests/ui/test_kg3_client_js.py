@@ -7,7 +7,9 @@
 * Two same-named permanents on the retarget prompt read apart
   (``retargetOptionLabels``).
 * Magical Hack aimed at a spell offers the land words that spell's text
-  reads now (``landWordOptionsForSpell``).
+  reads now — since kg4 the server's reading (``text_change.stack_words``,
+  ``web/offers.text_change_offer``; driven in
+  ``test_kg4_client2_text_change_words.py``), read by ``textChangeWordOptions``.
 * The re-ask back-off (``retryAutoAdvanceAfterFlight``): one scheduled
   re-ask serves every sender, and its delay grows only while nothing changes.
 """
@@ -168,18 +170,17 @@ def test_two_willbenders_one_seat_controls_read_apart():
 
 
 def test_magical_hack_offers_the_land_words_a_spell_reads_now():
+    """The words come from the server, per top-first stack index; the client
+    offers exactly those, in colour order."""
+    hack = {"text_change": {"mode": "land_type", "words": {}, "stack_words": {
+        "0": ["U", "G"], "1": ["B"],
+    }}}
     words = run_app_js(
-        ["landWordOptionsForSpell"],
-        "return INPUT.map((card) => landWordOptionsForSpell(card).map((o) => o.symbol));",
-        [
-            {"type": "Instant", "oracle_text": "Destroy target Island or Forest."},
-            {"type": "Instant", "oracle_text": "Destroy target Island.",
-             "text_changes": [{"from": "island", "to": "swamp"}]},
-            {"type": "Sorcery", "oracle_text": "Draw a card."},
-        ],
+        ["textChangeWordOptions", "castTextChange"],
+        "return [0, 1, 2].map((i) => textChangeWordOptions(INPUT, { stackIndex: i }).map((o) => o.symbol));",
+        hack,
         prelude=(
             "const MANA_COLOR_OPTIONS = [{symbol:'W'},{symbol:'U'},{symbol:'B'},{symbol:'R'},{symbol:'G'}];"
-            " const LAND_TYPE_BY_SYMBOL = { W: 'plains', U: 'island', B: 'swamp', R: 'mountain', G: 'forest' };"
         ),
     )
     assert words == [["U", "G"], ["B"], []]

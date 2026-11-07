@@ -794,7 +794,7 @@ def _pays(player, symbols: frozenset[str], *, as_any_type: bool = False,
 
 def board_can_pay(
     game: "Game", seat: int, required: dict, *, purpose=None,
-    nonland_sources: bool = False,
+    nonland_sources: bool = False, pool_only: bool = False,
 ) -> bool:
     """Whether *seat* could pay *required* from its pool plus what tapping its
     untapped lands would add — for a payment of *purpose*
@@ -805,6 +805,9 @@ def board_can_pay(
     tap-alone mana ability would add (:func:`source_tap_yields`): the question
     a **player** is asked, who may activate them (CR 601.2g), where the
     default is the question an automatic payment asks, which taps lands.
+    *pool_only* counts nothing but the mana already in the pool (restricted
+    buckets and grants as for any payment): what the pool alone pays, the
+    question an X prompt's "mana available" asks of the same matching.
 
     Pure: nothing is tapped, spent, logged or prompted for.
     """
@@ -826,7 +829,7 @@ def board_can_pay(
     )
     found: list[list[TapYield]] = []
     counted: list = []
-    for permanent in game.controlled_by(seat):
+    for permanent in () if pool_only else game.controlled_by(seat):
         if permanent.tapped:
             continue
         if permanent.has_type("land"):
@@ -838,7 +841,7 @@ def board_can_pay(
         if yields:
             found.append(yields)
             counted.append(permanent)
-    if nonland_sources:
+    if nonland_sources and not pool_only:
         # "Tap two untapped Elves you control: Add one mana of any color."
         # (Birchlore Rangers.) A mana ability the player may activate too
         # (CR 601.2g), once per pair it can tap — of the permanents no source

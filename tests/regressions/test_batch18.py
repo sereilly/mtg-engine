@@ -462,12 +462,21 @@ class TestLibraryOfAlexandria:
         assert resp.status_code == 200
         assert game.players[0].mana_pool.get("C") == 1
 
-    def test_client_greys_out_gated_ability(self):
-        from pathlib import Path
+    def test_client_greys_out_gated_ability(self, arn_by_name):
+        """The menu greys the draw ability by the server's denial (kg4
+        `client` deleted the client's own reading of "exactly seven cards in
+        hand"): the wire denies it with fewer than seven, in the engine's
+        sentence, and the menu's reason is that entry."""
+        from tests.helpers import app_js_function_body
 
-        app_js = (Path(__file__).resolve().parent.parent.parent / "web" / "static" / "app.js").read_text(encoding="utf-8")
-        assert "abilityOptionDisabledReason" in app_js
-        assert "exactly seven cards in hand" in app_js
+        sid, session, game, lib, idx = self._library_session(arn_by_name)
+        game.players[0].hand = [_C["Forest"]] * 3
+        payload = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
+        entry = payload["players"][0]["battlefield"][idx]
+        assert "exactly seven cards" in (entry["ability_denials"][1] or "")
+        assert "abilityProhibitionOf(card, opt?.index)" in app_js_function_body(
+            "abilityOptionDisabledReason"
+        )
 
 
 # ---------------------------------------------------------------------------

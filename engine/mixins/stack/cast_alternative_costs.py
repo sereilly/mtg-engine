@@ -724,10 +724,14 @@ class AlternativeCastCostsMixin:
         cost: "AlternativeCost | None" = None,
         *,
         extra_generic: int = 0,
+        x_value: int = 0,
+        x_allocation: "dict[str, int] | None" = None,
     ) -> dict[str, int]:
         """CR 118.9d, for a reader that **prices** a cast before making it: the
         mana a cast of *card* owes when it is paid for with *cost* rather than
-        with its mana cost.
+        with its mana cost — an {X} in it at *x_value* (0 by default, the price
+        before X is announced), split by *x_allocation* as the cast path splits
+        it ("Spend only red mana on X").
 
         The cost's own mana (a flashback cost) or none (a pitched card, a life
         payment, a sacrifice), plus every cost increase in force and less every
@@ -762,8 +766,9 @@ class AlternativeCastCostsMixin:
         return reduce_cost(
             self._parse_mana_cost(
                 (cost.mana if cost is not None else None) or "",
-                x_value=0,
+                x_value=max(0, int(x_value or 0)),
                 extra_generic=max(0, extra_generic) + tax + more,
+                x_allocation=x_allocation,
                 extra_pips=pips,
             ),
             reduction.plus_generic(less),

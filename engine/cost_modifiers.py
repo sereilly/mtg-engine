@@ -1029,16 +1029,19 @@ def reduce_cost(required: dict[str, int], reduction: CostReduction) -> dict[str,
 
 def cast_mana_charge(
     game, caster_index: int, card, *, extra_generic: int = 0,
+    x_value: int = 0, x_allocation: "dict[str, int] | None" = None,
 ) -> dict[str, int]:
-    """The mana a cast of *card* for its own mana cost is charged before X
-    is announced (X = 0): CR 601.2f's total — the mana cost, then the
-    increases (generic and coloured, :func:`spell_cost_tax`,
-    :func:`spell_symbol_tax`), then the reductions (the board's and the
-    card's own, :func:`cost_reduction_for_cast`) through CR 118.7's one
-    arithmetic (:func:`reduce_cost`).
+    """The mana a cast of *card* for its own mana cost is charged, X at
+    *x_value* (0 — the price before X is announced — by default): CR
+    601.2f's total — the mana cost, then the increases (generic and
+    coloured, :func:`spell_cost_tax`, :func:`spell_symbol_tax`), then the
+    reductions (the board's and the card's own, :func:`cost_reduction_for_cast`)
+    through CR 118.7's one arithmetic (:func:`reduce_cost`).
 
     *extra_generic* is what the zone adds that no modifier states (CR 903.8's
-    commander tax).
+    commander tax). *x_allocation* is how much of X is paid in each colour
+    ("Spend only black mana on X", the cast path's
+    ``_x_color_allocations``); the rest of X is generic.
 
     **One reader for every price a client is shown**, because the client
     drew three and only one of them was right: the castable highlight and a
@@ -1055,8 +1058,9 @@ def cast_mana_charge(
     return reduce_cost(
         game._parse_mana_cost(
             card.mana_cost,
-            x_value=0,
+            x_value=max(0, int(x_value or 0)),
             extra_generic=max(0, extra_generic) + tax,
+            x_allocation=x_allocation,
             extra_pips=pips,
         ),
         reduction,

@@ -15,7 +15,6 @@ import re
 
 from engine import Game
 from engine.activation_permissions import card_widens_activation
-from engine.board_payment import tap_alone_symbols
 from engine.color_changes import spell_color_change
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.entry_choices import chosen_as_entered
@@ -31,7 +30,6 @@ from engine.mana_payment import taps_for_payment
 from engine.object_colors import card_colors
 from engine.line_classification import LOYALTY_ANY_TIME_STATIC
 from engine.oracle import compile_card_oracle
-from engine.activation_prohibitions import activation_prohibition
 from engine.keywords import abilities_lost_at, derived_ability_lines
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
@@ -40,6 +38,10 @@ from engine.target_roles import recorded_role_seats
 from engine.cost_pickers import spec_is_a_cost
 from engine.text_changes import changed_words, spell_text_card
 
+from .offers import (
+    _ability_denial, _ability_mana_payload, _offered_mana, ability_x_payable,
+    cast_mana_offer, cast_x_payable, text_change_offer,
+)
 from .runtime import CARD_BY_NAME
 from .seats import _player_has_lost
 
@@ -297,155 +299,6 @@ def hidden_card_view(obj) -> dict | None:
     if printed is not None:
         view["morph_cost"] = printed
     return view
-
-
-def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
-    """The symbols the client offers when this permanent is tapped for mana.
-
-    The permanent's own answer, except where tapping a land lets the tapper
-    name a colour the printed summary does not list: a seat-wide swap ("…it
-    produces one mana of **a color of your choice** instead of any other type
-    and amount", Harvest Mage) or a granted ability ("Lands you control have
-    "{T}: Add two mana of **any one color**."", Overlaid Terrain). The client
-    prompts for a colour only when a land offers two or more, so a Forest that
-    answered "G" here would never be asked — the seam would get the default
-    request and the choice the card prints would be one no human could make.
-
-    Read off the planner's hook (``Game._land_payment_colors``), so the client
-    and the payment planner cannot disagree. Only a *choice* is taken from it:
-    a fixed swap (Deep Water) answers one symbol, which the seam decides
-    whatever is requested, and is left showing what it always showed.
-    """
-    own = tuple(perm.effective_produced_mana)
-    if perm.has_type("land"):
-        # A land whose colours the board defines (Reflecting Pool, Meteor
-        # Crater) is offered as exactly what it makes here, even when that is
-        # one colour or none: its printed summary is all five, and a picker
-        # built from it asks for colours the engine will not produce.
-        narrowed = game.narrowed_land_mana_colors(perm)
-        if narrowed is not None:
-            return narrowed
-        # …and a land a tap makes only a *gained* type's mana from (a
-        # depletion land under Blanket of Night) is offered as that: its
-        # summary also lists what its own, priced, ability makes, and a
-        # picker built from it asks for a colour the tap will not produce.
-        gained_only = game._tap_alone_makes_only_gained_mana(perm)
-        if gained_only:
-            return gained_only
-        payable = tuple(game._land_payment_colors(perm))
-        if len(payable) > 1 and set(payable) != set(own):
-            return payable
-        # …and a land with mana abilities of its own is offered as what **a
-        # tap alone** makes of it (CR 605: each mana ability is its own). The
-        # summary lists every symbol any ability of the land makes: a School
-        # of the Unseen ("{T}: Add {C}." / "{2}, {T}: Add one mana of any
-        # color.") was shown as five colours, the click that named one made
-        # {C}, and the client's own auto-tap planned it for a pip it could
-        # not pay. The priced ability is still on the land's ability list, to
-        # be activated for what it costs. In the summary's own order, so a
-        # land every one of whose abilities is the tap alone (a painland) is
-        # shown exactly as it was.
-        tapped_for = tap_alone_symbols(game, perm)
-        if tapped_for:
-            kept = tuple(symbol for symbol in own if symbol in tapped_for)
-            return kept + tuple(symbol for symbol in tapped_for if symbol not in kept)
-    return own
-
-
-#: Payload keys of an add-mana step that change *how much* it makes or what the
-#: mana may pay for, never *which symbols* it can be asked for.
-_MANA_AMOUNT_KEYS = frozenset({
-    "per_each", "per_each_counter_removed", "per_each_counter_on_source",
-    "pips_amount", "spend_only", "x_from_count", "any_color_count", "oracle_text",
-})
-
-
-def _effect_steps(instruction) -> list:
-    """*instruction*'s own steps, a ``sequence`` opened up."""
-    if instruction is None:
-        return []
-    if instruction.kind == "sequence":
-        return [
-            leaf
-            for step in (instruction.payload or {}).get("steps") or ()
-            if hasattr(step, "kind")
-            for leaf in _effect_steps(step)
-        ]
-    return [instruction]
-
-
-def _ability_mana(instruction) -> dict | None:
-    """What one activation of a mana ability adds, as its own payload states
-    it: ``{"symbols": […], "choice": bool}``, or None where the payload alone
-    does not say.
-
-    ``choice`` is the question the client has to ask. "{1}, {T}: Add {R}{G}."
-    (Mossfire Valley) and "{T}: Add {C}{C}." make a **fixed** output — every
-    symbol, whichever is named — and "{T}: Add {R} or {G}." makes **one of**
-    its symbols. The permanent's ``produced_mana`` cannot tell those apart: it
-    is a summary of everything the permanent can make, so a filter land and a
-    dual land read the same there, and the client opened a colour fan for an
-    ability with nothing to choose and then sent an answer the engine ignored.
-
-    Riders that change the amount or restrict the spend are read through; a
-    shape whose symbols the board or a record decides (``any_color_from``,
-    ``from_noted`` …) is None, and the client falls back to the summary — which
-    the server narrows for exactly those (:func:`_offered_mana`). A split the
-    seat chooses ("in any combination of") carries a ``combination`` entry of
-    its own: ``{"symbols": […], "count": N}``.
-    """
-    adders = [step for step in _effect_steps(instruction) if step.kind == "add_mana_from_text"]
-    if not adders:
-        return None
-    symbols: list[str] = []
-    choice = False
-    for step in adders:
-        payload = step.payload or {}
-        shape = set(payload) - _MANA_AMOUNT_KEYS
-        if shape == {"pips"}:
-            found = [str(symbol) for symbol, _count in payload["pips"]]
-        elif shape == {"pips_choice"} and len(adders) == 1:
-            found = [str(symbol) for symbol, _count in payload["pips_choice"]]
-            choice = len(set(found)) >= 2
-        elif shape == {"any_color"} and payload.get("any_color") and len(adders) == 1:
-            found = ["W", "U", "B", "R", "G"]
-            choice = True
-        elif (
-            shape == {"combination", "combination_count"}
-            and len(adders) == 1
-            and isinstance(payload["combination_count"], int)
-        ):
-            # "Add three mana in any combination of {R} and/or {G}" (Goblin
-            # Clearcutter): a **split**, which a colour fan cannot ask for —
-            # so the entry says how many and of which, and the activate action
-            # takes the answer as ``mana_combination`` ({symbol: count}).
-            # ``choice`` stays true for a client that knows only the fan: one
-            # colour named is every unit that colour, a legal split.
-            found = [str(symbol) for symbol in payload["combination"]]
-            return {
-                "symbols": found, "choice": True,
-                "combination": {"symbols": found, "count": int(payload["combination_count"])},
-            }
-        else:
-            return None
-        symbols.extend(symbol for symbol in found if symbol not in symbols)
-    return {"symbols": symbols, "choice": choice} if symbols else None
-
-
-def _ability_mana_payload(game: Game, perm: Permanent, usable) -> list | None:
-    """``ability_mana`` for one of the viewer's permanents: one entry per
-    usable ability, indexed like the ``ability_index`` the activate action
-    takes (so a one-ability permanent's is entry 0). None — the field is left
-    off — when no ability says anything, and when the board has changed what a
-    land offers (:func:`_offered_mana`'s swap or narrowing): there the summary
-    is the answer and an ability's printed symbols are not.
-    """
-    if not usable:
-        return None
-    if perm.has_type("land") and set(_offered_mana(game, perm)) != set(perm.effective_produced_mana):
-        return None
-    entries = [_ability_mana(getattr(ability, "instruction", None)) for ability in usable]
-    return entries if any(entry is not None for entry in entries) else None
 
 
 def _shield_source_payload(source_name: str | None) -> dict | None:
@@ -1044,6 +897,22 @@ def _serialize_card(
         combination = cast_split_offer(game, caster_index, card)
         if combination is not None:
             serialized["mana_combination"] = combination
+        # What the spell's own resolution adds and whether the cast names its
+        # colour (``offers.cast_mana_offer``), and a text change's words
+        # (``offers.text_change_offer``) — each absent for every card whose
+        # cast announces neither.
+        cast_mana = cast_mana_offer(card)
+        if cast_mana is not None:
+            serialized["cast_mana"] = cast_mana
+        text_change = text_change_offer(game, card)
+        if text_change is not None:
+            serialized["text_change"] = text_change
+        # How large an X the pool, and the board, pay for a cast from the
+        # hand (``offers.cast_x_payable``) — the X prompt's range.
+        if from_zone == "hand":
+            x_payable = cast_x_payable(game, caster_index, card)
+            if x_payable is not None:
+                serialized["x_payable"] = x_payable
     faces = face_cards(card)
     if faces:
         # CR 709.3: the player chooses a half *before* anything else about the
@@ -1439,32 +1308,6 @@ def _hand_revealed_to_viewer(game: Game, viewer_seat: int | None, seat: int) -> 
     return False
 
 
-def _ability_denial(game: Game, seat: int, perm, ability) -> str | None:
-    """Why *ability* of *perm* would be refused if *seat* activated it now,
-    before anything is chosen or paid — the activation path's own sentence —
-    or None.
-
-    The path's checks in its order, each the predicate the path asks: a
-    loyalty ability's window (CR 606.3, 606.6,
-    ``Game.loyalty_activation_refusal``), the prohibition table (CR 602.5,
-    ``activation_prohibition``), and a cost paid in something other than mana
-    that the board cannot pay (CR 601.2h, ``Game.unpayable_activation_cost``,
-    with no X announced — the smallest X, so nothing payable is denied). The
-    client kept a copy of each: the six "Activate only …" windows read off
-    the ability's text (``activationTimingDisabledReason``), Library of
-    Alexandria's hand size, Jandor's Ring's last-drawn card and the loyalty
-    rules. Not here: what depends on a choice still to be made (a target, an
-    X) and the {T} symbol's refusals, which the permanent's own flags say.
-    """
-    details = game.loyalty_activation_refusal(seat, perm, ability)
-    if details is not None:
-        return details
-    found = activation_prohibition(game, seat, perm, ability)
-    if found is not None:
-        return found.details
-    return game.unpayable_activation_cost(seat, perm, ability)
-
-
 def _exile_payload(
     game: Game, player: PlayerState, viewer_seat: int | None, seat: int
 ) -> list:
@@ -1533,10 +1376,13 @@ def exile_hidden_flags(
     return flags
 
 
-def _serialize_arriving(game: Game, seat: int) -> list[dict]:
+def _serialize_arriving(
+    game: Game, seat: int, viewer_seat: int | None = None,
+) -> list[dict]:
     """The permanents on their way onto *seat*'s battlefield while their "as
     it enters" choice is made (CR 614.12a, ``engine/entry_awaiting.py``),
-    each marked ``entering: True``.
+    each marked ``entering: True`` — and, to *seat* alone, what it has put
+    into an event still waiting on another seat's choice.
 
     The engine has such a permanent in no zone until the answer — its spell
     is still on the stack and nothing on the board sees it — but the table is
@@ -1545,7 +1391,19 @@ def _serialize_arriving(game: Game, seat: int) -> list[dict]:
     badges). Nothing can be done to it in that window: the game waits on the
     prompt (CR 117.3b), and an id the client sends for it resolves to nothing
     on the battlefield. No choice of its is shown, because none is recorded
-    for a person before they answer."""
+    for a person before they answer.
+
+    **A put handed to an open event** (CR 603.6a, ``Game.open_entry_events``)
+    is the other way a permanent waits in no zone: "Each player may put an
+    artifact, creature, enchantment, or land card from their hand onto the
+    battlefield" (Show and Tell) asks each seat in turn and puts every card
+    down together at the last answer, so the first seat's card has left its
+    hand and is nowhere while a later seat chooses. CR 101.4a lets a card
+    chosen from a hidden zone stay face down as it is chosen, so the other
+    seats are shown nothing — but its own controller chose it, and was shown
+    nothing either: the card was gone from its hand and on no board. It is
+    listed to its controller (*viewer_seat* = *seat*), arriving, and to
+    nobody else."""
     from engine.entry_awaiting import awaited_entries
 
     arriving = []
@@ -1555,6 +1413,18 @@ def _serialize_arriving(game: Game, seat: int) -> list[dict]:
         payload = _serialize_permanent(record.permanent, game)
         payload["entering"] = True
         arriving.append(payload)
+    if viewer_seat is not None and viewer_seat == seat:
+        shown = {id(record.permanent) for record in awaited_entries(game)}
+        for event in getattr(game, "open_entry_events", ()) or ():
+            if event.closed:
+                continue
+            for put in event.puts:
+                if put.controller_index != seat or id(put.permanent) in shown:
+                    continue
+                shown.add(id(put.permanent))
+                payload = _serialize_permanent(put.permanent, game)
+                payload["entering"] = True
+                arriving.append(payload)
     return arriving
 
 
@@ -1638,15 +1508,21 @@ def _serialize_player(
             if any(found is not None for found in denials):
                 perm_dict["ability_denials"] = denials
             # What each ability adds and whether activating it asks for a
-            # colour (:func:`_ability_mana`) - the per-ability fact behind the
+            # colour (``offers._ability_mana``) - the per-ability fact behind the
             # permanent-wide ``produced_mana`` summary.
             ability_mana = _ability_mana_payload(game, perm, usable)
             if ability_mana is not None:
                 perm_dict["ability_mana"] = ability_mana
+            # The X each "{X}…:" ability can be paid for now
+            # (``offers.ability_x_payable``), indexed like ``ability_index``;
+            # absent where no ability's cost prints an {X}.
+            x_payable = [ability_x_payable(game, seat, perm, ability) for ability in usable]
+            if any(entry is not None for entry in x_payable):
+                perm_dict["ability_x_payable"] = x_payable
     # …and, after them, the permanents on their way onto this seat's board
     # (``_serialize_arriving``), after the board's own so no slot a client
     # addresses an action by moves.
-    battlefield.extend(_serialize_arriving(game, seat))
+    battlefield.extend(_serialize_arriving(game, seat, viewer_seat))
 
     def _crowned(entries: list, cards) -> list:
         # CR 903.3: mark the designated commander card, wherever its zone

@@ -73,6 +73,7 @@ from .session_store import Session
 
 from .events import session_revision
 from .presence import seat_is_connected
+from .offers import zone_x_payable
 from .runtime import store
 from .seats import _build_rematch_info, _seat_type, _winner
 from .serialization import (
@@ -1044,6 +1045,9 @@ def _zone_cast_options(session: Session, player_index: int) -> list[dict]:
                 "free": bool(permission.free),
                 "land": as_land,
                 "price": "" if as_land else _zone_cast_price(game, player_index, spell, permission),
+                # How large an X this way can be paid for (``offers.
+                # zone_x_payable``) — None for a way whose price has no {X}.
+                "x_payable": None if as_land else zone_x_payable(game, player_index, spell, permission),
                 # The cost as a sentence, for one that is not only mana.
                 "cost": cost.describe() if cost is not None else None,
                 "castable_now": window is not None and _card_castable_now(
