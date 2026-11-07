@@ -479,7 +479,7 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if unspent_mana_kept_line(line) is not None:
         return "unspent_mana"
 
-    # engine/prevention/static.py — CR 615 shields. The same arrangement one
+    # engine/prevention/lines.py — CR 615 shields. The same arrangement one
     # layer over: a permanent's *static* prevention applies from its own text at
     # damage time, so there is nothing to lower, and the matcher the
     # interceptor self-selects on is the matcher asked here.

@@ -60,23 +60,33 @@ This package was one 2,974-line module, ``prevention.py``, until the 2,000-line
 cap's split round cut it on the line its own last section drew:
 
     registry   the order bands, ``@prevention_effect``, the candidates, and
-               ``source_has_type`` (the floor both halves read)
+               the floor every interceptor module reads (``source_has_type``,
+               a shield's "as long as" clause, ``_once``)
     shields    the shields a recipient was **given** — armed by something that
                resolved, and spent: the directional marker, the collection read
                as CR 616.1's pure half, and every collection shield
-    static     a permanent's **own** static prevention, read off its text at
-               damage time, and ``prevention_claims_line``
+    static     a permanent's **own** static prevention over itself (or what it
+               wears), read off the damaged permanent's text at damage time
+    blankets   a permanent's static prevention over **others** — its
+               controller, a described set, the table — read off the
+               battlefields the sentence reaches; and the chosen-source
+               one-shot
+    lines      ``prevention_claims_line``, which reads every matcher above
 
-Both interceptor modules register at import, so both are imported here: a name
-pulled from any module of the package first runs this file, which is what keeps
-the registry whole whichever module a caller reaches for.
+``static`` was cut again at kg4, by recipient, into ``static`` and
+``blankets``, with the claims reader moved beside them as
+``replacements/lines.py`` is beside its interceptors.
+
+The three interceptor modules register at import, so all three are imported
+here: a name pulled from any module of the package first runs this file, which
+is what keeps the registry whole whichever module a caller reaches for.
 """
 
 from .registry import (PREVENTION_EFFECTS, PreventionOutcome,
                        prevention_effect, shield_candidates, source_has_type,
                        spent)
-from . import shields  # noqa: F401  (registers its shields)
-from .static import prevention_claims_line
+from . import blankets, shields, static  # noqa: F401  (register their shields)
+from .lines import prevention_claims_line
 
 __all__ = [
     "PREVENTION_EFFECTS",

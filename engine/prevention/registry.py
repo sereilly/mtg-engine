@@ -9,10 +9,12 @@ each band sits where it does. ``shield_candidates`` hands the whole registry to
 other half is ``engine/replacements/``' damage kinds, whose orders share this
 space (see the package docstring).
 
-``source_has_type`` is here because it is the floor both halves of the package
-read — the shields a recipient was given and a permanent's own static
-prevention alike ask what type a damage source is — and three modules outside
-the package ask it too.
+``source_has_type`` is here because it is the floor every interceptor module of
+the package reads — the shields a recipient was given and a permanent's own
+static prevention alike ask what type a damage source is — and three modules
+outside the package ask it too. ``_condition_holds`` (a static's "as long as"
+clause) and ``_once`` (each source once) are the floor the two static modules,
+``static.py`` and ``blankets.py``, share.
 """
 
 from __future__ import annotations
@@ -323,6 +325,46 @@ def shield_candidates() -> list[Candidate]:
 
 
 # ---------------------------------------------------------------------------
+# The floor the two static modules share
+# ---------------------------------------------------------------------------
+
+
+def _condition_holds(game, wanted: dict, holder) -> bool:
+    """Whether a shield's "as long as" clause holds right now (CR 611.2).
+
+    Asked here, where the permanent whose text carried the line is in hand, and
+    asked on every event rather than latched: the creature the clause counts may
+    leave, and a shield that outlived its condition is one the card does not
+    print. Pure, like every other predicate in this package.
+
+    The clause is evaluated by ``engine/static_bonuses.conditional_static_holds``
+    -- the same payload shape and the same evaluator the conditional P/T bonuses
+    use, so "you control another creature" has one meaning in the engine.
+    """
+    condition = wanted.get("condition")
+    if condition is None:
+        return True
+    from ..static_bonuses import conditional_static_holds
+
+    seat = game.controller_index_of(holder)
+    if seat is None:
+        return False
+    return conditional_static_holds(game, seat, holder, condition)
+
+
+def _once(items) -> list:
+    """*items* in order, each object once — by identity, because a
+    ``Permanent`` compares by value and does not hash."""
+    seen: set[int] = set()
+    kept = []
+    for item in items:
+        if id(item) not in seen:
+            seen.add(id(item))
+            kept.append(item)
+    return kept
+
+
+# ---------------------------------------------------------------------------
 # Source matching
 # ---------------------------------------------------------------------------
 
@@ -332,8 +374,9 @@ def shield_candidates() -> list[Candidate]:
 # without changing the object's colour, so the answer is no longer read off the
 # object at all — and it is asked by protection's damage prevention
 # (CR 702.16e) as well as by the shields here, which is two files.
-# ``damage_source_colors`` (imported at the top of ``shields.py`` and
-# ``static.py``) is what every site in this package now asks.
+# ``damage_source_colors`` (imported at the top of ``shields.py``,
+# ``static.py`` and ``blankets.py``) is what every site in this package now
+# asks.
 
 
 def source_has_type(game, source, card_type: str) -> bool:
