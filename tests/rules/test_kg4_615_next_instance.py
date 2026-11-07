@@ -548,3 +548,40 @@ def test_two_damage_sentences_of_one_spell_are_two_instances(catalog_by_name, in
     resolve_stack(game)
     assert wurm.damage_marked == 0, game.log
     assert _lives(game) == [20, 18], game.log
+
+
+# ---------------------------------------------------------------------------
+# A sourceless charge binds to the source it is first spent on
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("615.8", "510.2")
+@pytest.mark.parametrize("interactive", [pytest.param(set(), id="nobody-asked")])
+def test_a_shield_that_named_no_source_takes_one_sources_instance(
+    catalog_by_name, interactive,
+):
+    """Pentagram of the Ages ("The next time a source of your choice would
+    deal damage to you this turn, prevent that damage") activated with no
+    source named — the any-source charge an AI or headless activation arms.
+    Two unblocked attackers deal Bob their combat damage in one step: the
+    charge is spent on the first one's instance, and the second source's
+    damage — another source, another instance — is dealt."""
+    game = _table(catalog_by_name, interactive)
+    pentagram = _put(game, catalog_by_name, 1, "Pentagram of the Ages")
+    bears = _put(game, catalog_by_name, 0, "Grizzly Bears")
+    giant = _put(game, catalog_by_name, 0, "Hill Giant")
+    armed = game.activate_permanent_ability(1, pentagram.card.name)
+    assert armed.supported, armed.details
+    resolve_stack(game)
+    _to_declare_attackers(game)
+    assert game.declare_attackers(0, [_slot(game, 0, bears), _slot(game, 0, giant)])[0]
+    resolve_stack(game)
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+    for _ in range(8):
+        if game.current_step == "postcombat_main":
+            break
+        game.advance_combat_phase()
+        resolve_stack(game)
+    assert game.players[1].life in (17, 18), game.log
+    assert sum("Pentagram of the Ages prevented" in line for line in game.log) == 1, game.log
