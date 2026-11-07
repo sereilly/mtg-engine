@@ -73,6 +73,7 @@ from .session_store import Session
 
 from .events import session_revision
 from .presence import seat_is_connected
+from .offers import zone_x_payable
 from .runtime import store
 from .seats import _build_rematch_info, _seat_type, _winner
 from .serialization import (
@@ -1035,6 +1036,11 @@ def _zone_cast_options(session: Session, player_index: int) -> list[dict]:
                 # Which permanents or graveyard cards the price may be paid
                 # with, so the caster names them (`_zone_cast_cost_choice`).
                 way["cost_choice"] = choice
+            # How large an X this way can be paid for (``offers.
+            # zone_x_payable``) — absent for a way whose price has no {X}.
+            x_payable = None if as_land else zone_x_payable(game, player_index, spell, permission)
+            if x_payable is not None:
+                way["x_payable"] = x_payable
             ways.append({
                 # What the cast action carries to pick this permission when
                 # both kinds cover the card (``alternative_cost: true``).

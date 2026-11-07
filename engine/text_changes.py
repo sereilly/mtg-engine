@@ -668,6 +668,41 @@ def creature_types_written(card: "CardDefinition") -> tuple[str, ...]:
     return tuple(found)
 
 
+#: The kinds of word each mode of the ``mark_text_modified`` instruction may
+#: name (its payload's ``mode``): "one color word with another" (Sleight of
+#: Mind), "one basic land type with another" (Magical Hack), and either (Mind
+#: Bend, Crystal Spray, Whim of Volrath — the vocabulary settled as the spell
+#: resolves, ``Game.arm_text_change_vocabulary``).
+TEXT_CHANGE_MODE_KINDS: dict[str, tuple[str, ...]] = {
+    "color_word": (COLOR_WORD,),
+    "land_type": (LAND_WORD,),
+    "color_word_or_land_type": (COLOR_WORD, LAND_WORD),
+}
+
+
+def words_written(card: "CardDefinition", kind: str) -> tuple[str, ...]:
+    """The mana symbols whose word of *kind* (:data:`COLOR_WORD` or
+    :data:`LAND_WORD`) *card* writes where a text change of that kind would
+    rewrite it — its type line, rules text and keywords, in every form
+    :func:`_forms` reaches ("nonblack", "Swamps", "swampwalk"), whole words
+    only — in symbol order.
+
+    :func:`creature_types_written`'s twin for the two vocabularies a cast
+    announces, and for its reason: the word a text change "replaces" is one
+    the object writes, or the change rewrites nothing. A substring test is not
+    that question: "red" is inside "entered" and "sacred", and the change's own
+    pattern (``one_pass``) leaves both alone.
+    """
+    table = COLOR_WORDS if kind == COLOR_WORD else LAND_TYPE_WORDS
+    texts = (card.type_line or "", card.oracle_text or "", *(card.keywords or ()))
+    found = []
+    for symbol, word in table.items():
+        pattern, _table = _compile(dict(_forms(kind, word, word)))
+        if any(pattern.search(text) for text in texts):
+            found.append(symbol)
+    return tuple(found)
+
+
 # ---------------------------------------------------------------------------
 # Views over the folded result
 # ---------------------------------------------------------------------------
@@ -752,5 +787,5 @@ __all__ = [
     "change_land_word", "changed_words", "creature_type_plural",
     "creature_types_written", "current_text_card", "has_text_changes",
     "one_pass", "spell_text_card", "spell_text_changes", "spell_text_of",
-    "text_changes", "text_seen_by",
+    "TEXT_CHANGE_MODE_KINDS", "text_changes", "text_seen_by", "words_written",
 ]

@@ -36,6 +36,9 @@ LAYERS = (
     "presence",
     # Seat identity, loss/win, and whether to hold priority.
     "seats",
+    # What an object offers right now (mana, ability refusals), as the
+    # engine answers it — the readers serialization's payloads call.
+    "offers",
     # Engine object -> client JSON, one function per kind of object.
     "serialization",
     # The card pool and decks as the client browses them.

@@ -95,9 +95,15 @@ class PoolPaymentMixin:
         credit = self._x_reduction_credit(
             mana_cost, extra_generic, reduction, extra_pips
         )
-        direct = credit + self._infer_x_from_pool(
+        # **Per {X} printed.** What is left after the rest of the cost is mana,
+        # and a cost printing two (Recall's {X}{X}{U}, Part Water's {X}{X}{U})
+        # spends two of it per point of X: eleven mana is X = 5 there, not the
+        # 10 this answered — which the payment then could not pay, so a cast
+        # that announced no X was refused for the X it had been given.
+        per_x = max(1, (mana_cost or "").upper().count("{X}"))
+        direct = (credit + self._infer_x_from_pool(
             player, mana_cost, extra_generic, x_colors, reduction, extra_pips,
-        )
+        )) // per_x
         grant = next(
             (g for g in player.spend_mana_as_though_grants
              if int(g.get("spells", 0)) > 0),
@@ -119,7 +125,7 @@ class PoolPaymentMixin:
             fungible_types_headroom(pool, required) if grant.get("any_type")
             else fungible_colors_headroom(pool, required)
         )
-        return direct if headroom is None else max(direct, headroom + credit)
+        return direct if headroom is None else max(direct, (headroom + credit) // per_x)
 
     def _x_reduction_credit(
         self, mana_cost: str, extra_generic: int,

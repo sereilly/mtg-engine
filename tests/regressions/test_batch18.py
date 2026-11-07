@@ -463,11 +463,11 @@ class TestLibraryOfAlexandria:
         assert game.players[0].mana_pool.get("C") == 1
 
     def test_client_greys_out_gated_ability(self, arn_by_name):
-        # The client greys an ability out by the server's answer, never its
-        # own reading of the text (kg4 client): the payload's
-        # ``ability_denials`` carries the activation path's refusal, and
-        # ``abilityOptionDisabledReason`` reads it.
-        from pathlib import Path
+        """The menu greys the draw ability by the server's denial (kg4
+        `client` deleted the client's own reading of "exactly seven cards in
+        hand"): the wire denies it with fewer than seven, in the engine's
+        sentence, and not with seven; the menu's reason is that entry."""
+        from tests.helpers import app_js_function_body
 
         sid, session, game, lib, idx = self._library_session(arn_by_name)
 
@@ -480,13 +480,12 @@ class TestLibraryOfAlexandria:
             return [d for d in (entry.get("ability_denials") or []) if d]
 
         game.players[0].hand = [_C["Forest"]] * 3
-        assert any("seven" in d for d in denials())
+        assert any("exactly seven cards" in d for d in denials())
         game.players[0].hand = [_C["Forest"]] * 7
         assert not any("seven" in d for d in denials())
-
-        app_js = (Path(__file__).resolve().parent.parent.parent / "web" / "static" / "app.js").read_text(encoding="utf-8")
-        assert "function abilityOptionDisabledReason" in app_js
-        assert "card.ability_denials" in app_js
+        assert "abilityProhibitionOf(card, opt?.index)" in app_js_function_body(
+            "abilityOptionDisabledReason"
+        )
 
 
 # ---------------------------------------------------------------------------

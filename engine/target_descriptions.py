@@ -576,10 +576,13 @@ def _slot_roles_spec(targets: dict, slot_filters: list) -> dict | None:
     None when the slots do **not** differ, which is the ordinary several-target
     spell ("Destroy two target creatures") and is honestly one list.
 
-    The role *name* is positional. Nothing renders it — the browser labels a
-    role by its ``kind`` and its step ("Choose the creature for Triangle of War
-    (2 of 2)") — and these slots often share a printed noun, which is exactly
-    what ``describe_independent_target_roles`` refuses to name.
+    The role *name* is positional (``slot_<n>``), because these slots often
+    share a printed noun, which is exactly what
+    ``describe_independent_target_roles`` refuses to name. The browser renders
+    a role's name where it is a printed noun (``roleTargetNoun`` in
+    ``app.js``) and skips this positional one, labelling the role by its
+    ``kind`` and its step instead ("Choose the creature for Triangle of War
+    (2 of 2)").
 
     **A slot the card lets the caster leave empty is an optional role**
     (:data:`OPTIONAL_ROLE`): "…it fights **up to one** target creature you

@@ -23,9 +23,9 @@ from typing import TYPE_CHECKING
 from ..color_changes import change_color, recolor_spell
 from ..oracle_types import (BLOCK_PAIR_SUBJECT, CHOSEN_COLOR_THIS_WAY,
                             SPELL_OR_OBJECT_TARGET, SUBJECT_FROM_TRIGGER)
-from ..text_changes import (LAND_TYPE_WORDS, change_color_word,
+from ..text_changes import (LAND_TYPE_WORDS, LAND_WORD, change_color_word,
                             change_creature_word, change_land_word,
-                            current_text_card, spell_text_card)
+                            current_text_card, spell_text_card, words_written)
 from ._targets import (attached_host, block_pair_permanents,
                        resolve_target_permanent, resolve_target_permanents,
                        described_target_predicate)
@@ -189,10 +189,14 @@ def _change_text(
             # never grants islandwalk from nothing (White Knight). The
             # *effective* text, so a second Hack rewrites what the first wrote
             # — and a spell's, its text as changed so far.
+            # Whole words in every form the change rewrites
+            # (``text_changes.words_written``), the reading the cast's word
+            # options are offered by, not a substring of the joined text.
             effective = current_text_card(subject)
-            written = " ".join(
-                (effective.type_line, effective.oracle_text, *effective.keywords)
-            ).lower()
+            written = {
+                _SYMBOL_TO_LAND_TYPE[symbol]
+                for symbol in words_written(effective, LAND_WORD)
+            }
             if old_type not in written:
                 game.log.append(
                     f"{card.name} had no effect: {subject_name} has no"

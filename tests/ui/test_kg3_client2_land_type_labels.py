@@ -8,6 +8,8 @@ because the wire addresses a basic land type by its colour letter
 colour. The word being replaced is "Plains". The letters on the wire are
 unchanged; the buttons and the hint name the land type
 (``textChangeWordLabel``), and a colour word (Sleight of Mind) keeps its colour.
+Since kg4, which words is the server's (``text_change.mode``), and a mode
+offering both (Mind Bend) names both.
 
 Backwards on ``f6c44277``: ``textChangeWordLabel`` does not exist and the
 renderer drew ``label`` (the colour name) for every text-change button.
@@ -40,8 +42,9 @@ def test_each_letter_is_named_as_a_land_type_or_as_a_colour():
         """
         const letters = ["W", "U", "B", "R", "G"];
         return {
-          land: letters.map((s) => textChangeWordLabel(s, true)),
-          color: letters.map((s) => textChangeWordLabel(s, false)),
+          land: letters.map((s) => textChangeWordLabel(s, "land_type")),
+          color: letters.map((s) => textChangeWordLabel(s, "color_word")),
+          either: letters.map((s) => textChangeWordLabel(s, "color_word_or_land_type")),
         };
         """,
         prelude=_CONSTANTS,
@@ -50,18 +53,23 @@ def test_each_letter_is_named_as_a_land_type_or_as_a_colour():
     assert labels == {
         "land": ["Plains", "Island", "Swamp", "Mountain", "Forest"],
         "color": ["White", "Blue", "Black", "Red", "Green"],
+        "either": [
+            "White / Plains", "Blue / Island", "Black / Swamp", "Red / Mountain",
+            "Green / Forest",
+        ],
     }
 
 
 def test_the_picker_and_the_hint_read_the_label_on_both_paths():
     """Both of Magical Hack's paths — a permanent target and a spell target —
-    open one picker (``pendingManaColor`` of kind "cast" with ``isLandType``),
+    open one picker (``pendingManaColor`` of kind "cast" with its ``textMode``),
     so the renderer is the one place the buttons are drawn, and the cast's
     hint the one place the words are echoed."""
     panel = app_js_function_body("renderActivationPrompt")
-    branch = panel.index('pendingManaColor.kind === "cast" && pendingManaColor.isLandType')
-    assert "textChangeWordLabel(symbol, true)" in panel[branch:branch + 400]
+    branch = panel.index('pendingManaColor.kind === "cast" && pendingManaColor.textMode === "land_type"')
+    assert 'textChangeWordLabel(symbol, "land_type")' in panel[branch:branch + 400]
+    assert "textChangeWordLabel(symbol, pendingManaColor.textMode)" in panel
     resolve = app_js_function_body("resolvePendingManaColor")
-    assert "textChangeWordLabel(pending.fromColor, pending.isLandType)" in resolve
-    assert "textChangeWordLabel(manaColor, pending.isLandType)" in resolve
+    assert "textChangeWordLabel(pending.fromColor, pending.textMode)" in resolve
+    assert "textChangeWordLabel(manaColor, pending.textMode)" in resolve
     assert "replaced ${fromWord} with ${toWord}" in resolve

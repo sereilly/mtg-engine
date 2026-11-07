@@ -826,24 +826,21 @@ class ValueChoicesMixin:
         text change rewrites what the first wrote
         (``text_changes.current_text_card``, which reads a spell's too).
         """
-        # `text_changes`' own tables, both keyed by mana **symbol**. The
-        # grammar's `COLOR_WORDS` is the same pairs the other way round (word →
-        # symbol) and reading it here would look up "U" and find nothing, which
-        # is a vocabulary silently never offered.
-        from ....text_changes import (COLOR_WORDS, LAND_TYPE_WORDS,
-                                     current_text_card)
+        # Whole words, in every form the change would rewrite
+        # (``text_changes.words_written``, keyed by mana **symbol**). This was
+        # a substring test, so "red" was written on every card printing
+        # "entered" or "sacred" — words the change's own pattern leaves alone
+        # — and a Mind Bend naming {R} asked which vocabulary over a word
+        # that was not there.
+        from ....text_changes import (COLOR_WORD, LAND_WORD, current_text_card,
+                                     words_written)
 
         symbol = (old_symbol or "").upper()
         effective = current_text_card(permanent)
-        written = " ".join(
-            (effective.type_line, effective.oracle_text, *effective.keywords)
-        ).lower()
         found = []
-        colour = COLOR_WORDS.get(symbol)
-        if colour and colour in written:
+        if symbol in words_written(effective, COLOR_WORD):
             found.append("color_word")
-        land = LAND_TYPE_WORDS.get(symbol)
-        if land and land in written:
+        if symbol in words_written(effective, LAND_WORD):
             found.append("land_type")
         return found
 

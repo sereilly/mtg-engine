@@ -24,8 +24,13 @@ it.
 
 from __future__ import annotations
 
-from ...cost_modifiers import sacrifice_taxes
+from ...aura_grants import attached_ability_cost_reduction
+from ...cost_modifiers import (ability_cost_reduction, ability_cost_tax,
+                                sacrifice_taxes)
+from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...mana_payment import mana_cost_from_symbols
+from ...oracle_types import x_spend_colors_from_text
+from ...self_cost_modifiers import ability_self_reduction_amount
 from ...handlers._filters import _card_matches_filter
 from ...handlers._targets import attached_host
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
@@ -181,6 +186,203 @@ def activation_cost_choice(controller, cost, permanent) -> tuple[int, dict]:
 
 
 class ActivationPaymentMixin:
+
+    def activation_mana_charge(
+        self, controller_index, permanent, ability, *, x_value=None,
+        alternative_mana=None, target_stack_item=None,
+    ):
+        """The mana activating *ability* of *permanent* charges (CR 601.2f
+        via 602.2b): the printed symbols, a per-counter rate, the "…or {2}"
+        the payer took (*alternative_mana*), an attached host's mana cost, X
+        at *x_value* (or as the card defines it), then the increases and the
+        reductions in force.
+
+        Pure — nothing is paid, and the log lines the activation path writes
+        about the price come back in ``log_lines`` for the path to append.
+        Asked by the path (``_activate_onto_stack``) and by the wire's X
+        prompt (``web/offers.x_payable``), which must price an X the way the
+        payment will. Returns the refusal's sentence, or ``(required_cost,
+        x_value, price_notes, log_lines)``: the symbol dict, the X the cost
+        was priced at (a defined X replaces the announced one), what moved the
+        price (for a refusal to name) and the lines to log.
+        """
+        alternative_mana = alternative_mana or {}
+        price_notes: list[str] = []
+        log_lines: list[str] = []
+        required_cost = dict(ability.cost.mana)
+        # "Pay {1} **for each +1/+1 counter on this creature**" (Skeleton
+        # Scavengers). CR 601.2f computes the cost as the ability is
+        # activated, so the rate is multiplied here -- the same moment
+        # ``activation_life_cost`` reads its own counter, and by the same
+        # count, so a card printing both would price them off one board.
+        for symbol, count in activation_mana_per_counter(
+            ability.cost, permanent
+        ).items():
+            required_cost[symbol] = required_cost.get(symbol, 0) + int(count)
+        # "…**or {2}**" when the pool covered it. Folded into the ordinary
+        # payment rather than charged beside it, so every tax, reduction and
+        # restricted-bucket rule below applies to it exactly as to a printed
+        # mana cost.
+        for symbol, count in alternative_mana.items():
+            required_cost[symbol] = required_cost.get(symbol, 0) + int(count)
+        # "**Pay enchanted creature's mana cost**: …" (Merseine.) The symbols
+        # are the *host's* and cannot be known when the card compiles, so the
+        # cost dict is built here, at the one moment there is a host to read
+        # (CR 202.1 — a permanent's mana cost is what is printed in its upper
+        # right corner, whatever the copy and text-change layers have made of
+        # the object).
+        #
+        # An Aura with no host, or a host whose printed cost carries a symbol
+        # this engine cannot spend, refuses the activation with nothing paid
+        # (CR 602.2b). Never a fallback to the empty dict beside it: an
+        # unreadable cost read as zero is an ability activated for free, which
+        # is the failure every cost reader in this engine is written against.
+        if ability.cost.mana_from_attached:
+            host = attached_host(self, permanent, last_known=False)
+            printed = None if host is None else (
+                getattr(host.card, "mana_cost", "") or ""
+            )
+            symbols = None if host is None else mana_cost_from_symbols(printed)
+            if host is None or (symbols is None and printed.strip()):
+                return (
+                    f"{permanent.card.name}: the mana cost it charges is the "
+                    "attached permanent's, and there is none to read"
+                )
+            for symbol, count in (symbols or {}).items():
+                required_cost[symbol] = required_cost.get(symbol, 0) + count
+        # Abilities with an "{X}" in their cost (e.g. Clockwork Beast's
+        # "{X}, {T}: Put up to X +1/+0 counters") charge X generic mana on top of
+        # the printed symbols, where X is the amount the player chose.
+        #
+        # **Per printed symbol, and only in the cost clause.** Voodoo Doll's
+        # cost is "{X}{X}" — two of them, so it charges 2X — and a card whose
+        # *effect* mentions X ("deals X damage") is not charging a second one.
+        # A single substring test read both as one X, which is half the cost on
+        # the one card in the pool that prints the double.
+        x_symbols = (ability.source_line or "").lower().split(":", 1)[0].count("{x}")
+        # "X is the number of pin counters on this artifact." (Voodoo Doll.)
+        # The card *defines* X, so the activator does not announce it
+        # (CR 601.2b) — and the definition is read from the same table the
+        # grammar consumed the sentence through, because an X consumed by one
+        # reader and unknown to the other is a cost nobody charges.
+        # The chosen spell is handed over because a definition may read it:
+        # "X is twice the mana value of **that spell**" (Reflecting Mirror) is
+        # priced off the object the ability targets, not off the board.
+        defined_x = cost_x_value(
+            self, permanent, ability.source_line or "", target=target_stack_item
+        )
+        if defined_x is not None:
+            x_value = defined_x
+        elif cost_x_is_defined(ability.source_line or ""):
+            # The card defines X and this activation cannot compute it — no
+            # target was named, most often. **Not zero**: an {X} nobody charges
+            # is a free ability, which is exactly the failure
+            # ``engine/cost_x_definitions.py`` exists to prevent, so the
+            # activation is refused with nothing paid (CR 601.2b via 602.2b).
+            return (
+                f"{permanent.card.name}: the value of X is defined by the card "
+                "and nothing here determines it"
+            )
+        if x_value and x_symbols:
+            # "Spend only red mana on X." (Crimson Hellkite.) The X pips are
+            # charged as that colour rather than as generic, which is the whole
+            # of the restriction: a generic pip is payable from any source, so
+            # a clause consumed by the grammar and dropped here would be an
+            # ability that works from a pool the card forbids.
+            #
+            # Read off the raw ability line, the same text
+            # ``_parse_x_spend_restriction`` handed to this reader, so the
+            # sentence the grammar consumed and the cost this charges cannot
+            # come apart. Exactly one colour reaches here: the grammar refuses
+            # the "and/or" pair, whose split is a choice this path cannot ask.
+            x_colors = x_spend_colors_from_text(ability.source_line or "")
+            if len(x_colors) == 1:
+                symbol = x_colors[0]
+                required_cost[symbol] = (
+                    required_cost.get(symbol, 0) + int(x_value) * x_symbols
+                )
+            else:
+                required_cost["generic"] = (
+                    required_cost.get("generic", 0) + int(x_value) * x_symbols
+                )
+        # Ability cost taxes (Gloom: "Activated abilities of white enchantments
+        # cost {3} more to activate"; the white-spell cast tax is applied
+        # separately in cast_from_hand).
+        extra_ability_tax, taxing_names = ability_cost_tax(
+            self, controller_index, permanent, ability
+        )
+        # What moves the price, for the payment's refusal to say (the log
+        # lines are taken back with a refused attempt, CR 733.1).
+        if extra_ability_tax:
+            required_cost["generic"] = required_cost.get("generic", 0) + extra_ability_tax
+            log_lines.append(f"{permanent.card.name}'s ability is taxed by {', '.join(taxing_names)}")
+            price_notes.append(
+                f"costs {{{extra_ability_tax}}} more: {', '.join(taxing_names)}"
+            )
+        # "This ability costs {1} less to activate for each Shrine you control."
+        # (Sanctum of Tranquil Light.) After the tax, because CR 601.2f applies
+        # increases before reductions, and clamped at zero because a cost cannot
+        # go below {0} — the same clamp `reduce_cost` makes for a spell.
+        discount = ability_self_reduction_amount(self, controller_index, permanent)
+        if discount:
+            before = required_cost.get("generic", 0)
+            required_cost["generic"] = max(0, before - discount)
+            log_lines.append(
+                f"{permanent.card.name}'s ability costs "
+                f"{{{before - required_cost['generic']}}} less to activate"
+            )
+            price_notes.append(f"costs {{{before - required_cost['generic']}}} less")
+        # "Enchanted artifact's activated abilities cost {2} less to activate.
+        # **This effect can't reduce the mana in that cost to less than one
+        # mana.**" (Power Artifact.) The reduction is on the *Aura*, not on the
+        # permanent whose ability it is, so it is read off what is attached
+        # rather than off this card's own text.
+        #
+        # The floor is over the *whole* cost, coloured pips included — "the
+        # mana in that cost", not the generic part of it — which is why it is
+        # applied after the subtraction rather than as a clamp inside it. A {2}
+        # ability reduced by {2} pays {1}, not nothing; a {B} ability is
+        # already at the floor and pays {B}.
+        aura_discount, aura_floor = attached_ability_cost_reduction(permanent)
+        # "Activated abilities of creatures cost {1} less to activate. This
+        # effect can't reduce the mana in that cost to less than one mana."
+        # (Heartstone.) The identical rider from a permanent that enchants
+        # nothing, so it is read off the board rather than off what is attached
+        # -- and folded into the *same* application, because CR 601.2f applies
+        # every reduction to one cost. Two applications would each measure the
+        # floor against a cost the other had already cut.
+        board_discount, reducing_names, board_floor = ability_cost_reduction(
+            self, controller_index, permanent, ability
+        )
+        aura_discount += board_discount
+        # The **highest** floor, for ``attached_ability_cost_reduction``'s
+        # reason: two reductions must not cancel each other's protection
+        # against a free ability.
+        floor = max(aura_floor, board_floor)
+        if reducing_names:
+            log_lines.append(
+                f"{permanent.card.name}'s ability is cheapened by "
+                f"{', '.join(reducing_names)}"
+            )
+        if aura_discount:
+            before_total = sum(required_cost.values())
+            generic = required_cost.get("generic", 0)
+            coloured = before_total - generic
+            reduced_generic = max(0, generic - aura_discount)
+            if reduced_generic + coloured < floor:
+                reduced_generic = max(0, floor - coloured)
+            required_cost["generic"] = reduced_generic
+            if before_total != reduced_generic + coloured:
+                log_lines.append(
+                    f"{permanent.card.name}'s ability costs "
+                    f"{{{before_total - reduced_generic - coloured}}} less to activate"
+                )
+                price_notes.append(
+                    f"costs {{{before_total - reduced_generic - coloured}}} less"
+                    + (f": {', '.join(reducing_names)}" if reducing_names else "")
+                )
+        return required_cost, x_value, price_notes, log_lines
+
     # -- Whether an activation's cost can be paid at all ----------------------
 
     def unpayable_activation_cost(

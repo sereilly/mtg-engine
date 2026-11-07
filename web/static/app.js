@@ -1273,11 +1273,18 @@ function openStateSyncStream() {
     // A rematch rebuilds the game with a fresh (shorter) log, so the monotonic-log
     // stale guard would wrongly discard it — bypass the guard for those resets too.
     try {
-      const reason = JSON.parse(event.data)?.reason;
-      if (reason === "undo" || reason === "rematch_start" || reason === "match_restart") skipStale = true;
+      // Every reason since the last event this stream sent: an event the
+      // server had not sent yet is replaced by the next, which then carries
+      // both (`reasons`, web/events.py) — so a restart followed at once by
+      // an action still announces the restart.
+      const data = JSON.parse(event.data) || {};
+      const reasons = Array.isArray(data.reasons) ? data.reasons : [data.reason];
+      if (reasons.some((reason) => reason === "undo" || reason === "rematch_start" || reason === "match_restart")) {
+        skipStale = true;
+      }
       // A restart rebuilds the board for everyone — announce it to all seats
       // (including the initiator, whose own stream also delivers this event).
-      if (reason === "match_restart") showMatchRestartAnnouncement();
+      if (reasons.includes("match_restart")) showMatchRestartAnnouncement();
     } catch {}
     getState(skipStale).catch(() => {
       // Ignore transient refresh failures; the stream will keep delivering future updates.
@@ -2093,10 +2100,6 @@ function getActivatedAbilityCost(card, abilityIndex = null) {
   return (chosen.cost || "").trim();
 }
 
-function abilityCostRequiresTap(card) {
-  return /\{t\}/i.test(getActivatedAbilityCost(card));
-}
-
 // The mana the insufficient-mana auto-tap flow must actually pay. For casting
 // this is the card's mana cost; for an activated ability it is the ability's
 // activation cost (e.g. Circle of Protection's {1}, not its {1}{W} card cost),
@@ -2154,32 +2157,6 @@ function parseManaCostSymbols(costText) {
   }
 
   return required;
-}
-
-function manaPoolCanPayCost(manaPool, required) {
-  const pool = manaPool || {};
-  if ((pool.W || 0) < required.W) return false;
-  if ((pool.U || 0) < required.U) return false;
-  if ((pool.B || 0) < required.B) return false;
-  if ((pool.R || 0) < required.R) return false;
-  if ((pool.G || 0) < required.G) return false;
-  if ((pool.C || 0) < required.C) return false;
-
-  const remaining =
-    (pool.W || 0) +
-    (pool.U || 0) +
-    (pool.B || 0) +
-    (pool.R || 0) +
-    (pool.G || 0) +
-    (pool.C || 0) -
-    required.W -
-    required.U -
-    required.B -
-    required.R -
-    required.G -
-    required.C;
-
-  return remaining >= required.generic;
 }
 
 // Whether the caster announces a value for X as this card is cast (CR 107.3a).
@@ -2644,21 +2621,19 @@ function getTargetablePermanentKeysForPrompt() {
   return [...pendingCastTarget.validKeys];
 }
 
-function activatedAbilityTargetsSelf(card) {
-  if (!card || typeof card === "string") return false;
-  // Abilities that grant keywords/buffs to "target creature" refer to the controller's
-  // own creatures (e.g. Helm of Chatzuk: "Target creature gains banding until end of turn").
-  const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
-    .map((line) => line.toLowerCase());
-  return activatedLines.some((line) =>
-    line.includes("target creature gains banding") ||
-    line.includes("target creature gains flying") ||
-    line.includes("target creature gains") ||
-    line.includes("untap target") ||
-    line.includes("regenerate target") ||
-    line.includes("target creature gets +")
-  );
+// The formal `target_seat` an activation starts out with, before any picker
+// has run: the first living opponent (the other seat at a two-player table).
+// Every ability that names a seat or an object as its target is asked for it
+// by a picker in `startActivationPrompt`, from the server's activation spec,
+// and sent with the seat that picker names; this default is what is left for
+// an ability that names none. One default for both of a permanent's click
+// paths: the DOM card's used to read the ability text for "target creature
+// gains", "untap target", "regenerate target", "target creature gets +"
+// (`activatedAbilityTargetsSelf`) and start at the clicker's own seat, which
+// only ever reached abilities whose picker replaced it — the canvas board's
+// click, every click a person makes on the board, never asked it.
+function activationDefaultSeat(cardName) {
+  return isFfaState() ? firstLivingOpponentSeat(currentState, seat, `${cardName} activation default`) : 1 - seat;
 }
 
 // --- Activated-ability target predicates (read the permanent's activation spec) ---
@@ -2725,37 +2700,62 @@ function cardRequiresManaColorChoice(card) {
   );
 }
 
-// The card's text with its activated-ability lines removed ("{T}: Add one
-// mana of any color."). An activated ability's choices are made when it is
-// activated (CR 602), never while casting the card — Meteorite must not ask
-// for a color on cast because its mana ability mentions one.
-function nonActivatedOracleText(card) {
-  return ((card && card.oracle_text) || "")
-    .split("\n")
-    .filter((line) => !/^[^.:]*:/.test(line))
-    .join("\n");
+// The colours a **cast** names for the mana its spell adds — "Add X mana of
+// any one color" (Metamorphosis, Traitorous Greed) — as the server states it
+// (`cast_mana`, web/offers.cast_mana_offer: what the spell's own resolution
+// adds and whether its colour is chosen), or null for a cast that names none.
+// This read "any one color" anywhere outside the card's activated lines, so a
+// permanent whose *trigger* makes the mana (Quirion Sentinel's entry, Carpet of
+// Flowers, Fertile Ground, Sanctum of Fruitful Harvest, Gadrak) asked for a
+// colour while being cast that nothing read — its own ability asks as it
+// resolves. A spell that says "Choose a color." (Prismatic Boon, Persecute) or
+// "the color of your choice" (Feat of Resistance) is cast with nothing extra:
+// CR 608.2d asks that colour as the spell resolves, through color_choice.
+function castManaColorOptions(card) {
+  const offer = card && typeof card === "object" ? card.cast_mana : null;
+  if (!offer || offer.choice !== true || !Array.isArray(offer.symbols)) return null;
+  const symbols = offer.symbols.map((symbol) => String(symbol).toUpperCase());
+  const options = MANA_COLOR_OPTIONS.filter((option) => symbols.includes(option.symbol));
+  return options.length >= 2 ? options : null;
 }
 
-// The cast-time variant: only text OUTSIDE activated abilities can put a mana
-// color choice on the spell itself (Metamorphosis). A spell that says "Choose a
-// color." (Prismatic Boon, Persecute) or "the color of your choice" (Feat of
-// Resistance) is cast with nothing extra: CR 608.2d asks that colour as the
-// spell resolves, through the color_choice prompt.
-function castRequiresManaColorChoice(card) {
-  if (!card || typeof card === "string") return false;
-  return cardRequiresManaColorChoice({ oracle_text: nonActivatedOracleText(card) });
+// The text change a cast announces (CR 612) as the server states it
+// (`text_change`, web/offers.text_change_offer): its `mode` — "color_word"
+// (Sleight of Mind), "land_type" (Magical Hack) or "color_word_or_land_type"
+// (Mind Bend, Crystal Spray, Whim of Volrath, whose vocabulary is settled as
+// it resolves) — and, per object it could be aimed at, the words that object
+// writes now. Null for a card whose cast names no words (Balduvian Shaman's
+// change is its activated ability's, Artificial Evolution's are chosen as it
+// resolves). This read two phrases off the card's text, so Balduvian Shaman
+// asked for two words as it was cast, and read "basic land type" for the
+// vocabulary, so the three "either" cards offered land types alone.
+function castTextChange(card) {
+  const offer = card && typeof card === "object" ? card.text_change : null;
+  return offer && typeof offer === "object" && typeof offer.mode === "string" ? offer : null;
 }
 
-function cardRequiresCastColorChoice(card) {
-  if (!card || typeof card === "string") return false;
-  const text = (card.oracle_text || "").toLowerCase();
-  // Sleight of Mind: "replacing all instances of one color word with another."
-  if (text.includes("replacing all instances of one color word with another")) return true;
-  // Magical Hack: "replacing all instances of one basic land type with another."
-  // Each chosen color maps to a basic land type (W=Plains, U=Island, B=Swamp,
-  // R=Mountain, G=Forest), passed to the engine as the new_color.
-  if (text.includes("replacing all instances of one basic land type with another")) return true;
-  return false;
+// The words a text change could replace on its target — a permanent by its
+// id, or a spell by its top-first stack index — as `MANA_COLOR_OPTIONS`
+// entries (a word is addressed by its colour letter: W is white and Plains).
+// The server's reading of the target's text now (`text_changes.words_written`:
+// whole words in every form the change rewrites, after any earlier change); it
+// replaced `landWordOptionsForTarget` / `landWordOptionsForSpell`, substring
+// reads of the land words alone.
+function textChangeWordOptions(card, { permanentId = null, stackIndex = null } = {}) {
+  const offer = castTextChange(card);
+  if (!offer) return [];
+  const words = permanentId !== null && permanentId !== undefined
+    ? offer.words?.[String(permanentId)]
+    : offer.stack_words?.[String(stackIndex)];
+  const symbols = (Array.isArray(words) ? words : []).map((symbol) => String(symbol).toUpperCase());
+  return MANA_COLOR_OPTIONS.filter((option) => symbols.includes(option.symbol));
+}
+
+// What a text change's words are called: "color word", "land type", or both.
+function textChangeNoun(mode) {
+  if (mode === "land_type") return "land type";
+  if (mode === "color_word_or_land_type") return "color word or land type";
+  return "color word";
 }
 
 const LAND_TYPE_BY_SYMBOL = { W: "plains", U: "island", B: "swamp", R: "mountain", G: "forest" };
@@ -2763,51 +2763,16 @@ const LAND_TYPE_BY_SYMBOL = { W: "plains", U: "island", B: "swamp", R: "mountain
 // What a text change's word is called on its button and in its hint. The wire
 // addresses a basic land type by its colour letter (W = Plains, …), but the
 // word being replaced is "Plains", not "White": Magical Hack's buttons read
-// as colours on both its permanent and its spell path.
-function textChangeWordLabel(symbol, isLandType) {
-  if (isLandType) {
-    const word = LAND_TYPE_BY_SYMBOL[symbol] || "";
-    return word ? word.charAt(0).toUpperCase() + word.slice(1) : String(symbol);
-  }
-  return MANA_COLOR_OPTIONS.find((option) => option.symbol === symbol)?.label || String(symbol);
-}
-
-// Magical Hack replaces an existing basic land type word — the "from" choices
-// are limited to land words actually present on the target (its land type,
-// override, oracle text or granted/printed landwalk keywords).
-function landWordOptionsForTarget(perm) {
-  if (!perm || typeof perm === "string") return [];
-  const haystack = [
-    perm.land_type_override || "",
-    perm.type || "",
-    perm.oracle_text || "",
-    ...(Array.isArray(perm.keywords) ? perm.keywords : []),
-  ]
-    .join(" ")
-    .toLowerCase();
-  return MANA_COLOR_OPTIONS.filter((o) => haystack.includes(LAND_TYPE_BY_SYMBOL[o.symbol]));
-}
-
-// The same narrowing for a **spell** on the stack (a text change can name
-// one, CR 612): the land words its text reads *now* — the printed text with
-// the wire's `text_changes` (`{from, to}`, already netted) applied, so a
-// spell whose "Island" an earlier Hack made "Swamp" offers Swamp and not
-// Island. Every land type was offered, and an unwritten one logged "had no
-// effect".
-function landWordOptionsForSpell(card) {
-  if (!card || typeof card !== "object") return [];
-  let text = `${card.type || ""} ${card.oracle_text || ""}`.toLowerCase();
-  const changes = (Array.isArray(card.text_changes) ? card.text_changes : [])
-    .map((change) => [String(change?.from || "").toLowerCase(), String(change?.to || "").toLowerCase()])
-    .filter(([from, to]) => from && from !== to)
-    .sort((a, b) => b[0].length - a[0].length);
-  if (changes.length) {
-    const escape = (word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const pattern = new RegExp(changes.map(([from]) => escape(from)).join("|"), "g");
-    const to = new Map(changes);
-    text = text.replace(pattern, (word) => to.get(word) ?? word);
-  }
-  return MANA_COLOR_OPTIONS.filter((o) => text.includes(LAND_TYPE_BY_SYMBOL[o.symbol]));
+// as colours on both its permanent and its spell path. A mode offering both
+// vocabularies names both ("Red / Mountain"): the letter is either word, and
+// the resolution asks which where the target writes both.
+function textChangeWordLabel(symbol, mode) {
+  const landWord = LAND_TYPE_BY_SYMBOL[symbol] || "";
+  const land = landWord ? landWord.charAt(0).toUpperCase() + landWord.slice(1) : String(symbol);
+  const colour = MANA_COLOR_OPTIONS.find((option) => option.symbol === symbol)?.label || String(symbol);
+  if (mode === "land_type") return land;
+  if (mode === "color_word_or_land_type") return `${colour} / ${land}`;
+  return colour;
 }
 
 // What the ability chosen from the menu — or the permanent's only one — adds,
@@ -2984,32 +2949,55 @@ function abilityManaColors(card) {
   return own.length >= 2 ? own : null;
 }
 
-function xSpendColorForCard(card) {
-  // "Spend only black mana on X." (Drain Life) — X may only be paid in one color.
-  if (!card || typeof card === "string") return null;
-  const m = (card.oracle_text || "").toLowerCase().match(/spend only (white|blue|black|red|green) mana on x/);
-  if (!m) return null;
-  return { white: "W", blue: "U", black: "B", red: "R", green: "G" }[m[1]] || null;
+// How large an X a cast or an ability can be paid for **now**, as the server
+// prices it: `x_payable` on a hand card (and on a zone cast's way, carried by
+// `zoneCastCard`), `ability_x_payable[i]` on a permanent's ability i —
+// `{pool, board, colors}` (web/offers: `cast_x_payable`, `zone_x_payable`,
+// `ability_x_payable`). `pool` is what the mana already floating pays, `board`
+// adds what the seat could still tap (the auto-tap's reach), and `colors` the
+// colours X may be paid with ("Spend only black and/or red mana on X"), the
+// price at each X the one the cast or the activation charges — its taxes and
+// reductions included. This client priced X itself (`getMaxAffordableX`): the
+// printed cost against the pool, one X colour read off the card's text and
+// none at all for an ability (Crimson Hellkite's red), no tax, no reduction.
+function castXPayable(card) {
+  const entry = card && typeof card === "object" ? card.x_payable : null;
+  return entry && typeof entry === "object" ? entry : null;
+}
+function abilityXPayable(card, abilityIndex = null) {
+  const listed = card && typeof card === "object" && Array.isArray(card.ability_x_payable)
+    ? card.ability_x_payable : null;
+  const entry = listed ? listed[Number.isInteger(abilityIndex) ? abilityIndex : 0] : null;
+  return entry && typeof entry === "object" ? entry : null;
 }
 
-function getMaxAffordableX(manaPool, manaCost, card = null) {
-  const pool = manaPool || {};
-  const cost = parseManaCostSymbols(manaCost || "");
-  const xColor = xSpendColorForCard(card);
-  const totalMana = MANA_ORDER.reduce((sum, symbol) => sum + Number(pool[symbol] || 0), 0);
-  const fixedCost = cost.W + cost.U + cost.B + cost.R + cost.G + cost.C + cost.generic;
-  const maxPossible = Math.max(0, totalMana - fixedCost);
-
-  for (let candidate = maxPossible; candidate >= 0; candidate -= 1) {
-    const trial = xColor
-      ? { ...cost, [xColor]: (cost[xColor] || 0) + candidate }
-      : { ...cost, generic: cost.generic + candidate };
-    if (manaPoolCanPayCost(pool, trial)) {
-      return candidate;
-    }
+// The X prompt's numbers from the state on screen now, so they follow the
+// board while the prompt is open: the permanent by its id for an ability, the
+// hand copy for a cast from the hand. A zone cast keeps its way's snapshot.
+function liveXPayable(pending, state = currentState) {
+  if (!pending) return null;
+  if (pending.castAction === "activate") {
+    const live = Number.isInteger(pending.card?.id)
+      ? findPermanentInState(state, pending.card.id)?.card : null;
+    return abilityXPayable(live || pending.card, pending.activateAbilityIndex);
   }
+  if (pending.card?.__zoneCast) return castXPayable(pending.card);
+  const hand = getCurrentPlayerState(state)?.hand || [];
+  const live = hand.find((c) => c && typeof c === "object" && c.name === pending.card?.name && c.x_payable);
+  return castXPayable(live || pending.card);
+}
 
-  return 0;
+// The X prompt's sentence for an X paid in mana.
+function xPayableSentence(payable) {
+  const words = { W: "white", U: "blue", B: "black", R: "red", G: "green" };
+  const colors = (Array.isArray(payable?.colors) ? payable.colors : [])
+    .map((symbol) => words[String(symbol).toUpperCase()]).filter(Boolean);
+  const only = colors.length ? ` (only ${colors.join(" and/or ")} mana may be spent on X)` : "";
+  const pool = Math.max(0, Number(payable?.pool) || 0);
+  const board = Math.max(pool, Number(payable?.board) || 0);
+  return board > pool
+    ? `Your mana pool pays for X up to ${pool}${only}; with what you could still tap, up to ${board} — the payment step offers to tap it.`
+    : `You can pay for X up to ${pool}${only}.`;
 }
 
 // --- auto-tap: the server's plan, rendered ---------------------------------
@@ -14884,16 +14872,16 @@ function renderActivationPrompt() {
       body.textContent = `Click a valid artifact on the battlefield to choose the ${picked}.`;
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "permanent") {
-      const isEnchantEnchantment = String(pendingCastTarget.card?.oracle_text || "")
-        .toLowerCase()
-        .includes("enchant enchantment");
+      // What may be chosen is what glows — the server's list, an Aura's
+      // enchant clause and every other narrowing already applied. This read
+      // "enchant enchantment" off the card's text to say "enchantment", and
+      // said "any permanent" for every other narrowed list (an artifact or
+      // enchantment, a nonland permanent, a white enchantment you control).
       body.textContent = isSacrificeCost
         ? `Click ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} you control on the battlefield to ${costVerb} it.`
         : pendingCastTarget.alsoStack
         ? `Click a permanent on the battlefield, or a glowing ${stackObjectsNoun(pendingCastTarget.validStackIndices)} on the stack, to choose the target.`
-        : isEnchantEnchantment
-        ? "Click a glowing enchantment on the battlefield to choose the target."
-        : "Click any permanent on the battlefield to choose the target.";
+        : "Click a glowing permanent on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "any") {
       // What the picker is actually offering: "any target" enumerates creatures
@@ -15178,15 +15166,18 @@ function renderActivationPrompt() {
       body.textContent =
         `${pendingCastX.cardName} has ${pendingCastX.maxX} loyalty, and X counters are removed to pay for this ability.`;
     } else {
-      if (pendingCastX.costString !== undefined) {
-        const liveMax = getMaxAffordableX(me?.mana_pool, pendingCastX.costString, pendingCastX.costCard);
-        pendingCastX.maxX = castXCeiling(
-          pendingCastX.card,
-          Math.max(0, liveMax - Math.max(0, pendingCastX.extraTargetTax || 0)),
-        );
+      // The server's numbers, re-read from the state on screen (see
+      // `liveXPayable`); an X paid in counters keeps its counter ceiling.
+      const payable = pendingCastX.xFromCounters ? null : liveXPayable(pendingCastX);
+      if (!pendingCastX.xFromCounters) {
+        const liveMax = Math.max(0, Number(payable?.board) || 0);
+        pendingCastX.maxX = pendingCastX.castAction === "activate"
+          ? liveMax
+          : castXCeiling(
+            pendingCastX.card,
+            Math.max(0, liveMax - Math.max(0, pendingCastX.extraTargetTax || 0)),
+          );
       }
-      const xColor = xSpendColorForCard(pendingCastX.card);
-      const xColorName = xColor ? { W: "white", U: "blue", B: "black", R: "red", G: "green" }[xColor] : null;
       // An *ability's* {X} is in its activation cost (Pernicious Deed's
       // "{X}, Sacrifice…"), which the card's mana cost says nothing about.
       const xIsPaidInMana = pendingCastX.castAction === "activate"
@@ -15199,9 +15190,7 @@ function renderActivationPrompt() {
         // "tap more mana sources" here would send the caster looking for the
         // one thing that cannot help.
         ? `X is part of this spell's additional cost rather than its mana cost, so tapping lands won't raise it. You may announce up to ${pendingCastX.maxX}.`
-        : xColorName
-        ? `You have ${pendingCastX.maxX} ${xColorName} mana available for X (only ${xColorName} mana may be spent on X). Tap more mana sources to raise the limit.`
-        : `You have ${pendingCastX.maxX} mana available for X after paying the colored cost. Tap more mana sources to raise the limit.`;
+        : xPayableSentence(payable);
     }
     const choiceButtons = [];
     for (let value = 0; value <= pendingCastX.maxX; value += 1) {
@@ -15333,7 +15322,7 @@ function renderActivationPrompt() {
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
     if (pendingManaColor.kind === "cast") {
-      const noun = pendingManaColor.isLandType ? "land type" : "color word";
+      const noun = textChangeNoun(pendingManaColor.textMode);
       if (pendingManaColor.step === "from") {
         title.textContent = `Choose the ${noun} to replace in ${pendingManaColor.cardName}'s target`;
         body.textContent = `Select the current ${noun} named in the target's text.`;
@@ -15351,16 +15340,21 @@ function renderActivationPrompt() {
         ({ symbol, label }) => {
           // A land type is a word, not a colour: its button names the type
           // and carries no mana symbol.
-          if (pendingManaColor.kind === "cast" && pendingManaColor.isLandType) {
+          if (pendingManaColor.kind === "cast" && pendingManaColor.textMode === "land_type") {
             return `<button type="button" class="prompt-choice-btn" data-mana-color="${symbol}">` +
-              `${escapeHtml(textChangeWordLabel(symbol, true))}</button>`;
+              `${escapeHtml(textChangeWordLabel(symbol, "land_type"))}</button>`;
           }
+          // Either vocabulary (Mind Bend): the letter is a colour word and a
+          // land type at once, so the button names both beside the symbol.
+          const buttonLabel = pendingManaColor.kind === "cast"
+            ? textChangeWordLabel(symbol, pendingManaColor.textMode)
+            : label;
           const token = `{${symbol}}`;
           const src = symbolSrc(token);
           const symbolHtml = src
             ? `<img class="mtg-symbol mtg-symbol-inline" src="${escapeHtml(src)}" alt="${escapeHtml(token)}" title="${escapeHtml(token)}" />`
             : escapeHtml(`{${symbol}}`);
-          return `<button type="button" class="prompt-choice-btn" data-mana-color="${symbol}">${escapeHtml(label)} ${symbolHtml}</button>`;
+          return `<button type="button" class="prompt-choice-btn" data-mana-color="${symbol}">${escapeHtml(buttonLabel)} ${symbolHtml}</button>`;
         },
       ).join("")}</div>`,
     ].join("");
@@ -15754,9 +15748,11 @@ function getActivatedAbilityOptions(card) {
 // Solitude on another player's turn — is a fact about the board no reading of
 // the ability's own line finds, and the line's own "Activate only …" clause,
 // a loyalty ability's window (CR 606.3, 606.6) and a cost the board cannot
-// pay are the engine's answers too. This client kept a copy of each (six of
-// the timing clauses read off the text, Library of Alexandria's hand size,
-// Jandor's Ring's last-drawn card, the loyalty rules); the copies are gone.
+// pay are the engine's answers too, and so are the {T} symbol's two refusals.
+// This client kept a copy of each (six of the timing clauses read off the
+// text, Library of Alexandria's hand size, Jandor's Ring's last-drawn card, the
+// loyalty rules, the {T} in the first ability's printed cost); the copies are
+// gone.
 function abilityOptionDisabledReason(opt, card) {
   return abilityProhibitionOf(card, opt?.index);
 }
@@ -15767,8 +15763,10 @@ function abilityOptionDisabledReason(opt, card) {
 // `ability_index` counts them, absent when nothing is denied: the activation
 // path's refusals before anything is chosen (web/serialization's
 // `_ability_denial`: the loyalty window, the prohibition table with every
-// printed "Activate only …" clause, a cost the board cannot pay). A permanent
-// with one ability is clicked with no index, which is its ability 0.
+// printed "Activate only …" clause, a targeting ban, an owner-only line, the
+// per-turn cap, the {T} symbol's summoning sickness and already-tapped, a cost
+// the board cannot pay). A permanent with one ability is clicked with no
+// index, which is its ability 0.
 function abilityProhibitionOf(card, abilityIndex = null) {
   if (!card || typeof card !== "object") return null;
   const listed = Array.isArray(card.ability_denials) ? card.ability_denials : null;
@@ -16026,7 +16024,10 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   }
   const abilityIndex = Number.isInteger(card?.__abilityIndex) ? card.__abilityIndex : null;
 
-  // CR 602.5: an ability the board forbids (see `abilityProhibitionOf`). A
+  // CR 602.5: an ability the board forbids (see `abilityProhibitionOf`) —
+  // the {T} symbol's two refusals included (CR 302.6's summoning sickness, CR
+  // 107.5's already tapped), per ability, so a summoning-sick creature's
+  // ability without {T} is not refused for the one that has it. A
   // permanent with several was stopped at its menu, where the button is
   // greyed out; one with a single ability has no menu, so this is where its
   // click learns the reason — instead of walking the target and cost prompts
@@ -16038,15 +16039,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
       updateActionHint(prohibited, true);
       return;
     }
-  }
-
-  // A {T} ability can't be activated while the creature is summoning sick
-  // (CR 302.6). When the only way to use the card is a tap ability, don't open a
-  // prompt that's doomed to fail — play the error sound and say why.
-  if (card && card.summoning_sick && abilityCostRequiresTap(card)) {
-    SFX.onError();
-    updateActionHint(`${cardName} has summoning sickness and can't use its tap ability yet.`, true);
-    return;
   }
 
   // A picker with nothing in it, for an ability that owes no target (see
@@ -16668,8 +16660,8 @@ function resolvePendingManaColor(manaColor) {
       old_color: pending.fromColor,
       mana_color: manaColor,
     };
-    const fromWord = textChangeWordLabel(pending.fromColor, pending.isLandType);
-    const toWord = textChangeWordLabel(manaColor, pending.isLandType);
+    const fromWord = textChangeWordLabel(pending.fromColor, pending.textMode);
+    const toWord = textChangeWordLabel(manaColor, pending.textMode);
     updateActionHint(`Casting ${pending.cardName} (${fromWord} → ${toWord})...`);
     sendAction(actionBody)
       .then(() => {
@@ -18744,6 +18736,10 @@ function roleTargetNoun(role) {
   // second): a creature, a player or a planeswalker, so a pill or a card
   // answers it. The spec kind is "any", which said "Choose the any…".
   if (role.kind === "any") return "any target";
+  // CR 115.4's widened seat slot ("target player **or planeswalker**",
+  // Kaboom!, Lunge, Shower of Sparks): a life pill or a planeswalker answers
+  // it, and the prompt said "Choose the player" over a planeswalker that glowed.
+  if (role.kind === "player_or_planeswalker") return "player or planeswalker";
   // A role whose object is a **seat** rather than an object in any zone
   // ("Target player gains control of target permanent you control", Donate).
   // The caster clicks a life pill for it, so the word has to be the one on the
@@ -18755,8 +18751,13 @@ function roleTargetNoun(role) {
   if (roleChoosesASpell(role)) return "spell";
   // The printed noun where the lowering named the role with one ("artifact or
   // enchantment", Nullmage Advocate's third slot): the spec kind "permanent"
-  // told the player nothing about what glows.
-  if (role.kind === "permanent" && role.role) return String(role.role).replace(/_/g, " ");
+  // told the player nothing about what glows. Not a **positional** name: the
+  // slots of "two target permanents" whose narrowings differ
+  // (`target_descriptions._slot_roles_spec`: Legerdemain, Gauntlets of
+  // Chaos) are named `slot_0`, `slot_1`, which said "Choose the slot 0".
+  if (role.kind === "permanent" && role.role && !/^slot_\d+$/.test(String(role.role))) {
+    return String(role.role).replace(/_/g, " ");
+  }
   return role.kind || "permanent";
 }
 
@@ -19752,7 +19753,7 @@ function startCastDividedXPrompt(
   card, cardName, dividedPayload, extraTargetTax, castAction = "cast",
   dividedValidTargets = null,
 ) {
-  const baseMax = getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || "", card);
+  const baseMax = Math.max(0, Number(castXPayable(card)?.board) || 0);
   pendingCastX = {
     kind: "cast_x",
     card,
@@ -19862,8 +19863,10 @@ function startActivationXPrompt(
     // it against mana would offer a maximum of 0 on a cost with no mana in it
     // at all, which is every card that prints this shape.
     maxX: maxXOverride === null
-      ? getMaxAffordableX(getCurrentPlayerState()?.mana_pool, activationCost, null)
+      ? Math.max(0, Number(abilityXPayable(card, abilityIndex)?.board) || 0)
       : Math.max(0, maxXOverride),
+    // A "Remove X counters" X: bounded by the counters, never re-priced.
+    xFromCounters: maxXOverride !== null,
     awaitingCustomValue: false,
   };
   renderActivationPrompt();
@@ -19878,7 +19881,8 @@ function startActivationXPrompt(
 // The largest X this cast may announce: the smallest of the bounds that apply.
 // `max_x` is the backend's — a printed cap (Winter's Chill), a life total
 // (Fire Covenant, CR 119.4) or a board of Swamps (Infernal Harvest, CR 601.2h).
-// `affordable` is what the mana pool can buy, and it applies **only** when the
+// `affordable` is the X the mana can buy — the server's `x_payable.board`, the
+// pool plus what the seat could still tap — and it applies **only** when the
 // {X} is in the mana cost: an X paid in life or permanents is not priced in
 // mana, and folding the pool in would have offered 0 to a caster who could
 // announce five.
@@ -19907,10 +19911,7 @@ function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAct
     manaRequirement: parseManaCostSymbols(card.mana_cost || ""),
     costString: card.mana_cost || "",
     costCard: card,
-    maxX: castXCeiling(
-      card,
-      getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || "", card),
-    ),
+    maxX: castXCeiling(card, Math.max(0, Number(castXPayable(card)?.board) || 0)),
     awaitingCustomValue: false,
   };
   renderActivationPrompt();
@@ -20296,34 +20297,37 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
 
   // Metamorphosis: "Add X mana of any one color..." — the caster picks the
   // color after choosing the sacrificed creature; it rides mana_color. Asked
-  // of the non-activated text only: "{T}: Add one mana of any color." is an
-  // ability whose color is chosen on activation, not while casting (Meteorite).
-  if (castRequiresManaColorChoice(pending.card) && (pending.castAction || "cast") === "cast") {
+  // only where the server says the cast names it (`castManaColorOptions`).
+  const castColors = castManaColorOptions(pending.card);
+  if (castColors && (pending.castAction || "cast") === "cast") {
     pendingManaColor = {
       kind: "cast_fixed",
       cardName: pending.cardName,
       oracleText: pending.card.oracle_text || "",
       castActionBody: actionBody,
+      colorOptions: castColors.length < MANA_COLOR_OPTIONS.length ? castColors : undefined,
     };
     renderActivationPrompt();
     return;
   }
 
-  if (cardRequiresCastColorChoice(pending.card)) {
-    // Text-change spells (Sleight of Mind / Magical Hack) replace one word with
-    // another, so two colors are chosen: the "from" word to replace, then the
-    // "to" word. Both are sent (old_color + mana_color); collecting only one
-    // leaves old_color unset and the engine stores no remap.
-    const isLandType = /basic land type/.test((pending.card.oracle_text || "").toLowerCase());
+  const textChange = castTextChange(pending.card);
+  if (textChange) {
+    // Text-change spells (Sleight of Mind, Magical Hack, Mind Bend) replace
+    // one word with another, so two are chosen: the "from" word to replace,
+    // then the "to" word. Both are sent (old_color + mana_color); collecting
+    // only one leaves old_color unset and the engine stores no remap. The
+    // "from" words are the ones the target writes (`textChangeWordOptions`).
+    const noun = textChangeNoun(textChange.mode);
     let fromOptions = null;
-    if (isLandType && Number.isInteger(selectedTarget) && Number.isInteger(selectedPermanentIndex)) {
+    if (Number.isInteger(selectedTarget) && Number.isInteger(selectedPermanentIndex)) {
       const targetPerm = currentState?.players?.[selectedTarget]?.battlefield?.[selectedPermanentIndex];
       if (targetPerm && typeof targetPerm !== "string") {
-        fromOptions = landWordOptionsForTarget(targetPerm);
+        fromOptions = textChangeWordOptions(pending.card, { permanentId: targetPerm.id });
         if (!fromOptions.length) {
           clearPendingHandCast();
           updateActionHint(
-            `${targetPerm.name} has no basic land type in its text for ${pending.cardName} to replace.`,
+            `${targetPerm.name} has no ${noun} in its text for ${pending.cardName} to replace.`,
             true,
           );
           return;
@@ -20334,16 +20338,14 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
       kind: "cast",
       step: "from",
       fromColor: null,
-      isLandType,
+      textMode: textChange.mode,
       cardName: pending.cardName,
       castActionBody: actionBody,
       oracleText: pending.card.oracle_text || "",
       colorOptions: fromOptions || undefined,
     };
     renderActivationPrompt();
-    updateActionHint(
-      `Choose the ${isLandType ? "land type" : "color word"} to replace in ${pending.cardName}'s target.`,
-    );
+    updateActionHint(`Choose the ${noun} to replace in ${pending.cardName}'s target.`);
     return;
   }
 
@@ -20434,10 +20436,13 @@ function resolvePendingCastX(xValue) {
   // see `confirmRoleTargets`); X is the one thing it lacked.
   if (pending.rolesBody) {
     updateActionHint(`Casting ${pending.cardName} with X = ${selectedX}...`);
-    sendAction({ ...pending.rolesBody, seat, x_value: selectedX })
+    const rolesBody = { ...pending.rolesBody, seat, x_value: selectedX };
+    sendAction(rolesBody)
       .then(() => updateActionHint(`Cast ${pending.cardName} with X = ${selectedX}.`))
-      .catch((e) => updateActionHint(e.message, true))
-      .finally(() => clearPendingHandCast());
+      .catch((e) => offerAutoTapForX(pending, rolesBody, e))
+      .finally(() => {
+        if (!pendingAutoTap) clearPendingHandCast();
+      });
     return;
   }
 
@@ -20523,8 +20528,29 @@ function resolvePendingCastX(xValue) {
     .then(() => updateActionHint(
       `${pending.castAction === "activate" ? "Activated" : "Cast"} ${pending.cardName} with X = ${selectedX}.`,
     ))
-    .catch((e) => updateActionHint(e.message, true))
-    .finally(() => clearPendingHandCast());
+    .catch((e) => offerAutoTapForX(pending, body, e))
+    .finally(() => {
+      if (!pendingAutoTap) clearPendingHandCast();
+    });
+}
+
+// An X the pool alone cannot pay is still one the board can (the prompt
+// offers up to `x_payable.board`): a mana refusal opens the payment step every
+// other send opens, with the body — X and targets — kept for the auto-tap.
+// It was reported as a hint and the cast dropped, so every X above the
+// pool's was a dead button.
+function offerAutoTapForX(pending, body, error) {
+  if (!isManaRefusal(error?.message)) {
+    updateActionHint(error?.message || String(error), true);
+    return;
+  }
+  pendingAutoTap = pending.castAction === "activate"
+    ? {
+      card: pending.card, cardName: pending.cardName,
+      cost: getActivatedAbilityCost(pending.card, pending.activateAbilityIndex), actionBody: body,
+    }
+    : { card: pending.card, cardName: pending.cardName, actionBody: body };
+  renderActivationPrompt();
 }
 
 function normalizeCardName(card) {
@@ -21674,14 +21700,10 @@ function createCardElement(card, options = {}) {
           return;
         }
 
-        // Abilities that buff/modify the controller's own creatures target self, not
-        // opponent. Abilities with a real target are intercepted by the dedicated
-        // prompt flows inside startActivationPrompt, so the FFA seat here is only
-        // the formal target_seat default — no picker needed.
-        const activationTargetSeat = activatedAbilityTargetsSelf(card)
-          ? seat
-          : (isFfaState() ? firstLivingOpponentSeat(currentState, seat, `${cardName} activation default`) : 1 - seat);
-        startActivationPrompt(card, activationTargetSeat, permanentIndex);
+        // Abilities with a real target are intercepted by the dedicated
+        // prompt flows inside startActivationPrompt, so the seat here is only
+        // the formal target_seat default (`activationDefaultSeat`).
+        startActivationPrompt(card, activationDefaultSeat(cardName), permanentIndex);
       } catch (e) {
         updateActionHint(e.message, true);
       }
@@ -22297,7 +22319,12 @@ function zoneCastWayLabel(way, { short = false } = {}) {
 // which is the other way's when two cover the card.
 function zoneCastCard(card, way) {
   if (!way || way.land || typeof way.price !== "string") return card;
-  return { ...card, mana_cost: way.price, effective_mana_cost: way.price };
+  // …and the X this way can be paid for (`x_payable`, web/offers.zone_x_payable):
+  // the flashback {X}{R}{R} leaves one less for X than the hand's {X}{R}.
+  return {
+    ...card, mana_cost: way.price, effective_mana_cost: way.price,
+    x_payable: way.x_payable ?? null, __zoneCast: true,
+  };
 }
 
 // More than one permission covers the card (CR 601.2b): ask which, on the
@@ -22793,15 +22820,17 @@ function selectStackSpellTarget(arrayIndex) {
 
   // A text change aimed at a spell (Sleight of Mind, Magical Hack — CR 612
   // on the stack): the two words are chosen here as they are for a permanent
-  // target, the "from" land words narrowed to the ones the spell's text reads
-  // now (`landWordOptionsForSpell`). The cast went out naming no word at all.
-  if (cardRequiresCastColorChoice(pending.card)) {
-    const isLandType = /basic land type/.test((pending.card.oracle_text || "").toLowerCase());
-    const fromOptions = isLandType ? landWordOptionsForSpell(item.card) : null;
-    if (isLandType && !fromOptions.length) {
+  // target, the "from" words the ones the spell's text writes now (the
+  // server's, by this top-first index: `textChangeWordOptions`). The cast went
+  // out naming no word at all.
+  const textChange = castTextChange(pending.card);
+  if (textChange) {
+    const noun = textChangeNoun(textChange.mode);
+    const fromOptions = textChangeWordOptions(pending.card, { stackIndex: arrayIndex });
+    if (!fromOptions.length) {
       clearPendingHandCast();
       updateActionHint(
-        `${item.card?.name || "That spell"} has no basic land type in its text for ${pending.cardName} to replace.`,
+        `${item.card?.name || "That spell"} has no ${noun} in its text for ${pending.cardName} to replace.`,
         true,
       );
       return;
@@ -22810,16 +22839,14 @@ function selectStackSpellTarget(arrayIndex) {
       kind: "cast",
       step: "from",
       fromColor: null,
-      isLandType,
+      textMode: textChange.mode,
       cardName: pending.cardName,
       castActionBody: actionBody,
       oracleText: pending.card.oracle_text || "",
-      colorOptions: fromOptions || undefined,
+      colorOptions: fromOptions,
     };
     renderActivationPrompt();
-    updateActionHint(
-      `Choose the ${isLandType ? "land type" : "color word"} to replace in ${item.card?.name || "the spell"}'s text.`,
-    );
+    updateActionHint(`Choose the ${noun} to replace in ${item.card?.name || "the spell"}'s text.`);
     return;
   }
 
@@ -26253,15 +26280,15 @@ function initBattlefieldCanvas() {
           }
         }
 
-        // If the ability costs {T} and the (chosen) copy is still tapped — no
-        // untapped copy was found in the pile — it can't be activated. Don't
-        // open a prompt; just play the error sound and say so.
-        // (A land tapping as its new type has no printed cost to read, and its
-        // tap is the whole of what a click does.)
-        if (
-          activateCard.tapped
-          && (abilityCostRequiresTap(activateCard) || landTapsOnlyAsItsNewType(activateCard))
-        ) {
+        // A land tapping as its new type (CR 305.7) has no ability for the
+        // server to deny — its tap is the whole of what a click does — so a
+        // tapped one is stopped here. Every other {T} ability's refusal (CR
+        // 107.5's "already tapped", CR 302.6's summoning sickness) is the
+        // server's, per ability (`ability_denials`, `Game.tap_symbol_refusal`):
+        // `startActivationPrompt` greys it in the menu or says it for a single
+        // ability. This read the *first* ability's printed cost for a {T}, so
+        // a tapped Basalt Monolith never reached its "{3}: Untap".
+        if (activateCard.tapped && landTapsOnlyAsItsNewType(activateCard)) {
           SFX.onError();
           updateActionHint("Card is already tapped.", true);
           return;
@@ -26272,7 +26299,7 @@ function initBattlefieldCanvas() {
         // formal target_seat default — no picker needed.
         startActivationPrompt(
           activateCard,
-          isFfaState() ? firstLivingOpponentSeat(currentState, seat, `${activateCard.name} activation default`) : 1 - seat,
+          activationDefaultSeat(activateCard.name),
           activateIdx,
         );
       } catch (e) {

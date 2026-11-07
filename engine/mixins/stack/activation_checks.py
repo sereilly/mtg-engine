@@ -510,6 +510,100 @@ class ActivationChecksMixin:
             )
         return None
 
+    @staticmethod
+    def _ability_line_lower(permanent, ability) -> str:
+        """The text an ability's own clauses are read from: its line, or —
+        for an ability with none recorded — the permanent's whole text as it
+        reads now (CR 613 layer 3)."""
+        return (ability.source_line or permanent.effective_card.oracle_text).lower()
+
+    def targeting_ban_activation_refusal(self, permanent, ability) -> str | None:
+        """Why *ability* cannot be begun under a targeting ban, or None.
+
+        "…players and permanents can't be the targets of spells or activated
+        abilities." (Peace Talks.) CR 602.2b sends an activation through CR
+        601.2c, so an ability that must choose a target and has none legal
+        cannot be begun. Asked of the *spec* rather than left to the target
+        gate: that one already refuses an ability with a mandatory **object**
+        target, but an ability that may aim at a face ("deals 1 damage to any
+        target", Rod of Ruin) names no permanent and walked straight through.
+
+        Pure, and nothing is chosen yet. Asked by the activation path
+        (``_activation_window``) and by the wire's per-ability refusals
+        (``web/serialization._ability_denial``).
+        """
+        if not self.targeting_bans:
+            return None
+        ban_spec = derive_activation_spec(ability)
+        # A cost picker is not a target (CR 601.2b vs 601.2c): Atog eating
+        # an artifact under Peace Talks targets nothing, and neither does
+        # a creature tapped to pay Llanowar Behemoth.
+        if ban_spec is None or spec_is_a_cost(ban_spec) or ban_spec.get("kind") in (
+            "none", "modal", "hand_card", "stack", "spell_or_permanent",
+        ):
+            return None
+        source_name = self.targeting_bans[-1].get("source_name", "an effect")
+        return (
+            f"{permanent.card.name} has no legal target: nothing can be "
+            f"targeted ({source_name})"
+        )
+
+    def owner_only_activation_refusal(
+        self, controller_index, permanent, ability,
+    ) -> str | None:
+        """Why *controller_index* may not activate an ability its line keeps
+        for the owner ("Only this creatures owner may activate this ability",
+        Personal Incarnation), or None. Pure; asked by the activation path and
+        the wire's per-ability refusals."""
+        if (
+            "only this creatures owner may activate this ability"
+            in self._ability_line_lower(permanent, ability)
+            and self.owner_index_of(permanent) != controller_index
+        ):
+            return f"only {permanent.card.name}'s owner may activate this ability"
+        return None
+
+    def activation_limit_refusal(
+        self, controller_index, permanent, ability,
+    ) -> str | None:
+        """Why *ability* has used up the activations its line allows this turn
+        ("Activate only once each turn", Vampire Bats' "no more than twice"),
+        or None. How limited a line is, is ``activation_tallies``' answer — the
+        reader the tally asks. Pure; asked by the activation path and the
+        wire's per-ability refusals."""
+        ability_lower = self._ability_line_lower(permanent, ability)
+        if not at_activation_limit(self, controller_index, permanent, ability_lower):
+            return None
+        return (
+            f"{permanent.card.name}'s ability can only be activated "
+            f"{activations_allowed_each_turn(ability_lower, self, controller_index, permanent)}"
+            f" time(s) each turn"
+        )
+
+    def tap_symbol_refusal(self, permanent, ability) -> str | None:
+        """The {T} symbol's two refusals, or None: CR 302.6 / 602.5a (a
+        creature's {T} ability can't be activated unless its controller has
+        controlled it continuously since their most recent turn began, haste
+        aside — ``_is_summoning_sick``) and CR 107.5 (a tapped permanent can't
+        be tapped again to pay the cost).
+
+        Questions about the board as the activation is proposed, which nothing
+        a cost decides. Pure; asked by the activation path
+        (``_activation_window``) and by the wire's per-ability refusals
+        (``web/serialization._ability_denial``). The client kept a copy of
+        both that read the *first* ability's printed cost for the symbol, so
+        a tapped Basalt Monolith could not be clicked for its "{3}: Untap"
+        and a summoning-sick creature's ability without {T} was refused as
+        though it had one.
+        """
+        if not ability.cost.requires_tap:
+            return None
+        if self._is_summoning_sick(permanent):
+            return f"{permanent.card.name} has summoning sickness"
+        if permanent.tapped:
+            return f"{permanent.card.name} is already tapped"
+        return None
+
     def _activation_window(
         self, *, ability, controller_index, permanent, program, x_value,
     ):
@@ -667,33 +761,17 @@ class ActivationChecksMixin:
         # mandatory **object** target, but an ability that may aim at a face
         # ("deals 1 damage to any target", Rod of Ruin) names no permanent and
         # walked straight through.
-        if self.targeting_bans:
-            ban_spec = derive_activation_spec(ability)
-            # A cost picker is not a target (CR 601.2b vs 601.2c): Atog eating
-            # an artifact under Peace Talks targets nothing, and neither does
-            # a creature tapped to pay Llanowar Behemoth.
-            if ban_spec is not None and not spec_is_a_cost(ban_spec) and ban_spec.get(
-                "kind"
-            ) not in (
-                "none", "modal", "hand_card", "stack", "spell_or_permanent",
-            ):
-                source_name = self.targeting_bans[-1].get("source_name", "an effect")
-                details = (
-                    f"{permanent.card.name} has no legal target: nothing can be "
-                    f"targeted ({source_name})"
-                )
-                return refuse(
-                    permanent.card.name, "unsupported", details,
-                )
+        details = self.targeting_ban_activation_refusal(permanent, ability)
+        if details is not None:
+            return refuse(permanent.card.name, "unsupported", details)
 
         # "Only this creatures owner may activate this ability." (Personal
         # Incarnation.) The owner — not whoever controls it — is the only legal
         # activator, so a thief who stole it with Control Magic can't use it.
-        if (
-            "only this creatures owner may activate this ability" in ability_lower
-            and self.owner_index_of(permanent) != controller_index
-        ):
-            details = f"only {permanent.card.name}'s owner may activate this ability"
+        details = self.owner_only_activation_refusal(
+            controller_index, permanent, ability,
+        )
+        if details is not None:
             return refuse(permanent.card.name, "unsupported", details)
 
         # "X can't be 0." (Aladdin's Lamp, Helm of Obedience.) Through the
@@ -724,12 +802,8 @@ class ActivationChecksMixin:
         # both would have to call a counted cap "no cap", which is the value
         # that stops the tally.
         activation_caps = printed_activation_caps(ability_lower)
-        if at_activation_limit(self, controller_index, permanent, ability_lower):
-            details = (
-                f"{permanent.card.name}'s ability can only be activated "
-                f"{activations_allowed_each_turn(ability_lower, self, controller_index, permanent)}"
-                f" time(s) each turn"
-            )
+        details = self.activation_limit_refusal(controller_index, permanent, ability)
+        if details is not None:
             return refuse(permanent.card.name, "unsupported", details)
 
         # The {T} symbol's two refusals, asked **here, before a single cost is
@@ -749,13 +823,9 @@ class ActivationChecksMixin:
         # pool before the move: 174 abilities paid mana into a summoning-sick
         # refusal and 361 into an already-tapped one (one of them, City of
         # Shadows, exiled a creature as well).
-        if ability.cost.requires_tap:
-            if self._is_summoning_sick(permanent):
-                details = f"{permanent.card.name} has summoning sickness"
-                return refuse(permanent.card.name, "unsupported", details)
-            if permanent.tapped:
-                details = f"{permanent.card.name} is already tapped"
-                return refuse(permanent.card.name, "unsupported", details)
+        details = self.tap_symbol_refusal(permanent, ability)
+        if details is not None:
+            return refuse(permanent.card.name, "unsupported", details)
 
         # **Can the cost be paid at all** (CR 601.2h via 602.2b; CR 118.3) —
         # one question over every resource a cost spends that is not mana,

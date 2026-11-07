@@ -324,10 +324,12 @@ def test_the_sweep_names_a_reader_with_a_list_of_its_own(session, monkeypatch):
     """Backwards: the AI's one call and the wire's taken out, which is each of
     them as it was — the AI asking the three gates it had always asked, the
     wire asking none."""
-    import web.serialization
+    import web.offers
 
     monkeypatch.setattr(ai_abilities, "activation_prohibition", lambda *args: None)
-    monkeypatch.setattr(web.serialization, "activation_prohibition", lambda *args: None)
+    # The wire's reader (``_ability_denial``) lives in ``web/offers.py`` since
+    # kg4 split it out of ``web/serialization.py``.
+    monkeypatch.setattr(web.offers, "activation_prohibition", lambda *args: None)
 
     _counts, disagreements = _sweep(session)
 
@@ -507,7 +509,8 @@ _READERS = {
     # The AI's hand chooser (cycling, typecycling), which proposed a cycle a
     # Stabilizer forbids until Scourge's W1G2 gave it the table.
     "engine/ai_hand_activations.py": ("_choose_hand_activation_action",),
-    "web/serialization.py": None,
+    # ``ability_denials``' reader, split out of ``web/serialization.py``.
+    "web/offers.py": None,
     "web/state_view.py": None,
 }
 

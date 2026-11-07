@@ -616,6 +616,15 @@ class LandManaTapsMixin:
             # sentence.
             if refusal in _LOGGED_TAP_REFUSALS:
                 return f"{land.card.name}{_LOGGED_TAP_REFUSALS[refusal]}"
+            # CR 107.5, in the sentence the activation path and the wire's
+            # ``ability_denials`` give it (``Game.tap_symbol_refusal``): a
+            # tapped land asked for its mana is "already tapped", where this
+            # said only "failed to tap land for mana".
+            if (
+                refusal == "not_an_untapped_land" and land is not None
+                and land.has_type("land") and land.tapped
+            ):
+                return f"{land.card.name} is already tapped"
             from ..activation_prohibitions import ACTIVATION_PROHIBITIONS
 
             # …and a printed "Activate only …" clause too (the
