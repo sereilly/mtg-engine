@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**433 / 641 tracked rules covered (67%)** — 3440 tests, 0 unannotated.
+**433 / 641 tracked rules covered (67%)** — 3446 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -609,11 +609,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **506.1** The combat phase has five steps, which proceed in order: beginning of combat, declare attackers, ... *(6 tests)*
 - [x] **506.2** During the combat phase, the active player is the attacking player; creatures that player control... *(8 tests)*
 - [x] **506.3** Only a creature can attack or block. Only a player, a planeswalker, or a battle can be attacked. *(13 tests, subrules ab)*
-- [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller or protector c... *(12 tests, subrules bc)*
+- [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller or protector c... *(13 tests, subrules bc)*
 - [x] **506.5** A creature attacks alone if it’s the only creature declared as an attacker during the declare att... *(8 tests)*
 - [ ] **506.6** A creature attacks a player alone if it’s declared as an attacker attacking a player during the d...
 - [x] **506.7** Some abilities check to see whether or not a creature “had to attack” during a particular combat ... *(2 tests)*
-- [x] **506.8** Some spells state that they may be cast “only [before/after] [a particular point in the combat ph... *(10 tests, subrules c)*
+- [x] **506.8** Some spells state that they may be cast “only [before/after] [a particular point in the combat ph... *(13 tests, subrules cefg)*
 
 ### 507. Beginning of Combat Step
 
@@ -629,7 +629,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **508.5** If an ability of an attacking creature refers to a defending player, or a spell or ability refers... *(3 tests, subrules a)*
 - [ ] **508.6** A player is “attacking [a player]” if the first player controls a creature that is attacking the ...
 - [ ] **508.7** Some cards allow a player to reselect which player, planeswalker, or battle a creature is attacking.
-- [x] **508.8** If no creatures are declared as attackers or put onto the battlefield attacking, skip the declare... *(2 tests)*
+- [x] **508.8** If no creatures are declared as attackers or put onto the battlefield attacking, skip the declare... *(8 tests)*
 
 ### 509. Declare Blockers Step
 
@@ -647,7 +647,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 511. End of Combat Step
 
-- [x] **511.1** The end of combat step has no turn-based actions. Once it begins, the active player gets priority... *(4 tests)*
+- [x] **511.1** The end of combat step has no turn-based actions. Once it begins, the active player gets priority... *(5 tests)*
 - [x] **511.2** Abilities that trigger “at end of combat” trigger as the end of combat step begins. Effects that ... *(2 tests)*
 - [x] **511.3** As soon as the end of combat step ends, all creatures, battles, and planeswalkers are removed fro... *(3 tests)*
 
