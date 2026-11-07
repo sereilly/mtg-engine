@@ -590,6 +590,11 @@ _NOT_DESTRUCTIONS_BY_CALLER: dict[str, str] = {
         "CR 701.12 — an exchange of ownership puts the card in a graveyard",
     "put_self_into_zone":
         "'Put it into your graveyard' — a move, and the card's own word for it",
+    # kg4 `asks`: the death's CR 616.1e question re-runs the death it
+    # interrupted (`answered_restart`), whose own caller announced it.
+    "_move_permanent_to_graveyard":
+        "CR 616.1e — the same move re-run at the affected player's answer, "
+        "not a second road; its caller announced what it was",
 }
 
 #: Floors, set well inside what the pool measures today (see the report this
