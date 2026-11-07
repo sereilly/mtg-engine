@@ -1,4 +1,4 @@
-"""Every `from X import Y` in engine/, web/ and scripts/ resolves — function-level ones too.
+"""Every `from X import Y` in engine/, web/, scripts/ and tests/ resolves — function-level ones too.
 
     import_names.py            run from the root of the tree to check
 
@@ -9,6 +9,10 @@ run, and the missing-name scan cannot see it (the name *is* imported — from
 a module that no longer has it). This imports every module an import
 statement names and asks it for every name the statement pulls. Exit 1 on
 any that does not resolve.
+
+tests/ is read too: a split's moved name imported by a test at its old home
+is a collection error the suite reports only as ERROR (kg4: a test imported
+`permanent_worth` from `ai_rehearsal` after it moved to `ai_standing`).
 """
 import ast
 import importlib
@@ -32,7 +36,7 @@ def package_of(path: Path) -> str:
 
 failures = []
 checked = 0
-for top in ("engine", "web", "scripts"):
+for top in ("engine", "web", "scripts", "tests"):
     for path in sorted((ROOT / top).rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         # An import under `if TYPE_CHECKING:` is never executed; annotations

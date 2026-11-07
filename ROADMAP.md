@@ -443,8 +443,10 @@ one card prints this") reads as a work item long after it stopped being true.
     Effigy") - a person's answer is judged; 20 triggers print a target and
     fire on a death or a departure. The fix is to enqueue after the removal
     (wrap `_destroy_swept_permanents`' loop, and the single-permanent paths,
-    in `deferring_triggers()`) and then drop `Game.departing`; four Blazing
-    Effigy tests pin the index fallback and will move. (b) A modal trigger's
+    in `deferring_triggers()`) and then drop `Game.departing`. (Since kg4 the
+    trigger-target offer drops departing permanents for every shape, so the
+    default never names the dying Effigy, and the four Effigy tests pass as
+    written.) (b) A modal trigger's
     mode target (one in the pool). (c) A spell target a trigger chose for
     itself. (d) A cast announcement the picker has no list for (12 of 65
     targeted entry triggers on the cast road; the 15 graveyard-card ones
@@ -492,7 +494,11 @@ one card prints this") reads as a work item long after it stopped being true.
     CR 601.2c's "can the announcement be made at all?" is asked per primary
     kind only.
 
-- **Three handler paths still resolve by index alone** (re-probed
+- **One handler path still resolves by index alone**,
+  `combat.remove_creature_from_combat`, and no stale index can reach it:
+  since kg4 every resolution context re-derives its slots from the ids
+  (the two exile handlers resolve through `resolve_target_permanent`). The
+  history (re-probed
   2026-10-18; `colors.mark_text_modified` was the fourth, and round 3's
   J6 found it hitting the wrong permanent six times in six and moved it onto
   `pick_target_permanent`). True of the code, and since APC wave 2
@@ -873,8 +879,9 @@ one card prints this") reads as a work item long after it stopped being true.
     caster's own creature (Afflict, Ice) is held. An X paid in mana is sized
     at the largest affordable, so Flowstone Slide's +X/−X kills its own
     attacker: `_cast_candidate_sized` covers X paid in life only. Soul Burn's
-    X under its spend restriction is sized wrong, and a coin flip (Desperate
-    Gambit) is sampled. Measured and not pinned: Remedy's division ignores
+    X under its spend restriction was sized wrong (the wire's payable X is
+    the cast path's since kg4), and a coin flip is weighed on one sample
+    (Bottle of Suleiman, pinned in the aidefend census). Measured and not pinned: Remedy's division ignores
     the fight (`choose_divided_targets`). A trick with a lasting additional
     cost (kicked Falling Timber's land) is never "fleeting", because
     `_untouched` does not pay optional costs. A cast at exactly `HARM_FLOOR`
@@ -1002,14 +1009,17 @@ one card prints this") reads as a work item long after it stopped being true.
     (tapping or killing a would-be attacker) needs the rehearsal to fight a
     combat that has not begun and is not the active seat's precombat main
     (`_combat_ahead`; `_fight_the_combat` finishes one already under way).
-  * *Abilities at instant speed, the rest.* A Prodigal Sorcerer is not held
-    up, because `_play_activations` taps it in its own main phase first.
-    Rescue abilities that remove their own source (Quicksilver Wall's
-    bounce) are skipped by the chooser's `harms_its_own_source` filter; a
-    hamper (a phase-out, a shroud, `hampers_its_own_source`) is rehearsed.
-    The chooser reads only the first usable ability of each permanent.
-    Foreign (CR 602.1b) and from-hand (cycling) activations are not asked
-    at instant speed; graveyard ones are (`ai_graveyard_activations`).
+  * *Abilities at instant speed, the rest.* Since kg4 the chooser weighs
+    every non-mana ability of a permanent (each turned-down one set aside
+    alone), an own-source removal is a rescue at instant speed, and the
+    hand is asked (a cycle whose trigger pays now). Left: a Prodigal
+    Sorcerer is not held up (`_play_activations` taps it in its own main
+    phase first); foreign (CR 602.1b) activations are not asked at
+    instant speed; a library-top rescue (Thalakos Mistfolk, Wayward Soul)
+    is a card the standing does not count; rescues whose cost is a
+    discard or a land (Ephemeron, Stormwatch Eagle) are kept out by the
+    cost floors; a later ability is held to the land gate's `lasting >
+    0`, stricter than the first ability's cast rule.
   * *Web `ai_vs_ai` sessions do not use the seam*: they give nobody
     priority. The parts are a session-level driver that is not a closure
     over the game, so it can be re-bound after `game_history`'s undo
@@ -1141,10 +1151,11 @@ one card prints this") reads as a work item long after it stopped being true.
     `trigger_target` names one target per click; a one-slot picker narrowed
     by a Flagbearer does not say why; a click on the middle of a lower stack
     card hits the card above.
-  * *Replacements that are never offered as a choice* (CR 616.1e). The
-    graveyard seam passes no `restart`, so Legacy Weapon under Forbidden
-    Crypt or Yawgmoth's Will takes the default order (exile first) even for
-    an asked seat; Library of Leng and Dodecapod on a taken discard likewise.
+  * *Replacements that are never offered as a choice* (CR 616.1e). Since
+    kg4 a death, a move into a graveyard and a discard ask the affected
+    player (`apply_replacements(..., joined=)`, `answered_restart`); what
+    is left is SET_PLAYBOOK's Known-gaps entry (an entry, land mana, the
+    chosen discard's else-branch).
     And Library of Leng is *offered* on a discard that pays a cost, against
     its ruling ("costs aren't effects"): eight cost sites call
     `_discard_card`, and one `as_cost` flag on the seam closes that and a
@@ -1178,8 +1189,9 @@ one card prints this") reads as a work item long after it stopped being true.
     attacker that changed sides.
   * *Small, each with a repro in its group's report.*
     `destroy_all_matching` logs what it aimed at, not what died (55 cards
-    compile to the kind). "<Creature type> card" lowers with a creature
-    `type_filter`, so a Kindred card would be missed (none in the manifest).
+    compile to the kind). ("<Creature type> card" and a bare creature type
+    naming a permanent read Kindred cards since kg4; what is left is the CR
+    400.4a entry seam, in SET_PLAYBOOK's Known gaps.)
     `put_self_into_zone` passes `source.card` alone, so a *copy* of Legacy
     Weapon leaving that way is read off its printed face; `MILLED_THIS_WAY`
     records a card a replacement sent to a hidden zone. Dodecapod's counters
@@ -1300,9 +1312,10 @@ one card prints this") reads as a work item long after it stopped being true.
     J5** (`tests/rules/test_roles_spell_target_legality.py`: 5 of 9 had acted
     on an illegal player, and 3 of 3 all-illegal objects resolved). Roles are not
     retargetable (`_CHANGEABLE_CHANNELS` excludes "role"), and a copy is
-    offered new targets only when it chose exactly one permanent or player
-    (`_copy_reaim_is_one_slot`): a copy with several targets, a stack or
-    graveyard target, or a mode keeps the original's. "Another target
+    offered new targets, on every copy road, only when it chose exactly one
+    target (one permanent or player, or one spell or graveyard card through
+    CR 115.7's `change_slots`): a copy with several targets or a mode keeps
+    the original's. "Another target
     player" is held only by the blanket CR 115.3 refusal (`distinct: True` is
     not lifted by `target_descriptions.roles_spec`). The AI never announces two
     players.
@@ -1327,13 +1340,10 @@ one card prints this") reads as a work item long after it stopped being true.
     suspended, and `resolve_replacement_choice` runs none after the answer;
     measured before the closer taught the step window to check state as it
     closes - re-probe before taking it).
-    An `effect_order` option names the effect, not the card on the table: a
-    prevention effect's `label=` (kg) and a replacement's docstring first line
-    ("Forethought Amulet" for any such shield) are both per registration; it
-    wants a per-event label hook reading the source permanent.
-  * *Destruction.* Three sacrifices go round `Game.sacrifice_permanent`
-    (Animate Dead's `_remove_aura_effects`, Golgothian Sylex and Apocalypse
-    Chime, the end step's sacrifice sweep). `destroy_each_unless_life_paid`
+    (An `effect_order` option names its effect and its source since kg4:
+    every registration takes `label=` and `sources=`.)
+  * *Destruction.* Every sacrifice goes through `Game.sacrifice_permanent(s)`
+    since kg4. `destroy_each_unless_life_paid`
     logs "destroyed" for an indestructible permanent. A non-interactive seat
     aims two Karmic Justice triggers at one permanent. And the fix this file
     names for `Game.departing` (a `deferring_triggers()` block) is
@@ -1378,8 +1388,8 @@ one card prints this") reads as a work item long after it stopped being true.
     several-modes loop, so a copied "choose one or more" resolves its first
     mode (read, not driven). The Debug Menu cannot seed a graveyard, a hand,
     a life total or a library, and its "cast for free" has no roles picker;
-    the Raw State endpoint bakes current P/T into a permanent and a rebuilt
-    Aura loses its behaviour. The castable highlight says no to a flashback
+    the Raw State endpoint bakes current P/T into a permanent (a rebuilt
+    Aura attaches through `attach_aura` since kg4). The castable highlight says no to a flashback
     whose price needs a filter land (the residue above). Wording: a
     replacement prompt's log lines after "<spell> resolved"; the Auto-Tap
     prompt for an ability shows the raw
@@ -1414,15 +1424,13 @@ one card prints this") reads as a work item long after it stopped being true.
     then measure who relies on the sweep's "manually placed" exemption
     before narrowing it.
     Reproduction: `.worktrees/scratch/tor/w2g2/drive_single_auras.py`.
-  * *Library of Leng and madness on a forced discard.* Both replace one
-    discard's destination (CR 616.1). On a discard its player chooses they
-    are asked; on one at random `Game._discard_card` passes no `restart` to
-    `apply_replacements`, so madness applies first by default. (A discard
-    paid as a cost no longer meets the Library at all: costs are not
-    effects, its 2004-10-04 ruling, and the seam carries `as_cost`.)
-    Parts: a restart closure in `_discard_card` that re-runs the
-    discard, the discard announcements deferred until it, and its twenty-odd
-    callers tolerating a suspended discard.
+  * *Library of Leng and madness on a forced discard.* Drained at kg4: a
+    discard's destination is one contention set
+    (`Game.discarded_card_destination`), asked through
+    `answered_restart`; no caller had to tolerate a suspension, because
+    every contending effect sends the card somewhere else. (A discard paid
+    as a cost meets no Library: costs are not effects, its 2004-10-04
+    ruling.) The chosen discard's else-branch is the Known gap left.
   * *The AI's default target for a graveyard-card trigger is the pile's
     first match*: Dawn of the Dead reanimated Llanowar Elves over a Hill
     Giant. Twenty-three cards (Gravedigger, Animate Dead, Necromancy ...). A
@@ -1574,7 +1582,9 @@ before citing it.**
    captured context), which are separate keys because reading either for the
    other yields a silent zero (round 33).
 8. **Stated AI policies, not special cases**: the maximum for "up to N", the
-   first printed mode, the costliest legal card in a reveal-and-choose,
+   first printed mode where nothing can be rehearsed (an opponent's mode,
+   CR 700.2e, is rehearsed from its seat), the costliest legal card in a
+   reveal-and-choose,
    everything matching in an any-number search, `default_sacrifice_pick`'s
    "keep the one whose death loses the game for last, then the ability's own
    source (`paying_for=`), then take the smallest",

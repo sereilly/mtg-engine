@@ -157,8 +157,13 @@ that does not exist under a rule that does). Advisory only.
 silent, repo-wide correctness event**: an edition that inserts a rule shifts
 every number after it, so an old citation names a different rule (`701.15c` is
 Goad). `tests/engine/test_cr_citation_subjects.py` reads the 701 keyword-action
-headings out of `MagicCompRules.txt` and fails a citation whose keyword moved.
-Outside 701, `scripts/cr_edition_diff.py old.txt` compares two editions by text
+headings out of `MagicCompRules.txt` and fails a citation in `engine/`, `web/`,
+`scripts/` or `tests/` whose keyword moved;
+`tests/engine/test_kg4_citations_rule_subjects.py` fails a cited number or
+letter the shipped CR does not have (a list's later members and every `cr`
+marker included) and a CR 113.7a / 112.2 citation made for a neighbouring
+rule's claim (`RULE_SUBJECTS`: 113.7a is an ability outliving its source, not
+"an ability is not a spell", 113.9). Outside 701, `scripts/cr_edition_diff.py old.txt` compares two editions by text
 and lists every citation here of a rule that moved, changed or went; install a
 download with `--install` (some editions mark blank lines with a NO-BREAK
 SPACE). The shipped CR is the **September 25, 2026** edition.
@@ -270,7 +275,10 @@ special actions are weighed in `engine/ai_special_actions.py`, before the
 first combat.
 
 - **Casting**: every cast site goes through `ai_actions.cast_announcement` (an
-  AST test fails a site that spells a cast keyword itself); the mode chooser
+  AST test fails a site that spells a cast keyword itself), and every
+  activation site through `ai_actions.activation_announcement` (an AST test
+  holds the executors to it; the text-change words ride `ActivationAction`);
+  the mode chooser
   loops `Game.announceable_modes`; `ai_weighed_cast.permitted_casts` is the one
   reader of what `cast_permissions` opens (`CastAction.from_zone`). Whether a
   card may be cast at instant speed is the engine's question
@@ -316,7 +324,13 @@ first combat.
   the web AI seat answer with one function, `ai_priority.act_at_priority`, in
   the moments `instant_speed_window` names: the cast chooser
   (`choose_combat_instant_cast_action`), then
-  `choose_instant_speed_activation`, then the graveyard chooser
+  `choose_instant_speed_activation` (every non-mana ability of a permanent,
+  each turned-down one set aside alone — with that ability of every
+  identical permanent, `ai_policy._making_the_same_proposal`; an effect
+  removing its own source is a rescue there), then the hand
+  (`ai_hand_activations.choose_hand_activation_action(at_instant_speed=True)`:
+  a cycle whose trigger pays now; a cycle whose trigger finds nothing is held
+  at sorcery speed), then the graveyard chooser
   (`ai_graveyard_activations.choose_graveyard_activation_action`, alone in
   the seat's own upkeep), each through its own executor; the web AI's own
   upkeep stops for it when the seat holds a graveyard ability. In the
@@ -332,18 +346,38 @@ first combat.
   asked only at sorcery speed, as the simulator's `_play_activations` asks it),
   each door once a step (`Session.ai_doors_spent`). Whatever any door puts on
   the stack goes round the table before it resolves (`_hand_priority_round`,
-  CR 117.3c).
-- **Rehearsal**: `ai_rehearsal.rehearse` deep-copies the game, casts the
-  candidate on the copy, resolves on defaults and reads `seat_standing` (life,
-  cards, `permanent_worth` through the layers) right after and at the end of
-  the turn — what lasts counts in full, what ends this turn a quarter. A cast
-  that moves nothing, or leaves its caster worse off, is not proposed. A
-  precombat cast whose good is gone by the end of the turn is rehearsed through
-  the fight (`through_combat=True`); `_fight_the_combat` also finishes a
-  combat already under way, from the step it is in.
-- **A copy sees what its seat sees** (`ai_rehearsal.conceal_from`, CR 400.2):
-  libraries reshuffled and other hands redealt before anything is cast on it.
-  Held by `tests/ai/test_ai_hidden_information_census.py`.
+  CR 117.3c). In declare attackers the AI answers in the request that
+  declared its attack (`_ai_declares_attackers`, CR 508.2), and in declare
+  blockers once the blocks are in; a person with no legal block has the
+  empty declaration made through the engine's `declare_blockers`
+  (`_declares_for_a_person_who_cannot_block`). The rail's hold on the AI's
+  turn is `_hold_at_flagged_step`: the AI declares and answers first,
+  `seats._hold_priority_for_human` refuses while a declaration is owed
+  (`_declaration_owed`) and hands priority past any other AI seat to the
+  person, or to nobody once every player still in the game has passed.
+- **Rehearsal**: `ai_rehearsal.rehearse` casts the candidate on a scratch copy
+  (`ai_scratch_copy.scratch_copy`), resolves on defaults and reads
+  `ai_standing.seat_standing` (life, cards, `permanent_worth` through the
+  layers) right after and at the end of the turn — what lasts counts in full,
+  what ends this turn a quarter. A cast that moves nothing, or leaves its
+  caster worse off, is not proposed — nor is an ability, read with its {T} on
+  both copies (`ai_abilities._moves_something`; a one-shot artifact keeps its
+  flat score). A precombat cast whose good is gone by the end of the turn is
+  rehearsed through the fight (`through_combat=True`), and such an ability
+  that changes neither the attack nor the blocks
+  (`Rehearsal.declarations_changed`) waits for the declare-blockers step;
+  `_fight_the_combat` also finishes a combat already under way, from the step
+  it is in. A rehearsal's own randomness is seeded from
+  `ai_scratch_copy.public_counts` (turn, step and what every seat can count),
+  never the log or a process-wide counter, and a seeded run in one process
+  plays as in a fresh one (`tests/ai/test_kg4_determinism_rehearsal_seed.py`,
+  `test_kg4_determinism_process_state.py`). An opponent's mode choice (CR
+  700.2e) and a copy offer's reply are the prompts rehearsed inside a
+  rehearsal, one level down (`ai_prompt_picks._one_level_deeper`), so a
+  caster's rehearsal prices the answer it will get.
+- **A copy sees what its seat sees** (`ai_scratch_copy.conceal_from`, CR
+  400.2): libraries reshuffled and other hands redealt before anything is
+  cast on it. Held by `tests/ai/test_ai_hidden_information_census.py`.
 - **A rehearsal that raises is counted** (`ai_rehearsal.REHEARSALS_RAISED`), each
   distinct one is an issue, and the script exits 1 — otherwise it is a card
   silently never cast.
@@ -351,10 +385,16 @@ first combat.
   class-level spy on `Game` sees rehearsal copies too (which run the end step
   and the next turn's bookkeeping), so guard a spy with
   `ai_rehearsal.rehearsing()`. The AI is two families of modules: the
-  choosers (`ai_policy` and the `ai_*` modules it fronts) and what a card or a
-  position is worth (`ai_valuation`, `ai_rehearsal`, `ai_weighed_cast`,
-  `ai_target_sides`, `ai_prompt_readers`, `ai_compelled_blocks` — a fight's
-  outcome, read by the blocks and by a trigger that compels a block).
+  choosers (`ai_policy` and the `ai_*` modules it fronts — among them
+  `ai_prompt_picks`, what a seat nobody asks picks, by worth, for every
+  prompt kind's default) and what a card or a position is worth
+  (`ai_valuation`, `ai_standing` — the one measure of a seat's position —,
+  `ai_rehearsal`, `ai_scratch_copy`, `ai_weighed_cast`, `ai_target_sides` and
+  `ai_slot_sides` — one target's side, and each slot's of an announcement
+  naming several —, `ai_prompt_readers`, `ai_compelled_blocks` — a fight's
+  outcome, read by the blocks and by a trigger that compels a block — and
+  `ai_combat_triggers`, what a creature's own attack or block trigger
+  gambles, read by the declarations).
 
 What the simulator does not do yet is in ROADMAP.
 
@@ -458,8 +498,11 @@ entries, not editing dispatch**.
   your graveyard", `cards_in_zones`) asked where each printing already has a
   seam: a conditional static, an activation restriction row, and a spell's
   "instead" (`line_rewrites.expand_instead_paragraph_lines`).
-- `engine/effect_labels.py` — the `effect_kind` *label* an ability reports. Never
-  dispatch: it feeds `SimulationResult` and `StackItem.ability_effect_kind`,
+- `engine/effect_labels.py` — the `effect_kind` *label* an ability reports,
+  looked up in two family tables, which is where a row goes:
+  `engine/activated_labels.py` (`ACTIVATED_LABELS`) and
+  `engine/triggered_labels.py` (`TRIGGERED_LABELS` and its by-condition
+  rows). Never dispatch: it feeds `SimulationResult` and `StackItem.ability_effect_kind`,
   and a wrapper is labelled by its shape, never by a leaf's effect — a
   triggered wrapper's by-condition row names the moment its condition names
   (`TRIGGERED_LABELS_BY_CONDITION`). Its prefix is not
@@ -540,7 +583,8 @@ entries, not editing dispatch**.
 
 - `engine/replacements/` — CR 614 interceptors, one module per kind of event,
   each a pure
-  `applies` predicate plus the effect and an explicit `order`. An interceptor
+  `applies` predicate plus the effect, an explicit `order`, and a required
+  `label` and `sources` (as for prevention, below). An interceptor
   produces no instruction, so a permanent whose only ability is one is held up
   by `REPLACEMENT_LINES` (`replacements/lines.py`; read by the grammar's parse
   claim and the support gate) — adding an interceptor means adding its line there.
@@ -555,16 +599,28 @@ entries, not editing dispatch**.
   (`_stack_item`), it holds that object and suspends the loop its event was a
   step of, and is answered inside `_answer_pending_choice`.
 - `engine/prevention/` — CR 615 shields, `@prevention_effect(order, applies=…,
-  label=…)` (`label` is the one-line `effect_order` option, never a docstring)
-  over one `{recipient, amount, source, combat}` event (recipient a player or a
-  permanent). A new "prevent …" card is an entry here, never a branch in a
+  label=…, sources=…)` over one `{recipient, amount, source, combat}` event
+  (recipient a player or a permanent): `label` is what the effect does (one
+  line, never a docstring) and `sources` reads what generates it for the
+  event, so the `effect_order` option is "<label> (<sources>)"
+  (`effect_ordering.option_text`; a face-down source named as every seat sees
+  it). The statics a permanent prints over itself or what it wears are
+  `prevention/static.py`, over others `prevention/blankets.py`. A new "prevent …" card is an entry here, never a branch in a
   damage path. `engine/shields.py` is the state they read: one `Shield`
   collection per recipient with what it answers to, amount, uses and lifetime —
   never a new `PlayerState` field and never a clearing line in a turn step.
 - `engine/effect_ordering.py` — CR 616.1: gather every applicable effect, the
   affected player chooses one, apply, re-ask (616.1f). That is why applicability
   is a separate, pure predicate. A re-runnable caller passes a `restart` thunk
-  (or `asks=True` to a damage entry point) so a contended choice can be asked.
+  (or `asks=True` to a damage entry point) so a contended choice can be asked;
+  a move whose every contending effect sends the object somewhere else asks
+  through `answered_restart` (a suspended move reports "did not arrive",
+  whatever is answered). Events the registry spells separately but CR 616.1
+  treats as one are one contention set (`apply_replacements(..., joined=)`):
+  a death is `would_die` + `would_leave_battlefield` + `put_into_graveyard`; a
+  discard's destination (`Game.discarded_card_destination`) is `discard` +
+  `put_into_graveyard`. `tests/engine/test_kg4_asks_replacement_sites.py`
+  classes every call site: asks, one registered effect, or declined.
 - `engine/resumption.py` — a loop records the rest of itself before each step,
   so answering resumes the targets, instructions and tail behind it. **A loop
   using it must be the last thing its function does**; what follows the loop
@@ -583,9 +639,11 @@ entries, not editing dispatch**.
 - **Damage dealt at once is one event** (CR 603.2c, 608.2f): the combat damage
   step and every spell or ability dealing damage to several recipients open
   one dealing (`simultaneous_damage.deal_at_once`; a split damage sentence's
-  `sequence` carries `oracle_types.ONE_DEALING`, its steps dealt in APNAP
-  order of the player each affects where each names one recipient,
-  `control_flow._in_apnap_order`), and a damage trigger naming one end of it
+  `sequence` carries `oracle_types.ONE_DEALING`: its steps run in printed
+  order while the dealing collects their chunks at the two damage seams,
+  `begin_sentence` / `collect`, and its last step, `deal_sentence`, deals them
+  as one loop in APNAP order of the seat each chunk's CR 616.1 question goes
+  to, printed order within a seat), and a damage trigger naming one end of it
   — delayed ones included — is announced once, for that end's total. A new
   loop dealing damage to several recipients goes through `deal_at_once`
   (`tests/engine/test_kg3_dealings_one_dealing_census.py`).
@@ -637,12 +695,30 @@ entries, not editing dispatch**.
   for nothing takes an entry prompt's default as it is armed
   (`Game._an_entry_nobody_waits_for`). **Permanents one event puts onto the
   battlefield enter together** (CR 603.6a): a road that enters several wraps
-  them in `Game.entering_together()` — each newcomer's entry state is
-  performed in no zone as its call is made, then all are appended, recomputed
-  once and announced with every newcomer present; an event whose newcomers
-  ask waits as one, at the last answer any of them owes.
-  `tests/engine/test_kg3_batch_roads.py` holds every entry made in a loop to
-  the block.
+  them in `Game.entering_together()` — each newcomer is handed to the event
+  as its call is made (`entry_awaiting.DeferredEntry`, its id stamped then),
+  and when the event closes each one's entry state is performed in no zone in
+  APNAP order of the seat it enters under (CR 101.4, 613.7m;
+  `entry_awaiting.apnap_order`), then all are appended, recomputed once and
+  announced with every newcomer present; an event whose newcomers ask waits
+  as one, at the last answer any of them owes. An event can outlive a
+  decision: a prompt armed inside it carries it (`entry_awaiting.ENTRY_EVENT`),
+  its answer re-joins it, and it closes once its opener is done and no
+  suspending prompt it stamped is owed — a resumable loop opens one with
+  `Game.entering_together_through` (a multi-seat `may`, Show and Tell; a
+  single-leaf `for_each`). `tests/engine/test_kg3_batch_roads.py` holds every
+  entry made in a loop to the block. **What one event takes off the
+  battlefield looks back at itself** (CR 603.10a, 704.3): each state-based
+  pass (`_state_based_pass`), each destruction of several permanents and
+  every loop removing several permanents for one action runs inside
+  `Game.leaving_together()`; the death scans, the `events.LOOKS_BACK_IN_TIME`
+  announcements and the transition's attachment and token-maker scans add
+  `departed_in_this_event()`; an inline leaves-the-battlefield effect waits
+  for the event (`after_this_departure`); a loop whose repetitions sacrifice
+  at their answers (Fade Away, Tariff) holds them on its context
+  (`sacrificing_together_through`, `OracleExecutionContext.sacrifice_batch`)
+  for its last step. `tests/engine/test_kg4_together_departure_roads.py`
+  holds every departing call made in a loop to the block.
 - **Leaving a hand is one transition**: `Game.take_card_from_hand(owner, card)`
   removes exactly one copy by identity — every copy of a card in a hand is the
   same `CardDefinition` object. Guarded by `tests/engine/test_hand_removal_seam.py`.
@@ -677,7 +753,7 @@ entries, not editing dispatch**.
   plus what its untapped lands would add (default — what an automatic payment
   asks), or plus every tap-alone source and every mana ability whose cost taps
   other permanents (`nonland_sources=True` — what a player is asked; the
-  castable highlight passes it).
+  castable highlight passes it), or from the pool alone (`pool_only=True`).
 - `engine/faces.py` — multi-face cards (CR 709). **A face is a card**: each half
   is derived once as its own `CardDefinition` carrying `face_of`, and that half
   compiles and goes on the stack; `whole_card` is CR 709.4 at the zone seams —
@@ -745,7 +821,11 @@ entries, not editing dispatch**.
   highlight, hand/graveyard activations and a land's tap
   (`Game.land_tap_prohibition`); refusals reach the client as
   `ability_denials`. Whether a non-mana cost can be paid is one question,
-  `Game.unpayable_activation_cost` (CR 601.2h).
+  `Game.unpayable_activation_cost` (CR 601.2h). The activation window's other
+  pre-choice refusals are methods the wire asks too:
+  `Game.loyalty_activation_refusal`, `tap_symbol_refusal` (CR 602.5a),
+  `targeting_ban_activation_refusal`, `owner_only_activation_refusal`,
+  `activation_limit_refusal`.
 - `engine/cast_restrictions.py` / `engine/activation_restrictions.py` —
   text-keyed timing gates ("cast this spell only during…", "activate only if…").
   Ordered tables keyed by the printed clause, read by the path **and the support
@@ -834,7 +914,14 @@ entries, not editing dispatch**.
   A copy whose targets may be chosen anew is pushed unannounced and announced
   once they are decided (`Game.announce_copy_put_onto_stack`, CR 707.10c):
   becomes-the-target, "chooses targets" only where one moved, then put onto
-  the stack.
+  the stack. Every copy road offers them through one offer
+  (`spell_copies.offer_new_targets`): a prompt for a seat somebody asks, the
+  measured answer for one nobody asks. A spell judged from outside its own
+  resolution (a retarget, a copy's new target, Grip of Chaos) is read as it
+  is — its colour and text (`_enumerate_targets(stack_item=…)`,
+  `object_colors.judging_targets_of`) — and a spell's one target may be
+  another stack object (`targeting.single_spell_target`'s `"stack"` answer;
+  a retargeting spell is a legal new target while it resolves).
   **The object a trigger is about is never its target**: a fire site records it
   as `StackItem.about_permanent_id` only for a line that names no target of
   its own (`trigger_utils.bound_event_object`), and the context builder hands
@@ -848,7 +935,15 @@ entries, not editing dispatch**.
   still offers the player (`Game.role_seat_is_offered`, CR 608.2b).
   `target_permanent_id` is `None` or a list of ids on every
   holder (`game_types.check_target_ids` on each write), read through
-  `target_ids` / `single_chosen_id` / `first_target_id`.
+  `target_ids` / `single_chosen_id` / `first_target_id`;
+  `target_permanent_index` has the same one shape (`check_target_slots`;
+  `target_slots` / `single_slot` / `first_slot`), is consumed into ids at
+  the push (`_stamp_stack_targets`), so a stack object carries none, and
+  every resolution context re-derives it from the ids
+  (`bare_announcements.resolving_slots`). A graveyard target is its stamp
+  (`target_graveyard_card`, None or a list, `check_graveyard_stamps`), read
+  through `handlers/_targets.chosen_graveyard_slots`. The API keyword still
+  takes a slot (SET_PLAYBOOK's Known gaps).
 
 **Triggers**
 
@@ -893,6 +988,16 @@ entries, not editing dispatch**.
   `trigger_utils.matching_triggers` (the battlefield by default) and
   `battlefield_triggers` never yield an ability stated for another zone
   (`trigger_functions_from`); the graveyard and exile scans name theirs.
+- **"Attacks and isn't blocked" triggers as the declaration of blockers
+  completes** (CR 509.3g), in that declaration's trigger window before the
+  active player's priority (CR 509.2a): the last defender's
+  `declare_blockers`, or `Game._lock_block_declaration` where nobody left had
+  a legal block; at a table with a person a lock that put something on the
+  stack gives the active player priority and keeps the step. **A turn with no
+  attack skips declare blockers and combat damage** (CR 508.8) at the one
+  seam that enters them (`_leave_combat_step`,
+  `Game.combat_skips_blocks_and_damage()`, by the declaration, not the live
+  attacker map).
 - `engine/phases/upkeep_effects.py` — `@upkeep_effect(condition, kind)` for the
   pay-or-consequence upkeep triggers; a duplicate pair raises at import.
 
@@ -952,8 +1057,13 @@ entries, not editing dispatch**.
   for both seats (`_attacker_division_refusal`, CR 510.1c–e), and each damage
   step is its own announcement (CR 510.4). A trampler blocked by one creature
   with more than lethal to assign is a manual assignment for an interactive
-  assigner (`trample_assignments_to_ask`, CR 702.19b); every other seat keeps
-  lethal-then-the-rest. A division among the defending
+  assigner (`trample_assignments_to_ask`, CR 702.19b); an attacking seat
+  nobody sits in keeps lethal-then-the-rest, and a defending one that assigns
+  (banding, Defensive Formation) keeps all of it on the blocker
+  (`defender_assignments_owed` lists it for every defending seat;
+  `ai_combat.choose_defender_damage_assignment`). A block spread across a
+  band (CR 702.22h) is kept when the member it was declared on leaves combat
+  (`_keep_band_blocks_past`). A division among the defending
   player and their creatures (Butcher Orgg) has its own gate
   (`divided_among_defenders_refusal`), and the step waits for an interactive
   controller's answer (`engine/phases/divided_damage_wait.py`).
@@ -966,7 +1076,7 @@ entries, not editing dispatch**.
   recompute gathers beside the battlefield's, with the CR 613.7d timestamp of
   its arrival there (`engine/graveyard_order.py`, recorded only for such cards).
   **A new `PlayerState` or `Game` field is read by every `vars()` walker** — the
-  rehearsal's `seat_standing` and the AI censuses' board signatures: a field
+  rehearsal's `position_digest` and the AI censuses' board signatures: a field
   that moves on every resolution reads as a lasting change unless it is
   listed as bookkeeping (`ai_rehearsal._PLAYER_BOOKKEEPING`).
 - `engine/continuous.py` + `engine/layer_bridge.py` — the CR 613 layer system
@@ -987,7 +1097,8 @@ entries, not editing dispatch**.
   - Folds are memoised by what the card *is* (`copies.card_identity`), **never by
     `id()`** — CPython reuses a freed object's address.
     `tests/regressions/test_derived_card_memo_identity.py` fails a module-level
-    dict under `engine/` keyed by `id()`.
+    dict under `engine/` keyed by `id()`, or one whose validity stamp is
+    built from `id()` (stored in it or compared with what it holds).
   - **Most reads have nothing to fold and skip the fold**: with every key in
     `models.fold_channels()` empty, `effective_card` returns the printed card
     (and `computed_types` likewise over `type_layer.TYPE_EFFECT_CHANNELS`).
@@ -1036,7 +1147,10 @@ entries, not editing dispatch**.
     before the cost is paid, and `resettle_announced_target_seats` asks again as
     the object resolves. Held by `tests/regressions/test_announced_target_seat.py`.
   - **Leaving the battlefield is one transition**:
-    `remove_from_battlefield(perm)` / `remove_all_from_battlefield(perms)`.
+    `remove_from_battlefield(perm)` / `remove_all_from_battlefield(perms)` —
+    and what phased out "until this leaves the battlefield" (Oubliette,
+    `phasing_locks.PHASED_OUT_UNTIL_SOURCE_LEAVES`) phases in from it, tapped
+    as printed (`Game.phase_in_what_waited_for`).
   - Combat maps are index-keyed but follow their creatures
     (`_renumber_combat_after_removal`); a new combat map is added there, and
     a new combat request field goes in `COMBAT_ID_FIELDS`.
@@ -1157,6 +1271,7 @@ and a module may import only from an earlier one
 | `runtime.py` | the card pool, the three store instances, session lookup, the per-session request lock |
 | `events.py` | server-sent events — the one thing the API *pushes* |
 | `seats.py` | seat kind, who has lost, whether to hold priority |
+| `offers.py` | what a viewer's object offers right now as the engine answers it: a tap's mana, each ability's mana and refusal, a cast's mana colour, text-change words, payable X |
 | `serialization.py` | engine object → client JSON, one function per kind |
 | `catalog.py` | the pool and decks as the client browses them |
 | `verification_report.py` | the verification tracker's read side |
@@ -1192,13 +1307,23 @@ reading the registry, so a new prompt is covered by construction. **The client
 keeps no copy of that registry**: the payload carries `waiting_on_prompt`, which
 the auto-pass reads. AI-owned prompts are answered before **and after** an
 action's handler (a human's answer can arm one), and **an AI step never advances
-a human's turn** (`_advance_ai_turn` returns unless the active seat is an AI).
+a human's turn** (`_advance_ai_turn` returns unless the active seat is an AI,
+nor in a step a person holds priority in).
 
 **What a card can do right now is sent, not re-derived by the client**: `ways`
 (each way a card may be cast from a permission-opened zone, its price, whether
-payable now), `ability_denials` (the activation gate's refusal per ability),
-`ability_mana` (each mana ability's symbols, whether a colour is chosen, and
-a mixed split's `combination` — `engine/mana_combination.py`), `prompt_owed_by`
+payable now), `ability_denials` (the activation path's pre-choice refusals
+per ability, {T} included — `web/offers._ability_denial`), `ability_mana`
+(each mana ability's symbols on this board — what the board, a record or the
+cost decides included, `web/offers._decided_ability_mana`; whether a colour
+is chosen; a mixed split's `combination` and an "or" of quantities'
+`alternatives`, both answered on `mana_combination` —
+`engine/mana_combination.py`; `symbols_by_cost` where the cost's permanent
+decides; null for an ability that adds no mana), `ability_text_change` and a
+cast's `text_change` (the words a text change announces), `x_payable` /
+`ability_x_payable` (`{pool, board, colors}`: the payable X as the cast or
+activation path prices it), `cast_mana`, a card's `cost_before_modifiers`
+beside its charged price, `prompt_owed_by`
 (which seat owes the decision holding the game — the pending-choice queue's,
 else a session-held one, `state_view._SESSION_DECISIONS`),
 `abilities_lost`, `taps_for_mana`, `produced_mana`, a payment prompt's `payable`
@@ -1213,7 +1338,8 @@ cost — `mana_combination.cast_split_offer`), the active seat's
 (each with `most_obeyable`); and while a permanent's "as it enters" choice is
 owed, that permanent listed in its controller's `battlefield` as arriving
 (`serialization._serialize_arriving`, `entering: true`; the engine has it in
-no zone until the answer, CR 614.12a). Every request body the client builds
+no zone until the answer, CR 614.12a), as are an open entry event's puts —
+to their controller alone (CR 101.4a). Every request body the client builds
 is held to its route: presence (`tests/ui/test_kg_client_request_schemas.py`),
 each value's type (`test_kg3_wire_request_shapes.py`), and what an armed
 prompt's handler takes (`test_kg3_wire_prompt_state_bodies.py`). **Every
@@ -1221,7 +1347,10 @@ automatic sender in the client re-asks by fetching the state when its
 in-flight flag clears** — one scheduled re-ask (`retryAutoAdvanceAfterFlight`)
 serves every sender, delayed only while the state key stays unchanged — and
 forgets the state key it last sent from when a game ends (a rematch can open
-on the same turn, step and log length). The client does not plan taps: a
+on the same turn, step and log length). A state is newer by the payload's
+`revision` (one more per announced change, `web/events`), never by the log's
+length, and each event stream is handed its events thread-safely,
+coalesced with their reasons. The client does not plan taps: a
 click on a castable card is answered by `web/payment_plan.py`
 (`POST …/payment_plan` previews; `auto_tap` on the action taps), and every
 paying action is previewed before it is sent (`previewPayingAction`), so a

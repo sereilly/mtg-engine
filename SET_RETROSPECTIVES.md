@@ -1735,3 +1735,74 @@ through the API, so it is a Known gap with its evidence, unreproduced.
     leftovers, and the Debug Menu paste dropping hidden cards;
   - the re-check's unreproduced Warchief, under "Seen, not measured";
   - in ROADMAP, the graveyard's missing arrival seam.
+
+### KG4 — 2026-11-07 (a round, not a set)
+
+*Every entry in the playbook's Known gaps, sixteen of them, in thirteen
+groups; then what those groups measured and left, in eleven more over two
+later waves launched beside the running ones; a module split and a
+citations audit; and `target_permanent_index` alone and last.* Of the
+sixteen entries, thirteen drained (the band module, the sixteen defaults
+and the four behind a preference, the each-seat puts, the mixed split
+sentence, the recoloured retarget, CR 508.8's window, the seeded run's
+process state, the log and wire leftovers, the client leftovers, the Debug Menu paste, the rehearsal seed,
+"<Subtype> permanent card", and the three seen-not-measured: the band-blocks
+pop, the GET flood's trigger, and the Krosan Warchief, reproduced with every
+request body captured — six identical Pemmin's Auras spent the instant-speed
+chooser's three proposals before it reached the Warchief). CR 615.8 stays:
+no ruling settles it, re-fetched the day. The AI leftovers' named parts were
+taken by four groups and the entry is rewritten to what they measured and
+left. `target_permanent_index` drained at
+its holders (one shape; a graveyard target its stamp; a stack object named by
+id alone after the push) and stopped, measured, at the API keyword, which
+also carries graveyard and ante slots.
+
+As at kg2 and kg3, nearly every group found the larger defect beside its
+entry, and the later waves were briefed from them:
+- one state-based check, one destruction of several permanents and every
+  loop of sacrifices, exiles or bounces made one departure event (CR
+  603.10a): Massacre Wurm, Havoc Jester, ~19 "enchanted creature dies"
+  Auras, Animate Dead under Apocalypse;
+- a death's three replacement spellings ran as three CR 616.1 contention
+  sets, so CR 616.1f's own example could not be asked;
+- 31 "attacks and isn't blocked" triggers went on the stack after
+  priority (CR 509.3g, 509.2a);
+- 54 of 66 engine citations of CR 113.7a made a neighbour's claim, and 44
+  test citations were on the pre-April 701 numbering;
+- the client's own copies of engine answers (Jandor's Ring and every
+  loyalty refusal had no other gate) and a mana fan for 17 abilities.
+
+*What the integration learned.*
+- **A later wave need not wait for a wave to close.** Three waves overlapped;
+  each group started from the link holding its first-wave neighbour, and
+  `main` stayed at the round's base until the last gate.
+- **`import_names.py` did not read `tests/`**, so a split's moved name
+  imported by a sibling's new test surfaced only as a collection ERROR; it
+  reads `tests/` now.
+- **A sibling's layer satisfies a backwards check**: three of `aivalue`'s
+  went red under `aiact`'s every-ability rehearsal, fixed by switching both
+  layers off in each backwards context.
+- **One group stopped its own run by command line and killed two siblings'
+  identical runs**; every brief now says to stop only a PID you started.
+- **The first whole full pass found a census calibrated on its sample**:
+  a backwards check's "at most two" held for the quick pass's stable
+  sample and not for the whole census; it holds each case to its reason now.
+- **Conflicts were few and small** (seven files across 26 merges); the reds
+  were meetings: a client text check of deleted code, a monkeypatch of a
+  moved import, the backwards checks above.
+
+*Edits in place:* a fix round's later waves launched beside running groups;
+stop a process only by its own PID; the citation guards; backwards checks a
+sibling's layer satisfies; the `vars()` walker is `position_digest`;
+`import_names` reads `tests/`. CLAUDE.md, ARCHITECTURE and ROADMAP carry the
+round's rules.
+
+*Known gaps:*
+- **Drained:** thirteen of sixteen, and the later waves' own finds.
+- **Rewritten:** CR 615.8 (re-fetched); AI leftovers (to what kg4's AI
+  groups measured and left); `target_permanent_index` (to its API keyword).
+- **Added:** CR 616.1e for an entry, land mana and a chosen discard; a
+  second AI seat at a flagged step and Camouflage's simulator stall;
+  `effect_order`'s measured order; Balduvian Shaman's granted cumulative
+  upkeep; "could produce" against CR 106.7; CR 400.4a's entry seam;
+  Oubliette's line hook; Desperate Gambit's marker names; Infernal Denizen.
