@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**433 / 641 tracked rules covered (67%)** — 3463 tests, 0 unannotated.
+**433 / 641 tracked rules covered (67%)** — 3479 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -168,7 +168,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **106.9** If an effect would add mana represented by a Phyrexian mana symbol to a player’s mana pool, one m...
 - [ ] **106.10** If an effect would add mana represented by a generic mana symbol to a player’s mana pool, that mu...
 - [ ] **106.11** If an effect would add mana represented by one or more snow mana symbols to a player’s mana pool,...
-- [x] **106.12** To “tap [a permanent] for mana” is to activate a mana ability of that permanent that includes the... *(40 tests, subrules ab)*
+- [x] **106.12** To “tap [a permanent] for mana” is to activate a mana ability of that permanent that includes the... *(41 tests, subrules ab)*
 - [x] **106.13** One card (Drain Power) causes one player to lose unspent mana and another to add “the mana lost t... *(1 tests)*
 
 ### 107. Numbers and Symbols
@@ -271,9 +271,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
 - [x] **115.5** A spell or ability on the stack is an illegal target for itself. *(2 tests)*
 - [x] **115.6** A spell or ability that requires targets may allow zero targets to be chosen. Such a spell or abi... *(6 tests)*
-- [x] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo... *(23 tests, subrules aef)*
+- [x] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo... *(34 tests, subrules aef)*
 - [x] **115.8** Modal spells and abilities may have different targeting requirements for each mode. An effect tha... *(2 tests)*
-- [x] **115.9** Some objects check what another spell or ability is targeting. Depending on the wording, these ma... *(1 tests, subrules a)*
+- [x] **115.9** Some objects check what another spell or ability is targeting. Depending on the wording, these ma... *(2 tests, subrules a)*
 - [x] **115.10** Spells and abilities can affect objects and players they don’t target. In general, those objects ... *(2 tests, subrules a)*
 
 ### 116. Special Actions
@@ -641,7 +641,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 510. Combat Damage Step
 
 - [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(92 tests, subrules abcde)*
-- [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(11 tests)*
+- [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(12 tests)*
 - [x] **510.3** Third, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(15 tests)*
 
@@ -738,7 +738,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(2 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(193 tests, subrules bcdfghmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(194 tests, subrules bcdfghmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -794,12 +794,12 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(52 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(54 tests, subrules abcd)*
 - [x] **614.2** Some replacement effects apply to damage from a source. See rule 609.7. *(1 tests)*
 - [x] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re... *(2 tests)*
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
 - [x] **614.5** A replacement effect doesn’t invoke itself repeatedly; it gets only one opportunity to affect an ... *(9 tests)*
-- [x] **614.6** If an event is replaced, it never happens. A modified event occurs instead, which may in turn tri... *(10 tests)*
+- [x] **614.6** If an event is replaced, it never happens. A modified event occurs instead, which may in turn tri... *(11 tests)*
 - [x] **614.7** If a replacement effect would replace an event, but that event never happens, the replacement eff... *(5 tests, subrules a)*
 - [x] **614.8** Regeneration is a destruction-replacement effect. The word “instead” doesn’t appear on the card b... *(9 tests)*
 - [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(15 tests)*
@@ -820,7 +820,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **615.4** Prevention effects must exist before the appropriate damage event occurs—they can’t “go back in t...
 - [x] **615.5** Some prevention effects also include an additional effect, which may refer to the amount of damag... *(1 tests)*
 - [x] **615.6** If damage that would be dealt is prevented, it never happens. A modified event may occur instead,... *(2 tests)*
-- [x] **615.7** Some prevention effects generated by the resolution of a spell or ability refer to a specific amo... *(15 tests)*
+- [x] **615.7** Some prevention effects generated by the resolution of a spell or ability refer to a specific amo... *(16 tests)*
 - [x] **615.8** Some prevention effects generated by the resolution of a spell or ability refer to the next time ... *(9 tests)*
 - [x] **615.9** Some effects generated by the resolution of a spell or ability prevent damage from a source of a ... *(5 tests)*
 - [ ] **615.10** Some prevention effects generated by static abilities refer to a specific amount of damage—for ex...
@@ -830,7 +830,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(81 tests, subrules efg)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(90 tests, subrules efg)*
 - [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General
@@ -900,7 +900,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.24** Cumulative Upkeep *(33 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
 - [x] **702.26** Phasing *(25 tests, subrules adfgim)*
-- [x] **702.27** Buyback *(15 tests, subrules a)*
+- [x] **702.27** Buyback *(16 tests, subrules a)*
 - [x] **702.28** Shadow *(6 tests, subrules abc)*
 - [x] **702.29** Cycling *(35 tests, subrules abcef)*
 - [x] **702.30** Echo *(16 tests, subrules ab)*
