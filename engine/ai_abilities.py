@@ -31,6 +31,7 @@ from .ai_target_sides import (
     ability_role_target_sides,
     ability_seat_side,
     ability_target_side,
+    host_effect_by_the_moment,
     host_effect_side,
     named_counter_marks_for_harm,
     instruction_target_side,
@@ -830,6 +831,10 @@ def _activation_candidate(
             and not _exists_to_be_given_up(permanent)
         )
         or reaches_both_sides(ability.instruction)
+        # ...and (kg4) a host effect worth something on one host and not
+        # another by what the host is: Flowstone Blade's "+1/-1" killed its
+        # controller's own Llanowar Elves at the flat score.
+        or host_effect_by_the_moment(ability.instruction)
     ):
         worth = _land_ability_worth(game, player_index, candidate)
         if worth is None:

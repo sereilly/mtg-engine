@@ -1000,6 +1000,49 @@ SEAT_FILTER_KEYS = frozenset({
     "played_by", "cast_by_you_this_turn",
 })
 
+#: The payload key ``all`` means **two different things**, by kind, and the
+#: payload cannot say which. In the global pumps below it is the seat word:
+#: ``all: True`` is "**All** creatures get -1/-0" (Bone Flute), "Red creatures
+#: get +1/+1" (Goblin Soothsayer) — every player's creatures — and ``all:
+#: False`` is "creatures **you control**" (``grammar/lowering/characteristics``
+#: writes ``filt.controller != "you"``; ``handlers/pump.global_buff_affected``
+#: walks every seat or the caster's). Everywhere else it is the *quantity*:
+#: "sacrifice **all** creatures you control" (Day of the Dragons,
+#: ``sacrifice_matching_permanent``), "put **all** land cards from your hand
+#: onto the battlefield" (Manabond) — every matching object of one seat's. So
+#: the kinds that read it as a seat are named, and every kind in the pool
+#: whose payload carries ``all`` is held to one reading or the other by
+#: ``tests/ai/test_kg4_aivalue_both_sides_pumps.py``.
+#:
+#: A pump in one of these kinds that carries ``all`` and no seat of its own
+#: (``opponents_only``: "Creatures your opponents control", Massacre Wurm;
+#: a ``controller`` key: "Creatures target player controls", Day) lands on
+#: both sides of the table (:func:`reaches_both_sides`).
+ALL_MEANS_EVERY_SEAT_KINDS = frozenset({
+    "buff_creatures_global", "buff_creatures_global_while_source_tapped",
+})
+#: …and the kinds whose ``all`` is the quantity, one seat's every match.
+ALL_MEANS_EVERY_MATCH_KINDS = frozenset({
+    "sacrifice_matching_permanent", "put_cards_from_hand_onto_battlefield",
+})
+#: The keys that put a seat in a global pump's payload beside ``all``.
+_GLOBAL_PUMP_SEAT_KEYS = SEAT_FILTER_KEYS | {"opponents_only"}
+
+
+def pumps_every_seat(step: OracleInstruction) -> bool:
+    """Whether *step* is a global pump over **every player's** creatures —
+    ``all`` read as the seat word it is in :data:`ALL_MEANS_EVERY_SEAT_KINDS`,
+    with no seat narrowing beside it. "All creatures get -1/-0 until end of
+    turn" (Bone Flute), "Dragon creatures get +1/+1 until end of turn"
+    (Bladewing the Risen), "All creatures get +2/+2 for as long as this
+    artifact remains tapped" (Thran Weaponry)."""
+    payload = getattr(step, "payload", None) or {}
+    return (
+        getattr(step, "kind", None) in ALL_MEANS_EVERY_SEAT_KINDS
+        and payload.get("all") is True
+        and not _GLOBAL_PUMP_SEAT_KEYS & set(payload)
+    )
+
 
 def swept_filter(payload: dict) -> "dict | None":
     """The noun phrase a step's effect sweeps — every permanent it names, not
@@ -1062,7 +1105,7 @@ def reaches_both_sides(instruction: OracleInstruction | None) -> bool:
     and not from others (Shepherd's life loss is a race only the seat ahead
     wins), and only a rehearsal of the position says which.
 
-    Read off the payload's shape, never a kind list: a step addressed to
+    Read off the payload's shape, never a card list: a step addressed to
     :data:`EVERY_PLAYER` under any key, or a **sweep** (:func:`swept_filter`)
     whose filter puts no seat in it (:data:`SEAT_FILTER_KEYS`). A sweep
     written flat — the payload its own filter — read as aimed until SCG:
@@ -1070,6 +1113,14 @@ def reaches_both_sides(instruction: OracleInstruction | None) -> bool:
     less" tapped its own controller's Mercurial Kite in the main phase, and
     Kill Switch, Aboshan, Pernicious Deed and Powder Keg were scored as if
     their sweep stopped at the table's edge.
+
+    …and a **global pump** over every player's creatures
+    (:func:`pumps_every_seat`), whose ``all`` is its seat word and no filter
+    at all, so the sweep reader cannot see it. Read as aimed until kg4: Bone
+    Flute's and Fyndhorn Pollen's "-1/-0", Thran Weaponry's "+2/+2",
+    Bladewing the Risen's and Nemata's tribal "+1/+1" were each activated in
+    their controller's main phase with every creature they reached on the
+    other side of the table.
     """
     if instruction is None:
         return False
@@ -1077,10 +1128,65 @@ def reaches_both_sides(instruction: OracleInstruction | None) -> bool:
         payload = getattr(step, "payload", None) or {}
         if any(value == EVERY_PLAYER for value in payload.values()):
             return True
+        if pumps_every_seat(step):
+            return True
         described = swept_filter(payload)
         if described is not None and not SEAT_FILTER_KEYS & set(described):
             return True
     return False
+
+
+def lowers_toughness(card: CardDefinition) -> bool:
+    """Whether *card*'s compiled program holds a **static** P/T contribution
+    that lowers a creature's toughness (CR 613.4c, layer 7c): a lord buff
+    (``lord_buffs.LORD_BUFF_KIND``, the one instruction every such static in
+    the pool compiles to) with a negative toughness, whatever it narrows to
+    and under whatever condition — "Other creatures get -1/-1" (Kaervek, the
+    Spiteful), "Nonblack creatures get -1/-1" (Ascendant Evincar), "Other
+    black creatures get -1/-1" (Urborg Shambler), "All creatures of the
+    chosen type get -1/-1" (Engineered Plague), "During turns other than
+    yours, creatures you control get -0/-2" (Vibrating Sphere).
+
+    The question a cast asks before it trusts a printed toughness: such a
+    static on the battlefield kills a creature with a printed toughness it
+    exceeds the moment it arrives (CR 704.5f), and no flat score reads that
+    (:func:`board_lowers_toughness`). Over-inclusive on purpose — a condition
+    that does not hold, a narrowing that misses — because what it buys is a
+    rehearsal, which reads the board exactly."""
+    from .lord_buffs import LORD_BUFF_KIND
+
+    for instruction in compile_card_oracle(card).instructions:
+        if instruction.kind != LORD_BUFF_KIND:
+            continue
+        toughness = (instruction.payload or {}).get("toughness")
+        if isinstance(toughness, int) and not isinstance(toughness, bool) and toughness < 0:
+            return True
+    return False
+
+
+def land_searches(instruction: OracleInstruction | None) -> tuple:
+    """The payloads of *instruction*'s library searches, when a search is
+    the whole of what it does — "Plainscycling {2}" is "search your library
+    for a Plains card, reveal it, put it into your hand, then shuffle" — or
+    ``()``. Whether what they can find is only land is the library's to say
+    (``ai_rehearsal.spare_land_find_price``), so a typecycle for a creature
+    type and a landcycle are one shape here."""
+    if instruction is None:
+        return ()
+    steps = _effect_steps(instruction)
+    if not steps or any(step.kind != "search_library" for step in steps):
+        return ()
+    return tuple(step.payload or {} for step in steps)
+
+
+def board_lowers_toughness(game) -> bool:
+    """Whether some permanent on the battlefield — any seat's, read as it is
+    now (``Permanent.effective_card``, CR 613 layer 1 and 3) — carries a
+    static that lowers a creature's toughness (:func:`lowers_toughness`)."""
+    return any(
+        lowers_toughness(permanent.effective_card)
+        for permanent in game.all_permanents()
+    )
 
 
 def source_toughness_change(instruction: OracleInstruction | None) -> int | None:
@@ -1327,7 +1433,12 @@ def library_top_setups(card: CardDefinition, x_value: "int | None" = None) -> tu
 
 
 __all__ = [
+    "ALL_MEANS_EVERY_MATCH_KINDS",
+    "ALL_MEANS_EVERY_SEAT_KINDS",
     "DRAW_REPLACEMENT_ARMINGS",
+    "board_lowers_toughness",
+    "land_searches",
+    "lowers_toughness",
     "EVERY_PLAYER",
     "MANA_ABILITY_KINDS",
     "SOURCE_HAMPER_KINDS",
@@ -1354,6 +1465,7 @@ __all__ = [
     "hand_pick_entry_consumer",
     "offer_buys_a_drawback_to_its_source",
     "planned_mana_yield",
+    "pumps_every_seat",
     "reaches_both_sides",
     "returns_creature_to_hand",
     "source_toughness_change",

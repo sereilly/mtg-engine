@@ -313,9 +313,33 @@ def choose_returning_aura_host(game: Game, seat: int, card: CardDefinition, lega
     harmful = _aura_harms_its_host(card)
     ranked = sorted(
         legal,
-        key=lambda host: (game.controller_index_of(host) == seat) == harmful,
+        key=lambda host: (
+            (game.controller_index_of(host) == seat) == harmful,
+            copies_worn(host, card),
+        ),
     )
     return ranked[0]
+
+
+def copies_worn(host, card: CardDefinition) -> int:
+    """How many Auras attached to *host* are the card *card* is — a second
+    one of which adds little or nothing to the first: a second "Enchanted
+    creature has flying", a second Pacifism, a second set of the same
+    activated abilities on one creature.
+
+    The diminishing value an Aura's host is ranked by after its side: an AI
+    seat put all five Pemmin's Auras it cast on one Prodigal Sorcerer (SCG
+    Phase 5's re-check), because the host chooser took the first legal
+    creature every time. Asked by what the attached card *is*
+    (``copies.card_identity``, every printed field), never by its name."""
+    from .aura_attachment import auras_attached_to
+    from .copies import card_identity
+
+    wanted = card_identity(card)
+    return sum(
+        1 for aura in auras_attached_to(host)
+        if card_identity(aura.card) == wanted
+    )
 
 
 def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> tuple[int, int] | None:
@@ -339,6 +363,9 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
         target_player_index = caster_index
     elif seat_clause == "opponent" and target_player_index == caster_index:
         target_player_index = choose_attack_target(game, caster_index)
+    # Of the legal hosts, the first that wears no copy of this Aura
+    # (`copies_worn`, the diminishing value of a second one), then the first.
+    legal: list[tuple[int, int]] = []
     for permanent_index, permanent in enumerate(game.players[target_player_index].battlefield):
         # The spell's own printed targeting restriction (CR 601.2c). Asked here
         # as well as at the cast, and through the same function: a choice only
@@ -355,8 +382,13 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
         if not game._can_be_targeted(permanent, card, caster_index=caster_index):
             continue
         if permanent_matches_enchant_noun(permanent, noun):
-            return target_player_index, permanent_index
-    return None
+            worn = copies_worn(permanent, card)
+            if worn == 0:
+                return target_player_index, permanent_index
+            legal.append((worn, permanent_index))
+    if not legal:
+        return None
+    return target_player_index, min(legal)[1]
 
 
 def _preferred_role_option(

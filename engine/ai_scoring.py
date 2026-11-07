@@ -51,9 +51,11 @@ from .ai_rehearsal import (
     rehearsing,
 )
 from .ai_valuation import (
+    board_lowers_toughness,
     cards_drawn_by_controller,
     is_mana_ability,
     library_top_setups,
+    lowers_toughness,
     mana_ability_amount,
 )
 from .cast_costs import additional_costs, cast_announces_x
@@ -427,6 +429,28 @@ def body_needs_the_board(card: CardDefinition) -> bool:
         and card.printed_toughness is not None
         and card.base_toughness is None
     )
+
+
+def arrival_needs_the_board(game: Game, card: CardDefinition) -> bool:
+    """Whether a cast of the **permanent** *card* is rehearsed before it is
+    proposed because a board-wide static could shrink a body as it arrives:
+    *card* is a creature and some permanent on the battlefield lowers a
+    creature's toughness (``ai_valuation.board_lowers_toughness``), or *card*
+    itself carries such a static and so shrinks every creature already there
+    (``ai_valuation.lowers_toughness``).
+
+    :func:`body_needs_the_board`'s question asked of a **printed** toughness:
+    Llanowar Elves cast with an opponent's Kaervek, the Spiteful ("Other
+    creatures get -1/-1") on the board is a 0/0 that goes straight to the
+    graveyard (CR 704.5f), and a seat's own Kaervek cast beside three Elves
+    kills all three — each was proposed at the flat score a permanent gets,
+    because nothing asked what the board would make of it (kg4). The
+    rehearsal is the engine's whole answer, as it is for a ``*`` body."""
+    if card.primary_type in SPELL_TYPES:
+        return False
+    if lowers_toughness(card):
+        return True
+    return card.primary_type == "creature" and board_lowers_toughness(game)
 
 
 def _arrives_to_stay(rehearsal: Rehearsal | None) -> bool:
