@@ -33,6 +33,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 from dataclasses import replace
 import re
+import weakref
 
 from .ai_weighed_cast import SPELL_TYPES, cast_weighed, spell_text
 from .ai_target_sides import (
@@ -553,10 +554,19 @@ def _pays_x_in_life(card: CardDefinition) -> bool:
     return any(cost.pay_life_x for cost in additional_costs(card))
 
 
-#: `_score_tutor_choice`'s answers for one position: ``{"at": stamp, (seat,
-#: card name): score}``. A search weighs every card it may find, a library is
-#: mostly repeats, and weighing a spell is a rehearsal — so each card is
-#: weighed once for as long as the position stands.
+#: `_score_tutor_choice`'s answers for one position of one game: ``{"game":
+#: a weak reference to it, "at": stamp, (seat, card name): score}``. A search
+#: weighs every card it may find, a library is mostly repeats, and weighing a
+#: spell is a rehearsal — so each card is weighed once for as long as the
+#: position stands.
+#:
+#: **The game is held by identity, never by its address.** This lives for the
+#: process, past every game it was filled for, and was stamped ``id(game)``:
+#: CPython hands a freed object's address to the next allocation, so a game
+#: (a rehearsal's copy, or the next test's or run's table) put where a freed
+#: one stood, with the same counts on it, was answered from the freed one's
+#: scores — a run's choices hanging on what ran before it in the process. A
+#: weak reference to a freed game answers None, and to another game is not it.
 _TUTOR_SCORES: dict = {}
 
 
@@ -575,11 +585,13 @@ def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> 
     # moves: a search asked one line later than before weighed its cards
     # again, or did not, as the log's wording said (kg4).
     stamp = (
-        id(game), public_counts(game),
+        public_counts(game),
         tuple(sorted(permanent.permanent_id for permanent in game.all_permanents())),
     )
-    if _TUTOR_SCORES.get("at") != stamp:
+    held = _TUTOR_SCORES.get("game")
+    if held is None or held() is not game or _TUTOR_SCORES.get("at") != stamp:
         _TUTOR_SCORES.clear()
+        _TUTOR_SCORES["game"] = weakref.ref(game)
         _TUTOR_SCORES["at"] = stamp
     key = (player_index, card.name)
     if key not in _TUTOR_SCORES:
