@@ -33,7 +33,11 @@ branches one at a time and gates the result. Analysis and authorship fan out;
 integration is serial. Integration, not budget, is the limit: expect about one
 integrator-hour per wave-hour, spent on merges rather than on cards. A fix
 round with no set (kg, the Known gaps) runs the same way: one group per
-subject, and a pool-wide refactor alone and last, on the merged tree. The
+subject, and a pool-wide refactor alone and last, on the merged tree. Its
+later waves are briefed from the earlier groups' measured-and-left as each
+report lands, and launched beside the groups still running from the link
+that holds their first-wave neighbour's work (kg4 ran three waves that way,
+none waiting for a wave to close). The
 scripts named below are in `scripts/integration/`, run from Git Bash with
 `ROUND` set (a set's code in lower case, or the round's name).
 
@@ -96,7 +100,10 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
 - **A stopped background task is not a stopped process**: the stop kills the
   tool's shell, not the Python under it. Look for survivors after a stop, write
   a long loop inline rather than in a script, and never edit a script something
-  may still be reading.
+  may still be reading. **Stop a process only by a PID you started**: a group
+  that stopped its own `pytest tests/ai --full` by command line also killed
+  two siblings' identical runs (kg4), which then read as unexplained exit-127
+  deaths. Every brief says so.
 - **Never edit a worktree while a test run is reading it.** The run's result
   would describe no tree that existed. Stage the next merge on a new link.
 - **Never `git stash`** — the stash is shared across worktrees, and agents have
@@ -195,7 +202,11 @@ And when writing one:
   is 303.4i, not 303.4f; "permanent card" is 110.4a, not 110.4b; a single
   target is counted by 115.9a, not 115.10. A group checking its own found ten
   engine comments citing 202.3b (a double-faced card's back face) for X on the
-  stack (202.3e); no guard reads a citation outside 701.
+  stack (202.3e). Since kg4 `test_kg4_citations_rule_subjects.py` fails a
+  cited number or letter the CR does not have and a 113.7a / 112.2 citation
+  made for a neighbour's claim (54 of 66 engine 113.7a citations were), and
+  the 701 heading guard reads `tests/` and `scripts/` too; a rule's other
+  neighbours are still read by hand.
 - **A test asserts an invariant, never a sibling's progress.** "These four
   morph cards stay unsupported" went red at the link where a sibling supported
   one, and a strict `xfail` of a defect a sibling was fixing turned into an
@@ -308,7 +319,11 @@ And when writing one:
   callers onto it; where one replaced what the other extended, keep the
   replacement and port the extension; name each choice in the merge message.
   Expect reds on the resolved tree and read each as a meeting, not a regression
-  — most are backwards checks a second layer now satisfies.
+  — most are backwards checks a second layer now satisfies. The same holds for
+  two sibling groups: kg4's `aiact` gate (every ability rehearsed) held back
+  what three of `aivalue`'s backwards checks switched `aivalue`'s fix off to
+  see; each backwards context switches both layers off, the forward tests
+  untouched.
 - **A no-behaviour-change contract is checked on the tree it lands on.**
   Snapshot `sim_fingerprint.py` on `main` before the merge and require 0 moved
   after it; after touching a fast path, run the seeded games under
@@ -379,7 +394,7 @@ on at least one resolution.
   often.** A count over a seeded game is a statement about every other card in
   a set still being implemented; the floor is one.
 - **A new `PlayerState` or `Game` field is read by every `vars()` walker** —
-  `ai_rehearsal.seat_standing` and the AI censuses' board signatures. One that
+  `ai_rehearsal.position_digest` and the AI censuses' board signatures. One that
   moves on every resolution (a graveyard arrival stamp) reads as a lasting
   change: the AI cast spells that did nothing, and two censuses drifted.
   Decide at the merge whether a new field is bookkeeping.
@@ -486,7 +501,8 @@ on at least one resolution.
   of one.** It imports every module any `from X import Y` names, function-level
   imports included, and asks it for each name. A function-level import of a
   moved name passes every smoke import and every scan, and fails only when its
-  line runs.
+  line runs. It reads `tests/` too since kg4: a test importing a moved name at
+  its old home is otherwise a collection ERROR the meeting reports late.
 - **A guard over a list of modules, or `inspect.getsource` of a package, goes
   blind when the module splits** — `getsource` of a package reads only its
   `__init__`. Make such a guard walk the package (`pkgutil.iter_modules`, or the
