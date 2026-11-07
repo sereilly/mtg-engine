@@ -2146,7 +2146,7 @@ def test_w2g2_a_snake_that_was_not_cast_asks_its_controller_which_spell(set_pool
     prompt = game.pending_choice_of("trigger_target", 0)
     assert prompt is not None, game.log
     assert [(t["kind"], t["name"]) for t in prompt.data["targets"]] == [
-        ("stack", "Shock"), ("stack", "Lightning Bolt"),
+        ("stack", "P1's Shock"), ("stack", "P1's Lightning Bolt"),
     ]
     assert game.waiting_prompt().kind == "trigger_target"
 

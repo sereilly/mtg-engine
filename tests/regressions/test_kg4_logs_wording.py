@@ -26,6 +26,7 @@ from pathlib import Path
 
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
+from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.pt import pt_change_text
 from tests.helpers import _nosick, resolve_stack
@@ -154,7 +155,8 @@ def test_the_formatter_follows_the_pools_own_convention():
     is signed — read off the card data, so the convention the formatter keeps
     is the one the cards keep."""
     printed: set[str] = set()
-    for card in load_catalog():
+    # Each face's own text box: a split card read whole has an empty one.
+    for card in compilation_units(load_catalog()):
         text = (card.oracle_text or "").replace("−", "-")
         printed.update(re.findall(r"[+-]\d+/[+-]\d+", text))
     assert len(printed) >= 20

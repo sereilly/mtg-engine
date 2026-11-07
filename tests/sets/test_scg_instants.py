@@ -327,7 +327,7 @@ def test_w1g1_hindering_touch_copy_may_be_re_aimed_at_another_spell(set_pool):
     owed = game.pending_choice_of("retarget_choice")
     assert owed is not None and owed.player_index == 0
     names = [option["name"] for option in owed.data["options"]]
-    assert names == ["Keep the original's target", "Giant Growth", "Hindering Touch"]
+    assert names == ["Keep the original's target", "B's Giant Growth", "A's Hindering Touch"]
     assert owed.data["options"][1]["_stack_item"] is first
     assert game.confirm_retarget_choice(0, 1)
     # Three spells before it, three copies, each asked in turn: the first is
