@@ -187,6 +187,10 @@ def board(card, placement: str) -> "tuple[Game, Permanent] | None":
     return game, subject
 
 
+def _moves_nothing_gate_off():
+    return mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True)
+
+
 def run(card, placement: str) -> "dict | None":
     row = {
         "card": card.name, "placement": placement, "proposed": False,
@@ -198,15 +202,22 @@ def run(card, placement: str) -> "dict | None":
         if built is None:
             return None
         game, subject = built
-        action = choose_activation_action(game, ME)
-        if action is None:
-            return row
-        row["proposed"] = True
-        row["by_subject"] = game.permanent_at(ME, action.permanent_index) is subject
-        report = ai_simulator.SimulationReport(
-            games_requested=1, games_completed=0, interaction_count=0,
-        )
-        ai_simulator._play_activations(game, ME, report, 1, 1)
+        # What the permanent *has* is this census's question, so the
+        # rehearsed "moves nothing" gate every ability meets since kg4
+        # (`ai_abilities._moves_something`) is off: on this board, with no
+        # fight in it, it holds back most of what is proposed — the printed
+        # card's and the copy's alike — and the comparison would be of
+        # nothing.
+        with _moves_nothing_gate_off():
+            action = choose_activation_action(game, ME)
+            if action is None:
+                return row
+            row["proposed"] = True
+            row["by_subject"] = game.permanent_at(ME, action.permanent_index) is subject
+            report = ai_simulator.SimulationReport(
+                games_requested=1, games_completed=0, interaction_count=0,
+            )
+            ai_simulator._play_activations(game, ME, report, 1, 1)
         row["refused"] = "; ".join(report.refused_activations) or None
     except Exception as exc:  # a crash is a finding, not a pass
         row["error"] = f"EXC {type(exc).__name__}: {exc}"
