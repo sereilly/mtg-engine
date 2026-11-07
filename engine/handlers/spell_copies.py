@@ -590,7 +590,9 @@ def copy_spell_for_each_other_target(game: Game, instruction: OracleInstruction,
         game.log.append(f"{card.name}: that spell is no longer on the stack")
         return True, "resolved"
     current = single_spell_target(game, copied)
-    if current is None:
+    # "…that targets only a single **permanent or player**": a spell aimed at
+    # a spell has a single target too (CR 115.9a), and is not this card's.
+    if current is None or current.get("kind") not in ("permanent", "player"):
         game.log.append(
             f"{card.name}: {copied.card.name} does not target only a single "
             "permanent or player"

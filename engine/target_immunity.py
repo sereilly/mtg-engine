@@ -270,7 +270,7 @@ class BoardTargetImmunity:
 #: The plural of :data:`_TARGET_IMMUNITY`'s sentence, and the plural is not
 #: cosmetic: a **set** of objects takes "the target**s**", where a single
 #: permanent takes "the target". The subject is read with ``plural=True`` for
-#: the reason ``prevention.static.prevent_all_to_matching`` reads its own that way —
+#: the reason ``prevention.blankets.prevent_all_to_matching`` reads its own that way —
 #: the parser refuses a singular self-reference under that flag, so "this
 #: creature" and "enchanted creature", which reduce to a bare
 #: ``{"type_filter": "creature"}`` and would shroud every creature in the game,

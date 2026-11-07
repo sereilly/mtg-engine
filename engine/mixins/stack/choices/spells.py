@@ -372,12 +372,16 @@ class SpellChoicesMixin:
 
     def _retarget_option_seat(self, option: dict) -> "int | None":
         """Whose a retarget candidate is: a face's seat, a permanent's
-        controller (through the control seam), else None."""
+        controller (through the control seam), a spell's controller (a
+        counterspell re-aimed at another spell, CR 405.4), else None."""
         if option.get("kind") == "player":
             return option.get("seat")
         if option.get("kind") == "permanent":
             permanent = self.permanent_by_id(option.get("permanent_id"))
             return self.controller_index_of(permanent) if permanent is not None else None
+        if option.get("kind") == "stack":
+            seat = getattr(option.get("_stack_item"), "caster_index", None)
+            return seat if isinstance(seat, int) else None
         return None
 
     def _retarget_preferred_seats(self, choice: PendingChoice) -> set:

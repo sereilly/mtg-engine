@@ -316,6 +316,140 @@ class StackTargetsMixin:
         offered = self._offered_stack_targets(caster_index, card, spec)
         return True, (offered[-1] if offered else None)
 
+    def _stack_spell_offered(
+        self, item, spec: dict, caster_index: int, source=None
+    ) -> bool:
+        """Whether the **spell** *item* answers *spec*'s stack description
+        for the seat *caster_index* (and the ability source *source*): the
+        per-object half of :meth:`_enumerate_stack_targets`, its own method so
+        an object that is not on the stack *list* can be asked it too — the
+        spell that is resolving, which CR 608.2 keeps on the stack until it
+        finishes (Deflection's 2004-10-04 ruling: a spell it re-aims may be
+        aimed at Deflection itself, ``handlers/retargeting._legal_new_targets``).
+        """
+        color_filter = spec.get("stack_color_filter")
+        instant_sorcery_only = spec.get("stack_instant_sorcery_only")
+        # Only spells are legal targets — activated/triggered abilities on the
+        # stack (which carry an ability_instruction) can't be countered/copied.
+        if getattr(item, "ability_instruction", None) is not None:
+            return False
+        # What the candidate spell is, as any text change made it
+        # (CR 612): an Elf spell an Artificial Evolution made a Goblin is
+        # offered to "target Goblin spell" and not to "target Elf spell".
+        item_card = spell_text_card(item)
+        if item_card is None:
+            return False
+        if instant_sorcery_only and item_card.primary_type not in ("instant", "sorcery"):
+            return False
+        # Miscast: "target instant or sorcery spell" — the union the
+        # compiled counter carries, tested here so the picker offers only
+        # what the handler would counter.
+        #
+        # Through the handler's own reader (``_spell_is_one_of``, CR 205.2:
+        # a card has every type its line names). This asked
+        # ``primary_type``, which picks one type off the line — "creature"
+        # for an artifact creature — so Annul ("artifact or enchantment
+        # spell") was never offered an Ornithopter while its handler would
+        # have countered one. That was a picker short of a legal target for
+        # as long as the picker was only a hint; it became a legal cast
+        # **refused** the day `cast_stack_target_refusal` made this list
+        # the announcement gate (INV W1G2), which is what found it. The
+        # complement below already asked the handler's reader for exactly
+        # this reason.
+        from .handlers.stack import _spell_is_one_of
+
+        stack_card_types = spec.get("stack_card_types")
+        if stack_card_types and not _spell_is_one_of(
+            item_card, stack_card_types,
+            game=self, seat=getattr(item, "caster_index", None),
+        ):
+            return False
+        # Null Brooch: "target **noncreature** spell" — the complement,
+        # asked through ``_spell_is_one_of`` rather than through
+        # ``primary_type`` above it. That is the handler's own reader, and
+        # the difference is load-bearing here in a way it is not for the
+        # union: CR 205.2 gives an artifact creature spell *both* types, so
+        # a ``primary_type`` test would offer it ("artifact" is not
+        # "creature") and the handler would then decline — the whole hand
+        # discarded for nothing. The union above asks the same reader now.
+        stack_excluded_types = spec.get("stack_excluded_types")
+        if stack_excluded_types:
+            if _spell_is_one_of(
+                item_card, stack_excluded_types,
+                game=self, seat=getattr(item, "caster_index", None),
+            ):
+                return False
+        # "…spell **with mana value 3 or less**" (Liquify). The spell's
+        # mana value *as it is on the stack* (CR 202.3e: an X in its cost
+        # counts at the announced value), so a spell whose X makes it
+        # bigger is not offered and, re-asked here at CR 608.2b, is not
+        # countered.
+        stack_mana_value = spec.get("stack_mana_value")
+        if stack_mana_value:
+            from .handlers._filters import _comparison_holds
+            from .targeting import stack_object_mana_value
+
+            if not _comparison_holds(stack_mana_value, stack_object_mana_value(item)):
+                return False
+        # "target instant or **Aura** spell" (Avoid Fate, Ring of
+        # Immortals): the same cross-axis union the handler tests, asked
+        # through the same reader, so the picker offers exactly what the
+        # counter would counter.
+        any_classes = spec.get("stack_any_classes")
+        if any_classes:
+            from .handlers.stack import _spell_is_one_of_classes
+
+            if not _spell_is_one_of_classes(
+                item_card, [tuple(entry) for entry in any_classes],
+                game=self, seat=getattr(item, "caster_index", None),
+            ):
+                return False
+        # "…that targets a permanent you control" — asked of the recorded
+        # targets of the spell being offered, against the seat whose spell
+        # or ability is doing the countering.
+        targets_filter = spec.get("stack_targets_filter")
+        targets_source = source if spec.get("stack_targets_source") else None
+        if targets_filter or targets_source is not None:
+            from .handlers.stack import _spell_targets_matching
+
+            if not _spell_targets_matching(
+                self, item, dict(targets_filter or {}), caster_index,
+                source=targets_source,
+            ):
+                return False
+        # "…**with a single target** [if that target is you]" (Deflection,
+        # Reflecting Mirror — CR 115.7a / CR 115.9a). Asked through the one
+        # reader the retarget handler asks at resolution, against the same
+        # seat every other narrowing here is measured against (CR 109.5) —
+        # so a spell the effect could not actually re-aim is never offered,
+        # and the mana it would cost is never paid for nothing.
+        #
+        # A spell whose target set the engine cannot establish answers None
+        # and is simply not offered: under-offering is a narrower card,
+        # over-offering is a card redirecting spells it was never allowed to.
+        #
+        # The count and the "is you" are **two** gates because two cards
+        # print them separately: Deflection carries only the first.
+        if not self._stack_single_target_ok(item, spec, caster_index, source):
+            return False
+        if not _stack_controller_ok(item, spec, caster_index):
+            return False
+        # "…spell **cast from a graveyard**" (Laquatus's Disdain): the zone
+        # the cast left, through the handler's own reader, so the offer and
+        # the counter name one set.
+        from .handlers.stack import stack_item_cast_from_ok
+
+        if not stack_item_cast_from_ok(item, spec.get("stack_cast_from_zone")):
+            return False
+        if color_filter and color_filter not in self._stack_item_colors(item):
+            return False
+        stack_any_colors = spec.get("stack_any_colors")
+        if stack_any_colors:
+            item_colors = self._stack_item_colors(item)
+            if not any(colour in item_colors for colour in stack_any_colors):
+                return False
+        return True
+
     def _enumerate_stack_targets(
         self, caster_index: int, card: CardDefinition, spec: dict, source=None
     ) -> list[dict]:
@@ -333,8 +467,6 @@ class StackTargetsMixin:
         permanent, which is what keeps the {U} from being paid for nothing.
         """
         targets: list[dict] = []
-        color_filter = spec.get("stack_color_filter")
-        instant_sorcery_only = spec.get("stack_instant_sorcery_only")
         # "Counter target **activated ability** from an artifact source" (Rust,
         # Ayesha Tanaka). A spec that asks for abilities offers abilities and
         # nothing else: an ability is not a spell (CR 113.7a) and the two are
@@ -347,128 +479,11 @@ class StackTargetsMixin:
             )
         depth = len(self.stack)
         for i, item in enumerate(self.stack):
-            # Only spells are legal targets — activated/triggered abilities on the
-            # stack (which carry an ability_instruction) can't be countered/copied.
-            if getattr(item, "ability_instruction", None) is not None:
+            if not self._stack_spell_offered(item, spec, caster_index, source):
                 continue
-            # What the candidate spell is, as any text change made it
-            # (CR 612): an Elf spell an Artificial Evolution made a Goblin is
-            # offered to "target Goblin spell" and not to "target Elf spell".
-            item_card = spell_text_card(item)
-            if item_card is None:
-                continue
-            if instant_sorcery_only and item_card.primary_type not in ("instant", "sorcery"):
-                continue
-            # Miscast: "target instant or sorcery spell" — the union the
-            # compiled counter carries, tested here so the picker offers only
-            # what the handler would counter.
-            #
-            # Through the handler's own reader (``_spell_is_one_of``, CR 205.2:
-            # a card has every type its line names). This asked
-            # ``primary_type``, which picks one type off the line — "creature"
-            # for an artifact creature — so Annul ("artifact or enchantment
-            # spell") was never offered an Ornithopter while its handler would
-            # have countered one. That was a picker short of a legal target for
-            # as long as the picker was only a hint; it became a legal cast
-            # **refused** the day `cast_stack_target_refusal` made this list
-            # the announcement gate (INV W1G2), which is what found it. The
-            # complement below already asked the handler's reader for exactly
-            # this reason.
-            from .handlers.stack import _spell_is_one_of
-
-            stack_card_types = spec.get("stack_card_types")
-            if stack_card_types and not _spell_is_one_of(
-                item_card, stack_card_types,
-                game=self, seat=getattr(item, "caster_index", None),
-            ):
-                continue
-            # Null Brooch: "target **noncreature** spell" — the complement,
-            # asked through ``_spell_is_one_of`` rather than through
-            # ``primary_type`` above it. That is the handler's own reader, and
-            # the difference is load-bearing here in a way it is not for the
-            # union: CR 205.2 gives an artifact creature spell *both* types, so
-            # a ``primary_type`` test would offer it ("artifact" is not
-            # "creature") and the handler would then decline — the whole hand
-            # discarded for nothing. The union above asks the same reader now.
-            stack_excluded_types = spec.get("stack_excluded_types")
-            if stack_excluded_types:
-                if _spell_is_one_of(
-                    item_card, stack_excluded_types,
-                    game=self, seat=getattr(item, "caster_index", None),
-                ):
-                    continue
-            # "…spell **with mana value 3 or less**" (Liquify). The spell's
-            # mana value *as it is on the stack* (CR 202.3e: an X in its cost
-            # counts at the announced value), so a spell whose X makes it
-            # bigger is not offered and, re-asked here at CR 608.2b, is not
-            # countered.
-            stack_mana_value = spec.get("stack_mana_value")
-            if stack_mana_value:
-                from .handlers._filters import _comparison_holds
-                from .targeting import stack_object_mana_value
-
-                if not _comparison_holds(stack_mana_value, stack_object_mana_value(item)):
-                    continue
-            # "target instant or **Aura** spell" (Avoid Fate, Ring of
-            # Immortals): the same cross-axis union the handler tests, asked
-            # through the same reader, so the picker offers exactly what the
-            # counter would counter.
-            any_classes = spec.get("stack_any_classes")
-            if any_classes:
-                from .handlers.stack import _spell_is_one_of_classes
-
-                if not _spell_is_one_of_classes(
-                    item_card, [tuple(entry) for entry in any_classes],
-                    game=self, seat=getattr(item, "caster_index", None),
-                ):
-                    continue
-            # "…that targets a permanent you control" — asked of the recorded
-            # targets of the spell being offered, against the seat whose spell
-            # or ability is doing the countering.
-            targets_filter = spec.get("stack_targets_filter")
-            targets_source = source if spec.get("stack_targets_source") else None
-            if targets_filter or targets_source is not None:
-                from .handlers.stack import _spell_targets_matching
-
-                if not _spell_targets_matching(
-                    self, item, dict(targets_filter or {}), caster_index,
-                    source=targets_source,
-                ):
-                    continue
-            # "…**with a single target** [if that target is you]" (Deflection,
-            # Reflecting Mirror — CR 115.7a / CR 115.9a). Asked through the one
-            # reader the retarget handler asks at resolution, against the same
-            # seat every other narrowing here is measured against (CR 109.5) —
-            # so a spell the effect could not actually re-aim is never offered,
-            # and the mana it would cost is never paid for nothing.
-            #
-            # A spell whose target set the engine cannot establish answers None
-            # and is simply not offered: under-offering is a narrower card,
-            # over-offering is a card redirecting spells it was never allowed to.
-            #
-            # The count and the "is you" are **two** gates because two cards
-            # print them separately: Deflection carries only the first.
-            if not self._stack_single_target_ok(item, spec, caster_index, source):
-                continue
-            if not _stack_controller_ok(item, spec, caster_index):
-                continue
-            # "…spell **cast from a graveyard**" (Laquatus's Disdain): the zone
-            # the cast left, through the handler's own reader, so the offer and
-            # the counter name one set.
-            from .handlers.stack import stack_item_cast_from_ok
-
-            if not stack_item_cast_from_ok(item, spec.get("stack_cast_from_zone")):
-                continue
-            if color_filter and color_filter not in self._stack_item_colors(item):
-                continue
-            stack_any_colors = spec.get("stack_any_colors")
-            if stack_any_colors:
-                item_colors = self._stack_item_colors(item)
-                if not any(colour in item_colors for colour in stack_any_colors):
-                    continue
             # The UI (and the cast/activate action) index the stack top-first, the
             # reverse of the engine's bottom-first list — emit the top-first index.
-            targets.append({"kind": "stack", "stack_index": depth - 1 - i, "name": item_card.name})
+            targets.append({"kind": "stack", "stack_index": depth - 1 - i, "name": spell_text_card(item).name})
         # "Change the target of target spell **or ability** that targets only
         # this creature." (Silver Wyvern.) CR 113.7a keeps the two apart, so the
         # ability half is a second list folded in rather than a widening of this

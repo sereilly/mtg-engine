@@ -108,12 +108,22 @@ def _retarget_subject(game: Game, context: OracleExecutionContext, instruction):
     return item, chosen
 
 
+def _stack_object(descriptor: dict):
+    """The stack object a ``"stack"`` descriptor names: ``single_spell_target``'s
+    answer carries it as ``stack_item``, a ``retarget_choice`` option as
+    ``_stack_item`` (the key that prompt has always read)."""
+    return descriptor.get("stack_item") or descriptor.get("_stack_item")
+
+
 def _same_target(left: dict, right: dict) -> bool:
-    """Whether two target descriptors name the same object or face."""
+    """Whether two target descriptors name the same object or face — a stack
+    object by identity, since one compares by value."""
     if left.get("kind") != right.get("kind"):
         return False
     if left.get("kind") == "player":
         return left.get("seat") == right.get("seat")
+    if left.get("kind") == "stack":
+        return _stack_object(left) is _stack_object(right)
     return left.get("permanent_id") == right.get("permanent_id")
 
 
@@ -137,9 +147,13 @@ def _legal_new_targets(game: Game, item: StackItem, bound) -> list[dict]:
 
     Each permanent is carried by ``permanent_id``, never by the slot the
     enumeration named it in: a prompt sits between this list and the write, and
-    an index is what renumbers underneath one.
+    an index is what renumbers underneath one. Another **spell or ability**
+    (a Counterspell's target, CR 115.7a) is carried by identity under
+    ``_stack_item`` — the shape ``retarget_choice`` reads for Psychic Battle's
+    options — and never the object itself (CR 115.5).
     """
     from ..legality import targeting_instruction
+    from ..stack_targets import stack_object_label
     from ..targeting import stack_object_target_spec
 
     # The object's own spec, which for an **ability** is not the card's. Silver
@@ -186,7 +200,29 @@ def _legal_new_targets(game: Game, item: StackItem, bound) -> list[dict]:
         stack_item=item,
     )
     candidates: list[dict] = []
+    depth = len(game.stack)
     for entry in entries:
+        if entry.get("kind") == "stack":
+            # A spell (or ability) the object could have been aimed at: a
+            # counterspell re-aimed at another spell. Only where the card
+            # bounds nothing — "the new target must be a player / another
+            # creature" names no spell. The enumeration counts top-first.
+            index = entry.get("stack_index")
+            if bound is not None or not isinstance(index, int):
+                continue
+            if not 0 <= depth - 1 - index < depth:
+                continue
+            other = game.stack[depth - 1 - index]
+            if other is item:
+                # CR 115.5: a spell or ability on the stack is an illegal
+                # target for itself.
+                continue
+            candidates.append({
+                "kind": "stack",
+                "_stack_item": other,
+                "name": stack_object_label(game, other),
+            })
+            continue
         if entry.get("kind") == "player":
             seat = entry.get("seat")
             if not isinstance(seat, int) or game.players[seat].lost:
@@ -213,7 +249,46 @@ def _legal_new_targets(game: Game, item: StackItem, bound) -> list[dict]:
             "permanent_id": permanent_id,
             "name": entry.get("name", ""),
         })
+    resolving = _resolving_spell(game)
+    if (
+        bound is None and resolving is not None and resolving is not item
+        and spec.get("kind") in ("stack", "spell_or_permanent")
+        and not any(_stack_object(c) is resolving for c in candidates)
+        and game._stack_spell_offered(
+            resolving, spec, item.caster_index, item.source_permanent,
+        )
+    ):
+        # "You can choose to make a spell on the stack target this spell (if
+        # such a target choice would be legal had the spell been cast while
+        # this spell was on the stack). … This spell is still on the stack
+        # when new targets are selected" (Deflection, Misdirection;
+        # 2004-10-04). CR 608.2 keeps a resolving spell on the stack until it
+        # finishes; this engine lifts it off first, so it is asked here by the
+        # enumeration's own per-spell predicate. Aimed at it, the re-aimed
+        # spell finds its target gone and is countered (CR 608.2b).
+        #
+        # First among the candidates: a seat nobody asks takes the first one
+        # not on its effect's side (``_default_retarget_choice``), and a spell
+        # that will have left the stack is the change that lands on nobody —
+        # where the other spells there are the chooser's own.
+        candidates.insert(0, {
+            "kind": "stack",
+            "_stack_item": resolving,
+            "name": stack_object_label(game, resolving),
+        })
     return candidates
+
+
+def _resolving_spell(game: Game):
+    """The **spell** whose resolution is running this effect (Deflection), or
+    None for an ability (Willbender's trigger: a spell is a card on the stack,
+    CR 112.1) or nothing resolving."""
+    resolving = game.resolving_items[-1] if getattr(game, "resolving_items", None) else None
+    if resolving is None or getattr(resolving, "is_ability", False):
+        return None
+    if getattr(resolving, "ability_instruction", None) is not None:
+        return None
+    return resolving
 
 
 @effect_handler("choose_new_spell_target")
@@ -306,6 +381,34 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
     if not isinstance(chosen, dict):
         game.log.append(unchanged)
         return True, "resolved"
+    if chosen.get("kind") == "stack":
+        # Another spell or ability (a Counterspell re-aimed, CR 115.7a): by
+        # identity, and only while it is still on the stack — the shape
+        # ``stack_targets.apply_target_change`` writes for Psychic Battle. A
+        # permanent target the object had ("target spell or permanent")
+        # goes, so no handler resolves it against the old one.
+        other = _stack_object(chosen)
+        still_there = other is not None and (
+            any(waiting is other for waiting in game.stack)
+            # The retargeting spell itself, resolving (Deflection's ruling,
+            # ``_legal_new_targets``).
+            or other is _resolving_spell(game)
+        )
+        if other is item or not still_there:
+            game.log.append(unchanged)
+            return True, "resolved"
+        item.target_stack_item = other
+        item.target_permanent_id = None
+        item.target_permanent_index = None
+        from ..stack_targets import stack_object_label
+
+        game.log.append(
+            f"{card_name}: {item.card.name} now targets {stack_object_label(game, other)}"
+        )
+        game.announce_targets_chosen(
+            item, chooser=game.seat_index(context.caster), newly_targeted=True,
+        )
+        return True, "resolved"
     if chosen.get("kind") == "permanent":
         found = game.find_permanent_by_id(chosen.get("permanent_id"))
         if found is None:
@@ -317,6 +420,10 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
         item.target_player_index = seat
         item.target_permanent_id = [permanent.permanent_id]
         item.target_permanent_index = game.battlefield_index_of(permanent)
+        # "Target spell or permanent" re-aimed from a spell (Hydroblast): the
+        # stack reference goes as the id arrives, as ``apply_target_change``
+        # writes it.
+        item.target_stack_item = None
         divided = (item.choices or {}).get(DIVIDED_TARGETS)
         if divided:
             # The list that decides, rewritten here as it is in the player

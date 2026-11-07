@@ -1075,14 +1075,17 @@ def grant_forcefield_shield(game: Game, instruction: OracleInstruction, context:
     # capped to 1. Fall back to a generic "next combat damage" cap for AI/headless
     # activations that supply no target.
     chosen = resolve_target_permanent(game, context, fallback_players=())
+    # The card that armed the shield, for CR 616.1e's option beside another
+    # (``prevention.shields._granted_by``) — every other shield here names it.
+    granted_by = getattr(context.card, "name", None) or None
     if chosen is not None:
-        add_shield(caster, make_capped_source(chosen))
+        add_shield(caster, make_capped_source(chosen, granted_by))
         game.log.append(
             f"{getattr(context.card, 'name', '') or 'An effect'} will prevent all "
             f"but 1 combat damage from {chosen.card.name}"
         )
     else:
-        add_shield(caster, make_capped_charge())
+        add_shield(caster, make_capped_charge(granted_by))
         game.log.append(
             f"{getattr(context.card, 'name', '') or 'An effect'} will prevent all "
             "but 1 combat damage from the next unblocked creature"

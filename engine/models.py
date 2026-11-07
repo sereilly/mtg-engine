@@ -1233,7 +1233,9 @@ class PlayerState:
     # `exile_if_dies_this_turn` has on a permanent, one object wider. On the
     # seat rather than on the game because the printed scope is a seat's own
     # pile, and a game-wide flag could not say whose. Reset with the turn.
-    exile_cards_bound_for_graveyard_this_turn: bool = False
+    # Armed, it holds the name of the card whose effect armed it (truthy), for
+    # CR 616.1e's option; ``False`` when nothing did.
+    exile_cards_bound_for_graveyard_this_turn: "bool | str" = False
     # Whether this seat declared an attacker this turn (CR 508.1). On the seat
     # rather than derived from the board, because a player who attacked and
     # then lost the attacker still attacked this turn — reading

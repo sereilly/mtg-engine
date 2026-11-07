@@ -43,12 +43,20 @@ def _applies_exile_instead_of_dying(game, payload: dict) -> bool:
     return bool(payload["permanent"].metadata.get("exile_if_dies_this_turn"))
 
 
-def _marker_sources(game, payload: dict) -> list:
-    """Nothing: the effect is a marker on the permanent (Disintegrate's
-    ``exile_if_dies_this_turn``, Dreams of the Dead's
-    :data:`EXILE_ON_LEAVING_BATTLEFIELD`), which records no arming card to
-    name. Pure."""
-    return []
+def recorded_name(value) -> list:
+    """The arming card a marker records, as a sources list: a marker's value
+    is the name of the card whose effect wrote it (Disintegrate, Runesword,
+    Dreams of the Dead, Yawgmoth's Will) — written when the effect was
+    created, so it is named as every seat saw that card — or a bare ``True``
+    from a writer that knew no card, which names nothing. Pure."""
+    return [value] if isinstance(value, str) and value else []
+
+
+def _exile_if_dies_sources(game, payload: dict) -> list:
+    """The card whose effect marked the permanent (Disintegrate's own
+    ``exile_if_dies_this_turn``, or Runesword's rider carried onto what its
+    creature damaged — ``damage_events._apply_dealer_riders``). Pure."""
+    return recorded_name(payload["permanent"].metadata.get("exile_if_dies_this_turn"))
 
 
 def _the_object_itself(game, payload: dict) -> list:
@@ -61,7 +69,8 @@ def _the_object_itself(game, payload: dict) -> list:
 
 @replacement_effect(
     "would_die", EXILE_INSTEAD_OF_DYING, applies=_applies_exile_instead_of_dying,
-    sources=_marker_sources, label="Exile it instead of putting it into a graveyard",
+    sources=_exile_if_dies_sources,
+    label="Exile it instead of putting it into a graveyard",
 )
 def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
     """Disintegrate-style: "if it would die this turn, exile it instead." The
@@ -83,6 +92,9 @@ def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
 #: a handler stamps and a pure predicate reads — and the same reason it is a
 #: marker rather than a text probe: what carries the effect is the permanent,
 #: and its printed text says nothing about it.
+#:
+#: Its value is the name of the card whose ability armed it (Dreams of the
+#: Dead), which CR 616.1e's option names (:func:`recorded_name`).
 EXILE_ON_LEAVING_BATTLEFIELD = "exile_if_it_would_leave_the_battlefield"
 
 
@@ -97,9 +109,15 @@ def _applies_exile_instead_of_leaving(game, payload: dict) -> bool:
     return bool(permanent.metadata.get(EXILE_ON_LEAVING_BATTLEFIELD))
 
 
+def _exile_on_leaving_sources(game, payload: dict) -> list:
+    """The card whose ability marked the permanent (Dreams of the Dead).
+    Pure."""
+    return recorded_name(payload["permanent"].metadata.get(EXILE_ON_LEAVING_BATTLEFIELD))
+
+
 @replacement_effect(
     "would_leave_battlefield", EXILE_INSTEAD_OF_LEAVING,
-    applies=_applies_exile_instead_of_leaving, sources=_marker_sources,
+    applies=_applies_exile_instead_of_leaving, sources=_exile_on_leaving_sources,
     label="Exile it instead of putting it anywhere else",
 )
 def _exile_instead_of_leaving(game, payload: dict) -> ReplacementOutcome | None:
@@ -558,14 +576,16 @@ def _graveyard_exile_source(game, payload: dict):
 
 def _graveyard_exile_sources(game, payload: dict) -> list:
     """Every permanent whose printed line would exile this card (Forbidden
-    Crypt, Leyline of the Void), by :func:`_graveyard_exile_source`'s reading.
-    An effect that armed the turn's exile (Yawgmoth's Will) marks the seat
-    without its name, so it is not among them. Pure."""
+    Crypt, Leyline of the Void), by :func:`_graveyard_exile_source`'s reading
+    — and the card whose effect armed the turn's exile on the seat (Yawgmoth's
+    Will), by the name its marker records (:func:`recorded_name`). Pure."""
     player = payload.get("player")
     if player is None:
         return []
     seat = game.players.index(player)
-    found = []
+    found: list = recorded_name(
+        getattr(player, "exile_cards_bound_for_graveyard_this_turn", None)
+    )
     for permanent in game.all_permanents():
         controller = game.controller_index_of(permanent)
         if controller is None:
@@ -624,10 +644,16 @@ def _exile_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | Non
     player = payload["player"]
     card = payload["card"]
     source = _graveyard_exile_source(game, payload)
+    by = (
+        source.card.name if source is not None
+        else next(iter(recorded_name(
+            getattr(player, "exile_cards_bound_for_graveyard_this_turn", None)
+        )), None)
+    )
     game.put_card_into_exile(player, card)
     game.log.append(
         f"{card.name} was exiled instead of going to {player.name}\'s graveyard"
-        + (f" ({source.card.name})" if source is not None else "")
+        + (f" ({by})" if by else "")
     )
     return ReplacementOutcome(replaced=True)
 

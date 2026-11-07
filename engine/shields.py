@@ -679,15 +679,15 @@ def make_counting_pool(
     )
 
 
-def make_capped_source(source) -> Shield:
+def make_capped_source(source, source_name: str | None = None) -> Shield:
     return make_chosen_source_shield(
-        PREVENT_ALL_BUT, source, leave=1, lifetime=END_OF_COMBAT
+        PREVENT_ALL_BUT, source, source_name, leave=1, lifetime=END_OF_COMBAT
     )
 
 
-def make_capped_charge() -> Shield:
+def make_capped_charge(source_name: str | None = None) -> Shield:
     return make_chosen_source_shield(
-        PREVENT_ALL_BUT, leave=1, lifetime=END_OF_COMBAT
+        PREVENT_ALL_BUT, source_name=source_name, leave=1, lifetime=END_OF_COMBAT
     )
 
 

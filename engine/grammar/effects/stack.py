@@ -851,8 +851,10 @@ def parse_copy_spell_for_each_other_target(
     target …" opens Reincarnation's two-sentence spell too, and a production
     that ate the opener would take those lines with it. "That targets only a
     single permanent or player" is CR 115.9a's count with its object
-    restricted to the two things a copy can be re-aimed at, which is exactly
-    the question ``targeting.single_spell_target`` answers.
+    restricted to the two things a copy can be re-aimed at: the question
+    ``targeting.single_spell_target`` answers (which counts a spell target
+    too), narrowed to those two kinds by the spec's
+    ``stack_single_target_type`` (``payload_target_specs``).
     """
     mark = stream.mark()
     if not stream.accept_phrase("choose", "target"):

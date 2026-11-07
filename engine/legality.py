@@ -1186,9 +1186,16 @@ def _single_target_is(game, chosen: dict, wanted: str, source=None) -> bool:
     ability whose own permanent has left the battlefield re-aims nothing, which
     is CR 608.2b's reading and not a fallback to "any creature".
 
+    ``permanent_or_player`` is Radiate's "that targets only **a single
+    permanent or player**": the count admits a spell aimed at a spell
+    (``targeting.single_spell_target`` answers ``"stack"`` for one), and this
+    card's sentence does not.
+
     A word this cannot answer is False, never True: an unrecognised bound must
     narrow to nothing rather than to everything.
     """
+    if wanted == "permanent_or_player":
+        return chosen.get("kind") in ("permanent", "player")
     if wanted == "player":
         return chosen.get("kind") == "player"
     if wanted == "creature":

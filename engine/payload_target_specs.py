@@ -1179,15 +1179,18 @@ def _copy_for_each_other_target_spec(payload: dict) -> dict:
     """"Choose target instant or sorcery spell **that targets only a single
     permanent or player**." (Radiate.) The stack picker a copy raises, with
     CR 115.9a's count — ``stack_single_target``, whose reader
-    (``single_spell_target``) answers only for a lone permanent or player
-    target, which is the restriction printed — and the type union, handed to
-    the enumeration under the keys a counterspell's are, so a spell the
-    handler could not copy around is never offered and, re-asked at
-    CR 608.2b, a spell re-aimed at two targets in response is not copied."""
+    (``single_spell_target``) also answers for a lone *spell* target, so the
+    printed "permanent or player" rides beside it as
+    ``stack_single_target_type`` (``legality._single_target_is``) — and the
+    type union, handed to the enumeration under the keys a counterspell's
+    are, so a spell the handler could not copy around is never offered and,
+    re-asked at CR 608.2b, a spell re-aimed at two targets in response is not
+    copied."""
     spec = {
         "kind": "stack",
         "copies_spell": True,
         "stack_single_target": True,
+        "stack_single_target_type": "permanent_or_player",
     }
     if payload.get("card_types"):
         spec["stack_card_types"] = list(payload["card_types"])

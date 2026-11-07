@@ -4,8 +4,8 @@ One reader, because the question had four partial ones and each declined a
 different half of it:
 
 * ``targeting.single_spell_target`` answers "what is this object's *only*
-  target?" and refuses everything modal, divided, graveyard-borne or aimed at
-  the stack;
+  target?" and refuses everything modal, divided or graveyard-borne (an
+  object aimed at the stack it counts through :func:`chosen_targets`);
 * ``targeting.spell_targets`` answers for a spell and never for an ability;
 * ``legality_resolution.illegal_targets_refusal`` has to know an object's targets to say
   they are all illegal, and declined every object that may target a player
