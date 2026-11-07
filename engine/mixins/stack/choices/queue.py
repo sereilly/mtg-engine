@@ -377,7 +377,12 @@ class PendingChoicesMixin:
                     tail, item.finish_resolution = item.finish_resolution, None
                     if tail is not None:
                         tail()
-                    self.log.append(f"{item.card.name} finished resolving")
+                    # A spell's bin says the resolution finished and where the
+                    # card went ("… finished resolving and moved to
+                    # graveyard", ``StackItem.ending_logged``), so it is the
+                    # one line, not a second.
+                    if not getattr(item, "ending_logged", False):
+                        self.log.append(f"{item.card.name} finished resolving")
                     # The resolution is over *now*, so what ``pass_priority``
                     # does after one that ran straight through happens here for
                     # one that stopped to ask: CR 704.3's check before anyone

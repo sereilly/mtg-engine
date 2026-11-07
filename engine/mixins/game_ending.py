@@ -211,11 +211,14 @@ class GameEndingMixin:
         with self.putting_triggers_on_stack(), self.outside_any_entry_event():
             return self._check_state_based_actions()
 
-    def _state_based_pass(self, banned_set_codes, banner_perm_ids) -> bool:
+    def _state_based_pass(
+        self, banned_set_codes, banner_perm_ids, banner_names=(),
+    ) -> bool:
         """One check of CR 704.3: every applicable state-based action,
         performed as one event (``_check_state_based_actions`` wraps it); True
-        when any was. *banned_set_codes* and *banner_perm_ids* are the City in
-        a Bottle census its caller takes once per check."""
+        when any was. *banned_set_codes*, *banner_perm_ids* and
+        *banner_names* are the City in a Bottle census its caller takes once
+        per check (the names are what the sacrifice line cites)."""
         changed = False
 
         # Recompute continuous effects (611.3a) before evaluating SBAs so that
@@ -532,7 +535,10 @@ class GameEndingMixin:
                         and card_set in banned_set_codes
                     ):
                         self.sacrifice_permanent(perm)
-                        self.log.append(f"{perm.card.name} sacrificed (City in a Bottle)")
+                        self.log.append(
+                            f"{perm.card.name} sacrificed "
+                            f"({', '.join(dict.fromkeys(banner_names))})"
+                        )
                         changed = True
 
         # Old Man of the Sea: linked-duration steal ends the instant it
@@ -1186,6 +1192,7 @@ class GameEndingMixin:
         # common case (no banner in play) leaves this empty and skips the sweep.
         banned_set_codes: set[str] = set()
         banner_perm_ids: set[int] = set()
+        banner_names: list[str] = []
         for _perm in self.all_permanents():
             for _instr in compile_card_oracle(_perm.effective_card).instructions:
                     if _instr.kind == "ban_and_sacrifice_set_permanents":
@@ -1193,6 +1200,7 @@ class GameEndingMixin:
                         if code is not None:
                             banned_set_codes.add(code)
                         banner_perm_ids.add(id(_perm))
+                        banner_names.append(_perm.card.name)
         while changed:
             # **One check is one event** (CR 704.3: "performs all applicable
             # state-based actions simultaneously as a single event"). What
@@ -1203,7 +1211,9 @@ class GameEndingMixin:
             # the cards the pass's departures give back (CR 610.3d) enter
             # together once it is done (the departures' event closed first).
             with self.entering_together(), self.leaving_together():
-                changed = self._state_based_pass(banned_set_codes, banner_perm_ids)
+                changed = self._state_based_pass(
+                    banned_set_codes, banner_perm_ids, banner_names,
+                )
             if changed:
                 any_changed = True
 

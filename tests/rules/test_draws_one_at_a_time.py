@@ -48,11 +48,14 @@ def _game(*cards, library=None, interactive=True):
 
 
 def _apply_first(game, label: str) -> None:
+    """Apply the effect the card *label* generates first: an option is
+    "<what it does> (<the card generating it>)" (kg4)."""
     order = game.pending_choice_of("effect_order")
     assert order is not None, [c.kind for c in game.pending_choices]
-    assert game.resolve_pending_choice(
-        "effect_order", 0, option_index=order.data["options"].index(label),
-    )
+    options = order.data["options"]
+    matching = [i for i, option in enumerate(options) if option.endswith(f"({label})")]
+    assert len(matching) == 1, (label, options)
+    assert game.resolve_pending_choice("effect_order", 0, option_index=matching[0])
 
 
 def _owed(game) -> list[str]:

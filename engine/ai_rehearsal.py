@@ -33,6 +33,7 @@ from collections import Counter
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+import zlib
 
 from .ai_weighed_cast import permitted_casts
 from .entry_awaiting import ENTRY_EVENT, awaited_entries
@@ -1115,12 +1116,48 @@ def forget_damage_history(game) -> None:
         permanent.metadata.pop(DAMAGED_THIS_GAME, None)
 
 
+def public_counts(game) -> tuple:
+    """The position as every seat can count it: the turn, the step, whose
+    turn it is and how many objects are on the stack, and for each seat its
+    life, how many cards are in its hand, library, graveyard and exile
+    (CR 401.3, 402.3: a library and a hand may be counted at any time), and
+    how many permanents it controls and how many of those are tapped.
+
+    Counts and nothing else, so it is the same for every arrangement of what
+    a seat cannot see, the same on a game and on every copy of it, and
+    nothing a log line, a process-wide counter (``models.next_permanent_id``,
+    ``continuous.next_timestamp``) or an object's address can move."""
+    seats = []
+    for seat, player in enumerate(game.players):
+        controlled = list(game.controlled_by(seat))
+        seats.append((
+            int(getattr(player, "life", 0) or 0),
+            len(player.hand), len(player.library), len(player.graveyard),
+            len(player.exile),
+            len(controlled), sum(1 for permanent in controlled if permanent.tapped),
+        ))
+    return (
+        int(getattr(game, "turn", 0) or 0), str(getattr(game, "current_step", "")),
+        getattr(game, "active_player_index", 0), len(game.stack), tuple(seats),
+    )
+
+
 def _rehearsal_seed(game) -> int:
     """The seed a rehearsal's own randomness runs on: a function of the
-    position, so a seed still reproduces a run, and nothing to do with the
-    game's real sequence — a coin flipped in a rehearsal is a sample, never a
-    look at the flip to come."""
-    return 7919 * int(getattr(game, "turn", 0) or 0) + len(game.log)
+    position (:func:`public_counts`), so a seed still reproduces a run, and
+    nothing to do with the game's real sequence — a coin flipped in a
+    rehearsal is a sample, never a look at the flip to come.
+
+    **Never the log.** It was ``7919 * turn + len(game.log)``, so a log line
+    added, removed or merged reseeded every later rehearsal's concealment
+    (:func:`conceal_from`) and moved AI decisions with no AI code touched:
+    Scourge's engine pile merged Carbonize's two lines into one, and a
+    Natural Selection, whose worth is a sample over a hidden library, was not
+    proposed at T8 (``tests/ai/test_kg4_determinism_rehearsal_seed.py``).
+    Nor a process-wide counter: a rehearsal's copy advances those as the
+    real game does not, and they carry over from whatever ran before in the
+    process. Hashed by ``zlib.crc32``, which no process's hash seed moves."""
+    return zlib.crc32(repr(public_counts(game)).encode("utf-8"))
 
 
 def _card_order(card) -> tuple:
@@ -1683,6 +1720,7 @@ __all__ = [
     "pays_before_the_blocks",
     "position_digest",
     "priced_by_the_fight",
+    "public_counts",
     "rehearse",
     "rehearsing",
     "seat_standing",

@@ -145,4 +145,10 @@ def test_an_armed_lamp_takes_the_first_card_of_a_bazaar_draw(pool):
     game._settle()
 
     assert game.lamp_draw_replacements == {}, "the charge is spent (CR 614.1)"
-    assert any("Aladdin's Lamp" in line for line in game.log)
+    # The charge names no card (``lamp_draw_replacements`` is seat -> X, and
+    # this one was armed by hand); the line says what replaced the draw.
+    assert any(
+        "looks at the top 3 card(s) of their library instead of drawing" in line
+        or "drew 1 of them" in line
+        for line in game.log
+    ), game.log[-4:]

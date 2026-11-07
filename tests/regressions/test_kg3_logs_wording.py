@@ -153,8 +153,10 @@ def test_hell_swarm_is_a_minus_one_and_not_a_buff():
 
     _cast(game, "Hell Swarm")
 
-    # Signed by the format, as every pump line is: "-1/+0".
-    assert "Hell Swarm gives 2 creature(s) -1/+0 until end of turn" in game.log, game.log[-4:]
+    # Written as the card prints it (``pt.pt_change_text``): "-1/-0", not
+    # the "-1/+0" a per-half sign made of the zero.
+    assert "Hell Swarm gives 2 creature(s) -1/-0 until end of turn" in game.log, game.log[-4:]
+    assert not any("-1/+0" in line for line in game.log)
     assert _on(game, 1, "Hill Giant").effective_power == 2
 
 

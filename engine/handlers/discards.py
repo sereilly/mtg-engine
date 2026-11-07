@@ -373,7 +373,17 @@ def _resolve_one_discard(
         cause_seat = choice.data.get("_cause_seat")
     if to_library and allow_top:
         game.put_card_into_library(player, card, "top")
-        game.log.append(f"{player.name} discarded {card.name} to the top of their library (Library of Leng)")
+        # Whose text let it (Library of Leng), named off the board.
+        from ..effect_ordering import source_names
+        from ..replacements.zone_changes import TOP_OF_LIBRARY_DISCARD_TEXT
+
+        by = ", ".join(source_names(
+            game._permanents_with_text(player, TOP_OF_LIBRARY_DISCARD_TEXT)
+        ))
+        game.log.append(
+            f"{player.name} discarded {card.name} to the top of their library"
+            + (f" ({by})" if by else "")
+        )
     else:
         # CR 614: "If a spell or ability an opponent controls causes you to
         # discard this card, put it onto the battlefield … instead of putting

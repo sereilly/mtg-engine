@@ -32,7 +32,7 @@ from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
                                 MUST_ASSIGN_AS_UNBLOCKED,
                                  BLOCKED_WITHOUT_BLOCKERS)
 from ..oracle_types import REMOVED_FROM_COMBAT_PERMANENTS
-from ..pt import add_pt_modifier
+from ..pt import add_pt_modifier, pt_change_text
 from ..rampage import rampage_bonus
 
 if TYPE_CHECKING:
@@ -195,7 +195,7 @@ def rampage_pump(game: Game, instruction: OracleInstruction, context: OracleExec
     if bonus:
         add_pt_modifier(attacker, bonus, bonus, until="end_of_turn")
         game.log.append(
-            f"{attacker.card.name} gets +{bonus}/+{bonus} until end of turn (rampage {amount})"
+            f"{attacker.card.name} gets {pt_change_text(bonus, bonus)} until end of turn (rampage {amount})"
         )
     return True, "resolved"
 
@@ -607,6 +607,9 @@ def left_right_combat_division(game: Game, instruction: OracleInstruction, conte
 @effect_handler("prevent_all_combat_damage")
 def prevent_all_combat_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     game.combat_damage_prevented_until_eot = True
+    name = getattr(context.card, "name", "") or ""
+    if name and name not in game.combat_damage_prevented_by:
+        game.combat_damage_prevented_by.append(name)
     game.log.append(
         f"{getattr(context.card, 'name', '') or 'An effect'}: all combat damage "
         "is prevented this turn"
@@ -635,7 +638,8 @@ def prevent_all_combat_damage_except_from(game: Game, instruction: OracleInstruc
     described = dict(instruction.payload.get("filter") or {})
     seat = game.players.index(context.caster)
     game.combat_damage_prevented_except_from.append(
-        {"filter": described, "seat": seat}
+        # The card's name, for CR 616.1e's prompt to name the record by.
+        {"filter": described, "seat": seat, "source_name": context.card.name}
     )
     game.log.append(
         f"{context.card.name}: combat damage is prevented this turn except from "
@@ -660,7 +664,10 @@ def prevent_all_combat_damage_to_matching(game: Game, instruction: OracleInstruc
     """
     described = dict(instruction.payload.get("filter") or {})
     seat = game.players.index(context.caster)
-    game.combat_damage_prevented_for.append({"filter": described, "seat": seat})
+    game.combat_damage_prevented_for.append(
+        # The card's name, for CR 616.1e's prompt to name the record by.
+        {"filter": described, "seat": seat, "source_name": context.card.name}
+    )
     game.log.append(
         f"{context.card.name}: combat damage to matching permanents is prevented this turn"
     )

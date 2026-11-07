@@ -3251,7 +3251,12 @@ def test_effect_order_prompt_is_shown_gates_actions_and_can_be_answered():
     prompt = state["effect_order"]
     assert prompt is not None, "the prompt was armed but never rendered"
     assert prompt["player_seat"] == 0
-    assert sorted(prompt["options"]) == ["Aladdin's Lamp", "Ring of Ma'rûf"]
+    # What each does; no card beside it, because both charges were armed by
+    # hand here (``Game.draw_charge_sources`` holds nothing).
+    assert sorted(prompt["options"]) == [
+        "Look at the top cards and draw one of them instead",
+        "Put a card you own from outside the game into your hand instead",
+    ]
     assert len(p0.library) == library_before and len(p0.hand) == hand_before, (
         "the draw waits for the answer"
     )
@@ -3262,7 +3267,7 @@ def test_effect_order_prompt_is_shown_gates_actions_and_can_be_answered():
     )
     assert blocked.status_code == 400, "the event is mid-flight; no seat should act"
 
-    lamp = prompt["options"].index("Aladdin's Lamp")
+    lamp = prompt["options"].index("Look at the top cards and draw one of them instead")
     confirm = client.post(
         f"/api/sessions/{sid}/action",
         json={"seat": 0, "action": "effect_order_confirm", "option_index": lamp},

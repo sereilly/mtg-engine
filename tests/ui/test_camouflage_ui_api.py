@@ -151,7 +151,7 @@ def test_ai_defender_resolves_random_piles_on_advance():
     resp = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
     assert resp.status_code == 200
     assert game.combat_blockers_locked is True
-    assert any("Camouflage matched" in line for line in game.log)
+    assert any("pile(s) matched to attackers at random" in line for line in game.log)
 
 
 def test_human_vs_human_defender_prompted():

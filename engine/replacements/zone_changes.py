@@ -22,6 +22,7 @@ from __future__ import annotations
 import random
 import re
 
+from ..effect_ordering import source_names
 from ..hand_locks import lock_card_in_hand
 from ..models import Permanent
 from ..replacement_choices import (
@@ -42,8 +43,25 @@ def _applies_exile_instead_of_dying(game, payload: dict) -> bool:
     return bool(payload["permanent"].metadata.get("exile_if_dies_this_turn"))
 
 
+def _marker_sources(game, payload: dict) -> list:
+    """Nothing: the effect is a marker on the permanent (Disintegrate's
+    ``exile_if_dies_this_turn``, Dreams of the Dead's
+    :data:`EXILE_ON_LEAVING_BATTLEFIELD`), which records no arming card to
+    name. Pure."""
+    return []
+
+
+def _the_object_itself(game, payload: dict) -> list:
+    """The permanent or card the event is about, for an effect its own text
+    prints about itself (Firestorm Phoenix, Gravebane Zombie, Dodecapod, a
+    madness card, Legacy Weapon). Pure."""
+    found = payload.get("permanent") or payload.get("card")
+    return [] if found is None else [found]
+
+
 @replacement_effect(
-    "would_die", EXILE_INSTEAD_OF_DYING, applies=_applies_exile_instead_of_dying
+    "would_die", EXILE_INSTEAD_OF_DYING, applies=_applies_exile_instead_of_dying,
+    sources=_marker_sources, label="Exile it instead of putting it into a graveyard",
 )
 def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
     """Disintegrate-style: "if it would die this turn, exile it instead." The
@@ -81,7 +99,8 @@ def _applies_exile_instead_of_leaving(game, payload: dict) -> bool:
 
 @replacement_effect(
     "would_leave_battlefield", EXILE_INSTEAD_OF_LEAVING,
-    applies=_applies_exile_instead_of_leaving,
+    applies=_applies_exile_instead_of_leaving, sources=_marker_sources,
+    label="Exile it instead of putting it anywhere else",
 )
 def _exile_instead_of_leaving(game, payload: dict) -> ReplacementOutcome | None:
     """Dreams of the Dead: "If the creature would leave the battlefield, exile
@@ -126,7 +145,8 @@ def _applies_return_to_hand_instead(game, payload: dict) -> bool:
 @replacement_effect(
     "would_die",
     RETURN_TO_HAND_INSTEAD_OF_DYING,
-    applies=_applies_return_to_hand_instead,
+    applies=_applies_return_to_hand_instead, sources=_the_object_itself,
+    label="Return it to its owner's hand instead",
 )
 def _return_to_hand_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
     """Firestorm Phoenix: "If this creature would die, return it to its owner's
@@ -183,7 +203,8 @@ def _applies_top_of_library_instead_of_dying(game, payload: dict) -> bool:
 @replacement_effect(
     "would_die",
     LIBRARY_TOP_INSTEAD_OF_DYING,
-    applies=_applies_top_of_library_instead_of_dying,
+    applies=_applies_top_of_library_instead_of_dying, sources=_the_object_itself,
+    label="Put it on top of its owner's library instead",
 )
 def _top_of_library_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
     """Gravebane Zombie: "If this creature would die, put it on top of its
@@ -234,7 +255,17 @@ def _applies_leng_discard(game, payload: dict) -> bool:
     return game._player_controls_text(payload["player"], TOP_OF_LIBRARY_DISCARD_TEXT)
 
 
-@replacement_effect("discard", DISCARD_DESTINATION, applies=_applies_leng_discard)
+def _leng_discard_sources(game, payload: dict) -> list:
+    """The discarding player's permanents printing the sentence (Library of
+    Leng). Pure."""
+    return game._permanents_with_text(payload["player"], TOP_OF_LIBRARY_DISCARD_TEXT)
+
+
+@replacement_effect(
+    "discard", DISCARD_DESTINATION, applies=_applies_leng_discard,
+    sources=_leng_discard_sources,
+    label="You may put it on top of your library instead of into your graveyard",
+)
 def _top_of_library_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
     """Library of Leng: "If an effect causes you to discard a card, discard it,
     but you may put it on top of your library instead of into your graveyard."
@@ -250,12 +281,16 @@ def _top_of_library_instead_of_graveyard(game, payload: dict) -> ReplacementOutc
             player_index=game.players.index(player),
             options=("top of library", "graveyard"),
             default_option=0,
-            data={"card": card},
+            # What generated it, for the answer's log line.
+            data={"card": card, "source_names": source_names(
+                _leng_discard_sources(game, payload)
+            )},
         ),
     )
     if suspended:
         game.log.append(
-            f"{player.name} discarded {card.name} — Library of Leng: "
+            f"{player.name} discarded {card.name} — "
+            f"{', '.join(source_names(_leng_discard_sources(game, payload)))}: "
             "choose graveyard or top of library"
         )
     return ReplacementOutcome(replaced=True)
@@ -267,8 +302,10 @@ def _resolve_leng_discard(game, choice: ReplacementChoice, option_index: int) ->
     card = choice.data["card"]
     if option_index == 0:
         game.put_card_into_library(player, card, "top")
+        by = ", ".join(choice.data.get("source_names") or ())
         game.log.append(
-            f"{player.name} put discarded {card.name} on top of their library (Library of Leng)"
+            f"{player.name} put discarded {card.name} on top of their library"
+            + (f" ({by})" if by else "")
         )
     else:
         # The Library applied and its "you may" was declined, so the event is
@@ -407,7 +444,9 @@ def _applies_discard_to_battlefield(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "discard", DISCARD_TO_BATTLEFIELD, applies=_applies_discard_to_battlefield
+    "discard", DISCARD_TO_BATTLEFIELD, applies=_applies_discard_to_battlefield,
+    sources=_the_object_itself,
+    label="Put it onto the battlefield instead of into your graveyard",
 )
 def _battlefield_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
     """Dodecapod: "If a spell or ability an opponent controls causes you to
@@ -434,7 +473,11 @@ def _applies_madness_discard(game, payload: dict) -> bool:
     return card is not None and printed_madness_cost(card) is not None
 
 
-@replacement_effect("discard", DISCARD_INTO_EXILE, applies=_applies_madness_discard)
+@replacement_effect(
+    "discard", DISCARD_INTO_EXILE, applies=_applies_madness_discard,
+    sources=_the_object_itself,
+    label="Exile it instead of putting it into your graveyard (madness)",
+)
 def _discarded_into_exile_for_madness(game, payload: dict) -> ReplacementOutcome | None:
     """Madness: "If a player would discard this card, that player discards
     it, but exiles it instead of putting it into their graveyard" — and the
@@ -513,6 +556,30 @@ def _graveyard_exile_source(game, payload: dict):
     return None
 
 
+def _graveyard_exile_sources(game, payload: dict) -> list:
+    """Every permanent whose printed line would exile this card (Forbidden
+    Crypt, Leyline of the Void), by :func:`_graveyard_exile_source`'s reading.
+    An effect that armed the turn's exile (Yawgmoth's Will) marks the seat
+    without its name, so it is not among them. Pure."""
+    player = payload.get("player")
+    if player is None:
+        return []
+    seat = game.players.index(player)
+    found = []
+    for permanent in game.all_permanents():
+        controller = game.controller_index_of(permanent)
+        if controller is None:
+            continue
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            scope = graveyard_exile_scope(line)
+            if scope is None:
+                continue
+            if scope == "any" or (seat == controller) == (scope == "you"):
+                found.append(permanent)
+                break
+    return found
+
+
 def _graveyard_exile_armed_by_effect(payload: dict) -> bool:
     """Whether an *effect* armed this seat's graveyard exile for the turn.
 
@@ -537,7 +604,8 @@ def _applies_graveyard_exile(game, payload: dict) -> bool:
 
 @replacement_effect(
     "put_into_graveyard", EXILE_INSTEAD_OF_GRAVEYARD,
-    applies=_applies_graveyard_exile,
+    applies=_applies_graveyard_exile, sources=_graveyard_exile_sources,
+    label="Exile that card instead of putting it into a graveyard",
 )
 def _exile_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
     """Forbidden Crypt: "If a card would be put into your graveyard from
@@ -623,7 +691,8 @@ def _shuffles_itself_instead_of_graveyard(game, payload: dict) -> bool:
 
 @replacement_effect(
     "put_into_graveyard", SHUFFLE_INSTEAD_OF_GRAVEYARD,
-    applies=_shuffles_itself_instead_of_graveyard,
+    applies=_shuffles_itself_instead_of_graveyard, sources=_the_object_itself,
+    label="Reveal it and shuffle it into its owner's library instead",
 )
 def _shuffle_into_library_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
     """Legacy Weapon: "If Legacy Weapon would be put into a graveyard from

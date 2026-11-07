@@ -1119,17 +1119,22 @@ def jade_monolith_redirect(game: Game, instruction: OracleInstruction, context: 
     if target_creature is not None:
         caster_idx = game.players.index(caster)
         target_creature.metadata["redirect_damage_to_player"] = caster_idx
+        # Who armed it, for the redirect's log line and CR 616.1e's option.
+        target_creature.metadata["redirect_damage_by"] = context.card.name
         chosen_source = context.choices.get("chosen_source")
         if chosen_source is not None:
             target_creature.metadata["redirect_damage_source"] = chosen_source
             source_name = getattr(getattr(chosen_source, "card", chosen_source), "name", "source")
             game.log.append(
-                f"Jade Monolith marks {target_creature.card.name} for damage redirect to {caster.name}"
-                f" (source: {source_name})"
+                f"{context.card.name} marks {target_creature.card.name} for damage "
+                f"redirect to {caster.name} (source: {source_name})"
             )
         else:
             target_creature.metadata.pop("redirect_damage_source", None)
-            game.log.append(f"Jade Monolith marks {target_creature.card.name} for damage redirect to {caster.name}")
+            game.log.append(
+                f"{context.card.name} marks {target_creature.card.name} for damage "
+                f"redirect to {caster.name}"
+            )
     return True, "resolved"
 
 

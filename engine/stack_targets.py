@@ -638,8 +638,7 @@ def target_label(game: "Game", target: ChosenTarget) -> str:
         name = permanent.effective_card.name
         return name if seat is None else f"{game.players[seat].name}'s {name}"
     if target.kind == "stack":
-        card = getattr(target.stack_item, "card", None)
-        return card.name if card is not None else "a spell"
+        return stack_object_label(game, target.stack_item)
     card = getattr(target.stamp, "card", None)
     if card is None:
         return "a card in a graveyard"
@@ -647,6 +646,33 @@ def target_label(game: "Game", target: ChosenTarget) -> str:
     if isinstance(seat, int) and 0 <= seat < len(game.players):
         return f"{card.name} in {game.players[seat].name}'s graveyard"
     return f"{card.name} in a graveyard"
+
+
+def stack_object_label(game: "Game", item) -> str:
+    """How a spell or ability on the stack reads in a log line or a prompt:
+    whose it is, its name, and "(copy)" for a copy (CR 707.10) — "P2's Shock",
+    "P1's Shock (copy)", "P2's Prodigal Sorcerer ability".
+
+    A permanent's label says whose it is for the reason ``target_label`` gives;
+    a spell's said only its name, so two of one name on the stack read the same
+    in a prompt that offers both (Hindering Touch's storm copy was offered
+    "Shock" and "Shock"). Who controls a stack object and whether it is a copy
+    are both public. Two of one name, one controller and one kind still read
+    alike; a prompt listing them says where each is on the stack as well
+    (``web/prompt_board.py``), which a log line — read later — cannot.
+    """
+    card = getattr(item, "card", None)
+    if card is None:
+        return "a spell"
+    name = card.name
+    if getattr(item, "is_ability", False):
+        name = f"{name} ability"
+    elif getattr(item, "is_copy", False):
+        name = f"{name} (copy)"
+    seat = getattr(item, "caster_index", None)
+    if isinstance(seat, int) and 0 <= seat < len(game.players):
+        return f"{game.players[seat].name}'s {name}"
+    return name
 
 
 def _printed_target_instances(item: "StackItem") -> int | None:

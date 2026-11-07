@@ -1043,6 +1043,8 @@ class TriggerTargetsMixin:
                 "it has no legal target (603.3d)"
             )
             return
+        from ...stack_targets import stack_object_label
+
         order = {id(existing): position for position, existing in enumerate(self.stack)}
         offered.sort(key=lambda existing: order[id(existing)], reverse=True)
         self.arm_pending_choice(
@@ -1053,7 +1055,8 @@ class TriggerTargetsMixin:
                     "kind": "stack",
                     "stack_item": existing,
                     "seat": existing.caster_index,
-                    "name": existing.card.name,
+                    # Whose, and whether a copy: two of one name read apart.
+                    "name": stack_object_label(self, existing),
                 }
                 for existing in offered
             ],

@@ -504,6 +504,12 @@ class StackItem(_TargetIdsGuard):
     # ``_release_stack_item`` runs it and clears it; None for an ability, or a
     # spell nothing held.
     finish_resolution: Callable[[], None] | None = None
+    # Whether a held resolution's last step has already said it is over: a
+    # spell's CR 608.2n bin, run under the hold, logs "Mind Rot finished
+    # resolving and moved to graveyard", and ``_release_stack_item`` then adds
+    # no "finished resolving" of its own — one ending, one line. Set only in
+    # the moment before the object leaves the stack.
+    ending_logged: bool = False
     # The triggered abilities set off while this object was held for an answer,
     # waiting with it: ``(collected, unannounced)``, the two lists of the
     # trigger window that closed on the hold (``putting_triggers_on_stack``).

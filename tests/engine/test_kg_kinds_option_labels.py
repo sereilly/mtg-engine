@@ -12,10 +12,11 @@ name (Argothian Treefolk's source-type blanket), and two different shields
 showed the same sentence ("The same shield cast without recording a chosen
 source"), so the player could not tell them apart.
 
-``@prevention_effect`` takes ``label=`` now and requires it; ``@replacement_effect``
-takes it and still falls back to the docstring, but refuses at import one that
-does not open with a short line. ``effect_ordering.option_label`` is the one
-rule both hold a label to.
+``@prevention_effect`` takes ``label=`` now and requires it; since kg4
+``@replacement_effect`` requires it too — the docstring fallback made most
+options an exemplar card's name — and both require ``sources=``, what the
+option names beside the label (``tests/rules/test_kg4_logs_effect_order_sources.py``).
+``effect_ordering.option_label`` is the one rule both hold a label to.
 """
 from __future__ import annotations
 
@@ -69,22 +70,32 @@ def test_a_shield_must_name_its_option_and_name_it_in_one_line():
     with pytest.raises(ValueError, match="one line"):
         prevention_effect(
             9_999, applies=lambda game, event: False,
+            sources=lambda game, event: [],
             label="Prevent the damage.\nThen read this whole paragraph.",
         )(lambda game, event: None)
     assert len(PREVENTION_EFFECTS) == count, "a refused registration is not added"
 
 
-def test_a_replacement_whose_docstring_is_a_paragraph_must_name_its_option():
+def test_a_replacement_must_name_its_option_whatever_its_docstring_says():
     def _wordy(game, payload):
         """"If a land is tapped for mana, it produces {B} instead of any other
         type." (A docstring that opens with a quotation and no colon.)"""
 
     kind = "_kg_kinds_label_probe"
     try:
-        with pytest.raises(ValueError, match="pass label="):
-            replacement_effect(kind, 1, applies=lambda game, payload: False)(_wordy)
+        with pytest.raises(TypeError):
+            replacement_effect(
+                kind, 1, applies=lambda game, payload: False,
+                sources=lambda game, payload: [],
+            )(_wordy)
+        with pytest.raises(ValueError, match="one line"):
+            replacement_effect(
+                kind, 3, applies=lambda game, payload: False,
+                sources=lambda game, payload: [], label="Two\nlines",
+            )(_wordy)
         replacement_effect(
             kind, 2, applies=lambda game, payload: False, label="A short option",
+            sources=lambda game, payload: [],
         )(_wordy)
         assert [c.label for c in REPLACEMENTS[kind]] == ["A short option"]
     finally:

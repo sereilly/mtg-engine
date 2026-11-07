@@ -225,6 +225,7 @@ PREVENTION_EFFECTS: list[Candidate] = []
 
 def prevention_effect(
     order: int, *, applies: Applicability, label: str,
+    sources: "Callable[[Any, dict], list]",
     unpreventable: "Callable[[Any, dict], None] | None" = None,
 ) -> Callable[[Preventer], Preventer]:
     """Register a prevention interceptor at *order* (ascending).
@@ -242,6 +243,13 @@ def prevention_effect(
     pool and for two sourceless charges, and a function name for one static.
     It names the effect rather than an exemplar card, because the same entry
     answers for every card that prints the sentence.
+
+    ``sources`` is **required** and names the card instead: ``(game, event)
+    -> [source, …]``, what
+    generates this shield for this event — a shield's granting card
+    (``Shield.source_name``), the permanent whose static it is — which the
+    prompt writes beside the label ("Prevent the next N damage (Healing
+    Salve)", ``effect_ordering.option_text``). Pure, like ``applies``.
 
     ``unpreventable`` is CR 615.12's half: the effect's *additional* effect
     alone, run when the damage can't be prevented (Flaring Pain, Lightning
@@ -266,7 +274,8 @@ def prevention_effect(
         PREVENTION_EFFECTS.append(
             Candidate(key=fn.__name__, order=order, applies=applies, apply=fn,
                       label=option_label(label, key=fn.__name__),
-                      unpreventable_apply=unpreventable)
+                      unpreventable_apply=unpreventable,
+                      sources=sources)
         )
         PREVENTION_EFFECTS.sort(key=lambda candidate: candidate.order)
         return fn
@@ -307,6 +316,7 @@ def shield_candidates() -> list[Candidate]:
             # CR 615.12's rider, unwrapped: it prevents nothing, so there is no
             # amount bookkeeping to wire in.
             unpreventable_apply=c.unpreventable_apply,
+            sources=c.sources,
         )
         for c in PREVENTION_EFFECTS
     ]

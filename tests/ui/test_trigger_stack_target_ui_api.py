@@ -89,8 +89,9 @@ def test_the_prompt_offers_each_spell_by_where_the_client_shows_it(set_pool):
     assert prompt is not None and prompt["player_seat"] == 0
     assert prompt["card_name"] == "Mystic Snake"
     assert prompt["candidates"] == [
-        {"kind": "stack", "stack_index": 1, "seat": 1, "name": "Shock"},
-        {"kind": "stack", "stack_index": 2, "seat": 1, "name": "Lightning Bolt"},
+        # Whose each is, in the name (``stack_targets.stack_object_label``).
+        {"kind": "stack", "stack_index": 1, "seat": 1, "name": "Joiner's Shock"},
+        {"kind": "stack", "stack_index": 2, "seat": 1, "name": "Joiner's Lightning Bolt"},
     ]
     # The index is into the stack the same payload serializes, topmost first,
     # with the trigger itself on top of both spells.

@@ -417,9 +417,11 @@ class DeclareBlockersStepMixin:
                 if self._left_right_block_illegal(attacker_idx, blocker_idx, blocker):
                     continue
                 assignment.setdefault(blocker_idx, []).append(attacker_idx)
+        # The spell that set this up named itself as it resolved
+        # (``handlers.combat.randomize_blockers``); nothing here holds it.
         self.log.append(
-            f"Camouflage matched {len(piles)} pile(s) to attackers at random: "
-            f"{len(assignment)} creature(s) block"
+            f"{defender.name}'s {len(piles)} pile(s) matched to attackers at "
+            f"random: {len(assignment)} creature(s) block"
         )
         return self.declare_blockers(defender_index, assignment, _camouflage_resolution=True)
 

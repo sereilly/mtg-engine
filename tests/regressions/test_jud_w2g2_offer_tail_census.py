@@ -272,12 +272,12 @@ def test_grip_of_amnesia_draws_only_after_the_counter_is_decided(accept):
     assert game.resume_stack == [] and not game.effect_suspended
     log = game.log
     drew = log.index(f"{caster.name} drew 1 card(s) (Grip of Amnesia)")
-    binned = log.index("Grip of Amnesia resolved and moved to graveyard")
-    finished = log.index("Grip of Amnesia finished resolving")
-    # CR 608.2c then CR 608.2n: the draw, then the card to the graveyard, and
-    # only then is the resolution over (the object left the stack before the
-    # draw while the answer released it).
-    assert drew < binned < finished
+    finished = log.index("Grip of Amnesia finished resolving and moved to graveyard")
+    # CR 608.2c then CR 608.2n: the draw, then the card to the graveyard, which
+    # is the resolution's end (the object left the stack before the draw while
+    # the answer released it) — one closing line saying both.
+    assert drew < finished
+    assert "Grip of Amnesia resolved and moved to graveyard" not in log
     assert any(card.name == "Grip of Amnesia" for card in caster.graveyard)
     if accept:
         # The graveyard was the price, and the Bolt was not countered.

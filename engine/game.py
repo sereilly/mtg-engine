@@ -316,6 +316,10 @@ class Game(
     skip_phase_counts: dict[object, int] = field(default_factory=dict)
     skip_step_counts: dict[object, int] = field(default_factory=dict)
     combat_damage_prevented_until_eot: bool = False
+    # Who armed it — the resolved spells' names, as CR 616.1e's prompt names
+    # the blanket ("Prevent all combat damage this turn (Fog)"). Set beside
+    # the flag and cleared with it.
+    combat_damage_prevented_by: list = field(default_factory=list)
     # Blind Fury's "this turn" doubling was a list here, cleared by a line of
     # its own in the cleanup step. It is a record on its caster's seat now,
     # beside Equal Treatment's and Plagiarize's (``engine/turn_replacements.py``),
@@ -714,6 +718,12 @@ class Game(
     # you own from outside the game into your hand". Consumed by that player's
     # next draw; cleared at end of turn alongside lamp_draw_replacements.
     outside_game_draw_replacements: set = field(default_factory=set)
+    # The card that armed each of the two charges above, keyed
+    # ``(LAMP_DRAW | OUTSIDE_GAME_DRAW, seat)`` (``replacements.draws``): what
+    # CR 616.1e's ``effect_order`` option and the replacement's log line name.
+    # Written by the arming handler, dropped as the charge is spent, cleared at
+    # end of turn with the charges. A charge armed without one names nothing.
+    draw_charge_sources: dict = field(default_factory=dict)
     # "The next time you would draw a card this turn, instead <effect>."
     # (Mangara's Tome; Onslaught's Words print "<effect> instead".) The
     # general form of the two above: each entry is {"player_index",

@@ -15,6 +15,7 @@ from __future__ import annotations
 from ....handlers._common import apply_temp_pt_boost
 from ....handlers._filters import permanent_matches_filter
 from ....pending_choices import ChoiceSpec, PendingChoice
+from ....pt import pt_change_text
 from ....mana_payment import plan_payment
 from ....subject_filters import subject_matches
 
@@ -94,7 +95,7 @@ class PermanentChoicesMixin:
             toughness = int(choice.data.get("toughness", 0)) * len(chosen)
             apply_temp_pt_boost(source, power, toughness)
             self.log.append(
-                f"{source.card.name} gets {power:+}/{toughness:+} until end of turn "
+                f"{source.card.name} gets {pt_change_text(power, toughness)} until end of turn "
                 f"({len(chosen)} tapped this way)"
             )
         self.discard_pending_choice(choice)

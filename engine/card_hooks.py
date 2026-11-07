@@ -526,7 +526,9 @@ def _guardian_angel(
         "target_player_index": target_player_index,
         "target_permanent_index": target_permanent_index,
     })
-    game.log.append(f"{caster.name} gains a Guardian Angel prevention emblem until end of turn")
+    game.log.append(
+        f"{caster.name} gains a {resolved_card.name} prevention emblem until end of turn"
+    )
 
 
 ON_SELF_RESOLVED: dict[str, SelfResolvedHook] = {

@@ -31,7 +31,7 @@ from ._filters import permanent_matches_filter
 from ._targets import (recorded_permanent_ids, bound_permanent,
                        block_pair_permanents, attached_host,
                        resolve_target_permanent, resolve_target_permanents,
-                       resolve_target_slots)
+                       resolve_target_slots, target_ordinal)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -619,11 +619,15 @@ def move_chosen_keyword_between_targets(game: Game, instruction: OracleInstructi
         wanted = chosen_keyword_as_word(
             slot_filters[index] if index < len(slot_filters) else {}, keyword,
         )
+        which = target_ordinal(index)
         if permanent is None or not game.is_on_battlefield(permanent):
-            game.log.append(f"{card.name}: nothing legal in slot {index + 1}")
+            game.log.append(f"{card.name}: its {which} target is no longer a legal target")
             continue
         if not permanent.is_creature:
-            game.log.append(f"{card.name}: slot {index + 1} is no longer a creature")
+            game.log.append(
+                f"{card.name}: its {which} target, {permanent.card.name}, is no "
+                "longer a creature"
+            )
             continue
         # The first slot's phrase is "with the chosen ability", which is a
         # layer-6 question and so is asked of the game rather than of the pure
@@ -638,12 +642,14 @@ def move_chosen_keyword_between_targets(game: Game, instruction: OracleInstructi
             source=source,
         ):
             game.log.append(
-                f"{card.name}: slot {index + 1} is no longer a legal target"
+                f"{card.name}: its {which} target, {permanent.card.name}, is no "
+                "longer a legal target"
             )
             continue
         if distinct and any(permanent is seen for seen in taken):
             game.log.append(
-                f"{card.name}: slot {index + 1} named the creature slot 1 took"
+                f"{card.name}: its {which} target, {permanent.card.name}, is "
+                f"already its {target_ordinal(0)} target"
             )
             continue
         taken.append(permanent)

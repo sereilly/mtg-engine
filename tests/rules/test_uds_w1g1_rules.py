@@ -131,7 +131,8 @@ def test_revealing_none_of_an_offer_records_a_zero_rather_than_nothing():
     resolve_stack(game)
 
     item = next(
-        entry for entry in game.log if "Blue Census" in entry and "resolved" in entry
+        entry for entry in game.log
+        if "Blue Census" in entry and ("resolved" in entry or "finished resolving" in entry)
     )
     assert item, "the spell resolved rather than waiting on the offer"
     assert alice.life == 20

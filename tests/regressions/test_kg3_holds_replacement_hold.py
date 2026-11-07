@@ -362,7 +362,7 @@ def test_on_the_wire_the_spell_is_on_the_stack_while_the_offer_is_owed():
     state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
     assert state["stack"] == []
     assert game.players[0].life == 18
-    assert "Shock finished resolving" in game.log
+    assert "Shock finished resolving and moved to graveyard" in game.log
 
 
 # ---------------------------------------------------------------------------

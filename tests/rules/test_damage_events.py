@@ -103,7 +103,10 @@ def test_616_1_a_shield_and_a_replacement_may_not_share_an_order():
     caught where they are put together, and at import for the same reason."""
     kind = "damage_to_player"
     try:
-        replacement_effect(kind, POOL, applies=lambda game, payload: True)(
+        replacement_effect(
+            kind, POOL, applies=lambda game, payload: True,
+            label="A probe at the pool's order", sources=lambda game, event: [],
+        )(
             lambda game, payload: None
         )
         with pytest.raises(ValueError, match="share one order space"):

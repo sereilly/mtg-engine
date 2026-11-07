@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 
+from ..effect_ordering import source_names
 from ..replacement_choices import (
     ReplacementChoice,
     offer_replacement_choice,
@@ -45,7 +46,15 @@ def _applies_life_gain_to_draw(game, payload: dict) -> bool:
     return game._player_controls_text(payload["player"], LIFE_GAIN_TO_DRAW_TEXT)
 
 
-@replacement_effect("life_gain", LIFE_GAIN_TO_DRAW, applies=_applies_life_gain_to_draw)
+def _life_gain_to_draw_sources(game, payload: dict) -> list:
+    """The drawing player's permanents printing the sentence (Lich). Pure."""
+    return game._permanents_with_text(payload["player"], LIFE_GAIN_TO_DRAW_TEXT)
+
+
+@replacement_effect(
+    "life_gain", LIFE_GAIN_TO_DRAW, applies=_applies_life_gain_to_draw,
+    sources=_life_gain_to_draw_sources, label="Draw that many cards instead",
+)
 def _draw_instead_of_life_gain(game, payload: dict) -> ReplacementOutcome | None:
     """Lich: "If you would gain life, draw that many cards instead."
 
@@ -57,10 +66,13 @@ def _draw_instead_of_life_gain(game, payload: dict) -> ReplacementOutcome | None
     """
     player = payload["player"]
     amount = payload["amount"]
+    # Named before the draw, which may move the board.
+    by = ", ".join(source_names(_life_gain_to_draw_sources(game, payload)))
     drawn = game._draw_with_replacements(player, amount)
     source = f" from {payload['source_name']}" if payload.get("source_name") else ""
     game.log.append(
-        f"{player.name} would gain {amount} life{source}; drew {drawn} card(s) instead (Lich)"
+        f"{player.name} would gain {amount} life{source}; drew {drawn} card(s) "
+        f"instead ({by})"
     )
     return ReplacementOutcome(replaced=True)
 
@@ -152,7 +164,10 @@ def _applies_double_draw(game, payload: dict) -> bool:
     return _doubled_draw_count(game, payload) > int(payload.get("count", 0))
 
 
-@replacement_effect("draw", DRAW_DOUBLED, applies=_applies_double_draw)
+@replacement_effect(
+    "draw", DRAW_DOUBLED, applies=_applies_double_draw, sources=_draw_doublers,
+    label="Draw two cards instead",
+)
 def _draw_two_cards_instead(game, payload: dict) -> ReplacementOutcome | None:
     """Teferi's Ageless Insight: "If you would draw a card except the first one
     you draw in each of your draw steps, draw two cards instead."
@@ -178,7 +193,7 @@ def _draw_two_cards_instead(game, payload: dict) -> ReplacementOutcome | None:
     )
     game.log.append(
         f"{player.name} draws {payload['count']} instead of {before} "
-        "(Teferi's Ageless Insight)"
+        f"({', '.join(source_names(doublers))})"
     )
     return ReplacementOutcome()
 
@@ -187,7 +202,31 @@ def _applies_outside_game_draw(game, payload: dict) -> bool:
     return game.players.index(payload["player"]) in game.outside_game_draw_replacements
 
 
-@replacement_effect("draw", DRAW_FROM_OUTSIDE, applies=_applies_outside_game_draw)
+#: ``Game.draw_charge_sources`` keys: which of the two seat-keyed draw
+#: charges a recorded arming card belongs to.
+LAMP_DRAW = "lamp_draw"
+OUTSIDE_GAME_DRAW = "outside_game_draw"
+
+
+def draw_charge_source(game, kind: str, seat: int) -> list:
+    """The card that armed *seat*'s *kind* draw charge (Aladdin's Lamp, Ring
+    of Ma'rûf), as its handler recorded it, or nothing for a charge armed
+    without one. Pure."""
+    named = (getattr(game, "draw_charge_sources", {}) or {}).get((kind, seat))
+    return [named] if named else []
+
+
+def _outside_game_draw_sources(game, payload: dict) -> list:
+    """The card that armed this seat's draw from outside the game (Ring of
+    Ma'rûf). Pure."""
+    return draw_charge_source(game, OUTSIDE_GAME_DRAW, game.players.index(payload["player"]))
+
+
+@replacement_effect(
+    "draw", DRAW_FROM_OUTSIDE, applies=_applies_outside_game_draw,
+    sources=_outside_game_draw_sources,
+    label="Put a card you own from outside the game into your hand instead",
+)
 def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | None:
     """Ring of Ma'rûf: the next draw is replaced by putting a card you own from
     outside the game into your hand.
@@ -199,12 +238,15 @@ def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | Non
     """
     player = payload["player"]
     player_index = game.players.index(player)
+    by = ", ".join(source_names(_outside_game_draw_sources(game, payload)))
     game.outside_game_draw_replacements.discard(player_index)
+    game.draw_charge_sources.pop((OUTSIDE_GAME_DRAW, player_index), None)
     available = game._outside_game_choices(player_index)
     remaining = payload["count"] - 1
     if not available:
         game.log.append(
-            f"{player.name} has no cards outside the game to take (Ring of Ma'rûf)"
+            f"{player.name} has no cards outside the game to take"
+            + (f" ({by})" if by else "")
         )
         draws_behind(game, player, remaining, queued_excludes(payload))
         payload["drawn"] = 0
@@ -289,8 +331,10 @@ def _armed_entry_identity(entry: dict) -> tuple:
 
 
 def _armed_entry_label(game, entry: dict) -> str:
-    """The ``effect_order`` option for one armed one-shot: the card that armed
-    it, and what its effect was announced at when it names a target."""
+    """The source half of one armed one-shot's ``effect_order`` option: the
+    card that armed it, and what its effect was announced at when it names a
+    target — "Words of War, at Grizzly Bears" — written beside the
+    registration's label by ``effect_ordering.option_text``."""
     source = entry.get("source")
     name = getattr(getattr(source, "card", None), "name", None) or "Armed replacement"
     announced = entry.get("announced") or {}
@@ -302,7 +346,7 @@ def _armed_entry_label(game, entry: dict) -> str:
             break
     if aimed is None and announced.get("target") is not None:
         aimed = getattr(announced["target"], "name", None)
-    label = f"{name} (at {aimed})" if aimed else name
+    label = f"{name}, at {aimed}" if aimed else name
     return label[:80]
 
 
@@ -333,9 +377,16 @@ def _applies_armed_draw_replacement(game, payload: dict) -> bool:
     return _armed_draw_replacement(game, payload) is not None
 
 
+def _armed_draw_sources(game, payload: dict) -> list:
+    """Each armed one-shot's arming card (Mangara's Tome, the Words); each
+    instance names its own (``_armed_draw_instances``). Pure."""
+    return [entry.get("source") for entry in _seat_armed_entries(game, payload)]
+
+
 @replacement_effect(
     "draw", DRAW_ARMED_REPLACEMENT, applies=_applies_armed_draw_replacement,
-    instances=_armed_draw_instances,
+    instances=_armed_draw_instances, sources=_armed_draw_sources,
+    label="Carry out the armed effect instead of drawing",
 )
 def _run_armed_draw_replacement(
     game, payload: dict, instance: str | None = None,
@@ -410,8 +461,16 @@ def _applies_turn_draw_replacement(game, payload: dict) -> bool:
     return int(payload.get("count", 0)) > 0 and bool(_turn_draw_records(game, payload))
 
 
+def _turn_draw_sources(game, payload: dict) -> list:
+    """The spells that armed the turn's draw replacements over this seat
+    (Plagiarize), by the name each record carries. Pure."""
+    return [record.source_name for record in _turn_draw_records(game, payload)]
+
+
 @replacement_effect(
-    "draw", DRAW_GIVEN_TO_ANOTHER, applies=_applies_turn_draw_replacement
+    "draw", DRAW_GIVEN_TO_ANOTHER, applies=_applies_turn_draw_replacement,
+    sources=_turn_draw_sources,
+    label="Skip the draw, and the effect's controller draws instead",
 )
 def _draw_given_to_another(game, payload: dict) -> ReplacementOutcome | None:
     """Plagiarize: "Until end of turn, if target player would draw a card,
@@ -544,7 +603,9 @@ def _applies_draw_becomes_counter(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "draw", DRAW_BECOMES_COUNTER, applies=_applies_draw_becomes_counter
+    "draw", DRAW_BECOMES_COUNTER, applies=_applies_draw_becomes_counter,
+    sources=_draw_becomes_counter_sources,
+    label="Put a counter on the permanent instead of drawing",
 )
 def _counter_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
     """Pursuit of Knowledge: "If you would draw a card, you may put a study
@@ -712,7 +773,10 @@ def _applies_skip_draw(game, payload: dict) -> bool:
     )
 
 
-@replacement_effect("draw", DRAW_MAY_BE_SKIPPED, applies=_applies_skip_draw)
+@replacement_effect(
+    "draw", DRAW_MAY_BE_SKIPPED, applies=_applies_skip_draw,
+    sources=_skip_draw_sources, label="Skip the draw",
+)
 def _skip_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
     """Obstinate Familiar: "If you would draw a card, you may skip that draw
     instead."
@@ -859,6 +923,7 @@ def _applies_pile_top_draw(game, payload: dict) -> bool:
 
 @replacement_effect(
     "draw", DRAW_FROM_EXILED_PILE, applies=_applies_pile_top_draw,
+    sources=_pile_top_draw_sources,
     label="Put the top card of the exiled pile into your hand instead",
 )
 def _pile_top_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
@@ -981,7 +1046,8 @@ def _applies_discard_instead_of_draw(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "draw", DRAW_DISCARD_INSTEAD, applies=_applies_discard_instead_of_draw
+    "draw", DRAW_DISCARD_INSTEAD, applies=_applies_discard_instead_of_draw,
+    sources=_chains_sources, label="Discard a card instead of drawing",
 )
 def _discard_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
     """Chains of Mephistopheles: "If a player would draw a card except the first
@@ -1084,9 +1150,19 @@ def _applies_return_from_graveyard_instead_of_draw(game, payload: dict) -> bool:
     )
 
 
+def _return_from_graveyard_sources(game, payload: dict) -> list:
+    """The drawing player's permanents printing the sentence (Forbidden
+    Crypt). Pure."""
+    return game._permanents_with_text(
+        payload["player"], RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_TEXT
+    )
+
+
 @replacement_effect(
     "draw", DRAW_RETURNS_FROM_GRAVEYARD,
     applies=_applies_return_from_graveyard_instead_of_draw,
+    sources=_return_from_graveyard_sources,
+    label="Return a card from your graveyard to your hand instead of drawing",
 )
 def _return_from_graveyard_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
     """Forbidden Crypt: "If you would draw a card, return a card from your
@@ -1135,13 +1211,17 @@ def _return_from_graveyard_instead_of_drawing(game, payload: dict) -> Replacemen
             data={
                 "remaining_draws": max(0, remaining),
                 QUEUED_EXCLUDES: queued_excludes(payload),
+                # What generated it, for the answer's log line.
+                "source_names": source_names(
+                    _return_from_graveyard_sources(game, payload)
+                ),
             },
         ),
     )
     if suspended:
         game.log.append(
             f"{player.name} returns a card from their graveyard instead of "
-            f"drawing (Forbidden Crypt)"
+            f"drawing ({', '.join(source_names(_return_from_graveyard_sources(game, payload)))})"
         )
     payload["drawn"] = drawn
     return ReplacementOutcome(replaced=True)
@@ -1162,9 +1242,10 @@ def _resolve_return_from_graveyard_instead_of_draw(
     if 0 <= option_index < len(player.graveyard):
         card = player.graveyard.pop(option_index)
         game.put_card_into_hand(player, card)
+        by = ", ".join(choice.data.get("source_names") or ())
         game.log.append(
             f"{player.name} returned {card.name} from their graveyard to their "
-            f"hand instead of drawing (Forbidden Crypt)"
+            "hand instead of drawing" + (f" ({by})" if by else "")
         )
     draws_behind(
         game, player, int(choice.data.get("remaining_draws", 0)),

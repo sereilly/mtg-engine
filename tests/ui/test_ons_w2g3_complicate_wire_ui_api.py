@@ -67,7 +67,7 @@ def test_w2g3_complicate_targets_the_spell_and_its_controller_answers(set_pool, 
 
     prompt = _state(sid, 0)["trigger_target"]
     (candidate,) = prompt["candidates"]
-    assert (candidate["kind"], candidate["name"]) == ("stack", "Glory Seeker")
+    assert (candidate["kind"], candidate["name"]) == ("stack", "Bob's Glory Seeker")
     assert "controller_seat" not in prompt, "Alice controls her own trigger"
     assert _act(sid, seat=0, action="trigger_target_confirm",
                 target_stack_index=candidate["stack_index"]).status_code == 200

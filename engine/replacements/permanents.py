@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 
+from ..effect_ordering import source_names
 from ..replacement_choices import (
     ReplacementChoice,
     offer_replacement_choice,
@@ -48,8 +49,42 @@ def _applies_extra_plus1_counter(game, payload: dict) -> bool:
     )
 
 
+def _extra_plus1_counter_sources(game, payload: dict) -> list:
+    """The placing seat's permanents printing the sentence (Conclave Mentor).
+    Pure."""
+    player = payload.get("player")
+    if player is None:
+        return []
+    return game._permanents_with_text(player, EXTRA_PLUS1_COUNTER_TEXT)
+
+
+def _the_entering_permanent(game, payload: dict) -> list:
+    """The permanent the event is about, for an effect its own text prints
+    about itself (Frankenstein's Monster, Mox Diamond, the Alliances lands,
+    Undiscovered Paradise). Pure."""
+    found = payload.get("permanent")
+    return [] if found is None else [found]
+
+
+def _seats_printing(text: str):
+    """A ``sources`` reader: every permanent on any battlefield printing
+    *text*, for a sentence that names no seat ("Lands can't enter", "if a
+    nontoken creature would enter"). Pure."""
+
+    def sources(game, payload: dict) -> list:
+        return [
+            permanent
+            for player in game.players
+            for permanent in game._permanents_with_text(player, text)
+        ]
+
+    return sources
+
+
 @replacement_effect(
-    "plus1_counters", EXTRA_PLUS1_COUNTER, applies=_applies_extra_plus1_counter
+    "plus1_counters", EXTRA_PLUS1_COUNTER, applies=_applies_extra_plus1_counter,
+    sources=_extra_plus1_counter_sources,
+    label="That many plus one +1/+1 counters are put on it instead",
 )
 def _one_more_plus1_counter(game, payload: dict) -> ReplacementOutcome | None:
     """Conclave Mentor: "If one or more +1/+1 counters would be put on a
@@ -66,7 +101,10 @@ def _one_more_plus1_counter(game, payload: dict) -> ReplacementOutcome | None:
     payload["count"] = int(payload.get("count", 0)) + 1
     permanent = payload.get("permanent")
     name = getattr(getattr(permanent, "card", None), "name", "a creature")
-    game.log.append(f"{name} gets one more +1/+1 counter (Conclave Mentor)")
+    by = ", ".join(source_names(_extra_plus1_counter_sources(game, payload)))
+    game.log.append(
+        f"{name} gets one more +1/+1 counter" + (f" ({by})" if by else "")
+    )
     return ReplacementOutcome()
 
 
@@ -96,6 +134,8 @@ def _applies_exile_uncast_creature(game, payload: dict) -> bool:
 @replacement_effect(
     "would_enter_battlefield", EXILE_INSTEAD_OF_ENTERING,
     applies=_applies_exile_uncast_creature,
+    sources=_seats_printing(EXILE_UNCAST_CREATURE_TEXT),
+    label="Exile it instead of letting it enter the battlefield",
 )
 def _exile_instead_of_entering(game, payload: dict) -> ReplacementOutcome | None:
     """Containment Priest: "If a nontoken creature would enter and it wasn't
@@ -176,7 +216,8 @@ def _applies_unpayable_entry_cost(game, payload: dict) -> bool:
 
 @replacement_effect(
     "would_enter_battlefield", UNPAYABLE_ENTRY_COST,
-    applies=_applies_unpayable_entry_cost,
+    applies=_applies_unpayable_entry_cost, sources=_the_entering_permanent,
+    label="Put it into its owner's graveyard instead: its entry cost can't be paid",
 )
 def _graveyard_instead_of_entering(game, payload: dict) -> ReplacementOutcome | None:
     """Frankenstein's Monster: "If you can't, put this creature into its owner's
@@ -247,7 +288,8 @@ def _applies_optional_entry_discard(game, payload: dict) -> bool:
 
 @replacement_effect(
     "would_enter_battlefield", OPTIONAL_ENTRY_DISCARD,
-    applies=_applies_optional_entry_discard,
+    applies=_applies_optional_entry_discard, sources=_the_entering_permanent,
+    label="Discard as it enters, or put it into its owner's graveyard instead",
 )
 def _discard_or_graveyard_instead_of_entering(
     game, payload: dict
@@ -448,7 +490,8 @@ def _applies_unpayable_entry_sacrifice(game, payload: dict) -> bool:
 
 @replacement_effect(
     "would_enter_battlefield", UNPAYABLE_ENTRY_SACRIFICE,
-    applies=_applies_unpayable_entry_sacrifice,
+    applies=_applies_unpayable_entry_sacrifice, sources=_the_entering_permanent,
+    label="Put it into its owner's graveyard instead: there is nothing to sacrifice",
 )
 def _graveyard_instead_of_paying_entry_sacrifice(
     game, payload: dict
@@ -512,6 +555,8 @@ def _applies_lands_cant_enter(game, payload: dict) -> bool:
 @replacement_effect(
     "would_enter_battlefield", LANDS_CANT_ENTER,
     applies=_applies_lands_cant_enter,
+    sources=_seats_printing(LANDS_CANT_ENTER_TEXT),
+    label="The land doesn't enter the battlefield",
 )
 def _lands_cannot_enter(game, payload: dict) -> ReplacementOutcome | None:
     """Worms of the Earth: "Lands can't enter the battlefield."
@@ -595,7 +640,8 @@ def _applies_land_equilibrium(game, payload: dict) -> bool:
 @replacement_effect(
     "would_enter_battlefield",
     SACRIFICE_AFTER_ENTERING,
-    applies=_applies_land_equilibrium,
+    applies=_applies_land_equilibrium, sources=_land_equilibrium_watchers,
+    label="Its controller sacrifices a land as it enters",
 )
 def _sacrifice_after_entering(game, payload: dict) -> ReplacementOutcome | None:
     """Land Equilibrium: "If an opponent who controls at least as many lands as
@@ -708,9 +754,29 @@ def _applies_counters_instead_of_untap(game, payload: dict) -> bool:
     )
 
 
+def _counters_instead_of_untap_sources(game, payload: dict) -> list:
+    """Every permanent whose line names a counter the untapping permanent
+    carries (Freyalise's Winds). Pure."""
+    from ..named_counters import counters_on
+
+    permanent = payload.get("permanent")
+    if permanent is None:
+        return []
+    found = []
+    for printer in game.all_permanents():
+        for line in (printer.effective_card.oracle_text or "").splitlines():
+            counter = counters_instead_of_untap(line)
+            if counter is not None and counters_on(permanent, counter) > 0:
+                found.append(printer)
+                break
+    return found
+
+
 @replacement_effect(
     "would_untap", COUNTERS_REMOVED_INSTEAD_OF_UNTAPPING,
     applies=_applies_counters_instead_of_untap,
+    sources=_counters_instead_of_untap_sources,
+    label="Remove those counters instead of untapping",
 )
 def _remove_counters_instead_of_untapping(
     game, payload: dict
@@ -760,7 +826,8 @@ def _applies_return_instead_of_untapping(game, payload: dict) -> bool:
 
 @replacement_effect(
     "would_untap", RETURNED_TO_HAND_INSTEAD_OF_UNTAPPING,
-    applies=_applies_return_instead_of_untapping,
+    applies=_applies_return_instead_of_untapping, sources=_the_entering_permanent,
+    label="Return it to its owner's hand as it would untap",
 )
 def _return_to_hand_instead_of_untapping(
     game, payload: dict
@@ -815,9 +882,17 @@ def _applies_land_mana_substitution(game, payload: dict) -> bool:
     return found is not None and found.produced is not None
 
 
+def _land_mana_substitution_sources(game, payload: dict) -> list:
+    """Nothing: ``land_mana_swaps.swapped_production`` answers with the symbol
+    a land makes instead and not with what said so, so there is no card on the
+    answer to name. Pure."""
+    return []
+
+
 @replacement_effect(
     "land_mana_produced", LAND_MANA_SUBSTITUTION,
     applies=_applies_land_mana_substitution,
+    sources=_land_mana_substitution_sources,
     label="The land produces the named type of mana instead",
 )
 def _substitute_land_mana(game, payload: dict) -> ReplacementOutcome | None:

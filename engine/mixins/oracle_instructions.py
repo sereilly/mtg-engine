@@ -753,7 +753,10 @@ class OracleInstructionsMixin:
 
             # Lure: all creatures able to block this creature must do so
             if "all creatures able to block enchanted creature do so" in text:
-                self.log.append(f"{target_creature.card.name} must be blocked by all able creatures (Lure)")
+                self.log.append(
+                    f"{target_creature.card.name} must be blocked by all able "
+                    f"creatures ({aura_permanent.card.name})"
+                )
 
             # Earthbind: on enter, if creature has flying, deal 2 damage and strip flying
             if "if enchanted creature has flying" in text and "deals 2 damage" in text:

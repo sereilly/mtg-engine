@@ -603,6 +603,23 @@ def _arms(kind: str, *, chosen: bool | None = None, player_only: bool = False) -
     return applies
 
 
+def _granted_by(kind: str, *, chosen: bool | None = None, player_only: bool = False):
+    """The ``sources`` reader beside :func:`_arms`: the card each shield of
+    *kind* that would modify this event was granted by
+    (``Shield.source_name``), for CR 616.1e's prompt to name beside the label.
+
+    The same shields ``_arms`` counts, by the same reading, so an option names
+    exactly the shields it would spend. Pure."""
+
+    def sources(game, event: dict) -> list:
+        live = _live(game, event, kind, chosen=chosen)
+        if player_only and not isinstance(event["recipient"], PlayerState):
+            live = (shield for shield in live if shield.any_recipient)
+        return [shield.source_name for shield in live if shield.source_name]
+
+    return sources
+
+
 def _spend(game, event: dict, kind: str, *, chosen: bool | None = None, rider=None):
     """Apply the recipient's shields of *kind* to this event.
 
@@ -773,8 +790,31 @@ def _applies_protection(game, event: dict) -> bool:
     )
 
 
+def _protection_sources(game, event: dict) -> list:
+    """What gives the recipient its protection, for the prompt: a permanent's
+    is its own (CR 702.16 — the quality is the permanent's, whoever granted
+    it), a player's the Runed Halo-style permanents naming this source's card.
+    Pure."""
+    recipient = event["recipient"]
+    if not isinstance(recipient, PlayerState):
+        return [recipient]
+    from ..named_protection import PROTECTION_FROM_NAMED_TEXT
+
+    seat = affected_seat(game, recipient)
+    source = event.get("source")
+    card = getattr(source, "effective_card", None) or getattr(source, "card", source)
+    name = getattr(card, "name", None)
+    if seat is None or not name:
+        return []
+    return [
+        permanent for permanent in game.controlled_by(seat)
+        if PROTECTION_FROM_NAMED_TEXT in (permanent.effective_card.oracle_text or "").lower()
+        and permanent.metadata.get("chosen_card_name") == name
+    ]
+
+
 @prevention_effect(
-    PROTECTION, applies=_applies_protection,
+    PROTECTION, applies=_applies_protection, sources=_protection_sources,
     label="Protection prevents the damage",
 )
 def _protection_prevents_damage(game, event: dict) -> PreventionOutcome | None:
@@ -799,8 +839,14 @@ def _source_label(source) -> str:
     return getattr(card, "name", None) or "that source"
 
 
+def _all_combat_sources(game, event: dict) -> list:
+    """The spells that armed the turn's combat blanket (Fog, Holy Day), named
+    as they resolved (``handlers.combat.prevent_all_combat_damage``). Pure."""
+    return list(getattr(game, "combat_damage_prevented_by", ()) or ())
+
+
 @prevention_effect(
-    COMBAT_BLANKET, applies=_applies_all_combat,
+    COMBAT_BLANKET, applies=_applies_all_combat, sources=_all_combat_sources,
     label="Prevent all combat damage this turn",
 )
 def _prevent_all_combat_damage(game, event: dict) -> PreventionOutcome | None:
@@ -810,8 +856,26 @@ def _prevent_all_combat_damage(game, event: dict) -> PreventionOutcome | None:
     return PreventionOutcome(prevented=event["amount"])
 
 
+def _scoped_combat_sources(game, event: dict) -> list:
+    """The cards whose turn-wide "…to <phrase>" records cover this recipient
+    (Pack Leader), by the same match ``_applies_scoped_combat`` makes. Pure."""
+    recipient = event.get("recipient")
+    if not event.get("combat") or recipient is None or not hasattr(recipient, "card"):
+        return []
+    from ..subject_filters import subject_matches
+
+    return [
+        entry.get("source_name") or ""
+        for entry in getattr(game, "combat_damage_prevented_for", ()) or ()
+        if subject_matches(
+            game, recipient, entry.get("filter") or {}, observer=entry.get("seat"),
+        )
+    ]
+
+
 @prevention_effect(
     COMBAT_BLANKET_SCOPED, applies=_applies_scoped_combat,
+    sources=_scoped_combat_sources,
     label="Prevent combat damage to the described creatures this turn",
 )
 def _prevent_scoped_combat_damage(game, event: dict) -> PreventionOutcome | None:
@@ -822,8 +886,29 @@ def _prevent_scoped_combat_damage(game, event: dict) -> PreventionOutcome | None
     return PreventionOutcome(prevented=event["amount"])
 
 
+def _all_combat_except_sources(game, event: dict) -> list:
+    """The cards whose blanket-with-a-hole records do not exempt this source
+    (Undergrowth, cost paid), by ``_applies_all_combat_except``'s match. Pure."""
+    if not event.get("combat"):
+        return []
+    from ..models import Permanent
+    from ..subject_filters import subject_matches
+
+    source = event.get("source")
+    return [
+        entry.get("source_name") or ""
+        for entry in getattr(game, "combat_damage_prevented_except_from", ()) or ()
+        if not (
+            isinstance(source, Permanent) and subject_matches(
+                game, source, entry.get("filter") or {}, observer=entry.get("seat"),
+            )
+        )
+    ]
+
+
 @prevention_effect(
     COMBAT_BLANKET_EXCEPT, applies=_applies_all_combat_except,
+    sources=_all_combat_except_sources,
     label="Prevent combat damage this turn, except from the excluded sources",
 )
 def _prevent_all_combat_damage_except_from(game, event: dict) -> PreventionOutcome | None:
@@ -838,8 +923,23 @@ def _prevent_all_combat_damage_except_from(game, event: dict) -> PreventionOutco
     return PreventionOutcome(prevented=event["amount"])
 
 
+def _combat_to_and_by_sources(game, event: dict) -> list:
+    """The shielded creature at whichever end of the event carries the shield
+    (Ebony Horse's, Maze of Ith's target; a Fog Bank's own text) — the one
+    thing on the board the shield is about. Pure."""
+    combat = bool(event.get("combat"))
+    found = []
+    recipient, source = event["recipient"], event.get("source")
+    if shields_damage(recipient, dealt_to=True, combat=combat):
+        found.append(recipient)
+    if source is not None and shields_damage(source, dealt_to=False, combat=combat):
+        found.append(source)
+    return found
+
+
 @prevention_effect(
     COMBAT_SHIELD, applies=_applies_combat_to_and_by,
+    sources=_combat_to_and_by_sources,
     label="Prevent combat damage dealt to and by one creature this turn",
 )
 def _prevent_combat_damage_to_and_by(game, event: dict) -> PreventionOutcome | None:
@@ -851,6 +951,7 @@ def _prevent_combat_damage_to_and_by(game, event: dict) -> PreventionOutcome | N
 
 @prevention_effect(
     SOURCE_CAP, applies=_arms(PREVENT_ALL_BUT, chosen=True),
+    sources=_granted_by(PREVENT_ALL_BUT, chosen=True),
     label="Prevent all but 1 of the chosen attacker's combat damage",
 )
 def _forcefield_chosen_attacker(game, event: dict) -> PreventionOutcome | None:
@@ -869,6 +970,7 @@ def _forcefield_chosen_attacker(game, event: dict) -> PreventionOutcome | None:
 
 @prevention_effect(
     GENERIC_CAP, applies=_arms(PREVENT_ALL_BUT, chosen=False),
+    sources=_granted_by(PREVENT_ALL_BUT, chosen=False),
     label="Prevent all but 1 of the next combat damage (no attacker chosen)",
 )
 def _forcefield_generic(game, event: dict) -> PreventionOutcome | None:
@@ -881,12 +983,16 @@ def _gain_prevented_life(game, event: dict, used: list[Shield], prevented: int) 
     # CR 615.5: the prevention happens first, then the rest of the effect —
     # here a life gain referring to the amount prevented.
     recipient = event["recipient"]
-    game.log.append(f"Reverse Damage prevented {prevented} damage to {recipient.name}")
-    game._gain_life(recipient, prevented, source_name="Reverse Damage")
+    # The shield's own granting card, not the exemplar's name: every card
+    # printing Reverse Damage's sentence arms this shield.
+    name = used[0].source_name or "A shield"
+    game.log.append(f"{name} prevented {prevented} damage to {recipient.name}")
+    game._gain_life(recipient, prevented, source_name=used[0].source_name or None)
 
 
 @prevention_effect(
     SOURCE_HALF, applies=_arms(PREVENT_HALF, chosen=True, player_only=True),
+    sources=_granted_by(PREVENT_HALF, chosen=True, player_only=True),
     label="Prevent half the next damage from the chosen source",
 )
 def _half_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
@@ -903,6 +1009,7 @@ def _half_prevention_chosen_source(game, event: dict) -> PreventionOutcome | Non
 
 @prevention_effect(
     GENERIC_HALF, applies=_arms(PREVENT_HALF, chosen=False, player_only=True),
+    sources=_granted_by(PREVENT_HALF, chosen=False, player_only=True),
     label="Prevent half the next damage (no source chosen)",
 )
 def _half_prevention_generic(game, event: dict) -> PreventionOutcome | None:
@@ -913,6 +1020,7 @@ def _half_prevention_generic(game, event: dict) -> PreventionOutcome | None:
 
 @prevention_effect(
     SOURCE_SHIELD, applies=_arms(PREVENT_AND_GAIN_LIFE, chosen=True, player_only=True),
+    sources=_granted_by(PREVENT_AND_GAIN_LIFE, chosen=True, player_only=True),
     label="Prevent the next damage from the chosen source and gain that much life",
 )
 def _reverse_damage_chosen_source(game, event: dict) -> PreventionOutcome | None:
@@ -925,6 +1033,7 @@ def _reverse_damage_chosen_source(game, event: dict) -> PreventionOutcome | None
 
 @prevention_effect(
     GENERIC_SHIELD, applies=_arms(PREVENT_AND_GAIN_LIFE, chosen=False, player_only=True),
+    sources=_granted_by(PREVENT_AND_GAIN_LIFE, chosen=False, player_only=True),
     label="Prevent the next damage and gain that much life (no source chosen)",
 )
 def _reverse_damage_generic(game, event: dict) -> PreventionOutcome | None:
@@ -959,6 +1068,7 @@ def _exile_for_prevented(game, event: dict, used: list[Shield], prevented: int) 
 
 @prevention_effect(
     SOURCE_EXILE_SHIELD, applies=_arms(PREVENT_AND_EXILE, chosen=True, player_only=True),
+    sources=_granted_by(PREVENT_AND_EXILE, chosen=True, player_only=True),
     label="Prevent the next damage from the chosen source and exile that many cards",
 )
 def _exile_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
@@ -970,6 +1080,7 @@ def _exile_prevention_chosen_source(game, event: dict) -> PreventionOutcome | No
 @prevention_effect(
     GENERIC_EXILE_SHIELD,
     applies=_arms(PREVENT_AND_EXILE, chosen=False, player_only=True),
+    sources=_granted_by(PREVENT_AND_EXILE, chosen=False, player_only=True),
     label="Prevent the next damage and exile that many cards (no source chosen)",
 )
 def _exile_prevention_generic(game, event: dict) -> PreventionOutcome | None:
@@ -1016,6 +1127,7 @@ def _gain_life_if_rider_colour(
 
 @prevention_effect(
     SOURCE_TEAM_SHIELD, applies=_arms(PREVENT_TEAM, chosen=True),
+    sources=_granted_by(PREVENT_TEAM, chosen=True),
     label="Prevent the next damage from the chosen source to you or your creatures",
 )
 def _team_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
@@ -1028,6 +1140,7 @@ def _team_prevention_chosen_source(game, event: dict) -> PreventionOutcome | Non
 
 @prevention_effect(
     GENERIC_TEAM_SHIELD, applies=_arms(PREVENT_TEAM, chosen=False),
+    sources=_granted_by(PREVENT_TEAM, chosen=False),
     label="Prevent the next damage to you or your creatures (no source chosen)",
 )
 def _team_prevention_generic(game, event: dict) -> PreventionOutcome | None:
@@ -1096,6 +1209,7 @@ def _damage_the_source_controller(
 
 @prevention_effect(
     SOURCE_REFLECT_SHIELD, applies=_arms(PREVENT_AND_DAMAGE_SOURCE, chosen=True),
+    sources=_granted_by(PREVENT_AND_DAMAGE_SOURCE, chosen=True),
     label="Prevent the next damage from the chosen source and send it back",
 )
 def _reflect_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
@@ -1109,6 +1223,7 @@ def _reflect_prevention_chosen_source(game, event: dict) -> PreventionOutcome | 
 
 @prevention_effect(
     GENERIC_REFLECT_SHIELD, applies=_arms(PREVENT_AND_DAMAGE_SOURCE, chosen=False),
+    sources=_granted_by(PREVENT_AND_DAMAGE_SOURCE, chosen=False),
     label="Prevent the next damage and send it back (no source chosen)",
 )
 def _reflect_prevention_generic(game, event: dict) -> PreventionOutcome | None:
@@ -1140,6 +1255,7 @@ def recipient_label(recipient) -> str:
 
 @prevention_effect(
     SOURCE_WHOLE, applies=_arms(PREVENT_WHOLE, chosen=True),
+    sources=_granted_by(PREVENT_WHOLE, chosen=True),
     label="Prevent the next damage from the chosen source",
 )
 def _whole_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
@@ -1161,6 +1277,7 @@ def _whole_prevention_chosen_source(game, event: dict) -> PreventionOutcome | No
 # disagrees with it.
 @prevention_effect(
     GENERIC_WHOLE, applies=_arms(PREVENT_WHOLE, chosen=False),
+    sources=_granted_by(PREVENT_WHOLE, chosen=False),
     label="Prevent the next damage (no source chosen)",
 )
 def _whole_prevention_generic(game, event: dict) -> PreventionOutcome | None:
@@ -1213,6 +1330,7 @@ def _chosen_source_blanket_rider(
 
 @prevention_effect(
     CHOSEN_SOURCE_BLANKET, applies=_arms(PREVENT_ALL_FROM_CHOSEN_SOURCE),
+    sources=_granted_by(PREVENT_ALL_FROM_CHOSEN_SOURCE),
     label="Prevent all damage from the chosen source this turn",
 )
 def _prevent_all_from_chosen_source(game, event: dict) -> PreventionOutcome | None:
@@ -1250,6 +1368,7 @@ def _log_color_prevention(game, event: dict, used: list[Shield], prevented: int)
 
 @prevention_effect(
     COLOR_SHIELD, applies=_arms(PREVENT_FROM_COLOR, player_only=True),
+    sources=_granted_by(PREVENT_FROM_COLOR, player_only=True),
     label="Prevent the next damage from a source of the shield's color",
 )
 def _circle_of_protection(game, event: dict) -> PreventionOutcome | None:
@@ -1271,6 +1390,7 @@ def _log_subject_prevention(game, event: dict, used: list[Shield], prevented: in
 
 @prevention_effect(
     SUBJECT_BLANKET, applies=_arms(PREVENT_FROM_SUBJECT),
+    sources=_granted_by(PREVENT_FROM_SUBJECT),
     label="Prevent all damage this turn from the described sources",
 )
 def _prevent_from_subject(game, event: dict) -> PreventionOutcome | None:
@@ -1288,6 +1408,7 @@ def _prevent_from_subject(game, event: dict) -> PreventionOutcome | None:
 
 @prevention_effect(
     TARGETING_BLANKET, applies=_arms(PREVENT_FROM_TARGETING_SOURCE),
+    sources=_granted_by(PREVENT_FROM_TARGETING_SOURCE),
     label="Prevent damage from a spell or ability that targets the creature",
 )
 def _prevent_from_targeting_source(game, event: dict) -> PreventionOutcome | None:
@@ -1305,6 +1426,7 @@ def _prevent_from_targeting_source(game, event: dict) -> PreventionOutcome | Non
 
 @prevention_effect(
     SPELL_BLANKET, applies=_arms(PREVENT_BY_RESOLVING_OBJECT),
+    sources=_granted_by(PREVENT_BY_RESOLVING_OBJECT),
     label="Prevent all damage the targeted spell would deal this turn",
 )
 def _prevent_by_resolving_object(game, event: dict) -> PreventionOutcome | None:
@@ -1328,6 +1450,7 @@ def _log_pool_prevention(game, event: dict, used: list[Shield], prevented: int) 
 
 @prevention_effect(
     POOL_WITH_COUNTERS, applies=_arms(PREVENT_NEXT_N_AND_COUNTERS),
+    sources=_granted_by(PREVENT_NEXT_N_AND_COUNTERS),
     label="Prevent the next N damage and put that many counters on the creature",
 )
 def _prevention_pool_with_counters(game, event: dict) -> PreventionOutcome | None:
@@ -1380,6 +1503,7 @@ def _prevention_pool_with_counters(game, event: dict) -> PreventionOutcome | Non
 
 @prevention_effect(
     POOL, applies=_arms(PREVENT_NEXT_N),
+    sources=_granted_by(PREVENT_NEXT_N),
     label="Prevent the next N damage",
 )
 def _prevention_pool(game, event: dict) -> PreventionOutcome | None:

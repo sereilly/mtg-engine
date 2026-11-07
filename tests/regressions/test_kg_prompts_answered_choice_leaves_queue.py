@@ -1547,8 +1547,8 @@ def _draw_one(game: Game, seat: int = 0) -> Game:
 
 @scenario(
     "effect_order", "Aladdin's Lamp beside Ring of Ma'rûf",
-    answer=lambda g, c: {"option_index": c.data["options"].index("Aladdin's Lamp")},
-    wire=lambda g, c: {"option_index": c.data["options"].index("Aladdin's Lamp")},
+    answer=lambda g, c: {"option_index": c.data["options"].index("Look at the top cards and draw one of them instead (Aladdin's Lamp)")},
+    wire=lambda g, c: {"option_index": c.data["options"].index("Look at the top cards and draw one of them instead (Aladdin's Lamp)")},
     then=lambda g: _assert(any(c.kind == "lamp_draw" for c in g.pending_replacement_choices)),
 )
 def _lamp_and_ring():

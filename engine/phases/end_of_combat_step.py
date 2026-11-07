@@ -156,6 +156,7 @@ class EndOfCombatStepMixin:
         # waiting would fire on a declaration the card never saw.
         expire_combat_delayed_triggers(self)
         self.combat_damage_prevented_until_eot = False
+        self.combat_damage_prevented_by = []
         self.combat_damage_prevented_for = []
         self.combat_damage_prevented_except_from = []
         for player in self.players:

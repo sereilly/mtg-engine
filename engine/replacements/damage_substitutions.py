@@ -61,9 +61,28 @@ def _applies_damage_to_counter_removal(game, payload: dict) -> bool:
     return _counter_removal_source(game, payload) is not None
 
 
+def _one_source(finder):
+    """A ``sources`` reader over a finder that answers with one permanent or
+    None. Pure, as the finder is."""
+
+    def sources(game, payload: dict) -> list:
+        found = finder(game, payload)
+        return [] if found is None else [found]
+
+    return sources
+
+
+def _the_recipient(game, payload: dict) -> list:
+    """The damaged creature, whose own text substitutes the damage
+    (Lichenthrope, Phytohydra). Pure."""
+    return [payload["recipient"]]
+
+
 @replacement_effect(
     "damage_to_player", DAMAGE_TO_COUNTER_REMOVAL,
     applies=_applies_damage_to_counter_removal,
+    sources=_one_source(_counter_removal_source),
+    label="Remove that many counters instead of being dealt the damage",
 )
 def _damage_removes_counters_instead(game, payload: dict) -> ReplacementOutcome | None:
     """Soul Echo: "For each 1 damage that would be dealt to you until your next
@@ -153,7 +172,8 @@ def _applies_damage_becomes_counters(game, payload: dict) -> bool:
 
 @replacement_effect(
     "damage_to_creature", DAMAGE_BECOMES_COUNTERS,
-    applies=_applies_damage_becomes_counters,
+    applies=_applies_damage_becomes_counters, sources=_the_recipient,
+    label="Put that many counters on it instead",
 )
 def _damage_becomes_counters(game, payload: dict) -> ReplacementOutcome | None:
     """Lichenthrope: "If damage would be dealt to this creature, put that many
@@ -224,6 +244,8 @@ def _applies_damage_becomes_library_exile(game, payload: dict) -> bool:
 @replacement_effect(
     "damage_to_player", DAMAGE_BECOMES_LIBRARY_EXILE,
     applies=_applies_damage_becomes_library_exile,
+    sources=_one_source(_library_exile_source),
+    label="Exile that many cards from the top of your library instead",
 )
 def _damage_becomes_library_exile(game, payload: dict) -> ReplacementOutcome | None:
     """Crumbling Sanctuary: "If damage would be dealt to a player, that player
@@ -318,6 +340,10 @@ def _applies_damage_to_you_becomes_counters(game, payload: dict) -> bool:
 @replacement_effect(
     "damage_to_player", DAMAGE_TO_YOU_BECOMES_COUNTERS,
     applies=_applies_damage_to_you_becomes_counters,
+    sources=lambda game, payload: [
+        permanent for permanent, _counter in _own_counter_substitutions(game, payload)
+    ],
+    label="Put that many counters on the permanent instead",
 )
 def _damage_to_you_becomes_counters(game, payload: dict) -> ReplacementOutcome | None:
     """Delaying Shield: "If damage would be dealt to you, put that many delay
@@ -401,6 +427,8 @@ def _graveyard_cards_already_owed(game, seat: int) -> int:
 @replacement_effect(
     "damage_to_player", DAMAGE_BECOMES_GRAVEYARD_EXILE,
     applies=_applies_damage_becomes_graveyard_exile,
+    sources=_one_source(_damage_graveyard_exile_source),
+    label="Exile that many cards from your graveyard instead",
 )
 def _damage_becomes_graveyard_exile(game, payload: dict) -> ReplacementOutcome | None:
     """Nefarious Lich: "If damage would be dealt to you, exile that many cards

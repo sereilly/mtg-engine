@@ -508,11 +508,15 @@ class SpellChoicesMixin:
                 # remember the chosen card by name and re-find it at resolution.
                 pending["chosen_card_name"] = target.hand[chosen].name
                 self.log.append(
-                    f"Word of Command: {self.players[caster_index].name} chose "
+                    f"{pending.get('card_name') or 'The spell'}: "
+                    f"{self.players[caster_index].name} chose "
                     f"{target.hand[chosen].name}; the spell waits on the stack"
                 )
             else:
-                self.log.append(f"Word of Command: {self.players[caster_index].name} declined to force a card")
+                self.log.append(
+                    f"{pending.get('card_name') or 'The spell'}: "
+                    f"{self.players[caster_index].name} declined to force a card"
+                )
             # The caster just acted mid-resolution; make sure a priority window is
             # open so the spell can be responded to and then resolved by passing.
             if self.priority_player_index is None:
@@ -567,7 +571,8 @@ class SpellChoicesMixin:
             )
             if hand_index < 0:
                 self.log.append(
-                    f"Word of Command: {target.name} no longer has {chosen_name} to play"
+                    f"{pending.get('card_name') or 'The spell'}: {target.name} no "
+                    f"longer has {chosen_name} to play"
                 )
                 return True
         if not (0 <= hand_index < len(target.hand)):
@@ -582,10 +587,13 @@ class SpellChoicesMixin:
         result = self.queue_from_hand(target_index, card_name, target_player_index=target_index)
         if result.supported and auto_resolve_forced and self.stack:
             self.resolve_stack()
+        forcing = pending.get("card_name") or "The spell"
         if result.supported:
-            self.log.append(f"Word of Command: {target.name} was forced to play {card_name}")
+            self.log.append(f"{forcing}: {target.name} was forced to play {card_name}")
         else:
-            self.log.append(f"Word of Command: {target.name} could not play {card_name} ({result.details})")
+            self.log.append(
+                f"{forcing}: {target.name} could not play {card_name} ({result.details})"
+            )
         return True
 
     # -- "You may choose a new target for that copy" (CR 707.10) ------------

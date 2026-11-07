@@ -1000,7 +1000,10 @@ def test_w1g7_sulfuric_vortex_beside_lich_asks_the_gaining_player(set_pool):
     lich = set_pool("2ED")["Lich"]
     nectar = set_pool("7ED")["Sacred Nectar"]
     forest = set_pool("2ED")["Forest"]
-    for pick, cards in (("Gain no life instead", 0), ("Lich", 4)):
+    for pick, cards in (
+        ("Gain no life instead (Sulfuric Vortex)", 0),
+        ("Draw that many cards instead (Lich)", 4),
+    ):
         game = _w1g7_game(mine=[lich, vortex], library=[forest] * 8, hand=[nectar])
         game.interactive_seats = {0}
         me = game.players[0]
@@ -1008,7 +1011,10 @@ def test_w1g7_sulfuric_vortex_beside_lich_asks_the_gaining_player(set_pool):
         game.resolve_top_of_stack()
         (asked,) = [c for c in game.pending_choices if c.kind == "effect_order"]
         assert asked.player_index == 0
-        assert set(asked.data["options"]) == {"Lich", "Gain no life instead"}
+        assert set(asked.data["options"]) == {
+            "Draw that many cards instead (Lich)",
+            "Gain no life instead (Sulfuric Vortex)",
+        }
         # Nothing has happened while the question is owed (CR 616.1).
         assert me.hand == [] and me.life == 20
         assert game.resolve_pending_choice(
@@ -1153,7 +1159,7 @@ def test_w1g7_parallel_thoughts_contends_with_another_draw_replacement(set_pool)
     game._draw_with_replacements(me, 1)
     (order,) = [c for c in game.pending_choices if c.kind == "effect_order"]
     pick = order.data["options"].index(
-        "Put the top card of the exiled pile into your hand instead"
+        "Put the top card of the exiled pile into your hand instead (Parallel Thoughts)"
     )
     assert game.resolve_pending_choice("effect_order", 0, option_index=pick)
     assert game.confirm_pile_top_draw(0, take_from_pile=True)

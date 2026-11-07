@@ -22,7 +22,9 @@ from ..replacement_choices import (
 )
 from ..resumption import run_resumable
 from ..search_filters import card_has_type
-from .draws import QUEUED_EXCLUDES, draws_behind, queued_excludes
+from ..effect_ordering import source_names
+from .draws import (LAMP_DRAW, QUEUED_EXCLUDES, draw_charge_source, draws_behind,
+                    queued_excludes)
 from .registry import (DRAW_LOOKING_AT_TOP, DRAW_REVEALED_AND_TAXED,
                        DRAW_REVEALED_UNLESS_PAID, DRAW_REVEALS_TOP,
                        DRAW_REVEALS_UNTIL_KIND, ReplacementOutcome,
@@ -70,7 +72,9 @@ def _applies_reveal_until_kind(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "draw", DRAW_REVEALS_UNTIL_KIND, applies=_applies_reveal_until_kind
+    "draw", DRAW_REVEALS_UNTIL_KIND, applies=_applies_reveal_until_kind,
+    sources=_reveal_until_kind_sources,
+    label="Reveal until a land or nonland card instead of drawing",
 )
 def _reveal_until_kind_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
     """Abundance: "If you would draw a card, you may instead choose land or
@@ -119,6 +123,9 @@ def _reveal_until_kind_instead_of_drawing(game, payload: dict) -> ReplacementOut
                 "exclude_sources": tuple(payload.get("exclude_sources") or ()),
                 QUEUED_EXCLUDES: queued_excludes(payload),
                 "source_id": source.permanent_id,
+                # Its name as it was, for the answer's log line: the
+                # permanent may have left by then.
+                "source_name": source.card.name,
             },
         ),
     )
@@ -160,6 +167,8 @@ def _resolve_reveal_until_kind_draw(
         drawn += game._draw_with_replacements(player, 1, exclude_sources=excludes)
     else:
         wants_land = option_index == 1
+        named = choice.data.get("source_name")
+        by = f" ({named})" if named else ""
         revealed: list = []
         found = None
         while player.library:
@@ -180,12 +189,12 @@ def _resolve_reveal_until_kind_draw(
             game.put_card_into_hand(player, found)
             game.log.append(
                 f"{player.name} revealed {len(revealed) + 1} card(s) and put "
-                f"{found.name} into their hand (Abundance)"
+                f"{found.name} into their hand{by}"
             )
         else:
             game.log.append(
                 f"{player.name} revealed their whole library and found no "
-                f"{'land' if wants_land else 'nonland'} card (Abundance)"
+                f"{'land' if wants_land else 'nonland'} card{by}"
             )
         bottomed = sum(
             1 for card in revealed if game.put_card_into_library(player, card)
@@ -217,7 +226,17 @@ def _applies_lamp_draw(game, payload: dict) -> bool:
     return bool(game.lamp_draw_replacements.get(game.players.index(payload["player"])))
 
 
-@replacement_effect("draw", DRAW_LOOKING_AT_TOP, applies=_applies_lamp_draw)
+def _lamp_draw_sources(game, payload: dict) -> list:
+    """The card that armed this seat's look (Aladdin's Lamp), as its handler
+    recorded it beside ``Game.lamp_draw_replacements``. Pure."""
+    return draw_charge_source(game, LAMP_DRAW, game.players.index(payload["player"]))
+
+
+@replacement_effect(
+    "draw", DRAW_LOOKING_AT_TOP, applies=_applies_lamp_draw,
+    sources=_lamp_draw_sources,
+    label="Look at the top cards and draw one of them instead",
+)
 def _look_at_top_cards_and_draw_one(game, payload: dict) -> ReplacementOutcome | None:
     """Aladdin's Lamp: the next draw is replaced by "look at the top X cards of
     your library, draw one of them, then put the rest on the bottom in a random
@@ -225,6 +244,8 @@ def _look_at_top_cards_and_draw_one(game, payload: dict) -> ReplacementOutcome |
     anything, in which case the draw happens normally (CR 614.1)."""
     player = payload["player"]
     player_index = game.players.index(player)
+    by = ", ".join(source_names(_lamp_draw_sources(game, payload)))
+    game.draw_charge_sources.pop((LAMP_DRAW, player_index), None)
     x = game.lamp_draw_replacements.pop(player_index)
     x = min(int(x), len(player.library))
     if x <= 0:
@@ -244,7 +265,8 @@ def _look_at_top_cards_and_draw_one(game, payload: dict) -> ReplacementOutcome |
     )
     if suspended:
         game.log.append(
-            f"{player.name} looks at the top {x} card(s) of their library (Aladdin's Lamp)"
+            f"{player.name} looks at the top {x} card(s) of their library instead "
+            "of drawing" + (f" ({by})" if by else "")
         )
     payload["drawn"] = drawn
     return ReplacementOutcome(replaced=True)
@@ -306,7 +328,9 @@ def _applies_reveal_top_instead_of_draw(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "draw", DRAW_REVEALS_TOP, applies=_applies_reveal_top_instead_of_draw
+    "draw", DRAW_REVEALS_TOP, applies=_applies_reveal_top_instead_of_draw,
+    sources=_reveal_top_sources,
+    label="Reveal the top card instead of drawing",
 )
 def _reveal_top_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
     """Enduring Renewal: "If you would draw a card, reveal the top card of your
@@ -415,7 +439,9 @@ def _applies_reveal_draw_unless_paid(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "draw", DRAW_REVEALED_UNLESS_PAID, applies=_applies_reveal_draw_unless_paid
+    "draw", DRAW_REVEALED_UNLESS_PAID, applies=_applies_reveal_draw_unless_paid,
+    sources=_zurs_weirding_sources,
+    label="Reveal the card; another player may pay life to have it milled",
 )
 def _reveal_draw_unless_paid(game, payload: dict) -> ReplacementOutcome | None:
     """Zur's Weirding: "If a player would draw a card, they reveal it instead.
@@ -517,7 +543,9 @@ def _applies_revealed_draw_tax(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "draw", DRAW_REVEALED_AND_TAXED, applies=_applies_revealed_draw_tax
+    "draw", DRAW_REVEALED_AND_TAXED, applies=_applies_revealed_draw_tax,
+    sources=_revealed_draw_tax_sources,
+    label="Draw and reveal the card; discard a creature card unless 3 life is paid",
 )
 def _revealed_draw_taxed(game, payload: dict) -> ReplacementOutcome | None:
     """Breathstealer's Crypt: "If a player would draw a card, instead they draw

@@ -1385,6 +1385,25 @@ def resolve_target_slots(
     return found
 
 
+#: The words a log line names each of several printed targets by, in order.
+_TARGET_ORDINALS = ("first", "second", "third", "fourth", "fifth")
+
+
+def target_ordinal(index: int) -> str:
+    """How a log line names the *index*-th (0-based) of the targets a spell or
+    ability printed: "first", "second", … — the words a person reads on the
+    card ("target creature … **another** target creature").
+
+    A handler reading :func:`resolve_target_slots` knows each target by its
+    slot, and its log lines said so ("Rookie Mistake: slot 2 is no longer a
+    legal target") — the engine's number, which nothing a player sees calls
+    it. ``game.log`` is every seat's (CLAUDE.md), so it says what they read.
+    """
+    if 0 <= index < len(_TARGET_ORDINALS):
+        return _TARGET_ORDINALS[index]
+    return f"number {index + 1}"
+
+
 def _as_slots(chosen: object) -> list:
     """The **slot** field (``target_permanent_index``) as a list of slots,
     whichever of its two shapes it holds. The id field has one shape and is

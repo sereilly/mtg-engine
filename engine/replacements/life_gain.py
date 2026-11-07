@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import re
 
+from ..effect_ordering import source_names
 from .registry import (LIFE_GAIN_REPLACED_BY_NOTHING, ReplacementOutcome,
                        replacement_effect)
 
@@ -112,7 +113,7 @@ def _applies_gains_no_life(game, payload: dict) -> bool:
 
 @replacement_effect(
     "life_gain", LIFE_GAIN_REPLACED_BY_NOTHING, applies=_applies_gains_no_life,
-    label="Gain no life instead",
+    sources=_replacing_sources, label="Gain no life instead",
 )
 def _gain_no_life_instead(game, payload: dict) -> ReplacementOutcome | None:
     """Sulfuric Vortex: the gain is replaced by no event (CR 614.1a).
@@ -128,11 +129,11 @@ def _gain_no_life_instead(game, payload: dict) -> ReplacementOutcome | None:
     difference between its answers.
     """
     player = payload["player"]
-    source = _replacing_sources(game, payload)[0]
+    by = ", ".join(source_names(_replacing_sources(game, payload)))
     origin = f" from {payload['source_name']}" if payload.get("source_name") else ""
     game.log.append(
         f"{player.name} would gain {payload['amount']} life{origin}; gains no "
-        f"life instead ({source.card.name})"
+        f"life instead ({by})"
     )
     return ReplacementOutcome(replaced=True)
 

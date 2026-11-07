@@ -66,10 +66,12 @@ class TestMindRot:
         assert game.stack == []
         assert [c.name for c in p1.graveyard] == ["Mind Rot"]
         assert [c.name for c in p2.hand] == ["Forest"]
-        # The graveyard is the last step, and the log says so in that order.
-        binned = game.log.index("Mind Rot resolved and moved to graveyard")
+        # The graveyard is the last step, and the log says so in that order —
+        # in one line, which is the resolution's end as well.
+        binned = game.log.index("Mind Rot finished resolving and moved to graveyard")
         assert binned > game.log.index("P2 discarded Opt")
-        assert game.log.index("Mind Rot finished resolving") > binned
+        assert "Mind Rot finished resolving" not in game.log
+        assert "Mind Rot resolved and moved to graveyard" not in game.log
         # CR 117.3b, now that the resolution is over.
         assert game.priority_player_index == game.active_player_index == 0
         assert game.priority_pass_count == 0

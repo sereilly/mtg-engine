@@ -78,6 +78,9 @@ PRINTED_CARD_READS: dict[tuple[str, str], str] = {
         "the cast record's object, written as the spell is cast (identity)",
     ("engine/handlers/_chosen.py", "_resolve_named_from"):
         "the triggering spell's name (CR 612.2)",
+    ("engine/stack_targets.py", "stack_object_label"):
+        "the name every seat sees a stack object by in a log line or a "
+        "prompt (CR 612.2: a text change does not change a name)",
     ("engine/handlers/_record_conditions.py", "evaluate_record_condition"):
         "a cost record's object, not a stack object",
     ("engine/handlers/prevention.py", "chosen_shield_source"):

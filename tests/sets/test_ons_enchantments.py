@@ -1642,11 +1642,16 @@ def test_w1g11_the_drawing_player_chooses_which_word_each_draw_spends(set_pool):
     offer = game.pending_choice_of("effect_order", 0)
     assert offer is not None
     options = offer.data["options"]
-    assert options == ["Words of Worship", "Words of War (at Bob)"]
+    assert options == [
+        "Carry out the armed effect instead of drawing (Words of Worship)",
+        "Carry out the armed effect instead of drawing (Words of War, at Bob)",
+    ]
     assert (alice.life, bob.life, len(alice.hand)) == (20, 20, 0), "nothing yet"
 
     assert game.resolve_pending_choice(
-        "effect_order", 0, option_index=options.index("Words of War (at Bob)")
+        "effect_order", 0, option_index=options.index(
+            "Carry out the armed effect instead of drawing (Words of War, at Bob)"
+        )
     )
 
     assert game.pending_choice_of("effect_order", 0) is None

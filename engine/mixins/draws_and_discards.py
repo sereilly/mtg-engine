@@ -413,7 +413,7 @@ class DrawsAndDiscardsMixin:
         # the last card drawn this turn (Jandor's Ring's cost can discard it).
         player.cards_drawn_this_turn.append(chosen)
         self.log.append(
-            f"{player.name} drew 1 card (Aladdin's Lamp) and put {len(top)} card(s) "
+            f"{player.name} drew 1 of them and put {len(top)} card(s) "
             "on the bottom of their library in a random order"
         )
         return 1
