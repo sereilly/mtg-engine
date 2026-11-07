@@ -559,18 +559,6 @@ def _resolve_upkeep_step(session: Session, player_index: int) -> bool:
 
     _clear_upkeep_pay_choices(session)
 
-    # On the AI's turn, pause to hand a human priority at the upkeep step if flagged.
-    if _ai_should_hold(session, "upkeep"):
-        game.resolve_upkeep(player_index, defer_priority=True)
-        _hold_priority_for_human(session)
-        return True
-
-    # On the human's own turn, open a priority window at upkeep if flagged on the
-    # phase rail, instead of resolving straight through to the main phase.
-    if _self_should_hold(session, "upkeep"):
-        game.resolve_upkeep(player_index, defer_priority=True)
-        return True
-
     # **The AI's own upkeep is a window it answers** when it holds an ability
     # of a card in its graveyard — the simulator's ``"upkeep"`` window
     # (`engine.ai_priority.instant_speed_window`): most of those print
@@ -580,9 +568,27 @@ def _resolve_upkeep_step(session: Session, player_index: int) -> bool:
     # (`game_flow._ai_step`). Asked of any graveyard ability rather than one
     # activatable now: "only during your upkeep" is not yet true of a step
     # that has not begun, and the answer asks CR 602.5 itself.
+    #
+    # **Before the person's hold, not after it**: the active player receives
+    # priority first (CR 117.3a). The hold below passed the AI's priority on
+    # unasked, so a person flagging the AI's upkeep cost it its Necrosavant;
+    # now the AI answers first and the person's hold follows from that same
+    # `ai_step` (`action_turn._action_ai_step`, `game_flow._hold_at_flagged_step`).
     if _seat_type(session, player_index) == "ai" and any(
         True for _ability in graveyard_abilities(game, player_index)
     ):
+        game.resolve_upkeep(player_index, defer_priority=True)
+        return True
+
+    # On the AI's turn, pause to hand a human priority at the upkeep step if flagged.
+    if _ai_should_hold(session, "upkeep"):
+        game.resolve_upkeep(player_index, defer_priority=True)
+        _hold_priority_for_human(session)
+        return True
+
+    # On the human's own turn, open a priority window at upkeep if flagged on the
+    # phase rail, instead of resolving straight through to the main phase.
+    if _self_should_hold(session, "upkeep"):
         game.resolve_upkeep(player_index, defer_priority=True)
         return True
 

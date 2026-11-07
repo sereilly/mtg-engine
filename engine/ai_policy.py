@@ -485,8 +485,41 @@ def choose_instant_speed_activation(
             permanent = game.permanent_at(player_index, action.permanent_index)
             if permanent is None:
                 return None
-            set_aside.add(permanent.permanent_id)
+            set_aside |= _making_the_same_proposal(game, player_index, permanent)
     return None
+
+
+def _making_the_same_proposal(game: Game, player_index: int, permanent) -> set[int]:
+    """The ``permanent_id`` of *permanent* and of every other permanent
+    *player_index* controls that would put the same proposal to
+    `choose_instant_speed_activation` again: the same card with nothing
+    folded onto it, attached to the same object (or to none), tapped and
+    summoning-sick alike — so the main-phase chooser scores it the same and
+    the rehearsal turns it down the same.
+
+    Setting aside one permanent per turned-down proposal let identical ones
+    spend the whole `INSTANT_ACTIVATIONS_WEIGHED`: six Pemmin's Auras on one
+    attacking Prodigal Sorcerer were proposed three times ("{U}: Untap
+    enchanted creature", turned down three times), and the Krosan Warchief
+    behind them on the battlefield, blocked by a 3/3 with {1}{G} open, was
+    never weighed and died (the Scourge re-check's turn 9, reproduced kg4).
+    Identity, never a name: a card printed twice is two objects only if it
+    was derived twice, and then it is simply weighed again."""
+    host = permanent.metadata.get("attached_to")
+    sick = game._is_summoning_sick(permanent)
+    same = {permanent.permanent_id}
+    if permanent.effective_card is not permanent.card:
+        return same
+    for other in game.controlled_by(player_index):
+        if (
+            other.card is permanent.card
+            and other.effective_card is other.card
+            and other.metadata.get("attached_to") is host
+            and other.tapped == permanent.tapped
+            and game._is_summoning_sick(other) == sick
+        ):
+            same.add(other.permanent_id)
+    return same
 
 
 def activate_chosen_ability(game: Game, seat: int, action: ActivationAction):

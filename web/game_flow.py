@@ -36,6 +36,7 @@ from .session_store import Session
 
 from .seats import (
     _ai_should_hold,
+    _declaration_owed,
     _hold_priority_for_human,
     _seat_type,
     _self_should_hold,
@@ -138,12 +139,7 @@ def _ai_holds_priority(game, seat: int) -> bool:
         return holder == seat
     if seat != game.active_player_index or not game._receives_priority(game.current_step):
         return False
-    if game.current_turn_phase == "combat":
-        if game.current_step == "declare_attackers" and not game.combat_attackers_locked:
-            return False
-        if game.current_step == "declare_blockers" and not game.combat_blockers_locked:
-            return False
-    return True
+    return not _declaration_owed(game)
 
 
 def _hand_priority_round(session: Session, seat: int, result) -> bool:
@@ -255,23 +251,7 @@ def _ai_step(session: Session) -> bool:
     # AI's combat trick after a person's blocks (CR 509.2 gives it priority
     # first). This is the simulator's answer in the same windows.
     if not sorcery_speed_ok:
-        # Bounded per step as the simulator bounds one round of priority
-        # (``Game.MAX_PRIORITY_ACTIONS``): each answer pauses for the round,
-        # and a seat whose abilities cost nothing it lacks (a pump with no
-        # mana enforced) would otherwise answer every time it is asked.
-        spent = _doors_spent(session)
-        answered = sum(1 for door in spent if door.startswith("priority"))
-        if answered >= game.MAX_PRIORITY_ACTIONS:
-            return True
-        act = act_at_priority(game, seat)
-        if act is not None and act.supported:
-            spent.add(f"priority:{answered}")
-            game.note_priority_action_taken(seat)
-            _auto_resolve_ai_pending(session)
-            if has_human_opponent and game.stack:
-                _run_priority_exchange(session, seat)
-                return False
-        return True
+        return not _ai_answers_priority(session, seat)
 
     cast_action = choose_cast_action(game, seat) if sorcery_speed_ok else None
     if cast_action is not None:
@@ -443,6 +423,129 @@ def _ai_step(session: Session) -> bool:
     return True
 
 
+def _ai_answers_priority(session: Session, seat: int) -> bool:
+    """*seat*, an AI holding priority anywhere but its own main phase with an
+    empty stack, answers it as every AI seat handed priority does
+    (`engine.ai_priority.act_at_priority`), and an object it puts on the
+    stack goes round the table (CR 117.3c, 117.4). True when the round was
+    handed on to a person — the AI's step is paused; False when nothing went
+    on the stack for anybody to answer.
+
+    Bounded per step as the simulator bounds one round of priority
+    (``Game.MAX_PRIORITY_ACTIONS``, counted in ``Session.ai_doors_spent``):
+    each answer pauses for the round, and a seat whose abilities cost
+    nothing it lacks (a pump with no mana enforced) would otherwise answer
+    every time it is asked.
+
+    Asked by ``_ai_step`` and, for the moments a declaration has just given
+    the active AI priority inside a request that would otherwise leave the
+    step (CR 508.2, 509.2), by ``_ai_declares_attackers`` and the declare
+    blockers step of ``_advance_phase``.
+    """
+    game = session.game
+    spent = _doors_spent(session)
+    answered = sum(1 for door in spent if door.startswith("priority"))
+    if answered >= game.MAX_PRIORITY_ACTIONS:
+        return False
+    act = act_at_priority(game, seat)
+    if act is None or not act.supported:
+        return False
+    spent.add(f"priority:{answered}")
+    game.note_priority_action_taken(seat)
+    _auto_resolve_ai_pending(session)
+    if _person_besides(session, seat) and game.stack:
+        _run_priority_exchange(session, seat)
+        return True
+    return False
+
+
+def _ai_declares_attackers(session: Session) -> bool:
+    """The active AI's declaration of attackers (CR 508.1) and the priority
+    CR 508.2 then gives it, in the same request — True when the round was
+    handed on to a person and the caller must stop.
+
+    The declaration's triggers go round first (``_round_over_ai_objects``:
+    the AI passes over its own objects and the person is asked); with
+    nothing on the stack the AI answers its priority there and then
+    (``_ai_answers_priority``) — the one moment an attacker's ability that
+    adds a block is worth anything (Swooping Talon or a Lured Ribbon Snake
+    shedding its flying, ``ai_priority.instant_speed_window``'s
+    ``"declare_attackers"``). It was never asked: ``_advance_phase`` left the
+    step through the engine's window, and the phase rail's hold passed its
+    priority on unasked, so the AI's answer came only when an attack trigger
+    happened to go round the table first.
+    """
+    game = session.game
+    active = game.active_player_index
+    if (
+        game.current_step != "declare_attackers"
+        or game.combat_attackers_locked
+        or _seat_type(session, active) != "ai"
+    ):
+        return False
+    _ai_declare_attackers(session)
+    if not game.combat_attackers_locked:
+        return False
+    if _round_over_ai_objects(session, active):
+        return True
+    if not game.has_priority(active):
+        return False
+    return _ai_answers_priority(session, active)
+
+
+def _declares_for_a_person_who_cannot_block(session: Session) -> bool:
+    """On the AI's turn, the declaration of a person who has no legal block
+    — their one possible declaration, no blockers (CR 509.1a) — made through
+    the engine's own ``declare_blockers``, which then gives the active
+    player priority (CR 509.2). True once every defender has declared.
+
+    The engine's leaving pass declares nothing for such a defender itself
+    ("has no valid blockers") and leaves the step in the same call, so the
+    AI's CR 509.2 priority — a pump on the unblocked attacker — was never
+    answered, and a person flagging declare blockers was never asked. The
+    client makes the same empty declaration itself when it reaches the step
+    first (``getValidBlockerAssignments`` empty); the server reaching it
+    first made it the engine's way. Camouflage's piles are the engine's.
+    """
+    game = session.game
+    if _seat_type(session, game.active_player_index) != "ai" or game.is_camouflage_active():
+        return False
+    for _ in range(len(game.players)):
+        if game.combat_blockers_locked:
+            break
+        defender = game._pending_block_declarer()
+        if not isinstance(defender, int):
+            break
+        chooser = game.block_chooser_index(defender)
+        if _seat_type(session, chooser) != "human" or game._has_any_legal_block(defender):
+            break
+        ok, _details = game.declare_blockers(defender, {}, acting_index=chooser)
+        if not ok:
+            break
+    return game.combat_blockers_locked
+
+
+def _hold_at_flagged_step(session: Session) -> bool:
+    """On the AI's turn, at a step the person flagged on the phase rail: True
+    when the turn stops here — the person holds priority, or an object the
+    AI put on the stack is going round first.
+
+    The active player receives priority first (CR 117.3a), so in the declare
+    attackers step the AI declares and answers its own priority before the
+    person is handed anything (``_ai_declares_attackers``); everywhere else
+    the AI has already answered by the time this is asked (``_ai_step``).
+    The hand-off itself is ``seats._hold_priority_for_human``, which refuses
+    while the step's declaration is owed.
+    """
+    game = session.game
+    step = game.current_step
+    if not _ai_should_hold(session, step):
+        return False
+    if step == "declare_attackers" and _ai_declares_attackers(session):
+        return True
+    return _hold_priority_for_human(session)
+
+
 def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
     """An AI seat handed priority by the exchange: the simulator's answer to
     priority (`engine.ai_priority.act_at_priority` — its windows, its
@@ -600,14 +703,24 @@ def _advance_ai_turn(session: Session) -> None:
             return
         if game.is_game_over():
             return
+        # **Nor a step a person holds priority in** (CR 500.2: a step ends
+        # once every player has passed in succession). `_advance_phase`
+        # hands the person priority over what the AI's declaration or its
+        # answer put on the stack and returns; `action_turn._action_ai_step`
+        # then called this loop, whose next `_advance_phase` drained that
+        # object in the step's window without the person's pass — every
+        # attack trigger of an AI whose attack was declared in that request
+        # (a person stopping at beginning of combat).
+        holder = game.priority_player_index
+        if holder is not None and _seat_type(session, holder) == "human":
+            return
 
-        if _ai_should_hold(session, step):
-            # Resolve the active player's turn-based action (declaring attackers)
-            # before handing priority to the human.
-            if step == "declare_attackers":
-                _ai_declare_attackers(session)
-            if _hold_priority_for_human(session):
-                return
+        # A step the person flagged: the active player's turn-based action
+        # (declaring attackers) and its own answer to priority first, then
+        # the person — and not while a declaration is still owed
+        # (`_hold_at_flagged_step`).
+        if _hold_at_flagged_step(session):
+            return
 
         prev_turn = session.current_turn
         prev_phase = game.current_turn_phase
@@ -713,12 +826,12 @@ def _advance_phase(session: Session) -> None:
             auto = game._build_auto_damage_assignment()
             game.resolve_all_combat_damage(game.active_player_index, attacker_damage=auto)
         if step == "declare_attackers" and not game.combat_attackers_locked:
-            _ai_declare_attackers(session)
-            # The AI's declaration set off its attack triggers: CR 508.2
-            # gives the active player priority, and the objects resolve only
-            # once every player has passed (CR 117.4) — so the person is
-            # asked over them rather than the step's window draining them.
-            if _round_over_ai_objects(session, game.active_player_index):
+            # The AI's declaration, then CR 508.2's priority for the active
+            # player: its attack triggers go round the table (the objects
+            # resolve only once every player has passed, CR 117.4), and with
+            # the stack empty it answers its own priority — rather than the
+            # step's window draining the one and skipping the other.
+            if _ai_declares_attackers(session):
                 return
         if step == "declare_blockers":
             combat_state = game.get_combat_state()
@@ -811,6 +924,17 @@ def _advance_phase(session: Session) -> None:
                         and _self_should_hold(session, "declare_blockers")
                     ):
                         return
+            elif not combat_state.get("blockers_locked", False) and (
+                _declares_for_a_person_who_cannot_block(session)
+            ):
+                # The AI's turn, and the person had no legal block: their
+                # declaration is made, and CR 509.2 gives the active AI
+                # priority — its answer first (a pump on the unblocked
+                # attacker), then the person, where they flagged the step.
+                if _ai_answers_priority(session, game.active_player_index):
+                    return
+                if _hold_at_flagged_step(session):
+                    return
         # CR 510.4: the combat-damage step opens a priority window after damage is
         # dealt. The engine normally auto-resolves that window and skips straight to
         # end-of-combat when no manual damage assignment is needed — which silently
