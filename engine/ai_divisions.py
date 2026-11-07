@@ -15,7 +15,7 @@ What a divided spell divides — its shape — is the compiled program's
 
 from __future__ import annotations
 
-from .ai_target_sides import divided_shape
+from .ai_slot_sides import divided_shape
 from .divided_damage import EACH, spread_shares
 from .game import Game
 from .models import CardDefinition

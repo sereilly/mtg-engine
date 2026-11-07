@@ -32,10 +32,9 @@ import pytest
 from engine import Game, PlayerState
 from engine.ai_actions import _OFFERS_ANNOUNCED
 from engine.ai_casts import _cast_candidate, _cast_candidate_announcing
-from engine.ai_target_sides import (
-    _PRINTED_SEATS,
+from engine.ai_target_sides import _PRINTED_SEATS, instruction_target_side
+from engine.ai_slot_sides import (
     _several_target_instruction,
-    instruction_target_side,
     role_target_sides,
     several_target_slot_sides,
 )

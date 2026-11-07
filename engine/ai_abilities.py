@@ -28,7 +28,6 @@ from contextvars import ContextVar
 
 from .ai_target_sides import (
     ability_denies_its_target,
-    ability_role_target_sides,
     ability_seat_side,
     ability_target_side,
     host_effect_by_the_moment,
@@ -36,6 +35,7 @@ from .ai_target_sides import (
     named_counter_marks_for_harm,
     instruction_target_side,
 )
+from .ai_slot_sides import ability_role_target_sides
 from .ai_valuation import (
     hand_entry_steps,
     hampers_its_own_source,

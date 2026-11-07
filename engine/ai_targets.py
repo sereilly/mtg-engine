@@ -33,14 +33,16 @@ import re
 
 from .ai_weighed_cast import SPELL_TYPES
 from .ai_target_sides import (
-    announced_roles_loop_side,
     best_counted_target_seat,
     entry_trigger_target_side,
     host_effect_side,
-    role_target_sides,
-    several_target_slot_sides,
     spell_denies_its_own_target,
     spell_target_side,
+)
+from .ai_slot_sides import (
+    announced_roles_loop_side,
+    role_target_sides,
+    several_target_slot_sides,
 )
 from .ai_standing import permanent_worth
 from .ai_prompt_readers import (
