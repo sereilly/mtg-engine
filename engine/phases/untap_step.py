@@ -12,7 +12,7 @@ aggregates and enforces them, so new restriction cards never touch it.
 """
 
 from ..aura_restrictions import aura_restriction_active
-from ..replacements import apply_replacements
+from ..replacements import answered_restart, apply_replacements
 from ..subject_filters import subject_matches
 from ..handlers.types import LAND_TYPE_UNTIL_UNTAP
 from ..handlers.tapping import (SKIP_NEXT_UNTAP_SEAT,
@@ -554,6 +554,33 @@ class UntapStepMixin:
         ]
 
     @goes_no_further(0)
+    def _untap_replaced(self, permanent, player) -> bool:
+        """Whether a CR 614 effect replaces *permanent*'s untap in this step
+        (``would_untap``: Freyalise's Winds' counters, Undiscovered Paradise's
+        return to its owner's hand).
+
+        Two of them on one permanent — a wind counter on an Undiscovered
+        Paradise due back this step — are CR 616.1's contention, and the
+        permanent's controller chooses which applies (616.1e). The untap step
+        gives nobody priority (CR 502.4), but a player still makes the
+        choices a rule gives them in it: an interactive seat is asked, and
+        the web's beginning phase pauses on the question before the upkeep
+        (``web/turn_steps``' ``"untap_step"`` marker), as it does for the
+        untap step's type choice. Every effect of this kind replaces the
+        untap, so a permanent whose question is owed does not untap — which is
+        what it does whatever is answered — and the answer re-runs this for it
+        alone; the rest of the step's permanents untap together as they always
+        did (CR 502.3)."""
+        event = {"permanent": permanent, "player": player}
+        consumed, _ = apply_replacements(
+            self, "would_untap", event,
+            restart=answered_restart(
+                self, "would_untap", event,
+                lambda: self._untap_replaced(permanent, player),
+            ),
+        )
+        return bool(consumed)
+
     def resolve_untap_step(
         self,
         player_index: int,
@@ -870,16 +897,7 @@ class UntapStepMixin:
             # and a replacement rather than one more skip condition above:
             # every test before this one says the permanent does not untap and
             # leaves it at that, while this one *does something else instead*.
-            #
-            # No `restart` thunk: the untap step gives nobody priority
-            # (CR 502.4), so there is no moment at which a CR 616.1e choice
-            # could be answered. With one effect in contention that costs
-            # nothing, and a second would take the documented default.
-            consumed, _ = apply_replacements(
-                self, "would_untap",
-                {"permanent": permanent, "player": player},
-            )
-            if consumed:
+            if self._untap_replaced(permanent, player):
                 continue
 
             untapping.append(permanent)

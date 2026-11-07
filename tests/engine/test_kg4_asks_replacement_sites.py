@@ -66,12 +66,6 @@ _ONE_EFFECT = {
 #: report names the parts). Each must still have two or more registrations —
 #: a declined site whose kind falls to one belongs in ``_ONE_EFFECT``.
 _DECLINED = {
-    ("phases/untap_step.py", "resolve_untap_step"): (
-        ("would_untap",),
-        "Freyalise's Winds beside Undiscovered Paradise's return: the untap "
-        "step gives nobody priority (CR 502.4) and its loop untaps together; "
-        "asking needs a pre-step ask like arm_untap_type_choices",
-    ),
     ("mixins/zone_funnels.py", "_begin_entry"): (
         ("would_enter_battlefield",),
         "Containment Priest, Worms of the Earth, the Alliances lands' tolls, "
