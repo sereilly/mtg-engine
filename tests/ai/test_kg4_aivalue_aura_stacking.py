@@ -16,6 +16,8 @@ census lands on the first creature.
 
 from __future__ import annotations
 
+import re
+
 from unittest import mock
 
 from engine import ai_targets
@@ -128,14 +130,33 @@ def test_no_beneficial_aura_is_stacked_while_a_bare_host_is_legal():
     assert len(found["examined"]) >= 8, found
 
 
+#: What a first copy can print that makes its host an illegal target, or an
+#: illegal host, for the second (shroud: Alexi's Cloak, Mystic Veil, Robe of
+#: Mirrors; protection: Pledge of Loyalty; "can't be enchanted by other
+#: Auras": Anti-Magic Aura). The test's own oracle — the printed text — not
+#: the engine's reading.
+_BARS_A_SECOND_COPY = re.compile(
+    r"shroud|hexproof|protection from|can't be the target|can't be enchanted"
+)
+
+
 def test_without_the_ranking_every_copy_goes_on_the_first_creature():
     """Backwards: ``copies_worn`` answering 0, as on 313bd09d — every copy on
     the first creature, unless the first copy made it a creature the second
-    cannot target ("Enchanted creature has shroud", Robe of Mirrors)."""
+    cannot target or enchant (shroud, protection, "can't be enchanted").
+
+    The quick pass samples the census; the full pass reads it whole, where
+    twelve such Auras spread by force (kg4's first whole full pass), so the
+    spread is held to its reason, not to a count."""
     with mock.patch.object(ai_targets, "copies_worn", lambda host, card: 0):
-        found = _census(_pool())
+        pool = _pool()
+        found = _census(pool)
     assert len(found["stacked"]) >= 8, found
-    assert len(found["spread"]) <= 2, found
+    unexplained = [
+        name for name in found["spread"]
+        if not _BARS_A_SECOND_COPY.search((pool[name].oracle_text or "").lower())
+    ]
+    assert unexplained == [], (unexplained, found)
 
 
 def test_an_aura_returned_without_a_cast_takes_the_bare_host_too():
