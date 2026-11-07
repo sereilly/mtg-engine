@@ -248,7 +248,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
 - [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(22 tests, subrules bgjkm)*
-- [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(11 tests, subrules a)*
+- [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(10 tests, subrules a)*
 - [ ] **113.8** The controller of an activated ability on the stack is the player who activated it. The controlle...
 - [ ] **113.9** Activated and triggered abilities on the stack aren’t spells, and therefore can’t be countered by...
 - [ ] **113.10** Effects can add or remove abilities of objects. An effect that adds an ability will state that th...
@@ -529,7 +529,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 405. Stack
 
-- [x] **405.1** When a spell is cast, the physical card is put on the stack (see rule 601.2a). When an ability is... *(2 tests)*
+- [x] **405.1** When a spell is cast, the physical card is put on the stack (see rule 601.2a). When an ability is... *(3 tests)*
 - [x] **405.2** The stack keeps track of the order that spells and/or abilities were added to it. Each time an ob... *(2 tests)*
 - [x] **405.3** If an effect puts two or more objects on the stack at the same time, those controlled by the acti... *(3 tests)*
 - [x] **405.4** Each spell has all the characteristics of the card associated with it. Each activated or triggere... *(2 tests)*
