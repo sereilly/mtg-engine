@@ -580,9 +580,10 @@ _NOT_DESTRUCTIONS_BY_CALLER: dict[str, str] = {
         "CR 704.5j legend rule, 704.5k world rule, 704.5m / 702.16c an Aura "
         "that may no longer be where it is, 704.5z the Role rule: each is "
         "'put into its owner's graveyard'",
-    "_remove_aura_effects":
-        "Animate Dead: 'that creature's controller sacrifices it' (CR 701.21a), "
-        "reached without the sacrifice transition",
+    # Animate Dead's "that creature's controller sacrifices it" was a row here
+    # ("reached without the sacrifice transition") until kg4/departures, which
+    # sends it through `sacrifice_permanent` once the event that took the Aura
+    # is over (`ControlSeamMixin.after_this_departure`).
     "sacrifice_expansion_permanents":
         "Golgothian Sylex: '…is sacrificed by its controller' (CR 701.21a), "
         "reached without the sacrifice transition",
