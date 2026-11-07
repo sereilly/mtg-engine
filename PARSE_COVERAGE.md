@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **6133**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **709**
+- With deletion-probe findings (ignored words): **682**
 
 ## Acknowledged simplifications
 
@@ -78,7 +78,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Battle Cry | `untap all white creatures you control` | all |
 | Battle-Rattle Shaman | `you may have target creature get +2/+0 until end of turn` | have |
 | Bend or Break | `each player separates all nontoken lands they control into two piles. ` | all all all |
-| Bladewing the Risen | `you may return target dragon permanent card from your graveyard to the` | permanent |
 | Bladewing the Risen | `dragon creatures get +1/+1 until end of turn` | creatures |
 | Blazing Effigy | `it deals x damage to target creature, where x is 3 plus the amount of ` | creature |
 | Blind Fury | `all creatures lose trample until end of turn. if a creature would deal` | all |
@@ -91,7 +90,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Bloodstoke Howler | `beast creatures you control get +3/+0 until end of turn` | creatures |
 | Blossoming Wreath | `you gain life equal to the number of creature cards in your graveyard` | cards |
 | Bog Down | `target player discards two cards. if this spell was kicked, that playe` | spell |
-| Bog Glider | `search your library for a mercenary permanent card with mana value 2 o` | permanent |
 | Boil | `destroy all islands` | all |
 | Bomb Squad | `put a fuse counter on each creature with a fuse counter on it` | each |
 | Bone Flute | `all creatures get -1/-0 until end of turn` | all |
@@ -109,15 +107,9 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Canopy Crawler | `target creature gets +1/+1 until end of turn for each +1/+1 counter on` | creature |
 | Canopy Surge | `canopy surge deals 1 damage to each creature with flying and each play` | spell |
 | Carrion Beetles | `exile up to three target cards from a single graveyard` | target |
-| Cateran Brute | `search your library for a mercenary permanent card with mana value 2 o` | permanent |
-| Cateran Enforcer | `search your library for a mercenary permanent card with mana value 4 o` | permanent |
-| Cateran Kidnappers | `search your library for a mercenary permanent card with mana value 3 o` | permanent |
-| Cateran Overlord | `search your library for a mercenary permanent card with mana value 6 o` | permanent |
-| Cateran Persuader | `search your library for a mercenary permanent card with mana value 1 o` | permanent |
-| Cateran Slaver | `search your library for a mercenary permanent card with mana value 5 o` | permanent |
 | Cavern Harpy | `return a blue or black creature you control to its owner's hand` | or |
 | Celestial Convergence | `remove an omen counter from this enchantment. if there are no omen cou` | enchantment, |
-| Celestial Gatekeeper | `exile it, then return up to two target bird and/or cleric permanent ca` | and/or permanent |
+| Celestial Gatekeeper | `exile it, then return up to two target bird and/or cleric permanent ca` | and/or |
 | Cephalid Vandal | `put a shred counter on this creature. then mill a card for each shred ` | creature |
 | Ceta Sanctuary | `if you control a red or green permanent, draw a card, then discard a c` | or |
 | Chainer, Dementia Master | `exile all nightmares` | all |
@@ -161,9 +153,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Decree of Pain | `all creatures get -2/-2 until end of turn` | all |
 | Decree of Savagery | `put four +1/+1 counters on each creature you control` | each |
 | Decree of Silence | `counter that spell and put a depletion counter on this enchantment. if` | enchantment, |
-| Defiant Falcon | `search your library for a rebel permanent card with mana value 3 or le` | permanent |
 | Defiant Vanguard | `at end of combat, destroy it and all creatures it blocked this turn` | all |
-| Defiant Vanguard | `search your library for a rebel permanent card with mana value 4 or le` | permanent |
 | Dega Sanctuary | `if you control a black or red permanent, you gain 2 life. if you contr` | or |
 | Deluge | `tap all creatures without flying` | all |
 | Demoralize | `all creatures gain menace until end of turn` | all |
@@ -173,7 +163,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Desolation Giant | `destroy all other creatures you control. if it was kicked, destroy all` | all all |
 | Devastating Dreams | `each player sacrifices x lands of their choice. devastating dreams dea` | each |
 | Diabolic Servitude | `exile the creature put onto the battlefield with this enchantment` | enchantment |
-| Didgeridoo | `you may put a minotaur permanent card from your hand onto the battlefi` | permanent |
 | Dimensional Breach | `exile all permanents. for as long as any of those cards remain exiled,` | all |
 | Dirge of Dread | `all creatures gain fear until end of turn` | all |
 | Dirge of Dread | `you may have target creature gain fear until end of turn` | have |
@@ -182,7 +171,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Do or Die | `separate all creatures target player controls into two piles. destroy ` | all all |
 | Doomsday Specter | `return a blue or black creature you control to its owner's hand` | or |
 | Downdraft | `it deals 2 damage to each creature with flying` | each |
-| Dragonstorm | `search your library for a dragon permanent card, put it onto the battl` | permanent |
 | Drain Life | `drain life deals x damage to any target. you gain life equal to the da` | life |
 | Dread Wight | `put a paralyzation counter on each creature blocking or blocked by thi` | each creature |
 | Dreams of the Dead | `return target white or black creature card from your graveyard to the ` | or |
@@ -266,7 +254,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Glyph of Reincarnation | `destroy all creatures that were blocked by target wall this turn. they` | all |
 | Goblin Burrows | `target goblin creature gets +2/+0 until end of turn` | creature |
 | Goblin Flotilla | `unless you pay {r}, whenever this creature blocks or becomes blocked b` | creature |
-| Goblin Lackey | `you may put a goblin permanent card from your hand onto the battlefiel` | permanent |
 | Goblin Lookout | `goblin creatures get +2/+0 until end of turn` | creatures |
 | Goblin Marshal | `if this permanent came under your control since the beginning of your ` | permanent |
 | Goblin Patrol | `if this permanent came under your control since the beginning of your ` | permanent |
@@ -275,7 +262,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Goblin Shrine | `it deals 1 damage to each goblin creature` | each creature |
 | Goblin Taskmaster | `target goblin creature gets +1/+0 until end of turn` | creature |
 | Goblin War Buggy | `if this permanent came under your control since the beginning of your ` | permanent |
-| Goblin Wizard | `you may put a goblin permanent card from your hand onto the battlefiel` | permanent |
 | Gorilla War Cry | `all creatures gain menace until end of turn` | all |
 | Graceful Antelope | `you may have target land become a plains until this creature leaves th` | have |
 | Grafted Skullcap | `draw an additional card` | additional |
@@ -380,7 +366,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Lightning Dragon | `if this permanent came under your control since the beginning of your ` | permanent |
 | Liliana, Death Mage | `target opponent loses 2 life for each creature card in their graveyard` | card |
 | Lilting Refrain | `counter target spell unless its controller pays {x}, where x is the nu` | enchantment |
-| Lin Sivvi, Defiant Hero | `search your library for a rebel permanent card with mana value x or le` | permanent |
 | Living Death | `each player exiles all creature cards from their graveyard, then sacri` | all all all |
 | Llanowar Druid | `untap all forests` | all |
 | Llawan, Cephalid Empress | `return all blue creatures your opponents control to their owners' hand` | all |
@@ -426,7 +411,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Mishra's War Machine | `this creature deals 3 damage to you unless you discard a card. if it d` | creature |
 | Mistform Wakecaster | `choose a creature type. each creature you control becomes that type un` | each |
 | Mogg Infestation | `destroy all creatures target player controls. for each creature that d` | all |
-| Moggcatcher | `search your library for a goblin permanent card, put it onto the battl` | permanent |
 | Monsoon | `tap all untapped islands that player controls and this enchantment dea` | all |
 | Mudhole | `target player exiles all land cards from their graveyard` | all |
 | Multani's Acolyte | `if this permanent came under your control since the beginning of your ` | permanent |
@@ -512,15 +496,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Rage Weaver | `target black or green creature gains haste until end of turn` | or |
 | Raiding Party | `each player may tap any number of untapped white creatures they contro` | all |
 | Raka Sanctuary | `if you control a white or blue permanent, this enchantment deals 1 dam` | or |
-| Ramosian Captain | `search your library for a rebel permanent card with mana value 4 or le` | permanent |
-| Ramosian Commander | `search your library for a rebel permanent card with mana value 5 or le` | permanent |
-| Ramosian Lieutenant | `search your library for a rebel permanent card with mana value 3 or le` | permanent |
-| Ramosian Sergeant | `search your library for a rebel permanent card with mana value 2 or le` | permanent |
-| Ramosian Sky Marshal | `search your library for a rebel permanent card with mana value 6 or le` | permanent |
 | Rapid Decay | `exile up to three target cards from a single graveyard` | target |
-| Rathi Assassin | `search your library for a mercenary permanent card with mana value 3 o` | permanent |
-| Rathi Fiend | `search your library for a mercenary permanent card with mana value 3 o` | permanent |
-| Rathi Intimidator | `search your library for a mercenary permanent card with mana value 2 o` | permanent |
 | Rats of Rath | `destroy target artifact, creature, or land you control` | or |
 | Raven Familiar | `if this permanent came under your control since the beginning of your ` | permanent |
 | Rayne, Academy Chancellor | `you may draw a card. you may draw an additional card if rayne is encha` | additional |
@@ -573,7 +549,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Scarab of the Unseen | `return all auras attached to target permanent you own to their owners'` | all |
 | Scars of the Veteran | `prevent the next 7 damage that would be dealt to any target this turn.` | 1 |
 | Scorching Lava | `scorching lava deals 2 damage to any target. if this spell was kicked,` | spell |
-| Seahunter | `search your library for a merfolk permanent card, put it onto the batt` | permanent |
 | Season of the Witch | `destroy all untapped creatures that didn't attack this turn, except fo` | all |
 | Seeds of Innocence | `destroy all artifacts. they can't be regenerated. the controller of ea` | all |
 | Sengir Autocrat | `exile all serf tokens` | all |
@@ -602,13 +577,11 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Silver Drake | `return a white or blue creature you control to its owner's hand` | or |
 | Simian Grunts | `if this permanent came under your control since the beginning of your ` | permanent |
 | Simoon | `simoon deals 1 damage to each creature target opponent controls` | each |
-| Skirk Drill Sergeant | `you may pay {2}{r}. if you do, reveal the top card of your library. if` | permanent card, |
 | Skirk Volcanist | `it deals 3 damage divided as you choose among one, two, or three targe` | or target |
 | Skizzik | `if this creature wasn't kicked, sacrifice it` | creature |
 | Sky Weaver | `target white or black creature gains flying until end of turn` | or |
 | Skyship Weatherlight | `search your library for any number of artifact and/or creature cards, ` | and/or |
 | Skyshroud Blessing | `all lands gain shroud until end of turn` | all |
-| Skyshroud Poacher | `search your library for an elf permanent card, put it onto the battlef` | permanent |
 | Slice and Dice | `slice and dice deals 4 damage to each creature` | each |
 | Slice and Dice | `you may have it deal 1 damage to each creature` | each |
 | Slithery Stalker | `exile target green or white creature an opponent controls` | or |
@@ -745,7 +718,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Whirlwind | `destroy all creatures with flying` | all |
 | Whiteout | `all creatures lose flying until end of turn` | all |
 | Wildfire | `each player sacrifices four lands of their choice. wildfire deals 4 da` | each |
-| Willow Priestess | `you may put a faerie permanent card from your hand onto the battlefiel` | permanent |
 | Winding Wurm | `if this permanent came under your control since the beginning of your ` | permanent |
 | Winds of Rath | `destroy all creatures that aren't enchanted. they can't be regenerated` | all |
 | Winter's Night | `that player adds one mana of any type that land produced. that land do` | controller's |
@@ -757,7 +729,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Wrath of Marit Lage | `tap all red creatures` | all |
 | Yavimaya Granger | `if this permanent came under your control since the beginning of your ` | permanent |
 | Zhalfirin Commander | `target knight creature gets +1/+1 until end of turn` | creature |
-| Zirilan of the Claw | `search your library for a dragon permanent card, put that card onto th` | permanent |
 | Zombie Boa | `choose a color. whenever this creature becomes blocked by a creature o` | creature |
 | Zombie Mob | `exile all creature cards from your graveyard` | all |
 | Zoologist | `reveal the top card of your library. if it's a creature card, put it o` | card, |

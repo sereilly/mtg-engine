@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**432 / 641 tracked rules covered (67%)** — 3383 tests, 0 unannotated.
+**432 / 641 tracked rules covered (67%)** — 3402 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -151,7 +151,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **105.1** There are five colors in the Magic game: white, blue, black, red, and green. *(6 tests)*
 - [x] **105.2** An object can be one or more of the five colors, or it can be no color at all. An object is the c... *(12 tests, subrules abc)*
-- [x] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an... *(7 tests)*
+- [x] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an... *(15 tests)*
 - [ ] **105.4** If a player is asked to choose a color, they must choose one of the five colors. “Multicolored” i...
 - [ ] **105.5** If an effect refers to a color pair, it means exactly two of the five colors. There are ten color...
 
@@ -214,7 +214,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **110.1** A permanent is a card or token on the battlefield. A permanent remains on the battlefield indefin... *(1 tests)*
 - [x] **110.2** A permanent’s owner is the same as the owner of the card that represents it (unless it’s a token;... *(3 tests, subrules a)*
 - [x] **110.3** A nontoken permanent’s characteristics are the same as those printed on its card, as modified by ... *(1 tests)*
-- [x] **110.4** There are six permanent types: artifact, battle, creature, enchantment, land, and planeswalker. I... *(2 tests, subrules a)*
+- [x] **110.4** There are six permanent types: artifact, battle, creature, enchantment, land, and planeswalker. I... *(8 tests, subrules a)*
 - [x] **110.5** A permanent’s status is its physical state. There are four status categories, each of which has t... *(5 tests, subrules abd)*
 
 ### 111. Tokens
@@ -271,7 +271,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
 - [x] **115.5** A spell or ability on the stack is an illegal target for itself. *(2 tests)*
 - [x] **115.6** A spell or ability that requires targets may allow zero targets to be chosen. Such a spell or abi... *(6 tests)*
-- [x] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo... *(17 tests, subrules aef)*
+- [x] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo... *(23 tests, subrules aef)*
 - [x] **115.8** Modal spells and abilities may have different targeting requirements for each mode. An effect tha... *(2 tests)*
 - [x] **115.9** Some objects check what another spell or ability is targeting. Depending on the wording, these ma... *(1 tests, subrules a)*
 - [x] **115.10** Spells and abilities can affect objects and players they don’t target. In general, those objects ... *(2 tests, subrules a)*
@@ -384,7 +384,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(18 tests, subrules ab)*
 - [x] **205.2** Card Types *(14 tests, subrules ab)*
-- [x] **205.3** Subtypes *(8 tests, subrules bim)*
+- [x] **205.3** Subtypes *(13 tests, subrules bim)*
 - [x] **205.4** Supertypes *(11 tests, subrules abcd)*
 
 ### 206. Expansion Symbol
@@ -738,7 +738,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(2 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(191 tests, subrules bcdfghmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(193 tests, subrules bcdfghmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -767,7 +767,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 612. Text-Changing Effects
 
-- [x] **612.1** Some continuous effects change an object’s text. This can apply to any words or symbols printed o... *(23 tests)*
+- [x] **612.1** Some continuous effects change an object’s text. This can apply to any words or symbols printed o... *(24 tests)*
 - [x] **612.2** A text-changing effect changes only those words that are used in the correct way (for example, a ... *(1 tests)*
 - [x] **612.3** Effects that add or remove abilities don’t change the text of the objects they affect, so any abi... *(1 tests)*
 - [ ] **612.4** A token’s subtypes and rules text are defined by the spell or ability that created the token. A t...
@@ -870,7 +870,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.20** Reveal *(11 tests, subrules ab)*
 - [x] **701.21** Sacrifice *(20 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
-- [x] **701.23** Search *(21 tests, subrules abd)*
+- [x] **701.23** Search *(23 tests, subrules abd)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*
 - [x] **701.26** Tap and Untap *(3 tests, subrules ab)*
 
@@ -886,11 +886,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.8** Flash *(3 tests, subrules ab)*
 - [x] **702.9** Flying *(8 tests, subrules ab)*
 - [x] **702.10** Haste *(3 tests, subrules bc)*
-- [x] **702.11** Hexproof *(2 tests, subrules bd)*
+- [x] **702.11** Hexproof *(6 tests, subrules bd)*
 - [x] **702.12** Indestructible *(3 tests, subrules b)*
 - [x] **702.14** Landwalk *(17 tests, subrules abc)*
 - [x] **702.15** Lifelink *(12 tests, subrules be)*
-- [x] **702.16** Protection *(64 tests, subrules abcdefgmn)*
+- [x] **702.16** Protection *(72 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(11 tests, subrules a)*
 - [x] **702.19** Trample *(26 tests, subrules bdf)*
@@ -909,7 +909,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.37** Morph *(11 tests, subrules ace)*
 - [x] **702.38** Amplify *(11 tests, subrules ab)*
 - [x] **702.39** Provoke *(5 tests, subrules ab)*
-- [x] **702.40** Storm *(7 tests, subrules ab)*
+- [x] **702.40** Storm *(8 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
 
@@ -940,7 +940,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 707. Copying Objects
 
 - [ ] **707.1** Some objects become or turn another object into a “copy” of a spell, permanent, or card. Some eff...
-- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(41 tests, subrules abc)*
+- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(44 tests, subrules abc)*
 - [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(2 tests)*
 - [x] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain... *(2 tests)*
 - [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(14 tests)*
@@ -948,7 +948,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **707.7** If a pair of linked abilities are copied, those abilities will be similarly linked to one another...
 - [ ] **707.8** When copying a melded permanent or other double-faced permanent, use the copiable values of the f...
 - [x] **707.9** Copy effects may include modifications or exceptions to the copying process. *(15 tests, subrules abc)*
-- [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(21 tests, subrules ac)*
+- [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(23 tests, subrules ac)*
 - [ ] **707.11** If an effect refers to a permanent by name, the effect still tracks that permanent even if it cha...
 - [ ] **707.12** An effect that instructs a player to cast a copy of an object (and not just copy a spell) follows...
 - [ ] **707.13** One card (Garth One-Eye) instructs a player to create a copy of a card defined by name rather tha...
@@ -1037,6 +1037,7 @@ Listed rather than dropped — see `EXCLUDED` in `scripts/rules_progress.py`. A 
 
 ## Cited outside tracked scope (consider widening SCOPE)
 
+- **308.2** Kindreds (3 tests)
 - **702.33** Keyword Abilities (13 tests)
 - **702.34** Keyword Abilities (22 tests)
 - **702.35** Keyword Abilities (12 tests)
