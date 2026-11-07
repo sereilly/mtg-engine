@@ -34,7 +34,8 @@ from .handlers._amounts import evaluate_count
 from .handlers._chosen import (CHOSEN_CARD_TYPE, _resolve_chosen_card_type,
                                _resolve_chosen_color, _resolve_chosen_keyword,
                                _resolve_chosen_subtype)
-from .handlers._filters import _comparison_holds, permanent_matches_filter
+from .handlers._filters import (_comparison_holds, names_a_creature_type,
+                               permanent_matches_filter)
 from .search_filters import name_key
 
 if TYPE_CHECKING:
@@ -1589,6 +1590,7 @@ __all__ = [
     "card_matches_any",
     "card_only_filter",
     "filter_head_noun",
+    "names_a_creature_type",
     "object_only_filter",
     "observer_source_filter",
     "quantified_board_phrase",

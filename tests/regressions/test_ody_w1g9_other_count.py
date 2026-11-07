@@ -69,7 +69,11 @@ def _one_of(filt: dict, *, cost: str = ""):
     """A card the count's noun phrase describes — of mana value 1 where a
     *cost* is printed, for a total of mana values (Ancient Ooze) to sum."""
     keywords = "\n".join(str(k).capitalize() for k in filt.get("with_keywords") or ())
-    if filt.get("type_filter") == "creature":
+    # "other Squirrels" names a creature type and no card type (CR 109.2): a
+    # creature of the type is one of them, as a Kindred permanent would be.
+    if filt.get("type_filter") == "creature" or (
+        not filt.get("type_filter") and filt.get("subtype_filter")
+    ):
         subtype = str(filt.get("subtype_filter") or "bear").title()
         return _mk_card(
             name="Counted", mana_cost=cost, type_line=f"Creature - {subtype}",

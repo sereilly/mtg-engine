@@ -27,7 +27,7 @@ from ..models import Permanent
 from ..keywords import grant_keyword, grant_protection_flag, remove_keyword
 from ..source_tapped_effects import record_while_tapped
 from ._amounts import resolve_amount
-from ._filters import permanent_matches_filter
+from ._filters import names_a_creature_type, permanent_matches_filter
 from ._targets import (recorded_permanent_ids, bound_permanent,
                        block_pair_permanents, attached_host,
                        resolve_target_permanent, resolve_target_permanents,
@@ -311,7 +311,14 @@ def granted_target_legal(game, instruction, context, *, characteristics=True):
     # below, because *characteristics* switches that check off for CR 608.2b's
     # second pass — and a pass with no floor would scan every permanent on the
     # board.
-    printed = filters.get("type_filter") or "creature"
+    #
+    # A bare creature type ("target **Goblin** gains protection from white",
+    # Goblin Wizard) prints no type at all: any permanent with the subtype
+    # (CR 109.2, 205.3m), so there is no type floor, and the subtype in
+    # ``filters`` is what narrows the scan.
+    printed = filters.get("type_filter") or (
+        () if names_a_creature_type(filters) else "creature"
+    )
     wanted = (printed,) if isinstance(printed, str) else tuple(printed)
 
     def legal(perm) -> bool:
@@ -327,7 +334,9 @@ def granted_target_legal(game, instruction, context, *, characteristics=True):
         # Safe because ``characteristics=False`` is only ever asked with the
         # fallback scan switched off (:func:`granted_target`), so a pass with no
         # floor can return the permanent the player announced and nothing else.
-        if characteristics and not any(perm.has_type(kind) for kind in wanted):
+        if characteristics and wanted and not any(
+            perm.has_type(kind) for kind in wanted
+        ):
             return False
         if characteristics and not permanent_matches_filter(perm, filters):
             return False

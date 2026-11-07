@@ -142,7 +142,9 @@ def test_a_subtype_only_target_needs_no_special_case(by_name, name, ability_inde
     ability = _abilities(by_name[name])[ability_index]
 
     spec = derive_activation_spec(ability)
-    assert spec["kind"] == "creature"
+    # A bare creature type names a permanent of it (CR 109.2) — a Kindred
+    # Elephant too (CR 205.3m) — so the picker is the general one (kg4).
+    assert spec["kind"] == "permanent"
     # And the printed subtype rides the spec under ``filter``, so the picker
     # offers the Elephants rather than every creature. King Suleiman's "Djinn
     # or Efreet" is a union, which is not one subtype and stays off the spec —
@@ -166,8 +168,10 @@ def test_a_subtype_only_target_needs_no_special_case(by_name, name, ability_inde
         # From the grammar's lowered `targets` description.
         ("Desert", 1, {"kind": "creature", "attacking_only": True}),
         ("Northern Paladin", 0, {"kind": "permanent", "color_filter": "B"}),
-        ("Dwarven Demolition Team", 0, {"kind": "creature", "wall_only": True}),
-        ("Ali Baba", 0, {"kind": "creature", "wall_only": True}),
+        # "target Wall": any Wall permanent (CR 109.2, 205.3m), the general
+        # picker narrowed by the flag, which its branch asks too (kg4).
+        ("Dwarven Demolition Team", 0, {"kind": "permanent", "wall_only": True}),
+        ("Ali Baba", 0, {"kind": "permanent", "wall_only": True}),
         # From the instruction's own payload.
         ("Island of Wak-Wak", 0, {"kind": "creature", "flying_only": True}),
         ("Singing Tree", 0, {"kind": "creature", "attacking_only": True}),

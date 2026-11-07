@@ -110,11 +110,11 @@ def test_509_1b_an_except_by_clause_names_the_only_legal_blockers():
     assert restriction is not None
     assert restriction.kind == "cant_be_blocked_except_by"
     assert restriction.payload["allowed_blockers"] == [
-        # "Walls" reads as creatures of that subtype now that the union's
-        # members go through the grammar's noun parser rather than through five
-        # regexes of this file's own — the same set, spelled the way every other
-        # filter in the engine spells it.
-        {"type_filter": "creature", "subtype_filter": "wall"},
+        # "Walls" is the subtype through the grammar's noun parser, the same
+        # set spelled the way every other filter in the engine spells it — no
+        # card type, since a bare creature type names any permanent of it
+        # (CR 109.2); a blocker is a creature whatever the filter says.
+        {"subtype_filter": "wall"},
         {"type_filter": "creature", "with_keywords": ["flying"]},
     ]
 

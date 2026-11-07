@@ -25,7 +25,7 @@ from ..models import Permanent
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             COUNTERS_PLACED_THIS_WAY)
 from ._amounts import resolve_amount, count_from_payload
-from ._filters import permanent_matches_filter
+from ._filters import creature_floor_holds, permanent_matches_filter
 from ._targets import (divided_target_permanent, recorded_permanent_ids,
                        attached_host, frozen_that_player_seat,
                        resolve_target_permanent, resolve_target_permanents)
@@ -526,7 +526,8 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
             creature = resolve_target_permanent(
                 game, context,
                 predicate=lambda perm: (
-                    perm.is_creature and permanent_matches_filter(perm, filters)
+                    creature_floor_holds(perm, filters)
+                    and permanent_matches_filter(perm, filters)
                 ),
                 fallback_on_invalid_choice=False,
             )
@@ -612,7 +613,11 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
         # the two branches of one handler disagreeing is how Pridemalkin,
         # Invigorating Surge and Basri's Lieutenant all put their "+1/+1 counter
         # on target creature **you control**" onto an opponent's creature.
-        if not perm.is_creature or not permanent_matches_filter(perm, filters):
+        # The floor is the phrase's: a bare creature type ("target **Cat**",
+        # Animal Sanctuary) is any permanent of it (CR 109.2, 205.3m).
+        if not creature_floor_holds(perm, filters) or not permanent_matches_filter(
+            perm, filters
+        ):
             return False
         # "…blocking or blocked by this creature" (Lesser Werewolf). The
         # relation rides the instruction rather than the filter — no read of the

@@ -70,7 +70,9 @@ def test_king_suleiman_prompts_for_djinn_or_efreet_only(arn_by_name, cards):
     spec = game.activation_target_spec(0, 0)
 
     assert spec["requires_target"] is True
-    assert spec["kind"] == "creature"
+    # "Djinn or Efreet" is any permanent of either (CR 109.2), so the picker is
+    # the general one, narrowed by the instruction's own filter.
+    assert spec["kind"] == "permanent"
     # Only the Djinn — the Bears are not a legal target.
     assert [t["name"] for t in spec["valid_targets"]] == ["Erhnam Djinn"]
 
@@ -86,7 +88,7 @@ def test_elephant_graveyard_prompts_for_elephants_only(arn_by_name, cards):
     spec = game.activation_target_spec(0, 0, ability_index=1)
 
     assert spec["requires_target"] is True
-    assert spec["kind"] == "creature"
+    assert spec["kind"] == "permanent"
     assert [t["name"] for t in spec["valid_targets"]] == ["War Elephant"]
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._filters import permanent_matches_filter
+from ._filters import creature_floor_holds, permanent_matches_filter
 from ._targets import (attached_host, block_pair_permanents,
                        resolve_target_permanent)
 from .registry import effect_handler
@@ -28,7 +28,7 @@ def grant_regeneration_to_target_creature(game: Game, instruction: OracleInstruc
     described = instruction.payload
 
     def eligible(perm: Permanent) -> bool:
-        return perm.is_creature and permanent_matches_filter(perm, described)
+        return regeneration_target_legal(perm, described)
 
     chosen = resolve_target_permanent(
         game, context, predicate=eligible, fallback_on_invalid_choice=False
@@ -40,6 +40,18 @@ def grant_regeneration_to_target_creature(game: Game, instruction: OracleInstruc
     chosen.regeneration_shield += 1
     game.log.append(f"{source_name} gave {chosen.card.name} a regeneration shield")
     return True, "resolved"
+
+
+def regeneration_target_legal(perm: Permanent, described: dict) -> bool:
+    """Whether "Regenerate target <noun>" may name *perm*: the printed noun
+    phrase, over a creature — or, for a bare creature type ("target **Beast**",
+    Krosan Warchief, Vitality Charm), over any permanent with it (CR 109.2,
+    205.3m): a Kindred Enchantment — Beast is a Beast, and regeneration
+    replaces the destruction of any permanent (CR 701.19a). One answer for the
+    picker (``legality_enumeration``), the cast gate and this resolution."""
+    return creature_floor_holds(perm, described) and permanent_matches_filter(
+        perm, described
+    )
 
 
 @effect_handler("grant_regeneration_to_self")

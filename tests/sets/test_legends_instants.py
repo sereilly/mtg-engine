@@ -2268,8 +2268,8 @@ def test_glyph_of_reincarnation_targets_a_wall(set_pool):
     assert sweep.payload["blocked_by_target_object"] is True
     # "They can't be regenerated" is the sweep's rider, not a lost sentence.
     assert sweep.payload["bypass_regeneration"] is True
-    assert derive_cast_spec(card, program) == {
-        "kind": "creature", "wall_only": True,
+    assert derive_cast_spec(card, program) == {  # any Wall permanent (CR 109.2)
+        "kind": "permanent", "wall_only": True,
     }
 
 

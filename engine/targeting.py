@@ -316,7 +316,10 @@ def spec_only_subtype(spec: dict | None) -> str | None:
     """
     if not spec:
         return None
-    if spec.get("wall_only"):
+    # "Enchant **Wall**" (Animate Wall) is an Aura spell's target description
+    # (CR 303.4a: the target is defined by its enchant ability), the Wall
+    # subtype under the enchant clause's own flag.
+    if spec.get("wall_only") or spec.get("enchant_wall"):
         return "wall"
     described = spec.get("filter")
     if isinstance(described, dict):
@@ -324,6 +327,32 @@ def spec_only_subtype(spec: dict | None) -> str | None:
         if isinstance(subtype, str):
             return subtype
     return None
+
+
+def spell_only_subtype(card, program) -> str | None:
+    """The one subtype every target *card* could choose as a spell is
+    restricted to, in **any** of its modes, or None.
+
+    "…can't be the target of spells that can target only Walls" (Wall of
+    Shadows) asks it of the spell, not of the mode announced: a modal spell
+    that can target a non-Wall in one of its modes is not a spell that can
+    target only Walls, even announced in its Wall mode (Scryfall ruling on
+    Wall of Shadows, 2004-10-04) — Chaos Charm's "Destroy target Wall" mode
+    may be aimed at it. A mode that targets nothing adds no target and is
+    passed over; a spell with no modes is its one spec.
+    """
+    if not program.modes:
+        return spec_only_subtype(derive_cast_spec(card, program))
+    found: set[str | None] = set()
+    for index, _mode in enumerate(program.modes):
+        spec = derive_cast_spec(card, program, mode_index=index)
+        if spec is None:
+            continue
+        found.add(spec_only_subtype(spec))
+    if len(found) != 1:
+        return None
+    (only,) = found
+    return only
 
 
 def bounce_subject_filter(payload: dict) -> dict:

@@ -265,7 +265,13 @@ def lower_named_placement(
                             "restriction",
                     node=node,
                 )
-                if not role["filter"].get("type_filter"):
+                # A subtype narrows as a type does: "target **Wall**" offers
+                # the Walls (CR 109.2), and only a phrase naming neither
+                # would offer every permanent.
+                if not (
+                    role["filter"].get("type_filter")
+                    or role["filter"].get("subtype_filter")
+                ):
                     raise LoweringError(
                         "a named-counter target role with no card type would "
                         "offer every permanent", node=node,
@@ -277,7 +283,9 @@ def lower_named_placement(
             raise LoweringError(
                 "a named counter is placed a fixed number at a time", node=node
             )
-        if not node.subject.filter.card_types:
+        # "…on target **Fungus**" (Fungal Bloom): a bare creature type is
+        # every Fungus permanent (CR 109.2), narrowed by the subtype alone.
+        if not (node.subject.filter.card_types or node.subject.filter.subtypes):
             raise LoweringError(
                 "a named-counter target with no card type would offer every "
                 "permanent",

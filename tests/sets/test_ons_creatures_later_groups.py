@@ -652,8 +652,8 @@ def test_w1g5_mistform_wall_defender_line_compiles_to_a_self_type_condition(set_
     (static,) = [ins for ins in program.instructions if ins.kind == "conditional_static"]
     assert static.payload["keywords"] == ["defender"]
     assert static.payload["condition"] == {
-        "kind": "self_matches",
-        "filter": {"type_filter": "creature", "subtype_filter": "wall"},
+        "kind": "self_matches",  # "it's a Wall": the subtype alone (CR 109.2)
+        "filter": {"subtype_filter": "wall"},
     }
 
 

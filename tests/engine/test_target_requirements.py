@@ -78,10 +78,12 @@ def test_the_sentence_is_read_whole_and_its_noun_is_payload():
     one Wall" needs no code. The noun comes back as printed, for the refusal a
     player reads."""
     described, noun = must_choose_line(_SENTENCE.format(noun="Flagbearer"))
-    assert described == {"type_filter": "creature", "subtype_filter": "flagbearer"}
+    # "a Flagbearer on the battlefield" is any permanent with the subtype
+    # (CR 109.2, 205.3m): no card type rides the narrowing.
+    assert described == {"subtype_filter": "flagbearer"}
     assert noun == "Flagbearer"
     assert must_choose_line(_SENTENCE.format(noun="Wall"))[0] == {
-        "type_filter": "creature", "subtype_filter": "wall",
+        "subtype_filter": "wall",
     }
     # The lowercased, unpunctuated spelling the support gate hands it.
     assert must_choose_line(_SENTENCE.format(noun="Flagbearer").lower().rstrip(".")) is not None

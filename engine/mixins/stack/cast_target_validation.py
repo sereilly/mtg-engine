@@ -29,7 +29,7 @@ from typing import NamedTuple
 
 from ...announced_creature_type import with_announced_creature_type
 from ...auras import aura_enchant_clause
-from ...handlers._filters import graveyard_card_matches
+from ...handlers._filters import creature_floor_holds, graveyard_card_matches
 from ...models import CardDefinition, Permanent
 from ...oracle import compile_card_oracle
 from ...oracle_types import (carries_x_bound, substitute_x_bounds,
@@ -1044,9 +1044,17 @@ class CastTargetValidationMixin:
             # creature). A specific choice must itself be a creature; otherwise any
             # creature on any battlefield makes the cast legal.
             blocking_only = bool(primary.payload.get("blocking_only"))
+            # "Regenerate target **Beast**" (Vitality Charm): a bare creature
+            # type names any permanent of it (CR 109.2), a kindred's too
+            # (CR 205.3m), so the floor is the phrase's rather than "creature"
+            # — the subtype asked with it, so "any legal target at all?" below
+            # stays the phrase's set.
+            described = (primary.payload.get("targets") or {}).get("filter")
+            if not isinstance(described, dict):
+                described = primary.payload
 
             def _legal_pump_target(p) -> bool:
-                if not p.is_creature:
+                if not creature_floor_holds(p, described):
                     return False
                 # Righteousness only targets a creature that is currently blocking.
                 if blocking_only and not self._is_blocking_creature(p):

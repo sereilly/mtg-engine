@@ -93,13 +93,6 @@
   ]
  },
  {
-  "card": "Alpha Kavu",
-  "clause": "target kavu creature gets -1/+1 until end of turn",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Amber Prison",
   "clause": "tap target artifact, creature, or land. that permanent doesn't untap during its controller's untap step for as long as this artifact remains tapped",
   "ignored": [
@@ -118,13 +111,6 @@
   "clause": "if you control a blue or black permanent, target creature gets +1/+1 until end of turn. if you control a blue permanent and a black permanent, that creature gets +5/+5 until end of turn instead",
   "ignored": [
    "or"
-  ]
- },
- {
-  "card": "Anaba Ancestor",
-  "clause": "another target minotaur creature gets +1/+1 until end of turn",
-  "ignored": [
-   "creature"
   ]
  },
  {
@@ -282,13 +268,6 @@
   ]
  },
  {
-  "card": "Balthor the Stout",
-  "clause": "another target barbarian creature gets +1/+0 until end of turn",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Bane of the Living",
   "clause": "all creatures get -x/-x until end of turn",
   "ignored": [
@@ -347,13 +326,6 @@
   ]
  },
  {
-  "card": "Bladewing the Risen",
-  "clause": "dragon creatures get +1/+1 until end of turn",
-  "ignored": [
-   "creatures"
-  ]
- },
- {
   "card": "Blazing Effigy",
   "clause": "it deals x damage to target creature, where x is 3 plus the amount of damage dealt to this creature this turn by other sources named blazing effigy",
   "ignored": [
@@ -407,13 +379,6 @@
   "clause": "choose a creature type. reveal the top card of your library. if that card is a creature card of the chosen type, put it into your hand. otherwise, put it into your graveyard",
   "ignored": [
    "card"
-  ]
- },
- {
-  "card": "Bloodstoke Howler",
-  "clause": "beast creatures you control get +3/+0 until end of turn",
-  "ignored": [
-   "creatures"
   ]
  },
  {
@@ -688,13 +653,6 @@
   ]
  },
  {
-  "card": "Contested Cliffs",
-  "clause": "target beast creature you control fights target creature an opponent controls",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Corrosion",
   "clause": "put a rust counter on each artifact target opponent controls. then destroy each artifact with mana value less than or equal to the number of rust counters on it. artifacts destroyed this way can't be regenerated",
   "ignored": [
@@ -770,13 +728,6 @@
   "clause": "if it's on the battlefield, it loses \"enchant creature card in a graveyard\" and gains \"enchant creature put onto the battlefield with this aura.\" put enchanted creature card onto the battlefield tapped under your control and attach this aura to it. when this aura leaves the battlefield, that creature's controller sacrifices it",
   "ignored": [
    "tapped"
-  ]
- },
- {
-  "card": "Daru Encampment",
-  "clause": "target soldier creature gets +1/+1 until end of turn",
-  "ignored": [
-   "creature"
   ]
  },
  {
@@ -1101,20 +1052,6 @@
   ]
  },
  {
-  "card": "Dwarven Lieutenant",
-  "clause": "target dwarf creature gets +1/+0 until end of turn",
-  "ignored": [
-   "creature"
-  ]
- },
- {
-  "card": "Dwarven Pony",
-  "clause": "target dwarf creature gains mountainwalk until end of turn",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Dwarven Scorcher",
   "clause": "this creature deals 1 damage to target creature unless that creature's controller has this creature deal 2 damage to them",
   "ignored": [
@@ -1182,13 +1119,6 @@
   "clause": "target creature doesn't untap during its controller's next untap step",
   "ignored": [
    "controller's"
-  ]
- },
- {
-  "card": "Elvish Pathcutter",
-  "clause": "target elf creature gains forestwalk until end of turn",
-  "ignored": [
-   "creature"
   ]
  },
  {
@@ -1270,13 +1200,6 @@
   ]
  },
  {
-  "card": "Everglove Courier",
-  "clause": "target elf creature gets +2/+2 and has trample for as long as this creature remains tapped",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Experimental Overload",
   "clause": "create an x/x blue and red weird creature token, where x is the number of instant and sorcery cards in your graveyard. then you may return an instant or sorcery card from your graveyard to your hand. exile experimental overload",
   "ignored": [
@@ -1320,13 +1243,6 @@
   ]
  },
  {
-  "card": "Faerie Noble",
-  "clause": "other faerie creatures you control get +1/+0 until end of turn",
-  "ignored": [
-   "creatures"
-  ]
- },
- {
   "card": "Falling Timber",
   "clause": "prevent all combat damage target creature would deal this turn. if this spell was kicked, prevent all combat damage another target creature would deal this turn",
   "ignored": [
@@ -1363,13 +1279,6 @@
   ]
  },
  {
-  "card": "Fever Charm",
-  "clause": "fever charm deals 3 damage to target wizard creature",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Fight or Flight",
   "clause": "separate all creatures that player controls into two piles. only creatures in the pile of their choice can attack this turn",
   "ignored": [
@@ -1396,13 +1305,6 @@
   "ignored": [
    "or",
    "target"
-  ]
- },
- {
-  "card": "Flamestick Courier",
-  "clause": "target goblin creature gets +2/+2 and has haste for as long as this creature remains tapped",
-  "ignored": [
-   "creature"
   ]
  },
  {
@@ -1449,13 +1351,6 @@
   ]
  },
  {
-  "card": "Frightshroud Courier",
-  "clause": "target zombie creature gets +2/+2 and has fear for as long as this creature remains tapped",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Frost Breath",
   "clause": "tap up to two target creatures. those creatures don't untap during their controller's next untap step",
   "ignored": [
@@ -1498,31 +1393,10 @@
   ]
  },
  {
-  "card": "Gempalm Avenger",
-  "clause": "soldier creatures get +1/+1 and gain first strike until end of turn",
-  "ignored": [
-   "creatures"
-  ]
- },
- {
   "card": "Gempalm Polluter",
   "clause": "you may have target player lose life equal to the number of zombies on the battlefield",
   "ignored": [
    "have"
-  ]
- },
- {
-  "card": "Gempalm Sorcerer",
-  "clause": "wizard creatures gain flying until end of turn",
-  "ignored": [
-   "creatures"
-  ]
- },
- {
-  "card": "Gempalm Strider",
-  "clause": "elf creatures get +2/+2 until end of turn",
-  "ignored": [
-   "creatures"
   ]
  },
  {
@@ -1537,13 +1411,6 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{r}",
   "ignored": [
    "permanent"
-  ]
- },
- {
-  "card": "Ghosthelm Courier",
-  "clause": "target wizard creature gets +2/+2 and has shroud for as long as this creature remains tapped",
-  "ignored": [
-   "creature"
   ]
  },
  {
@@ -1582,24 +1449,10 @@
   ]
  },
  {
-  "card": "Goblin Burrows",
-  "clause": "target goblin creature gets +2/+0 until end of turn",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Goblin Flotilla",
   "clause": "unless you pay {r}, whenever this creature blocks or becomes blocked by a creature this combat, that creature gains first strike until end of turn",
   "ignored": [
    "creature"
-  ]
- },
- {
-  "card": "Goblin Lookout",
-  "clause": "goblin creatures get +2/+0 until end of turn",
-  "ignored": [
-   "creatures"
   ]
  },
  {
@@ -1624,25 +1477,10 @@
   ]
  },
  {
-  "card": "Goblin Pyromancer",
-  "clause": "goblin creatures get +3/+0 until end of turn",
-  "ignored": [
-   "creatures"
-  ]
- },
- {
   "card": "Goblin Shrine",
   "clause": "it deals 1 damage to each goblin creature",
   "ignored": [
-   "each",
-   "creature"
-  ]
- },
- {
-  "card": "Goblin Taskmaster",
-  "clause": "target goblin creature gets +1/+0 until end of turn",
-  "ignored": [
-   "creature"
+   "each"
   ]
  },
  {
@@ -1671,13 +1509,6 @@
   "clause": "draw an additional card",
   "ignored": [
    "additional"
-  ]
- },
- {
-  "card": "Grassland Crusader",
-  "clause": "target elf or soldier creature gets +2/+2 until end of turn",
-  "ignored": [
-   "creature"
   ]
  },
  {
@@ -1798,13 +1629,6 @@
   "clause": "exile all sand warriors",
   "ignored": [
    "all"
-  ]
- },
- {
-  "card": "Heart Wolf",
-  "clause": "target dwarf creature gets +2/+0 and gains first strike until end of turn. when that creature leaves the battlefield this turn, sacrifice this creature",
-  "ignored": [
-   "creature"
   ]
  },
  {
@@ -1994,13 +1818,6 @@
   "clause": "if you cast it from your hand, exile all cards from target opponent's hand",
   "ignored": [
    "all"
-  ]
- },
- {
-  "card": "Icatian Lieutenant",
-  "clause": "target soldier creature gets +1/+0 until end of turn",
-  "ignored": [
-   "creature"
   ]
  },
  {
@@ -2287,13 +2104,6 @@
   "clause": "all damage that would be dealt this turn to target creature you control by a source of your choice is dealt to another target creature instead",
   "ignored": [
    "target"
-  ]
- },
- {
-  "card": "Krosan Groundshaker",
-  "clause": "target beast creature gains trample until end of turn",
-  "ignored": [
-   "creature"
   ]
  },
  {
@@ -2681,13 +2491,6 @@
   ]
  },
  {
-  "card": "Mishra's Factory",
-  "clause": "target assembly-worker creature gets +1/+1 until end of turn",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Mishra's War Machine",
   "clause": "this creature deals 3 damage to you unless you discard a card. if it deals damage to you this way, tap it",
   "ignored": [
@@ -2797,13 +2600,6 @@
   "clause": "up to five target creatures each get -1/-1 until end of turn",
   "ignored": [
    "each"
-  ]
- },
- {
-  "card": "Nemata, Grove Guardian",
-  "clause": "saproling creatures get +1/+1 until end of turn",
-  "ignored": [
-   "creatures"
   ]
  },
  {
@@ -2949,20 +2745,6 @@
   ]
  },
  {
-  "card": "Orc General",
-  "clause": "other orc creatures get +1/+1 until end of turn",
-  "ignored": [
-   "creatures"
-  ]
- },
- {
-  "card": "Orcish Captain",
-  "clause": "flip a coin. if you win the flip, target orc creature gets +2/+0 until end of turn. if you lose the flip, it gets -0/-2 until end of turn",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Orcish Healer",
   "clause": "regenerate target black or green creature",
   "ignored": [
@@ -3026,13 +2808,6 @@
   ]
  },
  {
-  "card": "Pearlspear Courier",
-  "clause": "target soldier creature gets +2/+2 and has vigilance for as long as this creature remains tapped",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Peat Bog",
   "clause": "add {b}{b}. if there are no depletion counters on this land, sacrifice it",
   "ignored": [
@@ -3082,24 +2857,10 @@
   ]
  },
  {
-  "card": "Phyrexian Driver",
-  "clause": "other mercenary creatures get +1/+1 until end of turn",
-  "ignored": [
-   "creatures"
-  ]
- },
- {
   "card": "Phyrexian Processor",
   "clause": "create an x/x black phyrexian minion creature token, where x is the life paid as this artifact entered",
   "ignored": [
    "artifact"
-  ]
- },
- {
-  "card": "Piety Charm",
-  "clause": "target soldier creature gets +2/+2 until end of turn",
-  "ignored": [
-   "creature"
   ]
  },
  {
@@ -3942,13 +3703,6 @@
   ]
  },
  {
-  "card": "Snarling Undorak",
-  "clause": "target beast creature gets +1/+1 until end of turn",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Snow Fortress",
   "clause": "this creature deals 1 damage to target creature without flying that's attacking you",
   "ignored": [
@@ -3967,13 +3721,6 @@
   "clause": "add {b} for each creature card in your graveyard",
   "ignored": [
    "card"
-  ]
- },
- {
-  "card": "Soraya the Falconer",
-  "clause": "target bird creature gains banding until end of turn",
-  "ignored": [
-   "creature"
   ]
  },
  {
@@ -4099,13 +3846,6 @@
   ]
  },
  {
-  "card": "Squirrel Wrangler",
-  "clause": "squirrel creatures get +1/+1 until end of turn",
-  "ignored": [
-   "creatures"
-  ]
- },
- {
   "card": "Stand or Fall",
   "clause": "for each defending player, separate all creatures that player controls into two piles and that player chooses one. only creatures in the chosen piles can block this turn",
   "ignored": [
@@ -4144,8 +3884,7 @@
   "card": "Strength of Night",
   "clause": "creatures you control get +1/+1 until end of turn. if this spell was kicked, zombie creatures you control get an additional +2/+2 until end of turn",
   "ignored": [
-   "spell",
-   "creatures"
+   "spell"
   ]
  },
  {
@@ -4753,13 +4492,6 @@
   ]
  },
  {
-  "card": "Wall of Caltrops",
-  "clause": "if at least one other wall creature is blocking that creature and no non-wall creatures are blocking that creature, this creature gains banding until end of turn",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Wall of Nets",
   "clause": "exile all creatures blocked by this creature",
   "ignored": [
@@ -4794,13 +4526,6 @@
   "ignored": [
    "card,",
    "card,"
-  ]
- },
- {
-  "card": "Wandering Mage",
-  "clause": "prevent the next 1 damage that would be dealt to target cleric or wizard creature this turn",
-  "ignored": [
-   "creature"
   ]
  },
  {
@@ -4943,13 +4668,6 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{g}",
   "ignored": [
    "permanent"
-  ]
- },
- {
-  "card": "Zhalfirin Commander",
-  "clause": "target knight creature gets +1/+1 until end of turn",
-  "ignored": [
-   "creature"
   ]
  },
  {

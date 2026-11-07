@@ -202,7 +202,8 @@ class TestKingSuleiman:
         game = _game(p1, p2)
         spec = game.activation_target_spec(0, 0)
         assert spec["requires_target"] is True
-        assert spec["kind"] == "creature"
+        # "Djinn or Efreet" names any permanent of either (CR 109.2, kg4).
+        assert spec["kind"] == "permanent"
         # Only the Djinn is a legal target — the Bears aren't offered.
         assert [t["name"] for t in spec["valid_targets"]] == ["Erhnam Djinn"]
 

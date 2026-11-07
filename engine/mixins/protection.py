@@ -665,16 +665,20 @@ class ProtectionMixin:
                 target, ABILITY_SOURCE if ability_source is not None else SPELL_SOURCE
             )
             if forbidden:
-                from ..targeting import derive_cast_spec, spec_only_subtype
+                from ..targeting import spec_only_subtype, spell_only_subtype
 
-                spec = source_spec
-                if spec is None and ability_source is None:
+                # A spell is asked across its modes, whichever one the spec
+                # handed in describes (``spell_only_subtype``: Chaos Charm's
+                # Wall mode is no "spell that can target only Walls"); an
+                # ability by the spec its own announcement describes.
+                if ability_source is None and source_card is not None:
                     from ..oracle import compile_card_oracle
 
-                    spec = derive_cast_spec(
+                    only = spell_only_subtype(
                         source_card, compile_card_oracle(source_card)
                     )
-                only = spec_only_subtype(spec)
+                else:
+                    only = spec_only_subtype(source_spec)
                 if only is not None and only in forbidden:
                     return False
         # CR 702.16b. **An ability's source is the object, and the object is

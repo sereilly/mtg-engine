@@ -301,9 +301,10 @@ def test_604_3_a_counted_cda_reads_its_noun_phrase_through_the_noun_parser():
           "offset": 1}),
         ("its power and toughness are each equal to 3 plus the number of "
          "soldiers and warriors you control",
+         # A bare creature type names every permanent of it (CR 109.2), a
+         # kindred's included (CR 205.3m), so the count is the subtype's.
          {"zone": "battlefield", "owner": "you",
-          "filter": {"type_filter": "creature",
-                     "subtype_filter": ["soldier", "warrior"]},
+          "filter": {"subtype_filter": ["soldier", "warrior"]},
           "offset": 3}),
         ("its power and toughness are each equal to 2 plus the number of "
          "black creatures you control",

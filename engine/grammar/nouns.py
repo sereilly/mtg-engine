@@ -33,7 +33,7 @@ from .filter_draft import _FilterDraft, _build_object_filter
 from .readers import _SELF_NOUNS, accept_source_reference
 from .vocabulary import GENERIC_NOUNS as _GENERIC_NOUNS
 from .vocabulary import singular as _singular
-from .vocabulary import (ALL_SUBTYPES, CARD_TYPES, COLOR_WORDS, CREATURE_TYPES,
+from .vocabulary import (ALL_SUBTYPES, CARD_TYPES, COLOR_WORDS,
                          PERMANENT_CARD_TYPES, SUBTYPE_INDEX, SUPERTYPES,
                          TYPE_LINE_SUPERTYPES, match_longest)
 
@@ -923,28 +923,19 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     _parse_postmodifiers(stream, d, parse_object_filter)
 
 
-    # A creature subtype implies the creature type: "destroy target Wall" means
-    # a creature. Land/artifact subtypes ("destroy all Plains") must not, so the
-    # implication is keyed on the vocabulary the subtype came from.
-    # Not after "permanent card" ("a Goblin **permanent** card", Goblin
-    # Wizard), which has recorded CR 110.4a's union above: a creature type is
-    # a creature's *or a kindred's* (CR 205.3m), so the printed "permanent" is
-    # a wider set than "creature" the day a Kindred card is in the pool.
-    #
-    # **Nor after any card head** ("search your library for a Goblin card",
-    # Goblin Matron; "return target Zombie card from your graveyard", Lord of
-    # the Undead). CR 109.2a: a description with the word "card" means a card
-    # matching it in the stated zone, and what it matches is the subtype — a
-    # Kindred Sorcery — Goblin is a Goblin card (CR 205.3m, 308.2) and no
-    # creature card. The phrase names no card type, so none is recorded; each
-    # reader takes "any card" with the subtype. A permanent the bare subtype
-    # names on the battlefield ("destroy target Wall") keeps the implication.
-    if (
-        d.subtypes and not d.card_types and not d.is_card
-        and all(s in CREATURE_TYPES for s in d.subtypes)
-    ):
-        d.card_types.append("creature")
-
+    # **A bare subtype implies no card type.** "Destroy target Wall" names a
+    # Wall: CR 109.2 makes a description with a subtype and no zone or "card"
+    # "a permanent of that card type or subtype on the battlefield", and CR
+    # 205.3m gives creature types to creatures *and kindreds* — a Kindred
+    # Artifact — Wall is a Wall permanent and no creature. This used to record
+    # "creature" after every bare creature type, which was exact on a pool with
+    # no Kindred card and narrower on one; under a card head ("a Goblin card",
+    # Goblin Matron) the same implication was a Goblin *creature* card, and
+    # after "permanent card" (Goblin Wizard) it is CR 110.4a's union, recorded
+    # above. So the phrase records the subtype alone, as "destroy all Plains"
+    # always has, and each reader takes "a permanent (or card) with the
+    # subtype". A printed card type ("Goblin **creatures**") is recorded where
+    # it is printed and narrows as printed.
     return _build_object_filter(d)
 
 

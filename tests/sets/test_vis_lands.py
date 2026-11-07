@@ -236,8 +236,8 @@ def test_griffin_canyons_second_ability_is_no_longer_hollow(set_pool):
 
     # The picker half. This was `None`, which is the exact value the client
     # tests to decide whether to ask for a target — the Roots class.
-    assert derive_activation_spec(untap[0]) == {
-        "kind": "creature", "filter": {"subtype_filter": "griffin"},
+    assert derive_activation_spec(untap[0]) == {  # any Griffin permanent (CR 109.2)
+        "kind": "permanent", "filter": {"subtype_filter": "griffin"},
     }
 
 

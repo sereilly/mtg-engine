@@ -328,7 +328,13 @@ def card_enchant_subject(oracle_text: str) -> str | None:
 
 _ENCHANT_NOUN_TO_SPEC: dict[str, dict] = {
     "creature": {"kind": "creature"},
-    "wall": {"kind": "creature", "enchant_wall": True},
+    # "Enchant **Wall**" (Animate Wall). A bare creature type names any Wall
+    # permanent (CR 109.2, 303.4a) — a Kindred Artifact — Wall as much as a Wall
+    # creature (CR 205.3m) — which is what the gate has always asked
+    # (``permanent_matches_enchant_noun``'s ``has_type("wall")``). The picker
+    # was the creature one, so it offered the creatures alone: the general
+    # picker narrowed by the flag is the gate's set.
+    "wall": {"kind": "permanent", "enchant_wall": True},
     "land": {"kind": "land"},
     "artifact": {"kind": "artifact"},
     "enchantment": {"kind": "permanent", "enchant_enchantment": True},

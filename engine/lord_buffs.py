@@ -293,6 +293,10 @@ class LordBuffFilter:
     # The default is the creature every printing before this one named, so a
     # payload written before this field existed rebuilds identically and
     # ``_lord_buff_matches`` answers exactly what it did.
+    #
+    # **Empty** is "Other Goblins" — a bare creature type, which names every
+    # permanent with it (CR 109.2), a Kindred Enchantment — Goblin as much as a
+    # Goblin creature (CR 205.3m, 308.2). The subtype narrows; no card type does.
     card_types: tuple[str, ...] = ("creature",)
     # "**Non**creature artifacts" — the exclusion beside it, and its own field
     # for the reason ``excluded_colors`` is one on ``ObjectFilter``: a negative
@@ -705,11 +709,17 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
         if subtype is not None:
             subtypes.append(subtype)
             index += 1
-    # The head noun. Optional only when a subtype already supplied one
-    # ("Other Goblins"); "Other Zombie creatures" spells it out.
+    # The head noun. Optional only when a subtype already stands as one
+    # ("Other Goblins"); "Other Zombie creatures" spells it out. The bare
+    # subtype is every permanent of it (CR 109.2) — a Kindred permanent shares
+    # the creature types (CR 205.3m) — so it records no card type, as the
+    # grammar's noun phrase does (``nouns.parse_object_filter``); the printed
+    # "creatures" narrows to creatures.
     card_types: tuple[str, ...] = ("creature",)
     if index < len(words) and words[index] in ("creature", "creatures"):
         index += 1
+    elif subtypes:
+        card_types = ()
     # "**Lands** you control have "{T}: Add two mana of any one color.""
     # (Overlaid Terrain.) CR 613 layer 6 is not about creatures — Spectral
     # Guardian's "noncreature artifacts" reached the filter's ``card_types``
@@ -1037,7 +1047,14 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             named=payload.get("named"),
             with_keywords=tuple(payload.get("with_keywords") or ()),
             without_keywords=tuple(payload.get("without_keywords") or ()),
-            card_types=tuple(payload.get("card_types") or ("creature",)),
+            # An **empty** list is a printed answer, not a missing one: "Other
+            # Goblins" names every Goblin permanent (CR 109.2, 205.3m), so
+            # only an absent key means the creature every payload written
+            # before the field existed was about.
+            card_types=(
+                tuple(payload["card_types"]) if "card_types" in payload
+                else ("creature",)
+            ),
             excluded_types=tuple(payload.get("exclude_types") or ()),
             chosen_land_type=bool(payload.get("chosen_land_type")),
             chosen_creature_type=bool(payload.get("chosen_creature_type")),

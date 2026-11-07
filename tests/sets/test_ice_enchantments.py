@@ -1262,7 +1262,7 @@ def test_caribou_range_sacrifices_a_caribou_token_for_a_life(set_pool):
     (ability,) = compile_card_oracle(aura.card).activated_abilities
 
     assert ability.cost.sacrifice_filter == {
-        "type_filter": "creature",
+        # "a Caribou token": the subtype and the token, no card type (CR 109.2)
         "subtype_filter": "caribou",
         "token_only": True,
     }

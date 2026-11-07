@@ -17,7 +17,8 @@ this reaches for a ``stack`` spec.
 from __future__ import annotations
 
 from .handlers._chosen import _resolve_chosen_subtype
-from .handlers._filters import (excluded_graveyard_slot,
+from .handlers.regeneration import regeneration_target_legal
+from .handlers._filters import (creature_floor_holds, excluded_graveyard_slot,
                                 graveyard_card_matches,
                                 permanent_matches_filter, seat_did,
                                 state_holds)
@@ -645,7 +646,7 @@ class TargetEnumerationMixin:
             # Elephant Graveyard's "target Elephant" — the same subtype filter
             # _grant_regeneration_shield enforces at resolution. Death Ward's
             # payload is empty, so every creature passes.
-            return perm.is_creature and permanent_matches_filter(perm, instruction.payload)
+            return regeneration_target_legal(perm, instruction.payload)
         if instruction.kind == "produce_mana_instead":
             # Quarum Trench Gnomes' "target Plains" — the same subtype filter
             # the handler tests at resolution, asked here so the ability is
@@ -723,8 +724,12 @@ class TargetEnumerationMixin:
             # offers exactly what the ability could affect. Most counter
             # placements carry an empty filter and every creature passes.
             targets = instruction.payload.get("targets") or {}
-            if not perm.is_creature or not permanent_matches_filter(
-                perm, targets.get("filter") or {}
+            # "…on target **Bird, Cat, Dog, Goat, Ox, or Snake**" (Animal
+            # Sanctuary) is any permanent of one (CR 109.2), a kindred's
+            # included (CR 205.3m): the floor is the phrase's, not "creature".
+            described = targets.get("filter") or {}
+            if not creature_floor_holds(perm, described) or not permanent_matches_filter(
+                perm, described
             ):
                 return False
             # "…on target creature **blocking or blocked by this creature**"
@@ -882,59 +887,7 @@ class TargetEnumerationMixin:
                 return False
             if spec.get("enchant_wall"):
                 return perm.has_type("wall")
-            # Forcefield: only unblocked attacking creatures are legal choices.
-            if spec.get("unblocked_attacker") and not (perm.attacking and not perm.blocked):
-                return False
-            # Singing Tree: only currently-attacking creatures are legal choices.
-            if spec.get("attacking_only") and not perm.attacking:
-                return False
-            # Righteousness, Sorrow's Path: only creatures that are currently
-            # blocking are legal choices. The narrower half of the `any_states`
-            # union below, asked of the same `state_holds` table so a picker and
-            # a resolution cannot disagree about what "blocking" means. Enforced
-            # here as well as at resolution because CR 602.2b refuses an
-            # activation outright when no legal target exists — the cast side
-            # reached the same answer through its own `_validate_cast_targets`
-            # probe, and an *ability* narrowed this way had nothing at all.
-            if spec.get("blocking_only") and not state_holds(perm, "blocking"):
-                return False
-            # "target **blocked** attacking creature" (General Jarkeld). The
-            # other end of the same relation, asked exactly as
-            # `permanent_matches_filter` asks it so the picker and the
-            # resolution cannot disagree — CR 509.1h's blocked creature is an
-            # attacking one that has blockers declared for it.
-            if spec.get("blocked_only") and not (
-                getattr(perm, "attacking", False) and getattr(perm, "blocked", False)
-            ):
-                return False
-            # The Legends pinger cycle: "target attacking or blocking creature".
-            # Enforced here as well as at resolution, because CR 602.2b refuses
-            # the activation outright when no legal target exists — a pinger
-            # with nothing in combat to shoot must cost nothing rather than
-            # resolve at whatever the picker happened to offer.
-            any_states = spec.get("any_states")
-            if any_states and not any(
-                state_holds(perm, word) for word in any_states
-            ):
-                return False
-            # "…creatures **without flying**" (Rock Slide). Asked of layer 6
-            # through the same accessor `flying_only` beside it uses, so a
-            # creature *granted* flying is excluded exactly as a printed flyer
-            # is (CR 613.1f) and one that lost it is offered. Enforced here as
-            # well as at resolution, for `blocked_only`'s reason: a narrowing
-            # the picker does not apply is one CR 601.2c then admits.
-            if any(
-                self._has_keyword(perm, str(word))
-                for word in spec.get("without_keywords") or ()
-            ):
-                return False
-            # Island of Wak-Wak: only flying creatures are legal choices.
-            if spec.get("flying_only") and not self._has_keyword(perm, "flying"):
-                return False
-            # Ali Baba: only Walls are legal choices.
-            if spec.get("wall_only") and not perm.has_type("wall"):
-                return False
-            return True
+            return self._narrowings_beyond_the_head_noun_hold(perm, spec)
         if kind == "artifact":
             if not perm.has_type("artifact"):
                 return False
@@ -968,8 +921,78 @@ class TargetEnumerationMixin:
             # narrowing only this branch has.
             if spec.get("enchant_enchantment"):
                 return perm.has_type("enchantment")
-            return True
+            if spec.get("enchant_wall"):
+                return perm.has_type("wall")
+            # …and the narrowings the creature branch asks, which are not about
+            # the head noun either: "destroy target **Wall**" (Tunnel) and
+            # "target attacking or blocking **Dragon**" (Rashida Scalebane)
+            # name a permanent with the subtype (CR 109.2) — a Kindred
+            # Artifact — Wall is one (CR 205.3m) — and the picker's kind is
+            # "permanent" for them, so a narrowing asked in the creature branch
+            # alone was a narrowing this branch dropped.
+            return self._narrowings_beyond_the_head_noun_hold(perm, spec)
         return False
+
+    def _narrowings_beyond_the_head_noun_hold(self, perm: Permanent, spec: dict) -> bool:
+        """The picker flags :meth:`_permanent_matches_target_kind` asks of a
+        creature target and of a permanent one alike: the combat states, the
+        keyword tests and the Wall subtype (``target_descriptions._narrowing_flags``).
+        A permanent that is no creature answers every state "no" (it cannot be
+        in combat) and every keyword through layer 6, so asking them of one is
+        the same question the creature branch asks."""
+        # Forcefield: only unblocked attacking creatures are legal choices.
+        if spec.get("unblocked_attacker") and not (perm.attacking and not perm.blocked):
+            return False
+        # Singing Tree: only currently-attacking creatures are legal choices.
+        if spec.get("attacking_only") and not perm.attacking:
+            return False
+        # Righteousness, Sorrow's Path: only creatures that are currently
+        # blocking are legal choices. The narrower half of the `any_states`
+        # union below, asked of the same `state_holds` table so a picker and
+        # a resolution cannot disagree about what "blocking" means. Enforced
+        # here as well as at resolution because CR 602.2b refuses an
+        # activation outright when no legal target exists — the cast side
+        # reached the same answer through its own `_validate_cast_targets`
+        # probe, and an *ability* narrowed this way had nothing at all.
+        if spec.get("blocking_only") and not state_holds(perm, "blocking"):
+            return False
+        # "target **blocked** attacking creature" (General Jarkeld). The
+        # other end of the same relation, asked exactly as
+        # `permanent_matches_filter` asks it so the picker and the
+        # resolution cannot disagree — CR 509.1h's blocked creature is an
+        # attacking one that has blockers declared for it.
+        if spec.get("blocked_only") and not (
+            getattr(perm, "attacking", False) and getattr(perm, "blocked", False)
+        ):
+            return False
+        # The Legends pinger cycle: "target attacking or blocking creature".
+        # Enforced here as well as at resolution, because CR 602.2b refuses
+        # the activation outright when no legal target exists — a pinger
+        # with nothing in combat to shoot must cost nothing rather than
+        # resolve at whatever the picker happened to offer.
+        any_states = spec.get("any_states")
+        if any_states and not any(
+            state_holds(perm, word) for word in any_states
+        ):
+            return False
+        # "…creatures **without flying**" (Rock Slide). Asked of layer 6
+        # through the same accessor `flying_only` beside it uses, so a
+        # creature *granted* flying is excluded exactly as a printed flyer
+        # is (CR 613.1f) and one that lost it is offered. Enforced here as
+        # well as at resolution, for `blocked_only`'s reason: a narrowing
+        # the picker does not apply is one CR 601.2c then admits.
+        if any(
+            self._has_keyword(perm, str(word))
+            for word in spec.get("without_keywords") or ()
+        ):
+            return False
+        # Island of Wak-Wak: only flying creatures are legal choices.
+        if spec.get("flying_only") and not self._has_keyword(perm, "flying"):
+            return False
+        # Ali Baba: only Walls are legal choices.
+        if spec.get("wall_only") and not perm.has_type("wall"):
+            return False
+        return True
 
     def _enumerate_cost_hand_cards(
         self, caster_index: int, card: CardDefinition, spec: dict | None = None,

@@ -82,8 +82,10 @@ def _derive(line: str) -> LordBuff | None:
         # these sentences is printed on any card in the pool.
         (
             "Other Elves get +2/+3 and have forestwalk.",
+            # A bare creature type is every permanent of it (CR 109.2), so
+            # no card type rides the filter (a Kindred Elf is an Elf).
             LordBuff(
-                LordBuffFilter(subtypes=("elf",), other_than_source=True),
+                LordBuffFilter(subtypes=("elf",), other_than_source=True, card_types=()),
                 2, 3, ("forestwalk",),
             ),
         ),
@@ -121,7 +123,8 @@ def _derive(line: str) -> LordBuff | None:
         (
             "Other Goblins get -2/-1.",
             LordBuff(
-                LordBuffFilter(subtypes=("goblin",), other_than_source=True), -2, -1,
+                LordBuffFilter(subtypes=("goblin",), other_than_source=True, card_types=()),
+                -2, -1,
             ),
         ),
     ],
@@ -138,6 +141,10 @@ def test_the_subtype_is_data_however_it_is_pluralised():
     assert _derive("Other Goblins get +1/+1.").filter.subtypes == ("goblin",)
     assert _derive("Other Merfolk get +1/+1.").filter.subtypes == ("merfolk",)
     assert _derive("Other Zombie creatures get +1/+1.").filter.subtypes == ("zombie",)
+    # …and the head noun is the printed one: "Goblins" names every Goblin
+    # permanent (CR 109.2, 205.3m), "Zombie creatures" the creatures.
+    assert _derive("Other Goblins get +1/+1.").filter.card_types == ()
+    assert _derive("Other Zombie creatures get +1/+1.").filter.card_types == ("creature",)
     # A type that is not a creature type at all is not a subtype slot.
     assert _derive("Other Mountains get +1/+1.") is None
 
