@@ -314,6 +314,16 @@ class DeclareBlockersStepMixin:
             self._fire_delayed_block_pair_triggers(controller_index, assignments)
             self._fire_delayed_becomes_blocked_triggers(controller_index, assignments)
             self._fire_board_wide_block_triggers(controller_index, assignments)
+            # …and, once this was the last declaration (CR 802.4), the
+            # attackers nobody blocked (CR 509.1h, 509.3g): "attacks and isn't
+            # blocked" is about the declaration as a whole, so it triggers as
+            # the whole of it is in — in this window, ordered with the block
+            # triggers (CR 603.3b) and on the stack before the active player's
+            # priority below (CR 509.2a). It was fired by the step's leaving
+            # pass, after that priority: on the web both seats were given it
+            # and passed, and the step's window resolved the trigger unasked.
+            if self.combat_blockers_locked:
+                self._fire_unblocked_attack_triggers()
         # CR 509.2/802.4: once every defending player has declared, the active
         # player receives priority — after the state-based check (CR 704.3).
         # A block can make one due: Heat Wave's life, paid down to 0, or
@@ -324,6 +334,26 @@ class DeclareBlockersStepMixin:
             self._check_after_turn_based_actions()
             self.start_priority_window(self.active_player_index)
         return True, "declared blockers"
+
+    def _lock_block_declaration(self) -> None:
+        """Complete the declaration of blockers where no declaration completes
+        it: every defender still to declare had no legal block and was passed
+        over (CR 509.1a: their declaration is no blockers), or a driver locked
+        the blocks itself.
+
+        The declaration's last half, as ``declare_blockers`` makes it for the
+        last defender who does declare: the attackers nobody blocked trigger
+        (CR 509.1h, 509.3g) inside one trigger window (CR 603.3b), and the
+        state-based check is made (CR 704.3) — a defender auto-skipped after
+        another one paid to block (CR 802.4) has no declaration of its own to
+        make it. All before the active player receives priority (CR 509.2a),
+        which is the caller's.
+        """
+        self.combat_blockers_locked = True
+        self._prune_combat_state()
+        with self.putting_triggers_on_stack():
+            self._fire_unblocked_attack_triggers()
+        self._check_after_turn_based_actions()
 
     def is_camouflage_active(self) -> bool:
         """True when Camouflage was cast this turn, so the defender's blocks come

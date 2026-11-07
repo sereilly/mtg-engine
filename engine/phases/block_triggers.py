@@ -292,13 +292,17 @@ class BlockTriggersMixin:
         reliable and wrong — an ability that changes what combat damage does
         was resolving after the damage.
 
-        Unlike its two neighbours it is **not** called from
-        :meth:`declare_blockers`: an attacker with nobody blocking it is
-        unblocked whether or not any declaration happened at all, and the
-        defender with no legal block is auto-skipped without ever reaching
-        that method. The caller is the declare-blockers step's completion in
-        ``combat_phase``, the one point every path to locked blocks reaches,
-        and ``combat_unblocked_triggers_fired`` is what makes it once.
+        **As the declaration completes** (CR 509.3g: it "triggers if no
+        creatures are declared as blockers for that creature"; CR 509.2a puts
+        it on the stack before the active player gets priority), on whichever
+        road completes it: the last defender's :meth:`declare_blockers`,
+        inside that declaration's trigger window, or
+        :meth:`_lock_block_declaration` where nobody left had a legal block.
+        An attacker is asked about as it stands then, so one removed from
+        combat or blocked by an effect later in the step has already
+        triggered, and one put onto the battlefield attacking afterwards
+        never does. ``combat_unblocked_triggers_fired`` is what makes it once;
+        the step's leaving pass fires it only for a lock neither road made.
 
         The ability names **no target**. "Attacks and isn't blocked" is about
         the attacker, which travels as the stack item's ``source_permanent``;

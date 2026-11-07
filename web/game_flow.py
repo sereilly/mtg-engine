@@ -915,8 +915,15 @@ def _advance_phase(session: Session) -> None:
             ):
                 # The AI's turn, and the person had no legal block: their
                 # declaration is made, and CR 509.2 gives the active AI
-                # priority — its answer first (a pump on the unblocked
-                # attacker), then the person, where they flagged the step.
+                # priority — over what the declaration set off first (CR
+                # 509.2a: an attacker nobody blocked, "attacks and isn't
+                # blocked"), which goes round the table so the person is asked
+                # before it resolves (CR 117.4), as the attack declaration's
+                # triggers do (`_ai_declares_attackers`); then, with the stack
+                # empty, its answer (a pump on the unblocked attacker), then
+                # the person, where they flagged the step.
+                if _round_over_ai_objects(session, game.active_player_index):
+                    return
                 if _ai_answers_priority(session, game.active_player_index):
                     return
                 if _hold_at_flagged_step(session):
