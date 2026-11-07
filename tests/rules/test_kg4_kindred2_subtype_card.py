@@ -47,8 +47,9 @@ Onto the battlefield no card in the pool prints the phrase ("a Goblin
 of the type is a "<type> card" that CR 400.4a leaves where it is, which none
 of the handlers says, so each road refuses the shape — a search, a targeted
 reanimation from your graveyard and from any graveyard, a sweep reanimation,
-Clear the Land's sorted reveal — where it used to read a creature card. The
-same sentences with "creature card" are still read.
+Clear the Land's sorted reveal, Animal Magnetism's opponent's pick, a
+reveal-until (Gamekeeper's) — where it used to read a creature card. The same
+sentences with "creature card" are still read.
 
 The readers of "<creature type> spell(s)" never paired the subtype with the
 creature type (each asks ``object_creature_types.card_creature_types``); they
@@ -435,6 +436,10 @@ _ONTO_THE_BATTLEFIELD = (
     "Put target Zombie card from a graveyard onto the battlefield under your control.",
     "Return all Zombie cards from your graveyard to the battlefield.",
     _POOL["Clear the Land"].oracle_text.replace("land cards", "Goblin cards"),
+    _POOL["Animal Magnetism"].oracle_text.replace("a creature card", "a Goblin card"),
+    "Reveal cards from the top of your library until you reveal a Goblin card. Put "
+    "that card onto the battlefield and put all other cards revealed this way into "
+    "your graveyard.",
 )
 
 

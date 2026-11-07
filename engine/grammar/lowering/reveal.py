@@ -126,6 +126,11 @@ def _lower_reveal_until(
         raise LoweringError(
             "the reveal cannot test this restriction on a card", node=node,
         )
+    # "…until you reveal a **Goblin** card. Put that card onto the
+    # battlefield": the run stops on a Kindred instant of the type too, which
+    # CR 400.4a would leave where it is. No card in the pool prints it.
+    if node.destination == "battlefield" and creature_type_card(filt):
+        raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
     return (
         OracleInstruction(
             "reveal_until_match", "",
@@ -457,6 +462,11 @@ def _lower_reveal_top_opponent_chooses(
                 node=node,
             )
         payload["pick_filter"] = picked
+        # "…chooses a **Goblin** card from among them. Put that card onto the
+        # battlefield": a Kindred instant of the type is a legal pick CR 400.4a
+        # would leave in the library. No card in the pool prints it.
+        if node.fate == "battlefield" and creature_type_card(node.pick):
+            raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
     if node.rest_fate is not None:
         if node.rest_fate != "graveyard":
             raise LoweringError(
