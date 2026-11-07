@@ -15,6 +15,8 @@ put it first. See ``tests/ai/test_kg4_webprio_identical_proposals.py``.
 
 from __future__ import annotations
 
+import pytest
+
 from engine.aura_attachment import attach_aura
 from engine.card_loader import load_catalog
 from engine.models import Permanent
@@ -44,6 +46,9 @@ def _act(sid: str, **body) -> None:
     assert response.status_code == 200, (body, response.json())
 
 
+# A whole web game driven over the API to the damage step (33-36 s): the
+# full pass's, and every run that names this file.
+@pytest.mark.full
 def test_the_web_ais_blocked_warchief_regenerates_behind_six_auras():
     created = client.post(
         "/api/sessions",
