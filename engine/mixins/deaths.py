@@ -24,7 +24,7 @@ from __future__ import annotations
 import re
 
 from ..card_hooks import ON_LEAVE_BATTLEFIELD
-from ..aura_attachment import auras_attached_to
+from ..aura_attachment import auras_attached_to, left_attached_to
 from ..destruction_events import (RESOLVING, announce_destroyed,
                                   destruction_finished)
 from ..delayed_triggers import fire_delayed_triggers
@@ -966,8 +966,19 @@ class DeathsMixin:
             # accident; the target-id arity census's board has no such key, and
             # Mogg Assassin destroying one of its mirrored Bait pairs raised
             # RecursionError.
+            #
+            # **…or was, as it left with it** (CR 603.10a, 603.6e): an Aura
+            # put into a graveyard by the same event is torn down as it goes
+            # (``_permanent_to_graveyard``, ``detach_aura``), so a Nevinyrral's
+            # Disk reaching the Aura before its creature left the creature
+            # dying bare. ``left_attached_to`` is asked of an Aura only — one
+            # with no live host is on its way off the battlefield — never of
+            # an Equipment, which stays on it unattached (CR 704.5n).
             if any(aura is observer for aura in auras_attached_to(dead_permanent)) or (
                 observer.metadata.get("attached_to") is dead_permanent
+            ) or (
+                observer.has_type("aura")
+                and left_attached_to(observer, dead_permanent)
             ):
                 for trig in matching_triggers(
                     observer.effective_card,

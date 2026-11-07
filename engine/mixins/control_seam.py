@@ -52,6 +52,20 @@ from ..trigger_utils import make_trigger_event, matching_triggers
 from ..turn_state import forget_controllers_upkeep
 
 
+def _sacrifice_what_it_held(game, aura: Permanent, attached: Permanent) -> None:
+    """Animate Dead's "that creature's controller sacrifices it", performed
+    once the event that took the Aura is over (``after_this_departure``): a
+    creature that event moved is not on the battlefield to sacrifice."""
+    controller_index = game.controller_index_of(attached)
+    if controller_index is None:
+        return
+    controller = game.players[controller_index]
+    if game.sacrifice_permanent(attached) is not None:
+        game.log.append(
+            f"{controller.name} sacrificed {attached.card.name} ({aura.card.name} left the battlefield)"
+        )
+
+
 class ControlSeamMixin:
     def _find_controlled_permanent(
         self,
@@ -121,17 +135,7 @@ class ControlSeamMixin:
         # sacrifice a permanent" hears it and Urza's Miter's "if it wasn't
         # sacrificed" reads it.
         if aura.metadata.get("sacrifice_attached_on_leave"):
-            def sacrifice_the_creature(aura=aura, attached=attached) -> None:
-                controller_index = self.controller_index_of(attached)
-                if controller_index is None:
-                    return
-                controller = self.players[controller_index]
-                if self.sacrifice_permanent(attached) is not None:
-                    self.log.append(
-                        f"{controller.name} sacrificed {attached.card.name} ({aura.card.name} left the battlefield)"
-                    )
-
-            self.after_this_departure(sacrifice_the_creature)
+            self.after_this_departure(_sacrifice_what_it_held, aura, attached)
 
     def _holding_seat(self, permanent: Permanent) -> int | None:
         """The seat whose battlefield list physically holds *permanent*, or None.
@@ -879,17 +883,17 @@ class ControlSeamMixin:
             raise
         self.departure_batch = None
         aftermath, self.departure_aftermath = self.departure_aftermath, None
-        for then in aftermath or ():
-            then()
+        for then, args in aftermath or ():
+            then(self, *args)
 
     def departed_in_this_event(self) -> list:
         """What the open departure event (``leaving_together``) has taken off
         the battlefield so far — empty outside one."""
         return list(self.departure_batch or ())
 
-    def after_this_departure(self, then) -> None:
-        """Run *then* once the open departure event is over — at once when
-        none is open.
+    def after_this_departure(self, then, *args) -> None:
+        """Run ``then(game, *args)`` once the open departure event is over —
+        at once when none is open.
 
         For a leaves-the-battlefield ability the engine performs inline
         instead of putting it on the stack (CR 603.6c): Animate Dead's "When
@@ -900,11 +904,14 @@ class ControlSeamMixin:
         an Apocalypse put its card in a graveyard and in exile at once. The
         trigger resolves after the event, by when the creature is wherever the
         event sent it.
+
+        A function and its arguments rather than a closure, so a deep copy of
+        the game (the AI's rehearsal) holds its own objects, not this game's.
         """
         if self.departure_aftermath is None:
-            then()
+            then(self, *args)
             return
-        self.departure_aftermath.append(then)
+        self.departure_aftermath.append((then, args))
 
     def remove_from_battlefield(
         self, permanent: Permanent, *, zone_change: bool = True
@@ -1148,6 +1155,18 @@ class ControlSeamMixin:
                     gone is already for already, _ in observers
                 ):
                     observers.append((gone, gone_seat))
+            # …and an Aura this same removal takes, torn down by its caller
+            # before the removal was made (a destruction sweep's
+            # ``_permanent_to_graveyard``): leaving with its creature, it saw
+            # the creature go (CR 603.6e).
+            for other in targets:
+                if (
+                    other is not perm
+                    and other.has_type("aura")
+                    and left_attached_to(other, perm)
+                    and not any(other is already for already, _ in observers)
+                ):
+                    observers.append((other, self.controller_index_of(other)))
             for observer, observer_seat in observers:
                 if observer_seat is None:
                     continue

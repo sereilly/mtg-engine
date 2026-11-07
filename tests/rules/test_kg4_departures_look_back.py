@@ -208,3 +208,31 @@ def test_no_departure_event_is_left_open():
     _settle(game)
     assert game.departure_batch is None
     assert game.departure_aftermath is None
+
+
+@pytest.mark.cr("603.10a", "603.6e")
+@pytest.mark.parametrize("aura", ["Creature Bond", "Funeral March"])
+@pytest.mark.parametrize("order", [FIRST, LAST])
+def test_an_aura_destroyed_with_its_creature_sees_it_go(order, aura):
+    """Nevinyrral's Disk destroys an Aura and its creature on one seat — one
+    removal, the Aura put into its graveyard (and torn down) as the sweep
+    reaches it. Its "when enchanted creature dies" (Creature Bond) or
+    "…leaves the battlefield" (Funeral March) triggers whichever of the two
+    the sweep reached first."""
+    game = _table()
+    if order == FIRST:
+        enchantment = _set_down(game, 1, aura)
+        host = _set_down(game, 1, "Hill Giant")
+    else:
+        host = _set_down(game, 1, "Hill Giant")
+        enchantment = _set_down(game, 1, aura)
+    attach_aura(enchantment, host)
+    _set_down(game, 0, "Nevinyrral's Disk")
+    assert game.activate_permanent_ability(0, "Nevinyrral's Disk").supported
+    _settle(game)
+    assert not list(game.all_permanents())
+    assert _resolved(game, aura) == 1, game.log[-10:]
+    if aura == "Creature Bond":
+        # "…deals damage equal to that creature's toughness to the
+        # creature's controller": the Hill Giant's 3.
+        assert game.players[1].life == 17
