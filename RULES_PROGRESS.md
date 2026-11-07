@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**432 / 641 tracked rules covered (67%)** — 3411 tests, 0 unannotated.
+**432 / 641 tracked rules covered (67%)** — 3420 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -669,7 +669,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(328 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(329 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(31 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [ ] **601.5** While announcing the choices of any targets and/or the division or distribution of any effects as...
@@ -692,11 +692,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(122 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
-- [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(26 tests, subrules acd)*
+- [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(28 tests, subrules acde)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(44 tests, subrules abcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(14 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
-- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(17 tests, subrules a)*
+- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(26 tests, subrules a)*
 - [x] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60... *(1 tests)*
 - [x] **603.12** A resolving spell or ability may allow or instruct a player to take an action and create a trigge... *(2 tests)*
 
@@ -868,7 +868,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.18** Play *(6 tests, subrules ab)*
 - [x] **701.19** Regenerate *(29 tests, subrules abc)*
 - [x] **701.20** Reveal *(11 tests, subrules ab)*
-- [x] **701.21** Sacrifice *(20 tests, subrules a)*
+- [x] **701.21** Sacrifice *(23 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(23 tests, subrules abd)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*
