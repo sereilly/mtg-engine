@@ -174,7 +174,7 @@ def test_damage_dealt_by_a_composed_sequence_still_kills():
         raw={"name": "Test Bolt", "type_line": "Instant"},
     )
     context = OracleExecutionContext(
-        caster=caster, target=owner, card=bolt, target_permanent_index=0
+        caster=caster, target=owner, card=bolt, target_permanent_index=[0]
     )
     sequence = OracleInstruction(
         "sequence", "", {"steps": (OracleInstruction("deal_damage", "", {"amount": 2}),)}

@@ -277,7 +277,7 @@ def _leadb_run(kind, *, depart):
         game, instruction,
         OracleExecutionContext(
             caster=game.players[0], target=game.players[1], card=card,
-            target_permanent_index=chosen_index, target_permanent_id=[chosen_id],
+            target_permanent_index=[chosen_index], target_permanent_id=[chosen_id],
             source_permanent=source,
         ),
     )
@@ -395,7 +395,7 @@ def _leadb_assassin(depart):
         OracleExecutionContext(
             caster=game.players[0], target=game.players[1],
             card=CARDS["Royal Assassin"],
-            target_permanent_index=index, target_permanent_id=[chosen_id],
+            target_permanent_index=[index], target_permanent_id=[chosen_id],
             source_permanent=assassin,
         ),
     )

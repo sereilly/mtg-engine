@@ -16,7 +16,7 @@ Split out of ``resolution.py`` at the 2,000-line cap, and composed onto
 
 from __future__ import annotations
 
-from ...game_types import StackItem, target_ids
+from ...game_types import StackItem, target_ids, target_slots
 from ...oracle import OracleInstruction
 from ...modal_triggers import modal_trigger_modes
 # Both owned by ``engine/targeting.py``: two callers ask whether a compiled
@@ -429,8 +429,7 @@ class TriggerTargetsMixin:
             # held to the same list, and no more of them than the trigger
             # prints. The pile is one seat, so "a single graveyard" holds by
             # construction.
-            slot = item.target_permanent_index
-            slots = slot if isinstance(slot, list) else [slot]
+            slots = target_slots(item.target_permanent_index)
             if not slots or not all(isinstance(each, int) for each in slots):
                 return "unnamed"
             pile = self.graveyard_target_seat(item, spec)

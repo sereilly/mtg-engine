@@ -24,6 +24,7 @@ from ..linked_exile import exiled_cards_for_the_log, linked_entries
 from ..search_filters import card_has_type
 from ._targets import frozen_that_player_seat
 from .registry import effect_handler
+from ..game_types import single_slot
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -345,7 +346,7 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
                 return False
             return True
 
-        index = context.target_permanent_index
+        index = single_slot(context.target_permanent_index)
         chosen = None
         if isinstance(index, int) and 0 <= index < len(caster.graveyard):
             candidate = caster.graveyard[index]

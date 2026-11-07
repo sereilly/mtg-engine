@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Callable, Sequence
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
-from ..game_types import first_target_id, target_ids
+from ..game_types import first_slot, first_target_id, target_ids, target_slots
 from ..oracle_types import named_no_target
 from ..models import Permanent, PlayerState
 from ._filters import graveyard_card_matches
@@ -637,8 +637,8 @@ def resolve_role_permanent(
     ids = context.target_permanent_id
     if isinstance(ids, list) and 0 <= slot < len(ids) and isinstance(ids[slot], int):
         return game.permanent_by_id(ids[slot])
-    indices = context.target_permanent_index
-    if isinstance(indices, list) and 0 <= slot < len(indices):
+    indices = target_slots(context.target_permanent_index)
+    if 0 <= slot < len(indices):
         return game.permanent_at(game.players.index(context.target), indices[slot])
     return None
 
@@ -1111,8 +1111,8 @@ def bound_permanent(
     )
 
 
-def _one_choice(chosen: object) -> object:
-    """The first entry of a multi-target choice, or *chosen* unchanged.
+def _one_choice(chosen: object) -> "int | None":
+    """The first slot of the slot channel (``game_types.first_slot``).
 
     A single-target handler must never be handed a list: ``pick_target_permanent``
     would fail ``isinstance(index, int)``, fall through to its scan, and hit the
@@ -1121,9 +1121,7 @@ def _one_choice(chosen: object) -> object:
     target the player actually named — the lowering is what decides whether a
     several-target line reaches such a handler at all, and it refuses.
     """
-    if isinstance(chosen, list):
-        return chosen[0] if chosen else None
-    return chosen
+    return first_slot(chosen)
 
 
 def divided_target_permanent(game: "Game", entry):
@@ -1308,7 +1306,7 @@ def resolve_target_permanents(
     if predicate is None:
         predicate = lambda p: p.is_creature
     owner = player if player is not None else context.target
-    indices = _as_slots(context.target_permanent_index)
+    indices = target_slots(context.target_permanent_index)
     ids = target_ids(context.target_permanent_id)
     # Positional pairing: `permanent_ids_at` keeps a slot that did not resolve as
     # None rather than dropping it, so the two lists stay the same length and
@@ -1367,7 +1365,7 @@ def resolve_target_slots(
     No fallback scan, for the reason `resolve_target_permanents` documents.
     """
     ids = target_ids(context.target_permanent_id)
-    indices = _as_slots(context.target_permanent_index)
+    indices = target_slots(context.target_permanent_index)
     owner = player if player is not None else context.target
     found: list[Permanent | None] = []
     for slot in range(count):
@@ -1404,15 +1402,6 @@ def target_ordinal(index: int) -> str:
     return f"number {index + 1}"
 
 
-def _as_slots(chosen: object) -> list:
-    """The **slot** field (``target_permanent_index``) as a list of slots,
-    whichever of its two shapes it holds. The id field has one shape and is
-    read through ``game_types.target_ids``."""
-    if isinstance(chosen, list):
-        return list(chosen)
-    return [] if chosen is None else [chosen]
-
-
 def _resolve_graveyard_slots(caster, context, count, eligible):
     """The cards *count* chosen graveyard slots name, removed from the graveyard.
 
@@ -1432,8 +1421,7 @@ def _resolve_graveyard_slots(caster, context, count, eligible):
     dropped (CR 608.2b) and the rest of the effect still happens; an empty
     answer is a legal outcome of "up to N".
     """
-    chosen = context.target_permanent_index
-    slots = chosen if isinstance(chosen, list) else ([] if chosen is None else [chosen])
+    slots = target_slots(context.target_permanent_index)
     graveyard = caster.graveyard
     seen: set[int] = set()
     resolved: list[tuple[int, object]] = []

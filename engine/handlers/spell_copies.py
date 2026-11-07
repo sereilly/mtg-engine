@@ -22,7 +22,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..color_changes import forget_spell_color_change, recolor_spell
-from ..game_types import StackItem, as_target_ids, single_chosen_id
+from ..game_types import (StackItem, as_target_ids, as_target_slots,
+                          single_chosen_id)
 from ..resumption import run_resumable
 from ._targets import triggering_spell
 from .registry import effect_handler
@@ -286,7 +287,7 @@ def _copy_of_spell(copied: StackItem, controller_index: int) -> StackItem:
         card=copied.card,
         caster_index=controller_index,
         target_player_index=copied.target_player_index,
-        target_permanent_index=copied.target_permanent_index,
+        target_permanent_index=as_target_slots(copied.target_permanent_index),
         # Its own list: a slot CR 608.2b blanks on one is not blanked on the
         # other.
         target_permanent_id=as_target_ids(copied.target_permanent_id),
@@ -385,7 +386,9 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         named = game.permanent_by_id(named_id) if named_id is not None else None
         if named is not None:
             copy.target_player_index = game.controller_index_of(named)
-            copy.target_permanent_index = game.battlefield_index_of(named)
+            copy.target_permanent_index = as_target_slots(
+                game.battlefield_index_of(named)
+            )
             copy.target_permanent_id = [named.permanent_id]
         elif named_id is not None:
             # The permanent named on the cast has left: the copy's new target
@@ -399,7 +402,9 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
                 game.players.index(context.target)
                 if context.target is not None else copied.target_player_index
             )
-            copy.target_permanent_index = context.target_permanent_index
+            copy.target_permanent_index = as_target_slots(
+                context.target_permanent_index
+            )
             copy.target_permanent_id = None
 
     game._stack_push(
@@ -531,7 +536,7 @@ def copy_this_spell(game: Game, instruction: OracleInstruction, context: OracleE
             else game.players.index(context.target) if context.target is not None
             else None
         ),
-        target_permanent_index=(
+        target_permanent_index=as_target_slots(
             original.target_permanent_index if original is not None
             else context.target_permanent_index
         ),
@@ -619,7 +624,9 @@ def copy_spell_for_each_other_target(game: Game, instruction: OracleInstruction,
                 continue
             copy = _copy_of_spell(copied, seat)
             copy.target_player_index = game.controller_index_of(perm)
-            copy.target_permanent_index = game.battlefield_index_of(perm)
+            copy.target_permanent_index = as_target_slots(
+                game.battlefield_index_of(perm)
+            )
             copy.target_permanent_id = [perm.permanent_id]
             label = perm.card.name
         else:

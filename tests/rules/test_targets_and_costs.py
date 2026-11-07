@@ -982,14 +982,14 @@ def _mk_creature(name):
 
 
 def _leadb_resolve(game, card, instruction, source, index, permanent_id):
-    from engine.game_types import OracleExecutionContext
+    from engine.game_types import OracleExecutionContext, as_target_slots
     from engine.handlers import EFFECT_HANDLERS
 
     EFFECT_HANDLERS[instruction.kind](
         game, instruction,
         OracleExecutionContext(
             caster=game.players[0], target=game.players[1], card=card,
-            target_permanent_index=index,
+            target_permanent_index=as_target_slots(index),
             target_permanent_id=None if permanent_id is None else [permanent_id],
             source_permanent=source,
         ),

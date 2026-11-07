@@ -239,14 +239,15 @@ def test_announced_slots_follow_the_permanent_and_end_when_it_leaves():
     game, first, second, third = _three_creatures()
     seat = game.players[1]
 
-    assert announced_slots(game, seat, None, [second.permanent_id]) == 1
-    assert announced_slots(game, seat, 1, [second.permanent_id]) == 1
+    # In the slot channel's one shape: a list, one slot per id.
+    assert announced_slots(game, seat, None, [second.permanent_id]) == [1]
+    assert announced_slots(game, seat, [1], [second.permanent_id]) == [1]
     game.remove_from_battlefield(first)
-    assert announced_slots(game, seat, 1, [second.permanent_id]) == 0
+    assert announced_slots(game, seat, [1], [second.permanent_id]) == [0]
     game.remove_from_battlefield(second)
-    assert announced_slots(game, seat, 1, [second.permanent_id]) is None
+    assert announced_slots(game, seat, [1], [second.permanent_id]) == [None]
     # …and a permanent on the other seat has no slot on this one.
-    assert announced_slots(game, game.players[0], 0, [third.permanent_id]) is None
+    assert announced_slots(game, game.players[0], [0], [third.permanent_id]) == [None]
 
 
 def test_announced_slots_leave_a_slot_with_no_id_alone():
@@ -255,8 +256,8 @@ def test_announced_slots_leave_a_slot_with_no_id_alone():
     game, first, second, _third = _three_creatures()
     seat = game.players[1]
 
-    assert announced_slots(game, seat, 3, None) == 3
-    assert announced_slots(game, seat, 3, [None]) == 3
+    assert announced_slots(game, seat, [3], None) == [3]
+    assert announced_slots(game, seat, [3], [None]) == [3]
     assert announced_slots(game, seat, [0, 4], [second.permanent_id, None]) == [1, 4]
     assert announced_slots(
         game, seat, None, [second.permanent_id, first.permanent_id],

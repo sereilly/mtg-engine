@@ -359,7 +359,7 @@ def test_w1g1_reaping_the_graves_copies_each_return_another_card(set_pool, befor
         assert not any("Forest" in name for name in names)
         # The first card not yet named by the original or an earlier copy.
         taken = {"Grizzly Bears"} | {
-            item.target_graveyard_card.card.name
+            item.target_graveyard_card[0].card.name
             for item in _w1g1_copies(game)[:-1]
         }
         pick = next(
@@ -405,7 +405,7 @@ def test_w1g1_a_copys_graveyard_offer_taken_by_default_keeps_the_target(set_pool
     assert owed is not None
     game.take_choice_default(owed)
     (copy,) = _w1g1_copies(game)
-    assert copy.target_graveyard_card.card.name == "Grizzly Bears"
+    assert copy.target_graveyard_card[0].card.name == "Grizzly Bears"
 
 
 @_w1g1_pytest.mark.parametrize("before", [0, 1, 3])

@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..equipment import attach_equipment, attachment_refusal
-from ..game_types import first_target_id
+from ..game_types import first_slot, first_target_id
 from ..oracle_types import OracleInstruction
 from .registry import effect_handler
 
@@ -78,9 +78,7 @@ def attach_source_to_target(
         )
 
     target_id = first_target_id(context.target_permanent_id)
-    target_index = context.target_permanent_index
-    if isinstance(target_index, list):
-        target_index = target_index[0] if target_index else None
+    target_index = first_slot(context.target_permanent_index)
     # Strictly the chosen permanent. The id is the identity (CR 400.7) and the
     # activation path stamps one whenever an index was named, so when there is
     # an id it is the *only* thing consulted: falling back to the index after

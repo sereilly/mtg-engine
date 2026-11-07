@@ -57,7 +57,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from .divided_damage import DIVIDED_TARGETS, divided_entry, divided_entry_id
-from .game_types import target_ids
+from .game_types import as_target_slots, target_ids, target_slots
 from .modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
 from .text_changes import spell_text_card
 
@@ -955,16 +955,13 @@ def names_several_targets(item: "StackItem") -> bool:
 
 
 def _blank_at(value, position: int, new):
-    """*value* with *new* at *position*, keeping its scalar-or-list shape —
-    and leaving a scalar alone for any slot but the first, which is the only
-    one a scalar can be about."""
-    if isinstance(value, (list, tuple)):
-        if not 0 <= position < len(value):
-            return value
-        updated = list(value)
-        updated[position] = new
-        return updated
-    return new if position == 0 else value
+    """The list *value* with *new* at *position* — a slot past its end is left
+    alone (there is nothing there to blank)."""
+    if value is None or not 0 <= position < len(value):
+        return value
+    updated = list(value)
+    updated[position] = new
+    return updated
 
 
 def blank_illegal_targets(item: "StackItem", targets) -> int:
@@ -1044,7 +1041,8 @@ def blank_illegal_targets(item: "StackItem", targets) -> int:
             continue
         holder.target_permanent_id = _blank_at(ids, target.position, tombstone)
         holder.target_permanent_index = _blank_at(
-            getattr(holder, "target_permanent_index", None), target.position, None
+            as_target_slots(getattr(holder, "target_permanent_index", None)),
+            target.position, None,
         )
         blanked += 1
     if dropped:
@@ -1103,8 +1101,8 @@ def _set_id_at(value, position: int, new: int) -> list:
 
 def _set_at(value, position: int, new):
     """*value* with *new* at *position*, keeping its scalar-or-list shape —
-    for the slot and graveyard channels, which keep both; the id channel is
-    :func:`_set_id_at`'s."""
+    for the graveyard channel, which keeps both; the id channel is
+    :func:`_set_id_at`'s and the slot channel :func:`_set_slot_at`'s."""
     if isinstance(value, list):
         updated = list(value)
         while len(updated) <= position:
@@ -1112,6 +1110,16 @@ def _set_at(value, position: int, new):
         updated[position] = new
         return updated
     return new
+
+
+def _set_slot_at(value, position: int, new) -> list:
+    """The slot channel *value* with *new* at slot *position* — a list always,
+    padded with ``None`` up to it (``game_types.check_target_slots``)."""
+    updated = target_slots(value)
+    while len(updated) <= position:
+        updated.append(None)
+    updated[position] = new
+    return updated
 
 
 def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
@@ -1151,12 +1159,16 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
                 seat, permanent = game.find_permanent_by_id(pick.permanent_id)
                 item.target_player_index = seat
                 item.target_permanent_id = [pick.permanent_id]
-                item.target_permanent_index = game.battlefield_index_of(permanent)
+                item.target_permanent_index = as_target_slots(
+                    game.battlefield_index_of(permanent)
+                )
             continue
         if channel == "graveyard":
             index = game.graveyard_index_of(pick.stamp)
             item.target_graveyard_card = _set_at(item.target_graveyard_card, position, pick.stamp)
-            item.target_permanent_index = _set_at(item.target_permanent_index, position, index)
+            item.target_permanent_index = _set_slot_at(
+                item.target_permanent_index, position, index
+            )
             item.target_player_index = pick.stamp.seat
             continue
         if channel == "divided":
@@ -1188,7 +1200,7 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
         item.target_permanent_id = _set_id_at(
             item.target_permanent_id, position, pick.permanent_id
         )
-        item.target_permanent_index = _set_at(
+        item.target_permanent_index = _set_slot_at(
             item.target_permanent_index, position,
             game.battlefield_index_of(game.permanent_by_id(pick.permanent_id)),
         )

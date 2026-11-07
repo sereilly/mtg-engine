@@ -38,12 +38,17 @@ def _mode_announcements(
     on two boards, and the cast's own fields name neither. A mode's targets
     travel as a slot beside its seat, never as ids — ``ChosenMode`` is stamped
     with ids only as it reaches the stack.
+
+    A mode holds its slots in the channel's one shape (a list); the gates are
+    handed them in the announcement's arity — one slot bare, several as the
+    list — which is the shape every caller's own announcement arrives in.
     """
     if chosen_modes:
         return [
             (
                 mode.index, mode.target_player_index,
-                mode.target_permanent_index, None, mode.target_stack_item,
+                _announced_arity(mode.target_permanent_index), None,
+                mode.target_stack_item,
             )
             for mode in chosen_modes
         ]
@@ -51,6 +56,14 @@ def _mode_announcements(
         mode_index, target_player_index, target_permanent_index,
         target_permanent_ids, target_stack_item,
     )]
+
+
+def _announced_arity(slots):
+    """The slot channel *slots* (None or a list) as an announcement names it:
+    None, one slot bare, or several as a list."""
+    if slots is None:
+        return None
+    return slots[0] if len(slots) == 1 else list(slots)
 
 
 class CastAnnouncementMixin:
@@ -222,7 +235,7 @@ class CastAnnouncementMixin:
         because that is the order the modes resolve in (CR 608.2c) — sorting
         once here is what lets the resolution loop be a loop rather than a sort.
         """
-        from ...game_types import ChosenMode
+        from ...game_types import ChosenMode, as_target_slots
 
         program = compile_card_oracle(card)
         # "**An opponent** chooses one —" (CR 700.2e). The choice is made at the
@@ -262,7 +275,9 @@ class CastAnnouncementMixin:
             chosen.append(ChosenMode(
                 index=index,
                 target_player_index=entry.get("target_player_index"),
-                target_permanent_index=entry.get("target_permanent_index"),
+                target_permanent_index=as_target_slots(
+                    entry.get("target_permanent_index")
+                ),
                 target_stack_item=stack_item,
             ))
         chosen.sort(key=lambda mode: mode.index)

@@ -36,7 +36,7 @@ from ...mana_payment import answer_color_choices, is_mana_ability
 from ...events import emit
 from ...game_types import (OracleExecutionContext, OracleStateMachine,
                            SimulationResult, StackItem, as_target_ids,
-                           chosen_damage_source)
+                           as_target_slots, chosen_damage_source)
 from ...handlers._chosen import CHOSEN_ABILITY
 from ...oracle import OracleInstruction
 from ...refusals import noting, refuse, take_back_refused_attempt
@@ -950,7 +950,7 @@ class AbilityActivationMixin:
                 card=permanent.card,
                 caster_index=controller_index,
                 target_player_index=announced_target_idx,
-                target_permanent_index=target_permanent_index,
+                target_permanent_index=as_target_slots(target_permanent_index),
                 target_permanent_id=as_target_ids(target_permanent_ids),
                 target_graveyard_card=graveyard_stamps,
                 x_value=x_value,

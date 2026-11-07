@@ -34,6 +34,7 @@ from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
 from ..oracle_types import REMOVED_FROM_COMBAT_PERMANENTS
 from ..pt import add_pt_modifier, pt_change_text
 from ..rampage import rampage_bonus
+from ..game_types import single_slot
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -548,7 +549,7 @@ def remove_creature_from_combat(game: Game, instruction: OracleInstruction, cont
     # creature only when no explicit target was supplied (AI/headless).
     target = context.target
     card = context.card
-    idx = context.target_permanent_index
+    idx = single_slot(context.target_permanent_index)
     removed_index: int | None = None
     if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
         if target.battlefield[idx].is_creature:

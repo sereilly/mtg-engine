@@ -342,16 +342,104 @@ def first_target_id(value) -> "int | None":
     return slots[0] if slots and type(slots[0]) is int else None
 
 
+# ---------------------------------------------------------------------------
+# The battlefield-slot channel: the same one shape as the ids beside it
+# ---------------------------------------------------------------------------
+#
+# ``target_permanent_index`` rides the same four holders, beside the ids, and
+# kept the shape the id channel shed: an ``int`` for one slot, a list for
+# several. A reader written for one arity silently missed the other, and each
+# answered the question for itself — seventeen ``isinstance(…, list)`` checks
+# over the holders, a ``_one_choice`` here and an ``_as_slots`` there.
+#
+# Settled the way the ids were: on every holder the channel is **None or a
+# list of slots**, each an ``int`` or ``None`` (a slot that names nothing —
+# blanked by CR 608.2b, or a permanent no longer on that battlefield). Every
+# holder refuses any other value as it is written (``check_target_slots``); a
+# writer holding a value of either arity hands it through
+# :func:`as_target_slots`. Readers ask :func:`target_slots` (every slot),
+# :func:`single_slot` (the one slot an announcement of one named) or
+# :func:`first_slot` (slot zero, for the single-target handlers a several-slot
+# sentence reaches by design).
+#
+# **A slot is a battlefield slot** on the seat beside it. A graveyard target
+# is identified by its stamp (``target_graveyard_card``) and located through
+# ``Game.chosen_graveyard_index``; a slot is a cache of the ids, re-read off
+# them at resolution (``bare_announcements.resolving_slots``).
+
+
+def check_target_slots(value, holder: str = "target_permanent_index") -> None:
+    """Raise unless *value* is the slot channel's one shape: None, or a list
+    whose every entry is an ``int`` or None."""
+    if value is None:
+        return
+    if type(value) is not list or any(
+        entry is not None and type(entry) is not int for entry in value
+    ):
+        raise TypeError(
+            f"{holder} is None or a list of slots (one slot is [index]); "
+            f"got {value!r}"
+        )
+
+
+def as_target_slots(value) -> "list[int | None] | None":
+    """*value* — an announcement's slot of either arity — in the channel's
+    shape: None stays None, one slot becomes a one-slot list, a list or tuple
+    is copied (no two holders share one list a later rewrite would change in
+    both)."""
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    return [value]
+
+
+def target_slots(value) -> "list[int | None]":
+    """Every slot *value* names, in order — empty for None. A copy."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    return [value]
+
+
+def single_slot(value) -> "int | None":
+    """The one slot an announcement of **one** slot named, or None — for the
+    reason :func:`single_chosen_id` gives: a longer list is several, and a
+    single-target read has no business picking from it."""
+    slots = target_slots(value)
+    if len(slots) != 1:
+        return None
+    return slots[0] if type(slots[0]) is int else None
+
+
+def first_slot(value) -> "int | None":
+    """The slot in position zero of *value*, or None — for the single-target
+    handlers a several-slot sentence reaches by design (:func:`first_target_id`'s
+    reason)."""
+    slots = target_slots(value)
+    return slots[0] if slots and type(slots[0]) is int else None
+
+
+#: The target channels a holder guards, each with its shape check.
+_GUARDED_CHANNELS = {
+    "target_permanent_id": check_target_ids,
+    "target_permanent_index": check_target_slots,
+}
+
+
 class _TargetIdsGuard:
-    """Mixed into every mutable holder of the channel: a write of any other
-    shape raises as it happens — on construction (a dataclass ``__init__``
-    assigns through ``__setattr__``) and on every later assignment alike."""
+    """Mixed into every mutable holder of the target channels: a write of any
+    other shape to the ids or the slots raises as it happens — on
+    construction (a dataclass ``__init__`` assigns through ``__setattr__``)
+    and on every later assignment alike."""
 
     __slots__ = ()
 
     def __setattr__(self, name, value):
-        if name == "target_permanent_id":
-            check_target_ids(value, f"{type(self).__name__}.target_permanent_id")
+        check = _GUARDED_CHANNELS.get(name)
+        if check is not None:
+            check(value, f"{type(self).__name__}.{name}")
         object.__setattr__(self, name, value)
 
 
@@ -370,11 +458,10 @@ class ChosenMode(_TargetIdsGuard):
 
     index: int
     target_player_index: int | None = None
-    # A list when the mode names several targets ("up to two target creatures",
-    # Fatal Lore) — the same shape, and for the same reason, that `StackItem`
-    # carries below: several chosen objects may sit on two battlefields, which
-    # one seat index cannot say.
-    target_permanent_index: int | list[int] | None = None
+    # The mode's battlefield slots: None or a list, as on the item
+    # (``check_target_slots``) — several when the mode names several targets
+    # ("up to two target creatures", Fatal Lore).
+    target_permanent_index: list[int | None] | None = None
     # The mode's targets by identity: None or a list of slots, as on the item
     # (``check_target_ids``).
     target_permanent_id: list[int | None] | None = None
@@ -389,8 +476,10 @@ class StackItem(_TargetIdsGuard):
     card: CardDefinition
     caster_index: int
     target_player_index: int | None
-    # target_permanent_index may be a single int or a list of ints for multi-target spells
-    target_permanent_index: int | list[int] | None
+    # The chosen battlefield slots on ``target_player_index``'s battlefield:
+    # None or a list, one slot per target (``check_target_slots``). A cache
+    # of the ids below, re-read off them as the object resolves.
+    target_permanent_index: list[int | None] | None
     x_value: int | None
     # The same target(s) by *stable identity* (CR 601.2c), stamped as the object
     # is put on the stack by ``Game._stack_push``. The index beside it is a
@@ -704,8 +793,9 @@ class OracleExecutionContext(_TargetIdsGuard):
     caster: PlayerState
     target: PlayerState
     card: CardDefinition
-    # target_permanent_index may be a single int or a list of ints for multi-target spells
-    target_permanent_index: int | list[int] | None = None
+    # The chosen battlefield slots on ``target``'s battlefield, re-read off the
+    # ids as the object resolves: None or a list (``check_target_slots``).
+    target_permanent_index: list[int | None] | None = None
     # The target(s) by stable identity, carried over from the stack item (see
     # StackItem.target_permanent_id) — None or a list of slots, as there.
     # ``engine/handlers/_targets.py`` prefers it over the index, which is why a

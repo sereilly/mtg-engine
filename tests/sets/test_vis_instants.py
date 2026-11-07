@@ -269,7 +269,9 @@ def _w1g3_resolve(game, card, *, caster, target=None, choices=None,
     context = OracleExecutionContext(
         card=card, caster=caster, target=target or caster,
         source_permanent=source_permanent,
-        target_permanent_index=target_permanent_index,
+        target_permanent_index=(
+            None if target_permanent_index is None else [target_permanent_index]
+        ),
         choices=choices or {},
     )
     for instruction in program.instructions:

@@ -720,23 +720,20 @@ def _lone_permanent_target(game, item) -> int | None:
     original target is itself illegal by then", so a spell whose creature died
     is exactly the spell a retarget is for.
     """
-    from .game_types import single_chosen_id
+    from .game_types import single_chosen_id, single_slot
 
     ids = getattr(item, "target_permanent_id", None)
     if ids is not None:
         return single_chosen_id(ids)
-    idxs = getattr(item, "target_permanent_index", None)
-    if idxs is None:
-        return None
-    chosen = list(idxs) if isinstance(idxs, (list, tuple)) else [idxs]
-    if len(chosen) != 1 or not isinstance(chosen[0], int):
+    slot = single_slot(getattr(item, "target_permanent_index", None))
+    if slot is None:
         return None
     seat = getattr(item, "target_player_index", None)
     if seat is None or not (0 <= seat < len(game.players)):
         return None
     # The one sanctioned direction for an index: through the seam's bridge,
     # once, and carried as an id from here on.
-    found = game.permanent_at(seat, chosen[0])
+    found = game.permanent_at(seat, slot)
     return None if found is None else game.permanent_id_of(found)
 
 

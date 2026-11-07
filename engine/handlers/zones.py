@@ -28,6 +28,7 @@ from ._targets import (_resolve_graveyard_slots, frozen_that_player_seat,
                        pile_owner_still_a_target, resolve_target_permanent,
                        resolve_target_permanents)
 from .registry import effect_handler
+from ..game_types import single_slot
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -344,7 +345,7 @@ def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruct
     caster = context.caster
     if instruction.payload.get("any_graveyard"):
         named = context.target if context.target in game.players else None
-        idx = context.target_permanent_index
+        idx = single_slot(context.target_permanent_index)
         if named is None or not (isinstance(idx, int) and 0 <= idx < len(named.graveyard)):
             game.log.append(f"{context.card.name}: no chosen card to bottom")
             return True, "resolved"
@@ -352,7 +353,7 @@ def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruct
     if not caster.graveyard:
         game.log.append(f"{context.card.name}: no card in the graveyard to bottom")
         return True, "resolved"
-    idx = context.target_permanent_index
+    idx = single_slot(context.target_permanent_index)
     if not (isinstance(idx, int) and 0 <= idx < len(caster.graveyard)):
         idx = 0
     # "Put target **Rebel** card …" (Lin Sivvi, Defiant Hero). A narrowed

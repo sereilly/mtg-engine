@@ -18,7 +18,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 from ...extra_triggers import additional_triggers
-from ...game_types import StackItem
+from ...game_types import StackItem, as_target_slots
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
@@ -157,7 +157,7 @@ class TriggeredAbilitiesMixin:
                     card=stack_card,
                     caster_index=controller_index,
                     target_player_index=target_player_index,
-                    target_permanent_index=target_permanent_index,
+                    target_permanent_index=as_target_slots(target_permanent_index),
                     target_permanent_id=target_permanent_id,
                     target_stack_item=target_stack_item,
                     x_value=x_value,
@@ -582,7 +582,7 @@ class TriggeredAbilitiesMixin:
             card=event["card"],
             caster_index=event["controller_index"],
             target_player_index=event.get("target_player_index"),
-            target_permanent_index=event.get("target_permanent_index"),
+            target_permanent_index=as_target_slots(event.get("target_permanent_index")),
             x_value=event.get("x_value"),
             target_permanent_id=event.get("target_permanent_id"),
             ability_instruction=event["instruction"],

@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..dexterity import flip_lands_on
-from ..game_types import target_ids
+from ..game_types import single_slot, target_ids
 from ..models import Permanent, PlayerState
 from ..destruction_events import (begin_destruction_hold,
                                   end_destruction_hold,
@@ -297,7 +297,7 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # ("Destroy target creature. Its controller loses 2 life." — Liliana,
     # Death Mage), and by then the permanent is gone — record it now
     # (CR 608.2h, last-known information).
-    chosen_index = context.target_permanent_index
+    chosen_index = single_slot(context.target_permanent_index)
     # **Was a target named at all** — by slot *or* by stable id. The gate used
     # to ask only about the slot, which is a gate standing in for a question it
     # does not ask: a caller that names its target the way CLAUDE.md asks for,

@@ -13,7 +13,7 @@ from __future__ import annotations
 from .... import madness as _madness
 from ....face_down import MASK_FACE_DOWN, face_down_card
 from ....faces import castable_faces, is_multi_face, spell_named
-from ....game_types import single_chosen_id
+from ....game_types import as_target_slots, single_chosen_id, single_slot
 from ....grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ....models import Permanent
 from ....pending_choices import ChoiceSpec, PendingChoice
@@ -789,7 +789,9 @@ class SpellChoicesMixin:
             if perm is None:
                 return False
             copy_item.target_player_index = self.controller_index_of(perm)
-            copy_item.target_permanent_index = self.battlefield_index_of(perm)
+            copy_item.target_permanent_index = as_target_slots(
+                self.battlefield_index_of(perm)
+            )
             copy_item.target_permanent_id = [perm.permanent_id]
             label = perm.card.name
         self.discard_pending_choice(choice)
@@ -858,7 +860,8 @@ class SpellChoicesMixin:
             held = single_chosen_id(copy_item.target_permanent_id)
             if held is None:
                 perm = self.permanent_at(
-                    copy_item.target_player_index, copy_item.target_permanent_index
+                    copy_item.target_player_index,
+                    single_slot(copy_item.target_permanent_index),
                 )
                 held = self.permanent_id_of(perm) if perm is not None else None
             current = {"permanent_id": held}

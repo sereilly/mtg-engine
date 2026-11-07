@@ -1239,7 +1239,7 @@ def test_w2g3_silver_wyvern_asks_again_at_resolution(set_pool):
     moved = game.stack[0]
     moved.target_player_index = 0
     moved.target_permanent_id = [bystander.permanent_id]
-    moved.target_permanent_index = game.battlefield_index_of(bystander)
+    moved.target_permanent_index = [game.battlefield_index_of(bystander)]
     game.resolve_stack()
 
     assert (

@@ -25,7 +25,7 @@ from ..counter_conditions import (cant_be_countered,
 from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
                               StackAnnouncement, is_live, record_exiled_card,
                               record_in_context)
-from ..game_types import StackItem, as_target_ids, target_ids
+from ..game_types import StackItem, as_target_ids, as_target_slots, target_ids
 from ..faces import is_face, spell_named, whole_card
 from ..flashback import leaves_stack_to_exile
 from ..mana_payment import mana_cost_label, total_pips
@@ -58,7 +58,7 @@ def _stack_announcement(item: StackItem) -> StackAnnouncement:
     return StackAnnouncement(
         caster_index=item.caster_index,
         target_player_index=item.target_player_index,
-        target_permanent_index=item.target_permanent_index,
+        target_permanent_index=as_target_slots(item.target_permanent_index),
         target_permanent_id=as_target_ids(item.target_permanent_id),
         target_graveyard_card=item.target_graveyard_card,
         x_value=item.x_value,
@@ -238,7 +238,7 @@ def put_exiled_card_onto_stack_as_copy(game: Game, instruction: OracleInstructio
         # left, whoever puts it on the stack.
         owner_index=record.owner_index,
         target_player_index=announcement.target_player_index,
-        target_permanent_index=announcement.target_permanent_index,
+        target_permanent_index=as_target_slots(announcement.target_permanent_index),
         target_permanent_id=as_target_ids(announcement.target_permanent_id),
         target_graveyard_card=announcement.target_graveyard_card,
         x_value=announcement.x_value,

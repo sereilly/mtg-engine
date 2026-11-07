@@ -30,7 +30,7 @@ from ...face_down import revealed_as_it_moves
 from ...faces import whole_card
 from ...flashback import leaves_stack_to_exile
 from ...game_types import (OracleExecutionContext, OracleStateMachine, StackItem,
-                           first_target_id)
+                           as_target_slots, first_target_id, single_slot)
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
@@ -387,7 +387,9 @@ class StackResolutionMixin:
             if found is not None:
                 if target_idx is None:
                     target_idx = found[0]
-                target_permanent_index = self.battlefield_index_of(found[1])
+                target_permanent_index = as_target_slots(
+                    self.battlefield_index_of(found[1])
+                )
             else:
                 target_permanent_index = None
         # **The player the sentence acts on, where nothing was chosen**: the
@@ -419,7 +421,7 @@ class StackResolutionMixin:
             caster=self.players[item.caster_index],
             target=self.players[target_idx],
             card=item.card,
-            target_permanent_index=target_permanent_index,
+            target_permanent_index=as_target_slots(target_permanent_index),
             target_permanent_id=target_permanent_id,
             about_permanent_id=item.about_permanent_id,
             # The graveyard half of the same announcement, for a roles
@@ -827,9 +829,9 @@ class StackResolutionMixin:
         # happened. The stamp itself is never overwritten: an item pushed back
         # on for a pending choice re-locates from the same name next time.
         if item.target_graveyard_card is not None:
-            item.target_permanent_index = self.chosen_graveyard_index(
+            item.target_permanent_index = as_target_slots(self.chosen_graveyard_index(
                 item.target_graveyard_card, item.target_permanent_index
-            )
+            ))
             # And which pile the slot counts into. For a graveyard target that
             # *is* what `target_player_index` means, and leaving it to be
             # re-derived below is how the two halves of one choice came apart:
@@ -1089,6 +1091,9 @@ class StackResolutionMixin:
         text_change_effects=(),
     ) -> None:
         caster = self.players[caster_index]
+        # The slot channel in its one shape, whether it came off a stack
+        # object or straight from a land play's announcement.
+        target_permanent_index = as_target_slots(target_permanent_index)
         text_card = spell_text_of(card, text_change_effects)
         owner_seat = caster_index if owner_index is None else owner_index
         owner = self.players[owner_seat]
@@ -1113,7 +1118,7 @@ class StackResolutionMixin:
             ):
                 permanent.metadata["copy_target"] = (
                     target_player_index if target_player_index is not None else caster_index,
-                    target_permanent_index,
+                    single_slot(target_permanent_index),
                     first_target_id(target_permanent_id),
                 )
             # The one entry site in the engine that *is* a cast (CR 701.5a):
@@ -1492,7 +1497,9 @@ class StackResolutionMixin:
 
         def finish() -> None:
             if first_pass["ends_turn"] is None:
-                self._apply_self_resolved_hook(caster_index, card, target_idx, target_permanent_index)
+                self._apply_self_resolved_hook(
+                    caster_index, card, target_idx, single_slot(target_permanent_index),
+                )
                 pending_woc = self.pending_choice_of("word_of_command")
                 if (
                     pending_woc is not None

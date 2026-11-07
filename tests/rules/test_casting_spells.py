@@ -213,7 +213,7 @@ def test_601_2c_target_permanent_index_announced_and_stored():
     game.queue_from_hand(0, "Paralyze", target_player_index=1, target_permanent_index=0)
 
     assert game.stack[-1].target_player_index == 1
-    assert game.stack[-1].target_permanent_index == 0
+    assert game.stack[-1].target_permanent_index == [0]
 
 
 @pytest.mark.cr("601.2c")

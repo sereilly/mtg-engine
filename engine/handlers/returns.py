@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 from ..announced_creature_type import (GRAVEYARD_ANNOUNCED_CREATURE_TYPE,
                                        announced_word,
                                        with_announced_creature_type)
-from ..game_types import first_target_id
+from ..game_types import first_target_id, single_slot, target_slots
 from ..models import Permanent
 from ..oracle_types import named_no_target
 from ..search_filters import card_has_type
@@ -91,7 +91,7 @@ def _return_graveyard_card_to_owners_hand(
     # (``_resolve_graveyard_slots``) — and each slot that no longer answers
     # is dropped (CR 608.2b) while the rest still return. No pile named, or
     # nothing named in it, is an announcement that named nothing: no scan.
-    if isinstance(index, list) or _names_several_cards(instruction):
+    if len(target_slots(index)) > 1 or _names_several_cards(instruction):
         if named is None:
             game.log.append(f"{context.card.name}: no card was returned from a graveyard")
             return True, "resolved"
@@ -109,6 +109,7 @@ def _return_graveyard_card_to_owners_hand(
             game.log.append(f"{context.card.name}: no card was returned from a graveyard")
         return True, "resolved"
     found = None
+    index = single_slot(index)
     if isinstance(index, int):
         if (
             named is not None
@@ -264,7 +265,7 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
 
     # Honor the caster's chosen graveyard card (Rule 601.2c). Regrowth
     # (any_card) accepts any type; Raise Dead only a creature card.
-    idx = context.target_permanent_index
+    idx = single_slot(context.target_permanent_index)
     if isinstance(idx, int) and 0 <= idx < len(caster.graveyard) and _eligible_slot(
         idx
     ):

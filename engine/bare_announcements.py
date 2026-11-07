@@ -57,6 +57,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .game_types import as_target_slots, target_ids, target_slots
 from .legality import (
     activation_target_obligation, cast_target_obligation, exact_target_count,
     targeting_instruction,
@@ -122,13 +123,9 @@ def names_an_object(
     "did this name a target?" that does not depend on the spec. (A seat alone
     is a target only where the spec offers a player; the two default
     functions below ask, given the seat.)"""
-    indices = (
-        target_permanent_index
-        if isinstance(target_permanent_index, list) else [target_permanent_index]
-    )
     return bool(
         any(pid is not None for pid in (target_permanent_ids or ()))
-        or any(index is not None for index in indices)
+        or any(index is not None for index in target_slots(target_permanent_index))
         or target_stack_item is not None
         or target_role_refs
         or divided_targets
@@ -368,7 +365,11 @@ def announced_slots(game: "Game", seat_player, index, ids):
     choice gated at announcement. A slot whose entry carries **no id** is left
     exactly as it was: that is a card in a graveyard, whose slot counts into a
     different list and has its own stamp (``GraveyardTarget``).
+
+    In the slot channel's one shape (``game_types.check_target_slots``): None
+    or a list, one slot per id.
     """
+    index = as_target_slots(index)
     if seat_player is None:
         return index
 
@@ -378,22 +379,15 @@ def announced_slots(game: "Game", seat_player, index, ids):
             return None
         return game.battlefield_index_of(permanent)
 
-    from .game_types import target_ids
-
     ids = target_ids(ids)
     if not any(isinstance(entry, int) for entry in ids):
         return index
-    listed = isinstance(index, (list, tuple))
-    indices = list(index) if listed else [index]
-    slots = []
-    for position, entry in enumerate(ids):
-        if isinstance(entry, int):
-            slots.append(slot_of(entry))
-        else:
-            slots.append(indices[position] if position < len(indices) else None)
-    if listed or len(slots) > 1:
-        return slots
-    return slots[0]
+    indices = target_slots(index)
+    return [
+        slot_of(entry) if isinstance(entry, int)
+        else (indices[position] if position < len(indices) else None)
+        for position, entry in enumerate(ids)
+    ]
 
 
 def resolving_slots(
@@ -410,6 +404,6 @@ def resolving_slots(
         card, compile_card_oracle(card), mode_index=mode_index,
         instruction=instruction,
     ) is not None:
-        return index
+        return as_target_slots(index)
     return announced_slots(game, seat_player, index, ids)
 

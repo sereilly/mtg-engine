@@ -10,7 +10,8 @@ from ..divided_damage import divided_entry_id
 from ..event_durations import end_event_durations
 from ..cast_costs import kicked
 from ..events import emit
-from ..game_types import OracleExecutionContext, OracleStateMachine, target_ids
+from ..game_types import (OracleExecutionContext, OracleStateMachine,
+                          as_target_slots, single_slot, target_ids)
 from ..handlers import EFFECT_HANDLERS
 from ..handlers._amounts import count_from_payload
 from ..handlers._common import apply_damage_to_creature
@@ -262,7 +263,7 @@ class OracleInstructionsMixin:
                 caster=caster,
                 target=target,
                 card=card,
-                target_permanent_index=target_permanent_index,
+                target_permanent_index=as_target_slots(target_permanent_index),
                 target_permanent_id=target_permanent_id,
                 x_value=x_value,
                 choices={
@@ -522,6 +523,9 @@ class OracleInstructionsMixin:
         renumbered underneath the index by the time this runs.
         """
         ran_entry_text = False
+        # An Aura has one target (CR 303.4a): its one slot, read off the slot
+        # channel whichever arity it arrived in.
+        target_permanent_index = single_slot(target_permanent_index)
         program = compile_card_oracle(aura_permanent.effective_card)
         text = program.normalized_text
         # The enchant clause is asked of the *printed* text: it is a line,
