@@ -1,6 +1,6 @@
 """The AI's decisions do not read the log.
 
-``ai_rehearsal._rehearsal_seed`` was ``7919 * turn + len(game.log)``: one log
+``ai_scratch_copy._rehearsal_seed`` was ``7919 * turn + len(game.log)``: one log
 line added, removed or merged reseeded every later rehearsal's concealment
 shuffle (``conceal_from``) and moved AI decisions with no AI code touched
 (Scourge's engine pile merged Carbonize's two lines into one and moved 2 of
@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 from engine import Game, PlayerState
-from engine import ai_rehearsal, ai_scoring
+from engine import ai_scoring, ai_scratch_copy
 from engine.ai_simulator import run_ai_simulation
 from engine.card_loader import manifest_set_path
 
@@ -43,14 +43,14 @@ def _run(monkeypatch, *, padded: bool, seed_of=None) -> tuple[list, dict, list]:
     """One seeded run: its lines without the padding, every other field of
     its report, and the log-length seed each rehearsal would have read."""
     log_seeds: list[int] = []
-    real_seed = seed_of or ai_rehearsal._rehearsal_seed
+    real_seed = seed_of or ai_scratch_copy._rehearsal_seed
 
     def spy(game):
         log_seeds.append(_log_seed(game))
         return real_seed(game)
 
     with monkeypatch.context() as patch:
-        patch.setattr(ai_rehearsal, "_rehearsal_seed", spy)
+        patch.setattr(ai_scratch_copy, "_rehearsal_seed", spy)
         if padded:
             start = Game.start_next_turn
 
@@ -92,16 +92,16 @@ def test_the_padded_run_can_tell_a_log_seed(monkeypatch):
 
 
 def test_the_seed_is_the_same_on_a_copy_and_for_any_log():
-    from engine.ai_rehearsal import scratch_copy
+    from engine.ai_scratch_copy import scratch_copy
 
     game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
     game.turn = 4
-    seed = ai_rehearsal._rehearsal_seed(game)
-    assert ai_rehearsal._rehearsal_seed(scratch_copy(game)) == seed
+    seed = ai_scratch_copy._rehearsal_seed(game)
+    assert ai_scratch_copy._rehearsal_seed(scratch_copy(game)) == seed
     game.log.extend(["a line", "another line"])
-    assert ai_rehearsal._rehearsal_seed(game) == seed
+    assert ai_scratch_copy._rehearsal_seed(game) == seed
     game.players[1].life -= 3
-    assert ai_rehearsal._rehearsal_seed(game) != seed
+    assert ai_scratch_copy._rehearsal_seed(game) != seed
 
 
 def test_a_tutor_score_is_not_weighed_again_for_a_log_line(monkeypatch, set_pool):

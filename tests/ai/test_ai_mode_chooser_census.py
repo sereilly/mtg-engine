@@ -79,7 +79,6 @@ from engine import ai_simulator
 from engine.ai_policy import (choose_cast_action,
                               choose_combat_instant_cast_action)
 from engine.ai_rehearsal import (
-    CARD_WORTH,
     combat_is_still_to_come,
     forget_damage_history,
     position_digest,
@@ -87,11 +86,9 @@ from engine.ai_rehearsal import (
     priced_by_the_fight,
     run_out_the_turn,
     same_position,
-    scratch_copy,
-    standing_swing,
-    standings,
-    swing_worth,
 )
+from engine.ai_scratch_copy import scratch_copy
+from engine.ai_standing import CARD_WORTH, standing_swing, standings, swing_worth
 from engine.ai_target_sides import instruction_target_side, several_target_slot_sides
 from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths

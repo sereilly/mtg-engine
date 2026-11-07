@@ -53,15 +53,13 @@ from dataclasses import dataclass
 from .ai_prompt_readers import TollLoss
 from .ai_prompts import _toll_loss_price
 from .ai_rehearsal import (
-    CARD_WORTH,
     combat_is_still_to_come,
     deliberating,
     has_a_creature_to_fight_with,
-    permanent_loss,
-    priced_as_their_blanks,
     rehearse,
     rehearsing,
 )
+from .ai_standing import CARD_WORTH, permanent_loss, priced_as_their_blanks
 from .face_down import TURN_FACE_UP
 from .game import Game
 from .special_actions import (

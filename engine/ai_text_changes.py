@@ -39,7 +39,7 @@ from .ai_actions import (
     _announced_steps,
     _cast_spec,
 )
-from .ai_rehearsal import CARD_WORTH
+from .ai_standing import CARD_WORTH
 from .ai_weighed_cast import SPELL_TYPES
 from .game import Game
 from .models import CardDefinition

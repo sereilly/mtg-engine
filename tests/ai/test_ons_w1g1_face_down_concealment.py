@@ -3,7 +3,7 @@
 CR 708.5: "You can't look at … face-down spells or permanents controlled by
 another player." The policy rehearses a candidate cast on a copy of the game,
 and a copy holds the card each face-down object hides — so a rehearsal could
-read it. ``ai_rehearsal.conceal_from`` deals the hidden cards again on the
+read it. ``ai_scratch_copy.conceal_from`` deals the hidden cards again on the
 copy, pooled with that player's library (``tests/ai/
 test_ai_hidden_information_census.py`` is the same census for hands and
 libraries).
@@ -30,7 +30,7 @@ from unittest import mock
 
 import pytest
 
-from engine import Game, PlayerState, ai_rehearsal
+from engine import Game, PlayerState, ai_scratch_copy
 from engine.ai_actions import cast_announcement
 from engine.ai_policy import choose_cast_action
 from engine.card_loader import load_catalog
@@ -89,7 +89,7 @@ def test_an_opponents_face_down_card_does_not_steer_a_proposal():
 def test_the_census_can_tell():
     """With the face-down objects left out of the deal, the copy keeps each
     world's real hidden card and the Bolt is weighed against it."""
-    with mock.patch.object(ai_rehearsal, "_face_down_objects", lambda game, index: []):
+    with mock.patch.object(ai_scratch_copy, "_face_down_objects", lambda game, index: []):
         proposals = [_proposal(*world) for world in WORLDS]
     assert proposals[0] != proposals[1], proposals
 
@@ -100,8 +100,8 @@ def test_the_seat_still_sees_its_own_face_down_cards(world):
     only. A copy made for the face-down creature's controller keeps it."""
     hidden, in_library = world
     game = _world(hidden, in_library)
-    copy = ai_rehearsal.scratch_copy(game)
+    copy = ai_scratch_copy.scratch_copy(game)
     random.seed(1)
-    ai_rehearsal.conceal_from(copy, OPP)
+    ai_scratch_copy.conceal_from(copy, OPP)
     (kept,) = copy.players[OPP].battlefield
     assert kept.card.face_down_of is _CATALOG[hidden]

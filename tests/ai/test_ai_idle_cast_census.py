@@ -60,7 +60,8 @@ import pytest
 from engine import Game, PlayerState
 from engine import ai_simulator
 from engine.ai_policy import choose_cast_action
-from engine.ai_rehearsal import CARD_WORTH, scratch_copy, standings
+from engine.ai_scratch_copy import scratch_copy
+from engine.ai_standing import CARD_WORTH, standings
 from engine.oracle import compile_card_oracle
 from tests.ai import test_ai_mode_chooser_census as modes
 from tests.helpers import full_census, stable_part

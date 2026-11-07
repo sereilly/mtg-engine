@@ -105,15 +105,9 @@ from engine.ai_scoring import SPELL_BASE_SCORE, SWING_CAP
 from engine.ai_actions import cast_announcement
 from engine.ai_policy import choose_cast_action
 from engine.ai_payment import tap_planned_lands
-from engine.ai_rehearsal import (
-    CARD_WORTH,
-    position_digest,
-    same_position,
-    scratch_copy,
-    standing_swing,
-    standings,
-    swing_worth,
-)
+from engine.ai_rehearsal import position_digest, same_position
+from engine.ai_scratch_copy import scratch_copy
+from engine.ai_standing import CARD_WORTH, standing_swing, standings, swing_worth
 from engine.ai_weighed_cast import permitted_casts
 from engine.damage_events import DAMAGED_THIS_GAME
 from engine.mixins._constants import phases_after

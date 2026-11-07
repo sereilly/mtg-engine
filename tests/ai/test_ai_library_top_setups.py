@@ -40,7 +40,7 @@ from engine.ai_scoring import (
     _rehearse_announcement,
 )
 from engine.ai_policy import choose_cast_action
-from engine.ai_rehearsal import CARD_WORTH
+from engine.ai_standing import CARD_WORTH
 from engine.ai_valuation import library_top_setups
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units

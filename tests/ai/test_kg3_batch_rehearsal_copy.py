@@ -10,7 +10,7 @@ onto the copy's battlefield joined the original's event and never arrived.
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.ai_rehearsal import scratch_copy
+from engine.ai_scratch_copy import scratch_copy
 from engine.card_loader import load_catalog
 from engine.models import Permanent
 

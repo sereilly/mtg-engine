@@ -16,7 +16,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine import ai_rehearsal
+from engine import ai_rehearsal, ai_scratch_copy
 from engine.ai_actions import cast_announcement
 from engine.ai_policy import choose_cast_action, choose_combat_instant_cast_action
 from engine.card_loader import load_cards, manifest_set_paths
@@ -356,7 +356,7 @@ def test_no_rehearsal_is_run_part_way_through_a_resolution(pool):
     game = _table(pool, [bolt])
     game.resolving_seats.append(ME)
     try:
-        assert ai_rehearsal.mid_resolution(game)
+        assert ai_scratch_copy.mid_resolution(game)
         assert ai_rehearsal.rehearse(game, ME, lambda table: None) is None
     finally:
         game.resolving_seats.pop()

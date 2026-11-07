@@ -34,7 +34,7 @@ from .models import Permanent
 from .ai_combat_triggers import (attack_is_worth_its_trigger, block_is_worth_its_trigger,
                                  expected_attack_damage)
 from .ai_compelled_blocks import compelled_blocks, fight_outcome
-from .ai_rehearsal import life_worth, permanent_worth
+from .ai_standing import life_worth, permanent_worth
 from .ai_scoring import choose_attack_target, _permanent_value
 from .combat_assignment import combat_damage_assigned_by
 

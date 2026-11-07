@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .ai_rehearsal import permanent_worth
+from .ai_standing import permanent_worth
 from .ai_weighed_cast import _effect_steps
 from .combat_assignment import combat_damage_assigned_by
 
@@ -133,7 +133,7 @@ def _shed_for_the_block(game: "Game", attacker: "Permanent", blocker: "Permanent
     import random
 
     from .activation_prohibitions import activation_prohibition
-    from .ai_rehearsal import _detach, scratch_copy
+    from .ai_scratch_copy import _detach, scratch_copy
     from .ai_valuation import hampers_its_own_source, is_mana_ability
     from .board_payment import board_can_pay
 
@@ -214,7 +214,7 @@ def _evasion_damage_worth(game: "Game", attacker: "Permanent", blocker: "Permane
     """What the combat damage *attacker* deals unblocked is worth to its seat
     against *blocker*'s controller (``ai_rehearsal.life_worth``) — the price
     of shedding the evasion that kept it unblocked."""
-    from .ai_rehearsal import life_worth
+    from .ai_standing import life_worth
 
     defender = game.players[game.controller_index_of(blocker)]
     damage = combat_damage_assigned_by(attacker)

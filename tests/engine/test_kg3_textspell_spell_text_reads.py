@@ -70,7 +70,7 @@ IDENTITY_CALLS = frozenset({
 #: Every other raw read, by (module, function), and why it is the printed card
 #: — never a text read.
 PRINTED_CARD_READS: dict[tuple[str, str], str] = {
-    ("engine/ai_rehearsal.py", "_every_card"):
+    ("engine/ai_scratch_copy.py", "_every_card"):
         "every card object in the game, collected for concealment (identity)",
     ("engine/counter_conditions.py", "spend_next_spell_promises"):
         "spent as the spell is cast (CR 601.2i), before any effect can change it",

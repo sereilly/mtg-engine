@@ -13,7 +13,7 @@ copy may be cut loose from the table at all (``held_for_an_answer``).
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.ai_rehearsal import held_for_an_answer, scratch_copy
+from engine.ai_scratch_copy import held_for_an_answer, scratch_copy
 from engine.card_loader import load_catalog
 from engine.entry_awaiting import ENTRY_EVENT
 

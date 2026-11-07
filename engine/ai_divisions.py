@@ -367,7 +367,7 @@ def _toughness_step(counter: str, *, damage: bool = False) -> int:
 def _shrink_ranking(game: Game, permanent_ids, step: int, deathtouch: bool = False):
     """``(counters to kill, -worth, offer position, permanent_id)`` for each
     of *permanent_ids* still on the battlefield."""
-    from .ai_rehearsal import permanent_worth
+    from .ai_standing import permanent_worth
 
     for position, permanent_id in enumerate(permanent_ids):
         permanent = game.permanent_by_id(permanent_id)

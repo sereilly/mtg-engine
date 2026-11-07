@@ -42,14 +42,14 @@ from .ai_target_sides import (
     spell_target_side,
 )
 from .ai_rehearsal import (
-    CARD_WORTH,
     Rehearsal,
     deliberating,
     priced_by_the_fight,
-    public_counts,
     rehearse,
     rehearsing,
 )
+from .ai_scratch_copy import public_counts
+from .ai_standing import CARD_WORTH
 from .ai_valuation import (
     board_lowers_toughness,
     cards_drawn_by_controller,

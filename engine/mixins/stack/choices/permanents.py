@@ -505,7 +505,7 @@ class PermanentChoicesMixin:
             if pick_is_taken_from_its_controller(
                 context.card, str(choice.data.get("result_key") or "")
             ):
-                from ....ai_rehearsal import permanent_worth
+                from ....ai_standing import permanent_worth
 
                 controllers = {self.controller_index_of(perm) for perm in live}
                 if choice.player_index not in controllers:

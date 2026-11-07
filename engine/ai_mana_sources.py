@@ -357,7 +357,7 @@ def _spent_on_a_tap_cost_first(game: Game, seat: int):
     then board order. A creature tapped for mana neither attacks nor blocks
     until it untaps, so the cost is paid with the bodies the seat misses least.
     """
-    from .ai_rehearsal import permanent_worth
+    from .ai_standing import permanent_worth
 
     order = {id(permanent): slot for slot, permanent in enumerate(game.controlled_by(seat))}
 

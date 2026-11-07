@@ -29,7 +29,8 @@ resolution paths import these from here, inside the function that asks.
 from __future__ import annotations
 
 from .ai_target_sides import ability_target_side, spell_seat_side, spell_target_side
-from .ai_rehearsal import deliberating, permanent_worth, rehearse, rehearsing
+from .ai_rehearsal import deliberating, rehearse, rehearsing
+from .ai_standing import permanent_worth
 from .ai_prompt_readers import offer_trade, TollLoss, toll_branch_loss
 from .ai_valuation import offer_buys_a_drawback_to_its_source
 from .game import Game
@@ -872,7 +873,7 @@ def offer_trade_is_worth_taking(
         return None
     if (trade.price, trade.purchase) == ("source", "target_permanent"):
         from .ai_prompt_readers import _offer_target_permanent
-        from .ai_rehearsal import permanent_worth
+        from .ai_standing import permanent_worth
 
         target = _offer_target_permanent(game, entry.get("_context"))
         if target is None or game.controller_index_of(target) in (None, player_index):
@@ -1237,7 +1238,7 @@ def exchange_picks(game: Game, player_index: int, candidates, payload: dict, con
     nobody asks resolved a cast that exchanged nothing — and the rehearsal,
     reading that, never proposed one (kg3).
     """
-    from .ai_rehearsal import permanent_worth
+    from .ai_standing import permanent_worth
 
     def worth(permanent) -> float:
         return permanent_worth(permanent, now=False)

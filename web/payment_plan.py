@@ -78,7 +78,7 @@ from types import SimpleNamespace
 from engine.ai_payment import (
     _PaymentPlanner, _paying_for, planned_tap_costs, tap_planned_lands,
 )
-from engine.ai_rehearsal import mid_resolution, scratch_copy
+from engine.ai_scratch_copy import mid_resolution, scratch_copy
 from engine.models import Permanent
 from engine.restricted_mana import CAST
 

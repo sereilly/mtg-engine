@@ -612,7 +612,8 @@ _MODE_QUESTIONS = {
 #: guards about the policy's announcements leave them out.
 _VALUATION_MODULES = frozenset({
     "ai_valuation.py", "ai_weighed_cast.py", "ai_target_sides.py",
-    "ai_rehearsal.py", "ai_prompt_readers.py",
+    "ai_rehearsal.py", "ai_standing.py", "ai_scratch_copy.py",
+    "ai_prompt_readers.py",
 })
 
 

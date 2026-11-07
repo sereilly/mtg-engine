@@ -19,7 +19,7 @@ from collections import Counter
 
 import pytest
 
-from engine import ai_priority, ai_rehearsal, ai_simulator
+from engine import ai_priority, ai_scratch_copy, ai_simulator
 from engine.ai_combat import run_ai_combat_phase
 from engine.ai_actions import CastAction
 from engine.models import Permanent, PlayerState
@@ -231,7 +231,7 @@ def test_a_copy_of_the_game_is_never_answered_for():
         boards=(("Grizzly Bears",), ("Mountain",)),
     )
     game._set_phase_and_step("ending", "end")
-    copy = ai_rehearsal.scratch_copy(game)
+    copy = ai_scratch_copy.scratch_copy(game)
 
     assert copy.priority_driver is game.priority_driver
     assert copy.priority_driver(copy, 1) is False

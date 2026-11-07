@@ -19,7 +19,7 @@ import random
 from fastapi import HTTPException
 
 from engine.activation_permissions import card_widens_activation
-from engine.ai_rehearsal import mid_resolution
+from engine.ai_scratch_copy import mid_resolution
 from engine.cast_permissions import permission_for
 from engine.cast_timing import casts_at_instant_speed
 from engine.face_down import cast_timing_card

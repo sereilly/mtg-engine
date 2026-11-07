@@ -253,7 +253,7 @@ def _division_among_defenders(game, attacker_slot: int, attacker) -> "dict | Non
     do anyway (an unblocked attacker sending everything to the player), and
     for an attack on a planeswalker, whose loyalty this has no price for.
     """
-    from .ai_rehearsal import life_worth, permanent_worth
+    from .ai_standing import life_worth, permanent_worth
     from .combat_assignment import DEFENDING_PLAYER_SHARE
 
     if game.combat_attacked_planeswalkers.get(attacker_slot) is not None:
@@ -434,7 +434,7 @@ def _division_costing_least(game, attacker, blockers: dict, damage: int) -> tupl
       damage to each — the most deaths the power allows, which is what an
       *attacker* wants.
     """
-    from .ai_rehearsal import permanent_worth
+    from .ai_standing import permanent_worth
 
     division = {slot: 0 for slot in blockers}
     if damage <= 0 or not blockers:
@@ -472,7 +472,7 @@ def _defender_takes_the_damage_itself(
     when none of them dies of it, and for an attack on a planeswalker, whose
     loyalty this has no price for.
     """
-    from .ai_rehearsal import life_worth, permanent_worth
+    from .ai_standing import life_worth, permanent_worth
 
     if not dying or game.combat_attacked_planeswalkers.get(attacker_slot) is not None:
         return False

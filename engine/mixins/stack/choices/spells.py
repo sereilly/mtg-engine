@@ -352,7 +352,7 @@ class SpellChoicesMixin:
         among the options keeps its slot — which face beats which creature is
         a trade this does not price.
         """
-        from ....ai_rehearsal import permanent_worth
+        from ....ai_standing import permanent_worth
 
         slots = [
             index for index, position in enumerate(positions)

@@ -32,8 +32,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-from .ai_rehearsal import (deliberating, permanent_loss, permanent_worth,
-                           rehearse, rehearsing, seat_standing)
+from .ai_rehearsal import deliberating, rehearse, rehearsing
+from .ai_standing import permanent_loss, permanent_worth, seat_standing
 from .ai_scoring import _score_tutor_choice
 from .models import CardDefinition, Permanent
 from .oracle import compile_card_oracle

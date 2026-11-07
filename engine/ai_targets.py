@@ -42,7 +42,7 @@ from .ai_target_sides import (
     spell_denies_its_own_target,
     spell_target_side,
 )
-from .ai_rehearsal import permanent_worth
+from .ai_standing import permanent_worth
 from .ai_prompt_readers import (
     exiles_a_graveyard_target,
     graveyard_denial_order,

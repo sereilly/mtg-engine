@@ -45,7 +45,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .ai_compelled_blocks import fight_outcome
-from .ai_rehearsal import life_worth, permanent_worth
+from .ai_standing import life_worth, permanent_worth
 from .combat_assignment import combat_damage_assigned_by
 from .trigger_utils import matching_triggers
 

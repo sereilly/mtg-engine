@@ -41,7 +41,8 @@ from .ai_policy import (
     holds_an_ability_it_could_activate,
     holds_an_instant_it_could_pay_for,
 )
-from .ai_rehearsal import blocks_still_to_come, mid_resolution
+from .ai_rehearsal import blocks_still_to_come
+from .ai_scratch_copy import mid_resolution
 
 if TYPE_CHECKING:
     from .game import Game

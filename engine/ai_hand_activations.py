@@ -27,7 +27,8 @@ from .oracle import compile_card_oracle
 from .activation_zones import HAND
 from .targeting import usable_activated_abilities
 from .ai_payment import _plan_land_taps, tap_planned_lands
-from .ai_rehearsal import Rehearsal, deliberating, rehearse, spare_land_find_price
+from .ai_rehearsal import Rehearsal, deliberating, rehearse
+from .ai_standing import spare_land_find_price
 from .ai_actions import HandActivationAction
 from .ai_scoring import SWING_CAP, _score_activation, _worth_proposing
 
