@@ -454,3 +454,51 @@ def test_the_ai_casts_tunnel_only_at_an_opponents_wall():
     assert not _can_cast_with_targets(own, 0, _POOL["Tunnel"])
     theirs = _duel(hand=[_POOL["Tunnel"]], theirs=[WALL])
     assert _can_cast_with_targets(theirs, 0, _POOL["Tunnel"])
+
+
+# --- "spells that can target only Walls" -------------------------------------
+
+
+@pytest.mark.cr("303.4a", "115.1", "601.2c")
+def test_animate_wall_cannot_enchant_wall_of_shadows():
+    """"This creature can't be the target of spells that can target only
+    Walls…" (Wall of Shadows). An Aura spell's target is the one its enchant
+    ability defines (CR 303.4a), so "Enchant Wall" (Animate Wall) is a spell
+    that can target only Walls — read by ``targeting.spec_only_subtype`` off
+    the enchant clause's flag. Wall of Stone may still be enchanted."""
+    game = _duel(hand=[_POOL["Animate Wall"]],
+                 mine=[_POOL["Wall of Shadows"], _POOL["Wall of Stone"]])
+    assert _offered(game.cast_target_spec(0, _POOL["Animate Wall"])) == ["Wall of Stone"]
+    shadows = _permanent(game, "Wall of Shadows")
+    refused = game.cast_from_hand(
+        0, "Animate Wall", target_player_index=0, target_permanent_ids=[shadows.permanent_id],
+    )
+    assert not refused.supported
+    stone = _permanent(game, "Wall of Stone")
+    result = game.cast_from_hand(
+        0, "Animate Wall", target_player_index=0, target_permanent_ids=[stone.permanent_id],
+    )
+    assert result.supported, result.details
+
+
+@pytest.mark.cr("700.2", "115.1", "601.2c")
+def test_chaos_charm_may_destroy_wall_of_shadows():
+    """"Choose one — • Destroy target Wall. • Chaos Charm deals 1 damage to
+    target creature. • …" A modal spell that can target a non-Wall in one of
+    its modes is not a spell that can target only Walls, even in its Wall mode
+    (Scryfall ruling on Wall of Shadows, 2004-10-04). Tunnel, which can target
+    only Walls, is still refused — the control."""
+    game = _duel(hand=[_POOL["Chaos Charm"], _POOL["Tunnel"]],
+                 theirs=[_POOL["Wall of Shadows"], _POOL["Wall of Stone"]])
+    shadows = _permanent(game, "Wall of Shadows")
+    assert _offered(game.cast_target_spec(0, _POOL["Tunnel"])) == ["Wall of Stone"]
+    assert _offered(game.cast_target_spec(0, _POOL["Chaos Charm"], mode_index=0)) == [
+        "Wall of Shadows", "Wall of Stone",
+    ]
+    result = game.cast_from_hand(
+        0, "Chaos Charm", mode_index=0, target_player_index=1,
+        target_permanent_ids=[shadows.permanent_id],
+    )
+    assert result.supported, result.details
+    _settle(game)
+    assert not game.is_on_battlefield(shadows), game.log[-3:]
