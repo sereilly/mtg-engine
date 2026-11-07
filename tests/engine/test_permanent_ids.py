@@ -87,10 +87,12 @@ def test_the_id_is_not_part_of_equality():
 @pytest.mark.parametrize("reuse_object", [False, True])
 def test_a_permanent_that_returns_gets_a_new_id(reuse_object):
     """CR 400.7. Whether the return builds a fresh ``Permanent`` (the usual
-    path: a creature dies and is reanimated) or puts the same object back
-    (Oubliette's scoped phase-out), the thing that comes back must not answer to
-    the id the thing that left had — otherwise an effect that remembered its
-    target would reach across a zone change it is not allowed to survive."""
+    path: a creature dies and is reanimated) or a caller puts the same object
+    back, the thing that comes back must not answer to the id the thing that
+    left had — otherwise an effect that remembered its target would reach
+    across a zone change it is not allowed to survive. (Phasing is not a zone
+    change, CR 702.26d: a phased-in permanent keeps its id, and does not come
+    back through this entry.)"""
     original = Permanent(card=_bear())
     game = _game_with([original], [])
     old_id = original.permanent_id

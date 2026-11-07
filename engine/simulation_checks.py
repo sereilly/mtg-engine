@@ -49,7 +49,6 @@ def _zone_counter(game: Game) -> Counter[str]:
     invariant runs over in every game.
     """
     counter: Counter[str] = Counter()
-    already: set[int] = set()
     for player in game.players:
         for zone in (
             player.library, player.hand, player.graveyard,
@@ -59,11 +58,9 @@ def _zone_counter(game: Game) -> Counter[str]:
             for card in zone:
                 counter[card.name] += 1
         for permanent in player.phased_out:
-            already.add(id(permanent))
             if not permanent.metadata.get("is_token"):
                 counter[whole_card(permanent.card).name] += 1
     for _seat, permanent in game.permanents_with_controller():
-        already.add(id(permanent))
         # Ignore generated tokens in zone conservation checks.
         if permanent.metadata.get("is_token"):
             continue
@@ -90,60 +87,7 @@ def _zone_counter(game: Game) -> Counter[str]:
             # without becoming whole again (CR 709.4) — is counted under the
             # half's name and is reported as exactly that leak.
             counter[whole_card(item.card).name] += 1
-    # And a permanent another permanent is *holding*. Oubliette's scoped
-    # exile-and-return keeps the creature it removed as a live ``Permanent`` on
-    # its own metadata rather than in any zone list, so the creature is in the
-    # game and in none of the lists above — it read as a card vanishing on the
-    # turn Oubliette landed and as one appearing on the turn it left.
-    #
-    # Only the keys that mean *held out of play*, which is a narrower rule than
-    # "any permanent reachable from metadata" and had to be. Permanents are
-    # stored in metadata for several unrelated jobs: `attached_auras` points at
-    # things that are on the battlefield already (counting those made every Aura
-    # in play a phantom extra card) and `damaged_by_sources_this_turn` points at
-    # a source that has since died (counting that resurrected a sacrificed
-    # artifact for one turn). Neither is a zone. The prefix below is the shape
-    # Oubliette's hook writes, and a new hook that holds a permanent off-zone has
-    # to be added here — it will announce itself as a phantom missing card
-    # rather than passing quietly, which is the failure direction to want.
-    for held in _held_out_of_play(game):
-        if id(held) not in already and not held.metadata.get("is_token"):
-            already.add(id(held))
-            counter[whole_card(held.card).name] += 1
     return counter
-
-
-#: Metadata keys under which a permanent is *kept out of every zone* while
-#: another permanent holds it. Oubliette's scoped exile-and-return is the only
-#: one today (`engine/card_hooks.py::_oubliette_leaves`); it stores the removed
-#: creature and its attachments on the Oubliette itself, so they belong to no
-#: player's list and are still very much in the game.
-_HELD_OUT_OF_PLAY_PREFIX = "phased_out"
-
-
-def _held_out_of_play(game: Game) -> list[Permanent]:
-    """Every ``Permanent`` another permanent is holding outside all zones.
-
-    One level deep, in the shapes the hook stores: the permanent itself, or a
-    list of ``(seat, permanent)`` pairs.
-    """
-    found: list[Permanent] = []
-
-    def collect(value) -> None:
-        if isinstance(value, Permanent):
-            found.append(value)
-        elif isinstance(value, (list, tuple)):
-            for item in value:
-                if isinstance(item, Permanent):
-                    found.append(item)
-                elif isinstance(item, (list, tuple)):
-                    found.extend(x for x in item if isinstance(x, Permanent))
-
-    for _seat, permanent in game.permanents_with_controller():
-        for key, value in permanent.metadata.items():
-            if str(key).startswith(_HELD_OUT_OF_PLAY_PREFIX):
-                collect(value)
-    return found
 
 
 def _assert_expected(

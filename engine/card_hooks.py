@@ -43,7 +43,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from .aura_attachment import detach_aura
-from .models import next_permanent_id
 from .oracle_types import OracleInstruction
 from .mana_payment import generic_cost, total_pips
 
@@ -595,37 +594,11 @@ def _revert_linked_steal_on_leave(game: Game, owner: PlayerState, permanent: Per
     game.end_control_changes_from(permanent)
 
 
-def _oubliette_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
-    # "Target creature phases out until this enchantment leaves the
-    # battlefield. Tap that creature as it phases in this way." Scoped
-    # exile-and-return (not full CR 702.26 phasing) tracked on Oubliette
-    # itself — the phased creature and any Auras/Equipment that phased out
-    # with it return, tapped, when Oubliette leaves.
-    phased = permanent.metadata.pop("phased_out_permanent", None)
-    owner_index = permanent.metadata.pop("phased_out_owner_index", None)
-    attachments = permanent.metadata.pop("phased_out_attachments", None) or []
-    # CR 400.7: this is the one path that puts the *same* ``Permanent`` object
-    # back on the battlefield, so the new-object rule has to be applied by hand
-    # — anything still holding the pre-phase-out id must not resolve to it.
-    if phased is not None and isinstance(owner_index, int) and 0 <= owner_index < len(game.players):
-        phased.tapped = True
-        phased.permanent_id = next_permanent_id()
-        game.players[owner_index].battlefield.append(phased)
-        game.log.append(
-            f"{phased.card.name} phases back in, tapped ({permanent.card.name} left the battlefield)"
-        )
-    for seat, attached_perm in attachments:
-        if 0 <= seat < len(game.players):
-            attached_perm.permanent_id = next_permanent_id()
-            game.players[seat].battlefield.append(attached_perm)
-
-
 ON_LEAVE_BATTLEFIELD: dict[str, LeaveBattlefieldHook] = {
     "Cyclopean Tomb": _cyclopean_tomb_leaves,
     "Consecrate Land": _consecrate_land_leaves,
     "Aladdin": _revert_linked_steal_on_leave,
     "Old Man of the Sea": _revert_linked_steal_on_leave,
-    "Oubliette": _oubliette_leaves,
 }
 
 

@@ -37,6 +37,7 @@ import zlib
 
 from .ai_weighed_cast import permitted_casts
 from .entry_awaiting import ENTRY_EVENT, awaited_entries
+from .phasing_locks import waits_for_its_source
 from .text_changes import spell_text_card
 
 
@@ -226,6 +227,11 @@ def seat_standing(game, seat: int, *, now: bool = True) -> float:
         lands += bool(permanent.has_type("land"))
     if not now:
         for permanent in player.phased_out:
+            # …except what is held out until a source leaves (Oubliette):
+            # it does not phase in at the untap step, so it is not coming
+            # back by itself.
+            if waits_for_its_source(game, permanent):
+                continue
             worth += permanent_worth(permanent, now=False)
     # Each land beyond the ones a seat needs is worth `SPARE_LAND_WORTH`, not
     # a card and a land drop.

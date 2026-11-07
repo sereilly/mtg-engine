@@ -938,6 +938,9 @@ def _inv_w1g4_tariff_board(set_pool, mine, theirs):
     assert inv_w1g4_tariff.cast_from_hand(0, "Tariff").supported
     inv_w1g4_tariff.enforce_mana_costs = True
     _inv_w1g4_tariff_resolve(inv_w1g4_tariff)
+    # The second seat's offer is owed with the stack empty; the sacrifices are
+    # made together once it is answered (CR 101.4).
+    inv_w1g4_tariff.auto_resolve_pending_choices()
     return inv_w1g4_tariff, placed
 
 
@@ -962,4 +965,4 @@ def test_inv_w1g4_tariff_cannot_be_paid_for_a_creature_with_no_mana_cost(set_poo
     game, (mine, theirs) = _inv_w1g4_tariff_board(set_pool, token, thopter)
     assert not game.is_on_battlefield(mine), "no mana cost: nothing may be paid"
     assert game.is_on_battlefield(theirs), "{0} is a cost, and anyone can pay it"
-    assert "Tariff: Saproling was sacrificed" in game.log
+    assert "Tariff-A sacrificed Saproling (Tariff)" in game.log

@@ -760,7 +760,10 @@ def toll_branch_loss(
             candidates = [
                 permanent
                 for index in game._sacrifice_candidate_indices(
-                    player, dict(payload.get("filter") or {}), exclude
+                    player, dict(payload.get("filter") or {}), exclude,
+                    # Not what this loop has already chosen to give up
+                    # (Fade Away's earlier repetitions).
+                    held=getattr(context, "sacrifice_batch", None),
                 )
                 for permanent in (game.permanent_at(player, index),)
                 if permanent is not None

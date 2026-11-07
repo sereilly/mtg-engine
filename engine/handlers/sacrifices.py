@@ -364,14 +364,21 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     # (``SacrificeChoicesMixin.finish_sacrifice_batch``). Every seat's prompt
     # used to be armed at once in *seat* order, each sacrificing as it was
     # answered.
-    batch = game.new_sacrifice_batch() if who in _EACH_SEAT_PAYERS else None
+    # Inside a loop whose sacrifices are made together (Fade Away's —
+    # ``sacrificing_together_through``) every payer's answer joins the loop's
+    # hold, which the loop's last step performs, a round of seats included.
+    hold = context.sacrifice_batch
+    each_seat = who in _EACH_SEAT_PAYERS
+    batch = hold if hold is not None else (
+        game.new_sacrifice_batch() if each_seat else None
+    )
     paid = {"could_pay": True}
 
     def ask(seat: int) -> None:
         described = dict(instruction.payload.get("filter") or {})
         if any_number:
             offered = game._sacrifice_candidate_indices(
-                game.players[seat], described, exclude
+                game.players[seat], described, exclude, held=batch,
             )
             if not offered:
                 return
@@ -394,10 +401,10 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
             # asked, rather than being handed a prompt with no answer.
             return
         if len(game._sacrifice_candidate_indices(
-            game.players[seat], described, exclude
+            game.players[seat], described, exclude, held=batch,
         )) < owed:
             paid["could_pay"] = False
-            if batch is None:
+            if not each_seat:
                 # The printed count is indivisible for a player told to pay
                 # it: one of the two Swamps sacrifices neither, and the "if
                 # you can't" branch behind this step is what the card says
@@ -425,7 +432,7 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
             batch=batch,
         )
 
-    if batch is None:
+    if not each_seat:
         for seat in payers:
             ask(seat)
         context.results["sacrificed_this_way"] = paid["could_pay"]
@@ -438,7 +445,8 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
             ask(seat)
 
     def done() -> None:
-        game.finish_sacrifice_batch(batch)
+        if batch is not hold:
+            game.finish_sacrifice_batch(batch)
         context.results["sacrificed_this_way"] = paid["could_pay"]
 
     ask_in_turn_order(game, ask_in_turn, then=done)

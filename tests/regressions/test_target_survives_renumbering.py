@@ -126,11 +126,10 @@ def test_an_etb_trigger_phases_out_the_creature_it_targeted(set_pool):
 
     game.resolve_stack()
 
-    oubliette = next(p for p in game.all_permanents() if p.card.name == "Oubliette")
-    phased = oubliette.metadata.get("phased_out_permanent")
-    assert phased is intended, (
-        f"Oubliette phased out {getattr(phased, 'card', None)} rather than the "
-        "creature its trigger targeted — the trigger followed a stale index"
+    phased = list(game.players[1].phased_out)
+    assert [perm.card.name for perm in phased] == ["Hill Giant"] and phased[0] is intended, (
+        f"Oubliette phased out {[perm.card.name for perm in phased]} rather than "
+        "the creature its trigger targeted — the trigger followed a stale index"
     )
     assert game.is_on_battlefield(bystander), "the wrong creature was taken"
 

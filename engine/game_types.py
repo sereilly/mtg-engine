@@ -817,6 +817,17 @@ class OracleExecutionContext(_TargetIdsGuard):
     # sentence acts on — so this is for the reader that wants the object the
     # event named even beside a chosen target: ``resolve_own_combatant``.
     about_permanent_id: int | None = None
+    # The sacrifices the **loop** this resolution is inside holds for its last
+    # step: "for each creature, its controller sacrifices a permanent of their
+    # choice unless they pay {1}" (Fade Away; its ruling: "all the sacrifices
+    # are done at the same time"). A ``new_sacrifice_batch`` set by
+    # ``SacrificeChoicesMixin.sacrificing_together_through`` for the length of
+    # the loop — across the answers it waits for, which see it on the context
+    # their prompt carries — and read by the sacrifices the loop's body makes
+    # (``handlers/sacrifices.sacrifice_matching_permanent``,
+    # ``handlers/destruction.sacrifice_recorded_permanent``) and by the offers
+    # whose price is one. None everywhere else.
+    sacrifice_batch: dict | None = None
 
 
 def chosen_damage_source(
