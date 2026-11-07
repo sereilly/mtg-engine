@@ -8,12 +8,13 @@ streams :func:`_stream_session_events` is holding open.
 **A route that notifies runs on a worker thread.** Every game route is a plain
 ``def``, which FastAPI runs in its threadpool, and each stream's queue belongs
 to the event loop the stream runs on. ``asyncio.Queue`` is not thread-safe: a
-``put_nowait`` from a worker thread hands the waiting ``get`` its value
-without waking the loop, so the stream sat in its selector until something
-else woke it — another request, or the stream's own 30-second keepalive
-timeout. So every hand-off is scheduled on the stream's own loop
-(``loop.call_soon_threadsafe``), which writes the loop's wake-up pipe; called
-from the loop itself it is the same call.
+``put_nowait`` from a worker thread completes the waiting ``get`` from the
+wrong thread and does not wake the loop, so a loop waiting in its selector
+need not notice until something else wakes it — another request, or the
+stream's own 30-second keepalive (measured at kg4: not reproduced on the
+Windows proactor loop, where delivery happened to be prompt). So every
+hand-off is scheduled on the stream's own loop (``loop.call_soon_threadsafe``),
+which wakes it; called from the loop itself it is the same call.
 
 **One undelivered event per stream, and it remembers every reason.** A stream
 that has not yet sent its last event is given the next one in its place — one

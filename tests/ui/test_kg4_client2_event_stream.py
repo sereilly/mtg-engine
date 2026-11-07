@@ -12,8 +12,12 @@ was a restart nobody's banner announced.
 
 Both are driven here as the server meets them: a stream running on one
 thread's loop, notified from another thread with nothing else to wake it.
-On the base the first test waits out its timeout (the event arrives only at
-the keepalive), and the second reads ``{"reason": "action"}`` alone.
+Measured on the base: the lost wake-up did **not** reproduce on this
+machine's Windows proactor loop (the first test passes there too — the
+hand-off was a data race on the loop's ready queue that happened to be
+noticed), so the first test pins delivery rather than proving the defect;
+the coalescing tests fail on the base, where the replaced event read
+``{"reason": "action"}`` alone.
 """
 from __future__ import annotations
 
