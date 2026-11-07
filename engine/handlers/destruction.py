@@ -1238,6 +1238,19 @@ def sacrifice_recorded_permanent(game: Game, instruction: OracleInstruction, con
     if victim is None or not game.is_on_battlefield(victim):
         game.log.append(f"{context.card.name}: nothing was chosen to sacrifice")
         return True, "resolved"
+    hold = context.sacrifice_batch
+    if hold is not None:
+        # One seat's part of "**each player** sacrifices the creature … unless
+        # they pay" (Tariff): held with the other seats' and made together
+        # by the loop's last step (CR 101.4: "Then the actions happen
+        # simultaneously"; ``sacrificing_together_through``).
+        seat = game.controller_index_of(victim)
+        game.hold_sacrifice(hold, seat, [victim], {"reason": context.card.name})
+        game.log.append(
+            f"{game.players[seat].name} chose {victim.card.name} to sacrifice "
+            f"({context.card.name})"
+        )
+        return True, "resolved"
     game.sacrifice_permanent(victim)
     game.log.append(f"{context.card.name}: {victim.card.name} was sacrificed")
     return True, "resolved"
@@ -1407,6 +1420,12 @@ def each_player_pays_or_sacrifices_greatest(
         game._execute_oracle_instruction(step, context)
 
     # Last thing this function does — ``engine/resumption.py``'s rule for any
-    # loop that can be interrupted, and every step here can be.
-    run_resumable(game, steps, run)
+    # loop that can be interrupted, and every step here can be. The seats'
+    # sacrifices are held and made together by the loop's last step (CR
+    # 101.4: "Then the actions happen simultaneously"): one at a time, a
+    # Massacre Wurm the active player gave up never saw the next seat's
+    # creature die (CR 603.10a).
+    game.sacrificing_together_through(
+        context, lambda then: run_resumable(game, steps, run, then=then)
+    )
     return True, "resolved"

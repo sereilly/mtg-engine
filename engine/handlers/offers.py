@@ -244,8 +244,12 @@ def _action_is_takeable(
         # **two** Swamps" (Mold Demon) is an offer a player with one Swamp
         # cannot take, and accepting it would run the cost half-paid and skip
         # the penalty the card prints for not paying it.
+        # …and not counting what this loop has already chosen to give up
+        # ("discard a card unless you sacrifice a permanent", Read the Runes:
+        # one permanent pays one toll).
         return len(game._sacrifice_candidate_indices(
-            player, dict(instruction.payload.get("filter") or {}), exclude
+            player, dict(instruction.payload.get("filter") or {}), exclude,
+            held=getattr(context, "sacrifice_batch", None),
         )) >= int(instruction.payload.get("count", 1))
     # "…unless the player **puts a -1/-1 counter on a creature they control**"
     # (Thelon's Chant, Tourach's Chant). A price paid out of the offered seat's

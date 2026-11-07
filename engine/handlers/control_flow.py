@@ -49,6 +49,7 @@ from ..oracle_types import (COIN_FLIPS_MADE, COIN_FLIPS_WON, ONE_DEALING,
                             STACK_TARGET_CONTROLLER)
 from ..resumption import run_resumable
 from ..mana_payment import mana_cost_label
+from ..models import Permanent
 from ._color_conditions import evaluate_color_condition
 from ._common import COIN_FACES_BY_SEAT, damage_dealer, flip_coin, flip_coin_for
 from ._conditions import evaluate_state_condition
@@ -849,14 +850,36 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     # several seats whose action is one instruction with nothing nested, for
     # ``for_each``'s reason below: a later step reading the permanent an
     # earlier one entered would read one held for the end of the event.
+    #
+    # **…and so is what they sacrifice for declining**: "each opponent
+    # sacrifices a permanent of their choice unless they pay {1}" (Rishadan
+    # Cutpurse) is one choice per seat and then, CR 101.4, "the actions
+    # happen simultaneously" — held as ``for_each``'s are
+    # (``sacrificing_together_through``) and made once the last seat has
+    # answered. Not "any player may sacrifice a land. **If a player does**,
+    # put this creature on top of its owner's library": there the
+    # consequence follows each taker's sacrifice, "but then all remaining
+    # players still get the option" (Argothian Wurm, 2007-02-01) — one
+    # seat's act after another.
+    def offers(then) -> None:
+        run_resumable(game, seats, offer, then=then)
+
+    def held(then) -> None:
+        game.sacrificing_together_through(
+            context, lambda performed: offers(_both(performed, then))
+        )
+
+    run = held if (
+        len(seats) > 1
+        and _body_sacrifices(_steps(instruction, "otherwise"))
+        and not _steps(instruction, "then")
+    ) else offers
     if len(seats) > 1 and _a_single_leaf(
         _steps(instruction, "action") + _steps(instruction, "then")
     ):
-        game.entering_together_through(
-            lambda then: run_resumable(game, seats, offer, then=then)
-        )
+        game.entering_together_through(run)
     else:
-        run_resumable(game, seats, offer)
+        run(None)
     return True, "resolved"
 
 
@@ -1601,14 +1624,74 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     # battlefield", Glyph of Reincarnation, asks a person which card each
     # time): a ``with`` block closed at the first suspension and every later
     # card entered at its own answer (``entering_together_through``).
+    #
+    # "For each creature, its controller **sacrifices** a permanent of their
+    # choice unless they pay {1}" (Fade Away; Read the Runes, Oath of
+    # Lim-Dûl): every repetition's sacrifice is held and made by the loop's
+    # last step, in one event (``sacrificing_together_through``) — its
+    # ruling: "all the sacrifices are done at the same time … you can't
+    # sacrifice one creature in order to pay for another". And "the active
+    # player announces their choices first followed by the other players"
+    # (CR 101.4): a loop over the board whose repetitions are its objects'
+    # controllers' choices is asked in APNAP order of those controllers.
+    holds = _body_sacrifices(steps)
+    if holds and matched and all(isinstance(item, Permanent) for item in matched):
+        turn = {seat: place for place, seat in enumerate(game.apnap_seats())}
+        matched.sort(key=lambda perm: turn.get(game.controller_index_of(perm), len(turn)))
     items = matched + [_END_OF_ITERATION]
-    if _a_single_leaf(steps):
-        game.entering_together_through(
-            lambda then: run_resumable(game, items, run_one, then=then)
+
+    def plain(then) -> None:
+        run_resumable(game, items, run_one, then=then)
+
+    def held(then) -> None:
+        game.sacrificing_together_through(
+            context, lambda performed: plain(_both(performed, then))
         )
+
+    loop = held if holds else plain
+    if _a_single_leaf(steps):
+        game.entering_together_through(loop)
     else:
-        run_resumable(game, items, run_one)
+        loop(None)
     return True, "resolved"
+
+
+#: The sacrifices a loop's repetitions hold for its last step
+#: (``SacrificeChoicesMixin.sacrificing_together_through``): the forced
+#: sacrifice a phrase names, and the one an earlier step recorded (Tariff's).
+HELD_SACRIFICE_KINDS = frozenset({
+    "sacrifice_matching_permanent", "sacrifice_recorded_permanent",
+})
+
+
+def _body_sacrifices(steps: tuple) -> bool:
+    """Whether a loop body of *steps* holds, anywhere in it, a sacrifice the
+    loop makes together (:data:`HELD_SACRIFICE_KINDS`) — an offer's price or
+    its penalty included."""
+    pending = list(steps)
+    while pending:
+        step = pending.pop()
+        if step.kind in HELD_SACRIFICE_KINDS:
+            return True
+        for value in (step.payload or {}).values():
+            if hasattr(value, "kind"):
+                pending.append(value)
+            elif isinstance(value, (list, tuple)):
+                pending.extend(item for item in value if hasattr(item, "kind"))
+    return False
+
+
+def _both(first, second):
+    """One last step running *first* then *second*, either of which may be
+    None."""
+    if first is None or second is None:
+        return first or second
+
+    def both() -> None:
+        first()
+        second()
+
+    return both
 
 
 def _a_single_leaf(steps: tuple) -> bool:

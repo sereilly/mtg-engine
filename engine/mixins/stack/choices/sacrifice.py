@@ -935,13 +935,25 @@ class SacrificeChoicesMixin:
     # at compile time rather than charged: the noun phrase the card prints is a
     # filter, and this was the one reader of it that could not read one.
 
-    def _sacrifice_candidate_indices(self, player, filter: dict | None, exclude=None) -> list[int]:
+    def _sacrifice_candidate_indices(
+        self, player, filter: dict | None, exclude=None, *, held: dict | None = None,
+    ) -> list[int]:
         """Battlefield indices of ``player``'s permanents eligible for a forced
         sacrifice under the filter payload ``filter`` (excluding ``exclude`` if
-        given)."""
+        given).
+
+        **Not one already held** in *held*, a sacrifice batch
+        (:meth:`new_sacrifice_batch`): a permanent a loop's earlier repetition
+        chose is given up once, by the loop's last step, and a later
+        repetition — or an offer whose price is a sacrifice — may not count it
+        again. Fade Away's ruling: "you can't sacrifice one creature in order
+        to pay for another"."""
+        held = self._held_ids(held)
         out: list[int] = []
         for i, perm in enumerate(player.battlefield):
             if exclude is not None and perm is exclude:
+                continue
+            if held and id(perm) in held:
                 continue
             if not subject_matches(self, perm, filter):
                 continue
@@ -1031,9 +1043,13 @@ class SacrificeChoicesMixin:
         what a characteristic-defining P/T reading "equal to the number of
         <things> sacrificed as it entered" counts (CR 604.3). It is recorded
         where the sacrifice happens because nothing downstream can recover it —
-        the permanents are gone, and are different objects (CR 400.7)."""
+        the permanents are gone, and are different objects (CR 400.7).
+
+        *batch* is also a loop's hold (:meth:`sacrificing_together_through`),
+        handed in by the body's sacrifice: this repetition's answer is held
+        with the others'."""
         player = self.players[player_index]
-        if not self._sacrifice_candidate_indices(player, filter, exclude):
+        if not self._sacrifice_candidate_indices(player, filter, exclude, held=batch):
             # Nothing matches, so nothing can be given up. An "any number"
             # sacrifice is *answered* by that — zero is a legal answer — so the
             # count it owes is recorded rather than left unset.
@@ -1091,8 +1107,78 @@ class SacrificeChoicesMixin:
         shape (:meth:`new_keep_batch`), finished by the round's own last step
         rather than by reading the queue, because the round is a
         ``run_resumable`` loop that already knows when its last seat has
-        answered."""
+        answered.
+
+        Each answer is ``(seat, permanents, data)``: who gives them up, what,
+        and the prompt's own data (its ``reason``, its ``record``, its
+        ``_count_onto``) — :meth:`hold_sacrifice`'s shape."""
         return {"answers": [], "applied": False}
+
+    @staticmethod
+    def hold_sacrifice(batch: dict, seat: int, permanents, data: dict) -> None:
+        """Hold *permanents* for *seat* in *batch*, to be sacrificed by
+        :meth:`finish_sacrifice_batch` with the rest. *data* carries the
+        ``reason`` its log line names, and optionally ``record`` and
+        ``_count_onto``."""
+        batch["answers"].append((seat, list(permanents), data))
+
+    @staticmethod
+    def _held_ids(batch: dict | None) -> set[int]:
+        """The permanents (by identity) *batch* holds and has not yet
+        sacrificed — empty for no batch."""
+        if not batch or batch.get("applied"):
+            return set()
+        return {
+            id(perm) for _seat, chosen, _data in batch["answers"] for perm in chosen
+        }
+
+    def sacrificing_together_through(self, context, run) -> None:
+        """One event for every sacrifice a **resumable loop** makes
+        (``engine/resumption.py``): ``run(then)`` runs the loop, and *then* is
+        its last step, which performs what the repetitions chose.
+
+        "For each creature, its controller sacrifices a permanent of their
+        choice unless they pay {1}." (Fade Away.) Its ruling (2004-10-04):
+        "each player counts up the number of creatures they control, then they
+        make the required number of payments and/or sacrifices. The active
+        player announces their choices first followed by the other players,
+        but all the sacrifices are done at the same time. Because of this, you
+        can't sacrifice one creature in order to pay for another and thereby
+        avoid payment for the first." Each repetition sacrificed at its own
+        answer, so an observer sacrificed by the first (Havoc Jester, Moonlit
+        Wake) saw none of the rest go (CR 603.10a), and a creature sacrificed
+        for another's repetition was gone before its own was asked.
+
+        The hold rides the loop's own *context*
+        (``OracleExecutionContext.sacrifice_batch``), so it reaches exactly the
+        sacrifices the loop's body makes — at once, or at the answer of a
+        prompt that carries that context (an offer's decline) — and nothing
+        else the table does meanwhile: the forced sacrifice a phrase names
+        (``sacrifice_matching_permanent``) and a recorded one
+        (``sacrifice_recorded_permanent``) are held, and a held permanent is
+        no candidate for another (:meth:`_sacrifice_candidate_indices`). The
+        last step clears it and sacrifices everything held in one event
+        (:meth:`finish_sacrifice_batch`). Inside a loop already holding, the
+        loop is part of that one, and *then* is None. The departure twin of
+        ``entering_together_through``.
+        """
+        if context.sacrifice_batch is not None:
+            run(None)
+            return
+        batch = self.new_sacrifice_batch()
+        context.sacrifice_batch = batch
+
+        def last_step() -> None:
+            if context.sacrifice_batch is batch:
+                context.sacrifice_batch = None
+            self.finish_sacrifice_batch(batch)
+
+        try:
+            run(last_step)
+        except BaseException:
+            if context.sacrifice_batch is batch:
+                context.sacrifice_batch = None
+            raise
 
     def _default_sacrifice_slots(self, player, data: dict) -> list[int]:
         """The battlefield slots a seat nobody asks gives up: the shared
@@ -1102,7 +1188,9 @@ class SacrificeChoicesMixin:
         is answered with none, the inline default's stated policy."""
         if data.get("up_to"):
             return []
-        valid = self._sacrifice_candidate_indices(player, data["filter"], data["exclude"])
+        valid = self._sacrifice_candidate_indices(
+            player, data["filter"], data["exclude"], held=data.get("_batch"),
+        )
         remaining = {index: self.permanent_at(player, index) for index in valid}
         picks: list[int] = []
         for _ in range(min(int(data["count"]), len(remaining))):
@@ -1128,20 +1216,19 @@ class SacrificeChoicesMixin:
         batch["applied"] = True
         plans: list = []
         doomed: list = []
-        for choice, chosen in batch["answers"]:
+        for seat, chosen, data in batch["answers"]:
             live = [perm for perm in chosen if self.is_on_battlefield(perm)]
             totals = (
                 sum(int(perm.effective_power) for perm in live),
                 sum(int(perm.effective_toughness) for perm in live),
             )
             for perm in live:
-                _record_sacrificed_card(choice.data.get("record"), choice.player_index, perm)
-            plans.append((choice, live, totals))
+                _record_sacrificed_card(data.get("record"), seat, perm)
+            plans.append((seat, data, live, totals))
             doomed.extend(live)
         gone = self.sacrifice_permanents(doomed)
-        for choice, live, totals in plans:
-            data = choice.data
-            player = self.players[choice.player_index]
+        for seat, data, live, totals in plans:
+            player = self.players[seat]
             went = [perm for perm in live if any(perm is g for g in gone)]
             for perm in went:
                 self.log.append(f"{player.name} sacrificed {perm.card.name} ({data['reason']})")
@@ -1182,7 +1269,8 @@ class SacrificeChoicesMixin:
     def _sacrifice_prompt(self, choice: PendingChoice) -> dict:
         player = self.players[choice.player_index]
         valid = self._sacrifice_candidate_indices(
-            player, choice.data["filter"], choice.data["exclude"]
+            player, choice.data["filter"], choice.data["exclude"],
+            held=choice.data.get("_batch"),
         )
         return {
             "player_index": choice.player_index,
@@ -1236,7 +1324,9 @@ class SacrificeChoicesMixin:
             indices = self._sacrifice_slots_for_ids(player, permanent_ids)
             if indices is None or len(set(permanent_ids)) != len(permanent_ids):
                 return False
-        valid = self._sacrifice_candidate_indices(player, data["filter"], data["exclude"])
+        valid = self._sacrifice_candidate_indices(
+            player, data["filter"], data["exclude"], held=data.get("_batch"),
+        )
         count = int(data["count"])
         need = min(count, len(valid))
         chosen = list(dict.fromkeys(indices or []))
@@ -1251,13 +1341,15 @@ class SacrificeChoicesMixin:
         reason = data["reason"]
         batch = data.get("_batch")
         if batch is not None:
-            # One seat's turn in "each player sacrifices …": the choice is
-            # held and said now — public the moment it is made, because the
-            # next player chooses knowing it (CR 101.4b) — and nothing leaves
-            # until the round's last answer (:meth:`finish_sacrifice_batch`).
+            # One seat's turn in "each player sacrifices …" — or one
+            # repetition of a loop whose sacrifices are made together
+            # (:meth:`sacrificing_together_through`): the choice is held and
+            # said now — public the moment it is made, because the next player
+            # chooses knowing it (CR 101.4b) — and nothing leaves until the
+            # round's last answer (:meth:`finish_sacrifice_batch`).
             held = [self.permanent_at(player, i) for i in sorted(chosen)]
             self.discard_pending_choice(choice)
-            batch["answers"].append((choice, held))
+            self.hold_sacrifice(batch, player_index, held, data)
             self.log.append(
                 f"{player.name} chose "
                 + (", ".join(perm.card.name for perm in held) or "nothing")
