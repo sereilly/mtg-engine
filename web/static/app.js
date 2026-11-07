@@ -19881,7 +19881,8 @@ function startActivationXPrompt(
 // The largest X this cast may announce: the smallest of the bounds that apply.
 // `max_x` is the backend's — a printed cap (Winter's Chill), a life total
 // (Fire Covenant, CR 119.4) or a board of Swamps (Infernal Harvest, CR 601.2h).
-// `affordable` is what the mana pool can buy, and it applies **only** when the
+// `affordable` is the X the mana can buy — the server's `x_payable.board`, the
+// pool plus what the seat could still tap — and it applies **only** when the
 // {X} is in the mana cost: an X paid in life or permanents is not priced in
 // mana, and folding the pool in would have offered 0 to a caster who could
 // announce five.
