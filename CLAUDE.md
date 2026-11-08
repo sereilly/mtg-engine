@@ -106,7 +106,11 @@ imports `web.app` — from a store in `.program_store/`, named by a hash of ever
 comment included — names a new store and the old one is never opened. The
 first worker of a folder or whole-suite run to find none builds it in a
 subprocess that imports only the engine (~18 s) and the rest wait for it; a run
-naming files only reads one that is there. **A script that walks the whole
+naming files builds one only when the web layer's import is about to compile the
+pool anyway (`tests/passes.py`'s `_read_before_the_pool_compiles`), so the first
+run after an engine edit pays the ~20 s and the next reads it (one per-set
+file: 22 s, then 4), while a guard file that never imports the web layer builds
+nothing. **A script that walks the whole
 pool reads it too**, calling `program_store.warm()` before its first compile
 (the first to find none builds it): `regen.sh`'s five pool walkers, which
 compiled the pool five times after every merge, `oracle_diff`, and
@@ -115,8 +119,8 @@ server**, as `web/runtime.py` loads the catalog: it starts in ~2 s, ~20 s on the
 first start after an engine edit. Never on a process's first compile miss — a
 probe that patches a production would be handed what the unpatched compiler
 wrote; one that patches before importing the web layer sets
-`MTG_NO_PROGRAM_STORE=1`. In a test process `warm()` is a no-op: the test
-runner reads the store, at configure time.
+`MTG_NO_PROGRAM_STORE=1`. In a test process `warm()` asks the test runner,
+which read the store at configure time.
 `tests/engine/test_program_store.py` holds every script the merge path runs to
 reading it or naming why it walks no pool.
 Reading takes under a second. Stored programs go into

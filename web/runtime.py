@@ -47,8 +47,9 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 # The behaviour classes below compile the whole shipped pool, which took a
 # server ~18 s to start. Read from the compiled-program store first (built on
-# the first start after an engine edit); a test process's store is the test
-# runner's, and this leaves it alone (`program_store.warm`).
+# the first start after an engine edit); in a test process the test runner
+# answers, and builds the store here for a run that named files
+# (`program_store.warm`, `tests/passes.py`).
 program_store.warm()
 
 CARD_CATALOG = load_cards(CARD_PATHS)

@@ -149,6 +149,50 @@ def test_an_engine_edited_since_the_run_started_reads_no_store(store_world, monk
     assert store_world.built == [] and store_world.loaded == []
 
 
+@pytest.fixture
+def before_the_web_layer(store_world, monkeypatch):
+    """A test process whose collection is importing the web layer, which asks
+    `program_store.warm` before compiling the shipped pool."""
+    from engine import program_store
+
+    monkeypatch.delenv(passes.NO_STORE_ENV, raising=False)
+    monkeypatch.setattr(program_store, "_test_runner_reader", passes._read_before_the_pool_compiles)
+    return store_world
+
+
+def test_a_named_file_run_builds_the_store_as_the_pool_is_about_to_compile(before_the_web_layer, monkeypatch):
+    """After an engine edit no store is there, and a run naming one per-set
+    file compiled the pool in every worker: 22 s, where reading a store takes
+    4 (2026-11-08). The compile was coming either way, so the build costs
+    nothing extra and the next run reads it."""
+    from engine import program_store
+
+    monkeypatch.setattr(passes, "_seeded_at_configure", False)
+    monkeypatch.setattr(passes, "_builds_before_the_compile", True)
+    program_store.warm()
+    assert before_the_web_layer.built == [before_the_web_layer.store]
+    assert before_the_web_layer.loaded == [before_the_web_layer.store]
+
+
+def test_a_run_whose_configure_read_filled_the_cache_reads_nothing_more(before_the_web_layer, monkeypatch):
+    from engine import program_store
+
+    monkeypatch.setattr(passes, "_seeded_at_configure", True)
+    monkeypatch.setattr(passes, "_builds_before_the_compile", True)
+    assert program_store.warm() == 0
+    assert before_the_web_layer.built == [] and before_the_web_layer.loaded == []
+
+
+def test_an_ide_discovery_reads_a_store_but_never_builds_one(before_the_web_layer, monkeypatch):
+    from engine import program_store
+
+    monkeypatch.setattr(passes, "_seeded_at_configure", False)
+    monkeypatch.setattr(passes, "_builds_before_the_compile", False)
+    program_store.warm()
+    assert before_the_web_layer.built == []
+    assert before_the_web_layer.loaded == [before_the_web_layer.store]
+
+
 def test_the_store_is_read_before_collection_and_built_only_for_a_large_run(monkeypatch):
     """Collection compiles the pool (``tests/helpers.py`` imports ``web.app``),
     so configure time is the last moment the store can save that compile. A
@@ -156,9 +200,13 @@ def test_the_store_is_read_before_collection_and_built_only_for_a_large_run(monk
     an IDE's discovery reads a store but never builds one."""
     monkeypatch.setattr(passes, "_store_dir", None)
     monkeypatch.setattr(passes, "_engine_print", None)
+    monkeypatch.setattr(passes, "_seeded_at_configure", passes._seeded_at_configure)
+    monkeypatch.setattr(passes, "_builds_before_the_compile", passes._builds_before_the_compile)
     monkeypatch.delenv(passes.NO_STORE_ENV, raising=False)
     seeded = []
-    monkeypatch.setattr(passes, "_seed_from_the_store", lambda *, build: seeded.append(build))
+    monkeypatch.setattr(
+        passes, "_seed_from_the_store", lambda *, build: seeded.append(build) or 0
+    )
 
     def note(*, collectonly=False, numprocesses=None, worker=False, args=("tests",)):
         config, _ = _config(collectonly=collectonly, args=args)

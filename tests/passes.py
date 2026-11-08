@@ -31,8 +31,9 @@ ran in 1,412 s and the quick pass in under 180. So:
   and the card files: a fraction of a second, where compiling took ~17 s in
   every worker. The first worker of a folder or whole-suite run to find no
   store for its engine builds it in a subprocess that imports nothing but the
-  engine, and the others wait for it; a run naming files reads one only if it
-  is there. ``MTG_NO_PROGRAM_STORE=1`` turns it off.
+  engine, and the others wait for it; a run naming files builds one only when
+  the web layer's import is about to compile the pool anyway.
+  ``MTG_NO_PROGRAM_STORE=1`` turns it off.
 
 The hooks are imported into ``tests/conftest.py``, which is what registers them.
 """
@@ -156,35 +157,63 @@ def _note_the_engine(config) -> None:
     pool: ``tests/helpers.py`` imports ``web.app``, whose ``runtime`` sorts the
     shipped pool into behaviour classes as it loads, and three test files in
     four import the helpers. Seeded any later, the store would arrive after
-    the compile it is for. A run that names files only reads a store that is
-    there — it may need none of the pool, and building one costs ~18 s — while
-    a folder or the whole suite builds one first if none is.
+    the compile it is for. A folder or the whole suite builds one first if
+    none is. A run that names files may need none of the pool, so here it only
+    reads a store that is there; if the web layer's import then asks
+    (``program_store.warm``, as it is about to compile the shipped pool), it
+    builds one at that moment (:func:`_read_before_the_pool_compiles`), where
+    compiling in-process would cost as much and save nothing for the next
+    run — 22 s against 4 for one per-set file after an engine edit
+    (2026-11-08). An IDE's discovery only reads.
 
     The fingerprint read here is compared with one read again at warm-up
     (:func:`_seed_from_the_store`). The store is its own folder rather than
     pytest's cache: the gate's runs turn that plugin off
     (``scripts/integration/gate.sh``), and the full pass is one of them."""
-    global _store_dir, _engine_print
+    global _store_dir, _engine_print, _seeded_at_configure, _builds_before_the_compile
     if os.environ.get(NO_STORE_ENV):
         return
     if not hasattr(config, "workerinput") and getattr(config.option, "numprocesses", None):
         return  # the xdist controller: its workers collect and run the tests
     from engine import program_store
 
-    # This process's store is read here, and only here: the web layer's
-    # import calls `program_store.warm`, which now leaves it alone.
-    program_store.leave_to_the_test_runner()
+    # The web layer's import calls `program_store.warm`; in a test process
+    # that is this module's question to answer.
+    program_store.leave_to_the_test_runner(_read_before_the_pool_compiles)
     _engine_print = program_store.fingerprint()
     _store_dir = program_store.DIRECTORY
-    _seed_from_the_store(build=not (config.option.collectonly or _named_files(config)))
+    _builds_before_the_compile = not config.option.collectonly
+    _seeded_at_configure = _seed_from_the_store(
+        build=not (config.option.collectonly or _named_files(config))
+    ) > 0
 
 
-def _seed_from_the_store(*, build: bool = False) -> None:
+#: Whether the configure-time read filled the compile cache.
+_seeded_at_configure = False
+#: Whether this process may build the store when the pool is about to compile.
+_builds_before_the_compile = False
+
+
+def _read_before_the_pool_compiles() -> int:
+    """What ``program_store.warm`` answers in a test process: the web layer's
+    import is about to compile the whole shipped pool.
+
+    Nothing more when the configure-time read filled the cache (a folder run,
+    or a named-file run that found a store). Otherwise a run naming files
+    builds the store now, in a subprocess, and reads it; an IDE's discovery
+    only reads."""
+    if _seeded_at_configure:
+        return 0
+    return _seed_from_the_store(build=_builds_before_the_compile)
+
+
+def _seed_from_the_store(*, build: bool = False) -> int:
     """Fill the compile cache from the store — first building it, if *build*
-    and no process has. On any failure the caller's compile does the work, as
-    it did before the store: the store is a shortcut, never a requirement."""
+    and no process has; how many programs it read. On any failure the caller's
+    compile does the work, as it did before the store: the store is a
+    shortcut, never a requirement."""
     if _store_dir is None:
-        return
+        return 0
     from engine import program_store
 
     try:
@@ -193,13 +222,14 @@ def _seed_from_the_store(*, build: bool = False) -> None:
                 "passes: engine sources changed since this run started; "
                 "compiling the pool in-process\n"
             )
-            return
+            return 0
         # The first worker to find no store builds it, in a subprocess, and
         # the rest wait on its lock (`program_store.ensure`).
         store = program_store.ensure(_store_dir, _engine_print, build=build)
-        program_store.load(store, _engine_print)
+        return program_store.load(store, _engine_print)
     except Exception as error:  # noqa: BLE001 - see the docstring
         sys.stderr.write(f"passes: compiled-program store unused ({error!r})\n")
+        return 0
 
 
 def rewarm_compile_cache() -> None:

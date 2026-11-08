@@ -243,7 +243,7 @@ def script_world(tmp_path, monkeypatch):
     monkeypatch.delenv(program_store.NO_STORE_ENV, raising=False)
     # A script's process, not this test process: nothing read yet, and no
     # test runner that reads the store for it.
-    monkeypatch.setattr(program_store, "_test_runner_reads", False)
+    monkeypatch.setattr(program_store, "_test_runner_reader", None)
     monkeypatch.setattr(program_store, "_warmed", None)
     world = SimpleNamespace(
         built=[], loaded=[],
@@ -282,18 +282,23 @@ def test_a_process_reads_the_store_once_however_many_callers_ask(script_world):
 
 
 def test_a_test_process_leaves_the_store_to_the_test_runner(script_world, monkeypatch):
-    monkeypatch.setattr(program_store, "_test_runner_reads", True)
-    assert program_store.warm() == 0
-    assert script_world.built == [] and script_world.loaded == []
+    asked = []
+    monkeypatch.setattr(program_store, "_test_runner_reader", lambda: asked.append(1) or 3)
+    assert program_store.warm() == 3
+    assert asked == [1], "the test runner answers"
+    assert script_world.built == [] and script_world.loaded == [], "and warm() reads nothing itself"
 
 
 def test_this_test_process_is_the_test_runners():
-    """`tests/passes.py` marks every test process it seeds, so the web layer's
-    import (collection imports it through `tests/helpers.py`) reads nothing a
-    second time and builds nothing for a run that named a file."""
+    """`tests/passes.py` registers its reader in every test process it seeds,
+    so the web layer's import (collection imports it through
+    `tests/helpers.py`) is answered by the runner: nothing read twice, a
+    store built for a named-file run only as the pool is about to compile."""
     if os.environ.get(program_store.NO_STORE_ENV):
         pytest.skip("the store is turned off for this run")
-    assert program_store._test_runner_reads
+    from tests import passes
+
+    assert program_store._test_runner_reader is passes._read_before_the_pool_compiles
 
 
 def test_the_web_layer_reads_the_store_before_it_compiles_the_pool():

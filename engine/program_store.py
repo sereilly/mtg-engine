@@ -37,7 +37,7 @@ after.
 
 **Three kinds of process read it, each at a moment nothing should have patched
 the compiler yet.** A test process reads it at configure time
-(``tests/passes.py``), and :func:`warm` there defers to that read. A script
+(``tests/passes.py``), and :func:`warm` there asks the test runner. A script
 that walks the whole pool calls :func:`warm` before its first compile —
 ``scripts/integration/regen.sh`` runs five such scripts after every merge, and
 they compiled the pool five times. And the web layer calls it as
@@ -79,8 +79,9 @@ NO_STORE_ENV = "MTG_NO_PROGRAM_STORE"
 #: How long a build may run before the waiting processes give up on it.
 BUILD_TIMEOUT_SECONDS = 600
 
-#: Set by the test runner in each test process (:func:`leave_to_the_test_runner`).
-_test_runner_reads = False
+#: In a test process, how the test runner reads the store
+#: (:func:`leave_to_the_test_runner`); :func:`warm` hands over to it.
+_test_runner_reader = None
 #: How many programs :func:`warm` read into this process, once it has.
 _warmed: int | None = None
 
@@ -245,14 +246,16 @@ def warm(*, build: bool = True) -> int:
     dozen cards — one simulated game's decks — reads a fingerprint and 9,000
     programs to save less than that, so it does not call this. A process reads
     the store once: a script that warms and then imports the web layer pays
-    for one read. 0, and the caller compiles as it always did, when
-    :data:`NO_STORE_ENV` is set, in a test process (the test runner read the
-    store before collection), or when the store cannot be built or read: the
+    for one read. In a test process the test runner decides (its reader is
+    asked instead). 0, and the caller compiles as it always did, when
+    :data:`NO_STORE_ENV` is set or the store cannot be built or read: the
     store is a shortcut, never a requirement.
     """
     global _warmed
-    if os.environ.get(NO_STORE_ENV) or _test_runner_reads:
+    if os.environ.get(NO_STORE_ENV):
         return 0
+    if _test_runner_reader is not None:
+        return _test_runner_reader()
     if _warmed is not None:
         return _warmed
     try:
@@ -266,17 +269,17 @@ def warm(*, build: bool = True) -> int:
     return read
 
 
-def leave_to_the_test_runner() -> None:
-    """Make :func:`warm` a no-op in this process: a test process.
+def leave_to_the_test_runner(reader) -> None:
+    """In this process — a test process — :func:`warm` calls *reader*, a
+    no-argument callable answering how many programs it read.
 
     ``tests/passes.py`` reads the store at configure time, before collection
-    imports a test module or the web layer and before anything can patch the
-    compiler, and a run naming files only reads a store that is there. The web
-    layer's import calling :func:`warm` again would build one for a run that
-    named a file, and a test calling a script's ``main`` would read it a
-    second time; neither is the test runner's decision."""
-    global _test_runner_reads
-    _test_runner_reads = True
+    imports a test module or the web layer, and decides there whether the run
+    may build one. What the web layer's import asks (it is about to compile the
+    whole shipped pool) is the runner's to answer: a run naming files builds
+    the store then, where its own compile would cost as much."""
+    global _test_runner_reader
+    _test_runner_reader = reader
 
 
 _BUILD = "import sys; from engine.program_store import build; build(sys.argv[1])"
