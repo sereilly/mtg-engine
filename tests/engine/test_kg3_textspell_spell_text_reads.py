@@ -32,6 +32,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from tests.source_index import source_tree
+
 ROOT = Path(__file__).resolve().parents[2]
 
 #: The names a stack object goes by in ``engine/`` and ``web/``. Some also name
@@ -190,7 +192,10 @@ def _modules():
     paths = sorted((ROOT / "engine").rglob("*.py")) + sorted((ROOT / "web").glob("*.py"))
     for path in paths:
         rel = path.relative_to(ROOT).as_posix()
-        yield rel, ast.parse(path.read_text(encoding="utf-8"))
+        # The shared cache's trees (`tests/source_index.py`): every other engine
+        # sweep in the worker reads the same ones, where a parse of its own held
+        # a second copy (~400 MB) in each of this file's four tests.
+        yield rel, source_tree(path)
 
 
 def _parents(tree):

@@ -37,6 +37,8 @@ from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
 
+from tests.source_index import source_tree
+
 ENGINE = Path(__file__).resolve().parents[2] / "engine"
 
 _TRANSITION = frozenset({"remove_from_battlefield", "remove_all_from_battlefield"})
@@ -124,10 +126,10 @@ _REVIEWED = {
 
 
 def _trees():
-    return {
-        path: ast.parse(path.read_text(encoding="utf-8"))
-        for path in sorted(ENGINE.rglob("*.py"))
-    }
+    # The shared cache's trees (`tests/source_index.py`): every other engine
+    # sweep in the worker reads the same ones, where a parse of its own held a
+    # second copy of the engine's trees (~400 MB) while the test ran.
+    return {path: source_tree(path) for path in sorted(ENGINE.rglob("*.py"))}
 
 
 def _called_name(call: ast.Call) -> str | None:

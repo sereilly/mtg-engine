@@ -33,10 +33,12 @@ from pathlib import Path
 
 import pytest
 
-# The largest private commit one xdist worker reached over a full `-n 4` run
-# of the suite (2026-10-31, measured after `load_cards` was cached), rounded
-# up. Re-measure when a worker's footprint changes shape.
-WORKER_PEAK_GB = 2.5
+# The largest private commit one xdist worker reached over a `--full -n 10`
+# run (1.34 GB, 2026-11-08), rounded up. It was 2.5 until the source guards
+# stopped keeping syntax trees twice (`tests/source_index.py`): most of a
+# worker is its collection (~0.55 GB) and the engine's trees (~0.4 GB), not
+# the games. Re-measure when a worker's footprint changes shape.
+WORKER_PEAK_GB = 1.5
 # Left free for the controller, the IDE, a browser, and whatever else the
 # machine's owner has open.
 RESERVE_GB = 4.0

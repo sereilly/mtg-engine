@@ -127,7 +127,7 @@ does). `MTG_NO_PROGRAM_STORE=1` turns the store off.
 
 **The runner holds itself to the machine's memory** (`tests/memory_guard.py`,
 hooked in by `tests/conftest.py`): `-n N` and `-n auto` run as at most what
-free memory holds — a worker peaks near 2.5 GB, and 4 GB is kept free
+free memory holds — a worker peaks near 1.5 GB, and 4 GB is kept free
 (`MTG_PYTEST_NO_MEMORY_CAP=1` overrides) — and a `--collect-only` session, which
 is what an IDE's test discovery is, waits for the one before it in the same
 checkout. `load_cards` is cached per file version, so the test modules that load

@@ -51,9 +51,11 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   code, replacement, tests) and one applier lands them in sequence.
 - **Size the fan-out from the memory you measure, never from a number here.**
   Read free *commit* (not just free RAM) with nothing of yours running, and
-  count about 2.5 GB for every process that compiles the pool — a suite worker,
-  an instrument, an agent's serial pytest (a worker's peak since `load_cards`
-  is cached; it was 5 GB before 2026-10-31). Five agents was right on an idle
+  count about 1.5 GB for every process that compiles the pool — a suite worker,
+  an instrument (`parse_coverage`'s eight processes together ~1.4 GB), an
+  agent's serial pytest (a worker's full-pass peak since the source guards
+  stopped keeping syntax trees twice; 2.5 GB before 2026-11-08, 5 GB before
+  2026-10-31). Five agents was right on an idle
   machine; at Judgment the owner's other work left ~18 GB, so three agents
   testing serially plus the integrator's `-n 2` meeting runs, and the full
   gate alone at `-n 4`; at kg ~55 GB was free and eleven agents ran at once

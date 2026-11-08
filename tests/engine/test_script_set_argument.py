@@ -261,6 +261,13 @@ def test_the_manifest_is_parsed_in_one_place():
             relative = path.relative_to(REPO)
             if Path(*relative.parts) in _MANIFEST_READERS:
                 continue
+            # A file that never spells the filename holds no constant equal to
+            # it (short of splitting it across two literals), so it is skipped
+            # unparsed: parsing all ~2,100 files left 855 MB of syntax trees in
+            # the shared cache of whichever worker ran this, the largest single
+            # cost to a worker's memory (measured 2026-11-08).
+            if filename not in source_text(path):
+                continue
             tree = source_tree(path)
             offenders += [
                 f"{relative.as_posix()}:{node.lineno}"

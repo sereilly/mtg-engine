@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import ast
 import re
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -57,8 +58,14 @@ def _sources() -> list[Path]:
     return sorted(ENGINE.rglob("*.py"))
 
 
+@lru_cache(maxsize=1)
 def _names_pulled_from_each_module() -> dict[str, set[str]]:
-    """For every module, the names some *other* module imports out of it."""
+    """For every module, the names some *other* module imports out of it.
+
+    Read by the first test that asks, never at import: it parses every engine
+    module, and a module-level call made each process that merely collected
+    this file — every xdist worker, every IDE discovery — parse ~650 modules
+    and hold their trees (410 MB, three seconds), measured 2026-11-08."""
     pulled: dict[str, set[str]] = {}
     for path in _sources():
         try:
@@ -74,7 +81,6 @@ def _names_pulled_from_each_module() -> dict[str, set[str]]:
     return pulled
 
 
-PULLED = _names_pulled_from_each_module()
 MODULES = [p for p in _sources() if p.name != "__init__.py"]
 
 
@@ -88,7 +94,7 @@ def _unused_imports(path: Path) -> list[str]:
     """
     src = source_text(path)
     tree = ast.parse(src)
-    exported = PULLED.get(_module_path(path), set())
+    exported = _names_pulled_from_each_module().get(_module_path(path), set())
     dead: list[str] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.Import, ast.ImportFrom)):

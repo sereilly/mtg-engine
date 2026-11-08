@@ -11,17 +11,31 @@ Read-only by contract: callers walk the returned trees and slice the returned
 text, never mutate them — a guard that edited a shared AST would corrupt every
 guard after it. Nothing here changes what any guard checks; the file lists,
 exemption tables and analyses all stay in their guard files.
+
+**The trees are most of a worker's memory, so they are held once.** The
+engine's ~650 modules parse to about 400 MB of trees (2026-11-08), which a
+worker keeps for every later sweep; :func:`source_tree` keeps each file's
+under one key whatever the spelling of its path, and keeps none of
+``tests/``'s. So a guard that sweeps ``engine/`` reads its trees here, never
+through a parse of its own (that held a second copy for as long as the test
+ran), and nothing parses at import time (a module-level sweep cost every
+collecting process those 400 MB, IDE discoveries included). A sweep whose
+question is a string skips each file whose text (:func:`source_text`) does not
+contain it before asking for a tree.
 """
 
 from __future__ import annotations
 
 import ast
 import io
+import os
 import tokenize
 from functools import lru_cache
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+#: Whose trees are parsed for each asking and never kept (see :func:`source_tree`).
+TESTS_ROOT = REPO_ROOT / "tests"
 
 
 @lru_cache(maxsize=None)
@@ -42,9 +56,22 @@ def source_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-@lru_cache(maxsize=None)
 def source_tree(path: Path) -> ast.Module:
-    """The parsed module. Walk it, never mutate it — the tree is shared."""
+    """The parsed module. Walk it, never mutate it — the tree is shared.
+
+    Kept once per file, however the path is spelled: a guard that asked by a
+    relative path held a second copy of every tree it swept, 1.3 GB in the
+    full pass (2026-11-08). A file under ``tests/`` is parsed afresh each time
+    and not kept — two guards sweep that folder, each once, and keeping its
+    trees cost the worker that ran them as much again as the engine's."""
+    absolute = Path(os.path.abspath(path))
+    if absolute.is_relative_to(TESTS_ROOT):
+        return ast.parse(source_text(absolute))
+    return _kept_tree(absolute)
+
+
+@lru_cache(maxsize=None)
+def _kept_tree(path: Path) -> ast.Module:
     return ast.parse(source_text(path))
 
 
