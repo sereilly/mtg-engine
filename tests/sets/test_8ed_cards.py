@@ -16,7 +16,6 @@ Air Elemental flies would be another copy of one written for Alpha.
 
 from __future__ import annotations
 
-import collections
 import json
 
 import pytest
@@ -41,10 +40,24 @@ NEW_TO_THE_POOL = [
 _RICH = {"W": 9, "U": 9, "B": 9, "R": 9, "G": 9}
 
 
-def _other_shipped_codes() -> list[str]:
-    """Every shipped set but this one — true while 8ED is `measured` and still
-    true the day it moves, which is what lets these tests survive promotion."""
-    return [entry["code"] for entry in manifest_sets() if entry["code"] != "8ED"]
+def _printed_before_eighth_edition(set_cards) -> set[str]:
+    """The oracle ids printed in a shipped set released **before** 8ED.
+
+    By release date rather than by manifest index, so it answers in either
+    manifest role, and no set shipped later can change it — 7ED's premise
+    tests asked "every other shipped set" and went red at this set's promotion,
+    because 8ED reprints nine of 7ED's seventeen."""
+    released = {
+        entry["code"]: entry["released"]
+        for entry in (*manifest_sets(), *manifest_measured_sets())
+    }
+    return {
+        card.oracle_id
+        for code, date in released.items()
+        if date < released["8ED"]
+        for card in set_cards(code)
+        if card.oracle_id
+    }
 
 
 def _duel(pool, *, hand=(), opp_hand=(), library=(), mana=None,
@@ -102,46 +115,37 @@ def _to_declare_attackers(game: Game, active: int = 0) -> None:
 
 
 def test_eighth_edition_brings_exactly_eleven_cards_the_pool_did_not_have(set_cards):
-    """Both directions: each of the eleven is printed in no other shipped set,
-    and no twelfth card is. Asked of the whole shipped pool, as 7ED's twin
-    asks it — the sets to 8ED's left would need a manifest index, which a
-    `measured` set does not have."""
-    elsewhere = {
-        card.oracle_id
-        for code in _other_shipped_codes()
-        for card in set_cards(code)
-        if card.oracle_id
-    }
+    """Both directions: each of the eleven is printed in no shipped set
+    released before 8ED, and no twelfth card is — and, with nothing of 8ED's
+    in M21 alone (next test), these are the cards the pool had never seen.
+    Asked of the earlier sets rather than of every other shipped set, so a
+    later set reprinting one of them cannot turn this red."""
+    earlier = _printed_before_eighth_edition(set_cards)
     novel = sorted(
-        card.name for card in set_cards("8ED") if card.oracle_id not in elsewhere
+        card.name for card in set_cards("8ED") if card.oracle_id not in earlier
     )
-    assert novel == NEW_TO_THE_POOL, f"8ED cards printed in no other shipped set: {novel}"
+    assert novel == NEW_TO_THE_POOL, (
+        f"8ED cards printed in no shipped set released before it: {novel}"
+    )
 
 
 def test_no_reprint_takes_its_origin_from_the_manifest_index(set_cards):
-    """The origin trap (CLAUDE.md, "The manifest"): a reprint whose only other
-    printings here are all *later* than 8ED has its origin decided by where the
-    set is inserted, with every other guard green. 8ED has none — the only
-    later set shipped is M21, and nothing 8ED prints is printed there alone.
+    """The origin trap (CLAUDE.md, "The manifest"): a card printed here and in
+    M21 — the one shipped set ahead of its turn in release order — and in no
+    earlier set would have its origin decided by where 8ED is inserted, with
+    every other guard green. 8ED has none.
 
-    Measured against release dates rather than an index, so it holds in either
-    manifest role. When a newly shipped set changes the answer, the wrong-insert
-    rehearsal at promotion has a card to watch, and this names it.
+    Asked of M21 rather than of "every other printing is later", which grows
+    with each later set reprinting an 8ED original though none of those is
+    position-dependent (each is inserted after 8ED). No later promotion can
+    change this answer.
     """
-    released = {
-        entry["code"]: entry["released"]
-        for entry in (*manifest_sets(), *manifest_measured_sets())
-    }
-    printed_in: dict[str, set[str]] = collections.defaultdict(set)
-    for code in _other_shipped_codes():
-        for card in set_cards(code):
-            printed_in[card.oracle_id].add(code)
-
+    earlier = _printed_before_eighth_edition(set_cards)
+    in_m21 = {card.oracle_id for card in set_cards("M21")}
     position_dependent = sorted(
         card.name
         for card in set_cards("8ED")
-        if printed_in.get(card.oracle_id)
-        and all(released[code] > released["8ED"] for code in printed_in[card.oracle_id])
+        if card.oracle_id in in_m21 and card.oracle_id not in earlier
     )
     assert position_dependent == []
 

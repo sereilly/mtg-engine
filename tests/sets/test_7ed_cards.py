@@ -51,10 +51,25 @@ NEW_TO_THE_POOL = [
 _RICH = {"W": 9, "U": 9, "B": 9, "R": 9, "G": 9}
 
 
-def _other_shipped_codes() -> list[str]:
-    """Every shipped set but this one — true while 7ED is `measured` and still
-    true the day it moves, which is what lets these tests survive promotion."""
-    return [entry["code"] for entry in manifest_sets() if entry["code"] != "7ED"]
+def _printed_before_seventh_edition(set_cards) -> set[str]:
+    """The oracle ids printed in a shipped set released **before** 7ED.
+
+    Asked by release date rather than by manifest index, so it answers in
+    either manifest role — and no set shipped later can change it, which is
+    what a premise asked of "every other shipped set" got wrong: 8ED reprints
+    nine of the seventeen below, and the two tests built on that question went
+    red at 8ED's promotion with nothing about 7ED changed."""
+    released = {
+        entry["code"]: entry["released"]
+        for entry in (*manifest_sets(), *manifest_measured_sets())
+    }
+    return {
+        card.oracle_id
+        for code, date in released.items()
+        if date < released["7ED"]
+        for card in set_cards(code)
+        if card.oracle_id
+    }
 
 
 def _duel(pool, *, hand=(), opp_hand=(), library=(), graveyard=(),
@@ -131,25 +146,24 @@ def _finish_combat(game: Game) -> None:
 
 
 def test_seventh_edition_brings_exactly_seventeen_cards_the_pool_did_not_have(set_cards):
-    """The premise everything else about this set rests on, in both directions:
-    each of the seventeen is printed in no other shipped set, and no eighteenth
-    card is.
+    """The premise everything else about this set rests on, in both directions,
+    asked of the sets released **before** 7ED: the seventeen the pool had never
+    seen at the ingest, and Mind Rot, whose only other printing here is later
+    (the next test) — new to every earlier set, though not to the pool.
 
-    "New to the pool" is asked of the whole shipped pool and not of the sets to
-    7ED's left, which is the one place this departs from 6ED's twin. That
-    question needs a manifest index, and 7ED has none while it is `measured` —
-    and the two answers differ by a card (see the next test).
+    It was asked of the whole shipped pool at first, because the sets to 7ED's
+    left needed a manifest index and a `measured` set has none. That question
+    has an answer only until a later set reprints one of the seventeen, and 8ED
+    reprints nine. Release dates answer "earlier" in either manifest role, and
+    no set shipped later can move the answer.
     """
-    elsewhere = {
-        card.oracle_id
-        for code in _other_shipped_codes()
-        for card in set_cards(code)
-        if card.oracle_id
-    }
+    earlier = _printed_before_seventh_edition(set_cards)
     novel = sorted(
-        card.name for card in set_cards("7ED") if card.oracle_id not in elsewhere
+        card.name for card in set_cards("7ED") if card.oracle_id not in earlier
     )
-    assert novel == NEW_TO_THE_POOL, f"7ED cards printed in no other shipped set: {novel}"
+    assert novel == sorted(NEW_TO_THE_POOL + ["Mind Rot"]), (
+        f"7ED cards printed in no shipped set released before it: {novel}"
+    )
 
 
 def test_one_reprint_takes_its_origin_from_the_manifest_index(set_cards):
@@ -157,26 +171,19 @@ def test_one_reprint_takes_its_origin_from_the_manifest_index(set_cards):
     decides whether its origin reads `7ed` or `m21` — Stronghold's Shock, Urza's
     Saga's three, Invasion's Opt, Planeshift's Quirion Dryad, one more time.
 
-    Measured against release dates rather than against an index, so it holds in
-    either manifest role: a reprint is position-dependent when **every** other
-    set that prints it was released after this one. Exactly one card is. When a
-    re-fetch or a newly shipped set changes that list, the wrong-insert
-    rehearsal at promotion has a different card to watch, and this says which.
+    Asked of M21, the one shipped set ahead of its turn in release order and so
+    the only printing that can make an origin turn on where 7ED goes — not of
+    "every other printing is later", which grows with each later set reprinting
+    a 7ED original (8ED put nine on it) though none of them is position-
+    dependent: each is inserted after 7ED. Exactly one card is printed in M21
+    and in no set released before 7ED, and no later promotion can change that.
     """
-    released = {
-        entry["code"]: entry["released"]
-        for entry in (*manifest_sets(), *manifest_measured_sets())
-    }
-    printed_in: dict[str, set[str]] = collections.defaultdict(set)
-    for code in _other_shipped_codes():
-        for card in set_cards(code):
-            printed_in[card.oracle_id].add(code)
-
+    earlier = _printed_before_seventh_edition(set_cards)
+    in_m21 = {card.oracle_id for card in set_cards("M21")}
     position_dependent = sorted(
         card.name
         for card in set_cards("7ED")
-        if printed_in.get(card.oracle_id)
-        and all(released[code] > released["7ED"] for code in printed_in[card.oracle_id])
+        if card.oracle_id in in_m21 and card.oracle_id not in earlier
     )
     assert position_dependent == ["Mind Rot"]
 
@@ -250,7 +257,8 @@ def test_eighteen_cards_are_originally_printed_in_seventh_edition(
         if catalog_by_name[card.name].original_printing == "7ed"
     )
     assert originates == sorted(NEW_TO_THE_POOL + [ORIGIN_DECIDED_BY_THE_INDEX])
-    assert list(catalog_by_name[ORIGIN_DECIDED_BY_THE_INDEX].printings) == ["7ed", "m21"]
+    printings = list(catalog_by_name[ORIGIN_DECIDED_BY_THE_INDEX].printings)
+    assert printings[0] == "7ed" and "m21" in printings, printings
 
 
 def test_promoting_the_set_actually_recorded_its_printings(set_cards, catalog_by_name):
