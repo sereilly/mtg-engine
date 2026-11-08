@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **6146**
-- Passed: **988** (692 checked in-game, 296 auto-passed)
+- Passed: **990** (694 checked in-game, 296 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **70**
-- Untested: **5088**
+- Untested: **5086**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -374,7 +374,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Badlands | ✅ pass |  |
 | Baki's Curse | ⬜ untested |  |
 | Balance | ✅ pass |  |
-| Balance of Power | ⬜ untested |  |
+| Balance of Power | ✅ pass |  |
 | Balancing Act | ⬜ untested |  |
 | Balduvian Barbarians | ✅ pass | auto-pass: no abilities |
 | Balduvian Bears | ✅ pass | auto-pass: no abilities |
@@ -3930,7 +3930,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Primal Order | ⬜ untested |  |
 | Primal Rage | ⬜ untested |  |
 | Primal Whisperer | ⬜ untested |  |
-| Primeval Force | ⬜ untested |  |
+| Primeval Force | ✅ pass |  |
 | Primeval Shambler | ≡ equivalent | same behaviour as Frozen Shade |
 | Primitive Etchings | ⬜ untested |  |
 | Primitive Justice | ⬜ untested |  |
