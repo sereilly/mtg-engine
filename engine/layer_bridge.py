@@ -903,6 +903,48 @@ def computed_types(perm: Permanent) -> tuple[set[str], set[str]]:
     return _computed_types_in_full(perm)
 
 
+def has_computed_type(perm: Permanent, wanted: str, *, card_types_only: bool = False) -> bool:
+    """Whether *perm* has the card type or subtype *wanted* (lowercase) after
+    layer 4 — :func:`computed_types`' answer to one membership question.
+
+    The question ``has_type`` and ``is_creature`` ask of every permanent on
+    every state-based pass, so the shortcut answers it from the seed's own
+    frozensets rather than copying them into two new sets per call. Checking
+    mode compares that answer with the full computation's.
+    """
+    if not _without_type_effects(perm):
+        card_types, subtypes = _computed_types_in_full(perm)
+        return wanted in card_types or (not card_types_only and wanted in subtypes)
+    card_types, subtypes = _seed_shape(perm, perm.effective_card)
+    answer = wanted in card_types or (not card_types_only and wanted in subtypes)
+    if fast_paths.CHECKING:
+        full_types, full_subtypes = _computed_types_in_full(perm)
+        full = wanted in full_types or (not card_types_only and wanted in full_subtypes)
+        fast_paths.checked(
+            "has_computed_type", answer == full,
+            lambda: f"{perm.card.name!r} {wanted!r}: {answer} against {full}",
+        )
+    return answer
+
+
+def has_computed_supertype(perm: Permanent, wanted: str) -> bool:
+    """Whether *perm* has the supertype *wanted* (lowercase) after layer 4 —
+    :func:`computed_supertypes`' answer to one membership question, without
+    building its set (the legend and world rules ask it of every permanent on
+    every state-based pass). Checking mode compares it with the full
+    computation's."""
+    if not _without_type_effects(perm):
+        return wanted in _computed_supertypes_in_full(perm)
+    answer = wanted in printed_supertypes(perm.effective_card.type_line)
+    if fast_paths.CHECKING:
+        full = wanted in _computed_supertypes_in_full(perm)
+        fast_paths.checked(
+            "has_computed_supertype", answer == full,
+            lambda: f"{perm.card.name!r} {wanted!r}: {answer} against {full}",
+        )
+    return answer
+
+
 def _computed_types_in_full(perm: Permanent) -> tuple[set[str], set[str]]:
     """:func:`computed_types`, through the layer system."""
     oid = id(perm)

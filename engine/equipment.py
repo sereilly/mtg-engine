@@ -347,6 +347,11 @@ def unattach_illegal_equipment(game: "Game") -> bool:
     """
     changed = False
     for permanent in list(game.all_permanents()):
+        # Attached to nothing and wearing nothing: neither half below has
+        # anything to judge, whatever the permanent is — so the layer-4 read
+        # of whether it is an Equipment is spared for nearly every permanent.
+        if equipped_creature(permanent) is None and not auras_attached_to(permanent):
+            continue
         if is_equipment(permanent):
             host = equipped_creature(permanent)
             if host is None:

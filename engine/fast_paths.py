@@ -4,7 +4,10 @@
 ``computed_types`` / ``computed_supertypes`` (``engine/layer_bridge.py``) are
 the most-read functions in the engine — 4.5 million and 0.7 million reads in
 two simulated Mirage games — and nearly every read is of a permanent nothing
-has touched: no copy, no text change, no grant, no type change. Each of them
+has touched: no copy, no text change, no grant, no type change. (The
+membership questions ``has_type``, ``is_creature`` and ``has_supertype`` ask
+layer 4 through one-question shortcuts beside them, ``has_computed_type`` and
+``has_computed_supertype``, checked under their own labels.) Each of them
 answers that case **without running its fold**, by asking whether any of the
 metadata channels the fold reads holds anything (``models.fold_channels``,
 ``type_layer.TYPE_EFFECT_CHANNELS``). Nothing is remembered between reads, so

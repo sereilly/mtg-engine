@@ -1132,7 +1132,14 @@ entries, not editing dispatch**.
     built from `id()` (stored in it or compared with what it holds).
   - **Most reads have nothing to fold and skip the fold**: with every key in
     `models.fold_channels()` empty, `effective_card` returns the printed card
-    (and `computed_types` likewise over `type_layer.TYPE_EFFECT_CHANNELS`).
+    (and `computed_types` likewise over `type_layer.TYPE_EFFECT_CHANNELS`;
+    `has_type` / `is_creature` / `has_supertype` answer from the seed's
+    frozensets through `layer_bridge.has_computed_type` / `has_computed_supertype`).
+    A shortcut is a predicate over the current state, never a remembered
+    answer: a text reader may be cached on its text (the Aura readers are),
+    and a state-based sweep asks its cheap metadata test before a layer read,
+    but nothing skips a recompute "because nothing changed" (ROADMAP, "The
+    folds that do run").
     **A channel the fold starts reading belongs in that tuple**
     (`tests/engine/test_effective_card_fast_path.py`).
     `engine/fast_paths.CHECKING` recomputes every shortcut the long way; run the

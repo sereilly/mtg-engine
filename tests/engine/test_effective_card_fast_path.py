@@ -259,12 +259,17 @@ def test_every_shortcut_answer_on_the_board_is_the_full_one(by_name, monkeypatch
     assert len(permanents) >= len(PANEL) + len(SOURCES)
     # Every accessor but ``card_through_layer_3`` (layers 1 and 3, and no
     # further) reaches ``effective_card``; the five layer-4 accessors reach
-    # ``computed_types`` or ``computed_supertypes``.
+    # ``computed_types`` or ``computed_supertypes`` — or, for the membership
+    # questions ``has_type`` / ``is_creature`` / ``has_supertype``, their
+    # one-question shortcuts, each checked under its own label.
     assert fast_paths.CHECKED["effective_card"] >= len(unfolded) * (len(ACCESSORS) - 1)
-    assert (
-        fast_paths.CHECKED["computed_types"] + fast_paths.CHECKED["computed_supertypes"]
-        >= len(untyped) * 5
-    )
+    assert sum(
+        fast_paths.CHECKED.get(label, 0)
+        for label in (
+            "computed_types", "computed_supertypes",
+            "has_computed_type", "has_computed_supertype",
+        )
+    ) >= len(untyped) * 5
     # The line an Aura's line-derived keyword grant turns into is kept per text
     # (Agility's flanking, on the enchanted Bears, which the board then strikes
     # off them again), and every kept answer was read again here.
@@ -356,7 +361,9 @@ def test_the_checking_mode_names_a_layer_4_channel_left_out(by_name, monkeypatch
     monkeypatch.setattr(fast_paths, "CHECKING", False)
     assert not forest.is_creature
     monkeypatch.setattr(fast_paths, "CHECKING", True)
-    with pytest.raises(RuntimeError, match="computed_types"):
+    # `is_creature` asks the one-question shortcut (`has_computed_type`),
+    # which raises under its own label.
+    with pytest.raises(RuntimeError, match="has_computed_type"):
         forest.is_creature
 
 

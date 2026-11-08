@@ -706,6 +706,12 @@ class GameEndingMixin:
 
         # 704.5f: creature with toughness 0 or less → graveyard (regeneration cannot replace)
         def _zero_toughness(perm: Permanent) -> bool:
+            # Only a creature is swept (below), and that is the one cheap
+            # question here: asked first, it spares the text read for every
+            # land and noncreature. Every test in this predicate is pure, so
+            # the order changes no answer.
+            if not perm.is_creature:
+                return False
             # ``effective_card``, not ``card``: a copy's printed toughness is
             # the copied object's (CR 613 layer 1). Reading the copier's own
             # would call a Clone of a variable-P/T creature "fixed at 0" and
@@ -764,6 +770,11 @@ class GameEndingMixin:
         # a damage step no longer necessarily sits inside a handler that
         # knows to run the sweep.
         def _lethally_damaged(perm: Permanent) -> bool:
+            # No damage marked is never lethal (either branch below needs some),
+            # and it is the common case: asked first, it spares the layer-4
+            # read of every undamaged permanent on every pass.
+            if perm.damage_marked <= 0:
+                return False
             if not perm.is_creature:
                 return False
             if perm.effective_toughness <= 0:
@@ -838,10 +849,12 @@ class GameEndingMixin:
         # costs. has_type, not the printed line, so a layer-4 type change
         # is honored.
         def _zero_loyalty(perm: Permanent) -> bool:
-            if not perm.has_type("planeswalker"):
-                return False
+            # The counters first: a pure test either way, and almost nothing
+            # carries loyalty, so the layer-4 read is asked of almost nothing.
             loyalty = perm.metadata.get("loyalty_counters")
-            return loyalty is not None and loyalty <= 0
+            if loyalty is None or loyalty > 0:
+                return False
+            return perm.has_type("planeswalker")
 
         for player in self.players:
             if self._destroy_swept_permanents(
@@ -907,15 +920,17 @@ class GameEndingMixin:
 
         # 704.5m: Aura/Role not attached to a legal object → graveyard
         def _illegally_attached(perm: Permanent) -> bool:
+            if "attached_to" not in perm.metadata:
+                # Manually placed without tracking — skip 704.5m. Asked
+                # before the type: a pure test either way, and it spares the
+                # layer-4 read of every permanent that was never attached.
+                return False
             # Asked of CR 613 layer 4, not of the printed line: an effect
             # can return an Aura "as a **non-Aura** enchantment"
             # (Takklemaggot), and a sweep reading `card.type_line` would
             # bin the very permanent that sentence created. The printed
             # line is still the answer for everything nothing has changed.
             if not perm.has_type("aura") and not perm.has_type("role"):
-                return False
-            if "attached_to" not in perm.metadata:
-                # Manually placed without tracking — skip 704.5m
                 return False
             attached_to = perm.metadata.get("attached_to")
             if attached_to is None:
@@ -952,10 +967,14 @@ class GameEndingMixin:
         for player in self.players:
             departing_immune = []
             for perm in list(self.controlled_by(player)):
-                if not perm.has_type("aura"):
-                    continue
+                # The host before the type, here and in the three sweeps
+                # below: each test is pure, and nearly every permanent is
+                # attached to nothing, which is a metadata read where the
+                # type is a layer-4 one.
                 host = perm.metadata.get("attached_to")
                 if host is None or not self.is_on_battlefield(host):
+                    continue
+                if not perm.has_type("aura"):
                     continue
                 if not cannot_be_enchanted(host, by_aura=perm):
                     continue
@@ -982,6 +1001,10 @@ class GameEndingMixin:
         for player in self.players:
             departing_own = []
             for perm in list(self.controlled_by(player)):
+                # `unsatisfied_enchant_clause` answers None for an Aura
+                # attached to nothing; asking that first spares the type read.
+                if perm.metadata.get("attached_to") is None:
+                    continue
                 if not perm.has_type("aura"):
                     continue
                 noun = unsatisfied_enchant_clause(self, perm)
@@ -1005,8 +1028,8 @@ class GameEndingMixin:
             for perm in list(self.controlled_by(player)):
                 attached_to = perm.metadata.get("attached_to")
                 if (
-                    perm.has_type("aura")
-                    and attached_to is not None
+                    attached_to is not None
+                    and perm.has_type("aura")
                     and self._cant_be_enchanted(attached_to)
                     and "can't be enchanted by other auras" not in perm.effective_card.oracle_text.lower()
                 ):
@@ -1052,7 +1075,7 @@ class GameEndingMixin:
                 # Gliding Licid that became an Aura is one, and stayed on
                 # a host given protection from blue while this read the
                 # printed type line.
-                if perm.has_type("aura") and attached_to is not None:
+                if attached_to is not None and perm.has_type("aura"):
                     text = perm.effective_card.oracle_text.lower()
                     if "remove all auras" in text:
                         continue
@@ -1102,6 +1125,10 @@ class GameEndingMixin:
         # attached to nothing, so it never reaches the state this loop acts
         # on.
         for perm in self.all_permanents():
+            # Attached at all, first: a metadata read that rules out nearly
+            # every permanent before the three layer-4 reads.
+            if perm.metadata.get("attached_to") is None:
+                continue
             if perm.has_type("aura") or is_equipment(perm) or perm.has_type("role"):
                 continue
             if perm.metadata.get("attached_to") is not None:
@@ -1135,10 +1162,12 @@ class GameEndingMixin:
 
         # 704.5s: Saga at or past final chapter → sacrifice
         def _saga_done(perm: Permanent) -> bool:
-            if not perm.has_type("saga"):
-                return False
+            # The chapters first: a pure test either way, and only a Saga
+            # records a final chapter.
             final = perm.metadata.get("final_chapter", 0)
-            return final > 0 and perm.metadata.get("lore_counters", 0) >= final
+            if not (final > 0 and perm.metadata.get("lore_counters", 0) >= final):
+                return False
+            return perm.has_type("saga")
 
         for player in self.players:
             if self._destroy_swept_permanents(
@@ -1161,9 +1190,12 @@ class GameEndingMixin:
             # "most recent" is still the last one collected.
             roles_by_ctrl: dict[int, list[Permanent]] = {}
             for ctrl_idx, role_perm in self.permanents_with_controller():
-                if not role_perm.has_type("role"):
-                    continue
+                # Attached to this creature, first: an identity test, where
+                # asking every permanent's type for every creature made this
+                # sweep quadratic in layer-4 reads.
                 if role_perm.metadata.get("attached_to") is not perm:
+                    continue
+                if not role_perm.has_type("role"):
                     continue
                 roles_by_ctrl.setdefault(ctrl_idx, []).append(role_perm)
             for ctrl_idx, roles in roles_by_ctrl.items():

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 from functools import lru_cache
+from types import MappingProxyType
 
 from . import fast_paths
 from .late_modules import LateModules
@@ -77,6 +78,7 @@ _PT_GRANT_PER_COUNTER = re.compile(
 )
 
 
+@lru_cache(maxsize=None)
 def aura_pt_grant_per_counter(oracle_text: str) -> tuple[int, int, str] | None:
     """``(power, toughness, counter name)`` for a per-counter grant, or None.
 
@@ -126,6 +128,7 @@ def _static_ability_line(line: str) -> bool:
     return ":" not in line.split(" gets ")[0]
 
 
+@lru_cache(maxsize=None)
 def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
     """The permanent +P/+T an Aura grants while attached, or None.
 
@@ -350,6 +353,7 @@ _CONDITIONAL_KEYWORD_GRANT = _LazyPattern(lambda: re.compile(
 ))
 
 
+@lru_cache(maxsize=None)
 def aura_conditional_keyword_grants(oracle_text: str) -> tuple[tuple[str, str], ...]:
     """``(keyword, state)`` pairs an Aura grants *while its host is in state*.
 
@@ -641,6 +645,7 @@ def _keyword_list(run: str) -> list[str]:
     return [part.strip() for part in re.split(r",| and ", run) if part.strip()]
 
 
+@lru_cache(maxsize=None)
 def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
     """Keyword abilities an Aura grants to the permanent it enchants.
 
@@ -743,6 +748,7 @@ def _line_derived_lines_of(oracle_text: str) -> tuple[str, ...]:
     )
 
 
+@lru_cache(maxsize=None)
 def aura_keyword_removals(oracle_text: str) -> tuple[str, ...]:
     """Keyword abilities an Aura **takes away** from the permanent it enchants.
 
@@ -833,6 +839,7 @@ _CARD_TYPE_ADDITION_GRANT = re.compile(
 )
 
 
+@lru_cache(maxsize=None)
 def aura_card_type_grants(oracle_text: str) -> tuple[str, ...]:
     """Card **types** an Aura adds to what it enchants (CR 613 layer 4).
 
@@ -850,6 +857,7 @@ def aura_card_type_grants(oracle_text: str) -> tuple[str, ...]:
     return tuple(granted)
 
 
+@lru_cache(maxsize=None)
 def aura_type_grants(oracle_text: str) -> tuple[str, ...]:
     """Creature subtypes an Aura *adds* to what it enchants (CR 613 layer 4).
 
@@ -865,6 +873,7 @@ def aura_type_grants(oracle_text: str) -> tuple[str, ...]:
     return tuple(granted)
 
 
+@lru_cache(maxsize=None)
 def aura_creature_type_sets(oracle_text: str) -> tuple[str, ...]:
     """Creature types an Aura **sets** on what it enchants (CR 613 layer 4).
 
@@ -901,6 +910,7 @@ _COLOR_GRANT = re.compile(
 )
 
 
+@lru_cache(maxsize=None)
 def aura_color_grants(oracle_text: str) -> tuple[str, ...]:
     """Colour words an Aura gives what it enchants (CR 613 layer 5).
 
@@ -921,6 +931,7 @@ def aura_color_grants(oracle_text: str) -> tuple[str, ...]:
     return tuple(granted)
 
 
+@lru_cache(maxsize=None)
 def aura_protection_colors(oracle_text: str) -> frozenset[str]:
     """Colour words an Aura grants protection from (the Ward cycle).
 
@@ -966,6 +977,7 @@ _ANIMATE_ARTIFACT = re.compile(
 )
 
 
+@lru_cache(maxsize=None)
 def aura_animates_artifact(oracle_text: str) -> bool:
     """Whether this Aura animates the artifact it enchants."""
     return any(
@@ -991,7 +1003,8 @@ _ATTACHED_LAND_ANIMATION = re.compile(
 )
 
 
-def aura_land_animation(oracle_text: str) -> dict | None:
+@lru_cache(maxsize=None)
+def aura_land_animation(oracle_text: str) -> MappingProxyType | None:
     """The body an Aura makes its land, or None.
 
     ``{"power", "toughness", "colors", "subtypes"}`` — colours as symbols, the
@@ -1019,12 +1032,14 @@ def aura_land_animation(oracle_text: str) -> dict | None:
                 subtypes.append(word)
             else:
                 return None
-        return {
+        # Read-only: the answer is cached on the text and shared by every
+        # caller, so nobody may write into it.
+        return MappingProxyType({
             "power": int(match.group("power")),
             "toughness": int(match.group("toughness")),
             "colors": tuple(colors),
             "subtypes": tuple(subtypes),
-        }
+        })
     return None
 
 

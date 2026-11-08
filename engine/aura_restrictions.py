@@ -21,6 +21,7 @@ that enforces it.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 from .aura_attachment import auras_attached_to
 from .special_actions import IGNORE_ATTACHED_STATIC_OFFER, ignore_offer_price
@@ -468,6 +469,7 @@ def aura_color_conditioned_combat_ban(line: str) -> tuple[str, str] | None:
     return _COMBAT_BAN_NAMES[match.group("verb")], match.group("color")
 
 
+@lru_cache(maxsize=None)
 def aura_restrictions(oracle_text: str) -> frozenset[str]:
     """The named restrictions an Aura imposes while attached."""
     found = {

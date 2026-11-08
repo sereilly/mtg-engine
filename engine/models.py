@@ -881,9 +881,7 @@ class Permanent:
         ``primary_type`` collapses multi-type lines to one type, so type checks
         on permanents should use this instead.
         """
-        wanted = card_type.lower()
-        card_types, subtypes = _late.layer_bridge.computed_types(self)
-        return wanted in card_types or wanted in subtypes
+        return _late.layer_bridge.has_computed_type(self, card_type.lower())
 
     @property
     def is_creature(self) -> bool:
@@ -894,7 +892,7 @@ class Permanent:
         special case. Targeting, combat, and creature-only effects must use
         this rather than the printed ``card.primary_type``.
         """
-        return "creature" in _late.layer_bridge.computed_types(self)[0]
+        return _late.layer_bridge.has_computed_type(self, "creature", card_types_only=True)
 
     def has_supertype(self, supertype: str) -> bool:
         """Whether this permanent currently has a supertype (CR 205.4a).
@@ -911,7 +909,7 @@ class Permanent:
         ``printed_supertypes`` stays for the callers that hold a *card* — a
         thing in a hand or a graveyard, where CR 613 does not apply at all.
         """
-        return supertype.lower() in _late.layer_bridge.computed_supertypes(self)
+        return _late.layer_bridge.has_computed_supertype(self, supertype.lower())
 
     @property
     def effective_supertypes(self) -> frozenset[str]:

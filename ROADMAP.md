@@ -984,7 +984,19 @@ one card prints this") reads as a work item long after it stopped being true.
     The simulator's honesty count of steps ending with something owed must
     also skip a finished game (`ai_simulator._owed_when_leaving`), or USG
     and M21 exit 1.
-  * *The folds that do run* (perf). About 6 s of a 47.6 s Mirage profile
+  * *The folds that do run* (perf). Measured again on 2026-11-08 over four
+    seeded games (SCG, ONS, MIR, M21; 35.0 s): the state-based check was 55%
+    of the run and the continuous-effect recompute inside it 21%. What was
+    exact went in — the Aura text readers cached on their text, each sweep
+    asking its metadata test before a layer read, `has_type` / `is_creature`
+    / `has_supertype` answered without building sets — and took the four
+    games to 23.3 s and the full pass from 2,068 s to 1,660 s at `-n 10`.
+    What is left is remembered state, which this entry is about: skipping a
+    recompute (or a whole state-based check) when nothing changed since the
+    last one needs a signal for every write below, and the full
+    `effective_card` fold (~15% of a profile; a permanent with a recorded
+    static or an attached Aura folds on every read) needs the same inputs
+    as a key. Earlier readings: about 6 s of a 47.6 s Mirage profile
     and 31 s of 81 in Planeshift, mostly `global_static_sources` per source.
     An epoch memo would need every input, not only the permanent's own
     channels. Those are each source's `card_through_layer_3` text, CR 305.7

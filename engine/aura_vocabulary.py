@@ -18,6 +18,7 @@ left there each of their imports would be a cycle.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 
 # The nouns an Aura's effect clause can address, from its "Enchant <noun>" line.
@@ -153,6 +154,7 @@ _CREATURE_TYPE_SET = _LazyPattern(_build_creature_type_set)
 _REMINDER = re.compile(r"\([^)]*\)")
 
 
+@lru_cache(maxsize=None)
 def _line_text(raw_line: str) -> str:
     return " ".join(_REMINDER.sub("", raw_line).strip().lower().split()).rstrip(".")
 
