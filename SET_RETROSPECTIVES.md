@@ -1809,3 +1809,28 @@ round's rules.
   `effect_order`'s measured order; Balduvian Shaman's granted cumulative
   upkeep; "could produce" against CR 106.7; CR 400.4a's entry seam;
   Oubliette's line hook; Desperate Gambit's marker names; Infernal Denizen.
+
+### 8ED — 2026-11-08
+
+*The fifth reprint-shaped core set: 342 cards, eleven new to the pool (the
+Portal and Starter reprints), no origin trap.* Ingested at 341/342 on a green
+full pass; Balance of Power took one condition clause ("has more cards in
+hand than you", the op "controls more … than you" already carried) and "the
+difference" bound to the two counts it compared (Bulwark's `minus_count`),
+with no hook. All eleven were driven headless before their tests and played
+as printed. Promoted at index 37 the day of the ingest.
+
+*What the set found was in the AI, the tests and the client, not the
+engine.* Pinning the new cards into AI games showed Primeval Force cast with
+two Forests and lost to its own trigger — and fourteen shipped siblings
+(Phyrexian Dreadnought beside no creature, Hecatomb beside one): a permanent
+is now rehearsed when its own entry can remove it. The promotion turned three
+7ED premise tests red on the *correct* insert: they asked "every other
+shipped set", and 8ED reprints nine of 7ED's seventeen. The smoke game found
+a cancelled target choice leaving the rail's Next Phase and End Turn dead.
+
+*Edits in place:* Phase 1 runs its pass in the ingest's worktree; Phase 5
+pins the set's new cards; a per-set premise asks the sets released before;
+a probe on an unreachable state can hide a defect (a chooser asked at a step
+the engine does not have). Known gaps gains the stacked-permanent
+multi-select.

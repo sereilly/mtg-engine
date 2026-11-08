@@ -212,7 +212,11 @@ And when writing one:
   one, and a strict `xfail` of a defect a sibling was fixing turned into an
   XPASS(strict) at the same kind of merge (Onslaught). Assert what holds in
   every state the wave passes through (morph is never the reason a card is
-  unsupported), and leave a sibling's defect to the sibling's own test.
+  unsupported), and leave a sibling's defect to the sibling's own test. The
+  same holds across sets: a per-set premise ("these cards are new", "this
+  reprint's origin turns on the index") asks the sets **released before** the
+  set and M21, never "every other shipped set" — 8ED reprinted nine of 7ED's
+  seventeen new cards and turned three 7ED tests red at its promotion.
 - **Brief a speed group from a profile of two sets of different shape**, with
   the numbers and not a design: the call counts reproduce, a proposed design
   usually does not.
@@ -601,7 +605,9 @@ carry its row, and the census is in hand.
    ("these are the base and not you; report any other"), and merge the owners
    first. Then **confirm the suite loaded the set** — check the collected count
    moved; a green run over a pool without it looks the same as one that found
-   nothing.
+   nothing. **Run it in the ingest's own worktree**, never in the checkout the
+   card work starts in: the work starts while this pass runs (8ED's integrator
+   edited the main checkout under it and had to put two files back).
 3. Regenerate the trackers. The set appears as a *(measured)* row; the floors
    and ceilings do not move.
 4. The census, all of it, before believing any number:
@@ -787,6 +793,9 @@ Rounds run as waves of groups, briefed, merged and gated as in Integration.
   stopped it. **A fixture standing on a state the rules cannot reach is a test
   of the defect**: when a rules-correct fix turns many tests red at once, check
   whether their boards are reachable before reading the reds as regressions.
+  A probe on one can hide a defect as well: 8ED's AI cast chooser, asked at a
+  step name the engine does not have, proposed nothing, which read as the AI
+  rightly holding a Primeval Force it in fact cast.
 
 **What each instrument sees.** The census sizes buckets and names no defect.
 `--hollow-lines` sees an ability part with no instruction; `parse_coverage` a
@@ -1012,7 +1021,11 @@ records it through the Debug Menu.
    rule but leaves a seat re-proposing it every turn. A seeded run is
    byte-identical unless a fix legitimately changed AI-visible behaviour, which
    the retrospective names; `--all` across the promotion commit shows whether
-   promotion itself changed anything. **A zero in the combat counts is a
+   promotion itself changed anything. **Pin the set's new cards too**
+   (`run_ai_simulation(..., required_cards=[...])`): a random limited deck
+   from a reprint set rarely holds them — ten 8ED games dealt three of eleven
+   — and the pinned run is what showed the AI casting Primeval Force into its
+   own sacrifice, a defect fourteen shipped cards shared. **A zero in the combat counts is a
    question for the pre-set commit, not a finding**: run the same seed in a
    throwaway `git worktree add <dir> <rev>`, and remove it from the main
    checkout, never from inside it (Windows holds the directory open).
@@ -1267,4 +1280,11 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
 
 - **Seen, not measured.** `_SimulatedGame._steps_left_owing` lives in the
   instance `__dict__`, so `position_digest` reads it in simulator games
-  only.
+  only. And a choose-N prompt over identical permanents the canvas draws as
+  one stack (8ED's Primeval Force, "sacrifice three Forests", over a ×3
+  Forest stack): a click on the stack toggles its front card, and the other
+  two are reached only by the strips of them showing behind it. It works and
+  says so ("Selected 2/3"), but nothing tells a person where the second card
+  is. Part: during a multi-select prompt, a click on a grouped stack selects
+  its next unselected member (`battlefield-canvas.js`'s hit test).
+  *Clears:* a client round.

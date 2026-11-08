@@ -2135,6 +2135,7 @@ a wave is five parallel worktree groups integrated serially.
 | ONS | 335 | 59.4% | 2 waves (thirteen groups landed 331, morph end to end in one; then six: the last four cards, two client groups, the engine pile, the AI pile, the rehearsal's answers) |
 | LGN | 145 | 67.6% | 2 waves (seven groups landed all 47 with no hook; then four: the client, the rehearsal's engine reds, the engine pile, the AI pile) + 1 follow-up the promotion's full pass found + 2 closers after Phase 5 |
 | SCG | 143 | 56.6% (81 read supported; 18 of them hollow) | 2 waves (nine groups landed 79 of the 80 with no hook; then five: the last card, the client, the AI pile, the engine pile, the rehearsal's inventories) + 3 follow-ups (the client's last prompt and an exile search's floor; the full-pass rehearsal's four census reds) + 4 closers after Phase 5 (the engine, the web, the AI, the client) + 1 follow-up their full gate found |
+| 8ED | 342 | 99.7% (11 new to the pool) | no group: one production by the integrator (Balance of Power), the eleven driven headless, promoted the day of the ingest + 1 AI fix the set's pinned AI games found |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -2150,21 +2151,20 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-11-06, after Scourge's promotion and its closers): 6,135 unique cards
-over 38 sets, 8,650 printings, 100% supported. Grammar parses 89.8% of
-lines, lowers 89.3% and executes 62.0% (`GRAMMAR_COVERAGE.md`; the All row
-fell on membership alone as Scourge's lines joined it). **0.7%** of supported
-cards carry a name-keyed hook — 46 cards, 51 entries in 6 registries
-(`HOOK_RELIANCE.md`) — and the projection that implies for the release line
-has fallen from 1,195 hand-written entries to **217**, across twenty-five
-consecutive sets that added no hook (Scourge's 142 new cards added none, and
-Fork's hook was retired for a production). That is the measure moving the
-way the architecture needs it to.
-Parse coverage: 6,133 of 6,135 supported cards fully claimed, 2
+2026-11-08, after Eighth Edition's promotion): 6,146 unique cards
+over 39 sets, 8,992 printings, 100% supported. Grammar parses 90.0% of
+lines, lowers 89.5% and executes 62.1% (`GRAMMAR_COVERAGE.md`). **0.7%** of
+supported cards carry a name-keyed hook — 46 cards, 50 entries in 6
+registries (`HOOK_RELIANCE.md`) — and the projection that implies for the
+release line has fallen from 1,195 hand-written entries to **212**, across
+twenty-six consecutive sets that added no hook (Eighth Edition's eleven new
+cards added none). That is the measure moving the way the architecture needs
+it to.
+Parse coverage: 6,144 of 6,146 supported cards fully claimed, 2
 acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is
-the CR coverage tracker (432 of 641 tracked rules, 3,371 tests).
-`CARD_VERIFICATION.md` is a log, not a target: 984 passed (692 in-game,
-292 auto), 70 equivalent, 0 failed, 5,081 untested.
+the CR coverage tracker (433 of 641 tracked rules, 3,521 tests).
+`CARD_VERIFICATION.md` is a log, not a target: 990 passed (694 in-game,
+296 auto), 70 equivalent, 0 failed, 5,086 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,
