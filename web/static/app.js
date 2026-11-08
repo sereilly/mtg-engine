@@ -28419,7 +28419,10 @@ for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
 }
 
 
-q("promptCancelBtn").addEventListener("click", () => {
+// Cancel the cast, activation or attack-target choice the prompt panel is
+// holding. Named rather than inline so a test can run it
+// (`tests/ui/test_8ed_p5_cancel_rerenders_board.py`).
+function cancelPendingPrompt() {
   SFX.onMenuCancel();
   // A cast waiting on its mana split (`askCastManaSplit`) is told it was
   // cancelled, so its caller's catch ends the cast.
@@ -28459,8 +28462,15 @@ q("promptCancelBtn").addEventListener("click", () => {
   // prompt, whose summary/Alpha Strike controls were hidden while it was open.
   if (wasPickingAttackTarget && currentState) renderCombatControls(currentState);
   renderActivationPrompt();
+  // The board reads the pending flags cleared above — the rail's Next Phase
+  // and End Turn are disabled while one is set (`hasBlockingPromptForAutoPass`)
+  // — and a cancel changes nothing on the server, so no new state arrives to
+  // redraw it: without this, cancelling a spell's target choice left both rail
+  // buttons dead until the game next moved (8ED Phase 5).
+  if (currentState) renderBoard(currentState);
   updateActionHint(wasCasting ? "Cast canceled. Any mana in your pool is retained." : "Prompt canceled.");
-});
+}
+q("promptCancelBtn").addEventListener("click", cancelPendingPrompt);
 
 q("promptAutoTapBtn")?.addEventListener("click", async () => {
   try {
