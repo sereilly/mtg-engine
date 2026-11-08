@@ -1041,6 +1041,21 @@ COIN_FLIPS_WON = "coin_flips_won"
 #: ``grammar/amounts`` reads it back.
 SECRET_NUMBERS_BY_SEAT = "secret_numbers_by_seat"
 
+#: What "…draw cards equal to **the difference**" names (Balance of Power): the
+#: amount by which the sentence's own condition — "if target opponent has more
+#: cards in hand than you" — found one count ahead of the other.
+#:
+#: **Not a record.** No handler writes it and no lowering declares a producer
+#: for it: ``grammar/amounts`` reads the words as a back-reference under this
+#: name, and ``grammar/rebinding.rebind_difference_to_condition`` replaces it
+#: at parse time with the two counts the condition compared (``ast.Minus``),
+#: which is the quantity the handler then takes at resolution. A sentence whose
+#: condition names no such pair keeps the back-reference, and
+#: ``_back_reference_payload`` refuses it for having no producer — the safe
+#: direction, since a difference read off nothing would be a draw of zero on a
+#: card reporting itself supported.
+CONDITION_DIFFERENCE = "condition_difference"
+
 #: What "**the chosen type**" / "**that type**" names when the ability that
 #: chose it is a *spell* (Turnabout). One card type, chosen by the controller of
 #: the resolving spell (CR 608.2d) in the sentence in front, and read back by

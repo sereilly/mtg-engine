@@ -17,8 +17,9 @@ counters on one), and the back-references "equal to …" reads.
 from __future__ import annotations
 
 from ..granted_abilities import GRANTER_PHRASE_HEAD, GRANTER_PHRASE_TAIL
-from ..oracle_types import (LIFE_LOST_THIS_WAY, LIFE_LOST_WHEN_ENTERED,
-                            MANA_PAID_BY_SEAT, SECRET_NUMBERS_BY_SEAT)
+from ..oracle_types import (CONDITION_DIFFERENCE, LIFE_LOST_THIS_WAY,
+                            LIFE_LOST_WHEN_ENTERED, MANA_PAID_BY_SEAT,
+                            SECRET_NUMBERS_BY_SEAT)
 from . import ast
 from .errors import GrammarError
 from .lexer import NUMBER, PT, WORD
@@ -506,6 +507,16 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     # parsed — one printed possessive with two readings, which is the fork
     # SET_PLAYBOOK records from Revised's round 8.
     had_article = bool(stream.accept_word("the"))
+
+    # "…draw cards equal to **the difference**." (Balance of Power.) The lead
+    # the sentence's own condition measured ("if target opponent has more
+    # cards in hand than you"), which nothing in these words can name: read as
+    # a back-reference under ``CONDITION_DIFFERENCE`` and bound to the two
+    # compared counts by the conditional that holds it
+    # (``rebinding.rebind_difference_to_condition``). Anywhere else nothing
+    # binds it, and the lowering refuses a back-reference with no producer.
+    if had_article and stream.accept_word("difference"):
+        return ast.ThatMuch(CONDITION_DIFFERENCE)
 
     # "…deals damage to any target equal to **the greatest mana value among
     # permanents you control**." (Torrent of Fire, and four more Scourge

@@ -56,7 +56,8 @@ from .effects.linked_exile import _parse_bin_unplayed_exiled_card
 from .effects.retargeting import _parse_conditional_retarget
 from .effects.stack import _parse_destroy_countered_ability_source
 from .errors import GrammarError
-from .rebinding import (rebind_player_pronoun_to_condition_target,
+from .rebinding import (rebind_difference_to_condition,
+                        rebind_player_pronoun_to_condition_target,
                         rebind_pronoun_to_condition_target)
 from .stream import TokenStream
 
@@ -188,10 +189,17 @@ def parse_if_opening(
             # (Psychic Transfer). The same substitution for the *player*
             # pronoun, run after the object one: a condition that announced a
             # targeted seat has chosen it, and "that player" names that choice.
+            # "…, draw cards equal to **the difference**" (Balance of Power).
+            # The arm's amount names the lead the condition measured, so the
+            # two counts it compared are written in for it.
             return ast.Conditional(
                 condition,
-                rebind_player_pronoun_to_condition_target(
-                    condition, rebind_pronoun_to_condition_target(condition, then)
+                rebind_difference_to_condition(
+                    condition,
+                    rebind_player_pronoun_to_condition_target(
+                        condition,
+                        rebind_pronoun_to_condition_target(condition, then),
+                    ),
                 ),
             )
         except GrammarError:

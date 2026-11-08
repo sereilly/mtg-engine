@@ -19,8 +19,8 @@ from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, DISCARDED_BY_SEAT,
                              OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import (halved_count_spec, maximum_amount_spec,
-                       per_card_count_spec)
+from ._amounts import (counted_definition_spec, halved_count_spec,
+                       maximum_amount_spec, per_card_count_spec)
 # The characteristics ``count_from_payload`` reads off a cost-eaten
 # permanent. A floor, shared with the damage family that named it: a mill
 # sized by one asks the same question a damage sized by one does, and two
@@ -375,6 +375,22 @@ def _lower_draw(
         payload: dict[str, object] = {
             "amount": "x",
             X_FROM_COUNT: per_card_count_spec(node.count, node, node.player),
+        }
+    elif (
+        isinstance(node.count, ast.Minus)
+        and isinstance(node.count.left, ast.CountOf)
+        and isinstance(node.count.right, ast.CountOf)
+    ):
+        # "If target opponent has more cards in hand than you, draw cards equal
+        # to **the difference**." (Balance of Power, whose conditional binds
+        # the words to the two counts it compared.) One count taken off
+        # another at resolution — the nested ``minus_count`` spec Bulwark's
+        # "the number of cards in your hand minus the number of cards in that
+        # player's hand" already travels, through the floor's one reader of
+        # that arithmetic, and clamped at zero by the evaluator (CR 107.1b).
+        payload: dict[str, object] = {
+            "amount": "x",
+            X_FROM_COUNT: counted_definition_spec(node.count, node, event=event),
         }
     elif maximum_amount_spec(node.count, node, event=event) is not None:
         # "Draw cards equal to **the greatest mana value among permanents you

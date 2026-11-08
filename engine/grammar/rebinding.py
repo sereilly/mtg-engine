@@ -35,6 +35,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import replace
 
+from ..oracle_types import CONDITION_DIFFERENCE
 from . import ast
 from .back_references import COMBAT_ROLES
 
@@ -245,6 +246,66 @@ def rebind_player_pronoun_to_condition_target(
         return target if ref.kind == "that_player" else None
 
     return _walk_specs(statement, _rewrite, ast.PlayerRef)
+
+
+def _condition_difference(condition: ast.Condition) -> "ast.Minus | None":
+    """The two counts *condition* compared, as the amount one leads by, or None.
+
+    Only a hand measured against the asker's — "if **target opponent** has more
+    cards in hand than you" (Balance of Power), ``ZoneHasCards`` under
+    ``more_than_you`` — and only for **one named seat**: the difference is that
+    seat's count less yours. "An opponent" is an existential the evaluator asks
+    of every opponent, so "the difference" would have one answer per opponent
+    and nothing to say which; it stays unbound, and the line refuses.
+    """
+    if not (
+        isinstance(condition, ast.ZoneHasCards)
+        and condition.comparison.op == "more_than_you"
+        and str(condition.player.kind).startswith("target_")
+    ):
+        return None
+
+    def _cards_in_hand(owner: ast.PlayerRef) -> ast.CountOf:
+        # The filter "the number of cards in <owner>'s hand" parses to, so the
+        # count spec it lowers to is the one that phrase already reaches.
+        return ast.CountOf(ast.ObjectFilter(
+            zone=condition.zone, zone_owner=owner, is_card=True,
+        ))
+
+    return ast.Minus(
+        _cards_in_hand(condition.player), _cards_in_hand(ast.PlayerRef("you")),
+    )
+
+
+def rebind_difference_to_condition(
+    condition: ast.Condition, statement: ast.Statement
+) -> ast.Statement:
+    """"If target opponent has more cards in hand than you, draw cards equal to
+    **the difference**." (Balance of Power.)
+
+    "The difference" names the lead the condition measured, which no word of the
+    arm can say, so ``amounts`` reads it as a back-reference under
+    ``CONDITION_DIFFERENCE`` and this replaces it with the two counts — an
+    ``ast.Minus``, the shape "the number of cards in your hand minus the number
+    of cards in that player's hand" (Bulwark) already lowers. Both counts are
+    taken when the arm resolves (CR 608.2c; the card's 2004-10-04 ruling: "the
+    number of cards is counted during resolution"), and the target seat is the
+    one the condition announced, so the arm counts the same opponent's hand the
+    condition compared.
+
+    A condition with no such pair leaves the back-reference in place, and the
+    lowering refuses it for having no producer.
+    """
+    difference = _condition_difference(condition)
+    if difference is None:
+        return statement
+
+    def _rewrite(amount: ast.ThatMuch) -> "ast.Minus | None":
+        if amount.source == CONDITION_DIFFERENCE and not amount.bonus:
+            return difference
+        return None
+
+    return _walk_specs(statement, _rewrite, ast.ThatMuch)
 
 
 def rebind_counter_pronoun_to_bound_target(

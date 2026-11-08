@@ -286,6 +286,28 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                 counted,
                 ast.Comparison("more_than_each_other_player", ast.Fixed(0)),
             )
+        # "If **target opponent has more cards in hand than you**, draw cards
+        # equal to the difference." (Balance of Power.) A hand measured against
+        # the asker's own, which is the "controls" clause's ``more_than_you``
+        # below with "has" for its verb and a hand for its pile: the same op,
+        # the same margin reader ("at least two more", 0 for the bare word),
+        # and so the same node the "five or more cards in hand" bound already
+        # reaches — one question about one pile, compared against a seat
+        # instead of a number. Only a seat other than the asker's: "you have
+        # more cards in hand than you" compares a pile with itself, and "a
+        # player" is the existential the life superlative above owns, which
+        # the zone evaluator does not answer.
+        lead_mark = stream.mark()
+        margin = accept_margin(stream)
+        if (
+            counted.kind not in ("you", "any_player")
+            and stream.accept_phrase("more", "cards", "in", "hand", "than", "you")
+        ):
+            return ast.ZoneHasCards(
+                counted, "hand",
+                ast.Comparison("more_than_you", ast.Fixed(margin or 0)),
+            )
+        stream.reset(lead_mark)
         comparison = _parse_count_bound(stream)
         if stream.accept_word("life"):
             return ast.PlayerLifeIs(counted, comparison)

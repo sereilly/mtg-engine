@@ -781,12 +781,24 @@ def evaluate_state_condition(
         # the instruction is followed (CR 608.2c), not when the ability was
         # activated: a pile that changed in between is the pile this asks about.
         zone = str(payload.get("zone") or "library")
+        op = str(payload.get("op", ""))
 
         def pile_holds(player) -> bool:
             pile = getattr(player, zone, None)
-            return pile is not None and _compare_count(
-                len(pile), str(payload.get("op", "")), payload.get("value")
-            )
+            if pile is None:
+                return False
+            if op == "more_than_you":
+                # "If target opponent has **more cards in hand than you**"
+                # (Balance of Power). The bound is the asker's own pile, read
+                # now like the asked seat's, and the lead must reach the printed
+                # margin — 0 for the bare "more", a lead of one, exactly as the
+                # "controls more … than you" branch reads its ``count``.
+                own = getattr(context.caster, zone, None)
+                if own is None:
+                    return False
+                lead = max(1, int(payload.get("value") or 0))
+                return len(pile) - len(own) >= lead
+            return _compare_count(len(pile), op, payload.get("value"))
 
         if payload.get("player") == "opponent":
             # "If **an opponent** has no cards in hand" (Avatar of Will). The
