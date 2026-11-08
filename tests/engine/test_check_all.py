@@ -41,8 +41,7 @@ def test_check_all_runs_exactly_the_ci_guard_checks_in_order():
 
 def test_the_freshness_list_regenerates_what_ci_regenerates():
     """The freshness step's regen list, held the same way. Its run lines are
-    plain script invocations (no --check) inside one multi-line step, plus the
-    verification-markdown one-liner."""
+    plain script invocations (no --check) inside one multi-line step."""
     workflow = CI_YML.read_text(encoding="utf-8")
     step_match = re.search(
         r"Generated trackers are up to date\s*\n\s*run: \|\n(.*?)\n\s*if ",
@@ -52,13 +51,13 @@ def test_the_freshness_list_regenerates_what_ci_regenerates():
     assert step_match, "ci.yml's freshness step moved — update this extraction"
     step = step_match.group(1)
     ci_scripts = re.findall(r"python (scripts/[a-z_]+\.py)", step)
-    ours = [cmd[0] for _, cmd in check_all.FRESHNESS_COMMANDS if cmd[0].endswith(".py")]
+    ours = [cmd[0] for _, cmd in check_all.FRESHNESS_COMMANDS]
     assert ours == ci_scripts, (
         "check_all.py FRESHNESS_COMMANDS differ from ci.yml's freshness step"
     )
-    assert ("write_verification_markdown" in step) == any(
-        "write_verification_markdown" in " ".join(cmd)
-        for _, cmd in check_all.FRESHNESS_COMMANDS
+    assert "python -c" not in step, (
+        "an inline command in the freshness step is one this guard cannot hold "
+        "check_all to — give it a script under scripts/"
     )
 
 

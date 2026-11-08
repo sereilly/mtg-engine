@@ -69,6 +69,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import engine.card_hooks as card_hooks
 from set_argument import POOL_SCOPE, add_set_argument, resolve_set  # noqa: E402
 import engine.oracle as oracle
+from engine import program_store
 from engine.card_loader import (
     load_cards,
     load_catalog,
@@ -565,6 +566,7 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     selection = _resolve_scope(parser, args)
+    program_store.warm()
 
     per_set, overall, registries, measured_codes = analyze()
 

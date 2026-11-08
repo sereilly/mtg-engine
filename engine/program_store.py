@@ -28,12 +28,25 @@ test that swaps a piece of the compiler out and clears the caches
 compiles under its stub: there is no second table for a stale answer to hide in.
 
 **It is written only by :func:`build`, in a process that imported nothing but
-the engine** (``tests/passes.py`` runs it as a subprocess), so nothing a test
-patched, at import or in a fixture, can be persisted: a poisoned answer cannot
-outlive the process that computed it. The fingerprint is read before the
+the engine** (:func:`ensure` runs it as a subprocess), so nothing a test or a
+script patched, at import or in a fixture, can be persisted: a poisoned answer
+cannot outlive the process that computed it. The fingerprint is read before the
 compile and again after it, and nothing is written if the two differ — an
 engine file edited mid-build belongs to neither the code before nor the code
 after.
+
+**Three kinds of process read it, each at a moment nothing should have patched
+the compiler yet.** A test process reads it at configure time
+(``tests/passes.py``), and :func:`warm` there defers to that read. A script
+that walks the whole pool calls :func:`warm` before its first compile —
+``scripts/integration/regen.sh`` runs five such scripts after every merge, and
+they compiled the pool five times. And the web layer calls it as
+``web/runtime.py`` loads the catalog, so the server starts in a couple of
+seconds rather than eighteen. It is deliberately *not* read on a process's
+first compile miss: a scratch probe that patches a production and then compiles
+a card would be handed what the unpatched compiler wrote. A probe that patches
+the compiler *before* importing the web layer sets :data:`NO_STORE_ENV`, or
+clears the compile caches after the import.
 """
 
 from __future__ import annotations
@@ -42,7 +55,10 @@ import functools
 import hashlib
 import os
 import pickle
+import subprocess
 import sys
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 #: The store file's layout. Part of the fingerprint, so changing what a file
@@ -57,6 +73,16 @@ INPUTS = (("engine", "**/*.py"), ("data", "**/*"), ("cards", "*.json"))
 #: How many stores a directory keeps, newest first. Older engines' are deleted
 #: as a new one is written, so switching branches back and forth stays warm.
 KEEP = 3
+#: Set to compile in every process rather than read a store, tests and scripts
+#: alike (``tests/passes.py`` reads the same name before importing the engine).
+NO_STORE_ENV = "MTG_NO_PROGRAM_STORE"
+#: How long a build may run before the waiting processes give up on it.
+BUILD_TIMEOUT_SECONDS = 600
+
+#: Set by the test runner in each test process (:func:`leave_to_the_test_runner`).
+_test_runner_reads = False
+#: How many programs :func:`warm` read into this process, once it has.
+_warmed: int | None = None
 
 #: While :func:`seed` runs: the stored programs not yet handed over.
 _seeding: dict | None = None
@@ -184,6 +210,139 @@ def load(path: Path, engine_print: str) -> int:
         return 0
     seed(_compile_card_oracle, stored["programs"])
     return len(stored["programs"])
+
+
+def ensure(directory, engine_print: str, *, build: bool = True) -> Path:
+    """The store for *engine_print* in *directory*, built first when *build*
+    and nobody has built it.
+
+    Of the processes that find no store, the first builds it while holding
+    ``build.lock`` and the rest wait on the lock, then read what it wrote. A
+    build that fails is recorded (:func:`failure_path`), so the waiting
+    processes, and every later one for that engine, compile for themselves
+    rather than each running the same failing build in turn. The path comes
+    back whether or not a file is there: :func:`load` answers 0 for none.
+    """
+    directory = Path(directory)
+    path = store_path(directory, engine_print)
+    if build and not path.exists():
+        directory.mkdir(parents=True, exist_ok=True)
+        with _locked(directory / "build.lock"):
+            failed = failure_path(directory, engine_print)
+            if not path.exists() and not failed.exists():
+                _build_in_subprocess(directory, path, failed)
+    return path
+
+
+def warm(*, build: bool = True) -> int:
+    """Fill this process's compile cache from the store for the engine it
+    runs, building the store first if *build* and none is there; how many
+    programs it read.
+
+    For a script about to walk the whole pool, and the web layer as it loads
+    the catalog, called before anything else compiles a card (see the module
+    docstring for why that moment and no other). A script that compiles a few
+    dozen cards — one simulated game's decks — reads a fingerprint and 9,000
+    programs to save less than that, so it does not call this. A process reads
+    the store once: a script that warms and then imports the web layer pays
+    for one read. 0, and the caller compiles as it always did, when
+    :data:`NO_STORE_ENV` is set, in a test process (the test runner read the
+    store before collection), or when the store cannot be built or read: the
+    store is a shortcut, never a requirement.
+    """
+    global _warmed
+    if os.environ.get(NO_STORE_ENV) or _test_runner_reads:
+        return 0
+    if _warmed is not None:
+        return _warmed
+    try:
+        engine_print = fingerprint()
+        read = load(ensure(DIRECTORY, engine_print, build=build), engine_print)
+    except Exception as error:  # noqa: BLE001 - see the docstring
+        sys.stderr.write(f"program_store: unused ({error!r}); compiling in-process\n")
+        return 0
+    if read:
+        _warmed = read
+    return read
+
+
+def leave_to_the_test_runner() -> None:
+    """Make :func:`warm` a no-op in this process: a test process.
+
+    ``tests/passes.py`` reads the store at configure time, before collection
+    imports a test module or the web layer and before anything can patch the
+    compiler, and a run naming files only reads a store that is there. The web
+    layer's import calling :func:`warm` again would build one for a run that
+    named a file, and a test calling a script's ``main`` would read it a
+    second time; neither is the test runner's decision."""
+    global _test_runner_reads
+    _test_runner_reads = True
+
+
+_BUILD = "import sys; from engine.program_store import build; build(sys.argv[1])"
+
+
+def _build_in_subprocess(directory: Path, store: Path, failed: Path) -> None:
+    # A subprocess, not the caller: a test run has imported every test module
+    # by now and a script may have patched what it likes, and nothing either
+    # did to the engine may be written down for the next process to read.
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", _BUILD, str(directory)],
+            cwd=ROOT, capture_output=True, text=True, timeout=BUILD_TIMEOUT_SECONDS,
+        )
+        why = result.stderr[-4000:] or f"exit {result.returncode} and no store written"
+    except subprocess.TimeoutExpired:
+        why = f"the build ran past {BUILD_TIMEOUT_SECONDS} s"
+    if not store.exists():
+        failed.write_text(why, encoding="utf-8")
+        sys.stderr.write(f"program_store: the compiled-program store was not built; see {failed}\n")
+
+
+@contextmanager
+def _locked(path: Path):
+    """Hold *path* locked against every other process for the block. A
+    process that dies holding it releases it with its handles.
+
+    The same one-byte lock ``tests/memory_guard.py`` takes for a collection,
+    kept apart on purpose: engine code cannot import the tests, and a waiting
+    collection must not import the engine to wait."""
+    handle = open(path, "a+b")
+    try:
+        while not _try_lock(handle):
+            time.sleep(0.25)
+    except BaseException:
+        handle.close()
+        raise
+    try:
+        yield
+    finally:
+        _unlock(handle)
+
+
+def _try_lock(handle) -> bool:
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError:
+        return False
+
+
+def _unlock(handle) -> None:
+    if sys.platform == "win32":
+        import msvcrt
+
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+    handle.close()  # on POSIX, closing releases the flock
 
 
 def _prune(directory: Path) -> None:

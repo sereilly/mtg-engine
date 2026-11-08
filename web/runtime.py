@@ -15,6 +15,7 @@ from threading import Lock, RLock
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 
+from engine import program_store
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.behaviour_signature import peers_by_card
 from engine.faces import face_cards, name_aliases
@@ -43,6 +44,12 @@ VERIFICATION_PATH = ROOT / "card_verification.json"
 VERIFICATION_MD_PATH = ROOT / "CARD_VERIFICATION.md"
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+# The behaviour classes below compile the whole shipped pool, which took a
+# server ~18 s to start. Read from the compiled-program store first (built on
+# the first start after an engine edit); a test process's store is the test
+# runner's, and this leaves it alone (`program_store.warm`).
+program_store.warm()
 
 CARD_CATALOG = load_cards(CARD_PATHS)
 

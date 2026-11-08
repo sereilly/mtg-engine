@@ -37,6 +37,7 @@ from engine.card_loader import (
     manifest_set_codes,
     manifest_set_path,
 )
+from engine import program_store
 from engine.reporting import build_support_report
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -183,6 +184,7 @@ def main() -> int:
         cache = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
 
     sets = [entry for entry in cache["sets"] if entry["code"] not in EXCLUDED_CODES]
+    program_store.warm()
     markdown = render_markdown(sets, cache["fetched_at"])
     OUTPUT_PATH.write_text(markdown, encoding="utf-8")
     print(f"Wrote {OUTPUT_PATH.name} ({len(sets)} sets)")

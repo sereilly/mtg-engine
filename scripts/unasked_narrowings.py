@@ -63,6 +63,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from engine.card_loader import load_cards, manifest_set_paths  # noqa: E402
 from engine.faces import compilation_units, unit_label  # noqa: E402
 from engine.oracle import compile_card_oracle  # noqa: E402
+from engine import program_store  # noqa: E402
 
 HANDLERS_DIR = REPO_ROOT / "engine" / "handlers"
 #: The whole engine, because a handler routinely asks the question through a
@@ -354,6 +355,7 @@ def main() -> int:
         help="widen past the three refused seats to `observer` and `source`",
     )
     args = parser.parse_args()
+    program_store.warm()
 
     if args.kinds:
         rows = census()

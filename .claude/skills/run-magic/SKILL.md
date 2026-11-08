@@ -56,8 +56,14 @@ $p = Start-Process -FilePath "$root\.venv\Scripts\python.exe" `
   -RedirectStandardOutput "$root\logs\skill_server.log" `
   -RedirectStandardError  "$root\logs\skill_server.err.log" `
   -WindowStyle Hidden -PassThru
-Start-Sleep -Seconds 5
-(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/ -TimeoutSec 5).StatusCode   # -> 200
+# Up in ~2 s when the compiled-program store for this engine is there; the first
+# start after an engine edit compiles the pool and writes it (~20 s).
+$deadline = (Get-Date).AddSeconds(60)
+do {
+  Start-Sleep -Milliseconds 500
+  try { $code = (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/ -TimeoutSec 2).StatusCode } catch { $code = $null }
+} until ($code -eq 200 -or (Get-Date) -gt $deadline)
+$code   # -> 200
 "server PID $($p.Id)"   # note this to stop it later
 ```
 

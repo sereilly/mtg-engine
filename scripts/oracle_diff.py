@@ -64,6 +64,7 @@ for _stream in (sys.stdout, sys.stderr):
 from engine.card_loader import load_cards, manifest_set_paths  # noqa: E402
 from engine.faces import face_cards  # noqa: E402
 from engine.oracle import compile_card_oracle  # noqa: E402
+from engine import program_store  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SNAPSHOT = REPO_ROOT / ".oracle_diff" / "baseline.json"
@@ -225,6 +226,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    program_store.warm()
     if args.mode == "snapshot":
         snapshot = snapshot_pool()
         write_snapshot(snapshot, args.snapshot)

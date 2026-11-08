@@ -12,7 +12,8 @@ cards/manifest.json → the set JSONs it registers (card_loader.manifest_set_pat
    ▼
 CardDefinition (immutable)
    │  oracle.compile_card_oracle        ← cached: each card compiles once per process
-   │                                      (a large test run reads it: program_store.py)
+   │                                      (a large test run, a whole-pool script and
+   │                                       the web server read it: program_store.py)
    │    ├─ engine/grammar/                    per line: tokenize → AST → lower
    │    └─ card_hooks.CARD_LINE_INSTRUCTIONS  one printed line of one card
    ▼

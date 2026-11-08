@@ -40,7 +40,6 @@ The hooks are imported into ``tests/conftest.py``, which is what registers them.
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -52,6 +51,8 @@ FULL_THRESHOLD_SECONDS = 10.0
 #: An unmarked quick-pass test whose call took this long is named at the end of the run.
 REPORT_THRESHOLD_SECONDS = 2 * FULL_THRESHOLD_SECONDS
 #: Set to compile the pool in every process rather than read it from the store.
+#: The same name as ``program_store.NO_STORE_ENV``, spelled here so that
+#: reading it imports no engine code (`tests/engine/test_program_store.py`).
 NO_STORE_ENV = "MTG_NO_PROGRAM_STORE"
 
 _slow_unmarked: list[tuple[float, str]] = []
@@ -170,6 +171,9 @@ def _note_the_engine(config) -> None:
         return  # the xdist controller: its workers collect and run the tests
     from engine import program_store
 
+    # This process's store is read here, and only here: the web layer's
+    # import calls `program_store.warm`, which now leaves it alone.
+    program_store.leave_to_the_test_runner()
     _engine_print = program_store.fingerprint()
     _store_dir = program_store.DIRECTORY
     _seed_from_the_store(build=not (config.option.collectonly or _named_files(config)))
@@ -190,41 +194,12 @@ def _seed_from_the_store(*, build: bool = False) -> None:
                 "compiling the pool in-process\n"
             )
             return
-        _store_dir.mkdir(parents=True, exist_ok=True)
-        store = program_store.store_path(_store_dir, _engine_print)
-        if build and not store.exists():
-            from tests.memory_guard import exclusive
-
-            with exclusive(_store_dir / "build.lock"):
-                failed = program_store.failure_path(_store_dir, _engine_print)
-                if not store.exists() and not failed.exists():
-                    _build_the_store(_store_dir, store, failed)
+        # The first worker to find no store builds it, in a subprocess, and
+        # the rest wait on its lock (`program_store.ensure`).
+        store = program_store.ensure(_store_dir, _engine_print, build=build)
         program_store.load(store, _engine_print)
     except Exception as error:  # noqa: BLE001 - see the docstring
         sys.stderr.write(f"passes: compiled-program store unused ({error!r})\n")
-
-
-_BUILD = "import sys; from engine.program_store import build; build(sys.argv[1])"
-
-
-def _build_the_store(directory: Path, store: Path, failed: Path) -> None:
-    # A subprocess, not this process: by now collection has imported every
-    # test module, and nothing a test module did to the engine may be written
-    # down for the next run to read.
-    try:
-        result = subprocess.run(
-            [sys.executable, "-c", _BUILD, str(directory)],
-            cwd=Path(__file__).resolve().parents[1],
-            capture_output=True, text=True, timeout=600,
-        )
-        why = result.stderr[-4000:] or f"exit {result.returncode} and no store written"
-    except subprocess.TimeoutExpired:
-        why = "the build ran past 600 s"
-    if not store.exists():
-        # Recorded, so the workers waiting on the lock compile for themselves
-        # rather than each running the same failing build in turn.
-        failed.write_text(why, encoding="utf-8")
-        sys.stderr.write(f"passes: the compiled-program store was not built; see {failed}\n")
 
 
 def rewarm_compile_cache() -> None:

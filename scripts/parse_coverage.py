@@ -47,7 +47,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -55,7 +57,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT))
 
-from engine import card_hooks, load_cards  # noqa: E402
+from engine import card_hooks, load_cards, program_store  # noqa: E402
 from engine.faces import face_cards, whole_card  # noqa: E402
 from set_argument import add_set_argument, resolve_set  # noqa: E402
 from engine.card_loader import manifest_set_paths  # noqa: E402
@@ -789,14 +791,60 @@ def load_pool() -> list:
     return [pool[name] for name in sorted(pool)]
 
 
-def analyze_pool(run_probe: bool = True) -> list[CardCoverage]:
-    hooked = _hooked_names()
-    coverages = []
-    for card in load_pool():
-        coverage = analyze_card(card, hooked, run_probe=run_probe)
+#: How many processes the script spreads the analysis over. The deletion probe
+#: re-parses every sentence once per word it leaves out, about ninety seconds in
+#: one process, and no card's analysis reads another's, so the cards go out in
+#: chunks and their coverages come back in pool order — the report is the same
+#: byte for byte at any count.
+DEFAULT_WORKERS = min(8, os.cpu_count() or 1)
+#: Cards per task: enough to keep a worker busy between hand-offs, few enough
+#: that the slowest chunk does not decide the run.
+_CHUNK = 40
+
+
+def analyze_pool(
+    run_probe: bool = True, *, workers: int = 1, names: set[str] | None = None,
+) -> list[CardCoverage]:
+    """Every card's coverage, in pool order; only the cards in *names*, if given.
+
+    *workers* above 1 analyses in that many processes, each reading the
+    compiled-program store for itself. That is for the script, which patches
+    nothing. A test calls this in-process (the default), where its monkeypatch
+    is seen.
+    """
+    cards = load_pool()
+    if names is not None:
+        cards = [card for card in cards if card.name in names]
+    if workers > 1 and len(cards) > _CHUNK:
+        coverages = _analyze_in_processes([card.name for card in cards], run_probe, workers)
+    else:
+        hooked = _hooked_names()
+        coverages = [analyze_card(card, hooked, run_probe=run_probe) for card in cards]
+    for card, coverage in zip(cards, coverages, strict=True):
         coverage.shipped = card.name in SHIPPED_NAMES
-        coverages.append(coverage)
     return coverages
+
+
+def _analyze_in_processes(names: list[str], run_probe: bool, workers: int) -> list[CardCoverage]:
+    chunks = [names[start:start + _CHUNK] for start in range(0, len(names), _CHUNK)]
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        parts = executor.map(_analyze_chunk, chunks, [run_probe] * len(chunks))
+        return [coverage for part in parts for coverage in part]
+
+
+#: In a worker process: the hook claims and the pool by name, read once.
+_WORKER_STATE: tuple[HookClaims, dict] | None = None
+
+
+def _analyze_chunk(names: list[str], run_probe: bool) -> list[CardCoverage]:
+    global _WORKER_STATE
+    if _WORKER_STATE is None:
+        # The script built the store before handing anything out, so a worker
+        # only reads it.
+        program_store.warm(build=False)
+        _WORKER_STATE = (_hooked_names(), {card.name: card for card in load_pool()})
+    hooked, by_name = _WORKER_STATE
+    return [analyze_card(by_name[name], hooked, run_probe=run_probe) for name in names]
 
 
 def collect_findings(coverages: list[CardCoverage]):
@@ -982,6 +1030,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--accept-probe", action="store_true",
         help="snapshot the current deletion-probe findings as the reviewed baseline",
     )
+    parser.add_argument(
+        "--workers", type=int, default=DEFAULT_WORKERS,
+        help=f"processes to analyse the pool in (default {DEFAULT_WORKERS}; 1 runs in this one)",
+    )
     add_set_argument(parser, default=None)
     return parser
 
@@ -990,6 +1042,9 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     selection = _resolve_scope(parser, args)
+    # One set's cards compile in a second or two, so a `--set` run reads a
+    # store that is there but builds none (~18 s after each engine edit).
+    program_store.warm(build=selection is None)
 
     if selection is not None:
         names = {
@@ -998,9 +1053,7 @@ def main() -> int:
             for card in load_cards(str(path))
         }
         print(f"Pool: {selection.label}")
-        scoped = [
-            c for c in analyze_pool(run_probe=False) if c.name in names
-        ]
+        scoped = analyze_pool(run_probe=False, names=names)
         gaps = [c for c in scoped if c.unclaimed or c.acknowledged]
         claimed = len(scoped) - len(gaps)
         print(
@@ -1016,7 +1069,7 @@ def main() -> int:
                 print(f"  acknowledged: {sentence}  ({reason})")
         return 0
 
-    coverages = analyze_pool()
+    coverages = analyze_pool(workers=args.workers)
     measured = collect_measured_findings(coverages)
 
     if args.accept_probe:

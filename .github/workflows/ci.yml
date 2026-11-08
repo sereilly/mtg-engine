@@ -191,7 +191,7 @@ jobs:
       - name: Generated trackers are up to date
         run: |
           python scripts/set_progress.py > /dev/null
-          python -c "from web.verification_report import write_verification_markdown as w; w()"
+          python scripts/verification_markdown.py
           if ! git diff --quiet; then
             echo "::error::generated trackers are stale — run the scripts and commit the result"
             git --no-pager diff --stat

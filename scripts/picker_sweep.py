@@ -41,6 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from engine import program_store  # noqa: E402
 from engine.card_loader import load_cards  # noqa: E402
 from engine.oracle import compile_card_oracle, compiled_faces  # noqa: E402
 from engine.picker_probes import (  # noqa: E402
@@ -204,6 +205,8 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     selection = resolve_set(parser, args)
+    if selection.whole_pool:
+        program_store.warm()
     findings = sweep(load_cards(selection.paths))
 
     print(f"Pool: {selection.label}")

@@ -29,7 +29,6 @@ import os
 import sys
 import tempfile
 import time
-from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -127,27 +126,6 @@ def _unlock(handle) -> None:
         handle.seek(0)
         msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
     handle.close()  # on POSIX, closing releases the flock
-
-
-@contextmanager
-def exclusive(path: Path):
-    """Hold *path* locked against every other process for the block.
-
-    The lock the collection wait below takes, as a block: ``tests/passes.py``
-    builds the compiled-program store under one, so of the workers that find
-    no store the first builds it and the rest wait for it. A process that
-    dies holding it releases it with its handles."""
-    handle = open(path, "a+b")
-    try:
-        while not _try_lock(handle):
-            time.sleep(0.25)
-    except BaseException:
-        handle.close()
-        raise
-    try:
-        yield
-    finally:
-        _unlock(handle)
 
 
 def pytest_configure(config):

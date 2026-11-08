@@ -45,6 +45,10 @@ class SetSelection:
 
     paths: list[Path]
     label: str
+    #: The whole shipped pool, which a script walks after reading the
+    #: compiled-program store (`program_store.warm`) — one set's few hundred
+    #: cards compile in about the second the store takes to read.
+    whole_pool: bool = False
 
 
 def _shipped_codes() -> str:
@@ -135,6 +139,7 @@ def resolve_set(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Se
         return SetSelection(
             paths=manifest_set_paths(),
             label=f"the whole manifest pool ({_shipped_codes()})",
+            whole_pool=True,
         )
 
     try:

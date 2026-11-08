@@ -82,12 +82,14 @@ def test_a_set_code_selects_that_set(module, base):
     selection = _resolve(module, [*base, "--set", "arn"])
     assert selection.paths == [manifest_set_path("ARN")]
     assert "ARN" in selection.label
+    assert not selection.whole_pool, "one set compiles in about the time the store takes to read"
 
 
 @pytest.mark.parametrize("module,base", SCRIPTS_UNDER_TEST)
 def test_all_selects_the_whole_manifest_pool(module, base):
     selection = _resolve(module, [*base, "--all"])
     assert selection.paths == manifest_set_paths()
+    assert selection.whole_pool, "what reads the compiled-program store before walking it"
 
 
 @pytest.mark.parametrize("module,base", SCRIPTS_UNDER_TEST)

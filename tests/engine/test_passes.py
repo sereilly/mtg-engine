@@ -118,7 +118,7 @@ def store_world(tmp_path, monkeypatch):
         world.built.append(store)
         store.write_bytes(b"")
 
-    monkeypatch.setattr(passes, "_build_the_store", build)
+    monkeypatch.setattr(program_store, "_build_in_subprocess", build)
     monkeypatch.setattr(program_store, "load", lambda path, _: world.loaded.append(path) or 0)
     return world
 

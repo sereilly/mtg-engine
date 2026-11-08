@@ -49,10 +49,7 @@ COMMANDS: list[tuple[str, list[str]]] = [
 #: COMMANDS above) already fails on a stale report from the analysis in hand.
 FRESHNESS_COMMANDS: list[tuple[str, list[str]]] = [
     ("Set progress report", ["scripts/set_progress.py"]),
-    (
-        "Verification markdown",
-        ["-c", "from web.verification_report import write_verification_markdown as w; w()"],
-    ),
+    ("Verification markdown", ["scripts/verification_markdown.py"]),
 ]
 
 

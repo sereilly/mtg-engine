@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from engine import program_store
 from engine.card_loader import load_cards
 from engine.reporting import build_support_report
 from set_argument import add_set_argument, resolve_set
@@ -382,6 +383,8 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     selection = resolve_set(parser, args)
+    if selection.whole_pool:
+        program_store.warm()
     cards = load_cards(selection.paths)
 
     if args.json:

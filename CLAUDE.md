@@ -106,7 +106,20 @@ imports `web.app` — from a store in `.program_store/`, named by a hash of ever
 comment included — names a new store and the old one is never opened. The
 first worker of a folder or whole-suite run to find none builds it in a
 subprocess that imports only the engine (~18 s) and the rest wait for it; a run
-naming files only reads one that is there. Reading takes under a second. Stored programs go into
+naming files only reads one that is there. **A script that walks the whole
+pool reads it too**, calling `program_store.warm()` before its first compile
+(the first to find none builds it): `regen.sh`'s five pool walkers, which
+compiled the pool five times after every merge, `oracle_diff`, and
+`support_report`/`picker_sweep` over the whole pool. **So does the web
+server**, as `web/runtime.py` loads the catalog: it starts in ~2 s, ~20 s on the
+first start after an engine edit. Never on a process's first compile miss — a
+probe that patches a production would be handed what the unpatched compiler
+wrote; one that patches before importing the web layer sets
+`MTG_NO_PROGRAM_STORE=1`. In a test process `warm()` is a no-op: the test
+runner reads the store, at configure time.
+`tests/engine/test_program_store.py` holds every script the merge path runs to
+reading it or naming why it walks no pool.
+Reading takes under a second. Stored programs go into
 `_compile_card_oracle`'s own `lru_cache`, so `clear_compilation_caches()` clears
 them too. An engine module that starts reading a file adds its folder to
 `program_store.INPUTS` (`tests/engine/test_program_store.py` fails until it
@@ -232,7 +245,11 @@ in `scripts/parse_coverage_claims.py`. It reads shipped *and* measured sets and
 gates on the shipped half (`tests/engine/test_parse_coverage.py`). A deletion
 probe flags words a matching rule ignored, ratcheted through
 `scripts/parse_coverage_probe_baseline.json` (`--accept-probe` after review).
-When you add a parse rule or a text-keyed engine behaviour, run `--check`; a
+The script analyses the pool in processes (`--workers`, default 8; the probe
+re-parses every sentence once per word, ~90 s in one process), reading the
+cards back in pool order, so its report is the same byte for byte at any
+count; `analyze_pool` called from a test runs in-process, where a monkeypatch
+is seen. When you add a parse rule or a text-keyed engine behaviour, run `--check`; a
 handler that implements trailing sentences of a clause declares them in
 `HANDLER_CLAIMS`. Only the four event-keyed hook registries
 (`ON_LEAVE_BATTLEFIELD`, `ON_SELF_RESOLVED`, `ON_SPELL_COUNTERED`,

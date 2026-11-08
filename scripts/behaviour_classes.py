@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT))
 
+from engine import program_store  # noqa: E402
 from engine.behaviour_signature import behaviour_classes  # noqa: E402
 from engine.card_loader import load_catalog, load_cards  # noqa: E402
 from set_argument import add_set_argument, resolve_set  # noqa: E402
@@ -142,6 +143,7 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     selection = _resolve_scope(parser, args)
+    program_store.warm()
 
     if selection is not None:
         # The Phase 2 question: which of this set's cards land in an existing
