@@ -186,6 +186,52 @@ def test_every_card_compiles_supported(set_cards):
     assert not unsupported, f"unsupported 8ED cards: {unsupported}"
 
 
+# --- PROMOTION ---------------------------------------------------------------
+#
+# Asserted from the day 8ED moved to `sets` at index 37, between Scourge and
+# M21. They read `load_catalog`, which does not load a measured set.
+
+
+def test_eleven_cards_are_originally_printed_in_eighth_edition(set_cards, catalog_by_name):
+    """Exactly the eleven the pool had never seen: with no reprint whose only
+    other printing here is later (the origin-trap test above), the insert
+    position decides no card's origin, so this list is the novelty list. The
+    wrong-insert rehearsal (8ED appended after M21) turned only the
+    printing-order guard red, as it must when nothing here depends on the
+    index."""
+    originates = sorted(
+        card.name
+        for card in set_cards("8ED")
+        if catalog_by_name[card.name].original_printing == "8ed"
+    )
+    assert originates == NEW_TO_THE_POOL
+
+
+def test_promoting_the_set_actually_recorded_its_printings(set_cards, catalog_by_name):
+    """The positive half, and what makes the origin test mean anything: "only
+    eleven cards originate in 8ED" also passes if the set was never loaded.
+    Every 8ED card carries `8ed` in `printings` — that, and not its origin, is
+    what promotion added for the other 331."""
+    cards = set_cards("8ED")
+    assert len(cards) == 342
+    missing = sorted(
+        card.name for card in cards
+        if "8ed" not in catalog_by_name[card.name].printings
+    )
+    assert not missing, f"8ED cards the catalog records no 8ed printing for: {missing}"
+
+
+def test_every_card_ships_supported(set_cards, catalog_by_name):
+    """What promotion claims, asserted of the set by name so a card dropped
+    from the catalog fails here rather than passing by absence."""
+    unsupported = sorted(
+        card.name
+        for card in set_cards("8ED")
+        if not compile_card_oracle(catalog_by_name[card.name]).supported
+    )
+    assert not unsupported, f"8ED cards the catalog does not support: {unsupported}"
+
+
 # --- Balance of Power ---
 
 

@@ -30,6 +30,11 @@
       "hooked_cards_pct_of_supported": 0.0,
       "hooked_lines_pct_of_supported": 0.0
     },
+    "8ED": {
+      "entries_per_100_supported_cards": 0.0,
+      "hooked_cards_pct_of_supported": 0.0,
+      "hooked_lines_pct_of_supported": 0.0
+    },
     "<pool>": {
       "entries_per_100_supported_cards": 0.8,
       "hooked_cards_pct_of_supported": 0.7,

@@ -5,6 +5,7 @@
     "Barbary Apes",
     "Barktooth Warbeard",
     "Blanchwood Treefolk",
+    "Coral Eel",
     "Coral Merfolk",
     "Craw Wurm",
     "Crimson Kobolds",
@@ -45,6 +46,7 @@
     "Merfolk of the Pearl Trident",
     "Mons's Goblin Raiders",
     "Moss Monster",
+    "Norwood Ranger",
     "Onakke Ogre",
     "Panther Warriors",
     "Pearled Unicorn",
@@ -56,6 +58,7 @@
     "Scaled Wurm",
     "Scarwood Goblins",
     "Scathe Zombies",
+    "Silverback Ape",
     "Sir Shandlar of Eberyn",
     "Sivitri Scarzam",
     "Spined Wurm",
@@ -77,6 +80,28 @@
     "Woodland Druid"
   ],
   [
+    "Air Elemental",
+    "Armored Pegasus",
+    "Aven Envoy",
+    "Azure Drake",
+    "Bird Maiden",
+    "Concordia Pegasus",
+    "Dusk Imp",
+    "Feral Shadow",
+    "Fighting Drake",
+    "Flying Men",
+    "Gaea's Skyfolk",
+    "Misshapen Fiend",
+    "Phantom Monster",
+    "Roc of Kher Ridges",
+    "Scryb Sprites",
+    "Sea Eagle",
+    "Suntail Hawk",
+    "Tormented Angel",
+    "Willow Faerie",
+    "Wind Drake"
+  ],
+  [
     "Abbey Gargoyles",
     "Aven Smokeweaver",
     "Cerulean Wyvern",
@@ -96,27 +121,6 @@
     "Voice of Truth",
     "Weatherseed Faeries",
     "Windreaper Falcon"
-  ],
-  [
-    "Air Elemental",
-    "Armored Pegasus",
-    "Aven Envoy",
-    "Azure Drake",
-    "Bird Maiden",
-    "Concordia Pegasus",
-    "Dusk Imp",
-    "Feral Shadow",
-    "Fighting Drake",
-    "Flying Men",
-    "Gaea's Skyfolk",
-    "Misshapen Fiend",
-    "Phantom Monster",
-    "Roc of Kher Ridges",
-    "Scryb Sprites",
-    "Suntail Hawk",
-    "Tormented Angel",
-    "Willow Faerie",
-    "Wind Drake"
   ],
   [
     "Anaconda",
@@ -915,6 +919,10 @@
     "Reclamation"
   ],
   [
+    "Folk of An-Havva",
+    "Giant Badger"
+  ],
+  [
     "Folk of the Pines",
     "Stonewood Invoker"
   ],
@@ -929,6 +937,10 @@
   [
     "Forest",
     "Snow-Covered Forest"
+  ],
+  [
+    "Foul Imp",
+    "Vampiric Spirit"
   ],
   [
     "Frenetic Ogre",

@@ -4,16 +4,16 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **6135**
-- Distinct behaviours: **5584**
-- Cards sharing a behaviour with another: **799** in **248** classes
-- Unverified cards covered by a verified peer: **233**
+- Cards in the catalog: **6146**
+- Distinct behaviours: **5589**
+- Cards sharing a behaviour with another: **807** in **250** classes
+- Unverified cards covered by a verified peer: **237**
 
 | Size | Cards |
 | --- | --- |
-| 75 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, Blanchwood Treefolk, Coral Merfolk, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, Eager Cadet, **Earth Elemental**, Elvish Ranger, Elvish Warrior, Enormous Baloth, Femeref Scouts, **Fire Elemental**, Fresh Volunteers, Fugitive Wizard, Garruk's Gorehorn, Giant Cockroach, Giant Octopus, Glory Seeker, Goblin Hero, Gorilla Warrior, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, Horned Turtle, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Knight Errant, Kobolds of Kher Keep, Lady Orca, Lowland Giant, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Onakke Ogre, Panther Warriors, **Pearled Unicorn**, Python, Raging Bull, Redwood Treefolk, Regal Unicorn, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Sir Shandlar of Eberyn, Sivitri Scarzam, Spined Wurm, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Trained Armodon, Trained Orgg, Viashino Warrior, Vizzerdrix, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wild Jhovall, Wishcoin Crab, Woodland Druid |
+| 78 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, Blanchwood Treefolk, Coral Eel, Coral Merfolk, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, Eager Cadet, **Earth Elemental**, Elvish Ranger, Elvish Warrior, Enormous Baloth, Femeref Scouts, **Fire Elemental**, Fresh Volunteers, Fugitive Wizard, Garruk's Gorehorn, Giant Cockroach, Giant Octopus, Glory Seeker, Goblin Hero, Gorilla Warrior, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, Horned Turtle, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Knight Errant, Kobolds of Kher Keep, Lady Orca, Lowland Giant, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Norwood Ranger, Onakke Ogre, Panther Warriors, **Pearled Unicorn**, Python, Raging Bull, Redwood Treefolk, Regal Unicorn, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Silverback Ape, Sir Shandlar of Eberyn, Sivitri Scarzam, Spined Wurm, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Trained Armodon, Trained Orgg, Viashino Warrior, Vizzerdrix, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wild Jhovall, Wishcoin Crab, Woodland Druid |
+| 20 | **Air Elemental**, Armored Pegasus, Aven Envoy, Azure Drake, **Bird Maiden**, Concordia Pegasus, Dusk Imp, Feral Shadow, Fighting Drake, **Flying Men**, Gaea's Skyfolk, Misshapen Fiend, **Phantom Monster**, **Roc of Kher Ridges**, **Scryb Sprites**, Sea Eagle, Suntail Hawk, Tormented Angel, Willow Faerie, Wind Drake |
 | 19 | Abbey Gargoyles, Aven Smokeweaver, Cerulean Wyvern, **Coast Watcher**, Duskrider Falcon, Freewind Falcon, Hazerider Drake, Melesse Spirit, Nightwind Glider, Sea Sprite, Thermal Glider, Treetop Sentinel, Voice of Duty, Voice of Grace, Voice of Law, Voice of Reason, Voice of Truth, Weatherseed Faeries, Windreaper Falcon |
-| 19 | **Air Elemental**, Armored Pegasus, Aven Envoy, Azure Drake, **Bird Maiden**, Concordia Pegasus, Dusk Imp, Feral Shadow, Fighting Drake, **Flying Men**, Gaea's Skyfolk, Misshapen Fiend, **Phantom Monster**, **Roc of Kher Ridges**, **Scryb Sprites**, Suntail Hawk, Tormented Angel, Willow Faerie, Wind Drake |
 | 12 | Anaconda, Anurid Murkdiver, Bog Raiders, Bog Smugglers, **Bog Wraith**, Lost Soul, Marsh Boa, Marsh Goblins, Moor Fiend, Plague Beetle, Pygmy Allosaurus, Warthog |
 | 12 | Death Speakers, Galina's Knight, Guma, Ihsan's Shade, Karoo Meerkat, Llanowar Knight, Oraxid, **Repentant Blacksmith**, Scalebane's Elite, Shivan Zombie, Vodalian Zombie, Yavimaya Barbarian |
 | 11 | Argothian Swine, Crash of Rhinos, Defiant Elf, Giant Warthog, Goliath Beetle, Iron Tusk Elephant, Jhovall Rider, **Moorish Cavalry**, Pygmy Razorback, **War Mammoth**, Wild Elephant |
@@ -164,10 +164,12 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Flailing Ogre, Flailing Soldier |
 | 2 | Fledgling Djinn, **Serendib Efreet** |
 | 2 | Flooded Woodlands, Reclamation |
+| 2 | Folk of An-Havva, Giant Badger |
 | 2 | Folk of the Pines, Stonewood Invoker |
 | 2 | Forbidden Lore, Verdant Field |
 | 2 | Force Spike, **Mana Leak** |
 | 2 | **Forest**, Snow-Covered Forest |
+| 2 | Foul Imp, Vampiric Spirit |
 | 2 | Frenetic Ogre, Pardic Swordsmith |
 | 2 | Fylamarid, Metathran Transport |
 | 2 | Fyndhorn Bow, Iron Lance |

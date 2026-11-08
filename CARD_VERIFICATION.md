@@ -2,11 +2,11 @@
 
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
-- Total cards: **6135**
-- Passed: **984** (692 checked in-game, 292 auto-passed)
+- Total cards: **6146**
+- Passed: **988** (692 checked in-game, 296 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **70**
-- Untested: **5081**
+- Untested: **5088**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -131,6 +131,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Aluren | ⬜ untested |  |
 | Ambassador Laquatus | ⬜ untested |  |
 | Amber Prison | ⬜ untested |  |
+| Ambition's Cost | ⬜ untested |  |
 | Ambush | ⬜ untested |  |
 | Ambush Commander | ⬜ untested |  |
 | Ambush Party | ✅ pass | auto-pass: keywords only (first strike, haste) |
@@ -373,6 +374,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Badlands | ✅ pass |  |
 | Baki's Curse | ⬜ untested |  |
 | Balance | ✅ pass |  |
+| Balance of Power | ⬜ untested |  |
 | Balancing Act | ⬜ untested |  |
 | Balduvian Barbarians | ✅ pass | auto-pass: no abilities |
 | Balduvian Bears | ✅ pass | auto-pass: no abilities |
@@ -1050,6 +1052,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Copper-Leaf Angel | ⬜ untested |  |
 | Copy Artifact | ✅ pass |  |
 | Coral Atoll | ⬜ untested |  |
+| Coral Eel | ✅ pass | auto-pass: no abilities |
 | Coral Fighters | ⬜ untested |  |
 | Coral Helm | ⬜ untested |  |
 | Coral Merfolk | ✅ pass | auto-pass: no abilities |
@@ -2116,6 +2119,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Ghosts of the Damned | ⬜ untested |  |
 | Ghoul's Feast | ⬜ untested |  |
 | Giant Albatross | ⬜ untested |  |
+| Giant Badger | ⬜ untested |  |
 | Giant Caterpillar | ⬜ untested |  |
 | Giant Cockroach | ✅ pass | auto-pass: no abilities |
 | Giant Crab | ⬜ untested |  |
@@ -3555,6 +3559,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Norritt | ⬜ untested |  |
 | North Star | ⬜ untested |  |
 | Northern Paladin | ✅ pass |  |
+| Norwood Ranger | ✅ pass | auto-pass: no abilities |
 | Nostalgic Dreams | ✅ pass |  |
 | Nosy Goblin | ⬜ untested |  |
 | Notorious Assassin | ⬜ untested |  |
@@ -3722,6 +3727,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Peace and Quiet | ⬜ untested |  |
 | Peace of Mind | ⬜ untested |  |
 | Peacekeeper | ⬜ untested |  |
+| Peach Garden Oath | ⬜ untested |  |
 | Pearl Dragon | ⬜ untested |  |
 | Pearl Medallion | ⬜ untested |  |
 | Pearled Unicorn | ✅ pass |  |
@@ -3924,6 +3930,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Primal Order | ⬜ untested |  |
 | Primal Rage | ⬜ untested |  |
 | Primal Whisperer | ⬜ untested |  |
+| Primeval Force | ⬜ untested |  |
 | Primeval Shambler | ≡ equivalent | same behaviour as Frozen Shade |
 | Primitive Etchings | ⬜ untested |  |
 | Primitive Justice | ⬜ untested |  |
@@ -4525,6 +4532,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Scrubland | ✅ pass |  |
 | Scryb Sprites | ✅ pass |  |
 | Scrying Glass | ⬜ untested |  |
+| Sea Eagle | ✅ pass | auto-pass: keywords only (flying) |
 | Sea Kings' Blessing | ⬜ untested |  |
 | Sea Monster | ⬜ untested |  |
 | Sea Scryer | ⬜ untested |  |
@@ -4728,6 +4736,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Silver Knight | ✅ pass | auto-pass: keywords only (first strike, protection from red) |
 | Silver Seraph | ⬜ untested |  |
 | Silver Wyvern | ⬜ untested |  |
+| Silverback Ape | ✅ pass | auto-pass: no abilities |
 | Silverglade Elemental | ⬜ untested |  |
 | Silverglade Pathfinder | ⬜ untested |  |
 | Silversmote Ghoul | ⬜ untested |  |
@@ -5201,6 +5210,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Svyelunite Temple | ⬜ untested |  |
 | Swamp | ✅ pass |  |
 | Swamp Mosquito | ⬜ untested |  |
+| Swarm of Rats | ⬜ untested |  |
 | Swat | ⬜ untested |  |
 | Sway of Illusion | ⬜ untested |  |
 | Swelter | ⬜ untested |  |
@@ -5690,6 +5700,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Vampire Hounds | ⬜ untested |  |
 | Vampiric Dragon | ⬜ untested |  |
 | Vampiric Embrace | ⬜ untested |  |
+| Vampiric Spirit | ⬜ untested |  |
 | Vampiric Tutor | ⬜ untested |  |
 | Vampirism | ⬜ untested |  |
 | Vanishing | ⬜ untested |  |
