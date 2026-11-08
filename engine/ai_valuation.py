@@ -536,6 +536,46 @@ def entry_sacrifice_is_unavoidable(game, seat: int, card: CardDefinition) -> boo
     return False
 
 
+def entry_may_remove_itself(card: CardDefinition) -> bool:
+    """Whether *card*'s own entry trigger can take it back off the battlefield
+    — anywhere in the trigger, an offer's declined branch included.
+
+    "When this creature enters, sacrifice it unless you sacrifice three
+    Forests." (Primeval Force; fourteen other shipped permanents print the
+    same sentence over another price — Phyrexian Dreadnought's twelve power of
+    creatures, Hecatomb's four creatures, Balduvian Horde's random discard.)
+    A permanent is scored by what it is (``ai_scoring._score_cast``), so with
+    nothing asking what its arrival does, the AI cast a Dreadnought beside no
+    creature and an 8/8 Force with two Forests, and each went straight to the
+    graveyard. The cast chooser rehearses such a cast before proposing it
+    (``ai_casts``, beside ``ai_scoring.arrival_needs_the_board``): the
+    rehearsal answers the offer on its default, and whether the permanent is
+    still there is the engine's answer for every price, where a count of the
+    price (``entry_sacrifice_is_unavoidable``) reads one shape.
+
+    Read off the compiled program: a trigger on the card's **own** entry
+    (``enters_battlefield``; "whenever another creature enters", Mogg Bombers,
+    is a different event) holding a :data:`SOURCE_REMOVAL_KINDS` step.
+    """
+    def removes(instructions) -> bool:
+        for instruction in instructions:
+            if instruction.kind in SOURCE_REMOVAL_KINDS:
+                return True
+            payload = instruction.payload or {}
+            for key in ("steps", "then", "else", "action", "otherwise"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)) and removes(nested):
+                    return True
+        return False
+
+    return any(
+        trigger.condition.kind == "enters_battlefield"
+        and trigger.instruction is not None
+        and removes([trigger.instruction])
+        for trigger in compile_card_oracle(card).triggered_abilities
+    )
+
+
 def is_mana_ability(instruction: OracleInstruction) -> bool:
     """Whether *instruction* adds mana to its controller's pool."""
     return instruction.kind in MANA_ABILITY_KINDS

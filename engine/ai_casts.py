@@ -47,6 +47,7 @@ from .ai_valuation import (
     OFFER_RETURNS_SPELL,
     CastOffer,
     cast_offers,
+    entry_may_remove_itself,
     entry_triggers_bought,
 )
 from .cast_costs import additional_costs, cast_announces_x
@@ -1262,9 +1263,8 @@ def _cast_candidate_announcing(
         if rehearsal is None and _names_an_unweighed_seat(game, player_index, card):
             return None
     elif (
-        body_needs_the_board(card) and not cast_announces_morph(
-            game, player_index, card, action,
-        )
+        (body_needs_the_board(card) or entry_may_remove_itself(card))
+        and not cast_announces_morph(game, player_index, card, action)
     ) or arrival_needs_the_board(game, card):
         # ...and for a creature whose toughness a characteristic-defining
         # ability fills in (CR 604.3), whether it **survives its arrival**:
@@ -1274,7 +1274,12 @@ def _cast_candidate_announcing(
         # the board would make of it. Not asked of a face-down cast, whose
         # body is the 2/2 (CR 708.2a). The same question of a **printed**
         # toughness under a board-wide static that lowers it — or of a
-        # permanent that carries one (`arrival_needs_the_board`, kg4).
+        # permanent that carries one (`arrival_needs_the_board`, kg4). And of
+        # a permanent whose own entry trigger can sacrifice it unless a price
+        # is paid (`ai_valuation.entry_may_remove_itself`): an 8/8 Primeval
+        # Force cast with two Forests, or a Phyrexian Dreadnought beside no
+        # creature, is a card gone as it arrives (8ED). A face-down cast has
+        # no such trigger (CR 708.2a).
         if not _arrives_to_stay(_rehearse_announcement(
             game, player_index, card, cast_announcement(action), planned=action,
         )):
