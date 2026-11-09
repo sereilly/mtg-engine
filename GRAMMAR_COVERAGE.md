@@ -55,7 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | SCG | 143 | 262 | 82.4% | 82.1% | 55.0% | 120 |
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| MRD *(measured)* | 291 | 456 | 76.8% | 75.0% | 53.7% | 205 |
+| MRD *(measured)* | 291 | 456 | 78.1% | 76.8% | 55.3% | 209 |
 | **All (shipped)** | **8992** | **13323** | **90.0%** | **89.5%** | **62.1%** | **7036** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -68,9 +68,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 888 | 470 | expected a subject |  |
+| 885 | 467 | expected a subject |  |
 | 198 | 103 | unrecognized effect verb |  |
-| 144 | 78 | unconsumed text |  |
+| 142 | 76 | unconsumed text |  |
 | 71 | 52 | granted ability in quotes | phase 3 (quoted abilities) |
 | 41 | 8 | expected what this creature can't block, or a duration |  |
 | 38 | 38 | unrecognized activation cost |  |
@@ -1855,6 +1855,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Chainflinger**
   - `{1}{R}, {T}: This creature deals 1 damage to any target.`
   - `Threshold — {2}{R}, {T}: This creature deals 2 damage to any target. Activate only if there are seven or more cards in your graveyard.`
+- **Chalice of the Void**
+  - `Whenever a player casts a spell with mana value equal to the number of charge counters on this artifact, counter that spell.`
 - **Chambered Nautilus**
   - `Whenever this creature becomes blocked, you may draw a card.`
 - **Chance Encounter**
@@ -4447,6 +4449,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Forethought Amulet**
   - `At the beginning of your upkeep, sacrifice this artifact unless you pay {3}.`
+- **Forge Armor**
+  - `Put X +1/+1 counters on target creature, where X is the sacrificed artifact's mana value.`
 - **Forget**
   - `Target player discards two cards, then draws as many cards as they discarded this way.`
   - `Target player discards two cards, then draws as many cards as they discarded this way.`
@@ -6785,6 +6789,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player casts a red spell, you may pay {R}. If you do, this enchantment deals 1 damage to any target.`
 - **Lightning Coils**
   - `Whenever a nontoken creature you control dies, put a charge counter on this artifact.`
+  - `At the beginning of your upkeep, if this artifact has five or more charge counters on it, remove all of them from it and create that many 3/1 red Elemental creature tokens with haste. Exile them at the beginning of the next end step.`
 - **Lightning Dart**
   - `Lightning Dart deals 1 damage to target creature. If that creature is white or blue, Lightning Dart deals 4 damage to it instead.`
 - **Lightning Dragon**
@@ -8117,6 +8122,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Obliterate**
   - `Destroy all artifacts, creatures, and lands. They can't be regenerated.`
   - `Destroy all artifacts, creatures, and lands. They can't be regenerated.`
+- **Oblivion Stone**
+  - `{4}, {T}: Put a fate counter on target permanent.`
+  - `{5}, {T}, Sacrifice this artifact: Destroy each nonland permanent without a fate counter on it, then remove all fate counters from all permanents.`
 - **Obsessive Search**
   - `Draw a card.`
 - **Obsessive Stitcher**
@@ -13354,6 +13362,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **War Dance**
   - `At the beginning of your upkeep, you may put a verse counter on this enchantment.`
   - `Sacrifice this enchantment: Target creature gets +X/+X until end of turn, where X is the number of verse counters on this enchantment.`
+- **War Elemental**
+  - `When this creature enters, sacrifice it unless an opponent was dealt damage this turn.`
+  - `Whenever an opponent is dealt damage, put that many +1/+1 counters on this creature.`
 - **War Tax**
   - `{X}{U}: This turn, creatures can't attack unless their controller pays {X} for each attacking creature they control.`
 - **Warbreak Trumpeter**

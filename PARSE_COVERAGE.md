@@ -25,12 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**23 unclaimed sentence(s) across 21 supported card(s).**
+**21 unclaimed sentence(s) across 19 supported card(s).**
 
 - **Betrayal of Flesh**
   - `entwine—sacrifice three lands`
-- **Chalice of the Void**
-  - `whenever a player casts a spell with mana value equal to the number of charge counters on this artifact, counter that spell`
 - **Chrome Mox**
   - `{t}: add one mana of any of the exiled card's colors`
 - **Dream's Grip**
@@ -48,8 +46,6 @@ anything anyone did, and every ingest would arrive red.
   - `{3}: put a charge counter on this artifact or remove one from it`
 - **Journey of Discovery**
   - `entwine {2}{g}`
-- **Lightning Coils**
-  - `at the beginning of your upkeep, if this artifact has five or more charge counters on it, remove all of them from it and create that many 3/1 red elemental creature tokens with haste. exile them at the beginning of the next end step`
 - **Mourner's Shield**
   - `{2}, {t}: prevent all damage that would be dealt this turn by a source of your choice that shares a color with the exiled card`
 - **One Dozen Eyes**
