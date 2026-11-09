@@ -459,6 +459,114 @@ def test_w1g11_krarks_thumb_keeps_heads_on_a_flip_nobody_wins(set_pool, monkeypa
     assert context.results[COIN_FACES_BY_SEAT] == {0: "heads", 1: "tails"}
     assert len(flips) == 3
 
+def test_w1g11_minds_eye_pays_one_to_draw_when_an_opponent_draws(set_pool):
+    """Drive list. "Whenever an opponent draws a card, you may pay {1}. If you
+    do, draw a card." Bob draws; Alice, with an untapped land, pays and draws;
+    Alice's own draw does not trigger it."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, bob = _w1g11_table(set_pool)
+    game.enforce_mana_costs = True
+    _w1g11_put(game, 0, mrd["Mind's Eye"])
+    _w1g11_put(game, 0, lea["Island"])
+    game._draw_with_replacements(bob, 1)
+    game._settle()
+    _w1g11_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g11_resolve_stack(game)
+    assert len(alice.hand) == 1
+    assert len(bob.hand) == 1
+    game._draw_with_replacements(alice, 1)
+    game._settle()
+    _w1g11_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert len(alice.hand) == 2
+
+
+def test_w1g11_tower_of_murmurs_mills_its_target_eight(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, bob = _w1g11_table(set_pool, bob_library=[lea["Island"]] * 10)
+    tower = _w1g11_put(game, 0, mrd["Tower of Murmurs"])
+    _w1g11_activate(game, 0, tower, target_player_index=1)
+    _w1g11_resolve_stack(game)
+    assert len(bob.graveyard) == 8 and len(bob.library) == 2
+    assert tower.tapped
+
+
+def test_w1g11_myr_mindservant_shuffles_its_controllers_library(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, _bob = _w1g11_table(set_pool)
+    servant = _w1g11_put(game, 0, mrd["Myr Mindservant"])
+    _w1g11_activate(game, 0, servant)
+    _w1g11_resolve_stack(game)
+    assert servant.tapped
+    assert any("shuffled their library" in line for line in game.log)
+
+
+def _w1g11_spellbomb(set_pool, name, ability_index, **targets):
+    mrd = set_pool("MRD")
+    game, alice, bob = _w1g11_table(set_pool)
+    bomb = _w1g11_put(game, 0, mrd[name])
+    result = game.activate_permanent_ability(
+        0, name, permanent_index=game.battlefield_index_of(bomb),
+        ability_index=ability_index, **targets,
+    )
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(bomb), "sacrificed as a cost"
+    _w1g11_resolve_stack(game)
+    return game, alice, bob
+
+
+def test_w1g11_every_spellbomb_cycles_for_one(set_pool):
+    for name in ("Aether Spellbomb", "Necrogen Spellbomb", "Pyrite Spellbomb",
+                 "Sunbeam Spellbomb", "Lifespark Spellbomb"):
+        game, alice, _bob = _w1g11_spellbomb(set_pool, name, 1)
+        assert len(alice.hand) == 1, name
+        assert [c.name for c in alice.graveyard] == [name]
+
+
+def test_w1g11_the_spellbombs_first_abilities(set_pool):
+    lea = set_pool("LEA")
+    # Aether: bounce a creature.
+    mrd = set_pool("MRD")
+    game, alice, bob = _w1g11_table(set_pool)
+    bears = _w1g11_put(game, 1, lea["Grizzly Bears"])
+    bomb = _w1g11_put(game, 0, mrd["Aether Spellbomb"])
+    _w1g11_activate(game, 0, bomb, target_permanent_ids=[bears.permanent_id])
+    _w1g11_resolve_stack(game)
+    assert [c.name for c in bob.hand] == ["Grizzly Bears"]
+    # Necrogen: target player discards.
+    game, alice, bob = _w1g11_table(set_pool)
+    bob.hand.append(lea["Shivan Dragon"])
+    bomb = _w1g11_put(game, 0, mrd["Necrogen Spellbomb"])
+    _w1g11_activate(game, 0, bomb, target_player_index=1)
+    _w1g11_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert [c.name for c in bob.graveyard] == ["Shivan Dragon"]
+    # Pyrite: 2 damage to any target.
+    game, alice, bob = _w1g11_table(set_pool)
+    bomb = _w1g11_put(game, 0, mrd["Pyrite Spellbomb"])
+    _w1g11_activate(game, 0, bomb, target_player_index=1)
+    _w1g11_resolve_stack(game)
+    assert bob.life == 18
+    # Sunbeam: gain 5.
+    game, alice, bob = _w1g11_table(set_pool)
+    bomb = _w1g11_put(game, 0, mrd["Sunbeam Spellbomb"])
+    _w1g11_activate(game, 0, bomb)
+    _w1g11_resolve_stack(game)
+    assert alice.life == 25
+    # Lifespark: a land becomes a 3/3 that is still a land, until end of turn.
+    game, alice, bob = _w1g11_table(set_pool)
+    forest = _w1g11_put(game, 0, lea["Forest"])
+    bomb = _w1g11_put(game, 0, mrd["Lifespark Spellbomb"])
+    _w1g11_activate(game, 0, bomb, target_permanent_ids=[forest.permanent_id])
+    _w1g11_resolve_stack(game)
+    game._recompute_continuous_effects()
+    assert forest.is_creature and forest.has_type("land")
+    assert (forest.effective_power, forest.effective_toughness) == (3, 3)
+    game.resolve_cleanup_step(0)
+    game._recompute_continuous_effects()
+    assert not forest.is_creature
+
 # ==== end W1G11 ======================================================
 
 
