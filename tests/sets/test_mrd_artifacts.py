@@ -230,6 +230,40 @@ def test_w1g3_every_reader_agrees_on_an_affinity_price(set_pool):
     assert playable == []
     assert _cost_for(game, game.players[0], frogmite, None)["generic"] == 4
 
+
+def test_w1g3_bosh_flings_the_mana_value_it_sacrificed(set_pool):
+    """"Trample" / "{3}{R}, Sacrifice an artifact: Bosh deals damage equal to
+    the sacrificed artifact's mana value to any target." A Myr Enforcer is
+    7: the Craw Wurm dies. Bosh may sacrifice itself (its ruling, 2020-08-07:
+    "Bosh can be sacrificed to pay the cost of its last ability") and deals 8
+    from beyond the battlefield."""
+    game, mine, theirs = _w1g3_table(
+        set_pool, mine=["Bosh, Iron Golem", "Myr Enforcer"] + ["Great Furnace"] * 8,
+        theirs=["Craw Wurm"],
+    )
+    game.enforce_mana_costs = False
+    bosh, enforcer = mine[:2]
+    wurm = theirs[0]
+    assert game._has_keyword(bosh, "trample")
+    activated = game.activate_permanent_ability(
+        0, "Bosh, Iron Golem", target_permanent_ids=[wurm.permanent_id],
+        cost_permanent_ids=[enforcer.permanent_id],
+    )
+    assert activated.supported, activated.details
+    _w1g3_resolve(game)
+    game.check_state_based_actions()
+    assert not game.is_on_battlefield(wurm) and not game.is_on_battlefield(enforcer)
+    assert "Bosh, Iron Golem dealt 7 damage to Craw Wurm" in game.log
+
+    activated = game.activate_permanent_ability(
+        0, "Bosh, Iron Golem", target_player_index=1,
+        cost_permanent_ids=[bosh.permanent_id],
+    )
+    assert activated.supported, activated.details
+    _w1g3_resolve(game)
+    assert game.players[1].life == 12
+    assert "Bosh, Iron Golem" in [c.name for c in game.players[0].graveyard]
+
 # ==== end W1G3 ======================================================
 
 # ==== end W1G3 ======================================================

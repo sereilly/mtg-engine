@@ -83,6 +83,90 @@ def test_w1g3_assert_authority_exiles_what_it_counters_at_its_affinity_price(set
     assert [getattr(c, "name", c) for c in game.players[1].exile] == ["Grizzly Bears"]
     assert [c.name for c in game.players[0].graveyard] == ["Assert Authority"]
 
+
+def _w1g3_duel(set_pool, mine=(), theirs=(), hand=(), their_hand=()):
+    """Costs not enforced; nobody interactive; seat 0's turn."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+
+    def w1g3_card(name):
+        return mrd[name] if name in mrd else lea[name]
+
+    w1g3_game = _W1G3Game(players=[
+        _W1G3PlayerState(name="W1G3-A", hand=[w1g3_card(n) for n in hand]),
+        _W1G3PlayerState(name="W1G3-B", hand=[w1g3_card(n) for n in their_hand]),
+    ])
+    w1g3_game.enforce_mana_costs = False
+    w1g3_game.interactive_seats = set()
+    w1g3_game.active_player_index = 0
+    w1g3_rows = []
+    for w1g3_seat, w1g3_names in ((0, mine), (1, theirs)):
+        w1g3_row = []
+        for w1g3_name in w1g3_names:
+            w1g3_perm = _W1G3Permanent(card=w1g3_card(w1g3_name))
+            w1g3_game._put_permanent_onto_battlefield(w1g3_seat, w1g3_perm, None)
+            w1g3_row.append(w1g3_perm)
+        w1g3_rows.append(w1g3_row)
+    return w1g3_game, w1g3_rows[0], w1g3_rows[1]  # _w1g3_duel
+
+
+def test_w1g3_irradiate_shrinks_by_its_casters_artifacts(set_pool):
+    """"Target creature gets -1/-1 until end of turn for each artifact you
+    control." Three artifacts of the caster's (the opponent's count for
+    nothing) make a Craw Wurm 3/1."""
+    game, _mine, theirs = _w1g3_duel(
+        set_pool, mine=["Ornithopter", "Ornithopter", "Seat of the Synod"],
+        theirs=["Craw Wurm", "Ornithopter"], hand=["Irradiate"],
+    )
+    wurm = theirs[0]
+    cast = game.cast_from_hand(0, "Irradiate", target_permanent_ids=[wurm.permanent_id])
+    assert cast.supported, cast.details
+    _w1g3_resolve(game)
+    assert (wurm.effective_power, wurm.effective_toughness) == (3, 1)
+
+
+def test_w1g3_override_with_no_artifacts_asks_for_nothing(set_pool):
+    """"…unless its controller pays {1} for each artifact you control." With
+    none, the toll is {0}, which is paid (CR 118.5: a cost of zero is paid by
+    acknowledging it) — the spell resolves. Paid off a Cloudpost is in
+    ``test_mrd_lands.py``."""
+    game, _mine, _theirs = _w1g3_duel(
+        set_pool, hand=["Grizzly Bears"], their_hand=["Override"],
+    )
+    game.queue_from_hand(0, "Grizzly Bears")
+    cast = game.cast_from_hand(1, "Override", target_stack_index=0)
+    assert cast.supported, cast.details
+    _w1g3_resolve(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Grizzly Bears"]
+    assert any("pays {0}" in line and "not countered" in line for line in game.log)
+
+
+def test_w1g3_shrapnel_blast_needs_exactly_one_artifact(set_pool):
+    """"As an additional cost to cast this spell, sacrifice an artifact." /
+    "Shrapnel Blast deals 5 damage to any target." The named Ornithopter is
+    sacrificed and 5 is dealt; with no artifact the spell cannot be cast
+    (its ruling, 2014-07-18: "you can't cast it without sacrificing an
+    artifact") and nothing happens."""
+    game, mine, _theirs = _w1g3_duel(
+        set_pool, mine=["Ornithopter", "Seat of the Synod"], hand=["Shrapnel Blast"],
+    )
+    ornithopter, land = mine
+    cast = game.cast_from_hand(
+        0, "Shrapnel Blast", target_player_index=1,
+        cost_permanent_ids=[ornithopter.permanent_id],
+    )
+    assert cast.supported, cast.details
+    _w1g3_resolve(game)
+    assert game.players[1].life == 15
+    assert not game.is_on_battlefield(ornithopter) and game.is_on_battlefield(land)
+
+    game, _mine, _theirs = _w1g3_duel(
+        set_pool, mine=["Grizzly Bears"], hand=["Shrapnel Blast"],
+    )
+    refused = game.cast_from_hand(0, "Shrapnel Blast", target_player_index=1)
+    assert not refused.supported and "no artifact to sacrifice" in refused.details
+    assert game.players[1].life == 20
+    assert [c.name for c in game.players[0].hand] == ["Shrapnel Blast"]
+
 # ==== end W1G3 ======================================================
 
 

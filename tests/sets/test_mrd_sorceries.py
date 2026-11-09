@@ -79,6 +79,51 @@ def test_w1g3_thoughtcast_draws_two_for_one_blue_off_four_artifacts(set_pool):
     assert not refused.supported and "insufficient mana" in refused.details
     assert [c.name for c in game.players[0].hand] == ["Thoughtcast"]
 
+
+def test_w1g3_trash_for_treasure_cannot_target_what_it_sacrifices(set_pool):
+    """"As an additional cost to cast this spell, sacrifice an artifact." /
+    "Return target artifact card from your graveyard to the battlefield."
+    Targets are chosen before costs are paid (CR 601.2c before 601.2h), so
+    the sacrificed artifact is never a legal target (its ruling, 2020-08-07):
+    with a Myr Enforcer in the graveyard, the Ornithopter is sacrificed and
+    the Enforcer returns; with an empty graveyard the spell has no target and
+    is not cast, and the Ornithopter stays."""
+    mrd = set_pool("MRD")
+
+    def table(graveyard):
+        game = _W1G3Game(players=[
+            _W1G3PlayerState(
+                name="W1G3-A", hand=[mrd["Trash for Treasure"]],
+                graveyard=[mrd[n] for n in graveyard],
+            ),
+            _W1G3PlayerState(name="W1G3-B"),
+        ])
+        game.enforce_mana_costs = False
+        game.interactive_seats = set()
+        game.active_player_index = 0
+        thopter = _W1G3Permanent(card=mrd["Ornithopter"])
+        game._put_permanent_onto_battlefield(0, thopter, None)
+        return game, thopter
+
+    game, thopter = table(["Myr Enforcer"])
+    cast = game.cast_from_hand(
+        0, "Trash for Treasure", cost_permanent_ids=[thopter.permanent_id],
+    )
+    assert cast.supported, cast.details
+    _w1g3_resolve(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Myr Enforcer"]
+    assert sorted(c.name for c in game.players[0].graveyard) == [
+        "Ornithopter", "Trash for Treasure",
+    ]
+
+    game, thopter = table([])
+    refused = game.cast_from_hand(
+        0, "Trash for Treasure", cost_permanent_ids=[thopter.permanent_id],
+    )
+    assert not refused.supported
+    assert game.is_on_battlefield(thopter)
+    assert [c.name for c in game.players[0].hand] == ["Trash for Treasure"]
+
 # ==== end W1G3 ======================================================
 
 
