@@ -75,7 +75,7 @@ from .events import session_revision
 from .presence import seat_is_connected
 from .offers import zone_x_payable
 from .runtime import store
-from .seats import _build_rematch_info, _seat_type, _winner
+from .seats import _build_rematch_info, _seat_type, _winner, acting_seat_for
 from .serialization import (
     _serialize_card,
     _serialize_card_summary,
@@ -1376,6 +1376,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
                     "most_obeyable": most,
                 })
 
+    owed_by = _prompt_owed_by(session, viewer_seat)
     return {
         "session_id": session.id,
         "mode": session.mode,
@@ -1483,7 +1484,21 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         # rather than "<holder> has priority." (``prompts.prompt_owed_by``).
         # A session-level decision (a cleanup discard, an upkeep payment) is
         # named too (``_prompt_owed_by``).
-        "prompt_owed_by": _prompt_owed_by(session, viewer_seat),
+        "prompt_owed_by": owed_by,
+        # CR 723 (Mindslaver): who controls whom this turn and who will next
+        # (both public — the activation is), the kind of seat deciding for
+        # each seat right now (the client's AI step and combat nudge ask
+        # this, never the sitter's kind), and the seat this viewer's decider
+        # acts as now when it decides for more than its own seat.
+        "player_controls": _controls_payload(session.game.player_controls, current=True),
+        "player_controls_waiting": _controls_payload(session.game.player_controls_waiting),
+        "decider_types": {
+            str(seat): _seat_type(session, seat)
+            for seat in range(len(session.game.players))
+        },
+        "act_as": acting_seat_for(
+            session, viewer_seat, (owed_by or {}).get("seat"),
+        ),
         "rematch": _build_rematch_info(session, viewer_seat),
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,
@@ -1565,3 +1580,16 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         ),
         **prompt_payloads,
     }
+
+
+def _controls_payload(controls: dict, *, current: bool = False) -> dict:
+    """``{controlled seat: controller seat}`` as the wire spells it, for the
+    control in force (``Game.player_controls``, which carries the turn) or
+    the one waiting (``player_controls_waiting``). Control of oneself
+    (CR 723.9) is left out: nothing about it differs."""
+    out = {}
+    for controlled, entry in controls.items():
+        controller = entry[0] if current else entry
+        if controller != controlled:
+            out[str(controlled)] = controller
+    return out

@@ -11,12 +11,28 @@ every other module asks at least one of them.
 from __future__ import annotations
 
 from engine.game_result_bans import player_cant_lose
+from engine.player_control import decided_by
 
 from .session_store import Session
 
 
-def _seat_type(session: Session, seat: int) -> str:
+def _sitter_type(session: Session, seat: int) -> str:
+    """Who **sits** at *seat* — "human", "ai" or "open" — as the session was
+    configured: the identity questions (who is a person at this table, whose
+    vote a rematch needs) ask this."""
     return session.seat_types.get(seat) or session.seat_types.get(str(seat), "human")
+
+
+def _seat_type(session: Session, seat: int) -> str:
+    """Who **decides** for *seat* right now: the kind of seat its decider sits
+    at (``Game.decider_of``, CR 723.5) — the sitter's own kind except during
+    a turn another player controls (Mindslaver). Every "does the AI act for
+    this seat, or is a person asked" question in the web layer asks this, so
+    a person controlling an AI seat's turn is asked that seat's decisions and
+    an AI controlling a person's turn plays it."""
+    game = getattr(session, "game", None)
+    decider = game.decider_of(seat) if game is not None and isinstance(seat, int) else seat
+    return _sitter_type(session, decider)
 
 
 def _mark_interactive_seats(session: Session) -> None:
@@ -27,7 +43,7 @@ def _mark_interactive_seats(session: Session) -> None:
     route may run before any action has been sent
     (``turn_steps._begin_first_turn``)."""
     session.game.interactive_seats = {
-        s for s in range(len(session.game.players)) if _seat_type(session, s) == "human"
+        s for s in range(len(session.game.players)) if _sitter_type(session, s) == "human"
     }
 
 
@@ -106,7 +122,7 @@ def _rematch_human_seats(session: Session) -> list[int]:
     """Joined human seats whose agreement is needed to start a rematch."""
     return [
         s for s in sorted(session.joined_seats)
-        if _seat_type(session, s) == "human"
+        if _sitter_type(session, s) == "human"
     ]
 
 
@@ -238,3 +254,76 @@ def _self_should_hold(session: Session, step: str) -> bool:
         and session.game._receives_priority(step)
         and _seat_type(session, session.game.active_player_index) == "human"
     )
+
+
+def controlled_seat_refusal(
+    session: Session, seat: int, action: str, controller_seat: int | None,
+    exempt: frozenset[str] = frozenset(),
+) -> str | None:
+    """Why an action for *seat* is refused under CR 723 (Mindslaver), or None.
+
+    *controller_seat* is the sender when it acts for a seat it controls (the
+    request's ``controller_seat``); absent, the seat acts for itself.
+
+    * A controller acting for another seat must be the seat deciding for it
+      now (``Game.decider_of``), and may do anything that seat may — except
+      concede for it: "the controller of another player can't make that
+      player concede" (CR 723.6).
+    * A seat another player controls makes none of its own decisions
+      (CR 723.5) — but "a player may concede the game at any time, even if
+      they are controlled by another player" (CR 723.6). Its ``ai_step`` and
+      the Debug Menu's actions (*exempt*) decide nothing for anybody and are
+      let through: the first is how the client of a person an AI controls
+      asks the AI to play the turn.
+    """
+    game = session.game
+    decider = game.decider_of(seat)
+    if controller_seat is not None and controller_seat != seat:
+        if controller_seat not in session.joined_seats:
+            return "seat has not joined"
+        if decider != controller_seat:
+            return "you do not control that player this turn"
+        if action == "concede":
+            return "you can't make the player you control concede (CR 723.6)"
+        return None
+    if decider != seat and action not in {"concede", "ai_step"} | set(exempt):
+        return (
+            f"{game.players[decider].name} controls you this turn (CR 723.5); "
+            "you may only concede"
+        )
+    return None
+
+
+def acting_seat_for(session: Session, viewer_seat: int | None, owed_seat) -> int | None:
+    """The seat a person deciding for more than one seat (CR 723.8: their
+    own, and the one they control this turn) acts as right now, or None when
+    *viewer_seat*'s decider decides for nobody else.
+
+    Asked for the decider of the viewer, so the person reads the same answer
+    whichever of the two seats they are looking through. In order: the seat
+    that owes the decision holding the game (*owed_seat*, the payload's
+    ``prompt_owed_by``), the seat a declaration is owed by (CR 508.1 the
+    active player's attack, CR 509.1 a defending player's blocks), the seat
+    holding priority, and otherwise the active player (CR 723.3: the
+    controlled player is still the active player)."""
+
+    game = session.game
+    if viewer_seat is None or not 0 <= viewer_seat < len(game.players):
+        return None
+    decider = game.decider_of(viewer_seat)
+    seats = decided_by(game, decider)
+    if len(seats) == 1:
+        return None
+    if owed_seat in seats:
+        return owed_seat
+    if _declaration_owed(game):
+        if game.current_step == "declare_attackers":
+            active = game.active_player_index
+            return active if active in seats else decider
+        defending = sorted(set(seats) & game.combat_defending_players())
+        return defending[0] if defending else decider
+    holder = game.priority_player_index
+    if holder in seats:
+        return holder
+    active = game.active_player_index
+    return active if active in seats else decider

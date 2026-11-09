@@ -317,3 +317,100 @@ def test_w1g10_timesifter_a_player_who_exiles_nothing_cannot_win(set_pool):
 # W1G12's tests go between this line and the "end W1G12" line.
 
 # ==== end W1G12 ======================================================
+
+
+# ==== W2G1 ==========================================================
+# W2G1's tests go between this line and the "end W2G1" line.
+#
+# Mindslaver — "{4}, {T}, Sacrifice Mindslaver: You control target player
+# during that player's next turn." The CR 723 rules themselves are in
+# tests/rules/test_mrd_w2g1_controlling_a_player.py; these are the card.
+from engine import Game as _w2g1_Game, PlayerState as _w2g1_PlayerState
+from engine.models import Permanent as _w2g1_Permanent
+from engine.oracle import compile_card_oracle as _w2g1_compile
+from engine.targeting import derive_activation_spec as _w2g1_activation_spec
+from tests.helpers import resolve_stack as _w2g1_resolve_stack
+
+
+def _w2g1_table(set_pool, *, their_hand=()):
+    lea = set_pool("LEA")
+    game = _w2g1_Game(players=[
+        _w2g1_PlayerState("P1", library=[lea["Forest"]] * 20),
+        _w2g1_PlayerState("P2", library=[lea["Forest"]] * 20, hand=list(their_hand)),
+    ])
+    game.active_player_index = 0
+    game.turn = 1
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    return game
+
+
+def _w2g1_put(game, seat, card):
+    permanent = _w2g1_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def test_w2g1_mindslaver_picks_a_player_and_costs_four_tap_and_itself(set_pool):
+    slaver = set_pool("MRD")["Mindslaver"]
+    program = _w2g1_compile(slaver)
+    assert program.supported, program.reason
+    (ability,) = program.activated_abilities
+    assert ability.cost.mana["generic"] == 4
+    assert ability.cost.requires_tap and ability.cost.sacrifice_self
+    assert _w2g1_activation_spec(ability)["kind"] == "player"
+
+
+def test_w2g1_mindslaver_paid_for_controls_the_opponents_next_turn(set_pool):
+    lea = set_pool("LEA")
+    game = _w2g1_table(set_pool, their_hand=[lea["Grizzly Bears"]])
+    game.enforce_mana_costs = True
+    _w2g1_put(game, 0, set_pool("MRD")["Mindslaver"])
+    for _ in range(4):
+        _w2g1_put(game, 0, lea["Forest"])
+    for land in [p for p in game.players[0].battlefield if p.card.name == "Forest"]:
+        assert game.tap_land_for_mana(0, "Forest", permanent_id=land.permanent_id)
+    assert game.players[0].mana_pool.get("G") == 4
+    result = game.activate_permanent_ability(0, "Mindslaver", target_player_index=1)
+    assert result.supported, result.details
+    _w2g1_resolve_stack(game)
+    assert "Mindslaver" in [card.name for card in game.players[0].graveyard]
+    assert "P1 will control P2 during P2's next turn" in game.log
+    assert game.decider_of(1) == 1    # not yet: P1's own turn goes on
+    game.start_next_turn()
+    _w2g1_resolve_stack(game)
+    assert (game.active_player_index, game.decider_of(1)) == (1, 0)
+    game.start_next_turn()
+    _w2g1_resolve_stack(game)
+    assert game.decider_of(1) == 1
+
+
+def test_w2g1_an_ai_controlling_the_opponent_casts_nothing_for_them(set_pool):
+    """The controlled seat's whole main phase as the simulator plays it: the
+    AI deciding for it plays no land, casts no creature and attacks with
+    nothing (``engine/ai_player_control.py``); uncontrolled, it would."""
+    from engine.ai_simulator import SimulationReport, _play_land_drops, _play_casts
+    from engine.ai_declarations import choose_attackers
+
+    lea = set_pool("LEA")
+    game = _w2g1_table(set_pool, their_hand=[lea["Forest"], lea["Grizzly Bears"]])
+    game.enforce_mana_costs = False
+    bears = _w2g1_put(game, 1, lea["Grizzly Bears"])
+    _w2g1_put(game, 0, set_pool("MRD")["Mindslaver"])
+    assert game.activate_permanent_ability(0, "Mindslaver", target_player_index=1).supported
+    _w2g1_resolve_stack(game)
+    game.start_next_turn()
+    _w2g1_resolve_stack(game)
+    report = SimulationReport(games_requested=1, games_completed=0, interaction_count=0)
+    _play_land_drops(game, 1, report, 1, 1)
+    _play_casts(game, 1, report, 1, 1)
+    assert report.lands_played == 0
+    assert [p.card.name for p in game.players[1].battlefield] == ["Grizzly Bears"]
+    assert choose_attackers(game, 1) == []
+    game.player_controls.clear()
+    _play_land_drops(game, 1, report, 1, 1)
+    assert report.lands_played >= 1
+    assert bears in list(game.controlled_by(1))
+
+# ==== end W2G1 ======================================================

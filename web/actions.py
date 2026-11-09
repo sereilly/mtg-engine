@@ -33,7 +33,7 @@ from .schemas import GameActionRequest
 
 from .runtime import _require_session, _save_snapshot
 from .events import _notify_session_change
-from .seats import _mark_interactive_seats, _seat_type
+from .seats import _mark_interactive_seats, _seat_type, controlled_seat_refusal
 from .turn_steps import (
     _cleanup_discard_requirement,
     _optional_trigger_pending,
@@ -1114,6 +1114,11 @@ def preview_payment(session_id: str, req: GameActionRequest):
         raise HTTPException(status_code=400, detail="that action pays no mana")
     if req.seat not in session.joined_seats:
         raise HTTPException(status_code=400, detail="seat has not joined")
+    refusal = controlled_seat_refusal(
+        session, req.seat, req.action, req.controller_seat,
+    )
+    if refusal is not None:
+        return {"payable": False, "taps": [], "cost": None, "reason": refusal}
     game = session.game
     if mid_resolution(game):
         # A table part-way through a resolution is not copied (its
@@ -1156,6 +1161,14 @@ def do_action(session_id: str, req: GameActionRequest):
 
     if req.seat not in session.joined_seats:
         raise HTTPException(status_code=400, detail="seat has not joined")
+    # CR 723 (Mindslaver): a seat another player controls this turn acts only
+    # through its controller, and concedes only for itself.
+    refusal = controlled_seat_refusal(
+        session, req.seat, req.action, req.controller_seat,
+        frozenset(_DEBUG_ANYTIME_ACTIONS),
+    )
+    if refusal is not None:
+        raise HTTPException(status_code=400, detail=refusal)
 
     # Stable ids in, battlefield indices out — before any branch reads a target,
     # so every action below sees one spelling. See _resolve_permanent_ids.
