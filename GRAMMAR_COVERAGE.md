@@ -55,7 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | SCG | 143 | 262 | 82.4% | 82.1% | 55.0% | 120 |
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| MRD *(measured)* | 291 | 456 | 78.1% | 76.8% | 55.3% | 209 |
+| MRD *(measured)* | 291 | 456 | 79.2% | 78.5% | 56.6% | 213 |
 | **All (shipped)** | **8992** | **13323** | **90.0%** | **89.5%** | **62.1%** | **7036** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -68,15 +68,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 885 | 467 | expected a subject |  |
+| 883 | 465 | expected a subject |  |
 | 198 | 103 | unrecognized effect verb |  |
-| 142 | 76 | unconsumed text |  |
+| 140 | 74 | unconsumed text |  |
 | 71 | 52 | granted ability in quotes | phase 3 (quoted abilities) |
 | 41 | 8 | expected what this creature can't block, or a duration |  |
 | 38 | 38 | unrecognized activation cost |  |
 | 24 | 20 | expected 'unless defending player controls' |  |
 | 22 | 16 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 8 | 2 | no lowering for RawEffect |  |
+| 7 | 1 | no lowering for RawEffect |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
@@ -90,9 +90,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 3 | an Aura's continuous grant is derived by engine/auras.py |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | expected 'a' |  |
 | 2 | 2 | expected a keyword ability |  |
 | 2 | 2 | expected 'put' |  |
+| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
@@ -2280,6 +2280,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Confound**
   - `Counter target spell that targets a creature.`
   - `Draw a card.`
+- **Confusion in the Ranks**
+  - `Whenever an artifact, creature, or enchantment enters, its controller chooses target permanent another player controls that shares a card type with it. Exchange control of those permanents.`
 - **Congregate**
   - `Target player gains 2 life for each creature on the battlefield.`
 - **Conservator**
@@ -2565,6 +2567,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this land: Add {C}{C}.`
 - **Crystalline Sliver**
   - `All Slivers have shroud. (They can't be the targets of spells or abilities.)`
+- **Culling Scales**
+  - `At the beginning of your upkeep, destroy target nonland permanent with the lowest mana value. (If two or more permanents are tied for lowest, target any one of them.)`
 - **Culling the Weak**
   - `Add {B}{B}{B}{B}.`
 - **Cultivate**
@@ -4508,6 +4512,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
   - `Untap target attacking creature. Prevent all combat damage that would be dealt to and dealt by that creature this turn.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Fractured Loyalty**
+  - `Whenever enchanted creature becomes the target of a spell or ability, that spell or ability's controller gains control of that creature. (This effect lasts indefinitely.)`
 - **Frantic Inventory**
   - `Draw a card, then draw cards equal to the number of cards named Frantic Inventory in your graveyard.`
 - **Frantic Purification**
@@ -6100,7 +6106,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target land becomes the basic land type of your choice until end of turn.`
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Jinxed Choker**
+  - `At the beginning of your end step, target opponent gains control of this artifact and puts a charge counter on it.`
   - `At the beginning of your upkeep, this artifact deals damage to you equal to the number of charge counters on it.`
+  - `{3}: Put a charge counter on this artifact or remove one from it.`
 - **Jinxed Idol**
   - `At the beginning of your upkeep, this artifact deals 2 damage to you.`
   - `Sacrifice a creature: Target opponent gains control of this artifact.`
@@ -6981,6 +6989,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals damage to a creature, destroy that creature at end of combat.`
 - **Loxodon Mender**
   - `{W}, {T}: Regenerate target artifact.`
+- **Loxodon Peacekeeper**
+  - `At the beginning of your upkeep, the player with the lowest life total gains control of this creature. If two or more players are tied for lowest life total, you choose one of them, and that player gains control of this creature.`
 - **Loxodon Punisher**
   - `This creature gets +2/+2 for each Equipment attached to it.`
 - **Lull**

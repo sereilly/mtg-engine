@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**21 unclaimed sentence(s) across 19 supported card(s).**
+**19 unclaimed sentence(s) across 18 supported card(s).**
 
 - **Betrayal of Flesh**
   - `entwine—sacrifice three lands`
@@ -41,9 +41,6 @@ anything anyone did, and every ingest would arrive red.
   - `entwine {2}`
 - **Isochron Scepter**
   - `{2}, {t}: you may copy the exiled card. if you do, you may cast the copy without paying its mana cost`
-- **Jinxed Choker**
-  - `at the beginning of your end step, target opponent gains control of this artifact and puts a charge counter on it`
-  - `{3}: put a charge counter on this artifact or remove one from it`
 - **Journey of Discovery**
   - `entwine {2}{g}`
 - **Mourner's Shield**
