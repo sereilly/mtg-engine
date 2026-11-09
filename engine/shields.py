@@ -337,6 +337,14 @@ class Shield:
     #: is what makes every recipient find it, exactly as ``_class_shields``
     #: makes a described permanent find Shadowbane's.
     any_recipient: bool = False
+    #: "The next time target creature would deal damage this turn, prevent that
+    #: damage. **You** gain life equal to the damage prevented this way." (Awe
+    #: Strike.) The seat CR 615.5's additional effect pays when that is not the
+    #: recipient: an ``any_recipient`` shield is spent on whatever its source
+    #: was about to damage — a creature, or the opponent — and "you" is the
+    #: seat that armed it (CR 109.5), captured then. None for every shield whose
+    #: rider pays the recipient it hangs on (Reverse Damage's "to you").
+    payee_seat: int | None = None
     #: "Prevent all **combat** damage that would be dealt by unblocked creatures
     #: this turn." (Snag.) The shield answers only an event whose ``combat`` flag
     #: is set (CR 510.2): a ping from the same unblocked creature after blockers
@@ -939,6 +947,20 @@ def make_reflect_charge(
 def make_whole_source(source, source_name: str | None = None) -> Shield:
     """Pentagram of the Ages' shield against the source its controller chose."""
     return make_chosen_source_shield(PREVENT_WHOLE, source, source_name)
+
+
+def make_targeted_source_shield(
+    source, payee_seat: int, *, gain_life: bool, source_name: str | None = None,
+) -> Shield:
+    """Awe Strike's shield: the next instance of damage *source* — the creature
+    the spell targeted — deals, to whoever it was headed for (Penance's
+    ``any_recipient`` reach), and with "you gain life equal to the damage
+    prevented this way" paid to *payee_seat* when printed. The two kinds are
+    the interceptors Pentagram of the Ages and Reverse Damage already spend."""
+    return make_chosen_source_shield(
+        PREVENT_AND_GAIN_LIFE if gain_life else PREVENT_WHOLE, source,
+        source_name, any_recipient=True, payee_seat=payee_seat,
+    )
 
 
 def make_whole_charge(source_name: str | None = None) -> Shield:

@@ -50,5 +50,79 @@ log), not instruction kinds alone.
 
 # ==== W1G12 ==========================================================
 # W1G12's tests go between this line and the "end W1G12" line.
+#
+# Awe Strike: CR 615.8's shield keyed on the creature the spell targets, with
+# no recipient printed (Penance's reach), and Reverse Damage's CR 615.5 rider
+# paid to the caster. The sweep and look-alike boards are in
+# tests/rules/test_mrd_w1g12_awe_strike.py.
+
+from engine import Game as _w1g12_Game
+from engine import PlayerState as _w1g12_PlayerState
+from engine import targeting as _w1g12_targeting
+from engine.models import Permanent as _w1g12_Permanent
+from engine.oracle import compile_card_oracle as _w1g12_compile
+from tests.helpers import _nosick as _w1g12_nosick
+from tests.helpers import resolve_stack as _w1g12_resolve_stack
+
+
+def _w1g12_card(set_pool, name):
+    """A card by name, from Mirrodin first and Alpha for the fillers."""
+    mrd = set_pool("MRD")
+    return mrd[name] if name in mrd else set_pool("LEA")[name]
+
+
+def _w1g12_table(set_pool, *, hand=(), mine=(), theirs=(), interactive=()):
+    card = lambda name: _w1g12_card(set_pool, name)  # noqa: E731
+    game = _w1g12_Game(players=[
+        _w1g12_PlayerState(
+            "A", hand=[card(n) for n in hand], library=[card("Forest")] * 12,
+        ),
+        _w1g12_PlayerState("B", library=[card("Island")] * 12),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _w1g12_Permanent(card=card(name))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            _w1g12_nosick(permanent)
+            placed[seat].append(permanent)
+    game.start_turn(0)
+    game._settle()
+    return game, placed[0], placed[1]
+
+
+def test_w1g12_awe_strike_turns_an_unblocked_attackers_damage_into_life(set_pool):
+    awe = _w1g12_card(set_pool, "Awe Strike")
+    assert _w1g12_targeting.derive_cast_spec(awe, _w1g12_compile(awe)) == {
+        "kind": "creature",
+    }
+    game, _, (wurm,) = _w1g12_table(set_pool, hand=["Awe Strike"], theirs=["Craw Wurm"])
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(1, [0], defending_player_index=0)[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(0, {})[0]
+    assert game.queue_from_hand(
+        0, "Awe Strike", target_permanent_ids=[wurm.permanent_id],
+    ).supported
+    _w1g12_resolve_stack(game)
+    game.advance_combat_phase()
+    assert game.players[0].life == 26
+    assert "A gained 6 life from Awe Strike (20 -> 26)" in game.log
+
+
+def test_w1g12_awe_strike_on_a_creature_that_leaves_does_nothing(set_pool):
+    # CR 608.2b: its only target gone, the spell does nothing, and a Wurm that
+    # comes back would be a new object the shield never named (CR 400.7).
+    game, _, (wurm,) = _w1g12_table(set_pool, hand=["Awe Strike"], theirs=["Craw Wurm"])
+    assert game.queue_from_hand(
+        0, "Awe Strike", target_permanent_ids=[wurm.permanent_id],
+    ).supported
+    game.remove_from_battlefield(wurm)
+    _w1g12_resolve_stack(game)
+    assert game.players[0].life == 20
+    assert not any("the next damage" in line for line in game.log)
 
 # ==== end W1G12 ======================================================

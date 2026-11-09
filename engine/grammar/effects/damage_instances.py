@@ -267,10 +267,12 @@ def _finish_named_source_effect(
 
 def _finish_unaddressed_named_source_redirect(
     stream: TokenStream, source: "ast.TargetSpec", mark, combat_only: bool
-) -> "ast.RedirectDamage | None":
+) -> "ast.RedirectDamage | ast.PreventDamage | None":
     """The tail of "The next time <named source> would deal [combat] damage
     <duration>, it deals that damage to <recipient> instead" — the sentence
-    :func:`_finish_named_source_effect` reads, printed with **no recipient**.
+    :func:`_finish_named_source_effect` reads, printed with **no recipient** —
+    and, for a source the sentence **targets**, "…, prevent that damage"
+    (Awe Strike).
 
     "Whenever this creature attacks or blocks, flip a coin. If you lose the
     flip, the next time it would deal combat damage this turn, it deals that
@@ -289,8 +291,30 @@ def _finish_unaddressed_named_source_redirect(
     stream.accept_punct(",")
     tail = _accept_redirect_tail(stream)
     if tail is None:
-        stream.reset(mark)
-        return None
+        # "The next time **target creature** would deal damage this turn,
+        # prevent that damage. You gain life equal to the damage prevented
+        # this way." (Awe Strike.) The shield ending, for a source named by
+        # **announcement** only: "it" here is Desperate Gambit's pronoun and
+        # is that production's (the docstring's reason), so a source the
+        # sentence did not target refuses with the cursor where it was. The
+        # source travels whole, as ``dealt_by``, because a targeted source
+        # reduced to its filter would be a shield against every creature the
+        # noun phrase describes; and CR 615.5's rider is read as part of the
+        # sentence, exactly as the chosen-source branch reads it.
+        announced = (
+            source.quantifier == "target" and source.targeted
+            and source.count == 1
+        )
+        if not announced or combat_only or not stream.accept_phrase(
+            "prevent", "that", "damage"
+        ):
+            stream.reset(mark)
+            return None
+        rider = _parse_prevented_this_way_rider(stream)
+        return ast.PreventDamage(
+            ast.Fixed(1), to=None, from_filter=ast.ObjectFilter(),
+            duration=duration, dealt_by=source, prevented_rider=rider,
+        )
     new_recipient, chooser = tail
     return ast.RedirectDamage(
         to=None,
