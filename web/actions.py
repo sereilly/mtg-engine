@@ -807,6 +807,9 @@ def _action_activate(session, req, seat_type):
                 # Phyrexian Splicer: the ability the activation chose (CR 601.2b),
                 # forwarded like every other announcement-time choice above.
                 chosen_keyword=req.chosen_keyword,
+                # Power Conduit: the kind of counter its cost removes, when the
+                # chosen permanent holds several (CR 601.2b).
+                cost_counter_kind=req.cost_counter_kind,
                 source_seat=req.source_seat,
                 source_permanent_index=req.source_permanent_index,
                 source_stack_index=engine_source_stack_index,

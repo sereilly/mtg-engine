@@ -150,7 +150,9 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
     return cost_object_is_chargeable(carried)
 
 
-def _is_chargeable_counter_target(filt: ast.ObjectFilter) -> bool:
+def _is_chargeable_counter_target(
+    filt: ast.ObjectFilter, *, removal: bool = False,
+) -> bool:
     """Whether the payment path can find the permanent this counter goes on.
 
     "Put a -1/-1 counter on **a creature you control**" (Wandering Mage). The
@@ -163,10 +165,22 @@ def _is_chargeable_counter_target(filt: ast.ObjectFilter) -> bool:
     The phrase must also pin a card type or a subtype. Without one the cost
     could be paid by putting the counter on a land, which is no cost at all for
     a card that means to shrink a creature.
+
+    *removal* is the other direction — "Remove a counter from **a permanent
+    you control**" (Power Conduit) — where the generic head noun is the whole
+    printed set: what the cost gives up is the counter, and a permanent holding
+    none cannot pay (CR 601.2h), so no card type is owed. A card, a spell or an
+    ability is still no permanent to take one from.
     """
     if filt.is_source:
         return True
-    if not (filt.card_types or filt.subtypes):
+    if not (filt.card_types or filt.subtypes) and not (
+        removal
+        and filt.zone == "battlefield"
+        and not filt.is_card
+        and not filt.also_spell
+        and not filt.also_ability
+    ):
         return False
     described = filt.to_payload()
     return not _restrictions_beyond(

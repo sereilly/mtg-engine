@@ -729,17 +729,19 @@ class ActivationPaymentMixin:
     ) -> list:
         """What "Remove a <kind> counter from a <noun phrase> you control" may
         take the counters off: the permanent must match **and** hold them."""
-        from ...named_counters import counters_on
+        from ...named_counters import counters_held
 
         wanted = cost.remove_counter_count
         needed = int(wanted) if isinstance(wanted, int) else 1
+        # ``counters_held``: a printed kind's own store, or — "remove **a
+        # counter**" (Power Conduit) — a counter of any kind.
         return [
             perm for perm in self.controlled_by(controller_index)
             if subject_matches(
                 self, perm, cost.remove_counter_filter,
                 observer=controller_index, source=permanent,
             )
-            and counters_on(perm, str(cost.remove_counter)) >= needed
+            and counters_held(perm, str(cost.remove_counter)) >= needed
         ]
 
     def _sacrifice_also_candidates(

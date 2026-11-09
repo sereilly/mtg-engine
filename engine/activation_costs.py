@@ -996,6 +996,23 @@ def parse_activated_ability_cost(
         remove_counter_filter = _chargeable_counter_target(chosen_removal.group(2))
         if remove_counter_filter is not None:
             remove_counter = chosen_removal.group(1)
+    # "{T}, Remove **a counter** from a permanent you control" (Power Conduit).
+    # The chosen spelling with no kind printed: any kind pays, so the field
+    # carries ``named_counters.ANY_COUNTER_KIND`` and the charger turns it into
+    # the kind the payer gives up. Only the chosen-permanent spelling, the one
+    # the grammar admits; read before the self-referring rows below, whose
+    # "from " would otherwise read the source's counter for the same reason the
+    # row above is read first.
+    if remove_counter is None:
+        any_removal = re.search(
+            r"\bremove a counter from (an? [^,:]+?)\s*(?=,|:|$)", cost_lower,
+        )
+        if any_removal is not None:
+            from .named_counters import ANY_COUNTER_KIND
+
+            remove_counter_filter = _chargeable_counter_target(any_removal.group(1))
+            if remove_counter_filter is not None:
+                remove_counter = ANY_COUNTER_KIND
     if remove_counter is None:
         removal_cost = re.search(
             r"\bremove an? ([a-z]+|[+-]\d+/[+-]\d+) counter from ", cost_lower

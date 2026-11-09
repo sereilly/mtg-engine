@@ -411,6 +411,126 @@ def test_w1g6_lightning_coils_below_five_does_nothing_and_counts_deaths(set_pool
     assert len(_w1g6_elementals(game)) == 5
     assert _w1g6_counters_on(coils, "charge") == 0
 
+
+def _w1g6_conduit_table(set_pool):
+    """Power Conduit beside a Clockwork Beetle (a 0/0) holding two +1/+1
+    counters and a charge counter, a counterless Leaden Myr, and the
+    opponent's creature carrying a +1/+1 counter it cannot be asked to pay."""
+    from engine.named_counters import add_counters
+
+    pool = set_pool("MRD")
+    conduit = _w1g6_nosick(_w1g6_Permanent(card=pool["Power Conduit"]))
+    beetle = _w1g6_nosick(_w1g6_Permanent(card=pool["Clockwork Beetle"]))
+    myr = _w1g6_nosick(_w1g6_Permanent(card=pool["Leaden Myr"]))
+    theirs = _w1g6_nosick(_w1g6_Permanent(card=_w1g6_creature("Theirs")))
+    add_counters(beetle, "+1/+1", 2)
+    add_counters(beetle, "charge", 1)
+    add_counters(theirs, "+1/+1", 1)
+    game = _w1g6_game([conduit, beetle, myr], [theirs])
+    return game, conduit, beetle, myr, theirs
+
+
+def test_w1g6_power_conduit_pays_with_a_counter_of_the_kind_named(set_pool):
+    """"{T}, Remove a counter from a permanent you control: Choose one — • Put a
+    charge counter on target artifact. • Put a +1/+1 counter on target
+    creature."
+
+    A counter of any kind pays (CR 122.1), off any permanent its controller
+    controls that holds one — the picker offers exactly those — and the kind
+    named is the kind removed: a +1/+1 counter off the Beetle shrinks it
+    (CR 122.1a), and the charge mode puts its counter on the target artifact;
+    then the Beetle's charge counter pays for the +1/+1 mode on the Myr.
+    """
+    from engine.targeting import derive_activation_spec
+
+    game, conduit, beetle, myr, theirs = _w1g6_conduit_table(set_pool)
+    program = _w1g6_compile(conduit.card)
+    assert program.supported, program.reason
+    charge_mode, plus_mode = program.activated_abilities
+    cost_spec = derive_activation_spec(charge_mode)["cost_spec"]
+    assert cost_spec["remove_counter_cost"] and cost_spec["any_counter_kind"]
+    from engine.subject_filters import subject_matches
+
+    offered = [
+        p.card.name for p in game.players[0].battlefield
+        if subject_matches(game, p, cost_spec["filter"], observer=0, source=conduit)
+    ]
+    assert offered == ["Clockwork Beetle"], "only what holds a counter can pay"
+
+    paid = game.activate_permanent_ability(
+        0, "Power Conduit", ability_index=0,
+        target_permanent_ids=[myr.permanent_id],
+        cost_permanent_ids=[beetle.permanent_id], cost_counter_kind="+1/+1",
+    )
+    assert paid.supported, paid.details
+    assert beetle.metadata.get("plus_counters") == 1
+    assert _w1g6_counters_on(beetle, "charge") == 1
+    assert (beetle.effective_power, beetle.effective_toughness) == (1, 1)
+    _w1g6_resolve_stack(game)
+    assert _w1g6_counters_on(myr, "charge") == 1
+
+    conduit.tapped = False
+    paid = game.activate_permanent_ability(
+        0, "Power Conduit", ability_index=1,
+        target_permanent_ids=[myr.permanent_id],
+        cost_permanent_ids=[beetle.permanent_id], cost_counter_kind="charge",
+    )
+    assert paid.supported, paid.details
+    assert _w1g6_counters_on(beetle, "charge") == 0
+    _w1g6_resolve_stack(game)
+    assert myr.metadata.get("plus_counters") == 1
+    assert (myr.effective_power, myr.effective_toughness) == (2, 2)
+
+
+def test_w1g6_power_conduit_refuses_a_payment_it_cannot_take(set_pool):
+    """A kind the chosen permanent does not hold, a permanent the opponent
+    controls, and a board holding no counter at all are each refused with
+    nothing paid — the Conduit stays untapped (CR 601.2h, 733.1)."""
+    game, conduit, beetle, myr, theirs = _w1g6_conduit_table(set_pool)
+
+    for named in (
+        {"cost_permanent_ids": [beetle.permanent_id], "cost_counter_kind": "fate"},
+        {"cost_permanent_ids": [theirs.permanent_id]},
+        {"cost_permanent_ids": [myr.permanent_id]},
+    ):
+        refused = game.activate_permanent_ability(
+            0, "Power Conduit", ability_index=1,
+            target_permanent_ids=[myr.permanent_id], **named,
+        )
+        assert not refused.supported, named
+        assert not conduit.tapped, named
+        assert beetle.metadata.get("plus_counters") == 2, named
+        assert _w1g6_counters_on(beetle, "charge") == 1, named
+
+    from engine.named_counters import remove_counters
+
+    remove_counters(beetle, "+1/+1", 2)
+    remove_counters(beetle, "charge", 1)
+    assert game.unpayable_activation_cost(
+        0, conduit, _w1g6_compile(conduit.card).activated_abilities[1],
+    )
+    refused = game.activate_permanent_ability(
+        0, "Power Conduit", ability_index=1, target_permanent_ids=[myr.permanent_id],
+    )
+    assert not refused.supported and not conduit.tapped
+
+
+def test_w1g6_power_conduit_unnamed_gives_up_the_inert_counter_first(set_pool):
+    """A seat that names no kind (a headless one, or the AI): the Beetle
+    holds +1/+1 counters and a charge counter, and the charge counter — which
+    sizes nothing — is the one given up."""
+    game, conduit, beetle, myr, theirs = _w1g6_conduit_table(set_pool)
+
+    paid = game.activate_permanent_ability(
+        0, "Power Conduit", ability_index=1, target_permanent_ids=[myr.permanent_id],
+    )
+    assert paid.supported, paid.details
+    assert _w1g6_counters_on(beetle, "charge") == 0
+    assert beetle.metadata.get("plus_counters") == 2
+    assert any(
+        "Clockwork Beetle gave up 1 charge counter(s)" in line for line in game.log
+    ), game.log
+
 # ==== end W1G6 ======================================================
 
 

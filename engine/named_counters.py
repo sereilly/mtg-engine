@@ -167,6 +167,84 @@ def add_counters(permanent, kind: str, count: int = 1) -> int:
     return total
 
 
+#: "{T}, Remove **a counter** from a permanent you control: …" (Power Conduit).
+#: CR 122.1's open kind space asked the other way round: any kind answers. It
+#: rides ``ActivatedAbilityCost.remove_counter`` where a printed word would, so
+#: every reader of that field that is not taught it below asks for counters of
+#: a kind named this — which no card places — and finds none: the direction
+#: that refuses a payment rather than taking it for free. Never written to a
+#: store; :func:`counter_kind_to_remove` turns it into a real kind at payment.
+ANY_COUNTER_KIND = "<counter of any kind>"
+
+#: The CR 122.1a kinds this engine keeps under a key of their own, read back
+#: from the key. The inverse of ``pt._PT_COUNTER_KEYS``, spelled here rather
+#: than imported because a store reader must not depend on the layer module.
+_KINDS_BY_KEY = {
+    "plus_counters": "+1/+1",
+    "minus_counters": "-1/-1",
+    "plus_1_0_counters": "+1/+0",
+}
+
+
+def counter_kinds_on(permanent) -> dict[str, int]:
+    """Every counter on *permanent*, ``{kind: count}`` (CR 122.1).
+
+    Read off the stores :func:`add_counters` and ``pt.add_pt_counters`` write —
+    ``<kind>_counters`` for every kind, under the three P/T keys for those —
+    so a kind is named exactly as :func:`remove_counters` addresses it, and
+    taking one of these off reaches the counter this counted.
+    """
+    found: dict[str, int] = {}
+    for key, value in (getattr(permanent, "metadata", None) or {}).items():
+        if not isinstance(key, str) or not key.endswith("_counters"):
+            continue
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            continue
+        kind = _KINDS_BY_KEY.get(key, key[: -len("_counters")])
+        found[kind] = found.get(kind, 0) + value
+    return found
+
+
+def counters_held(permanent, kind: str) -> int:
+    """How many counters a cost naming *kind* can take off *permanent*:
+    :func:`counters_on` for a printed kind, every counter for
+    :data:`ANY_COUNTER_KIND`."""
+    if kind == ANY_COUNTER_KIND:
+        return sum(counter_kinds_on(permanent).values())
+    return counters_on(permanent, kind)
+
+
+#: The order a payer nobody asks gives up a counter of any kind in: the one
+#: whose loss helps first (a -1/-1 counter, CR 122.1a), then the inert markers
+#: (CR 122.3: nothing reacts to their loss but the card counting them), then
+#: the ones that size a creature, and loyalty — the permanent's life — last.
+_UNASKED_REMOVAL_ORDER = ("-1/-1",)
+_UNASKED_REMOVAL_LAST = ("+1/+0", "+1/+1", "loyalty")
+
+
+def counter_kind_to_remove(permanent, named: "str | None" = None) -> "str | None":
+    """Which counter "remove a counter from <it>" takes off *permanent*, or None.
+
+    *named* is the payer's announcement (CR 602.2b's choices through CR
+    601.2b): answered when the permanent holds that kind and refused (None)
+    when it does not — a named payment is paid as named or not at all. With
+    nothing named, a permanent holding one kind needs no choice, and one
+    holding several takes :data:`_UNASKED_REMOVAL_ORDER`'s deterministic pick.
+    """
+    held = counter_kinds_on(permanent)
+    if named:
+        return named if held.get(str(named), 0) > 0 else None
+    if not held:
+        return None
+    for kind in _UNASKED_REMOVAL_ORDER:
+        if kind in held:
+            return kind
+    inert = sorted(kind for kind in held if kind not in _UNASKED_REMOVAL_LAST)
+    if inert:
+        return inert[0]
+    return next(kind for kind in _UNASKED_REMOVAL_LAST if kind in held)
+
+
 #: The kinds of counter a permanent has been emptied of and not yet announced
 #: for. Written by :func:`remove_counters`, drained by the state-based sweep in
 #: ``engine/mixins/game_ending.py``.
@@ -220,11 +298,15 @@ def remove_counters(permanent, kind: str, count: int = 1) -> int:
 
 
 __all__ = [
+    "ANY_COUNTER_KIND",
     "CAP_CLAIM",
     "EMPTIED_KINDS_MARK",
     "add_counters",
     "counter_cap",
     "counter_cap_line",
+    "counter_kind_to_remove",
+    "counter_kinds_on",
+    "counters_held",
     "counters_key",
     "counters_on",
     "remove_counters",

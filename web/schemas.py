@@ -833,6 +833,12 @@ class GameActionRequest(BaseModel):
     # was finished. The engine checks the word against the options the card
     # printed, which is the same list the client offered.
     chosen_keyword: str | None = None
+    # Power Conduit: "Remove **a counter** from a permanent you control" — which
+    # kind the chosen permanent (``cost_permanent_ids``) gives up, sent with
+    # `activate_ability` for ``chosen_keyword``'s reason (CR 601.2b through
+    # CR 602.2b). None is the engine's pick; a named kind the permanent does
+    # not hold refuses the activation with nothing paid.
+    cost_counter_kind: str | None = None
     # Counterspell / Fork: which spell on the stack to target, as a top-first index
     # into the serialized stack (0 = topmost). Converted server-side to an engine
     # stack index.
