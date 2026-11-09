@@ -315,6 +315,12 @@ class Game(
     # are the only places the key shapes are spelled.
     skip_phase_counts: dict[object, int] = field(default_factory=dict)
     skip_step_counts: dict[object, int] = field(default_factory=dict)
+    # "Creatures don't untap during target player's next untap step." (Blinding
+    # Beam.) A restriction on a *seat's* step rather than a marker on the
+    # permanents there, because CR 611.2c lets it reach creatures that arrive
+    # after it began — ``engine/untap_step_locks.py``. Written when such a
+    # spell resolves and spent by the step it names, nothing else.
+    untap_step_locks: list = field(default_factory=list)
     combat_damage_prevented_until_eot: bool = False
     # Who armed it — the resolved spells' names, as CR 616.1e's prompt names
     # the blanket ("Prevent all combat damage this turn (Fog)"). Set beside

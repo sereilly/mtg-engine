@@ -65,6 +65,34 @@ def _mode_target_index(game, mode):
     None rather than the index beside it, because the index is a *position* and
     the permanent that position now holds is a different object.
     """
+    several = getattr(mode, "permanent_ids", None)
+    if several:
+        # A mode naming several permanents ("Tap two target creatures"): each
+        # id resolved to its slot on the mode's one board, refused whole when
+        # any is gone or sits on another — a mode's slots are positions on
+        # ``target_seat``'s battlefield, and a slot read on the wrong board is
+        # a different permanent.
+        if mode.permanent_id is not None or mode.permanent_index is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="a mode names its permanents once: permanent_ids alone",
+            )
+        slots = []
+        for permanent_id in several:
+            found = game.find_permanent_by_id(permanent_id)
+            if found is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="that permanent is no longer on the battlefield",
+                )
+            seat_found, permanent = found
+            if mode.target_seat is not None and seat_found != mode.target_seat:
+                raise HTTPException(
+                    status_code=422,
+                    detail="a mode's permanents are on one battlefield, its target_seat's",
+                )
+            slots.append(game.battlefield_index_of(permanent))
+        return slots
     if mode.permanent_id is not None:
         found = game.find_permanent_by_id(mode.permanent_id)
         if found is None:

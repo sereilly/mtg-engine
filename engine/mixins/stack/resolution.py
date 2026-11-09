@@ -970,6 +970,45 @@ class StackResolutionMixin:
             if target_idx is None:
                 target_idx = item.target_player_index if item.target_player_index is not None else (1 - item.caster_index)
             target = self.players[target_idx] if 0 <= target_idx < len(self.players) else caster
+            if item.chosen_modes:
+                # CR 707.10 / 700.2g: the copy has the original's *modes*, each
+                # with its targets — every mode of an entwined spell
+                # (CR 702.42b), every chosen mode of a "choose one or more" —
+                # and this arm read the first one alone, so a Forked entwined
+                # One Dozen Eyes made the Beast and no Insects. The modes in
+                # printed order, resumable for the main path's reason.
+                copied_card = item.card
+
+                def apply_copied_mode(mode) -> None:
+                    seat = (
+                        mode.target_player_index
+                        if mode.target_player_index is not None else target_idx
+                    )
+                    if not 0 <= seat < len(self.players):
+                        seat = target_idx
+                    self._apply_spell_text(
+                        caster,
+                        self.players[seat],
+                        copied_card,
+                        text_card=spell_text_card(item),
+                        target_permanent_index=mode.target_permanent_index,
+                        target_permanent_id=mode.target_permanent_id,
+                        x_value=item.x_value,
+                        new_color=item.choices.get("new_color"),
+                        stack_target=mode.target_stack_item,
+                        mode_index=mode.index,
+                        old_color=item.choices.get("old_color"),
+                        divided_targets=item.choices.get("divided_targets"),
+                        choices=item.choices,
+                        trigger_context=item.trigger_context,
+                        target_graveyard_card=mode.target_graveyard_card,
+                    )
+
+                run_resumable(
+                    self, item.chosen_modes, apply_copied_mode,
+                    then=lambda: self.log.append(f"{copied_card.name} (copy) resolved"),
+                )
+                return
             self._apply_spell_text(
                 caster,
                 target,
@@ -1463,8 +1502,16 @@ class StackResolutionMixin:
             # A cast that named no modes at all — the legacy `mode_index=`
             # spelling, and every non-modal spell — leaves the list empty and
             # takes the branch below exactly as it always has.
+            #
+            # **Resumable** (``engine/resumption.py``), because an entwined
+            # spell (CR 702.42b) is the first whose earlier mode stops to ask:
+            # Tooth and Nail searches for two creature cards and then puts up
+            # to two from the hand onto the battlefield, so the second mode
+            # must wait for the search's answer or it chooses from a hand the
+            # search has not yet filled. The loop is the last thing this
+            # function does, as the module requires.
             if chosen_modes:
-                for mode in chosen_modes:
+                def apply_mode(mode) -> None:
                     seat = (
                         mode.target_player_index
                         if mode.target_player_index is not None else target_idx
@@ -1487,7 +1534,12 @@ class StackResolutionMixin:
                         cast_from_zone=cast_from_zone,
                         choices=choices,
                         trigger_context=trigger_context,
+                        # …and the card in a graveyard the mode named, on the
+                        # mode's own channel (an entwined Betrayal of Flesh).
+                        target_graveyard_card=mode.target_graveyard_card,
                     )
+
+                run_resumable(self, chosen_modes, apply_mode)
                 return
             self._apply_spell_text(
                 caster,

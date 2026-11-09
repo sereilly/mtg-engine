@@ -626,18 +626,34 @@ def test_w2g2_every_mode_is_held_to_its_own_targets(name):
                 game = _census_board(card, combat=combat)
         if not problems:
             assert _census_signature(game) == before, f"{name} {tag}: a refused cast changed the board"
+        # A printed count is a count (CR 601.2c): "Tap **two** target
+        # creatures" (Blinding Beam's first mode, the first exact count >1 a
+        # census mode printed) names that many, so a legal announcement here is
+        # that many legal targets on one side — and one alone is refused for
+        # the count, which is the gate working, not the target refused.
+        count = int(spec.get("max_targets") or 1) if spec.get("exact_targets") else 1
         # a legal one is accepted, on each side that has one
         for seat in sorted({seat for seat, _ in legal}):
             game = _census_board(card, combat=combat)
-            target = game.permanent_at(*sorted(s for s in legal if s[0] == seat)[-1])
-            result = _census_cast(game, card, index, target_permanent_ids=[target.permanent_id])
+            slots = sorted(s for s in legal if s[0] == seat)[-count:]
+            if len(slots) < count:
+                continue
+            named = [game.permanent_at(*slot) for slot in slots]
+            target = named[-1]
+            result = _census_cast(
+                game, card, index, target_permanent_ids=[p.permanent_id for p in named],
+            )
             if not result.supported:
                 problems.append(f"{tag}: legal {target.card.name} (seat {seat}) refused: {result.details}")
         # CR 608.2b: the named target gone, nothing else is touched
         game = _census_board(card, combat=combat)
-        target = game.permanent_at(*sorted(legal)[-1])
-        if _census_cast(game, card, index, target_permanent_ids=[target.permanent_id]).supported:
-            game.remove_from_battlefield(target)
+        named = [game.permanent_at(*slot) for slot in sorted(legal)[-count:]]
+        target = named[-1]
+        if _census_cast(
+            game, card, index, target_permanent_ids=[p.permanent_id for p in named],
+        ).supported:
+            for gone in named:
+                game.remove_from_battlefield(gone)
             before = _census_signature(game)
             resolve_stack(game)
             if _census_signature(game) != before:

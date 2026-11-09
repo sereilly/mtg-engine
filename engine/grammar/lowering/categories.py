@@ -653,6 +653,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_regeneration_to_target_creature": "regeneration",
     "grant_regeneration_to_self": "regeneration",
     "grant_regeneration_to_enchanted_creature": "regeneration",
+    # "Regenerate each creature you control." (Wail of the Nim): a shield on
+    # every permanent a noun phrase names rather than on one. Same family, so
+    # GRAMMAR_CATEGORIES is unchanged.
+    "grant_regeneration_to_each_matching": "regeneration",
     # "Target creature can't be regenerated this turn" is the negative half of
     # the same subject, so it shares the category rather than minting one that
     # would always be switched on and off alongside it.
@@ -805,6 +809,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # sentence does is hold a permanent through one untap step, which is the
     # tapping family's business either way.
     "skip_next_untap": "tapping",
+    # "Creatures don't untap during target player's next untap step."
+    # (Blinding Beam.) The same restriction held on a seat's step rather than
+    # on permanents (CR 611.2c) — the same family, so GRAMMAR_CATEGORIES is
+    # unchanged.
+    "lock_next_untap_step": "tapping",
     "add_mana_from_text": "mana",
     # "Note the type of mana spent to pay this activation cost."
     # (Jeweled Amulet.) No mana is produced; what the instruction does is

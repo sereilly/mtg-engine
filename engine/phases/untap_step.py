@@ -20,6 +20,7 @@ from ..handlers.tapping import (SKIP_NEXT_UNTAP_SEAT,
                                 UNTAP_LOCK_WHILE_PRESENT_KEY,
                                 UNTAP_LOCK_WHILE_TAPPED_KEY, untap_lock_ids)
 from ..land_types import end_land_type_changes_from
+from ..untap_step_locks import spend_untap_step_locks, untap_step_locks_for
 from ..control import LINKED_CONTROL_CONDITIONS
 from ..named_counters import counters_on
 from ..turn_state import record_turn_start_states
@@ -312,6 +313,13 @@ class UntapStepMixin:
                 blocked.append(
                     (restriction.blocked, self.controller_index_of(perm), perm)
                 )
+        # "Creatures don't untap during **target player's** next untap step."
+        # (Blinding Beam.) A record on the seat's step rather than on a
+        # permanent (``engine/untap_step_locks.py``, CR 611.2c), so it reaches
+        # a creature that arrived after the spell resolved — one more entry in
+        # the same family as the printed blocks above, with no source.
+        for lock in untap_step_locks_for(self, player_index):
+            blocked.append((lock.described, lock.observer, None))
         return {
             "skip_all_source": skip_all_source,
             "limits": limits,
@@ -353,6 +361,7 @@ class UntapStepMixin:
         controller, so a narrowed printing ("creatures and lands") untaps only
         what it names.
         """
+        step_locks = untap_step_locks_for(self, player_index)
         by_seat: dict[int, list[tuple[object, dict]]] = {}
         for source, seat, described in others_untaps:
             by_seat.setdefault(seat, []).append((source, described))
@@ -368,6 +377,18 @@ class UntapStepMixin:
                 untapped = 0
                 for permanent in list(self.controlled_by(seat)):
                     if not permanent.tapped or not self.is_on_battlefield(permanent):
+                        continue
+                    # …except a restriction on *this step itself* rather than
+                    # on a player's own permanents: "Creatures don't untap
+                    # during target player's next untap step" binds whatever
+                    # would untap in it, a Seedborn Muse's included (Blinding
+                    # Beam's 2013-06-07 ruling).
+                    if any(
+                        subject_matches(
+                            self, permanent, lock.described, observer=lock.observer,
+                        )
+                        for lock in step_locks
+                    ):
                         continue
                     if not any(
                         subject_matches(
@@ -961,6 +982,9 @@ class UntapStepMixin:
         # untap step (Stasis) is a step that does not happen (CR 500.11), so it is
         # not yet the "next untap step" the spell named and the marker waits for
         # one that does.
+        # …and a lock on this seat's step (``engine/untap_step_locks.py``) is
+        # spent by the same rule: this is the step it named.
+        spend_untap_step_locks(self, player_index)
         for permanent in self.controlled_by(player_index):
             # A count, not a flag: "its controller's next **two** untap steps"
             # (Telekinesis) spends one of them here and waits for the other, and

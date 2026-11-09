@@ -129,6 +129,195 @@ def test_w1g3_trash_for_treasure_cannot_target_what_it_sacrifices(set_pool):
 
 # ==== W1G4 ==========================================================
 # W1G4's tests go between this line and the "end W1G4" line.
+#
+# Entwine (CR 702.42) on the sorceries: an entwined cast pays the offer and
+# names every mode, which resolve in printed order (CR 702.42b) — one after
+# the other, an earlier mode's prompt answered before a later mode runs.
+
+from engine import Game as _w1g4_Game
+from engine import PlayerState as _w1g4_PlayerState
+from engine.models import Permanent as _w1g4_Permanent
+from tests.helpers import resolve_stack as _w1g4_resolve_stack
+
+
+def _w1g4_card(set_pool, name):
+    """A card by name, from Mirrodin first and Alpha for the fillers."""
+    mrd = set_pool("MRD")
+    return mrd[name] if name in mrd else set_pool("LEA")[name]
+
+
+def _w1g4_table(set_pool, hand=(), *, mine=(), theirs=(), graveyard=(),
+                library=None, opponent_hand=(), interactive=()):
+    """Seat 0 (A) to act in its first main phase, mana off unless a test
+    turns it on; each named permanent untapped and able to act."""
+    card = lambda name: _w1g4_card(set_pool, name)  # noqa: E731
+    game = _w1g4_Game(players=[
+        _w1g4_PlayerState(
+            "A", hand=[card(n) for n in hand],
+            library=[card(n) for n in (library or ["Forest"] * 12)],
+            graveyard=[card(n) for n in graveyard],
+        ),
+        _w1g4_PlayerState(
+            "B", hand=[card(n) for n in opponent_hand],
+            library=[card("Forest")] * 12,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _w1g4_Permanent(card=card(name))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata["summoning_sickness_turn"] = -99
+            placed[seat].append(permanent)
+    game.start_turn(0)
+    game._settle()
+    return game, placed[0], placed[1]
+
+
+def _w1g4_names(permanents):
+    return sorted(p.card.name for p in permanents)
+
+
+def test_w1g4_one_dozen_eyes_entwined_makes_both_kinds_of_token(set_pool):
+    """{5}{G} and the entwine's {G}{G}{G}: a 5/5 Beast and five 1/1 Insects."""
+    game, _mine, _theirs = _w1g4_table(set_pool, ["One Dozen Eyes"])
+    game.enforce_mana_costs = True
+    game.players[0].mana_pool["G"] = 9
+    result = game.cast_from_hand(0, "One Dozen Eyes", optional_cost_payments={"{G}{G}{G}": 1})
+    assert result.supported, result.details
+    tokens = _w1g4_names(game.players[0].battlefield)
+    assert tokens == ["Beast Token"] + ["Insect Token"] * 5, tokens
+    assert game.players[0].mana_pool["G"] == 0
+
+
+def test_w1g4_a_copy_of_an_entwined_spell_is_entwined(set_pool):
+    """CR 707.10: a copy copies "all decisions made for it, including modes …
+    and additional or alternative costs" (and CR 700.2g, the modes). Fork's
+    copy of an entwined One Dozen Eyes makes both kinds of token too."""
+    game, _mine, _theirs = _w1g4_table(set_pool, ["One Dozen Eyes", "Fork"])
+    queued = game.queue_from_hand(0, "One Dozen Eyes", optional_cost_payments={"{G}{G}{G}": 1})
+    assert queued.supported, queued.details
+    forked = game.queue_from_hand(0, "Fork", target_stack_index=0)
+    assert forked.supported, forked.details
+    _w1g4_resolve_stack(game)
+    tokens = _w1g4_names(game.players[0].battlefield)
+    assert tokens == ["Beast Token"] * 2 + ["Insect Token"] * 10, (tokens, game.log)
+
+
+def test_w1g4_promise_of_power_entwined_counts_the_cards_it_drew(set_pool):
+    """The ruling (2004-12-01): "you draw five cards, then lose five life, then
+    put the Demon token onto the battlefield. The five cards you draw count
+    toward the Demon's power and toughness.\""""
+    game, _mine, _theirs = _w1g4_table(set_pool, ["Promise of Power"])
+    result = game.cast_from_hand(0, "Promise of Power", optional_cost_payments={"{4}": 1})
+    assert result.supported, result.details
+    player = game.players[0]
+    assert len(player.hand) == 5 and player.life == 15
+    (demon,) = player.battlefield
+    assert demon.card.name == "Demon Token"
+    assert (demon.effective_power, demon.effective_toughness) == (5, 5)
+    assert game._has_keyword(demon, "flying")
+
+
+def test_w1g4_solar_tide_entwined_sacrifices_two_lands_and_destroys_both_sizes(set_pool):
+    game, mine, theirs = _w1g4_table(
+        set_pool, ["Solar Tide"], mine=["Plains", "Plains", "Plains", "Grizzly Bears"],
+        theirs=["Hill Giant", "Llanowar Elves"],
+    )
+    result = game.cast_from_hand(0, "Solar Tide", optional_cost_payments={"sacrifice two lands": 1})
+    assert result.supported, result.details
+    assert not any(game.is_on_battlefield(p) for p in (mine[3], *theirs)), game.log
+    assert _w1g4_names(game.players[0].battlefield) == ["Plains"]
+
+    game, _mine, theirs = _w1g4_table(
+        set_pool, ["Solar Tide"], mine=["Plains"], theirs=["Hill Giant", "Llanowar Elves"],
+    )
+    refused = game.cast_from_hand(0, "Solar Tide", optional_cost_payments={"sacrifice two lands": 1})
+    assert not refused.supported
+    assert all(game.is_on_battlefield(p) for p in theirs)
+
+
+def test_w1g4_temporal_cascade_entwined_shuffles_then_draws_seven(set_pool):
+    """Printed order: every hand and graveyard into its library, then seven
+    cards each. The spell itself is not shuffled in (the 2013-07-01 ruling:
+    it goes to the graveyard only once it has finished resolving)."""
+    game, _mine, _theirs = _w1g4_table(
+        set_pool, ["Temporal Cascade", "Hill Giant"], graveyard=["Craw Wurm"],
+        opponent_hand=["Grizzly Bears"],
+    )
+    result = game.cast_from_hand(0, "Temporal Cascade", optional_cost_payments={"{2}": 1})
+    assert result.supported, result.details
+    for player in game.players:
+        assert len(player.hand) == 7, game.log
+    caster = game.players[0]
+    assert [c.name for c in caster.graveyard] == ["Temporal Cascade"]
+    seen = [c.name for c in caster.hand + caster.library]
+    assert "Hill Giant" in seen and "Craw Wurm" in seen
+    opponent = game.players[1]
+    assert "Grizzly Bears" in [c.name for c in opponent.hand + opponent.library]
+
+
+def test_w1g4_tooth_and_nail_entwined_puts_the_creatures_it_found(set_pool):
+    """The second mode waits for the first's search (a resumable loop over the
+    modes): the creatures found go to the hand, and only then is the hand
+    chosen from — interactive seat answering both prompts."""
+    game, _mine, _theirs = _w1g4_table(
+        set_pool, ["Tooth and Nail"],
+        library=["Craw Wurm", "Forest", "Hill Giant"] + ["Forest"] * 6,
+        interactive=(0,),
+    )
+    result = game.cast_from_hand(0, "Tooth and Nail", optional_cost_payments={"{2}": 1})
+    assert result.supported, result.details
+    assert [c.kind for c in game.pending_choices] == ["search_library"]
+    assert not game.players[0].battlefield
+    assert game.confirm_search_library_picks(
+        0, [{"zone": "library", "index": 0}, {"zone": "library", "index": 2}],
+    )
+    assert [c.kind for c in game.pending_choices] == ["choose_cards_in_hand"]
+    hand = game.players[0].hand
+    assert sorted(c.name for c in hand) == ["Craw Wurm", "Hill Giant"]
+    assert game.confirm_choose_cards_in_hand(0, [0, 1])
+    _w1g4_resolve_stack(game)
+    assert _w1g4_names(game.players[0].battlefield) == ["Craw Wurm", "Hill Giant"], game.log
+    assert [c.name for c in game.players[0].graveyard] == ["Tooth and Nail"]
+
+
+def test_w1g4_tooth_and_nail_entwined_headless(set_pool):
+    """The same cast for a seat nobody asks: the defaults find two creature
+    cards and put them onto the battlefield."""
+    game, _mine, _theirs = _w1g4_table(
+        set_pool, ["Tooth and Nail"],
+        library=["Craw Wurm", "Forest", "Hill Giant"] + ["Forest"] * 6,
+    )
+    result = game.cast_from_hand(0, "Tooth and Nail", optional_cost_payments={"{2}": 1})
+    assert result.supported, result.details
+    # The search suspends the resolution (it holds the spell off the stack)
+    # even for a seat nobody asks; its default answer is what carries on.
+    game.auto_resolve_pending_choices()
+    assert _w1g4_names(game.players[0].battlefield) == ["Craw Wurm", "Hill Giant"], game.log
+    assert [c.name for c in game.players[0].graveyard] == ["Tooth and Nail"]
+
+
+def test_w1g4_journey_of_discovery_entwined_finds_lands_and_plays_them(set_pool):
+    """Two basic lands into the hand, then two land plays beyond the turn's
+    one: three lands played this turn."""
+    game, _mine, _theirs = _w1g4_table(
+        set_pool, ["Journey of Discovery", "Swamp"],
+        library=["Plains", "Grizzly Bears", "Island"] + ["Hill Giant"] * 6,
+    )
+    result = game.cast_from_hand(
+        0, "Journey of Discovery", optional_cost_payments={"{2}{G}": 1},
+    )
+    assert result.supported, result.details
+    game.auto_resolve_pending_choices()
+    assert sorted(c.name for c in game.players[0].hand) == ["Island", "Plains", "Swamp"], game.log
+    game.enforce_mana_costs = True
+    for land in ("Swamp", "Plains", "Island"):
+        played = game.cast_from_hand(0, land)
+        assert played.supported, (land, played.details)
+    assert _w1g4_names(game.players[0].battlefield) == ["Island", "Plains", "Swamp"]
 
 # ==== end W1G4 ======================================================
 

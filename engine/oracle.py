@@ -60,6 +60,7 @@ from .oracle_types import (ModalOption,
                            TriggerCondition, compilation_cache)
 from .auras import unclaimed_aura_lines
 from .cycling import unread_cycling_line
+from .entwine import unsupported_entwine
 from .flashback import (FLASHBACK_CLAIM, flashback_x_unannounced,
                         unread_flashback_line)
 from .fading import unread_fading_line
@@ -364,6 +365,16 @@ def _compile_card_oracle(
                 f"printed cost nothing charges: {unread_cost}",
                 normalized_text,
             )
+
+    # An **entwine** line the CR 702.42a rewrite could not read, or one printed
+    # on a card with no modes for it to choose (``engine/entwine.py``). Beside
+    # the uncharged-cost gate and for its reason: before the rewrite existed,
+    # all eleven readable Mirrodin printings compiled as a plain "choose one"
+    # with the keyword dropped — supported, zero hollow lines, and a cost and
+    # a whole mode choice that no cast could ever make.
+    entwine_refusal = unsupported_entwine(printed_text, oracle_text, name)
+    if entwine_refusal is not None:
+        return OracleProgram(False, "unsupported", entwine_refusal, normalized_text)
 
     # "…if it was kicked **with its {5} kicker**" on a card whose kicker line
     # offers no {5} (CR 702.33f: the ability is linked to one of the kicker

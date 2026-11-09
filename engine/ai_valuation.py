@@ -939,6 +939,7 @@ SHIELD_KINDS = frozenset({
     "grant_half_prevention_shield",
     "grant_prevention_shield",
     "grant_recipient_class_prevention_shield",
+    "grant_regeneration_to_each_matching",
     "grant_regeneration_to_enchanted_creature",
     "grant_regeneration_to_self",
     "grant_regeneration_to_target_creature",
@@ -1348,6 +1349,10 @@ OFFER_ADDS = "more_effect"
 #: on the board (Undergrowth's paid Fog spares red creatures — the caster's and
 #: everybody else's).
 OFFER_ALTERS = "other_effect"
+#: The spell chooses **every** mode (CR 702.42a, entwine). Not a larger version
+#: of the mode being weighed, so the per-mode offer loop declines it and
+#: ``ai_entwine.entwined_cast`` weighs it as a cast of its own.
+OFFER_ENTWINES = "entwines"
 
 
 @dataclass(frozen=True)
@@ -1387,8 +1392,11 @@ def _payload_names(value, key: str) -> bool:
 
 def _what_an_offer_buys(card: CardDefinition, key: str) -> str:
     from .cast_costs import buyback_paid, kicked
+    from .entwine import entwine_offered
 
     record = {"additional_costs_paid": {key: 1}}
+    if entwine_offered(card, key):
+        return OFFER_ENTWINES
     if buyback_paid(card, record):
         return OFFER_RETURNS_SPELL
     if kicked(card, record):

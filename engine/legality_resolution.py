@@ -479,10 +479,13 @@ class ResolutionTargetsMixin:
             legality.append(legal)
             if addresses is not None:
                 addresses.append(("permanent", "item", position, permanent_id))
-        # A graveyard stamp is recorded on the item alone — a "choose one or
-        # more" mode carries no such field — so it is read for the item's own
-        # announcement and for nothing else.
-        stamps = item.target_graveyard_card if holder is item else None
+        # A graveyard stamp is recorded on the announcement that made it: the
+        # item's own, or a chosen mode's (an entwined Betrayal of Flesh's
+        # "return target creature card", ``ChosenMode.target_graveyard_card``).
+        stamps = (
+            item.target_graveyard_card if holder is item
+            else getattr(holder, "target_graveyard_card", None)
+        )
         for stamp in (stamps if isinstance(stamps, list) else [stamps]):
             if stamp is None:
                 continue

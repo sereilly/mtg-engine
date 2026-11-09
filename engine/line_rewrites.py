@@ -226,6 +226,7 @@ def expand_ability_lines(
     """
     from .cast_costs import expand_buyback_lines, expand_kicker_lines
     from .echo import expand_echo_lines
+    from .entwine import expand_entwine_lines
     from .fading import expand_fading_lines
     from .self_reference import expand_short_self_references
 
@@ -256,6 +257,12 @@ def expand_ability_lines(
     # *other* sentences ask whether it was paid; that is ``cast_costs.kicked``,
     # not a rewrite.
     oracle_text = expand_kicker_lines(oracle_text)
+    # CR 702.42a's, kicker's shape: "Entwine [cost]" is an additional cost the
+    # caster may pay to choose every mode (``engine/entwine.py``), so the line
+    # becomes the CR 601.2b offer and the mode half is the cast's
+    # ``mode_choices``. A whole keyword line in, one cost sentence out, read by
+    # none of the rewrites below.
+    oracle_text = expand_entwine_lines(oracle_text)
 
     # Its own statement rather than another layer of the nested call below. The
     # composition is what every keyword-as-a-rewrite adds itself to, so it is

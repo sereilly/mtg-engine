@@ -19,6 +19,7 @@ spell that is not a copy is ``retargeting.py``'s.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from ..color_changes import forget_spell_color_change, recolor_spell
@@ -297,7 +298,19 @@ def _copy_of_spell(copied: StackItem, controller_index: int) -> StackItem:
         # rather than one per choice the original made.
         choices=dict(copied.choices),
         chosen_mode_index=copied.chosen_mode_index,
-        chosen_modes=copied.chosen_modes,
+        # The modes as their own objects too (CR 707.10: the copy has the
+        # original's modes and targets — an entwined spell's every mode): a
+        # mode's slot CR 608.2b blanks on one must not be blanked on the other,
+        # which a shared ``ChosenMode`` would do.
+        chosen_modes=tuple(
+            replace(
+                mode,
+                target_permanent_index=as_target_slots(mode.target_permanent_index),
+                target_permanent_id=as_target_ids(mode.target_permanent_id),
+                target_graveyard_card=as_graveyard_stamps(mode.target_graveyard_card),
+            )
+            for mode in copied.chosen_modes
+        ),
         target_stack_item=copied.target_stack_item,
         is_copy=True,
     )

@@ -217,7 +217,8 @@ class CastAnnouncementMixin:
         return hand_index, permission, source_seat, source_zone
 
     def _resolve_chosen_modes(
-        self, card, mode_choices: list[dict] | None
+        self, card, mode_choices: list[dict] | None, *,
+        optional_paid: dict | None = None,
     ) -> tuple[tuple, str | None]:
         """The ``ChosenMode`` list for this cast, or a refusal naming the fault.
 
@@ -234,10 +235,18 @@ class CastAnnouncementMixin:
         The list comes back in **printed** order whatever order it arrived in,
         because that is the order the modes resolve in (CR 608.2c) — sorting
         once here is what lets the resolution loop be a loop rather than a sort.
+
+        **Entwine** (CR 702.42a) is the one way a "choose one" card takes more:
+        *optional_paid* is the cast's CR 601.2b answer, and a paid entwine is
+        every mode (``entwine.entwine_mode_refusal`` holds the two together).
+        A headless cast that paid it and named no mode was given every mode
+        before this ran (``entwine.entwined_mode_choices``).
         """
+        from ...entwine import entwine_cost, entwine_mode_refusal, entwined
         from ...game_types import ChosenMode, as_target_slots
 
         program = compile_card_oracle(card)
+        entwine_paid = entwined(card, {"additional_costs_paid": optional_paid or {}})
         # "**An opponent** chooses one —" (CR 700.2e). The choice is made at the
         # same moment (CR 601.2b) but by somebody else, so an announcement that
         # names a mode is not a legal announcement — it is the caster taking the
@@ -255,7 +264,14 @@ class CastAnnouncementMixin:
             return (), None
         if not program.modes:
             return (), f"{card.name} has no modes to choose"
-        if len(mode_choices) > 1 and not program.modes_at_least:
+        if entwine_cost(card.oracle_text or "") is not None:
+            refusal = entwine_mode_refusal(
+                card, len(program.modes),
+                [entry.get("index") for entry in mode_choices], entwine_paid,
+            )
+            if refusal is not None:
+                return (), refusal
+        elif len(mode_choices) > 1 and not program.modes_at_least:
             return (), f"{card.name} chooses one mode, not {len(mode_choices)}"
         seen: set[int] = set()
         chosen: list[ChosenMode] = []

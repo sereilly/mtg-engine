@@ -41,6 +41,7 @@ from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
 from ...damage_ledger import record_cast
 from ...counter_conditions import spend_next_spell_promises
 from ...divided_damage import divided_entry, stamped_entry
+from ...entwine import entwined_mode_choices
 from ...face_down import announced_morph_cost, face_down_card
 from ...faces import choose_a_face_refusal, spell_named
 from ...mana_combination import MANA_COMBINATION, split_refusal
@@ -447,6 +448,20 @@ class SpellCastingMixin:
         if combination_refusal is not None:
             return refuse(card_name, None, combination_refusal)
         classification = classify_card(card)
+        # CR 702.42a: a paid entwine **is** the choice of every mode, so a cast
+        # that paid it and named none is given every mode here — before the
+        # bare-cast default below, which defaults a *cast-level* target only
+        # where no mode was listed (``entwine.entwined_mode_choices``).
+        mode_choices, entwine_denial = entwined_mode_choices(
+            card, mode_choices, _taken_offers(optional_cost_payments),
+            names_cast_targets=target_player_index is not None or names_an_object(
+                target_permanent_index, target_permanent_ids,
+                target_stack_index, target_role_refs, divided_targets,
+            ),
+            mode_index=mode_index,
+        )
+        if entwine_denial is not None:
+            return refuse(card.name, classification.effect_kind, entwine_denial)
         # The roles announcement's seats **by slot** where several roles may
         # each be answered by a player ("Choose any number of target players
         # or planeswalkers", Kaboom!), even when one was named: the scalar
@@ -955,7 +970,9 @@ class SpellCastingMixin:
         # "Choose one or more —": the modes are chosen as the spell is cast
         # (CR 601.2b) and are checked here, before any mana leaves the pool, so
         # a card that does not print the head cannot be handed two modes.
-        chosen_modes, mode_denial = self._resolve_chosen_modes(card, mode_choices)
+        chosen_modes, mode_denial = self._resolve_chosen_modes(
+            card, mode_choices, optional_paid=optional_paid,
+        )
         if mode_denial is not None:
             return refuse(card.name, classification.effect_kind, mode_denial)
         for mode in chosen_modes:

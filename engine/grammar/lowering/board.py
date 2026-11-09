@@ -44,6 +44,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import halved_count_spec
 from ._chosen_members import _lower_sacrifice_one_of_chosen
+from ._filters import testable_filter_payload
 from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload,
                       _is_enchanted, _is_source, player_deed_payload)
@@ -64,6 +65,8 @@ def _lower_regenerate(node: ast.Regenerate) -> tuple[OracleInstruction, ...]:
         return (OracleInstruction("grant_regeneration_to_enchanted_creature", "", {}),)
     if _is_source(subject):
         return (OracleInstruction("grant_regeneration_to_self", "", {}),)
+    if isinstance(subject, ast.TargetSpec) and subject.quantifier in ("each", "all"):
+        return _lower_regenerate_each(node, subject)
     if not (isinstance(subject, ast.TargetSpec) and subject.quantifier == "target"):
         raise LoweringError("no handler for regenerating this subject", node=node)
     filt = subject.filter
@@ -82,6 +85,37 @@ def _lower_regenerate(node: ast.Regenerate) -> tuple[OracleInstruction, ...]:
     payload: dict[str, object] = dict(carried)
     _describe_targets(payload, subject)
     return (OracleInstruction("grant_regeneration_to_target_creature", "", payload),)
+
+
+#: The seats a group regeneration's noun phrase may name: the resolving
+#: controller ("each creature **you control**", CR 109.5), its opponents, or
+#: nobody. A seat some earlier sentence or event fixed ("that player",
+#: "target player") names nobody the shield's handler is handed, so it refuses.
+_REGENERATE_EACH_SEATS = frozenset({None, "you", "opponent"})
+
+
+def _lower_regenerate_each(
+    node: ast.Regenerate, subject: ast.TargetSpec,
+) -> tuple[OracleInstruction, ...]:
+    """"Regenerate **each creature you control**." (Wail of the Nim.)
+
+    CR 701.19a: one shield per permanent the phrase names as the effect
+    resolves — CR 611.2c fixes the set then, so a creature arriving afterwards
+    has none. Untargeted, so the payload is the printed noun phrase alone, and
+    every key of it must be one ``subject_matches`` tests or the shield would
+    land on permanents the card never named.
+    """
+    described = testable_filter_payload(
+        subject.filter,
+        refusal="the group regeneration cannot test this restriction",
+        node=node,
+    )
+    if described.get("controller") not in _REGENERATE_EACH_SEATS:
+        raise LoweringError(
+            "a group regeneration names no seat it can resolve for "
+            f"{described.get('controller')!r}", node=node,
+        )
+    return (OracleInstruction("grant_regeneration_to_each_matching", "", described),)
 
 
 # Who a sacrifice can be owed by. "You" is the absent value — a bare imperative
