@@ -436,6 +436,17 @@ asked). "Players can't gain life" (Forsaken Wastes) is CR 119.7's ban, asked by
 `engine/life_prohibitions.py` *before* any replacement is gathered, and it
 stops Lich as well.
 
+The same shape one rule over: "You can't lose the game and your opponents
+can't win the game" (Platinum Angel) is a ban on an *outcome*,
+`engine/game_result_bans.py`, read off the board on every ask so it lifts the
+moment the Angel leaves (CR 611.3b). **Every loss the engine performs goes
+through `Game.lose_the_game`**, which asks it — CR 704.5a/b/c, commander damage,
+and every effect that says a player loses (`tests/engine/test_mrd_w1g10_loss_funnel.py`
+fails a `.lost = True` written anywhere but the funnel, a concession and a
+draw); a "wins the game" effect asks `player_cant_win` before anyone loses to
+it. A concession (CR 104.3a), a draw (CR 104.4) and CR 104.2a's last player
+standing are outside it, per the Angel's rulings.
+
 ### Replacements that need a decision
 
 Some replacement effects are optional ("you *may* put it on top of your library

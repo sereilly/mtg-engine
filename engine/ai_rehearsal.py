@@ -84,6 +84,14 @@ _GAME_BOOKKEEPING = frozenset({
     # is where the end-of-turn reading is taken (`untap_for_the_next_turn`),
     # so every cast would read as having changed it.
     "last_own_turn_activity",
+    # How many cards each seat held as the turn began (Mindstorm Crown,
+    # `begin_turn_bookkeeping`). Nothing a cast does writes it, but a reading
+    # taken "as the next turn begins" (`untap_for_the_next_turn`, the combat
+    # trick census's `lasting_digest`) records the hand the cast left — and
+    # the hand is already digested by name, with the spell's own trip put back
+    # (`same_position`). Read as a field it counted that trip a second time,
+    # so every cast was a lasting change.
+    "hand_sizes_at_turn_start",
 })
 
 #: Rehearsals that **raised**, by what was being rehearsed and what the
