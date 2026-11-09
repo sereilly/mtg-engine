@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**435 / 643 tracked rules covered (67%)** — 3552 tests, 0 unannotated.
+**435 / 643 tracked rules covered (67%)** — 3555 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -341,7 +341,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **121.3** If there are no cards in a player’s library and an effect offers that player the choice to draw a...
 - [x] **121.4** A player who attempts to draw a card from a library with no cards in it loses the game the next t... *(5 tests)*
 - [x] **121.5** If an effect moves cards from a player’s library to that player’s hand without using the word “dr... *(1 tests)*
-- [x] **121.6** Some effects replace card draws. *(1 tests)*
+- [x] **121.6** Some effects replace card draws. *(2 tests, subrules a)*
 - [ ] **121.7** Some replacement effects and prevention effects result in one or more card draws. In such a case,...
 - [ ] **121.8** If a spell or ability causes a card to be drawn while another spell is being cast, the drawn card...
 - [ ] **121.9** If an effect gives a player the option to reveal a card as they draw it, that player may look at ...
@@ -540,7 +540,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **406.1** The exile zone is essentially a holding area for objects. Some spells and abilities exile an obje... *(2 tests)*
 - [x] **406.2** To exile an object is to put it into the exile zone from whatever zone it’s currently in. An exil... *(2 tests)*
-- [x] **406.3** Exiled cards are, by default, kept face up and may be examined by any player at any time. Cards “... *(3 tests)*
+- [x] **406.3** Exiled cards are, by default, kept face up and may be examined by any player at any time. Cards “... *(5 tests, subrules a)*
 - [ ] **406.4** Face-down cards in exile should be kept in separate piles based on when they were exiled and how ...
 - [ ] **406.5** Exiled cards that might return to the battlefield or any other zone should be kept in separate pi...
 - [ ] **406.6** An object may have one ability printed on it that causes one or more cards to be exiled, and anot...
@@ -804,7 +804,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **614.8** Regeneration is a destruction-replacement effect. The word “instead” doesn’t appear on the card b... *(9 tests)*
 - [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(17 tests)*
 - [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(6 tests, subrules a)*
-- [x] **614.11** Some effects replace card draws. These effects are applied even if no cards could be drawn becaus... *(4 tests)*
+- [x] **614.11** Some effects replace card draws. These effects are applied even if no cards could be drawn becaus... *(5 tests)*
 - [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(38 tests, subrules a)*
 - [x] **614.13** An effect that modifies how a permanent enters the battlefield may cause other objects to change ... *(2 tests, subrules a)*
 - [ ] **614.14** An object may have one ability printed on it that generates a replacement effect which causes one...
@@ -830,7 +830,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(91 tests, subrules efg)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(92 tests, subrules efg)*
 - [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General
@@ -928,7 +928,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **704.2** State-based actions are checked throughout the game and are not controlled by any player. *(1 tests)*
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(13 tests)*
 - [x] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol... *(1 tests)*
-- [x] **704.5** The state-based actions are as follows: *(107 tests, subrules abcdefghijkmnpqrsz)*
+- [x] **704.5** The state-based actions are as follows: *(108 tests, subrules abcdefghijkmnpqrsz)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*

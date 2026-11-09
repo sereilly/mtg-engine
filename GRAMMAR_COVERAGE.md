@@ -55,7 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | SCG | 143 | 262 | 82.4% | 82.1% | 55.0% | 120 |
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| MRD *(measured)* | 291 | 456 | 87.3% | 87.3% | 64.7% | 236 |
+| MRD *(measured)* | 291 | 456 | 87.9% | 87.9% | 64.9% | 237 |
 | **All (shipped)** | **8992** | **13323** | **90.0%** | **89.5%** | **62.1%** | **7036** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -68,8 +68,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 869 | 451 | expected a subject |  |
-| 190 | 97 | unrecognized effect verb |  |
+| 868 | 450 | expected a subject |  |
+| 188 | 95 | unrecognized effect verb |  |
 | 136 | 70 | unconsumed text |  |
 | 71 | 52 | granted ability in quotes | phase 3 (quoted abilities) |
 | 41 | 8 | expected what this creature can't block, or a duration |  |
@@ -6736,6 +6736,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, that player may put a +1/+1 counter on target creature of their choice.`
 - **Liability**
   - `Whenever a nontoken permanent is put into a player's graveyard from the battlefield, that player loses 1 life.`
+- **Liar's Pendulum**
+  - `{2}, {T}: Choose a card name. Target opponent guesses whether a card with that name is in your hand. You may reveal your hand. If you do and your opponent guessed wrong, draw a card.`
 - **Liberate**
   - `Exile target creature you control. Return that card to the battlefield under its owner's control at the beginning of the next end step.`
 - **Liberated Dwarf**
