@@ -82,11 +82,13 @@ def _card_put_into_graveyard_filter(
 
     **another**: the ability's own source is excluded and nothing else is.
     Compared by `CardDefinition` identity, which is the identity this engine
-    has — a deck repeats one immutable definition per copy, so a second Planar
-    Void milled while the first is on the battlefield is skipped. That is the
-    wrong half of a rare pair and it is chosen deliberately: the other reading
-    has Planar Void exiling itself as it dies, which is the one case the printed
-    word forbids.
+    has, and by the id of the permanent the moved card was. A deck repeats one
+    immutable definition per copy, so a second Planar Void milled while the
+    first is on the battlefield is skipped — unless a graveyard already held
+    that object, in which case it lands as a new one and is exiled
+    (``put_card_into_graveyard``). That is the wrong half of a rare pair and it
+    is chosen deliberately: the other reading has Planar Void exiling itself as
+    it dies, which is the one case the printed word forbids.
 
     A row carrying neither marker admits every card, which is what the sentence
     without either word says.
@@ -115,6 +117,14 @@ def _card_put_into_graveyard_filter(
             owner=game.players[event.payload["owner_index"]],
         )
     if "another_card" in payload:
+        # …and not the watcher's own death either: a card leaving the
+        # battlefield can land as a new object (``put_card_into_graveyard``,
+        # CR 400.7, when a graveyard already held its card's object), so the
+        # move names the permanent it was, and a dying Planar Void is still
+        # itself.
+        moved = event.payload.get("moved_permanent_id")
+        if moved is not None and moved == permanent.permanent_id:
+            return False
         return event.subject is not permanent.card
     # "Whenever **a black card** is put into **an opponent's** graveyard from
     # anywhere." (Compost.) The third printed narrowing of this one condition,

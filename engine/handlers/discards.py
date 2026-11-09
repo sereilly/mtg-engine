@@ -420,7 +420,9 @@ def _resolve_one_discard(
         if not discarded_onto_battlefield(
             game, player, card, game.discard_cause_seat(cause_seat)
         ) and not exile_madness_card(game, player, card):
-            game.put_card_into_graveyard(player, card)
+            # The object the graveyard now holds is what "that card" names
+            # from here on (CR 400.7, ``put_card_into_graveyard``).
+            card = game.put_card_into_graveyard(player, card) or card
             game.log.append(f"{player.name} discarded {card.name}")
         if took is not None:
             took.append(card)

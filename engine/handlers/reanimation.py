@@ -1359,13 +1359,13 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
             if _card_matches_filter(card, described, game=game, owner=player)
         ]
         if only_this_turn:
-            # Matched by **count of entries**, not by membership: two copies of
-            # a card in a deck are the same immutable ``CardDefinition``, so a
-            # graveyard holding one that died this turn and one that was
-            # discarded last turn holds one object twice — and the record says
-            # how many of them arrived the way the sentence names. Newest first,
-            # since a death puts the card on top and that is the copy the record
-            # is about.
+            # Matched by **count of entries** over objects: the graveyard's one
+            # arrival lands a copy colliding with an object some graveyard holds
+            # as a new one (CR 400.7), so a pile the engine built holds the
+            # copy that died this turn and the one discarded last turn as two
+            # objects, and the record names the first. The count is for a pile
+            # written directly, where one object can sit at two positions.
+            # Newest first, since a death puts the card on top.
             arrived = list(
                 player.cards_put_into_your_graveyard_from_battlefield_this_turn
             )
@@ -1558,6 +1558,15 @@ def _destroyed_this_way_slots(player, taken, context) -> list[int]:
     name must not claim an older copy that did. A token's card never gets here
     (CR 111.7), and the seam records the whole card (CR 709.4), so the
     permanent's card is compared the same way.
+
+    **The arrival record decides which object; the destroyed list decides
+    which card.** A permanent's card is the object it entered with, and the
+    graveyard's one arrival lands a copy colliding with an object some
+    graveyard holds as a new, equal one (CR 400.7,
+    ``Game.put_card_into_graveyard``) — so a Castle destroyed beside an older
+    Castle is a different object from the permanent's card, and only the
+    record names it. The destroyed list is matched by value (the card it was),
+    the record by identity (the object that arrived this turn).
     """
     from ..faces import whole_card
 
@@ -1571,7 +1580,8 @@ def _destroyed_this_way_slots(player, taken, context) -> list[int]:
     for index in sorted(taken, reverse=True):
         card = player.graveyard[index]
         was_destroyed = next(
-            (i for i, held in enumerate(destroyed) if held is card), None
+            (i for i, held in enumerate(destroyed) if held is card or held == card),
+            None,
         )
         came_from_battlefield = next(
             (i for i, held in enumerate(arrived) if held is card), None

@@ -586,4 +586,35 @@ def test_w2g7_second_sunrise_a_card_that_left_the_graveyard_and_came_back_stays(
     assert "Grizzly Bears" in [c.name for c in game.players[0].graveyard]
     assert "Second Sunrise: no cards to return" in game.log
 
+def test_w2g7_second_sunrise_tells_two_copies_of_one_card_apart(set_pool):
+    # An old Grizzly Bears in the pile and a second one Bolted this turn are
+    # two objects (CR 400.7, ``Game.put_card_into_graveyard``): Raise Dead
+    # takes back the one that died, and the one left was not put there from
+    # the battlefield this turn. They were one object, and Second Sunrise
+    # returned the old Bears.
+    game, (bears,), _ = _w2g7_table(
+        set_pool, hand=["Lightning Bolt", "Raise Dead", "Second Sunrise"],
+        mine=["Grizzly Bears"],
+    )
+    game.put_card_into_graveyard(0, _w2g7_card(set_pool, "Grizzly Bears"))
+    assert game.queue_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w2g7_resolve_stack(game)
+    game._settle()
+    pile = game.players[0].graveyard
+    assert [c.name for c in pile] == ["Grizzly Bears", "Lightning Bolt", "Grizzly Bears"]
+    assert pile[0] is not pile[2]
+    assert game.queue_from_hand(
+        0, "Raise Dead", target_permanent_index=2, target_player_index=0,
+    ).supported
+    _w2g7_resolve_stack(game)
+    assert game.queue_from_hand(0, "Second Sunrise").supported
+    _w2g7_resolve_stack(game)
+    game._settle()
+    assert not list(game.controlled_by(0))
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Grizzly Bears", "Lightning Bolt", "Raise Dead", "Second Sunrise",
+    ]
+
 # ==== end W2G7 ======================================================

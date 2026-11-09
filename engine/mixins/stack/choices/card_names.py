@@ -138,7 +138,14 @@ class CardNameChoicesMixin:
         if zone_name == "hand":
             self.put_card_into_hand(player, revealed)
         else:
-            getattr(player, zone_name).append(revealed)
+            # The other destination the production admits
+            # (``naming._REVEAL_DESTINATIONS``): "…Otherwise, the player puts it
+            # into their graveyard" (Petra Sphinx, Vexing Arcanix), through the
+            # graveyard's one arrival for the hand's reason above. It was an
+            # append through the computed zone name, which Forbidden Crypt, a
+            # "put into your graveyard from your library" watcher and CR
+            # 400.7's distinct object all walked straight past.
+            self.put_card_into_graveyard(player, revealed, from_zone="library")
         self.discard_pending_choice(choice)
         self.log.append(
             f"{player.name} named {named or 'nothing'} and revealed "

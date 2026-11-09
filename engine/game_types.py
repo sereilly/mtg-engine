@@ -238,6 +238,13 @@ class GraveyardTarget:
     graveyard the engine cannot know which of them left, because they are the
     same object. Resolution therefore clamps to the last surviving copy and
     reports "gone" only when *no* copy remains — the one case it can establish.
+
+    **Since Mirrodin's wave 2 an arrival cannot make that pile.** The
+    graveyard's one arrival (``Game.put_card_into_graveyard``) makes a copy
+    arriving as an object some graveyard already holds a new, equal object
+    (CR 400.7), so a pile the engine built holds every object once and
+    ``ordinal`` is 0 for every stamp it writes. The ordinal and the clamp
+    remain for a pile written directly (a test's ``PlayerState(graveyard=…)``).
     """
 
     seat: int
