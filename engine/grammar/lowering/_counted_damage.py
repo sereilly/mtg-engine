@@ -47,6 +47,7 @@ from ._cost_records import COST_RECORD_CHANNELS
 from ._common import _describe_targets, _is_target
 from ._filters import dropped_narrowings, split_bound_card_type
 from ._sweeps import lower_counted_sweep_damage
+from ._record_keys import REVEALED_UNTIL_CARDS
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PLAYER,
                       EVENT_SUBJECT_PLAYER, _DAMAGED_PLAYER_EVENTS,
                       _EVENT_SUBJECT_PLAYERS)
@@ -643,6 +644,8 @@ def lower_revealed_this_way_damage(
     assert isinstance(node.amount, ast.CountOfRevealsThisWay)
     if node.riders != ast.DamageRiders():
         raise LoweringError("a counted damage carries no riders yet", node=node)
+    if REVEALED_HAND_CARDS not in produced and REVEALED_UNTIL_CARDS in produced:
+        return _lower_run_count_damage(node, produced, multiplier=multiplier)
     if len(node.recipients) != 1 or not _damaged_player_is(
         node.recipients, "that_player"
     ):
@@ -666,6 +669,47 @@ def lower_revealed_this_way_damage(
     )
 
 
+def _lower_run_count_damage(
+    node: ast.DealDamage, produced: frozenset[str], *, multiplier: int = 1,
+) -> tuple[OracleInstruction, ...]:
+    """"Reveal cards from the top of your library until you reveal a land card.
+    This artifact deals damage equal to **the number of nonland cards revealed
+    this way** to any target." (Goblin Charbelcher.)
+
+    The count over the pile a fateless reveal-until left on top of its library
+    (``REVEALED_UNTIL_CARDS``) rather than over a revealed hand: the same
+    ``recorded_cards`` channel and the same card-only gate
+    (:func:`revealed_cards_count_spec`), aimed at whatever the sentence
+    announces. The run reads the activator's own library, so no seat binds the
+    recipient to the count the way "that player" binds Blood Oath's — the
+    target is chosen as the ability is activated (the card's ruling,
+    2016-06-08: "before you reveal any cards"). A run that found no land is its
+    whole library, every card nonland — the ruling's "damage equal to the
+    number of cards revealed".
+    """
+    if len(node.recipients) != 1:
+        raise LoweringError("a counted damage reaches one recipient", node=node)
+    recipient = node.recipients[0]
+    if not (
+        _is_target(recipient)
+        or (isinstance(recipient, ast.TargetSpec)
+            and recipient.quantifier == "any_target")
+        or (isinstance(recipient, ast.PlayerRef)
+            and recipient.kind in ("target_player", "target_opponent"))
+    ):
+        raise LoweringError(
+            "no handler aims a revealed-pile count at this recipient", node=node
+        )
+    spec = revealed_cards_count_spec(
+        node.amount, produced, node, multiplier=multiplier
+    )
+    payload: dict[str, object] = {"amount": "x", X_FROM_COUNT: spec}
+    if isinstance(recipient, ast.PlayerRef):
+        payload["recipient"] = "target_player"
+    _describe_targets(payload, recipient)
+    return (OracleInstruction("deal_damage", "", payload),)
+
+
 def revealed_cards_count_spec(
     counted: ast.CountOfRevealsThisWay, produced: frozenset[str], node,
     *, multiplier: int = 1,
@@ -680,7 +724,14 @@ def revealed_cards_count_spec(
     second copy is where one of them would come to admit a phrase the evaluator
     drops. *node* is the spending statement, for the refusal to point at.
     """
-    if REVEALED_HAND_CARDS not in produced:
+    # Which pile "revealed this way" names: a revealed hand (Blood Oath) or the
+    # cards a fateless reveal-until turned over (Goblin Charbelcher). One
+    # effect prints at most one of the two; the hand is asked first so every
+    # spec written before the run's pile was a producer stays what it was.
+    record = REVEALED_HAND_CARDS
+    if REVEALED_HAND_CARDS not in produced and REVEALED_UNTIL_CARDS in produced:
+        record = REVEALED_UNTIL_CARDS
+    if record not in produced:
         raise LoweringError(
             f"back-reference to {REVEALED_HAND_CARDS!r} with no producer in "
             "this effect",
@@ -711,7 +762,7 @@ def revealed_cards_count_spec(
             "a revealed-card count cannot test this restriction", node=node
         )
     spec: dict[str, object] = {
-        "recorded_cards": REVEALED_HAND_CARDS, "filter": {**described, **bound},
+        "recorded_cards": record, "filter": {**described, **bound},
     }
     if multiplier != 1:
         # Omitted at 1 for ``count_spec``'s reason: a spec written without the

@@ -373,6 +373,17 @@ EXTRA_TURN_GRANTED = "extra_turn_granted"
 #: permanent until this step made it.
 PUT_FROM_HAND_PERMANENTS = "put_from_hand_permanents"
 
+#: "Reveal cards from the top of your library until you reveal a land card.
+#: This artifact deals damage equal to the number of nonland cards **revealed
+#: this way** to any target. … Put **the revealed cards** on the bottom of your
+#: library in any order." (Goblin Charbelcher; Goblin Machinist.) The pile a
+#: fateless reveal-until leaves revealed on top of its library, in the order
+#: it was turned over — the find last. The scratchpad key
+#: ``handlers/reveal.reveal_until_match`` writes, spelled there as
+#: ``REVEALED_UNTIL_CARDS`` too; here, below every family, so the reveal
+#: lowering and the counted-damage floor read one spelling.
+REVEALED_UNTIL_CARDS = "revealed_until_cards"
+
 #: "You and that opponent each gain control of all creatures the other controls
 #: until end of turn. **Those creatures** gain haste until end of turn."
 #: (Reins of Power.) Every permanent the mutual control change moved, in both

@@ -648,7 +648,7 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
 
 #: The pile a fateless reveal-until left revealed on top of its library, in
 #: the order it was turned over — the find last. Spelled once more in
-#: ``grammar/lowering/reveal.REVEALED_UNTIL_CARDS``, which the record
+#: ``grammar/lowering/_record_keys.REVEALED_UNTIL_CARDS``, which the record
 #: declaration reads.
 REVEALED_UNTIL_CARDS = "revealed_until_cards"
 
@@ -683,6 +683,11 @@ def _reveal_until_match_in_place(
             break
     context.results[REVEALED_UNTIL_CARDS] = pile
     context.results["its_mana_value"] = int(found.cmc or 0) if found is not None else 0
+    # "If **the revealed land card** was a Mountain, …" (Goblin Charbelcher.)
+    # The find, for the condition behind the run — written only when there is
+    # one, so a run that found nothing has no revealed land card to ask about.
+    if found is not None:
+        context.results["revealed_card"] = found
     if pile:
         game.record_reveal(seat, [card.name for card in pile])
     if found is not None:

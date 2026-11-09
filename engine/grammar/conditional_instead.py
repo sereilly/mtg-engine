@@ -83,6 +83,7 @@ from .amounts import parse_amount
 from .conditions import _parse_condition
 from .errors import GrammarError
 from .lexer import PUNCT, WORD
+from .readers import accept_source_reference
 from .sentence_rebinding import restates_target
 from .statements import parse_statement
 from .stream import TokenStream
@@ -124,6 +125,8 @@ def _parse_conditional_instead_rider(
     # read before the statement parser, which has no antecedent to give the
     # two words.
     replacement = _accept_resized_this_way(stream, replaced)
+    if replacement is None:
+        replacement = _accept_doubled_damage(stream, replaced)
     if replacement is None:
         try:
             replacement = parse_statement(stream)
@@ -315,6 +318,48 @@ def _accept_resized_this_way(stream: TokenStream, replaced):
         stream.reset(mark)
         return None
     return replace(replaced, amount=amount)
+
+
+def _accept_doubled_damage(stream: TokenStream, replaced):
+    """``<the replaced sentence's source> deals double that damage`` as
+    *replaced* at twice its amount, or None with the cursor unmoved.
+
+    "This artifact deals damage equal to the number of nonland cards revealed
+    this way to any target. If the revealed land card was a Mountain, this
+    artifact deals **double that damage** instead." (Goblin Charbelcher.) "That
+    damage" is the replaced sentence's own amount and its recipient is the
+    replaced sentence's — the second sentence names none — so the replacement
+    *is* that sentence with its amount multiplied (CR 107.3's "twice" over the
+    same quantity, ``ast.Times``), which also keeps one announced target
+    whichever arm resolves (CR 601.2c).
+
+    Read here rather than by the damage production for
+    :func:`_accept_resized_this_way`'s reason: on its own "deals double that
+    damage" names a number nothing dealt. The CR 614 spelling with "would"
+    ("…would deal damage …, it deals double that damage instead") is a
+    replacement of an *event* and never reaches this rider. The subject must be
+    the replaced sentence's own source, said again.
+    """
+    if not isinstance(replaced, ast.DealDamage) or replaced.source is None:
+        return None
+    mark = stream.mark()
+    if not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("deals", "double", "that", "damage"):
+        stream.reset(mark)
+        return None
+    if not _is_self_source(replaced.source):
+        stream.reset(mark)
+        return None
+    return replace(replaced, amount=ast.Times(2, replaced.amount))
+
+
+def _is_self_source(source) -> bool:
+    """Whether a damage sentence's *source* is the ability's own source ("this
+    artifact", the card's name) — the only subject "this artifact deals double
+    that damage" can restate."""
+    return getattr(source, "quantifier", None) in ("this", "self")
 
 
 #: The statement kinds the rider can replace. `AddMana` joined `GainLife` for

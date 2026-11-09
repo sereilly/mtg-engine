@@ -913,8 +913,15 @@ _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, "str | tuple[str, ...]"]] = 
     # admit "the revealed cards" behind a run whose pile is already gone.
     # Two records, the pile and the find's mana value (0 when the run found
     # nothing, CR 107.2 — the rulings' "X is zero").
+    #
+    # And a third, the find itself under ``revealed_card``: "If **the revealed
+    # land card** was a Mountain, this artifact deals double that damage
+    # instead." (Goblin Charbelcher.) Written only when the run stopped on a
+    # match, so a run that found nothing answers every question about the
+    # find False — there is no revealed land card to be a Mountain.
     "reveal_until_match": (
-        "destination", "revealed", ("revealed_until_cards", "its_mana_value"),
+        "destination", "revealed",
+        ("revealed_until_cards", "its_mana_value", "revealed_card"),
     ),
     # "Reveal the top three cards of your library and put one of them into
     # your hand. You gain life equal to **that card's mana value**." (Reviving
