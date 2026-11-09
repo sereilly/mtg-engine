@@ -19,7 +19,6 @@ the pile was offered by.
 
 from __future__ import annotations
 
-import random
 from ....exiled_records import record_exiled_card
 from ....linked_exile import link_exiled_card
 from ....models import Permanent
@@ -533,9 +532,7 @@ class HandChoicesMixin:
         # Through the module-level RNG every other shuffle in this engine uses,
         # so a seeded run stays reproducible.
         if choice.data.get("shuffle"):
-            import random
-
-            random.shuffle(player.library)
+            self.shuffle_library_of(player)
             self.log.append(
                 f"{player.name} shuffled {len(cards)} card(s) into their library"
             )

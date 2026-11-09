@@ -1439,6 +1439,14 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # (Mana Clash's heads-or-tails) does not go through that seam and is not
     # announced.
     ("you_win_coin_flip",           r"whenever you win a coin flip"),
+    # "Whenever a spell or ability causes a player to shuffle their library,
+    # …" (Psychogenic Probe.) CR 701.24's event, announced from the one seam
+    # an effect's shuffle goes through (``Game.shuffle_library_of``),
+    # carrying the shuffling seat as ``event_subject_player``. The pregame
+    # shuffles (CR 103.3, the mulligans) are no spell's or ability's and do
+    # not go through it.
+    ("library_shuffled",
+     r"whenever a spell or ability causes a player to shuffle their library"),
     # "Whenever you sacrifice a permanent …" (Havoc Jester). Emitted from
     # ``Game.sacrifice_permanent``, the one place CR 701.21a happens — which is
     # why this row could be added without hunting for a fire site: there are

@@ -11,7 +11,6 @@ offered again for each payment (Forgotten Lore).
 
 from __future__ import annotations
 
-import random
 from ....linked_exile import link_exiled_card
 from ....models import Permanent
 from ....oracle_types import (CLAIMABLE_EXILED_CARDS, EXILED_THIS_WAY,
@@ -489,8 +488,6 @@ class PileChoicesMixin:
         no single fire site and this is one more place that would have
         forgotten it - a commander found this way must reach the command zone.
         """
-        import random
-
         pile = list(choice.data.get("_pile") or ())
         if pile_index is not None and not 0 <= int(pile_index) < len(pile):
             return False
@@ -500,7 +497,7 @@ class PileChoicesMixin:
             self.put_card_into_hand(player, found)
         for card in pile:
             self.put_card_into_library(player, card)
-        random.shuffle(player.library)
+        self.shuffle_library_of(player)
         self.discard_pending_choice(choice)
         # A search of a pile its divider saw and its searcher alone searched:
         # which card went to the hand is the searcher's to know (CR 400.2;

@@ -68,7 +68,7 @@ class CardNameChoicesMixin:
                 self.put_cards_into_exile(target, taken)
         # "That player shuffles" — once, after the search, and only their
         # library is disturbed (CR 701.24).
-        random.shuffle(target.library)
+        self.shuffle_library_of(target)
 
         spec = data["token"]
         made = taken_from.get(data["token_zone"], 0)

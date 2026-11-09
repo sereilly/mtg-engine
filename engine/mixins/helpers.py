@@ -573,6 +573,39 @@ class GameHelpersMixin:
         granted = granted_top_abilities(self, permanent)
         return _with_granted_abilities(base, granted) if granted else base
 
+    def shuffle_library_of(self, player, *, below: int = 0) -> None:
+        """Shuffle *player*'s library because a spell or ability says to
+        (CR 701.24a), and announce it.
+
+        The one seam for an effect's shuffle, for the reason
+        :meth:`become_untapped` is one: "Whenever a spell or ability causes a
+        player to shuffle their library, this artifact deals 2 damage to that
+        player." (Psychogenic Probe) can only hear a shuffle that says so, and
+        ``random.shuffle(player.library)`` was written at some thirty sites.
+        ``tests/engine/test_w1g11_shuffle_seam.py`` holds every library shuffle
+        outside the pregame (CR 103.3's opening shuffle and the mulligans,
+        which no spell or ability causes) to this method.
+
+        Through the module RNG ``run_ai_simulation`` seeds, drawn exactly where
+        each call site drew it, so a seeded game replays byte for byte. The
+        card's ruling (2009-02-01): the event happens "even if the player's
+        library is empty", as CR 701.24e says of a library of zero or one
+        cards — so the announcement is unconditional.
+        """
+        import random
+
+        if below > 0:
+            # "Shuffle your library, then put the chosen cards on top" read the
+            # other way: the top *below* cards are held where they are and the
+            # rest of the library is shuffled under them — still a shuffle of
+            # that library (CR 701.24b keeps such cards out of it).
+            rest = player.library[below:]
+            random.shuffle(rest)
+            player.library[below:] = rest
+        else:
+            random.shuffle(player.library)
+        emit(self, "library_shuffled", event_subject_player=self.seat_index(player))
+
     def become_untapped(self, permanent: "Permanent") -> bool:
         """Turn *permanent* from tapped to untapped, firing "becomes untapped"
         triggers (CR 701.26b). Returns whether it actually changed.

@@ -92,7 +92,7 @@ class LibrarySearchChoicesMixin:
             if enforce_floor and self._search_floor(choice) > 0:
                 return False
             if "library" in zones:
-                random.shuffle(caster.library)
+                self.shuffle_library_of(caster)
             self._record_search_reveal(choice)
             self.discard_pending_choice(choice)
             # A search that found nothing still *searched*, so a printed "exile
@@ -137,7 +137,7 @@ class LibrarySearchChoicesMixin:
                 record["revealed_card"] = card
             choice.data.setdefault("revealed_names", []).append(card.name)
             self.log.append(f"{caster.name} searched {zone} and revealed {card.name}")
-            random.shuffle(caster.library)
+            self.shuffle_library_of(caster)
             self._record_search_reveal(choice)
             self.discard_pending_choice(choice)
             return True
@@ -165,7 +165,7 @@ class LibrarySearchChoicesMixin:
                 record["found_card"] = card
             self.log.append(f"{caster.name} searched {zone} and found {card.name}")
             if zone == "library":
-                random.shuffle(caster.library)
+                self.shuffle_library_of(caster)
             self._record_search_reveal(choice)
             self.discard_pending_choice(choice)
             return True
@@ -243,7 +243,7 @@ class LibrarySearchChoicesMixin:
             # shuffle below — reaching that one would put the card on top and
             # then shuffle it back in, which is the card doing nothing.
             if zone == "library":
-                random.shuffle(caster.library)
+                self.shuffle_library_of(caster)
             self.put_card_into_library(caster, card, "top")
             shown = (
                 card.name if self.find_is_public(choice.data, destination, zone)
@@ -265,7 +265,7 @@ class LibrarySearchChoicesMixin:
             # "If there are fewer than 3 cards in your library, put the card
             # on the bottom of your library"), which the funnel's depth does.
             if zone == "library":
-                random.shuffle(caster.library)
+                self.shuffle_library_of(caster)
             depth = int(choice.data.get("from_top") or 0)
             if depth < 2:
                 # A depth the lowering always writes; without it the card
@@ -334,7 +334,7 @@ class LibrarySearchChoicesMixin:
         # and randomising a library the player did not search would destroy
         # information they were entitled to keep.
         if zone == "library":
-            random.shuffle(caster.library)
+            self.shuffle_library_of(caster)
         self._record_search_reveal(choice)
         self.discard_pending_choice(choice)
         return True
@@ -466,7 +466,7 @@ class LibrarySearchChoicesMixin:
         # The search is over once the finds are named (CR 701.23h): shuffle
         # before the destination question, which happens after the search.
         if "library" in zones:
-            random.shuffle(caster.library)
+            self.shuffle_library_of(caster)
         self._record_search_reveal(choice)
         self.discard_pending_choice(choice)
         # "…**and exile the rest**." (Doomsday.) Before the finds are placed,
@@ -1090,7 +1090,7 @@ class LibrarySearchChoicesMixin:
         # The library was searched whether or not anything was taken from it,
         # and the printed "then shuffle" applies to the search, not the find.
         if "library" in zones:
-            random.shuffle(caster.library)
+            self.shuffle_library_of(caster)
         ctx = choice.data.get("_context")
         # "…exile them **in a face-down pile**, and shuffle that pile."
         # (Mangara's Tome.) The finds become one linked pile on the exiling

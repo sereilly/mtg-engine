@@ -321,6 +321,50 @@ def test_w1g11_mesmeric_orb_mills_the_untapped_permanents_controller_mid_turn(se
     game._settle()
     assert len(alice.graveyard) == 1
 
+def test_w1g11_psychogenic_probe_burns_whoever_an_ability_makes_shuffle(set_pool):
+    """Bob's Myr Mindservant shuffles Bob's library: Alice's Probe deals Bob 2."""
+    mrd = set_pool("MRD")
+    game, alice, bob = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, mrd["Psychogenic Probe"])
+    servant = _w1g11_put(game, 1, mrd["Myr Mindservant"])
+    _w1g11_activate(game, 1, servant)
+    _w1g11_resolve_stack(game)
+    game._settle()
+    _w1g11_resolve_stack(game)
+    assert bob.life == 18
+    assert alice.life == 20
+
+
+def test_w1g11_psychogenic_probe_hears_a_search_and_an_empty_library(set_pool):
+    """The ruling (2009-02-01): the ability triggers "even if the player's
+    library is empty"; and a search's shuffle is a shuffle (CR 701.23a)."""
+    mrd = set_pool("MRD")
+    game, alice, bob = _w1g11_table(set_pool)
+    _w1g11_put(game, 1, mrd["Psychogenic Probe"])
+    alice.library.clear()
+    game.shuffle_library_of(alice)
+    game._settle()
+    _w1g11_resolve_stack(game)
+    assert alice.life == 18
+    servant = _w1g11_put(game, 0, mrd["Myr Mindservant"])
+    _w1g11_activate(game, 0, servant)
+    _w1g11_resolve_stack(game)
+    game._settle()
+    _w1g11_resolve_stack(game)
+    assert alice.life == 16
+    assert bob.life == 20
+
+
+def test_w1g11_two_probes_each_burn_for_one_shuffle(set_pool):
+    mrd = set_pool("MRD")
+    game, alice, bob = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, mrd["Psychogenic Probe"])
+    _w1g11_put(game, 0, mrd["Psychogenic Probe"])
+    game.shuffle_library_of(bob)
+    game._settle()
+    _w1g11_resolve_stack(game)
+    assert bob.life == 16
+
 # ==== end W1G11 ======================================================
 
 

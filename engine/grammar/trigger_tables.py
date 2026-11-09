@@ -360,6 +360,12 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # above: which flip it was is the event's, and the effect reads nothing
     # out of these words.
     ("you_win_coin_flip", ("you", "win", "a", "coin", "flip")),
+    # "Whenever a spell or ability causes a player to shuffle their library"
+    # (Psychogenic Probe). Bare: the seat that shuffled is the event's.
+    ("library_shuffled", (
+        "a", "spell", "or", "ability", "causes", "a", "player", "to",
+        "shuffle", "their", "library",
+    )),
     # "Whenever you sacrifice a permanent …" (Havoc Jester). Announced from
     # ``Game.sacrifice_permanent``, the one place CR 701.21a happens. Bare, like
     # the life gain above: what was sacrificed is the event's, and no card in

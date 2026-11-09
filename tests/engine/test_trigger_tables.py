@@ -184,6 +184,11 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # the event is the flipper's and is announced by the one seam that flips
     # for a seat (`handlers/_common.flip_coin_for`).
     "you_win_coin_flip": "whenever you win a coin flip",
+    # Psychogenic Probe. CR 701.24's event, announced by the one seam an
+    # effect's shuffle goes through (`Game.shuffle_library_of`).
+    "library_shuffled": (
+        "whenever a spell or ability causes a player to shuffle their library"
+    ),
     # Multani's Presence. CR 701.6a's cancel rather than a cast, and the one
     # condition in the pool whose event happens after its spell has left the
     # stack (CR 603.10e: such an ability looks back in time).
@@ -199,6 +204,8 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever this creature becomes untapped",
         "whenever this artifact becomes untapped",
         "whenever this permanent becomes untapped",
+        # Mesmeric Orb: the same event over a described set.
+        "whenever a permanent becomes untapped",
     ),
     # One kind, both printed words: Mazemind Tome prints "when" and Homarid
     # "whenever", and CR 603.8 makes them the same state trigger. The row lives

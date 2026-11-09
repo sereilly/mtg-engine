@@ -249,7 +249,7 @@ def reveal_library_opponent_chooses(game: Game, instruction: OracleInstruction, 
     if not isinstance(chooser, int) or not names:
         if names:
             game.log.append(f"{card_name}: no opponent to choose")
-        random.shuffle(caster.library)
+        game.shuffle_library_of(caster)
         return True, "resolved"
     slots = [dict(slot) for slot in instruction.payload.get(ONE_OF_EACH) or ()]
     destination = str(instruction.payload.get("destination", "hand"))
@@ -628,7 +628,7 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
         player.library.extend(revealed)
         # Through the module RNG `run_ai_simulation` seeds, like every other
         # shuffle in the engine, so a given seed still replays exactly.
-        random.shuffle(player.library)
+        game.shuffle_library_of(player)
     elif rest == "exile":
         # "…and **exile** all other cards revealed this way." (Sacred Guide.)
         # The third printed fate, and the one that costs the revealer the
