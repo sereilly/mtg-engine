@@ -161,6 +161,9 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # Venom damaged the Aura controller's opponent, and did it even when the
     # enchanted land was the Aura controller's own.
     "permanent_becomes_tapped",
+    # Mesmeric Orb — the untapped permanent's, frozen by the one untap seam
+    # (`become_untapped`) for `become_tapped`'s reason one event over.
+    "permanent_becomes_untapped",
     # Haunting Wind, Artifact Possession — the tapped artifact's, for the same
     # reason and from the same stamp. This condition has two announcements (a
     # tap, and an ability activated without {T}); both freeze the *subject's*

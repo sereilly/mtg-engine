@@ -899,6 +899,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # them would have missed the other ten.
     ("permanent_becomes_untapped",
      r"whenever this (?:creature|artifact|enchantment|land|permanent) becomes untapped"),
+    # "Whenever **a permanent** becomes untapped, that permanent's controller
+    # mills a card." (Mesmeric Orb.) The same event watched over a described
+    # set rather than the source alone: the noun phrase is a ``_subject``
+    # group, read by the noun parser into ``untapped_filter`` (its presence is
+    # what tells the dispatcher "a class" from "this one"), and the event's
+    # subject is the permanent that untapped. After the self row, whose
+    # spellings this pattern would otherwise claim.
+    ("permanent_becomes_untapped",
+     r"whenever (?P<untapped_subject>an? .+?) becomes untapped"),
     # "Whenever this creature phases out" / "…phases in" (Teferi's Imp, Warping
     # Wurm). CR 702.26's event, announced from the two seams that move a
     # permanent between the battlefield and its controller's holding list

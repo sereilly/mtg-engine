@@ -284,6 +284,43 @@ def test_w1g11_myr_incubator_left_to_itself_takes_every_artifact(set_pool):
     assert all("Artifact" not in c.type_line for c in alice.library)
 
 
+def test_w1g11_mesmeric_orb_mills_once_for_each_permanent_the_untap_step_untaps(set_pool):
+    """The ruling (2020-08-07): permanents untapped in the untap step trigger
+    the Orb that many times, put on the stack at the upkeep."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, bob = _w1g11_table(set_pool, bob_library=[lea["Island"]] * 6)
+    _w1g11_put(game, 0, mrd["Mesmeric Orb"])
+    islands = [_w1g11_put(game, 1, lea["Island"]) for _ in range(2)]
+    untapped_already = _w1g11_put(game, 1, lea["Forest"])
+    for island in islands:
+        island.tapped = True
+    assert not untapped_already.tapped
+    game.active_player_index = 1
+    game.resolve_untap_step(1)
+    game._settle()
+    _w1g11_resolve_stack(game)
+    assert all(not island.tapped for island in islands)
+    assert len(bob.graveyard) == 2
+    assert len(bob.library) == 4
+    assert alice.graveyard == []
+
+
+def test_w1g11_mesmeric_orb_mills_the_untapped_permanents_controller_mid_turn(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, bob = _w1g11_table(set_pool, library=[lea["Plains"]] * 4)
+    _w1g11_put(game, 1, mrd["Mesmeric Orb"])
+    bears = _w1g11_put(game, 0, lea["Grizzly Bears"])
+    bears.tapped = True
+    assert game.become_untapped(bears)
+    game._settle()
+    _w1g11_resolve_stack(game)
+    assert [c.name for c in alice.graveyard] == ["Plains"]
+    assert bob.graveyard == []
+    # Re-untapping an untapped permanent is no event (CR 701.26b).
+    assert not game.become_untapped(bears)
+    game._settle()
+    assert len(alice.graveyard) == 1
+
 # ==== end W1G11 ======================================================
 
 

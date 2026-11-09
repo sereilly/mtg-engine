@@ -232,6 +232,14 @@ def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
             return ast.TriggerEvent(
                 "land_tapped_for_mana", "whenever", subject=spec.filter
             )
+        # "Whenever **a permanent becomes untapped**, that permanent's
+        # controller mills a card." (Mesmeric Orb.) CR 701.26b's event over a
+        # described set — the tap reading's twin, announced by the one untap
+        # seam (``Game.become_untapped``).
+        if stream.accept_phrase("becomes", "untapped"):
+            return ast.TriggerEvent(
+                "permanent_becomes_untapped", "whenever", subject=spec.filter
+            )
     stream.reset(mark)
     return None
 

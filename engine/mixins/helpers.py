@@ -594,7 +594,15 @@ class GameHelpersMixin:
         if not permanent.tapped:
             return False
         permanent.tapped = False
-        emit(self, "permanent_becomes_untapped", subject=permanent)
+        # The subject's controller and id, frozen into the announcement
+        # (CR 603.10) as ``become_tapped`` freezes them: "Whenever a permanent
+        # becomes untapped, **that permanent's controller** mills a card."
+        # (Mesmeric Orb.)
+        emit(
+            self, "permanent_becomes_untapped", subject=permanent,
+            event_subject_controller=self.controller_index_of(permanent),
+            event_subject_permanent_id=permanent.permanent_id,
+        )
         # "When this creature leaves the battlefield **or becomes untapped**,
         # destroy that creature." (Merieke Ri Berit.) The second of the two
         # events one delayed ability answers to, announced here for the reason
