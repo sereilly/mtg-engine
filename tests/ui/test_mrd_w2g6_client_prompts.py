@@ -299,7 +299,8 @@ def test_a_moved_equip_price_is_shown_and_gated_as_charged():
         prelude=_shard_prelude() + "function renderSymbolsInline(text) { return String(text); }",
     )
     assert out["Leonin Scimitar"] == {
-        "printed": "{1}", "charged": "{0}", "prompts": False, "shown": "<s>{1}</s> {0}",
+        "printed": "{1}", "charged": "{0}", "prompts": False,
+        "shown": '{0} <span class="prompt-subnote">(printed {1})</span>',
     }
     assert out["Vulshok Battlegear"]["charged"] == "{2}"
     assert out["Vulshok Battlegear"]["prompts"] is True

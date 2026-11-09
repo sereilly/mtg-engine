@@ -2174,11 +2174,14 @@ function chargedActivationCost(card, abilityIndex = null) {
 }
 
 // A menu button's cost: the printed cost, and — where the server says the
-// charge moved — that, with the printed one struck through beside it.
+// charge moved — the charge, with the printed one named after it. (Struck
+// through, the printed symbols read as a second price: a line through a mana
+// image does not show.)
 function abilityCostShownHtml(card, printedCost, abilityIndex) {
   const price = abilityPriceNow(card, abilityIndex);
   if (price === null) return renderSymbolsInline(printedCost);
-  return `<s>${renderSymbolsInline(printedCost)}</s> ${renderSymbolsInline(chargedActivationCost(card, abilityIndex))}`;
+  return `${renderSymbolsInline(chargedActivationCost(card, abilityIndex))}`
+    + ` <span class="prompt-subnote">(printed ${renderSymbolsInline(printedCost)})</span>`;
 }
 
 // The mana the insufficient-mana auto-tap flow must actually pay. For casting
@@ -5140,7 +5143,7 @@ function isAnyPromptActive(state = currentState) {
   if (getRagingRiverInfo(state)) return true;
   if (getCamouflageInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return true;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingAbilityCostChoice || pendingCounterKindChoice || pendingChannel || pendingAttackTarget) return true;
 
   const hasValidAttackers = getValidAttackerIndices(state).length > 0;
   const hasValidBlockers = getValidBlockerAssignments(state).length > 0;
@@ -5348,7 +5351,7 @@ async function confirmPendingAttackTarget(targetSeat) {
 
 async function handlePriorityPromptOk() {
   if (!currentState || seat === null) return false;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return false;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingAbilityCostChoice || pendingCounterKindChoice || pendingChannel || pendingAttackTarget) return false;
   if (!shouldShowPriorityPrompt(currentState)) return false;
   await sendAction({ seat, action: "pass_priority" });
   updateActionHint("Passed priority.");
@@ -15116,7 +15119,7 @@ function renderActivationPrompt() {
     return;
   }
 
-  if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingCastDivision && !pendingManaColor && !pendingAbilityChoice && !pendingChannel) {
+  if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingCastDivision && !pendingManaColor && !pendingAbilityChoice && !pendingAbilityCostChoice && !pendingChannel) {
     // Who the game is actually waiting on: the seat that owes the open
     // decision (`prompt_owed_by`, read off the pending-choice queue), which is
     // not the priority holder — while it is owed nobody receives priority
