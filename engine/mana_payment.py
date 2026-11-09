@@ -1082,9 +1082,20 @@ def _wants_left(rest: "list[frozenset[str]]", wants) -> tuple:
     together, and two one-drops in hand beat a one-drop and an ability that
     can wait. Nothing finer: two cards in hand are not ranked against each
     other, so where they tie the caller's own choice stands.
+
+    **The cards' tier is packed on its own** for that second key, then
+    counted among the joint pack as before. Smallest first takes a one-pip
+    ability ahead of two-pip cards, so the joint pack could hide that one
+    choice keeps both cards payable together: Aether Spellbomb's {1} paid off
+    Tundra, Plains, Island and two Mountains, with {W}{R} and {W}{U} in hand
+    and the Spellbomb's own "{U}, Sacrifice" brought along, packs the {U} and
+    one card whether a Plains or a Mountain pays — and the board-order Plains
+    stranded the pair a Mountain would have kept (Mirrodin's promotion
+    rehearsal, ``tests/ai/test_kg2_payment_colour_census.py``).
     """
     together: dict[str, int] = {}
-    packed = cards = 0
+    held: dict[str, int] = {}
+    packed = cards = cards_together = 0
     ordered = sorted(
         enumerate(wants), key=lambda item: (sum(item[1][0].values()), item[1][2], item[0]),
     )
@@ -1097,8 +1108,16 @@ def _wants_left(rest: "list[frozenset[str]]", wants) -> tuple:
                 together = trial
                 packed += 1
                 cards += 1 if tier == 0 else 0
+            if tier != 0:
+                continue
+            trial = dict(held)
+            for symbol, amount in want.items():
+                trial[symbol] = trial.get(symbol, 0) + amount
+            if _units_pay(rest, trial):
+                held = trial
+                cards_together += 1
     alone = sum(times for want, times, _tier in wants if _units_pay(rest, want))
-    return (packed, cards, alone)
+    return (packed, cards_together, cards, alone)
 
 
 def _units_pay(units: "list[frozenset[str]]", want: dict[str, int]) -> bool:
