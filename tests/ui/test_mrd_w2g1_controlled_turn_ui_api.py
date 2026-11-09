@@ -175,3 +175,40 @@ def test_a_controlled_person_may_still_concede(set_pool):
     conceded = _act(sid, seat=0, action="concede")
     assert conceded.status_code == 200, conceded.json()
     assert game.players[0].lost
+
+
+def test_between_two_people_only_the_controller_acts_for_the_controlled_seat():
+    """Two people at one table: the request for the controlled seat names its
+    sender (``controller_seat``), so the person sitting there is refused
+    and the person controlling them is admitted — and neither can concede
+    for anybody but themselves."""
+    created = client.post("/api/sessions", json={
+        "mode": "human_vs_human", "host_name": "Host", "guest_name": "Guest",
+        "host_colors": 2, "guest_colors": 2, "seed": 4244,
+    }).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    session = store.get(sid)
+    game = session.game
+    game.enforce_mana_costs = False
+    session.current_turn = 1
+    game.active_player_index = 1
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    game.pending_choices.clear()
+    game.start_priority_window(1)
+    game.player_controls[1] = (0, game.turn)      # the Host controls this turn
+    game.players[1].hand = [_SHIPPED["Forest"]]
+
+    assert _state(sid, 1)["player_controls"] == {"1": 0}
+    own = _act(sid, seat=1, action="cast", card_name="Forest")
+    assert own.status_code == 400
+    assert "Host controls you this turn" in own.json()["detail"]
+    stranger = _act(sid, seat=1, controller_seat=1, action="cast", card_name="Forest")
+    assert stranger.status_code == 400
+    played = _act(sid, seat=1, controller_seat=0, action="cast", card_name="Forest")
+    assert played.status_code == 200, played.json()
+    assert "Forest" in [p.card.name for p in game.players[1].battlefield]
+    assert _act(sid, seat=1, controller_seat=0, action="concede").status_code == 400
+    assert _act(sid, seat=1, action="concede").status_code == 200
+    assert game.players[1].lost and not game.players[0].lost

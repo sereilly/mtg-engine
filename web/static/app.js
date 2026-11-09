@@ -1421,11 +1421,14 @@ function hasBlockingPromptForAutoPass(state = currentState) {
 function shouldAutoPassUntilTurnEnd(state = currentState) {
   if (!state || seat === null) return false;
   if (!autoPassTurnEndEnabled) return false;
+  // Through `typeof` for the reason sendAction gives (CR 723's helper).
+  const drivenHere = typeof turnIsDrivenHere === "function"
+    ? turnIsDrivenHere(state) : state.current_turn === seat;
   if (autoPassMode === "self") {
-    return turnIsDrivenHere(state);
+    return drivenHere;
   }
   if (autoPassMode === "opponent") {
-    return !turnIsDrivenHere(state);
+    return !drivenHere;
   }
   return false;
 }
@@ -25818,6 +25821,24 @@ function turnIsDrivenHere(state) {
     && (state.player_controls || {})[String(state.current_turn)] === homeSeat;
 }
 
+// sendAction's CR 723 half: a person another player controls sends only what
+// `CONTROLLED_SEAT_ACTIONS` names; a person acting for the seat they control
+// signs the body with their own seat.
+function carryControllerSeat(actionBody) {
+  const controlledBy = controllerOfHomeSeat(currentState);
+  if (
+    Number.isInteger(controlledBy)
+    && !CONTROLLED_SEAT_ACTIONS.has(actionBody?.action)
+    && !String(actionBody?.action || "").startsWith("debug_")
+  ) {
+    const name = currentState?.players?.[controlledBy]?.name || "Another player";
+    throw new Error(`${name} controls your turn (Mindslaver) — you may only concede.`);
+  }
+  if (Number.isInteger(homeSeat) && Number.isInteger(actionBody?.seat) && actionBody.seat !== homeSeat) {
+    actionBody.controller_seat = homeSeat;
+  }
+}
+
 function controllerOfHomeSeat(state) {
   if (!state || !Number.isInteger(homeSeat)) return null;
   const controller = (state.player_controls || {})[String(homeSeat)];
@@ -28088,18 +28109,11 @@ function carryCastZoneAndCost(body) {
 
 async function sendAction(actionBody) {
   if (!sessionId) return;
-  const controlledBy = controllerOfHomeSeat(currentState);
-  if (
-    Number.isInteger(controlledBy)
-    && !CONTROLLED_SEAT_ACTIONS.has(actionBody?.action)
-    && !String(actionBody?.action || "").startsWith("debug_")
-  ) {
-    const name = currentState?.players?.[controlledBy]?.name || "Another player";
-    throw new Error(`${name} controls your turn (Mindslaver) — you may only concede.`);
-  }
-  if (Number.isInteger(homeSeat) && Number.isInteger(actionBody?.seat) && actionBody.seat !== homeSeat) {
-    actionBody.controller_seat = homeSeat;
-  }
+  // CR 723 (Mindslaver): refused here when another player controls this
+  // browser's seat, and signed with `controller_seat` when it acts for a
+  // seat it controls. Through `typeof`, because the tests that lift this
+  // function into bare node bring their own module state, not this.
+  if (typeof carryControllerSeat === "function") carryControllerSeat(actionBody);
   snapStateRefetchBackoff();
   // Always carry the current phase-rail hold preferences so the server knows where
   // to stop on the AI's turn — including steps it resolves itself (turn start, end).
