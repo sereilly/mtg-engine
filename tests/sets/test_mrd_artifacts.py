@@ -436,6 +436,57 @@ def test_w1g5_mourners_shield_arms_nothing_once_the_imprinted_card_leaves(set_po
     assert "no colored card is exiled with it" in " ".join(game.log[-3:])
     assert _w1g5_damage_dealt(game, game.players[0], 2, source=bears) == 2
 
+def _w1g5_tapped_for(game, seat, land):
+    pool = game.players[seat].mana_pool
+    before = dict(pool)
+    assert game.tap_land_for_mana_or_refusal(
+        seat, land.card.name, permanent_id=land.permanent_id,
+    ) is None
+    return {k: pool[k] - before.get(k, 0) for k in pool if pool[k] != before.get(k, 0)}
+
+
+def test_w1g5_extraplanar_lens_doubles_every_land_sharing_the_imprinted_name(set_pool):
+    """"Whenever a land with the same name as the exiled card is tapped for
+    mana, its controller adds one mana of any type that land produced." A
+    Forest imprinted: each Forest — Alice's and Bob's, each to its own
+    controller — makes {G}{G}; a Mountain makes its one {R}."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, bob = _w1g5_table(set_pool, [mrd["Extraplanar Lens"]], interactive=True)
+    game.enforce_mana_costs = False
+    imprinted = _w1g5_put(game, 0, lea["Forest"])
+    forest = _w1g5_put(game, 0, lea["Forest"])
+    mountain = _w1g5_put(game, 0, lea["Mountain"])
+    theirs = _w1g5_put(game, 1, lea["Forest"])
+    assert game.cast_from_hand(0, "Extraplanar Lens").supported
+    assert game.resolve_top_of_stack() is False
+    assert game.confirm_trigger_target(0, permanent_id=imprinted.permanent_id)
+    game.resolve_top_of_stack()
+    assert game.confirm_optional_pay(0, accept=True)
+    _w1g5_resolve_stack(game)
+    assert [c.name for c in alice.exile] == ["Forest"]
+    assert not game.is_on_battlefield(imprinted)
+    assert _w1g5_tapped_for(game, 0, forest) == {"G": 2}
+    assert _w1g5_tapped_for(game, 0, mountain) == {"R": 1}
+    assert _w1g5_tapped_for(game, 1, theirs) == {"G": 2}
+    assert bob.mana_pool["G"] == 2 and alice.mana_pool["G"] == 2
+
+
+def test_w1g5_extraplanar_lens_without_its_card_adds_nothing(set_pool):
+    """A declined imprint is a Lens with no exiled card: a Forest is one {G}."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, _alice, _bob = _w1g5_table(set_pool, [mrd["Extraplanar Lens"]], interactive=True)
+    game.enforce_mana_costs = False
+    target = _w1g5_put(game, 0, lea["Forest"])
+    forest = _w1g5_put(game, 0, lea["Forest"])
+    assert game.cast_from_hand(0, "Extraplanar Lens").supported
+    assert game.resolve_top_of_stack() is False
+    assert game.confirm_trigger_target(0, permanent_id=target.permanent_id)
+    game.resolve_top_of_stack()
+    assert game.confirm_optional_pay(0, accept=False)
+    _w1g5_resolve_stack(game)
+    assert game.is_on_battlefield(target)
+    assert _w1g5_tapped_for(game, 0, forest) == {"G": 1}
+
 # ==== end W1G5 ======================================================
 
 

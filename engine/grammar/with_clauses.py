@@ -133,6 +133,12 @@ def accept_with_clause(stream: TokenStream, d, parse_filter) -> bool | None:
         if comparison == "recorded":
             d.name_from_recorded_card = True
             return True
+        # "…with the same name as **the exiled card**" (Extraplanar Lens): a
+        # relation to the ability's source's linked exile, which
+        # ``subject_matches`` answers given the source.
+        if comparison == "exiled_card":
+            d.shares_name_with_exiled_card = True
+            return True
         # "…with **lesser power**" (No Quarter). A bound stated against the
         # other object the sentence is about, with no number and no
         # possessive — so it opens on the *adjective* rather than on the

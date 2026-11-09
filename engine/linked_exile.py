@@ -257,6 +257,27 @@ def cards_still_exiled_with(
     return found
 
 
+def shares_a_name_with_an_exiled_card(game, source: "Permanent | None", card) -> bool:
+    """Whether *card* has the same name as one of the cards *source*'s linked
+    ability exiled and still in exile — "a land **with the same name as the
+    exiled card**" (Extraplanar Lens), "a card … **with the same name as one of
+    the cards exiled with this artifact**" (Spellweaver Helix).
+
+    CR 201.2a: two objects share a name when they have at least one in common,
+    so each name of a split card is asked (the Helix's 2017-04-18 ruling),
+    through the reader every name question goes through
+    (``counted_names.card_answers_to_name``).
+    """
+    from .counted_names import card_answers_to_name
+    from .faces import card_names
+
+    return any(
+        card_answers_to_name(card, name)
+        for exiled, _owner in cards_still_exiled_with(game, source)
+        for name in card_names(exiled)
+    )
+
+
 def take_linked_entry_at(
     source: "Permanent | None", position: int
 ) -> dict[str, Any] | None:

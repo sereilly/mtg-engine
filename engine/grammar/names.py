@@ -218,6 +218,13 @@ def accept_name_comparison(
     # and the two cannot both claim it.
     if stream.accept_phrase("the", "same", "name", "as", "that", "card"):
         return "recorded"
+    # "…a land **with the same name as the exiled card**" (Extraplanar Lens).
+    # A fourth referent: the card the phrase's own source exiled with its
+    # linked ability (CR 607.2a) — not an event's object and not a step's
+    # record, so its own return value for the reason the three above each
+    # have one.
+    if stream.accept_phrase("the", "same", "name", "as", "the", "exiled", "card"):
+        return "exiled_card"
     # "…the number of cards in all graveyards **with the same name as that
     # spell**" (Aven, Cabal, Dwarven and Nantuko Shrine; Cephalid Shrine prints
     # "as **the** spell"). The firing event's object again — a cast event is

@@ -257,6 +257,7 @@ class _FilterDraft:
     shares_name_with_another: bool = False
     name_from_event: bool = False
     name_from_recorded_card: bool = False
+    shares_name_with_exiled_card: bool = False
     #: See ``ast.ObjectFilter.shares_color_with_it``.
     shares_color_with_it: bool = False
     #: See ``ast.ObjectFilter.colors_of_sacrificed_for_cost``.
@@ -323,6 +324,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         shares_name_with_another=d.shares_name_with_another,
         name_from_event=d.name_from_event,
         name_from_recorded_card=d.name_from_recorded_card,
+        shares_name_with_exiled_card=d.shares_name_with_exiled_card,
         shares_color_with_it=d.shares_color_with_it,
         colors_of_sacrificed_for_cost=d.colors_of_sacrificed_for_cost,
         shares_creature_type_with=d.shares_creature_type_with,
