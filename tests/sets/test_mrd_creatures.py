@@ -21,6 +21,49 @@ log), not instruction kinds alone.
 # ==== W1G1 ==========================================================
 # W1G1's tests go between this line and the "end W1G1" line.
 
+from engine import Game as _W1G1Game, PlayerState as _W1G1PlayerState
+from engine.models import Permanent as _W1G1Permanent
+from tests.helpers import resolve_stack as _w1g1_resolve_stack
+
+
+def test_w1g1_loxodon_punisher_grows_with_each_equipment_and_shrinks_when_one_moves(set_pool):
+    """'This creature gets +2/+2 for each Equipment attached to it.' Equipped
+    twice through the real equip ability, then one Equipment moves away."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    island = lea["Island"]
+    game = _W1G1Game(players=[
+        _W1G1PlayerState(name=f"P{seat}", library=[island] * 10) for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    def put(card):
+        permanent = _W1G1Permanent(card=card)
+        game._put_permanent_onto_battlefield(0, permanent, None)
+        game._settle()
+        return permanent
+
+    def equip(gear, creature):
+        result = game.activate_permanent_ability(
+            0, gear.card.name, permanent_index=game.battlefield_index_of(gear),
+            target_permanent_ids=[creature.permanent_id],
+        )
+        assert result.supported, result
+        _w1g1_resolve_stack(game)
+        game._settle()
+
+    punisher = put(mrd["Loxodon Punisher"])
+    bears = put(lea["Grizzly Bears"])
+    scimitar = put(mrd["Leonin Scimitar"])
+    splitter = put(mrd["Bonesplitter"])
+    assert (punisher.effective_power, punisher.effective_toughness) == (2, 2)
+    equip(scimitar, punisher)
+    assert (punisher.effective_power, punisher.effective_toughness) == (5, 5)
+    equip(splitter, punisher)
+    assert (punisher.effective_power, punisher.effective_toughness) == (9, 7)
+    equip(scimitar, bears)
+    assert (punisher.effective_power, punisher.effective_toughness) == (6, 4)
+
 # ==== end W1G1 ======================================================
 
 

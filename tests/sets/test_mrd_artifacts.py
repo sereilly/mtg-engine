@@ -556,6 +556,139 @@ def test_w1g1_scythe_destroyed_in_response_still_returns_the_card(set_pool):
     assert [card.name for card in game.players[0].graveyard] == ["Scythe of the Wretched"]
 
 
+# --- The supported-on-arrival Equipment, driven (W1G1's drive list) -------
+#
+# (name, P/T delta, keywords granted). Each is equipped through its own equip
+# ability, read through the layers, moved to a second creature (the bonus
+# follows it, CR 301.5a / 613.7e), and sent into combat.
+_W1G1_DRIVEN = (
+    ("Bonesplitter", (2, 0), ()),
+    ("Fireshrieker", (0, 0), ("double strike",)),
+    ("Leonin Scimitar", (1, 1), ()),
+    ("Lightning Greaves", (0, 0), ("haste", "shroud")),
+    ("Loxodon Warhammer", (3, 0), ("trample", "lifelink")),
+    ("Neurok Hoversail", (0, 0), ("flying",)),
+    ("Slagwurm Armor", (0, 6), ()),
+    ("Vulshok Battlegear", (3, 3), ()),
+    ("Vulshok Gauntlets", (4, 2), ()),
+)
+
+
+@_w1g1_pytest.mark.parametrize("name, delta, keywords", _W1G1_DRIVEN)
+def test_w1g1_driven_equipment_grants_and_follows(set_pool, name, delta, keywords):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    gear = _w1g1_put(game, mrd[name], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 0)
+    ogre = _w1g1_put(game, lea["Gray Ogre"], 0)
+
+    _w1g1_equip(game, 0, gear, bears)
+    assert _w1g1_pt(bears) == (2 + delta[0], 2 + delta[1])
+    for keyword in keywords:
+        assert bears.has_keyword(keyword), keyword
+
+    _w1g1_equip(game, 0, gear, ogre)
+    assert _w1g1_pt(bears) == (2, 2)
+    assert _w1g1_pt(ogre) == (2 + delta[0], 2 + delta[1])
+    for keyword in keywords:
+        assert ogre.has_keyword(keyword) and not bears.has_keyword(keyword)
+
+    # The ogre alone attacks; what reaches the player is its new power,
+    # twice for double strike.
+    game._destroy_swept_permanents(game.players[0], lambda p: p is bears)
+    _w1g1_declare_attack(game, 0)
+    hits = 2 if "double strike" in keywords else 1
+    _w1g1_fight(game, steps=hits)
+    assert game.players[1].life == 20 - hits * (2 + delta[0]), game.log[-6:]
+    if "lifelink" in keywords:
+        assert game.players[0].life == 20 + 2 + delta[0]
+
+
+def test_w1g1_vulshok_gauntlets_keeps_its_creature_tapped(set_pool):
+    """"...and doesn't untap during its controller's untap step." An attacker
+    wearing the Gauntlets stays tapped through its controller's next untap
+    step."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    gauntlets = _w1g1_put(game, mrd["Vulshok Gauntlets"], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 0)
+    _w1g1_equip(game, 0, gauntlets, bears)
+    _w1g1_declare_attack(game, 0)
+    _w1g1_fight(game)
+    assert bears.tapped
+
+    game.start_turn(1)
+    game.start_turn(0)
+    assert bears.tapped, game.log[-6:]
+
+
+def test_w1g1_lightning_greaves_shroud_refuses_a_bolt(set_pool):
+    """Shroud on the equipped creature: an opponent's Lightning Bolt cannot
+    name it (CR 702.18a)."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    greaves = _w1g1_put(game, mrd["Lightning Greaves"], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 0, sick=True)
+    _w1g1_equip(game, 0, greaves, bears)
+    assert bears.has_keyword("haste")
+    game.players[1].hand.append(lea["Lightning Bolt"])
+    cast = game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id]
+    )
+    _w1g1_resolve_stack(game)
+    assert not cast.supported
+    assert game.is_on_battlefield(bears)
+
+
+def test_w1g1_viridian_longbow_grants_a_ping_activated_from_the_creature(set_pool):
+    """'Equipped creature has "{T}: This creature deals 1 damage to any
+    target."' The ability is the creature's (CR 301.5d): activated from the
+    bears, tapping the bears, and gone once the Longbow moves."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    bow = _w1g1_put(game, mrd["Viridian Longbow"], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 0)
+    ogre = _w1g1_put(game, lea["Gray Ogre"], 0)
+    _w1g1_equip(game, 0, bow, bears)
+
+    result = game.activate_permanent_ability(
+        0, "Grizzly Bears",
+        permanent_index=game.battlefield_index_of(bears),
+        target_player_index=1,
+    )
+    assert result.supported, (result, game.log[-4:])
+    _w1g1_resolve_stack(game)
+    assert bears.tapped
+    assert game.players[1].life == 19
+
+    _w1g1_equip(game, 0, bow, ogre)
+    bears.tapped = False
+    again = game.activate_permanent_ability(
+        0, "Grizzly Bears",
+        permanent_index=game.battlefield_index_of(bears),
+        target_player_index=1,
+    )
+    _w1g1_resolve_stack(game)
+    assert not again.supported
+    assert game.players[1].life == 19
+
+
+def test_w1g1_myr_adapter_counts_the_equipment_on_it(set_pool):
+    """'This creature gets +1/+1 for each Equipment attached to it.'"""
+    mrd = set_pool("MRD")
+    game = _w1g1_table(set_pool)
+    adapter = _w1g1_put(game, mrd["Myr Adapter"], 0)
+    scimitar = _w1g1_put(game, mrd["Leonin Scimitar"], 0)
+    gauntlets = _w1g1_put(game, mrd["Golem-Skin Gauntlets"], 0)
+    assert _w1g1_pt(adapter) == (1, 1)
+    _w1g1_equip(game, 0, scimitar, adapter)
+    assert _w1g1_pt(adapter) == (3, 3)
+    # Gauntlets: +1/+0 per Equipment on it (2), the Adapter's own +1/+1 per
+    # Equipment (2) and the Scimitar's +1/+1.
+    _w1g1_equip(game, 0, gauntlets, adapter)
+    assert _w1g1_pt(adapter) == (6, 4)
+
+
 # ==== end W1G1 ======================================================
 
 
