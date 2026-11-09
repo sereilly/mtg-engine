@@ -316,6 +316,147 @@ def test_w1g8_scrabbling_claws_on_an_empty_graveyard_exiles_nothing(set_pool):
     assert claws.tapped and not game.players[1].exile
     assert not game.pending_choices
 
+# -- Supported on arrival, driven: the mana rocks, Myr, Talismans, Towers ---
+
+_W1G8_TALISMANS = {
+    "Talisman of Dominance": "UB", "Talisman of Impulse": "RG",
+    "Talisman of Indulgence": "BR", "Talisman of Progress": "WU",
+    "Talisman of Unity": "GW",
+}
+
+
+def test_w1g8_talismans_hurt_only_on_their_coloured_ability(set_pool):
+    mrd = set_pool("MRD")
+    for name, pair in _W1G8_TALISMANS.items():
+        for colour in pair:
+            game, (talisman,) = _w1g8_board(set_pool, [mrd[name]])
+            assert game.activate_permanent_ability(
+                0, name, ability_index=1, mana_color=colour
+            ).supported
+            assert game.players[0].mana_pool[colour] == 1, (name, colour)
+            assert game.players[0].life == 19
+            assert f"{name} dealt 1 damage to A" in game.log
+        game, (talisman,) = _w1g8_board(set_pool, [mrd[name]])
+        assert game.activate_permanent_ability(0, name, ability_index=0).supported
+        assert game.players[0].mana_pool["C"] == 1 and game.players[0].life == 20
+
+
+def test_w1g8_the_ai_pays_a_coloured_pip_off_a_talisman_and_generic_painlessly(set_pool):
+    """The planner counted a non-land source by its first free mana ability
+    alone, so a Talisman paid only {C} and the AI never cast a coloured spell
+    off one. Each colour now names the ability that makes it, priced by it:
+    a Mountain pays {R} before the Talisman's painful one does."""
+    from types import SimpleNamespace
+
+    from engine.ai_payment import _plan_land_taps, tap_planned_lands
+
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    for lands, need, paid, life in (
+        ([], {"R": 1}, {"R": 1}, 19),
+        ([], {"generic": 1}, {"C": 1}, 20),
+        (["Mountain"], {"R": 1}, {"R": 1}, 20),
+        (["Mountain"], {"R": 1, "generic": 1}, {"R": 1, "C": 1}, 20),
+        (["Mountain"], {"R": 1, "G": 1}, {"R": 1, "G": 1}, 19),
+    ):
+        game, _placed = _w1g8_board(
+            set_pool, [mrd["Talisman of Impulse"], *(lea[n] for n in lands)],
+        )
+        game.enforce_mana_costs = True
+        plan = _plan_land_taps(game, game.players[0], need)
+        assert plan is not None, (lands, need)
+        tap_planned_lands(game, 0, SimpleNamespace(
+            land_tap_indices=plan[0], land_tap_colors=plan[1],
+        ))
+        pool = {s: n for s, n in game.players[0].mana_pool.items() if n}
+        assert pool == paid and game.players[0].life == life, (lands, need, pool)
+
+
+def test_w1g8_myr_and_gilded_lotus_make_their_mana(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    for name, colour in (
+        ("Copper Myr", "G"), ("Gold Myr", "W"), ("Iron Myr", "R"),
+        ("Leaden Myr", "B"), ("Silver Myr", "U"),
+    ):
+        game, _placed = _w1g8_board(set_pool, [mrd[name]])
+        assert game.activate_permanent_ability(0, name).supported
+        assert {s: n for s, n in game.players[0].mana_pool.items() if n} == {colour: 1}
+    game, _placed = _w1g8_board(set_pool, [mrd["Gilded Lotus"]], hand=[lea["Craw Wurm"]])
+    game.enforce_mana_costs = True
+    game.players[0].mana_pool["C"] = 3
+    assert game.activate_permanent_ability(0, "Gilded Lotus", mana_color="G").supported
+    assert game.players[0].mana_pool["G"] == 3
+    assert game.cast_from_hand(0, "Craw Wurm").supported
+    _w1g8_resolve_stack(game)
+    assert "Craw Wurm" in [p.card.name for p in game.players[0].battlefield]
+
+
+def test_w1g8_galvanic_key_untaps_an_artifact(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, (key, ring) = _w1g8_board(set_pool, [mrd["Galvanic Key"], lea["Sol Ring"]])
+    ring.tapped = True
+    assert game.activate_permanent_ability(
+        0, "Galvanic Key", target_permanent_ids=[ring.permanent_id]
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert not ring.tapped and key.tapped
+
+
+def test_w1g8_lodestone_myr_taps_artifacts_to_grow(set_pool):
+    """"Tap an untapped artifact you control": any one, itself included (no
+    {T} symbol, so CR 302.6 does not apply), and a named one is the one
+    tapped."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, (lodestone, ring, myr) = _w1g8_board(
+        set_pool, [mrd["Lodestone Myr"], lea["Sol Ring"], mrd["Iron Myr"]],
+    )
+    assert game._has_keyword(lodestone, "trample")
+    assert game.activate_permanent_ability(
+        0, "Lodestone Myr", cost_permanent_ids=[myr.permanent_id]
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert myr.tapped and not ring.tapped and not lodestone.tapped
+    assert (lodestone.effective_power, lodestone.effective_toughness) == (3, 3)
+    for _ in range(2):
+        assert game.activate_permanent_ability(0, "Lodestone Myr").supported
+        _w1g8_resolve_stack(game)
+    assert lodestone.effective_power == 5 and ring.tapped and lodestone.tapped
+    refused = game.activate_permanent_ability(0, "Lodestone Myr")
+    assert not refused.supported and lodestone.effective_power == 5
+
+
+def test_w1g8_tanglebloom_nuisance_engine_and_the_towers(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, _placed = _w1g8_board(set_pool, [mrd["Tanglebloom"], mrd["Tower of Eons"]])
+    game.activate_permanent_ability(0, "Tanglebloom")
+    game.activate_permanent_ability(0, "Tower of Eons")
+    _w1g8_resolve_stack(game)
+    assert game.players[0].life == 31
+    game, (engine_,) = _w1g8_board(set_pool, [mrd["Nuisance Engine"]])
+    assert game.activate_permanent_ability(0, "Nuisance Engine").supported
+    _w1g8_resolve_stack(game)
+    (pest,) = [p for p in game.players[0].battlefield if p is not engine_]
+    assert pest.card.type_line == "Artifact Creature — Pest"
+    assert (pest.effective_power, pest.effective_toughness) == (0, 1)
+    assert not pest.card.colors
+    game, (tower, bears) = _w1g8_board(
+        set_pool, [mrd["Tower of Champions"], lea["Grizzly Bears"]],
+    )
+    game.activate_permanent_ability(
+        0, "Tower of Champions", target_permanent_ids=[bears.permanent_id]
+    )
+    _w1g8_resolve_stack(game)
+    assert (bears.effective_power, bears.effective_toughness) == (8, 8)
+    game, (fortunes,) = _w1g8_board(set_pool, [mrd["Tower of Fortunes"]])
+    game.enforce_mana_costs = True
+    game.players[0].mana_pool["C"] = 7
+    assert not game.activate_permanent_ability(0, "Tower of Fortunes").supported
+    game.players[0].mana_pool["C"] = 8
+    before = len(game.players[0].hand)
+    assert game.activate_permanent_ability(0, "Tower of Fortunes").supported
+    _w1g8_resolve_stack(game)
+    assert len(game.players[0].hand) - before == 4
+
+
 # ==== end W1G8 ======================================================
 
 

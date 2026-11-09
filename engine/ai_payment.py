@@ -203,7 +203,9 @@ def tap_planned_lands(
             game.activate_permanent_ability(
                 seat, land.card.name,
                 permanent_index=slot,
-                ability_index=source.ability_index,
+                # The ability that makes the asked symbol, where the source
+                # has several (a Talisman's {C} and its painful colours).
+                ability_index=source.ability_for(color),
                 # "Any color" is one of the five (CR 105.1): a source asked for
                 # the {C} a generic cost was planned at names no colour, and
                 # the ability's own default answers.
@@ -679,7 +681,10 @@ class _PaymentPlanner:
             entry = _ManaSource(
                 slot, options, 3 if source.sacrifices else 1,
                 source.symbols[0],
-                _source_prices(game, permanent, options, watched, source.ability_index),
+                _source_prices(
+                    game, permanent, options, watched, source.ability_index,
+                    ability_for_symbol=source.ability_for_symbol,
+                ),
             )
             if not source.sacrifices:
                 self.sources.append(entry)
@@ -894,15 +899,29 @@ class _PaymentPlanner:
         return profiles if any(profile != FREE_TAP for profile in profiles) else None
 
 
-def _source_prices(game, permanent, options, watched, ability_index=None) -> tuple:
+def _source_prices(
+    game, permanent, options, watched, ability_index=None, *,
+    ability_for_symbol=(),
+) -> tuple:
     """``((symbol, price), …)`` for every symbol *options* can make
-    (`mana_drawbacks.tap_prices`), or () where none costs anything."""
+    (`mana_drawbacks.tap_prices`), or () where none costs anything —
+    each asked of the ability that makes it, where a source has several
+    (*ability_for_symbol*: a Talisman's coloured tap is the one that hurts)."""
     from .mana_drawbacks import tap_prices
 
     symbols = sorted({
         symbol for option in options for unit in option.units for symbol in unit
         if symbol in _MANA_SYMBOLS
     })
+    if ability_for_symbol:
+        owner = dict(ability_for_symbol)
+        prices = {}
+        for symbol in symbols:
+            prices.update(tap_prices(
+                game, permanent, [symbol],
+                ability_index=owner.get(symbol, ability_index), watched=watched,
+            ))
+        return tuple(sorted(prices.items())) if any(prices.values()) else ()
     prices = tap_prices(game, permanent, symbols, ability_index=ability_index, watched=watched)
     return tuple(sorted(prices.items())) if any(prices.values()) else ()
 

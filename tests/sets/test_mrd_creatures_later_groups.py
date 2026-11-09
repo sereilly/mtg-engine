@@ -277,6 +277,30 @@ def test_w1g8_quicksilver_blue_pays_only_its_own_abilities(set_pool):
     assert not refused.supported and "insufficient mana" in refused.details
     assert game.players[0].mana_pool["U"] == 1
 
+def test_w1g8_spikeshot_goblin_deals_its_power(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, (goblin,) = _w1g8_board(set_pool, [mrd["Spikeshot Goblin"]], hand=[lea["Giant Growth"]])
+    game.cast_from_hand(0, "Giant Growth", target_permanent_ids=[goblin.permanent_id])
+    _w1g8_resolve_stack(game)
+    assert game.activate_permanent_ability(
+        0, "Spikeshot Goblin", target_player_index=1
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert game.players[1].life == 16
+
+
+def test_w1g8_auriok_transfixer_taps_an_artifact(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, (transfixer, ring) = _w1g8_board(
+        set_pool, [mrd["Auriok Transfixer"]], [lea["Sol Ring"]],
+    )
+    assert game.activate_permanent_ability(
+        0, "Auriok Transfixer", target_permanent_ids=[ring.permanent_id]
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert ring.tapped and transfixer.tapped
+
+
 # ==== end W1G8 ======================================================
 
 

@@ -62,6 +62,49 @@ log), not instruction kinds alone.
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+#
+# Blinkmoth Well, supported on arrival and driven: its {C}, and "Tap target
+# noncreature artifact" refusing an artifact creature at announcement.
+from engine import Game as _W1G8Game
+from engine.models import Permanent as _W1G8Permanent
+from engine.models import PlayerState as _W1G8PlayerState
+from engine.oracle import compile_card_oracle as _w1g8_compile
+
+from tests.helpers import resolve_stack as _w1g8_resolve_stack
+
+
+def test_w1g8_blinkmoth_well_taps_only_a_noncreature_artifact(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _W1G8Game(players=[
+        _W1G8PlayerState(name="A", library=[lea["Plains"]] * 5),
+        _W1G8PlayerState(name="B", library=[lea["Plains"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    well = _W1G8Permanent(card=mrd["Blinkmoth Well"])
+    ring = _W1G8Permanent(card=lea["Sol Ring"])
+    myr = _W1G8Permanent(card=mrd["Iron Myr"])
+    game._put_permanent_onto_battlefield(0, well, None)
+    game._put_permanent_onto_battlefield(1, ring, None)
+    game._put_permanent_onto_battlefield(1, myr, None)
+    _w1g8_resolve_stack(game)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    ability = _w1g8_compile(well.card).activated_abilities[1]
+    offered = [e.get("name") for e in game.activation_offer(0, well, ability)["valid_targets"]]
+    assert offered == ["Sol Ring"]
+    refused = game.activate_permanent_ability(
+        0, "Blinkmoth Well", ability_index=1, target_permanent_ids=[myr.permanent_id]
+    )
+    assert not refused.supported and not well.tapped
+    assert game.activate_permanent_ability(
+        0, "Blinkmoth Well", ability_index=1, target_permanent_ids=[ring.permanent_id]
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert ring.tapped and well.tapped
+    well.tapped = False
+    assert game.tap_land_for_mana(0, "Blinkmoth Well")
+    assert game.players[0].mana_pool["C"] == 1
+
 
 # ==== end W1G8 ======================================================
 
