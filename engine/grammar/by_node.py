@@ -400,7 +400,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     # copy inherits was frozen into the exile register when the spell left the
     # stack, so the lowering reads the node and nothing else.
     ast.PutExiledCardOnStackAsCopy: _lower_put_exiled_card_on_stack_as_copy,
-    ast.CastCopyOfExiledCard: _lower_cast_copy_of_exiled_card,
     ast.ChooseBlocksForDefenders: _lower_choose_blocks_for_defenders,
     ast.ReassignBlockersBetweenAttackers: _lower_reassign_blockers_between_attackers,
     ast.ReturnSelfInsteadOfUntapping: _lower_return_self_instead_of_untapping,
@@ -436,6 +435,10 @@ _BY_NODE_TYPE: dict[type, object] = {
 #: whichever was consulted first, which is not a fact anyone should have to look
 #: up.
 _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
+    # "…you may copy **the other**" (Spellweaver Helix) names the exiled card
+    # the trigger's cast does not share a name with, so only a cast trigger
+    # can mean it — the lowering asks which event fired.
+    ast.CastCopyOfExiledCard: _lower_cast_copy_of_exiled_card,
     # "…**that player** exiles all cards from their library" (Thought Lash),
     # "…**that player** mills a card" (Reef Pirates), "…**that player**
     # discards a card" (Anvil of Bogardan): each names the seat the fire site

@@ -296,12 +296,45 @@ def cast_copy_of_exiled_card(game: Game, instruction: OracleInstruction, context
         None,
     )
     exiled = cards_still_exiled_with(game, context.source_permanent)
+    if instruction.payload.get("other"):
+        exiled = _the_other_exiled_cards(game, context, exiled)
     if seat is None or not exiled:
         game.log.append(f"{context.card.name}: no card is exiled with it to copy")
         return True, "resolved"
     for card, _owner in exiled:
         arm_copy_cast(game, seat, card, context.card.name)
     return True, "resolved"
+
+
+def _the_other_exiled_cards(game, context, exiled):
+    """"…if it has the same name as one of the cards exiled with this
+    artifact, you may copy **the other**." (Spellweaver Helix.)
+
+    The cast card is the trigger's (``cast_card``, frozen at the fire site —
+    last-known information once it has left the stack). One exiled card
+    sharing its name is set aside (CR 201.2a, through
+    ``counted_names.card_answers_to_name``) and the rest are "the other": two
+    imprinted cards with one name make one copy, not two (the 2004-12-01
+    ruling), and a lone imprint makes none ("nothing happens"). No exiled card
+    sharing the name any more is CR 603.4's intervening if failing on
+    resolution: nothing."""
+    from ..counted_names import card_answers_to_name
+    from ..faces import card_names
+
+    cast = (context.trigger_context or {}).get("cast_card")
+    if cast is None:
+        return []
+    names = card_names(cast)
+    matched = next(
+        (
+            position for position, (card, _owner) in enumerate(exiled)
+            if any(card_answers_to_name(card, name) for name in names)
+        ),
+        None,
+    )
+    if matched is None:
+        return []
+    return [entry for position, entry in enumerate(exiled) if position != matched]
 
 
 def _stack_ability_kind(item) -> str | None:

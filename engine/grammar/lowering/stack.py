@@ -760,12 +760,24 @@ def _lower_put_exiled_card_on_stack_as_copy(
 
 
 def _lower_cast_copy_of_exiled_card(
-    node: "ast.CastCopyOfExiledCard",
+    node: "ast.CastCopyOfExiledCard", event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"You may copy the exiled card. If you do, you may cast the copy without
     paying its mana cost." (Isochron Scepter.) The handler reads the source's
     linked exile and offers each copy (``engine/copy_casts.py``), so nothing
-    rides the payload."""
+    rides the payload.
+
+    "…you may copy **the other**" (Spellweaver Helix) names the exiled card
+    the *cast that triggered the ability* does not share a name with, which
+    only a cast trigger has (the cast card is frozen on its context as
+    ``cast_card``); anywhere else the words name nothing and refuse."""
+    if node.other:
+        if event != "spell_cast":
+            raise LoweringError(
+                "'the other' exiled card is the one a cast does not name, and "
+                "nothing here was cast", node=node,
+            )
+        return (OracleInstruction("cast_copy_of_exiled_card", "", {"other": True}),)
     return (OracleInstruction("cast_copy_of_exiled_card", "", {}),)
 
 

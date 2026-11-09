@@ -455,8 +455,14 @@ class CastCopyOfExiledCard:
     other copy node here copies a spell already on the stack (CR 707.10):
     the object is the card the permanent's imprint exiled (CR 607.2a), and the
     copy is made in exile and cast from there (``engine/copy_casts.py``).
-    Nothing is chosen at announcement, so the node carries nothing.
+    Nothing is chosen at announcement.
+
+    ``other`` is Spellweaver Helix's "you may copy **the other**": the exiled
+    card that is not the one sharing a name with the cast that triggered the
+    ability — so only a cast trigger can mean it.
     """
+
+    other: bool = False
 
 
 @dataclass(frozen=True)

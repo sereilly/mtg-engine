@@ -771,9 +771,17 @@ def _parse_cast_copy_of_exiled_card(
     cost is a different card. Declines with the cursor unmoved.
     """
     mark = stream.mark()
+    # "…you may copy **the other**." (Spellweaver Helix.) The other of the two
+    # cards its imprint exiled — the one the trigger's cast does not share a
+    # name with; the lowering refuses it outside a cast trigger.
+    other = False
+    if stream.accept_phrase("you", "may", "copy", "the", "other"):
+        other = True
+    elif not stream.accept_phrase("you", "may", "copy", "the", "exiled", "card"):
+        stream.reset(mark)
+        return None
     if not (
-        stream.accept_phrase("you", "may", "copy", "the", "exiled", "card")
-        and stream.accept_punct(".")
+        stream.accept_punct(".")
         and stream.accept_phrase("if", "you", "do")
         and stream.accept_punct(",")
         and stream.accept_phrase(
@@ -783,7 +791,7 @@ def _parse_cast_copy_of_exiled_card(
     ):
         stream.reset(mark)
         return None
-    return ast.CastCopyOfExiledCard()
+    return ast.CastCopyOfExiledCard(other=other)
 
 
 def _parse_bid_life_contest(stream: TokenStream) -> ast.Statement | None:

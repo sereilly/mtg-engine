@@ -287,6 +287,19 @@ def _cast_narrowing_admits(
     if "cast_shares_with_exiled_card" in trig.condition.payload:
         if not _shares_with_exiled_card(game, permanent, card, caster, item):
             return False
+    # "…casts **a card**, if it has the same name as one of the cards exiled
+    # with this artifact" (Spellweaver Helix). A copy is not a card (CR 707.10,
+    # ``StackItem.is_copy``) — which is also what keeps the Helix's own copy
+    # from triggering it again — and CR 603.4's intervening if, the name
+    # compared by CR 201.2a against the source's linked exile
+    # (``linked_exile.shares_a_name_with_an_exiled_card``).
+    if "cast_named_like_exiled_card" in trig.condition.payload:
+        from .linked_exile import shares_a_name_with_an_exiled_card
+
+        if item is not None and getattr(item, "is_copy", False):
+            return False
+        if not shares_a_name_with_an_exiled_card(game, permanent, card):
+            return False
     cast_types = trig.condition.payload.get("cast_types")
     if cast_types and not any(word in type_line for word in cast_types.split(" or ")):
         return False

@@ -702,6 +702,91 @@ def test_w1g5_isochron_scepter_offer_is_answered_on_the_wire(set_pool):
     _w1g5_resolve_stack(game)
     assert bob.life == 17 and game.pending_choices == []
 
+def _w1g5_helix_imprints(set_pool, buried, *, interactive=True):
+    """Spellweaver Helix with the two sorceries *buried* in Bob's graveyard
+    exiled by its imprint (named on the trigger's target prompt), Bad Moon and
+    a Swamp on Bob's side, and a Stone Rain in Alice's hand."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, bob = _w1g5_table(
+        set_pool, [mrd["Spellweaver Helix"], lea["Stone Rain"]], interactive=interactive,
+    )
+    game.enforce_mana_costs = False
+    bob.graveyard.extend(lea[name] for name in buried)
+    moon = _w1g5_put(game, 1, lea["Bad Moon"])
+    swamp = _w1g5_put(game, 1, lea["Swamp"])
+    assert game.cast_from_hand(0, "Spellweaver Helix").supported
+    if interactive:
+        assert game.resolve_top_of_stack() is False
+        assert game.confirm_trigger_target(0, seat=1, graveyard_indices=[0, 1])
+        game.resolve_top_of_stack()
+        assert game.confirm_optional_pay(0, accept=True)
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    return game, alice, bob, moon, swamp
+
+
+def _w1g5_cast_stone_rain(game, swamp, *, accept=True):
+    assert game.cast_from_hand(0, "Stone Rain", target_permanent_ids=[swamp.permanent_id]).supported
+    while game.stack and not game.pending_choices:
+        if game.resolve_top_of_stack():
+            continue
+        break
+    offers = [c for c in game.pending_choices if c.kind == "copy_cast"]
+    for offer in offers:
+        assert game.confirm_copy_cast(0, accept)
+    _w1g5_resolve_stack(game)
+    return [offer.data["card_name"] for offer in offers]
+
+
+def test_w1g5_spellweaver_helix_casts_a_copy_of_the_other_imprinted_sorcery(set_pool):
+    """"Whenever a player casts a card, if it has the same name as one of the
+    cards exiled with this artifact, you may copy the other. If you do, you
+    may cast the copy without paying its mana cost." Stone Rain and
+    Tranquility imprinted: Alice's Stone Rain offers a copy of Tranquility,
+    cast above it, which destroys Bad Moon before the Stone Rain resolves; the
+    copy is not a card, so it does not trigger the Helix again (CR 707.10)."""
+    game, alice, bob, moon, swamp = _w1g5_helix_imprints(set_pool, ("Stone Rain", "Tranquility"))
+    assert [c.name for c in bob.exile] == ["Stone Rain", "Tranquility"]
+    assert _w1g5_cast_stone_rain(game, swamp) == ["Tranquility"]
+    assert not game.is_on_battlefield(moon) and not game.is_on_battlefield(swamp)
+    assert [c.name for c in bob.exile] == ["Stone Rain", "Tranquility"]
+    assert [c.name for c in alice.graveyard] == ["Stone Rain"], "the copy ceased to exist"
+    assert sum("cast a copy of" in line for line in game.log) == 1
+
+
+def test_w1g5_spellweaver_helix_two_of_one_name_make_one_copy(set_pool):
+    """Ruling 2004-12-01: "If the two imprinted sorcery cards have the same
+    name and a card with that name is cast, only one copy is created." And a
+    seat nobody asks takes the offer."""
+    game, _alice, _bob, _moon, swamp = _w1g5_helix_imprints(
+        set_pool, ("Stone Rain", "Stone Rain"), interactive=False,
+    )
+    _w1g5_put(game, 1, set_pool("LEA")["Swamp"])
+    assert game.cast_from_hand(0, "Stone Rain", target_permanent_ids=[swamp.permanent_id]).supported
+    _w1g5_resolve_stack(game)
+    assert sum("cast a copy of Stone Rain" in line for line in game.log) == 1
+    assert not game.is_on_battlefield(swamp)
+
+
+def test_w1g5_spellweaver_helix_with_one_card_left_does_nothing(set_pool):
+    """Ruling 2004-12-01: "If there's only one imprinted sorcery card, nothing
+    happens." With Tranquility gone from exile, Stone Rain names one card and
+    there is no other; with Stone Rain gone, the cast names none and the Helix
+    does not trigger (CR 603.4)."""
+    game, _alice, bob, moon, swamp = _w1g5_helix_imprints(set_pool, ("Stone Rain", "Tranquility"))
+    tranquility = next(c for c in bob.exile if c.name == "Tranquility")
+    assert game.take_card_from_exile(1, tranquility)
+    assert _w1g5_cast_stone_rain(game, swamp) == []
+    assert game.is_on_battlefield(moon) and not game.is_on_battlefield(swamp)
+
+    game, _alice, bob, moon, swamp = _w1g5_helix_imprints(set_pool, ("Stone Rain", "Tranquility"))
+    rain = next(c for c in bob.exile if c.name == "Stone Rain")
+    assert game.take_card_from_exile(1, rain)
+    before = len(game.log)
+    assert _w1g5_cast_stone_rain(game, swamp) == []
+    assert game.is_on_battlefield(moon)
+    assert not any("Spellweaver Helix" in line for line in game.log[before:])
+
 # ==== end W1G5 ======================================================
 
 

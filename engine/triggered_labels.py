@@ -674,6 +674,10 @@ TRIGGERED_LABELS: dict[str, str] = {
     # instant or sorcery spell." Beside the storm trigger's
     # `copy_triggering_spell`: a copy of a spell either way.
     "copy_top_stack_spell": "triggered_copy",
+    # "…you may copy the other. If you do, you may cast the copy without
+    # paying its mana cost." (Spellweaver Helix.) CR 707.12's copy of a card,
+    # cast as the trigger resolves — a copy, beside the row above.
+    "cast_copy_of_exiled_card": "triggered_copy",
     # Xantid Swarm: "Whenever this creature attacks, defending player can't
     # cast spells this turn." `forbid_land_plays_this_turn`'s
     # `activated_restriction`, the other half of CR 305.1's pair, with this

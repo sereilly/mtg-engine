@@ -27,6 +27,7 @@ from . import ast
 from .bounds import parse_comparison
 from .errors import GrammarError
 from .nouns import parse_object_filter
+from .phrases import _accept_self_reference
 from .stream import TokenStream
 from .vocabulary import (CARD_TYPES, COLOR_WORDS, CREATURE_TYPES,
                          IMPLEMENTED_KEYWORDS, ORDINAL_WORDS)
@@ -202,6 +203,21 @@ def _parse_cast_event(
             "that", "shares", "a", "color", "or", "mana", "value", "with",
             "the", "exiled", "card",
         )
+    ):
+        return ast.TriggerEvent("spell_cast", trigger_word)
+    stream.reset(mark)
+    # "…a player casts **a card, if it has the same name as one of the cards
+    # exiled with this artifact**" (Spellweaver Helix). The table's
+    # ``cast_named_like_exiled_card`` row, its intervening if (CR 603.4) read
+    # with it for that row's reason; the dispatcher answers both halves off the
+    # source.
+    if stream.accept_phrase("a", "player", "casts", "a", "card") and (
+        stream.accept_punct(",")
+        and stream.accept_phrase(
+            "if", "it", "has", "the", "same", "name", "as", "one", "of", "the",
+            "cards", "exiled", "with",
+        )
+        and _accept_self_reference(stream)
     ):
         return ast.TriggerEvent("spell_cast", trigger_word)
     stream.reset(mark)
