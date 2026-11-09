@@ -55,7 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | SCG | 143 | 262 | 82.4% | 82.1% | 55.0% | 120 |
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| MRD *(measured)* | 291 | 456 | 75.0% | 72.8% | 52.0% | 197 |
+| MRD *(measured)* | 291 | 456 | 75.9% | 73.7% | 52.6% | 200 |
 | **All (shipped)** | **8992** | **13323** | **90.0%** | **89.5%** | **62.1%** | **7036** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -68,9 +68,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 893 | 475 | expected a subject |  |
+| 892 | 474 | expected a subject |  |
 | 198 | 103 | unrecognized effect verb |  |
-| 145 | 79 | unconsumed text |  |
+| 144 | 78 | unconsumed text |  |
 | 71 | 52 | granted ability in quotes | phase 3 (quoted abilities) |
 | 41 | 8 | expected what this creature can't block, or a duration |  |
 | 38 | 38 | unrecognized activation cost |  |
@@ -87,12 +87,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 1 | expected 'of' |  |
 | 3 | 2 | expected 'the number of' in a where-clause |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 3 | 3 | expected 'a' |  |
 | 3 | 3 | an Aura's continuous grant is derived by engine/auras.py |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 2 | 2 | expected 'a' |  |
 | 2 | 2 | expected a keyword ability |  |
-| 2 | 2 | expected 'be' |  |
+| 2 | 2 | expected 'put' |  |
 
 ## Cards executing through the grammar
 
@@ -4020,6 +4020,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• You draw three cards.`
 - **Fatal Mutation**
   - `When enchanted creature is turned face up, destroy it. It can't be regenerated.`
+- **Fatespinner**
+  - `At the beginning of each opponent's upkeep, that player chooses draw step, main phase, or combat phase. The player skips each instance of the chosen step or phase this turn.`
 - **Fatigue**
   - `Target player skips their next draw step.`
 - **Fault Line**
@@ -7461,6 +7463,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Mindstab Thrull**
   - `Whenever this creature attacks and isn't blocked, you may sacrifice it. If you do, defending player discards three cards.`
   - `Whenever this creature attacks and isn't blocked, you may sacrifice it. If you do, defending player discards three cards.`
+- **Mindstorm Crown**
+  - `At the beginning of your upkeep, draw a card if you had no cards in hand at the beginning of this turn. If you had a card in hand, this artifact deals 1 damage to you.`
 - **Mindwarper**
   - `{2}{B}, Remove a +1/+1 counter from this creature: Target player discards a card. Activate only as a sorcery.`
 - **Mindwhip Sliver**
@@ -12347,6 +12351,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target player takes an extra turn after this one.`
 - **Time and Tide**
   - `Simultaneously, all phased-out creatures phase in and all creatures with phasing phase out.`
+- **Timesifter**
+  - `At the beginning of each upkeep, each player exiles the top card of their library. The player who exiled the card with the greatest mana value takes an extra turn after this one. If two or more players' cards are tied for greatest, the tied players repeat this process until the tie is broken.`
 - **Timetwister**
   - `Each player shuffles their hand and graveyard into their library, then draws seven cards. (Then put Timetwister into its owner's graveyard.)`
   - `Each player shuffles their hand and graveyard into their library, then draws seven cards. (Then put Timetwister into its owner's graveyard.)`
