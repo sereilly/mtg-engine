@@ -488,7 +488,7 @@ def test_w2g4_misstep_holds_down_the_named_players_creatures_only(set_pool):
 
 def test_w2g4_misstep_waits_for_the_named_players_untap_step(set_pool):
     """"…during **that player's** next untap step" — the seat the spell chose
-    (CR 115.4), recorded on the lock and spent by that seat's step alone: the
+    (CR 601.2c), recorded on the lock and spent by that seat's step alone: the
     caster's own untap step leaves it standing.
     """
     game, _caster, _other = _w2g4_table(
