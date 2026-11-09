@@ -100,6 +100,15 @@ def _lower_remove_counter(
     the first picks a dispatch path, the second says which object the firing
     was about.
     """
+    # "…remove **all of them** from it" with no condition in front of it that
+    # counted a kind of counter (``rebinding.bind_counter_pronoun_to_condition``
+    # rebinds Lightning Coils' printing). Refused by name: a sentinel lowered
+    # as a kind would remove counters nothing ever placed.
+    if node.counter == ast.COUNTERS_NAMED_BEFORE:
+        raise LoweringError(
+            "'all of them' names counters no condition in front of it counted",
+            node=node,
+        )
     # "**Target player** loses all poison counters." (Leeches.) A counter on a
     # seat rather than on an object, so it reaches neither the sweep below nor
     # any of the permanent removals under it — read first, because every one of

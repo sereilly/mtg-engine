@@ -331,6 +331,86 @@ def test_w1g6_chalice_for_zero_counters_the_mana_value_zero_spells(set_pool):
     _w1g6_resolve_stack(game)
     assert len(game.players[1].battlefield) == 1
 
+
+def _w1g6_coils_table(set_pool, charge: int, *, mine=()):
+    lea = set_pool("LEA")
+    coils = _w1g6_Permanent(card=set_pool("MRD")["Lightning Coils"])
+    game = _w1g6_Game(players=[
+        _w1g6_PlayerState(name="P1", battlefield=[coils, *mine],
+                          library=[lea["Island"]] * 10),
+        _w1g6_PlayerState(name="P2", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._sync_control()
+    from engine.named_counters import add_counters
+
+    add_counters(coils, "charge", charge)
+    return game, coils
+
+
+def _w1g6_elementals(game):
+    return [p for p in game.all_permanents() if p.card.name == "Elemental Token"]
+
+
+def test_w1g6_lightning_coils_spends_every_counter_on_hasty_elementals(set_pool):
+    """"At the beginning of your upkeep, if this artifact has five or more charge
+    counters on it, remove all of them from it and create that many 3/1 red
+    Elemental creature tokens with haste. Exile them at the beginning of the
+    next end step."
+
+    "All of them" is every charge counter, and "that many" is how many came
+    off: six counters are six 3/1 hasty Elementals and an empty Coils. They
+    are exiled at the next end step and the Coils starts again from zero.
+    """
+    game, coils = _w1g6_coils_table(set_pool, 6)
+    game.start_turn(0)
+    _w1g6_resolve_stack(game)
+
+    tokens = _w1g6_elementals(game)
+    assert len(tokens) == 6, game.log
+    assert _w1g6_counters_on(coils, "charge") == 0
+    assert all(
+        (t.effective_power, t.effective_toughness) == (3, 1) for t in tokens
+    )
+    assert all(game._has_keyword(t, "haste") for t in tokens)
+    assert all(t in game.players[0].battlefield for t in tokens)
+
+    game.resolve_end_step(0)
+    _w1g6_resolve_stack(game)
+    assert _w1g6_elementals(game) == [], game.log[-6:]
+    assert game.is_on_battlefield(coils)
+
+
+def test_w1g6_lightning_coils_below_five_does_nothing_and_counts_deaths(set_pool):
+    """Four counters: the intervening-if is false and nothing happens (CR
+    603.4). A nontoken creature its controller controls dying is the fifth
+    ("Whenever a nontoken creature you control dies"), and the next upkeep
+    makes five."""
+    lea = set_pool("LEA")
+    bears = _w1g6_nosick(_w1g6_Permanent(card=lea["Grizzly Bears"]))
+    game, coils = _w1g6_coils_table(set_pool, 4, mine=[bears])
+    game.start_turn(0)
+    _w1g6_resolve_stack(game)
+    assert _w1g6_elementals(game) == []
+    assert _w1g6_counters_on(coils, "charge") == 4
+
+    game._close_current_priority_step()
+    game.players[1].hand.append(lea["Lightning Bolt"])
+    assert game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g6_resolve_stack(game)
+    game.check_state_based_actions()
+    _w1g6_resolve_stack(game)
+    assert not game.is_on_battlefield(bears)
+    assert _w1g6_counters_on(coils, "charge") == 5
+
+    game.start_turn(0)
+    _w1g6_resolve_stack(game)
+    assert len(_w1g6_elementals(game)) == 5
+    assert _w1g6_counters_on(coils, "charge") == 0
+
 # ==== end W1G6 ======================================================
 
 

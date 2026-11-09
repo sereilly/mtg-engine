@@ -714,6 +714,16 @@ def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:
     # that player **removes** a counter from it"), which only the toll's price
     # list reaches — the statement dispatch opens on the imperative.
     stream.expect_word("remove", "removes")
+    # "…if this artifact has five or more charge counters on it, remove **all
+    # of them** from it" (Lightning Coils). The kind is the one the condition
+    # counted, which this production cannot see: the sentinel says so, and
+    # the trigger's line assembly rebinds it or the lowering refuses it.
+    if stream.accept_phrase("all", "of", "them"):
+        stream.expect_word("from")
+        subject = parse_recipient(stream)
+        if subject is None:
+            raise stream.error("expected what to remove the counters from")
+        return ast.RemoveCounter(subject, ast.COUNTERS_NAMED_BEFORE, ast.AllOf())
     if stream.accept_word("a", "an"):
         count: ast.Amount = ast.Fixed(1)
     else:

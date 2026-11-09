@@ -411,6 +411,34 @@ def rebind_pronoun_to_event_subject(
     return _rebound(statement, subject)
 
 
+def bind_counter_pronoun_to_condition(condition, statement: ast.Statement) -> ast.Statement:
+    """"At the beginning of your upkeep, **if this artifact has five or more
+    charge counters on it**, remove **all of them** from it …" (Lightning
+    Coils.)
+
+    "Them" names the counters the intervening-if counted, so the kind is the
+    condition's: a :class:`ast.SourceCounterCount` about the ability's own
+    source, whose counters the removal takes off that same source. Anything
+    else — no condition, a condition counting something else, a removal from
+    some other object — leaves the sentinel in place, and the lowering refuses
+    it by name rather than guessing a kind.
+    """
+    if not isinstance(condition, ast.SourceCounterCount):
+        return statement
+
+    def _rewrite(node: ast.RemoveCounter) -> "ast.RemoveCounter | None":
+        subject = node.subject
+        if (
+            node.counter == ast.COUNTERS_NAMED_BEFORE
+            and isinstance(subject, ast.TargetSpec)
+            and subject.filter.is_source
+        ):
+            return replace(node, counter=condition.counter)
+        return None
+
+    return _walk_specs(statement, _rewrite, ast.RemoveCounter)
+
+
 #: For each printed combat role, the trigger events whose **subject** plays it.
 #:
 #: A role names one member of a combat pair, and a pair has two — so an event

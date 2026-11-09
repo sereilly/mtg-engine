@@ -310,6 +310,16 @@ class RemoveCounter:
     count: Amount = field(default_factory=lambda: Fixed(1))
 
 
+#: "…if this artifact has five or more charge counters on it, remove **all of
+#: them** from it" (Lightning Coils). A ``RemoveCounter.counter`` naming no
+#: kind of its own: "them" is the counters a condition in front of it counted,
+#: which only a reader holding the trigger's intervening-if can say
+#: (``rebinding.bind_counter_pronoun_to_condition``). A sentinel rather than a
+#: kind word, so a removal nothing rebound is refused by name in the lowering
+#: instead of removing counters of a kind called "them".
+COUNTERS_NAMED_BEFORE = "<counters named before>"
+
+
 @dataclass(frozen=True)
 class MoveCounter:
     """``Move a +1/+1 counter from this enchantment onto target creature.``

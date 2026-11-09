@@ -61,7 +61,7 @@ from .quoted_lines import (_ASSIGN_UNBLOCKED_LINE_RE,
                            _parse_becomes_with_granted_ability,
                            _parse_emblem_line,
                            _parse_reanimation_aura_line)
-from .rebinding import (bind_recorded_card,
+from .rebinding import (bind_counter_pronoun_to_condition, bind_recorded_card,
                         rebind_pronoun_to_event_subject,
                         rebind_combat_role_to_event_subject)
 from .sentence_rebinding import rebind_attachment_pronoun_to_sentence_target
@@ -445,12 +445,18 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
             # bare pronoun names, and which event recorded the card "that card"
             # names. Only a reader holding the trigger, the intervening-if and
             # the effect at once can answer either.
-            bind_recorded_card(
-                event.kind, intervening,
-                rebind_combat_role_to_event_subject(
-                    event,
-                    rebind_pronoun_to_event_subject(
-                        event, statement, intervening=intervening
+            #
+            # A third: which counters "all of them" are (Lightning Coils) —
+            # the ones the intervening-if counted.
+            bind_counter_pronoun_to_condition(
+                intervening,
+                bind_recorded_card(
+                    event.kind, intervening,
+                    rebind_combat_role_to_event_subject(
+                        event,
+                        rebind_pronoun_to_event_subject(
+                            event, statement, intervening=intervening
+                        ),
                     ),
                 ),
             ),
