@@ -309,8 +309,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # creatures deal combat damage to you simultaneously, Vengeful Pharaoh will
     # only trigger once"). "Whenever **a source** deals damage to you" names
     # the source, and is once per source (``engine/simultaneous_damage.py``).
+    #
+    # "Whenever **an opponent is dealt damage**, put that many +1/+1 counters
+    # on this creature." (War Elemental.) The same row with the other seat word
+    # the active row's recipient list already names, so `event_filters` tests
+    # it the way it tests "deals damage to an opponent" — and read from the
+    # recipient's side like Blood Hound's: once per opponent for the total of
+    # one dealing.
     ("damage_dealt",
-     r"whenever (?P<damage_recipient>you)(?:'re| are) dealt "
+     r"whenever (?P<damage_recipient>you(?='re| are)|an opponent(?= is))"
+     r"(?:'re| are| is) dealt "
      r"(?:(?P<damage_combat>combat|noncombat) )?damage(?P<damager_any>)"
      r"(?P<damage_received>)"),
     ("damage_dealt",
