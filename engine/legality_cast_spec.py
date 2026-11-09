@@ -235,7 +235,26 @@ class CastTargetSpecMixin:
         # and let the UI run its mode-choice flow rather than enumerating here.
         program = compile_card_oracle(card)
         if len(program.modes) >= 2 and mode_index is None:
-            return {"kind": "modal", "requires_target": False, "valid_targets": []}
+            modal = {"kind": "modal", "requires_target": False, "valid_targets": []}
+            # **Entwine** (CR 702.42a) is answered *before* a mode: taking it is
+            # choosing every mode, so its offer rides the card's own "modal"
+            # spec — the one the client reads before it asks which mode — and
+            # is left off each mode's (below), where taking it would be a
+            # single-mode announcement the cast path refuses.
+            entwine = entwine_cost(card.oracle_text or "")
+            if entwine is not None:
+                offered = [
+                    offer for offer in self.cast_cost_offers(
+                        caster_index, card, from_zone=from_zone,
+                        spell_hand_index=spell_hand_index,
+                        taken=optional_cost_payments,
+                    )
+                    if offer.get("symbols") == entwine
+                ]
+                if offered:
+                    modal["cost_offers"] = offered
+                    modal["entwine"] = entwine
+            return modal
         # The compiled program answers in full — the kind *and* the flags that
         # narrow the picker (own_only, stack filters, sacrifice_cost, ...).
         # There is no text cascade behind this any more: a program that
@@ -427,6 +446,11 @@ class CastTargetSpecMixin:
                 if from_zone == "command" else 0
             ),
         )
+        if mode_index is not None and len(program.modes) >= 2:
+            # One mode's spec: its entwine is the card's, not the mode's (the
+            # "modal" spec above carries it).
+            entwine = entwine_cost(card.oracle_text or "")
+            offers = [offer for offer in offers if offer.get("symbols") != entwine]
         if offers:
             spec["cost_offers"] = offers
         # CR 601.2c's count, once CR 601.2b has been answered. The arithmetic
