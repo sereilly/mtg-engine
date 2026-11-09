@@ -222,6 +222,38 @@ def _parallel_thoughts():
     return game
 
 
+@board("opponent_library_draw", "Shared Fate", "Catalog", draws=True)
+def _shared_fate():
+    """Mirrodin, still under ``measured`` when this row was written, so the
+    enchantment is read off its own set file. Three seats, because the offer
+    — whose library the drawer exiles from — is made only to a drawer with
+    two or more opponents."""
+    from engine.card_loader import load_cards, manifest_set_path
+
+    fate = next(
+        c for c in load_cards(manifest_set_path("MRD", include_measured=True))
+        if c.name == "Shared Fate"
+    )
+    players = [
+        PlayerState(
+            name=f"P{seat}",
+            hand=[card("Catalog"), card("Shock")] if seat == 0 else [],
+            library=[card("Island")] * 8,
+        )
+        for seat in range(3)
+    ]
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1, 2}
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    game._put_permanent_onto_battlefield(0, Permanent(card=fate), None)
+    game._recompute_continuous_effects()
+    game.start_priority_window(0)
+    game.cast_from_hand(0, "Catalog")
+    return game
+
+
 @board("draw_becomes_counter", "Pursuit of Knowledge", "Catalog", draws=True)
 def _pursuit_of_knowledge():
     return _catalog_under(("Pursuit of Knowledge",))

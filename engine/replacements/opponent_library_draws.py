@@ -84,16 +84,24 @@ def _applies_opponent_library_draw(game, payload: dict) -> bool:
 
 
 def _default_opponent(game, seat: int, opponents: list[int]) -> int:
-    """Which opponent a seat nobody asks exiles from: the first, in turn
-    order from the drawer, whose library has a card — a card
-    exiled is a card the drawer may play, and an empty library gives nothing.
-    Every library empty, the first opponent: nothing is exiled either way."""
+    """Which opponent a seat nobody asks exiles from, weighed by the one
+    thing about the choice the drawer may know: how many cards each library
+    holds (CR 402.3's count, one zone over — a library's size is public).
+
+    A library with a card first — a card exiled is a card the drawer may
+    play, and an empty library gives nothing — and among those the
+    **smallest**: the card itself is the same unknown from any library, so
+    what the choice decides is whose library runs down, and the opponent
+    nearest to running out is the one a draw they cannot replace will cost
+    the game once the enchantment is gone. Ties go in turn order from the
+    drawer. Every library empty, the first opponent: nothing is exiled
+    either way."""
     count = len(game.players)
     ordered = sorted(opponents, key=lambda other: (other - seat) % count)
-    return next(
-        (other for other in ordered if game.players[other].library),
-        ordered[0],
-    )
+    holding = [other for other in ordered if game.players[other].library]
+    if not holding:
+        return ordered[0]
+    return min(holding, key=lambda other: len(game.players[other].library))
 
 
 def exile_opponent_top_for_draw(game, source, drawer_seat: int, opponent_seat) -> None:

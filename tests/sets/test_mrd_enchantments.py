@@ -829,12 +829,14 @@ def test_w2g2_three_players_the_drawer_picks_whose_library(set_pool):
     assert game.resolve_replacement_choice(0, 1, kind="opponent_library_draw")
     assert _w2g2_names(carol.exile) == ["Mountain"] and bob.exile == []
     assert [e["name"] for e in _w2g2_playable(game, 0)] == ["Mountain"]
-    # A seat nobody asks takes the first opponent, in turn order, with a card
-    # to exile: Bob's library emptied, so Carol's.
-    bob.library.clear()
+    # A seat nobody asks takes the smallest library still holding a card —
+    # Carol's two against Bob's three — and an empty one never.
     game.interactive_seats = set()
     game._draw_with_replacements(alice, 1)
     assert _w2g2_names(carol.exile) == ["Mountain", "Mountain"]
+    carol.library.clear()
+    game._draw_with_replacements(alice, 1)
+    assert _w2g2_names(bob.exile) == ["Plains"]
 
 
 def test_w2g2_two_shared_fates_the_drawer_chooses_which_replaces(set_pool):
