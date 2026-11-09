@@ -1428,6 +1428,10 @@ class SpellCastingMixin:
                     chosen_mode_index=mode_index,
                     chosen_modes=chosen_modes,
                     cast_from_zone=from_zone,
+                    # CR 707.12: a copy of a card cast under the grant that
+                    # made it (``engine/copy_casts.py``) is a copy on the stack
+                    # (CR 707.10a): it resolves and ceases to exist.
+                    is_copy=bool(permission is not None and permission.cast_as_copy),
                     exile_instead_of_graveyard=bool(
                         permission is not None and permission.exile_instead
                     ),

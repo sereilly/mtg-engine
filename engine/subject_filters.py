@@ -396,6 +396,12 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # source — which is exactly why it needs the game and is testable here and
     # nowhere else. ``OBJECT_ONLY_FILTER_KEYS`` drops it below for that reason.
     "shares_name_with_another",
+    # "…a land **with the same name as the exiled card**" (Extraplanar Lens).
+    # CR 201.2a against the card the ability's source exiled with its linked
+    # ability (CR 607.2a) — a relation to the source, like
+    # ``blocked_by_source``, and to the exile zone, so it needs both the game
+    # and the source; out of the object-only set below.
+    "shares_name_with_exiled_card",
     # "…**except for basic lands**" / "…**other than a basic land**" (Eye of
     # Singularity's two lines). A pair of printed characteristics and nothing
     # relative at all, so the pure matcher answers it and it stays in the
@@ -465,6 +471,8 @@ OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {
     # relation is to every other permanent on the table, so a caller with no
     # game has nothing to compare against.
     "shares_name_with_another",
+    # Out for the key above's reason, and a source besides.
+    "shares_name_with_exiled_card",
     # Out for the key above's reason: the extreme is taken over the board.
     "superlative_among",
     # Out for ``controller``'s reason: "you cast this turn" is half a seat
@@ -1465,6 +1473,18 @@ def subject_matches(
         if not any(
             other is not obj and other.effective_card.name == name
             for other in game.all_permanents()
+        ):
+            return False
+    # "…a land **with the same name as the exiled card**" (Extraplanar Lens).
+    # The source's linked exile, still in exile (CR 607.2a), by CR 201.2a's
+    # shared-name rule (``linked_exile.shares_a_name_with_an_exiled_card``);
+    # read off the effective card, as the board reading above is. No source,
+    # or nothing exiled with it, answers no.
+    if described.get("shares_name_with_exiled_card"):
+        from .linked_exile import shares_a_name_with_an_exiled_card
+
+        if source is None or not shares_a_name_with_an_exiled_card(
+            game, source, obj.effective_card
         ):
             return False
     if described.get("blocked_source_this_turn"):

@@ -202,6 +202,15 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # not a one-shot pump with a duration. Who it applies to — the whole board
     # or the source alone — is not what the category is about.
     "dynamic_pt_bonus": "static_buffs",
+    # "This creature has protection from each of the exiled card's card
+    # types." (Mirror Golem.) A printed protection ability on its own source,
+    # lowered to the ``static_line`` the bare keyword line compiles to — the
+    # same continuous family as the self-conditional static above.
+    "static_line": "static_buffs",
+    # "…this creature has the power, toughness, and creature types of the last
+    # creature card exiled with it." (Duplicant.) A self static over layers 4
+    # and 7b, the family of the self-conditional static above.
+    "adopt_exiled_creature_body": "static_buffs",
     # A permanent's board-wide static effect on *lands* (CR 613 layer 4):
     # Kormus Bell animating every Swamp, Conversion turning every Mountain into
     # a Plains. Their own category rather than "static_buffs" because the two
@@ -762,6 +771,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # exile rather than one still on the stack, which changes where the
     # decisions are read from and not what the sentence does.
     "put_exiled_card_onto_stack_as_copy": "counterspells",
+    # "You may copy the exiled card. If you do, you may cast the copy without
+    # paying its mana cost." (Isochron Scepter.) CR 707.12's copy of a card,
+    # the copy family above.
+    "cast_copy_of_exiled_card": "counterspells",
     # CR 115.7a, changing a spell's target. Its own category rather than the
     # counterspells one beside it: a counter removes an object from the stack
     # and a retarget leaves it there resolving in full, so filing them together

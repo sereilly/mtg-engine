@@ -27,6 +27,41 @@ log), not instruction kinds alone.
 # ==== W1G5 ==========================================================
 # W1G5's tests go between this line and the "end W1G5" line.
 
+from engine import Game as _W1G5Game
+from engine import PlayerState as _W1G5PlayerState
+from engine.models import Permanent as _W1G5Permanent
+from tests.helpers import resolve_stack as _w1g5_resolve_stack
+
+
+def test_w1g5_arc_slogger_exiles_ten_to_deal_two(set_pool):
+    """Drive list. "{R}, Exile the top ten cards of your library: This
+    creature deals 2 damage to any target." With twelve cards the cost is
+    paid and Bob takes 2; with nine it cannot be (CR 601.2h): nothing is paid,
+    nothing exiled."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    for library, life, left in ((12, 18, 2), (9, 20, 9)):
+        alice = _W1G5PlayerState(name="Alice", library=[lea["Plains"]] * library)
+        bob = _W1G5PlayerState(name="Bob", library=[lea["Island"]] * 6)
+        game = _W1G5Game(players=[alice, bob])
+        game.enforce_mana_costs = True
+        game.interactive_seats = {0}
+        game.active_player_index = game.priority_player_index = 0
+        game.current_phase = "main"
+        game.current_turn_phase, game.current_step = "precombat_main", None
+        slogger = _W1G5Permanent(card=mrd["Arc-Slogger"])
+        game._put_permanent_onto_battlefield(0, slogger, None)
+        slogger.metadata["summoning_sickness_turn"] = -99
+        game._sync_control()
+        alice.mana_pool["R"] = 1
+        result = game.activate_permanent_ability(
+            0, "Arc-Slogger", permanent_index=game.battlefield_index_of(slogger),
+            ability_index=0, target_player_index=1,
+        )
+        assert result.supported is (library >= 10), result.details
+        _w1g5_resolve_stack(game)
+        assert (bob.life, len(alice.library)) == (life, left)
+        assert len(alice.exile) == library - left
+
 # ==== end W1G5 ======================================================
 
 

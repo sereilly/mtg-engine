@@ -975,6 +975,43 @@ def _madness_cast(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("copy_cast")
+def _copy_cast(ctx: PromptContext, choices: list) -> dict:
+    """CR 707.12: "You may copy the exiled card. If you do, you may cast the
+    copy without paying its mana cost." (Isochron Scepter.)
+
+    The copy does not exist yet — it is made in exile when the offer is taken
+    (``engine/copy_casts.py``) — so the client opens its ordinary cast dialog
+    on **the exiled card it copies** (``exile_seat`` / ``exile_index``) for the
+    targets, X and mode, and sends them as ``copy_cast_confirm`` with
+    ``accept: true``; ``accept: false`` declines, and no copy is made. The
+    mana cost is waived; a tap and a mana ability still answer this prompt,
+    for an additional cost that wants mana."""
+    choice = choices[0]
+    card = choice.data.get("_card")
+    where = next(
+        (
+            (seat, index)
+            for seat, player in enumerate(ctx.game.players)
+            for index, held in enumerate(player.exile)
+            if held is card
+        ),
+        (None, None),
+    )
+    name = choice.data.get("card_name", "the exiled card")
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "source_name": choice.data.get("source_name", ""),
+        "exile_seat": where[0],
+        "exile_index": where[1],
+        "prompt": (
+            f"Cast a copy of {name} without paying its mana cost "
+            f"({choice.data.get('source_name', '')})?"
+        ),
+    }
+
+
 @prompt_renderer("retarget_choice")
 def _retarget_choice(ctx: PromptContext, choices: list) -> dict:
     """Deflection: "Change the target of target spell with a single target."

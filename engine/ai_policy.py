@@ -288,6 +288,34 @@ def choose_madness_cast(
     No timing gate: CR 608.2g makes the cast during a resolution, where a
     creature or a sorcery with madness is cast whatever the step.
     """
+    return _choose_exile_cast(
+        game, player_index, held, permission, alternative_cost=True,
+    )
+
+
+def choose_copy_cast(
+    game: Game, player_index: int, held: CardDefinition, permission,
+) -> "CastAction | None":
+    """The cast *player_index* makes of *held* — a copy of an exiled card the
+    resolving ability made in exile (CR 707.12, ``engine/copy_casts.py``:
+    Isochron Scepter) — or None to decline it.
+
+    :func:`choose_madness_cast`'s question over a permission that waives the
+    mana cost rather than naming an alternative one (``free``, CR 118.9), so
+    it is asked the same way: the same candidate builder, gates, choosers and
+    rehearsal, weighed in the abstract because it is asked mid-resolution.
+    """
+    return _choose_exile_cast(
+        game, player_index, held, permission, alternative_cost=False,
+    )
+
+
+def _choose_exile_cast(
+    game: Game, player_index: int, held: CardDefinition, permission, *,
+    alternative_cost: bool,
+) -> "CastAction | None":
+    """The best rehearsed cast of *held* out of *player_index*'s exile under
+    *permission*, or None — the body the two offers above share."""
     pile = game.players[player_index].exile
     index = next((i for i, card in enumerate(pile) if card is held), None)
     if index is None or permission is None:
@@ -300,7 +328,7 @@ def choose_madness_cast(
                 permitted = PermittedCast(
                     zone="exile", owner_seat=player_index, index=index,
                     held=held, spell=spell, permission=permission,
-                    alternative_cost=True,
+                    alternative_cost=alternative_cost,
                 )
                 candidate = _priced_candidate(
                     game, player_index, spell, index,

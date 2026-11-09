@@ -795,7 +795,23 @@ def grant_chosen_source_blanket_shield(
     granted_by = context.card.name if context.card else None
     seat = game.players.index(caster) if caster in game.players else None
     colors: tuple[str, ...] = ()
-    if instruction.payload.get("source_shares_spent_mana_color"):
+    if instruction.payload.get("source_shares_exiled_card_color"):
+        # "…that shares a color with the exiled card." (Mourner's Shield.) The
+        # imprinted card's colours (CR 607.2a), off the source's linked exile —
+        # read even once the source has left, the record being the object's.
+        # None exiled, or a colourless card: no source can share a colour, and
+        # the shield is not armed, the spent-mana branch's reasoning below.
+        from ..mana_could_produce import exiled_card_colors
+
+        exiled = exiled_card_colors(game, context.source_permanent)
+        colors = tuple(symbol for symbol in ALL_COLORS if symbol in exiled)
+        if not colors:
+            game.log.append(
+                f"{granted_by}: no colored card is exiled with it, so no damage "
+                "is prevented"
+            )
+            return True, "resolved"
+    elif instruction.payload.get("source_shares_spent_mana_color"):
         spent = (context.choices or {}).get("mana_spent_for_cost") or {}
         colors = tuple(
             symbol for symbol in ALL_COLORS if int(spent.get(symbol, 0) or 0) > 0
@@ -857,7 +873,11 @@ def grant_chosen_source_blanket_shield(
         f"{getattr(source_card, 'name', 'a source')} would deal "
         f"{'' if any_recipient else 'them '}this turn"
         + (
-            f" while it shares a color with the mana spent ({'/'.join(colors)})"
+            (
+                " while it shares a color with the exiled card"
+                if instruction.payload.get("source_shares_exiled_card_color")
+                else " while it shares a color with the mana spent"
+            ) + f" ({'/'.join(colors)})"
             if colors else ""
         )
         + f" ({granted_by})"

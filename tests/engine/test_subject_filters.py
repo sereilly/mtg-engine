@@ -789,6 +789,8 @@ _COVERED_ELSEWHERE = {
         "test_a_state_union_admits_either_alternative_and_nothing_else",
     "shares_name_with_another":
         "test_shares_name_with_another_is_a_relation_to_the_rest_of_the_board",
+    "shares_name_with_exiled_card":
+        "test_shares_name_with_exiled_card_is_a_relation_to_the_source_s_exile",
     "exclude_basic_lands":
         "test_exclude_basic_lands_names_the_pair_not_the_supertype",
     # --- W1G3 ---
@@ -1330,6 +1332,34 @@ def test_shares_name_with_another_is_a_relation_to_the_rest_of_the_board(pool):
     # The singleton is what says the relation is not vacuous — and it is a
     # permanent, so a key that simply answered "yes" would pass without it.
     assert not subject_matches(game, lone, described)
+
+
+def test_shares_name_with_exiled_card_is_a_relation_to_the_source_s_exile(pool):
+    """"…a land **with the same name as the exiled card**" (Extraplanar Lens).
+
+    CR 607.2a's linked exile, asked of the source the matcher is handed: a
+    land named like a card still exiled with the source answers yes, one named
+    otherwise no, and so does every land once that card has left exile — or
+    with no source at all (the key is a relation, and a caller with none has
+    nothing to relate to)."""
+    from engine.linked_exile import link_exiled_card
+
+    lens = Permanent(card=pool["Ornithopter"])
+    forest = Permanent(card=pool["Forest"])
+    island = Permanent(card=pool["Island"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[lens, forest, island]),
+        PlayerState(name="P2"),
+    ])
+    exiled = game.put_card_into_exile(0, pool["Forest"])
+    link_exiled_card(lens, exiled, 0)
+
+    described = {"shares_name_with_exiled_card": True}
+    assert subject_matches(game, forest, described, source=lens)
+    assert not subject_matches(game, island, described, source=lens)
+    assert not subject_matches(game, forest, described)
+    assert game.take_card_from_exile(0, exiled)
+    assert not subject_matches(game, forest, described, source=lens)
 
 
 def test_exclude_basic_lands_names_the_pair_not_the_supertype(pool):

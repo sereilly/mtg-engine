@@ -646,6 +646,11 @@ class ObjectFilter:
     # there. Like the one above it, the key travels to the handler, which
     # resolves the name out of the resolution's scratchpad and then matches.
     name_from_recorded_card: bool = False
+    # "…a land **with the same name as the exiled card**" (Extraplanar Lens).
+    # The comparison against the card the ability's *source* exiled with its
+    # linked ability (CR 607.2a) — answered by ``subject_matches`` from the
+    # source it is handed, unlike the event and record spellings above.
+    shares_name_with_exiled_card: bool = False
     # "…all other creatures **that share a color with it**" (Spreading
     # Plague). CR 105.2's relation against the object a pronoun names, which no
     # matcher can answer for ``name_from_event``'s reason: ``subject_matches``

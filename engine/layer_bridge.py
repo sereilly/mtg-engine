@@ -35,6 +35,7 @@ from .global_statics import (global_static_sources, removes_all_abilities,
                              stack_statics_applying_to)
 from .land_animation import LAND_ANIMATIONS_REACHING
 from .pt import BASE_PT_TIMESTAMP_KEY, CDA_POWER_KEY, CDA_TOUGHNESS_KEY
+from .exiled_card_bodies import EXILED_CARD_BODY
 from .continuous import (
     Characteristics,
     ContinuousEffect,
@@ -182,6 +183,20 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
                 label=f"set{suffix}",
             )
         )
+
+    # 7b — "…this creature has the power, toughness, and creature types of
+    # the last creature card exiled with it." (Duplicant.) The body the
+    # refresh derived off the permanent's linked exile
+    # (``engine/exiled_card_bodies.py``), set at the permanent's own timestamp
+    # (CR 613.7a): its base P/T, with counters and 7c on top (the 2020-08-07
+    # ruling).
+    body = meta.get(EXILED_CARD_BODY)
+    if body:
+        effects.append(set_pt(
+            only, int(body["power"]), int(body["toughness"]),
+            timestamp=perm.timestamp,
+            label=f"exiled card's body ({body.get('card_name', 'card')})",
+        ))
 
     # 7b — "Lands you control are **2/2** creatures…" (Natural Emergence,
     # Living Lands, Kormus Bell.) Read off the record the board-wide layer-4

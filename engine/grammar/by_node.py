@@ -66,6 +66,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_put_graveyard_position_onto_battlefield,
                        _lower_waive_shroud, _lower_change_event_targets, _lower_change_target, _lower_counter_spell,
                        _lower_put_exiled_card_on_stack_as_copy,
+                       _lower_cast_copy_of_exiled_card,
                        _lower_create_emblem, _lower_create_copy_token,
                        _lower_damage_dealt_riders, _lower_coin_flip_damage_loop,
                        _lower_coin_flip_stakes_loop, _lower_damage_this_game_history,
@@ -442,6 +443,10 @@ _BY_NODE_TYPE: dict[type, object] = {
 #: whichever was consulted first, which is not a fact anyone should have to look
 #: up.
 _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
+    # "…you may copy **the other**" (Spellweaver Helix) names the exiled card
+    # the trigger's cast does not share a name with, so only a cast trigger
+    # can mean it — the lowering asks which event fired.
+    ast.CastCopyOfExiledCard: _lower_cast_copy_of_exiled_card,
     # "…**that player** exiles all cards from their library" (Thought Lash),
     # "…**that player** mills a card" (Reef Pirates), "…**that player**
     # discards a card" (Anvil of Bogardan): each names the seat the fire site

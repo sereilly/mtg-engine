@@ -198,6 +198,11 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # board the relation compares against — the same footing
     # ``controller_controls`` below is on.
     "shares_name_with_another",
+    # "…**with the same name as the exiled card**" (Extraplanar Lens). The
+    # same relation against the source's linked exile (CR 607.2a), emitted
+    # unconditionally and answered by ``subject_matches`` given the source —
+    # which the gate downstream decides whether a caller can hand over.
+    "shares_name_with_exiled_card",
     "attached_to_filter",
     # "…**whose controller controls an Island**" (Seasinger). ``to_payload``
     # emits it unconditionally, and ``subject_filters.subject_matches`` is what

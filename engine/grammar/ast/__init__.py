@@ -441,6 +441,7 @@ from .stack import (
     ModalNode,
     NextSpellUncounterable,
     PutExiledCardOnStackAsCopy,
+    CastCopyOfExiledCard,
     WaiveShroud,
 )
 from .combat import (
@@ -915,6 +916,7 @@ __all__ = [
     "ChangeTarget",
     "ChooseTarget",
     "PutExiledCardOnStackAsCopy",
+    "CastCopyOfExiledCard",
     "WaiveShroud",
     "CreateDelayedTrigger",
     "NextDrawReplacement",

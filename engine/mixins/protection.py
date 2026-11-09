@@ -31,6 +31,23 @@ from ..oracle_types import _COLOR_WORD_TO_SYMBOL
 from ..static_bonuses import conditional_static_holds
 
 
+def exiled_card_types(game, permanent: Permanent) -> frozenset[str]:
+    """The card types (CR 205.2a) of the cards *permanent*'s linked ability
+    exiled that are still exiled — "each of the exiled card's card types"
+    (Mirror Golem). The printed type line, because a card in exile has no
+    layers applied (CR 613.1); several cards is CR 607.3's every answer."""
+    from ..grammar.vocabulary import CARD_TYPES
+    from ..linked_exile import cards_still_exiled_with
+
+    found: set[str] = set()
+    for card, _owner in cards_still_exiled_with(game, permanent):
+        found |= {
+            word for word in (card.type_line or "").lower().replace("—", " ").split()
+            if word in CARD_TYPES
+        }
+    return frozenset(found)
+
+
 class ProtectionMixin:
     @staticmethod
     def _protection_quality_of(word: str) -> tuple[str, str] | None:
@@ -68,7 +85,9 @@ class ProtectionMixin:
         """
         qualities: set[tuple[str, str]] = set()
         program = compile_card_oracle(permanent.effective_card)
-        from ..keywords import (EACH_OF_ITS_COLORS, PROTECTION_GRANT_STAMPS,
+        from ..keywords import (EACH_OF_ITS_COLORS,
+                                EACH_OF_THE_EXILED_CARDS_CARD_TYPES,
+                                PROTECTION_GRANT_STAMPS,
                                 protection_qualities_named,
                                 protection_removals)
 
@@ -98,9 +117,20 @@ class ProtectionMixin:
             # The colours are computed only for the member that asks: every
             # other word is answered without touching the layers.
             held = None
-            if " ".join(str(word).lower().split()) == EACH_OF_ITS_COLORS:
+            exiled_types = None
+            member = " ".join(str(word).lower().split())
+            if member == EACH_OF_ITS_COLORS:
                 held = self._effective_colors(permanent)
-            for quality in protection_qualities_named(word, holder_colors=held) or ():
+            elif member == EACH_OF_THE_EXILED_CARDS_CARD_TYPES:
+                # "…each of the exiled card's card types" (Mirror Golem): the
+                # card types of the cards *this* permanent's imprint exiled and
+                # still in exile (CR 607.2a) — a card in exile has no layers
+                # (CR 613.1 applies them to objects on the battlefield and the
+                # stack), so its printed type line is its card types.
+                exiled_types = exiled_card_types(self, permanent)
+            for quality in protection_qualities_named(
+                word, holder_colors=held, exiled_card_types=exiled_types,
+            ) or ():
                 _add(quality, stamp)
 
         def _absorb(clause: str) -> None:

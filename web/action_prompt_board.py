@@ -517,6 +517,46 @@ def _action_madness_cast_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail=detail)
 
 
+@action_handler("copy_cast_confirm")
+def _action_copy_cast_confirm(session, req, seat_type):
+    """CR 707.12: "You may copy the exiled card. If you do, you may cast the
+    copy without paying its mana cost." (Isochron Scepter.)
+
+    ``accept`` false declines, and no copy is made. True makes the copy in
+    exile and casts it, announced on the ordinary cast fields and forwarded
+    through ``_queue_spell_from_request`` out of exile — madness's arrangement
+    (``madness_cast_confirm``), with no alternative cost: the copy's grant
+    waives the mana cost. Made during the ability's resolution, so no priority
+    or timing is asked. A refused cast is a 400 with the engine's reason, and
+    the offer stays open.
+    """
+    if req.accept is None:
+        raise HTTPException(status_code=400, detail="accept is required")
+    game = session.game
+    if not req.accept:
+        if not game.confirm_copy_cast(req.seat, False):
+            raise HTTPException(status_code=400, detail="no copy cast is offered to you")
+        return
+    choice = game.pending_choice_of("copy_cast", req.seat)
+    if choice is None:
+        raise HTTPException(status_code=400, detail="no copy cast is offered to you")
+    card_name = req.card_name or choice.data.get("card_name") or ""
+    announced = req.model_copy(update={"from_zone": "exile"})
+
+    def perform(table):
+        return _queue_spell_from_request(
+            table, req.seat, card_name, announced, x_value=req.x_value,
+        )
+
+    outcome: list = []
+    if not game.confirm_copy_cast(req.seat, True, perform=perform, outcome=outcome):
+        detail = (
+            outcome[-1].details if outcome and getattr(outcome[-1], "details", None)
+            else "the copy's cast was refused"
+        )
+        raise HTTPException(status_code=400, detail=detail)
+
+
 @action_handler("retarget_choice_confirm")
 def _action_retarget_choice_confirm(session, req, seat_type):
     # Deflection: which legal target replaces the one the spell announced, by

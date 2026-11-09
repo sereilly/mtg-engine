@@ -10,6 +10,7 @@ re-aimed (CR 115.7), and the choice CR 707.10 gives a copy's controller.
 
 from __future__ import annotations
 
+from .... import copy_casts as _copy_casts
 from .... import madness as _madness
 from ....face_down import MASK_FACE_DOWN, face_down_card
 from ....faces import castable_faces, is_multi_face, spell_named
@@ -190,6 +191,28 @@ class SpellChoicesMixin:
         return self.resolve_pending_choice(
             "madness_cast", player_index, accept=bool(accept), perform=perform,
             card_name=card_name, outcome=outcome, announcement=announcement,
+        )
+
+    # -- A copy of an exiled card, cast during a resolution (CR 707.12) -------
+
+    def confirm_copy_cast(
+        self, player_index: int, accept: bool, *, perform=None,
+        card_name: str | None = None, outcome: list | None = None,
+        **announcement,
+    ) -> bool:
+        """Answer the ``copy_cast`` prompt: copy the exiled card and cast the
+        copy without paying its mana cost (*accept*), announced by
+        *announcement* — the keywords ``queue_from_hand`` takes — or by
+        *perform*; or decline, and no copy is made.
+
+        False when there is no such prompt or the engine refused the cast; the
+        refusal's ``SimulationResult`` is appended to *outcome* when given. See
+        ``engine/copy_casts.py``."""
+        if card_name is not None:
+            announcement["card_name"] = card_name
+        return self.resolve_pending_choice(
+            "copy_cast", player_index, accept=bool(accept), perform=perform,
+            outcome=outcome, announcement=announcement,
         )
 
     # -- The new target of a spell being re-aimed (CR 115.7a) ----------------
@@ -953,6 +976,25 @@ MADNESS_CAST_SPEC = ChoiceSpec(
     default_at_arm=True,
     # The card is in exile (a public zone) and the offer is the rule's, so a
     # seatless viewer may see the question.
+    spectator_visible=True,
+)
+
+COPY_CAST_SPEC = ChoiceSpec(
+    "copy_cast",
+    resolve=lambda game, choice, r: _copy_casts.resolve_copy_cast_offer(game, choice, r),
+    default=lambda game, choice: _copy_casts.default_copy_cast_offer(game, choice),
+    action="copy_cast_confirm",
+    prompt_key="copy_cast",
+    # CR 707.12: the copy is cast *while the ability is resolving* (Isochron
+    # Scepter's 2020-08-07 ruling: "You can't wait to cast it later in the
+    # turn"), so the game waits on the answer and the ability stays on the
+    # stack under the spell the answer casts — madness's offer exactly. Its
+    # mana cost is waived, but an additional cost may still want mana, so a
+    # tap and a mana ability answer it too.
+    blocked_detail="decide whether to cast a copy of the exiled card",
+    also_answers=("tap", "activate"),
+    default_at_arm=True,
+    # The card is in exile, face up, and the offer is the rule's.
     spectator_visible=True,
 )
 

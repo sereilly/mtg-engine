@@ -151,6 +151,10 @@ ActionKind = Literal[
     # (``accept`` true, with the cast's whole announcement on the ordinary cast
     # fields) or decline it, which puts the card into its owner's graveyard.
     "madness_cast_confirm",
+    # CR 707.12: cast a copy of the exiled card without paying its mana cost
+    # (``accept`` true, with the cast's announcement on the ordinary cast
+    # fields) or decline it (Isochron Scepter).
+    "copy_cast_confirm",
     "retarget_choice_confirm",
     "loyalty_recipient_confirm",
     # "…you may move any number of +1/+1 counters from this creature onto

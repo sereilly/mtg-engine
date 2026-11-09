@@ -142,6 +142,14 @@ class CastPermission:
     #: else about the cards moves (they are still the other player's, and
     #: their activated abilities stay theirs — the card's other 2004 ruling).
     as_though_yours: bool = False
+    #: "You may copy the exiled card. If you do, you may cast **the copy**…"
+    #: (Isochron Scepter, Spellweaver Helix.) CR 707.12: the card this grant
+    #: covers is a *copy* of a card, made in exile by the resolving ability
+    #: (``engine/copy_casts.py``), and the spell it is cast as is a copy —
+    #: CR 707.10a's object that ceases to exist rather than going to a
+    #: graveyard. Read by the cast path as it builds the stack object
+    #: (``StackItem.is_copy``).
+    cast_as_copy: bool = False
 
     @property
     def zone_seat(self) -> int:

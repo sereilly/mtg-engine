@@ -724,6 +724,13 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
         return True, "resolved"
     exiled = game.put_card_into_exile(owner, owner.graveyard.pop(index))
     context.results["exiled_cards"] = [exiled]
+    # Recorded as exiled **with** the ability's source when that source is a
+    # permanent (CR 607.2a), as ``exile_target_permanent`` records its exile:
+    # inert for a permanent no other ability of which asks, and the whole of
+    # "the exiled card" for an imprint ("…you may exile target card from a
+    # graveyard", Mourner's Shield, Mirror Golem). A spell has no permanent.
+    if context.source_permanent is not None:
+        link_exiled_card(context.source_permanent, exiled, game.players.index(owner))
     # Whose card it was, for "**Its owner** creates …" (Funeral Pyre): the pile
     # it was taken from is its owner's (CR 404.1), and the record is written as
     # it moves (CR 608.2h) under the key Path of Peace's owner already reads.

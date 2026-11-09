@@ -53,6 +53,12 @@ _REVIEWED = {
         "``that token`` names) â€” written to the object, which keeps them "
         "on its way; the log line is the effect's."
     ),
+    ("handlers/tokens.py", "_copy_exiled_cards"): (
+        "Soul Foundry's token copy of the exiled card: the same two records "
+        "``create_copy_token`` writes (who made it, the result ``that token`` "
+        "names), written to the object, which keeps them on its way; the log "
+        "line is the effect's."
+    ),
     ("piles.py", "_graveyard_fates"): (
         "``arrived is not None`` â€” whether a card came back, for the log."
     ),

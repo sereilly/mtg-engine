@@ -316,7 +316,11 @@ def _lower_chosen_source_blanket(
         )
     payload: dict[str, object] = {}
     if targeted:
-        if node.prevented_rider is not None or node.source_shares_spent_mana_color:
+        if (
+            node.prevented_rider is not None
+            or node.source_shares_spent_mana_color
+            or node.source_shares_exiled_card_color
+        ):
             # Both riders read the controller's own payment or pay the
             # controller, and this shield may stand around an opponent's
             # creature; no card prints the pair, and borrowing either would pay
@@ -345,6 +349,12 @@ def _lower_chosen_source_blanket(
         # payment the activation measured (``choices["mana_spent_for_cost"]``),
         # so what rides here is only that the shield must be handed them.
         payload["source_shares_spent_mana_color"] = True
+    if node.source_shares_exiled_card_color:
+        # "…that shares a color with the exiled card" (Mourner's Shield). The
+        # colours are the imprinted card's, read at resolution off the
+        # source's linked exile (``mana_could_produce.exiled_card_colors``,
+        # the reader Chrome Mox's colours come from).
+        payload["source_shares_exiled_card_color"] = True
     rider = node.prevented_rider
     if rider is not None:
         if (
@@ -392,9 +402,9 @@ def _lower_prevent_all(
         # the blanket. Before every branch below, each of which was written for
         # a described or targeted source and reads no choice.
         return _lower_chosen_source_blanket(node)
-    if node.source_shares_spent_mana_color:
+    if node.source_shares_spent_mana_color or node.source_shares_exiled_card_color:
         raise LoweringError(
-            "only a chosen source is narrowed by the mana spent", node=node
+            "only a chosen source is narrowed by a colour it shares", node=node
         )
     if node.from_targeting_source:
         # Silhouette. The shield hangs on the object the spell's first sentence

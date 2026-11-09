@@ -50,6 +50,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_cast_permission,
                       _parse_attacking_doesnt_tap,
                       _parse_reveal_hand_and_choose,
+                      _parse_cast_copy_of_exiled_card,
                       _parse_return_instead_of_untapping,
                       _parse_count_objects,
                       _parse_tapped_lands_produce_chosen,
@@ -262,6 +263,12 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     revealed = _parse_reveal_hand_and_choose(stream)
     if revealed is not None:
         return revealed
+    # "You may copy the exiled card. If you do, you may cast the copy without
+    # paying its mana cost." (Isochron Scepter.) Two sentences read whole, for
+    # the reveal template's reason: the second names what the first made.
+    copied = _parse_cast_copy_of_exiled_card(stream)
+    if copied is not None:
+        return copied
     # "**After this main phase,** there is an additional combat phase followed
     # by an additional main phase." (Relentless Assault, CR 500.8.) Read here
     # with the other sentences whose first word opens no effect: there is no

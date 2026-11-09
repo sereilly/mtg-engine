@@ -289,6 +289,11 @@ class CreateCopyToken:
     #: Not a characteristic of the token, which is why the paragraph above does
     #: not exclude it: CR 111.2 makes the creator the owner, whatever is copied.
     recipient_players: str | None = None
+    #: "Create a token that's a copy of **the exiled card**." (Soul Foundry.)
+    #: The card this permanent's imprint exiled (CR 607.2a) — not a target and
+    #: not a permanent, so ``subject`` carries only "a card" and this flag is
+    #: what the lowering reads first.
+    of_exiled_card: bool = False
 
 
 @dataclass(frozen=True)

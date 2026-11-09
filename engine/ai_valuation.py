@@ -646,6 +646,7 @@ class ManaYield:
 _PLANNABLE_MANA_KEYS = frozenset({
     "pips", "pips_choice", "any_color", "any_color_count", "any_color_from",
     "could_produce_lands", "from_chosen_color", "oracle_text",
+    "colors_of_exiled_card",
 })
 
 
@@ -709,7 +710,10 @@ def planned_mana_yield(instruction: OracleInstruction | None) -> ManaYield | Non
         count = payload.get("any_color_count", 1)
         if not isinstance(count, int) or isinstance(count, bool) or count < 1:
             return None
-        if payload.get("any_color_from"):
+        if payload.get("any_color_from") or payload.get("colors_of_exiled_card"):
+            # Chrome Mox's colours are a record's, not a board's, but the
+            # answer is asked of the same reader
+            # (``mana_could_produce.ability_colors_on_offer``).
             return ManaYield(amount=count, board_narrowed=True)
         return ManaYield(symbols=("W", "U", "B", "R", "G"), amount=count)
     return None

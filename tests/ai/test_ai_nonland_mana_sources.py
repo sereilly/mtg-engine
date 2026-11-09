@@ -34,6 +34,7 @@ from engine.ai_policy import choose_cast_action
 from engine.ai_valuation import ManaYield, planned_mana_yield
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
+from engine.linked_exile import link_exiled_card
 from engine.mana_payment import is_mana_ability
 from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.models import Permanent
@@ -89,6 +90,13 @@ def _w2g5_pay(game, plan) -> None:
     ))
 
 
+def _w2g5_steps(instruction) -> tuple:
+    """*instruction* and every step inside it."""
+    from engine.mana_payment import _every_nested_step
+
+    return (instruction, *_every_nested_step(instruction))
+
+
 def _w2g5_floating(game) -> dict:
     return {symbol: n for symbol, n in game.players[0].mana_pool.items() if n}
 
@@ -120,6 +128,18 @@ def test_w2g5_every_nonland_source_the_plan_counts_makes_what_it_counted(pool):
         source = _w2g5_enter(game, card)
         if not game.is_on_battlefield(source):
             continue  # an entry replacement put it elsewhere (Mox Diamond)
+        # "Add one mana of any of the exiled card's colors" (Chrome Mox): the
+        # colours are a record's, not a board's — the card the source's
+        # imprint exiled (CR 607.2a) — so the source is given one, a green
+        # card, for the reason the tapped lands give a "could produce" clause
+        # a board to read.
+        if any(
+            (step.payload or {}).get("colors_of_exiled_card")
+            for ability in abilities
+            for step in _w2g5_steps(ability.instruction)
+        ):
+            exiled = game.put_card_into_exile(0, pool["Grizzly Bears"])
+            link_exiled_card(source, exiled, 0)
         planned = _nonland_mana_source(game, 0, source)
         tap_alone = [a for a in abilities if is_tap_alone_mana_ability(a)]
         if planned is None:

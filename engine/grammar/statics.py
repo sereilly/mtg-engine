@@ -491,6 +491,36 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
                 payload["functions_from"] = "graveyard"
             instructions.append(OracleInstruction(LORD_BUFF_KIND, "", payload))
         return tuple(instructions)
+    # "This creature has protection from each of the exiled card's card types."
+    # (Mirror Golem.) A protection ability printed as a sentence about its own
+    # source, unconditionally: the ability the bare keyword line "Protection
+    # from …" is (CR 702.16a), so it lowers to the instruction that line
+    # compiles to — a ``static_line`` carrying "protection from <quality>",
+    # which ``mixins/protection._protection_qualities`` reads. Every quality
+    # has to be one a shield answers to, the gate the keyword line passes
+    # (``keywords.protection_qualities_named``); anything else on the sentence
+    # — a duration, a choice, a second effect — refuses.
+    if (
+        len(effects) == 1
+        and isinstance(effects[0], ast.GainKeyword)
+        and _is_source(effects[0].subject)
+        and effects[0].keywords
+        and all(str(k).startswith("protection from ") for k in effects[0].keywords)
+    ):
+        from ..keywords import protection_qualities_named
+
+        grant = effects[0]
+        if grant.duration.kind is not None or grant.choose_one or grant.chosen_ability:
+            raise LoweringError(
+                "a printed protection ability carries no duration or choice",
+                node=node,
+            )
+        for keyword in grant.keywords:
+            if protection_qualities_named(keyword[len("protection from "):]) is None:
+                raise LoweringError(f"no shield answers to {keyword!r}", node=node)
+        return tuple(
+            OracleInstruction("static_line", str(keyword)) for keyword in grant.keywords
+        )
     # A static ability on the *source itself* whose size is computed (Carrion
     # Grub's "gets +X/+0, where X is the greatest power among creature cards in
     # your graveyard"). Not a lord buff — it buffs nobody else — and not a
