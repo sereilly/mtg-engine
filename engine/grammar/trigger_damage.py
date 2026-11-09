@@ -78,10 +78,14 @@ def _parse_damage_dealt_event(
     # consumed and not carried, exactly as the active form's is —
     # `engine/trigger_conditions.py`'s row marks the seat and `event_filters._damage_dealt_filter`
     # tests it, which is where every other recipient narrowing is answered.
+    #
+    # "Whenever **an opponent is dealt damage**, …" (War Elemental). The same
+    # passive with the other seat word the table's row names — consumed and
+    # not carried, for the reason "you're" is.
     passive = stream.mark()
     if stream.accept_word("you're") or (
         stream.accept_word("you") and stream.accept_word("are")
-    ):
+    ) or stream.accept_phrase("an", "opponent", "is"):
         if stream.accept_word("dealt"):
             stream.accept_word("combat", "noncombat")
             if stream.accept_word("damage"):

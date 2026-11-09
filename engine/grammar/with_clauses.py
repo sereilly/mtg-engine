@@ -371,6 +371,26 @@ def accept_with_clause(stream: TokenStream, d, parse_filter) -> bool | None:
     if stream.at_word("without"):
         probe = stream.mark()
         stream.advance()
+        # "…without **a fate counter on it**" (Oblivion Stone). The counter
+        # branch of "with" above turned over, read with the same reader of the
+        # kind and the same "on it"/"on them" tail, so one word table answers
+        # both. A +1/+1 kind has its own store and its own field above and no
+        # negated twin yet, so it refuses here rather than being asked of the
+        # open-kind store, where it would never be found.
+        counter_probe = stream.mark()
+        stream.accept_word("a", "an")
+        token = stream.peek()
+        if token is None or token.kind != PT:
+            kind = accept_counter_kind(stream)
+            if kind is not None and stream.accept_word(
+                "counter", "counters"
+            ) and (
+                stream.accept_phrase("on", "it")
+                or stream.accept_phrase("on", "them")
+            ):
+                d.without_named_counter = kind.text
+                return True
+        stream.reset(counter_probe)
         try:
             d.without_keywords.extend(_parse_keyword_list(stream))
             return True

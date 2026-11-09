@@ -983,6 +983,14 @@ class ObjectFilter:
     #: for it refuses the phrase by name instead of dropping the word and
     #: sweeping the board.
     superlative: "Superlative | None" = None
+    #: "Destroy each nonland permanent **without a fate counter on it**"
+    #: (Oblivion Stone). The negation of ``with_named_counter``: the object
+    #: carries none of CR 122.1's open-kind counter the word names. Its own
+    #: field rather than a flag on the positive one, for ``without_keywords``'
+    #: reason — a payload key whose meaning flips on a sibling is one a reader
+    #: that knows only the positive answers the wrong way round. Appended
+    #: last: the node is append-only.
+    without_named_counter: str | None = None
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.

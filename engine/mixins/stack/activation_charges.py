@@ -88,6 +88,7 @@ class ActivationChargesMixin:
         cost_graveyard_indices, cost_hand_index, cost_other_hand_indices,
         cost_permanent_ids, cost_permanent_index, counters_removed_for_cost,
         permanent, target_permanent_index, target_role_refs, x_value,
+        cost_counter_kind=None,
     ):
         """What pays each part of the cost that is not mana (CR 601.2h's
         choices, through CR 602.2b).
@@ -517,7 +518,7 @@ class ActivationChargesMixin:
         # is one.
         counter_removal_permanent = None
         if ability.cost.remove_counter_filter is not None:
-            from ...named_counters import counters_on
+            from ...named_counters import counters_held
 
             kind = ability.cost.remove_counter
             wanted = ability.cost.remove_counter_count
@@ -536,9 +537,22 @@ class ActivationChargesMixin:
             ]
             counter_removal_permanent = (
                 named[0] if named
-                else max(candidates, key=lambda perm: counters_on(perm, str(kind)))
+                else max(candidates, key=lambda perm: counters_held(perm, str(kind)))
             )
             counters_removed_for_cost = needed
+            # "Remove **a counter** …" (Power Conduit): a kind the payer named
+            # is paid as named or the activation is refused, here with nothing
+            # spent (CR 601.2h; ``_named_cost_refusal``'s rule for a named
+            # permanent, one choice over).
+            if self.cost_counter_removal_kind(
+                ability, counter_removal_permanent, cost_counter_kind,
+            ) is None:
+                details = (
+                    f"{permanent.card.name}: "
+                    f"{counter_removal_permanent.card.name} has no "
+                    f"{cost_counter_kind} counter to remove for its cost"
+                )
+                return refuse(permanent.card.name, "unsupported", details)
 
         # "{T}, Sacrifice a creature **and a Swamp**: …" (Viscerid Drone). The
         # second object a conjoined sacrifice names, collected here rather than
@@ -737,6 +751,27 @@ class ActivationChargesMixin:
             untap_cost_permanent, library_bottom_cost_cards,
         )
 
+    def cost_counter_removal_kind(
+        self, ability, payer, named: "str | None" = None,
+    ) -> "str | None":
+        """Which kind of counter an activation's counter-removal cost takes off
+        *payer*: the printed kind, or — "Remove **a counter** from a permanent
+        you control" (Power Conduit) — the kind *named* if *payer* holds it, the
+        one ``named_counters.counter_kind_to_remove`` picks if nothing was
+        named, and None when a named kind is not there to take.
+
+        One function for the refusal above the payment and the payment below
+        it, so the kind checked is the kind removed.
+        """
+        from ...named_counters import ANY_COUNTER_KIND, counter_kind_to_remove
+
+        printed = getattr(ability.cost, "remove_counter", None)
+        if printed != ANY_COUNTER_KIND:
+            return printed
+        if payer is None:
+            return None
+        return counter_kind_to_remove(payer, named)
+
     def _choose_graveyard_to_library_bottom(
         self, cost, controller, controller_index: int, named_slots,
     ) -> "tuple | str":
@@ -797,7 +832,7 @@ class ActivationChargesMixin:
         sacrifice_attached_permanent, sacrifice_cost_permanent,
         sacrifice_cost_set, sacrifice_tax_victims, tap_cost_permanents,
         target_permanent_index, untap_cost_permanent,
-        library_bottom_cost_cards=(),
+        library_bottom_cost_cards=(), counter_removal_kind=None,
     ):
         """Every cost but the mana, paid at one moment once the mana payment
         has gone through (CR 601.2h through CR 602.2b), so nothing here
@@ -865,13 +900,15 @@ class ActivationChargesMixin:
             # is the whole of `remove_counter_filter` — the same arrangement the
             # placing twin makes below with `counter_cost_permanent`.
             payer = counter_removal_permanent or permanent
-            remove_counters(
-                payer, ability.cost.remove_counter, counters_removed_for_cost
-            )
+            # The kind the payer gives up: the printed one, or — "remove **a
+            # counter**" — the one ``cost_counter_removal_kind`` settled above
+            # the payment.
+            kind = counter_removal_kind or ability.cost.remove_counter
+            remove_counters(payer, kind, counters_removed_for_cost)
             if payer is not permanent:
                 self.log.append(
                     f"{payer.card.name} gave up {counters_removed_for_cost} "
-                    f"{ability.cost.remove_counter} counter(s) "
+                    f"{kind} counter(s) "
                     f"({permanent.card.name}'s cost)"
                 )
 

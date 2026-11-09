@@ -68,6 +68,13 @@ def _accept_seat_damage_record(stream: TokenStream) -> "ast.Condition | None":
     Non-consuming on refusal, so the dispatcher's next branch keeps its say.
     """
     mark = stream.mark()
+    # "…sacrifice it unless **an opponent was dealt damage this turn**." (War
+    # Elemental.) The same existential over the ability controller's opponents
+    # that "one of your opponents" spells out, so the same node and referent:
+    # the evaluator asks it of every opponent and any one answers.
+    if stream.accept_phrase("an", "opponent", "was", "dealt", "damage", "this", "turn"):
+        return ast.SeatWasDealtDamageThisTurn("you")
+    stream.reset(mark)
     if not stream.accept_phrase("one", "of"):
         return None
     referent = _OPPONENT_POSSESSIVES.get(stream.peek_word() or "")

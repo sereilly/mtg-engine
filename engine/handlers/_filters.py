@@ -1190,9 +1190,21 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # else has been pumping must not find them there.
     named_counter = payload.get("with_named_counter")
     if named_counter:
+        # ``counters_held`` rather than ``counters_on``: the same store for a
+        # printed kind, and every kind for ``ANY_COUNTER_KIND`` — the picker
+        # of "Remove a counter from a permanent you control" (Power Conduit)
+        # offers what holds a counter of any kind, as its charger accepts.
+        from ..named_counters import counters_held
+
+        if counters_held(perm, str(named_counter)) <= 0:
+            return False
+    # "…**without** a fate counter on it" (Oblivion Stone). The same store
+    # asked the other way round: one counter of the kind is enough to fail.
+    absent_counter = payload.get("without_named_counter")
+    if absent_counter:
         from ..named_counters import counters_on
 
-        if counters_on(perm, str(named_counter)) <= 0:
+        if counters_on(perm, str(absent_counter)) > 0:
             return False
     # "each land **with an activated ability that isn't a mana ability**"
     # (Tsabo's Web). What the permanent can do *now*: ``effective_card`` is the

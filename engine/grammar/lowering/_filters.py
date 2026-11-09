@@ -146,6 +146,9 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "nontoken", "token_only",
     "named", "their_choice", "mana_value", "power", "toughness",
     "colored", "with_plus1_counter", "with_named_counter",
+    # "…without a fate counter on it" (Oblivion Stone): the negation, emitted
+    # whenever set and tested by ``permanent_matches_filter`` beside its twin.
+    "without_named_counter",
     "with_nonmana_activated_ability",
     # "a **multicolored** creature card" (Dragon Arch). ``to_payload`` emits it
     # whenever it is set and both matchers test it — ``permanent_matches_filter``

@@ -130,6 +130,11 @@ class AbilityActivationMixin:
         # with the activation as ``mana_color`` is (CR 605.3a) — see
         # ``engine/mana_combination.py``. None is the seat's default split.
         mana_combination: dict | None = None,
+        # "Remove **a counter** from a permanent you control" (Power Conduit):
+        # which kind the chosen permanent gives up, when it holds several
+        # (CR 602.2b's choice through CR 601.2b). None is
+        # ``named_counters.counter_kind_to_remove``'s pick.
+        cost_counter_kind: str | None = None,
         source_seat: int | None = None,
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
@@ -157,6 +162,7 @@ class AbilityActivationMixin:
             cost_graveyard_indices=cost_graveyard_indices,
             chosen_keyword=chosen_keyword,
             mana_combination=mana_combination,
+            cost_counter_kind=cost_counter_kind,
             source_seat=source_seat,
             source_permanent_index=source_permanent_index,
             source_stack_index=source_stack_index,
@@ -336,6 +342,11 @@ class AbilityActivationMixin:
         # with the activation as ``mana_color`` is (CR 605.3a) — see
         # ``engine/mana_combination.py``. None is the seat's default split.
         mana_combination: dict | None = None,
+        # "Remove **a counter** from a permanent you control" (Power Conduit):
+        # which kind the chosen permanent gives up, when it holds several
+        # (CR 602.2b's choice through CR 601.2b). None is
+        # ``named_counters.counter_kind_to_remove``'s pick.
+        cost_counter_kind: str | None = None,
         source_seat: int | None = None,
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
@@ -617,6 +628,7 @@ class AbilityActivationMixin:
             cost_permanent_ids=cost_permanent_ids,
             cost_permanent_index=cost_permanent_index,
             counters_removed_for_cost=counters_removed_for_cost,
+            cost_counter_kind=cost_counter_kind,
             permanent=permanent, target_permanent_index=target_permanent_index,
             target_role_refs=target_role_refs, x_value=x_value,
         )
@@ -729,6 +741,9 @@ class AbilityActivationMixin:
             target_permanent_index=target_permanent_index,
             untap_cost_permanent=untap_cost_permanent,
             library_bottom_cost_cards=library_bottom_cost_cards,
+            counter_removal_kind=self.cost_counter_removal_kind(
+                ability, counter_removal_permanent, cost_counter_kind,
+            ),
         )
 
         instruction = ability.instruction

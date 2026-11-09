@@ -272,6 +272,35 @@ def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     nothing charges, which is an ability activated for free.
     """
     stream.expect_word("remove")
+    # "{T}, Remove **a counter** from a permanent you control: …" (Power
+    # Conduit). No kind printed, so any kind pays (CR 122.1) — the payer
+    # chooses which as the cost is paid (CR 602.2b). Only off a permanent the
+    # payer is asked for: the source spelling ("remove a counter from this
+    # artifact") has no charger that chooses a kind, so it keeps refusing.
+    any_mark = stream.mark()
+    if stream.accept_phrase("a", "counter", "from"):
+        if accept_source_reference(stream):
+            raise stream.error(
+                "a counter of any kind is removed only from a permanent the "
+                "payer is asked for"
+            )
+        try:
+            subject = _parse_cost_object(stream, "remove a counter from")
+        except GrammarError:
+            subject = None
+        if subject is not None and _is_chargeable_counter_target(
+            subject, removal=True,
+        ):
+            from ..named_counters import ANY_COUNTER_KIND
+
+            return ast.RemoveCounterCost(
+                ANY_COUNTER_KIND, ast.Fixed(1), subject=subject,
+            )
+        stream.reset(any_mark)
+        raise stream.error(
+            "a counter of any kind is removed from a permanent the payer can "
+            "be asked for"
+        )
     count = ast.Fixed(1) if stream.accept_word("a", "an") else parse_amount(stream)
     counter = _expect_counter_kind(stream, " to remove").text
     stream.expect_word("counter", "counters")
@@ -311,7 +340,9 @@ def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
         subject = _parse_cost_object(stream, "remove a counter from")
     except GrammarError:
         subject = None
-    if subject is not None and _is_chargeable_counter_target(subject):
+    if subject is not None and _is_chargeable_counter_target(
+        subject, removal=True,
+    ):
         # …but only for a *printed* count. The chosen-permanent charger reads
         # its number as ``int(wanted) if isinstance(wanted, int) else 1``, so an
         # announced X would be charged as one counter off a permanent the payer

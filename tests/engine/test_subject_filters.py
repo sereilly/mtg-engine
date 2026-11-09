@@ -823,6 +823,9 @@ _COVERED_ELSEWHERE = {
         "test_ons_w1g6_sharing_a_type_with_the_host_reads_the_last_host_once_the_aura_left",
     "shares_creature_type_with_each":
         "test_ons_w1g6_sharing_a_type_with_each_anchor_asks_every_anchor",
+    # --- MRD W1G6 ---
+    "without_named_counter":
+        "test_mrd_w1g6_without_a_named_counter_rejects_a_permanent_carrying_one",
 }
 
 
@@ -1635,6 +1638,36 @@ def test_cast_by_you_this_turn_reads_a_seat_and_a_turn(pool):
     )
     assert not subject_matches(game, mine, described), (
         "with no observer there is no seat to compare against"
+    )
+
+
+def test_mrd_w1g6_without_a_named_counter_rejects_a_permanent_carrying_one(pool):
+    """"Destroy each nonland permanent **without a fate counter on it**"
+    (Oblivion Stone). Its own demonstration rather than a row in
+    ``_REJECTIONS``, because the rejected permanent has to *carry* the counter
+    and that table builds a bare one.
+
+    Both directions: the bare permanent answers, one fate counter makes it
+    fail, and a counter of another kind (a +1/+1 included, which lives in a
+    different store) is not the one the phrase names.
+    """
+    from engine.named_counters import add_counters
+
+    marked = Permanent(card=pool["Grizzly Bears"])
+    other = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[marked, other]),
+        PlayerState(name="P2"),
+    ])
+    described = {"type_filter": "creature", "without_named_counter": "fate"}
+
+    assert subject_matches(game, marked, described)
+    add_counters(marked, "fate", 1)
+    assert not subject_matches(game, marked, described)
+    add_counters(other, "doom", 1)
+    add_counters(other, "+1/+1", 1)
+    assert subject_matches(game, other, described), (
+        "a counter of another kind is not a fate counter"
     )
 
 

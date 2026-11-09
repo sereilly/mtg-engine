@@ -422,6 +422,16 @@ def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
                 "remove_counter_cost", 1,
             )
             spec["counter"] = cost.remove_counter
+            # "Remove **a counter** from a permanent you control" (Power
+            # Conduit): any kind pays, so the client says "a counter" and —
+            # where the chosen permanent holds two kinds — may name one on
+            # ``cost_counter_kind``; unnamed, the charger takes
+            # ``named_counters.counter_kind_to_remove``'s pick.
+            from .named_counters import ANY_COUNTER_KIND
+
+            if cost.remove_counter == ANY_COUNTER_KIND:
+                spec["counter"] = "any"
+                spec["any_counter_kind"] = True
             specs.append(spec)
     if getattr(cost, "hand_to_library_top", 0):
         # "**Put a card from your hand on top of your library**: …" (Hidden

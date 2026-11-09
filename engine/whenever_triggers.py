@@ -320,8 +320,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # creatures deal combat damage to you simultaneously, Vengeful Pharaoh will
     # only trigger once"). "Whenever **a source** deals damage to you" names
     # the source, and is once per source (``engine/simultaneous_damage.py``).
+    #
+    # "Whenever **an opponent is dealt damage**, put that many +1/+1 counters
+    # on this creature." (War Elemental.) The same row with the other seat word
+    # the active row's recipient list already names, so `event_filters` tests
+    # it the way it tests "deals damage to an opponent" — and read from the
+    # recipient's side like Blood Hound's: once per opponent for the total of
+    # one dealing.
     ("damage_dealt",
-     r"whenever (?P<damage_recipient>you)(?:'re| are) dealt "
+     r"whenever (?P<damage_recipient>you(?='re| are)|an opponent(?= is))"
+     r"(?:'re| are| is) dealt "
      r"(?:(?P<damage_combat>combat|noncombat) )?damage(?P<damager_any>)"
      r"(?P<damage_received>)"),
     ("damage_dealt",
@@ -1170,6 +1178,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("spell_cast",
      r"whenever a player casts a spell with mana value (?P<cast_mana_value>\d+) "
      r"or (?P<cast_mana_value_bound>greater|less)"),
+    # "Whenever a player casts a spell with mana value **equal to the number
+    # of charge counters on this artifact**, counter that spell." (Chalice of
+    # the Void.) The bound is a count on the trigger's *source*, so the kind
+    # is payload and the number is read off the permanent as the spell is
+    # cast (`cast_event_filters`) — the card's 2021-03-19 ruling: "The number
+    # of charge counters … matters only at the time the spell is cast." Before
+    # the bare row, its strict prefix.
+    ("spell_cast",
+     r"whenever a player casts a spell with mana value equal to the number of "
+     r"(?P<cast_mana_value_source_counters>[a-z]+) counters on "
+     r"this (?:artifact|creature|enchantment|land|permanent)"),
     ("spell_cast",                  r"whenever a player casts a spell"),
     # "Whenever a player **kicks** a spell" (Saproling Infestation). CR 702.33d:
     # a spell is kicked when "its controller declared the intention to pay" its

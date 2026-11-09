@@ -162,6 +162,9 @@ class _FilterDraft:
     # "with a <kind> counter on it" (Bounty Hunter) — see
     # ``ast.ObjectFilter.with_named_counter``.
     with_named_counter: str | None = None
+    # "without a <kind> counter on it" (Oblivion Stone) — see
+    # ``ast.ObjectFilter.without_named_counter``.
+    without_named_counter: str | None = None
     # "with an activated ability that isn't a mana ability" (Tsabo's Web) —
     # see ``ast.ObjectFilter.with_nonmana_activated_ability``.
     with_nonmana_activated_ability: bool = False
@@ -371,6 +374,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         is_card=d.is_card,
         with_plus1_counter=d.with_plus1_counter,
         with_named_counter=d.with_named_counter,
+        without_named_counter=d.without_named_counter,
         with_nonmana_activated_ability=d.with_nonmana_activated_ability,
         nontoken=d.nontoken,
         colored=d.colored,

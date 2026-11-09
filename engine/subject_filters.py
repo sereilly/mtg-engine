@@ -92,6 +92,12 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # is what a compiler admits a narrowed line on, so without the word the
     # whole ability refused and the card was unsupported.
     "with_named_counter",
+    # "Destroy each nonland permanent **without a fate counter on it**"
+    # (Oblivion Stone). The key above turned over, off the same store and the
+    # same reader; listed for its reason. On a sweep the direction matters: an
+    # unlisted key refuses the line, a listed one ignored would destroy the
+    # permanents the counters were placed to spare.
+    "without_named_counter",
     # "each land **with an activated ability that isn't a mana ability**"
     # (Tsabo's Web). Answered off the object alone — what a permanent can do
     # is its effective card's compiled program (layer 1's copy and layer 3's
