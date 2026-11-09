@@ -28,6 +28,8 @@ the guard too.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ..oracle_types import (COIN_FLIPS_WON, EXILED_THIS_WAY, MILLED_THIS_WAY,
                            REVEALED_BY_SEAT, REVEALED_THIS_WAY)
 from .errors import GrammarError
@@ -787,6 +789,27 @@ def accept_player_deed(stream: TokenStream, parse_filter) -> "ast.PlayerDeed | N
             stream.reset(mark)
             return None
         return ast.PlayerDeed("sacrificed_this_way", filter=filt)
+    # "Each opponent **who cast a spell this turn with the same name as that
+    # card** loses 6 life." (Grim Reminder.) The turn's cast record
+    # (``PlayerState.spells_cast_this_turn``) narrowed by the printed noun —
+    # a spell, of whatever types it names — and, where printed, by the name
+    # of the card an earlier step of this same effect revealed. Every word is
+    # required: "this turn" is the window and the record's whole meaning.
+    if stream.accept_word("cast"):
+        stream.accept_word("a", "an")
+        try:
+            filt = parse_filter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if filt.zone != "stack" or not stream.accept_phrase("this", "turn"):
+            stream.reset(mark)
+            return None
+        if stream.accept_phrase(
+            "with", "the", "same", "name", "as", "that", "card",
+        ):
+            filt = dataclasses.replace(filt, name_from_recorded_card=True)
+        return ast.PlayerDeed("cast_spell_this_turn", filter=filt)
     # "…each player **who didn't discard a creature card this way** loses 4
     # life." (Strongarm Tactics.) The sacrifice clause above one record over —
     # what an earlier step of this same effect took out of each hand — and

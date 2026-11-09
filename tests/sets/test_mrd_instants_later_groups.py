@@ -120,6 +120,77 @@ def test_w1g11_spoils_of_the_vault_left_to_itself_names_from_its_own_library(set
     assert [c.name for c in alice.exile] == ["Island"]
     assert alice.life == 19
 
+def _w1g11_reminder_table(set_pool, *, bob_cast=("Shivan Dragon",)):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    library = [lea["Island"], lea["Shivan Dragon"], lea["Lightning Bolt"],
+               lea["Forest"]]
+    game, alice, bob = _w1g11_table(set_pool, [mrd["Grim Reminder"]],
+                                    library=library)
+    bob.spells_cast_this_turn.extend(lea[name] for name in bob_cast)
+    return game, alice, bob
+
+
+def _w1g11_index_of(library, name):
+    return next(i for i, card in enumerate(library) if card.name == name)
+
+
+def test_w1g11_grim_reminder_punishes_the_opponent_who_cast_the_revealed_name(set_pool):
+    game, alice, bob = _w1g11_reminder_table(set_pool)
+    game.interactive_seats = {0}
+    assert game.cast_from_hand(0, "Grim Reminder").supported
+    assert not game.resolve_top_of_stack(), "held for the search"
+    (choice,) = [c for c in game.pending_choices if c.kind == "search_library"]
+    # A land is not a nonland card: the pick is refused.
+    assert not game.confirm_search_library(0, _w1g11_index_of(alice.library, "Island"))
+    assert game.confirm_search_library(
+        0, _w1g11_index_of(alice.library, "Shivan Dragon"),
+    )
+    _w1g11_resolve_stack(game)
+    assert bob.life == 14
+    assert alice.life == 20
+    # Revealed, never moved: the Dragon is still in the (shuffled) library.
+    assert sorted(c.name for c in alice.library) == [
+        "Forest", "Island", "Lightning Bolt", "Shivan Dragon",
+    ]
+    assert alice.hand == []
+    assert any("revealed Shivan Dragon" in line for line in game.log)
+
+
+def test_w1g11_grim_reminder_revealing_another_name_costs_nobody_life(set_pool):
+    game, alice, bob = _w1g11_reminder_table(set_pool)
+    game.interactive_seats = {0}
+    assert game.cast_from_hand(0, "Grim Reminder").supported
+    game.resolve_top_of_stack()
+    assert game.confirm_search_library(
+        0, _w1g11_index_of(alice.library, "Lightning Bolt"),
+    )
+    _w1g11_resolve_stack(game)
+    assert bob.life == 20
+
+
+def test_w1g11_grim_reminder_left_to_itself_shows_a_name_an_opponent_cast(set_pool):
+    game, alice, bob = _w1g11_reminder_table(set_pool, bob_cast=("Lightning Bolt",))
+    assert game.cast_from_hand(0, "Grim Reminder").supported
+    _w1g11_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g11_resolve_stack(game)
+    assert bob.life == 14
+
+
+def test_w1g11_grim_reminder_returns_from_the_graveyard_only_during_upkeep(set_pool):
+    mrd = set_pool("MRD")
+    game, alice, _bob = _w1g11_table(set_pool, [])
+    alice.graveyard.append(mrd["Grim Reminder"])
+    refused = game.activate_from_graveyard(0, "Grim Reminder")
+    assert not refused.supported
+    game.current_phase = "beginning"
+    game.current_turn_phase, game.current_step = "beginning", "upkeep"
+    result = game.activate_from_graveyard(0, "Grim Reminder")
+    assert result.supported, result.details
+    _w1g11_resolve_stack(game)
+    assert [c.name for c in alice.hand] == ["Grim Reminder"]
+    assert alice.graveyard == []
+
 # ==== end W1G11 ======================================================
 
 

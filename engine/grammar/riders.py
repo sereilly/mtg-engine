@@ -963,7 +963,8 @@ def _parse_deferred_search_shuffle(
         for part in (step.steps if isinstance(step, ast.Sequence) else (step,))
     ]
     if not any(
-        isinstance(part, ast.SearchAndExile) and part.shuffle_deferred
+        isinstance(part, (ast.SearchAndExile, ast.SearchLibrary))
+        and part.shuffle_deferred
         for part in flat
     ):
         return False

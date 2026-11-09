@@ -906,8 +906,19 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
 #: One table rather than a predicate, for :data:`_PRODUCES`' own reason: this is
 #: a registry, and the thing being registered is a payload entry the lowering
 #: already writes.
-_PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, "str | tuple[str, ...]"]] = {
-    "search_library": ("destination", "exile", "exiled_cards"),
+_PRODUCES_FOR_PAYLOAD: dict[
+    str,
+    "tuple[str, object, str | tuple[str, ...]] | "
+    "list[tuple[str, object, str | tuple[str, ...]]]",
+] = {
+    # A list where one kind writes different records for different payloads:
+    # the find exiled (Grinning Totem) or the find revealed and left in the
+    # library — "Each opponent who cast a spell this turn with the same name
+    # as **that card** …" (Grim Reminder) reads the card it showed.
+    "search_library": [
+        ("destination", "exile", "exiled_cards"),
+        ("destination", "revealed", "revealed_card"),
+    ],
     # "Put target creature on the bottom of its owner's library. **That
     # creature's controller** reveals cards …" (Proteus Staff.) The bottom
     # shape only: it is single-target (the lowering emits ``library_end`` on
@@ -1058,8 +1069,10 @@ def _produced_by_kind(instruction) -> frozenset[str]:
         else frozenset((recorded,) if isinstance(recorded, str) else recorded)
     )
     conditional = _PRODUCES_FOR_PAYLOAD.get(kind)
-    if conditional is not None:
-        payload_key, payload_value, record = conditional
+    for payload_key, payload_value, record in (
+        conditional if isinstance(conditional, list)
+        else [conditional] if conditional is not None else []
+    ):
         if (instruction.payload or {}).get(payload_key) == payload_value:
             keys = keys | ({record} if isinstance(record, str) else set(record))
     unless = _PRODUCES_FOR_PAYLOAD_WITHOUT.get(kind)

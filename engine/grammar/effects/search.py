@@ -424,6 +424,25 @@ def _parse_search_single_find(
         broken = stream.mark()
         if not (stream.accept_punct(".") and stream.at_word("put")):
             stream.reset(broken)
+        # "Search your library for a nonland card **and reveal it.** Each
+        # opponent who cast a spell this turn with the same name as that card
+        # loses 6 life. **Then shuffle.**" (Grim Reminder.) The find goes
+        # nowhere: it is revealed (CR 701.20a) and stays in the library, and
+        # the sentence behind reads it — so the search ends at its full stop,
+        # recording the find, and the line's closing "Then shuffle." is this
+        # search's shuffle (``riders._parse_deferred_search_shuffle``). Only
+        # where that sentence is printed: a search that neither places its
+        # find nor shuffles is a different card.
+        if (
+            not graveyard and not hand and not alternatives
+            and stream.at_punct(".") and stream.peek_word(1) != "put"
+            and _names_a_trailing_shuffle(stream)
+        ):
+            return ast.SearchLibrary(
+                ast.PlayerRef("you"), filt, ast.Zone("library_revealed"),
+                graveyard, tapped=(False,), reveal=True,
+                shuffle_deferred=True,
+            )
     # "…, **then shuffle and put that card on top**." (Enlightened Tutor,
     # Mystical Tutor, Worldly Tutor.) The same search with its last two clauses
     # in the other order, and the order is the effect: the card is placed

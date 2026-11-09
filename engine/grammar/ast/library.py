@@ -272,6 +272,13 @@ class SearchLibrary:
     #: rather than a zone of its own per number, so "second from the top"
     #: is this field with another value.
     from_top: int = 0
+    #: "Search your library for a nonland card and reveal it. Each opponent
+    #: who cast a spell this turn with the same name as that card loses 6
+    #: life. **Then shuffle.**" (Grim Reminder.) The search's own shuffle
+    #: (CR 701.23a) printed as a later sentence, behind a step that reads the
+    #: find — :class:`SearchAndExile`'s field of the same name, read by the
+    #: same rider. The search answer shuffles either way.
+    shuffle_deferred: bool = False
 
 @dataclass(frozen=True)
 class LookAtLibraryTop:

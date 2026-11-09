@@ -26,7 +26,10 @@ from .object_creature_types import every_creature_type_subtypes
 # without a test — or a test added without the field — cannot drift apart:
 # there is one copy and the lowering imports it.
 SEARCH_RESTRICTIONS = frozenset(
-    {"colors", "mana_value", "named", "named_among", "subtypes"}
+    {"colors", "mana_value", "named", "named_among", "subtypes",
+     # "Search your library for a **nonland** card" (Grim Reminder): the
+     # restriction's ``exclude_types``, read beside the flat key below.
+     "excluded_types"}
 )
 SEARCH_COMPARISONS = frozenset({"eq", "ge", "gt", "le", "lt"})
 
@@ -170,6 +173,15 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
         return False
     type_line = card.type_line.lower()
     if any(excluded in type_line for excluded in data.get("exclude_types") or ()):
+        return False
+    # "Search your library for a **nonland** card" (Grim Reminder): the same
+    # exclusion a search carries among its ``restrictions`` (the revealed-hand
+    # picker above carries it flat), through ``card_has_type`` so a card is
+    # excluded for any type its line prints (CR 205.2a).
+    if any(
+        card_has_type(card, excluded)
+        for excluded in (data.get("restrictions") or {}).get("exclude_types") or ()
+    ):
         return False
     # "a card **other than a basic land card**" (Lobotomy, Booby Trap). The
     # *pair* — CR 205.4a's Basic supertype and the land card type — rather than

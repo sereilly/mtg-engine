@@ -125,6 +125,22 @@ class LibrarySearchChoicesMixin:
             card, choice.data, game=self, owner=choice.player_index
         ):
             return False
+        if choice.data.get("destination") == "revealed":
+            # "Search your library for a nonland card **and reveal it.** Each
+            # opponent who cast a spell this turn with the same name as that
+            # card loses 6 life. Then shuffle." (Grim Reminder.) The find is
+            # shown (CR 701.20a) and never leaves the library (CR 701.20b):
+            # it is recorded for the sentence behind, and the library —
+            # the find in it — is shuffled as the search ends.
+            record = choice.data.get("record")
+            if record is not None:
+                record["revealed_card"] = card
+            choice.data.setdefault("revealed_names", []).append(card.name)
+            self.log.append(f"{caster.name} searched {zone} and revealed {card.name}")
+            random.shuffle(caster.library)
+            self._record_search_reveal(choice)
+            self.discard_pending_choice(choice)
+            return True
         self._take_found_card(caster, zone, source, library_index)
         # "…, reveal it, …" (CR 701.20): a search armed with the printed word
         # shows the find's face to every player when the search ends.
@@ -916,6 +932,23 @@ class LibrarySearchChoicesMixin:
                         choice, -1, "none", enforce_floor=False
                     )
             return
+        if choice.data.get("destination") == "revealed":
+            # "…and reveal it. Each opponent who cast a spell this turn with
+            # the same name as that card loses 6 life." (Grim Reminder.) A find
+            # that stays in the library is worth only what the sentence behind
+            # reads off it, and the one reader is a name against the turn's
+            # casts — public information (CR 601.2a casts are announced) — so
+            # a card an opponent cast is shown first, before the generic pick.
+            cast = {
+                card.name
+                for seat in self.opponents_of(choice.player_index)
+                for card in self.players[seat].spells_cast_this_turn
+            }
+            for zone, index, card in self._search_findable_entries(choice):
+                if card.name in cast and self._resolve_search_library(
+                    choice, index, zone
+                ):
+                    return
         found = choose_search_card(self, choice.player_index, choice.data)
         if found is None or not self._resolve_search_library(choice, found[1], found[0]):
             # A search that must find (CR 701.23d: "a card", with no quality
