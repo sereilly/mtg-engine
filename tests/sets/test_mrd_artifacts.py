@@ -399,6 +399,163 @@ def test_w1g1_worldslayer_destroys_every_other_permanent(set_pool):
     assert list(game.controlled_by(1)) == []
     assert _w1g1_equipped(slayer) is None
 
+
+def _w1g1_sledge_board(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    sledge = _w1g1_put(game, mrd["Dead-Iron Sledge"], 0)
+    giant = _w1g1_put(game, lea["Hill Giant"], 0)
+    wurm = _w1g1_put(game, lea["Craw Wurm"], 1)
+    _w1g1_equip(game, 0, sledge, giant)
+    return game, sledge, giant, wurm
+
+
+def test_w1g1_dead_iron_sledge_destroys_both_when_its_creature_is_blocked(set_pool):
+    """"Whenever equipped creature blocks or becomes blocked by a creature,
+    destroy both creatures." The becomes-blocked half: the trigger resolves
+    in the declare-blockers step, before any damage."""
+    game, sledge, giant, wurm = _w1g1_sledge_board(set_pool)
+
+    _w1g1_declare_attack(game, 0, blocks={
+        game.battlefield_index_of(wurm): game.battlefield_index_of(giant),
+    })
+    _w1g1_resolve_stack(game)
+    game._settle()
+
+    assert game.current_step == "declare_blockers"
+    assert not game.is_on_battlefield(giant), game.log[-6:]
+    assert not game.is_on_battlefield(wurm)
+    assert game.is_on_battlefield(sledge)
+    assert game.players[0].life == 20 and game.players[1].life == 20
+
+
+def test_w1g1_dead_iron_sledge_destroys_both_when_its_creature_blocks(set_pool):
+    """The blocks half: the Sledge on a blocker destroys it and the attacker."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    sledge = _w1g1_put(game, mrd["Dead-Iron Sledge"], 1)
+    wall = _w1g1_put(game, lea["Wall of Stone"], 1)
+    wurm = _w1g1_put(game, lea["Craw Wurm"], 0)
+    # Seat 1's own equip happened on its turn; attach directly here.
+    assert _w1g1_attach(game, sledge, wall)
+    game._settle()
+
+    _w1g1_declare_attack(game, 0, blocks={
+        game.battlefield_index_of(wall): game.battlefield_index_of(wurm),
+    })
+    _w1g1_resolve_stack(game)
+    game._settle()
+
+    assert not game.is_on_battlefield(wurm), game.log[-6:]
+    assert not game.is_on_battlefield(wall)
+
+
+def test_w1g1_dead_iron_sledge_moved_after_triggering_destroys_the_same_pair(set_pool):
+    """Its 2006-10-15 ruling: "Moving Dead-Iron Sledge after the ability
+    triggers will not affect which creatures are destroyed." The Sledge is
+    moved onto a third creature while the trigger waits; the original pair
+    dies and the new host lives."""
+    game, sledge, giant, wurm = _w1g1_sledge_board(set_pool)
+    bears = _w1g1_put(game, set_pool("LEA")["Grizzly Bears"], 0)
+    game.interactive_seats = {0, 1}
+
+    _w1g1_declare_attack(game, 0, blocks={
+        game.battlefield_index_of(wurm): game.battlefield_index_of(giant),
+    })
+    assert [item.card.name for item in game.stack] == ["Dead-Iron Sledge"]
+    _w1g1_attach(game, sledge, bears)
+    assert _w1g1_equipped(sledge) is bears
+    _w1g1_resolve_stack(game)
+    game._settle()
+
+    assert not game.is_on_battlefield(giant), game.log[-6:]
+    assert not game.is_on_battlefield(wurm)
+    assert game.is_on_battlefield(bears)
+
+
+def test_w1g1_dead_iron_sledge_unblocked_does_nothing(set_pool):
+    """No block, no trigger: the giant hits the player and everything stays."""
+    game, sledge, giant, wurm = _w1g1_sledge_board(set_pool)
+
+    _w1g1_declare_attack(game, 0)
+    _w1g1_fight(game)
+
+    assert game.players[1].life == 17
+    assert game.is_on_battlefield(giant) and game.is_on_battlefield(wurm)
+
+
+def test_w1g1_scythe_of_the_wretched_steals_the_creature_its_host_killed(set_pool):
+    """"Whenever a creature dealt damage by equipped creature this turn dies,
+    return that card to the battlefield under your control. Attach this
+    Equipment to that creature." The Wurm-sized host kills a blocker; the
+    blocker comes back under the Scythe's controller, wearing the Scythe."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    scythe = _w1g1_put(game, mrd["Scythe of the Wretched"], 0)
+    giant = _w1g1_put(game, lea["Hill Giant"], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 1)
+    _w1g1_equip(game, 0, scythe, giant)
+    assert _w1g1_pt(giant) == (5, 5)
+
+    _w1g1_declare_attack(game, 0, blocks={
+        game.battlefield_index_of(bears): game.battlefield_index_of(giant),
+    })
+    _w1g1_fight(game)
+
+    stolen = [p for p in game.controlled_by(0) if p.card.name == "Grizzly Bears"]
+    assert len(stolen) == 1, game.log[-8:]
+    assert _w1g1_equipped(scythe) is stolen[0]
+    assert _w1g1_pt(stolen[0]) == (4, 4)
+    assert _w1g1_pt(giant) == (3, 3)
+    assert game.players[1].graveyard == []
+    # Ownership never moved (CR 400.3): it is still the opponent's card.
+    assert game.owner_index_of(stolen[0]) == 1
+
+
+def test_w1g1_scythe_of_the_wretched_ignores_a_death_its_host_did_not_damage(set_pool):
+    """A creature that dies without having been dealt damage by the equipped
+    creature this turn does not trigger the Scythe."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    scythe = _w1g1_put(game, mrd["Scythe of the Wretched"], 0)
+    giant = _w1g1_put(game, lea["Hill Giant"], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 1)
+    _w1g1_equip(game, 0, scythe, giant)
+
+    game._destroy_swept_permanents(game.players[1], lambda p: p is bears)
+    _w1g1_resolve_stack(game)
+    game._settle()
+
+    assert [card.name for card in game.players[1].graveyard] == ["Grizzly Bears"]
+    assert not game.is_on_battlefield(bears)
+    assert _w1g1_equipped(scythe) is giant
+
+def test_w1g1_scythe_destroyed_in_response_still_returns_the_card(set_pool):
+    """The trigger exists apart from its source (CR 113.7a): the Scythe is
+    destroyed while its trigger waits, the dead creature still comes back
+    under the Scythe controller's control, and there is nothing to attach."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool, interactive=(0, 1))
+    scythe = _w1g1_put(game, mrd["Scythe of the Wretched"], 0)
+    giant = _w1g1_put(game, lea["Hill Giant"], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 1)
+    _w1g1_equip(game, 0, scythe, giant)
+
+    # The record combat damage writes (``damaged_by_sources_this_turn``),
+    # written here so the death can be caused with the trigger left waiting
+    # on the stack rather than resolved inside the damage step.
+    bears.metadata["damaged_by_sources_this_turn"] = [giant]
+    game._destroy_swept_permanents(game.players[1], lambda p: p is bears)
+    assert [item.card.name for item in game.stack] == ["Scythe of the Wretched"], game.log[-6:]
+    game._destroy_swept_permanents(game.players[0], lambda p: p is scythe)
+    game._settle()
+    _w1g1_resolve_stack(game)
+    game._settle()
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Hill Giant", "Grizzly Bears"], game.log[-12:]
+    assert [card.name for card in game.players[0].graveyard] == ["Scythe of the Wretched"]
+
+
 # ==== end W1G1 ======================================================
 
 
