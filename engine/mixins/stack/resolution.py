@@ -970,6 +970,43 @@ class StackResolutionMixin:
             if target_idx is None:
                 target_idx = item.target_player_index if item.target_player_index is not None else (1 - item.caster_index)
             target = self.players[target_idx] if 0 <= target_idx < len(self.players) else caster
+            if item.chosen_modes:
+                # CR 707.10 / 700.2g: the copy has the original's *modes*, each
+                # with its targets — every mode of an entwined spell
+                # (CR 702.42b), every chosen mode of a "choose one or more" —
+                # and this arm read the first one alone, so a Forked entwined
+                # One Dozen Eyes made the Beast and no Insects. The modes in
+                # printed order, resumable for the main path's reason.
+                def apply_copied_mode(mode) -> None:
+                    seat = (
+                        mode.target_player_index
+                        if mode.target_player_index is not None else target_idx
+                    )
+                    if not 0 <= seat < len(self.players):
+                        seat = target_idx
+                    self._apply_spell_text(
+                        caster,
+                        self.players[seat],
+                        item.card,
+                        text_card=spell_text_card(item),
+                        target_permanent_index=mode.target_permanent_index,
+                        target_permanent_id=mode.target_permanent_id,
+                        x_value=item.x_value,
+                        new_color=item.choices.get("new_color"),
+                        stack_target=mode.target_stack_item,
+                        mode_index=mode.index,
+                        old_color=item.choices.get("old_color"),
+                        divided_targets=item.choices.get("divided_targets"),
+                        choices=item.choices,
+                        trigger_context=item.trigger_context,
+                        target_graveyard_card=mode.target_graveyard_card,
+                    )
+
+                run_resumable(
+                    self, item.chosen_modes, apply_copied_mode,
+                    then=lambda: self.log.append(f"{item.card.name} (copy) resolved"),
+                )
+                return
             self._apply_spell_text(
                 caster,
                 target,

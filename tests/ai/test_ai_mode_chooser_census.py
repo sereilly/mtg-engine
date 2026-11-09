@@ -1386,6 +1386,39 @@ UNBUILDABLE = {
     # order put back is the order taken: what the bullet is for is the draws
     # to come, which no census board holds.
     ("Trickery Charm", 2): "it has nothing to act on on any census board",
+    # Mirrodin's entwine spells (MRD W1G4), each a census board's limit and
+    # not a chooser's: the board holds one bait the mode may target, on the
+    # side it wants, and nothing of the caster's but what a sibling's decoy
+    # puts there.
+    # "Tap **two** target creatures": an exact count of two (CR 601.2c), and
+    # a census board carries one bait per mode.
+    ("Blinding Beam", 0): "the engine offers this mode on no census board",
+    # "Sacrifice a creature. … damage equal to that creature's power": the
+    # caster controls no creature to sacrifice on the board built for the
+    # damage's target.
+    ("Grab the Reins", 1): "it has nothing to act on on any census board",
+    # "Creatures target player controls attack this turn if able": cast in
+    # the caster's own main phase, it requires nothing of anyone — the
+    # opponent has no attack this turn.
+    ("Incite War", 0): "it has nothing to act on on any census board",
+    # "Creatures you control gain first strike until end of turn": no
+    # creature of the caster's to give it to, and no fight for it.
+    ("Incite War", 1): "it has nothing to act on on any census board",
+    # "You may play up to two additional lands this turn": no land in hand.
+    ("Journey of Discovery", 1): "it has nothing to act on on any census board",
+    # "Create an X/X … where X is the number of cards in your hand": the hand
+    # is empty once the spell is cast, so the token is a 0/0. Entwined behind
+    # "you draw five cards" it is a 5/5, which is the proposal on its
+    # sibling's board ([0], natural: modes [0, 1]).
+    ("Promise of Power", 1): "it has nothing to act on on any census board",
+    # "Search your library for up to two creature cards": a census library is
+    # ten Forests. "Put up to two creature cards from your hand onto the
+    # battlefield": a census hand holds none.
+    ("Tooth and Nail", 0): "it has nothing to act on on any census board",
+    ("Tooth and Nail", 1): "it has nothing to act on on any census board",
+    # "Regenerate each creature you control": no creature of the caster's,
+    # and a shield with nothing coming measures nothing anyway.
+    ("Wail of the Nim", 0): "it has nothing to act on on any census board",
 }
 
 #: Modes with a board on which **nothing is cast**, each with why: the mode's
@@ -1437,6 +1470,8 @@ HELD = {
     # Bolt on the stack at the caster's creature it is the bullet the
     # instant-speed chooser takes (SCG W2G3b's drive).
     ("Recuperate", 1): "a shield on a creature with no damage coming",
+    # Mirrodin's (W1G4): Ivory Charm's tap one set over.
+    ("Dream's Grip", 0): "a tap of a creature with no attack to stop, undone at its untap step",
 }
 
 #: Modes whose own board leaves a sibling worth casting too, and the sibling
@@ -1485,6 +1520,10 @@ SHADOWED = {
     ("Vitality Charm", 2): ([0], "a 1/1 Insect lasts; +1/+1 and trample is three damage and a regeneration shield two, unblocked: 4.0 against 3.0 and 2.0"),
     # Scourge's.
     ("Recuperate", 1): ([0], "six life lasts; a shield with no damage coming measures nothing"),
+    # Mirrodin's (W1G4). "Each player shuffles their hand and graveyard into
+    # their library" takes the opposing hand away; seven cards each way
+    # measures even.
+    ("Temporal Cascade", 1): ([0], "the opposing hand shuffled away against seven cards drawn by each seat"),
 }
 
 #: Boards on which the cast the policy made measures **less** than some

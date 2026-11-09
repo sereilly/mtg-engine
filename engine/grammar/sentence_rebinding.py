@@ -330,6 +330,18 @@ def restates_target(spec, bound: "ast.TargetSpec") -> bool:
     return named == chosen
 
 
+def _bare_it(spec) -> bool:
+    """Whether *spec* is the bare pronoun "it" — the spec ``parse_recipient``
+    gives the word, which names the source unless a binder points it
+    elsewhere (the reading ``_rebind_pump_subject`` tests)."""
+    return (
+        isinstance(spec, ast.TargetSpec)
+        and spec.quantifier == "it"
+        and spec.filter.is_source
+        and spec.filter.to_payload() == {}
+    )
+
+
 def _rebind_clause_bound_noun(node, bound: "ast.TargetSpec"):
     """*node* with every bare "that <noun>" back-reference set to *bound*.
 
@@ -375,6 +387,17 @@ def _rebind_clause_bound_noun(node, bound: "ast.TargetSpec"):
     if isinstance(node, ast.DealDamage) and len(node.recipients) == 1:
         if restates_target(node.recipients[0], bound):
             return replace(node, recipients=(bound,))
+    if isinstance(node, ast.GainKeyword) and _bare_it(node.subject):
+        # "Until end of turn, you gain control of target creature **and it
+        # gains haste**." (Grab the Reins.) The bare pronoun, as the object of
+        # the clause in front: the sentence loop binds it to that clause's
+        # target when a full stop stands between them ("…until end of turn. It
+        # gains haste until end of turn.", Threaten —
+        # ``pronouns._parse_pronoun_grant_rider``), and the "and" join never
+        # reached that rider — so the grant lowered to the ability's *own*
+        # source, which a spell does not have, and the stolen creature had no
+        # haste. The same announcement, so the bound spec stays a target.
+        return replace(node, subject=bound)
     if dataclasses.is_dataclass(node) and not isinstance(node, type):
         changes = {
             field.name: rebound
