@@ -52,6 +52,7 @@ from .phrases import (
 from .effects import (
     _parse_attacks_this_turn_if_able,
     _parse_blocks_this_turn_if_able,
+    _parse_able_to_block_do_so,
     parse_block_count_grant,
     parse_cant_activate_nonmana_abilities,
     parse_cant_cast_spell_types,
@@ -66,6 +67,7 @@ from .effects import (
     _parse_becomes_base_pt,
     _parse_cant_attack_or_block,
     _parse_no_longer_supertype,
+    _parse_land_type_while_counter,
     _parse_can_be_targeted_as_though,
     _parse_damage,
     _parse_doesnt_untap_next_step,
@@ -500,6 +502,13 @@ def parse_subject_verb(
             requirement = _parse_blocks_this_turn_if_able(stream, source_spec)
             if requirement is not None:
                 return requirement
+        # "**All creatures** able to block target creature this turn do so."
+        # (Bloodscent.) Lure's requirement for a turn, printed with the
+        # compelled creatures as the subject; non-consuming on refusal.
+        if token.text == "able":
+            requirement = _parse_able_to_block_do_so(stream, source_spec)
+            if requirement is not None:
+                return requirement
         if token.text in ("becomes", "become"):
             # "Target unblocked attacking creature **becomes blocked**."
             # (Dazzling Beauty; CR 509.1h.) Tried before the type/colour
@@ -547,6 +556,11 @@ def parse_subject_verb(
             thawed = _parse_no_longer_supertype(stream, source_spec)
             if thawed is not None:
                 return thawed
+            # "That land is an Island **for as long as it has a flood counter
+            # on it**." (Quicksilver Fountain.) Non-consuming on refusal.
+            flooded = _parse_land_type_while_counter(stream, source_spec)
+            if flooded is not None:
+                return flooded
         if token.text in ("phases", "phase"):
             # "Target creature you don't control phases out." (Teferi, Master
             # of Time) / "Each creature target opponent controls phases out.

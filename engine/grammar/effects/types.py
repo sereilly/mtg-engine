@@ -30,7 +30,7 @@ from ..back_references import _parse_that_object
 from ..lexer import SELF
 from ..readers import _SELF_NOUNS
 from ..stream import TokenStream
-from ..vocabulary import (CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, LAND_TYPES,
+from ..vocabulary import (BASIC_LAND_WORDS, CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, LAND_TYPES,
                           SUBTYPE_INDEX, TYPE_LINE_SUPERTYPES, match_longest,
                           singular as _singular_type)
 
@@ -490,6 +490,53 @@ def _parse_no_longer_supertype(
         return None
     stream.advance()
     return ast.ChangeSupertype(subject, word, False, _parse_duration(stream))
+
+
+def _parse_land_type_while_counter(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.LandTypeWhileCounter | None":
+    """``<subject> is a/an <basic land type> for as long as it has a <kind>
+    counter on it.`` (Quicksilver Fountain.)
+
+    Non-consuming on refusal, for :func:`_parse_no_longer_supertype`'s reason:
+    "is" opens sentences this has no business claiming. Every word after the
+    land type is required — the window *is* the sentence — and the counter
+    kind is payload, so a card printing "a Swamp … a mire counter" is this
+    production. A quantified subject is declined for that function's reason:
+    "All lands are Islands" is a static the land-type table derives.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("is"):
+        return None
+    if not stream.accept_word("a", "an"):
+        stream.reset(mark)
+        return None
+    land_type = stream.peek_word()
+    if land_type not in BASIC_LAND_WORDS:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase(
+        "for", "as", "long", "as", "it", "has", "a",
+    ):
+        stream.reset(mark)
+        return None
+    token = stream.peek()
+    counter = str(token.text).lower() if token is not None else ""
+    if not counter or not counter.isalpha():
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("counter", "on", "it"):
+        stream.reset(mark)
+        return None
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("target", "that")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.LandTypeWhileCounter(subject, land_type, counter)
 
 
 def _parse_gain_type(

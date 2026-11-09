@@ -14,7 +14,8 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_THIS_COMBAT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
-                                  MUST_BLOCK_UNTIL_EOT)
+                                  MUST_BLOCK_UNTIL_EOT,
+                                  MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT)
 from ..damage_events import (DAMAGE_DENIES_REGENERATION,
                              DAMAGE_EXILES_INSTEAD)
 from ..next_damage import NEXT_DAMAGE_KEYS
@@ -87,6 +88,9 @@ _EOT_METADATA_KEYS = (
     # (Trumpeting Armodon.) The narrowed twin of the mark above it, swept
     # beside it for the same reason and at the same moment.
     MUST_BLOCK_ATTACKERS_UNTIL_EOT,
+    # "All creatures able to block target creature **this turn** do so."
+    # (Bloodscent.) Lure's requirement for one turn, on the attacker.
+    MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT,
     # "…block this creature **this combat** if able." (Provoke.) Ended by the
     # end of combat step; swept here as well for a combat that never reaches
     # that step (a turn ended early, CR 723), so it cannot outlive the turn.

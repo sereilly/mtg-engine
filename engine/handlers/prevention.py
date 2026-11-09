@@ -26,6 +26,7 @@ from ..shields import (
     make_reflect_source,
     make_source_subject_shield,
     make_subject_shield,
+    make_targeted_source_shield,
     make_whole_charge,
     make_whole_source,
 )
@@ -1004,6 +1005,30 @@ def grant_whole_prevention_shield(game: Game, instruction: OracleInstruction, co
         game.log.append(
             f"{caster.name} will prevent the next damage {source_perm.card.name} "
             "would deal them"
+        )
+        return True, "resolved"
+    if instruction.payload.get("source_from") == "target":
+        # "The next time **target creature** would deal damage this turn, …"
+        # (Awe Strike.) The source is the announced target, by id (CR 608.2b
+        # has already blanked it if it left), and the shield hangs on the
+        # caster's seat for the cleanup sweep while every recipient reaches it
+        # (``prevention.shields._table_shields``). "You" is that seat.
+        # No fallback: a shield keyed on a permanent the spell did not name
+        # would stop some other creature's damage.
+        source_perm = resolve_target_permanent(
+            game, context, fallback_players=(), fallback_on_invalid_choice=False,
+        )
+        if source_perm is None:
+            game.log.append(f"{granted_by}: its target is gone")
+            return True, "resolved"
+        add_shield(caster, make_targeted_source_shield(
+            source_perm, game.players.index(caster),
+            gain_life=instruction.payload.get("rider") == "gain_life",
+            source_name=granted_by,
+        ))
+        game.log.append(
+            f"{granted_by}: the next damage {source_perm.card.name} would deal "
+            "this turn is prevented"
         )
         return True, "resolved"
     shaped = _whole_shield_build(game, instruction, context)

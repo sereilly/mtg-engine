@@ -1190,15 +1190,25 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
 #: Paradise. The Aura clause one file over
 #: (``auras``' ``activated_abilities_shut_off``) prints its exception out loud
 #: and is a different sentence.
+#:
+#: **Several types, and CR 605.1a's exception printed** (Damping Matrix:
+#: "Activated abilities of artifacts **and creatures** can't be activated
+#: **unless they're mana abilities**."). The list is payload like the one type
+#: — a permanent of any listed type is bound — and the exception is the same
+#: words Faith's Fetters prints on its Aura clause, answered by the same
+#: ``mana_payment.is_mana_ability`` the activation path asks: a mana ability is
+#: defined by what it does (2017-03-14: "A mana ability is an ability that
+#: produces mana, not an ability that costs mana").
+_BAN_TYPE = r"(?:artifacts|creatures|enchantments|lands|planeswalkers)"
 _GLOBAL_ACTIVATION_BAN = re.compile(
-    r"^activated abilities of "
-    r"(?P<type>artifacts|creatures|enchantments|lands|planeswalkers) "
-    r"can't be activated$"
+    rf"^activated abilities of (?P<types>{_BAN_TYPE}(?:(?:,| and|, and) {_BAN_TYPE})*) "
+    r"can't be activated(?P<nonmana> unless they're mana abilities)?$"
 )
 
 
-def global_activation_ban_line(line: str) -> str | None:
-    """The card type *line* forbids anybody from activating abilities of, or None.
+def global_activation_ban_line(line: str) -> dict | None:
+    """What *line* forbids anybody from activating — ``{"types": (...),
+    "nonmana_only": bool}`` — or None.
 
     One reader, two callers, exactly as ``global_cast_ban_line`` has:
     ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
@@ -1207,16 +1217,23 @@ def global_activation_ban_line(line: str) -> str | None:
     reporting supported while every ability it names keeps working — the
     failure this file's docstring opens on.
 
-    The type is returned in the singular the type readers use, because that is
-    what ``has_type`` answers to; the printed plural is what the sentence
-    spells.
+    The types are returned in the singular the type readers use, because that
+    is what ``has_type`` answers to; the printed plural is what the sentence
+    spells. ``nonmana_only`` is the printed "unless they're mana abilities".
     """
     match = _GLOBAL_ACTIVATION_BAN.match(line.strip().lower().rstrip("."))
-    return match.group("type").rstrip("s") if match is not None else None
+    if match is None:
+        return None
+    types = tuple(
+        word.strip().rstrip("s")
+        for word in re.split(r",|\band\b", match.group("types"))
+        if word.strip()
+    )
+    return {"types": types, "nonmana_only": bool(match.group("nonmana"))}
 
 
-def global_activation_ban(game, permanent) -> str | None:
-    """The name of a permanent forbidding *permanent*'s abilities, or None.
+def global_activation_ban(game, permanent, ability=None) -> str | None:
+    """The name of a permanent forbidding *permanent*'s *ability*, or None.
 
     Every battlefield, and no seat comparison: the sentence names nobody, so it
     binds everybody including the banning permanent's own controller.
@@ -1227,12 +1244,28 @@ def global_activation_ban(game, permanent) -> str | None:
     permanent's type is asked through ``has_type`` (layer 4), never the printed
     line, so an animated Swamp is a creature here exactly as it is everywhere
     else.
+
+    A line printing "unless they're mana abilities" (Damping Matrix) binds a
+    named *ability* only if it is not one (CR 605.1a). Asked with no ability —
+    "is this permanent shut off?", the AI's coarse question before it looks at
+    any one ability — such a line answers None: it never stops the mana
+    abilities, so it does not shut the permanent off.
     """
     for _seat, source in game.permanents_with_controller():
         for raw_line in (source.effective_card.oracle_text or "").splitlines():
             banned = global_activation_ban_line(raw_line)
-            if banned is not None and permanent.has_type(banned):
-                return source.card.name
+            if banned is None or not any(
+                permanent.has_type(word) for word in banned["types"]
+            ):
+                continue
+            if banned["nonmana_only"]:
+                if ability is None:
+                    continue
+                from .mana_payment import is_mana_ability
+
+                if is_mana_ability(ability):
+                    continue
+            return source.card.name
     return None
 
 

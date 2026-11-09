@@ -65,6 +65,18 @@ ADDITIONAL_BLOCKS_UNTIL_EOT = "additional_blocks_until_eot"
 CAN_BLOCK_ANY_NUMBER_UNTIL_EOT = "can_block_any_number_until_eot"
 MUST_BLOCK_ALL_UNTIL_EOT = "must_block_all_until_eot"
 
+#: "All creatures able to block target creature this turn do so." (Bloodscent.)
+#: Lure's CR 509.1c requirement for one turn, on the **attacker**: every
+#: creature able to block it when blockers are declared must, including one
+#: that arrived after the spell resolved — the requirement modifies no
+#: characteristic, so CR 611.2c does not fix its set at resolution. A list,
+#: one entry per effect (CR 509.1c counts them, as two Lures are two), each
+#: ``{"blockers": filter, "seat": observer}`` — the compelled creatures as a
+#: printed phrase (``{}`` for "all creatures") and the seat a relative word in
+#: it means (CR 109.5, the caster). Read beside Lure's two channels by
+#: ``phases/block_requirements``, swept with the turn.
+MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT = "must_be_blocked_by_all_until_eot"
+
 #: "Target creature blocks this creature this turn if able." (Trumpeting
 #: Armodon.) CR 509.1c's requirement for one turn, aimed at **one named
 #: attacker**: a list of that attacker's ``permanent_id``s on the compelled

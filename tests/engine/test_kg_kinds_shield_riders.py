@@ -132,7 +132,18 @@ def test_every_rider_the_pool_prints_arms_the_shield_that_performs_it(population
         p1 = PlayerState(name="P1", life=20)
         p2 = PlayerState(name="P2", life=20)
         game = Game(players=[p1, p2])
-        ok, detail = EFFECT_HANDLERS[KIND](game, step, _context(game, card, p1, p1))
+        context = _context(game, card, p1, p1)
+        if step.payload.get("source_from") == "target":
+            # Awe Strike: the shield is keyed on the creature the spell
+            # targeted, so the drive names one, as the announcement would —
+            # on the seat the announcement settles (its controller's).
+            source = Permanent(card=next(
+                c for c in load_catalog() if c.name == "Grizzly Bears"
+            ))
+            game._put_permanent_onto_battlefield(1, source, None)
+            context = _context(game, card, p1, p2)
+            context.target_permanent_id = [source.permanent_id]
+        ok, detail = EFFECT_HANDLERS[KIND](game, step, context)
         assert ok, (card.name, detail)
         armed = [shield.kind for shield in shields_on(p1)]
         expected = (

@@ -455,3 +455,26 @@ class BlocksThisTurnIfAble:
 
     subject: Recipient
     attacker: "Recipient | None" = None
+
+
+@dataclass(frozen=True)
+class BlockedByAllAbleThisTurn:
+    """``All <blockers> able to block <attacker> this turn do so.``
+    (Bloodscent.)
+
+    Lure's CR 509.1c requirement ("All creatures able to block enchanted
+    creature do so") made by a resolving spell for one turn, with the attacker
+    named by announcement. Its own node rather than
+    :class:`BlocksThisTurnIfAble` with an "all" subject, because the two are
+    enforced from opposite ends: that sentence marks the creatures it names as
+    it resolves, and this one names every creature *able to block* the
+    attacker when blockers are declared -- one that arrives later included, as
+    the requirement changes no characteristic (CR 611.2c) -- so it is a mark on
+    the attacker, read where Lure's is.
+
+    ``blockers`` is the printed noun phrase of the compelled creatures ("all
+    creatures"; Talruum Piper's static prints "all creatures with flying").
+    """
+
+    blockers: Recipient
+    attacker: Recipient

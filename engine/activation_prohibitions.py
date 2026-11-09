@@ -153,9 +153,11 @@ def _combat_ban(game, seat, source, ability):
 def _global_ban(game, seat, source, ability):
     # "Activated abilities of creatures can't be activated." (Cursed Totem.)
     # "Activated abilities of artifacts can't be activated." (Null Rod.)
+    # "…of artifacts and creatures can't be activated unless they're mana
+    # abilities." (Damping Matrix: the ability is what the exception asks.)
     from .activation_restrictions import global_activation_ban
 
-    banned_by = global_activation_ban(game, source)
+    banned_by = global_activation_ban(game, source, ability)
     if banned_by is None:
         return None
     return f"{_name(source)}'s activated abilities can't be activated ({banned_by})"

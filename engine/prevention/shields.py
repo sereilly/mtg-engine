@@ -1017,8 +1017,15 @@ def _gain_prevented_life(game, event: dict, used: list[Shield], prevented: int) 
     # The shield's own granting card, not the exemplar's name: every card
     # printing Reverse Damage's sentence arms this shield.
     name = used[0].source_name or "A shield"
-    game.log.append(f"{name} prevented {prevented} damage to {recipient.name}")
-    game._gain_life(recipient, prevented, source_name=used[0].source_name or None)
+    game.log.append(
+        f"{name} prevented {prevented} damage to {recipient_label(recipient)}"
+    )
+    # "**You** gain life …": the recipient for a shield around its caster
+    # (Reverse Damage), and the seat that armed it for one keyed on a source
+    # alone (Awe Strike), whose recipient may be a creature or an opponent.
+    seat = used[0].payee_seat
+    gainer = game.players[seat] if seat is not None else recipient
+    game._gain_life(gainer, prevented, source_name=used[0].source_name or None)
 
 
 @prevention_effect(

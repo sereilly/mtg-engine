@@ -97,6 +97,7 @@ from .types import (
     _parse_becomes,
     _parse_becomes_aura_enchantment,
     _parse_no_longer_supertype,
+    _parse_land_type_while_counter,
 )
 from .board import (
     parse_simultaneous_phasing,
@@ -267,6 +268,7 @@ from .requirements import (
     _parse_attacks_this_turn_if_able,
     _parse_destroy_chosen_that_didnt_attack,
     _parse_blocks_this_turn_if_able,
+    _parse_able_to_block_do_so,
     _parse_force_chosen_creature_to_attack,
 )
 from .combat import (
@@ -367,6 +369,7 @@ __all__ = [
     "_parse_becomes",
     "_parse_becomes_aura_enchantment",
     "_parse_no_longer_supertype",
+    "_parse_land_type_while_counter",
     "_parse_bid_life_for_control",
     "_parse_gain_control",
     "parse_mutual_control_of_sets",
@@ -506,6 +509,7 @@ __all__ = [
     "_parse_attacks_this_turn_if_able",
     "_parse_destroy_chosen_that_didnt_attack",
     "_parse_blocks_this_turn_if_able",
+    "_parse_able_to_block_do_so",
     "_parse_force_chosen_creature_to_attack",
     "_parse_attacking_doesnt_tap",
     "_parse_becomes_blocked",

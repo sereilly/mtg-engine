@@ -111,6 +111,12 @@ _DRIVEN = {
     # "…to an opponent": the opponent it attacks, one combat chunk a step; the
     # redirect family's occasion is Reflect Damage's.
     "Soltari Guerrillas": "test_reflect_damage_sends_a_whole_sweep_to_its_sources_controller",
+    # Mirrodin, W1G12. "The next time target creature would deal damage this
+    # turn, prevent that damage. You gain life …": an announced source and no
+    # recipient, so a double block hands it two chunks of one dealing. A
+    # board in another module is named "<path>::<board>".
+    "Awe Strike": "tests/rules/test_mrd_w1g12_awe_strike.py::"
+                  "test_awe_strike_prevents_a_double_blocked_attackers_whole_dealing",
 }
 
 #: Source-keyed "next time" cards in both roles when this was written (53).
@@ -214,8 +220,12 @@ def test_the_cards_a_sweep_can_meet_are_each_driven():
         f"no longer in the pool, or no longer reaching several recipients: "
         f"{sorted(set(_DRIVEN) - meets)}"
     )
-    boards = importlib.import_module(
-        _RULES.removesuffix(".py").replace("/", ".")
-    )
-    missing = sorted({board for board in _DRIVEN.values() if not hasattr(boards, board)})
+    def found(board: str) -> bool:
+        path, _, name = board.rpartition("::")
+        module = importlib.import_module(
+            (path or _RULES).removesuffix(".py").replace("/", ".")
+        )
+        return hasattr(module, name)
+
+    missing = sorted({board for board in _DRIVEN.values() if not found(board)})
     assert missing == [], missing

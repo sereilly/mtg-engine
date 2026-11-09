@@ -92,21 +92,37 @@ def prevent_and_count_kind(line: str) -> str | None:
 #: read through the layers (a creature that *became* a Cleric is one). A phrase
 #: the parser cannot read in full refuses the line rather than shielding a set
 #: larger than the card names.
+#:
+#: **And the source's card type** (Sphere of Purity: "If **an artifact** would
+#: deal damage to you, prevent 1 of that damage."). The source named by what it
+#: is rather than called "a source" — CR 609.7c's static shield over "sources
+#: … with certain properties", which "applies to sources that are permanents
+#: with that property and to any sources that aren't on the battlefield that
+#: have that property": a sacrificed Spellbomb's damage is an artifact's. One
+#: closed word list rather than any noun, for ``blankets._SPELL_CLASSES``'
+#: reason: ``source_has_type`` substring-matches a type line, and a word it
+#: cannot answer would shield against nothing while the card reported
+#: supported. A type and a colour together is a card nobody prints, and the
+#: alternation cannot read one.
 _PREVENT_N_OF_DAMAGE_RE = re.compile(
-    r"^if a (?:(?P<color>white|blue|black|red|green) )?source would deal "
+    r"^if (?:a (?:(?P<color>white|blue|black|red|green) )?source"
+    r"|an? (?P<card_type>artifact|creature|enchantment|land)) would deal "
     r"damage to (?P<to>.+?), prevent (?P<points>\d+) of that damage$"
 )
 
 
 def static_points_shield(line: str) -> dict | None:
     """What *line* shaves off each event — ``{"points": n, "color": symbol or
-    None, "protects": filter or None}`` — or None if it is not that line.
+    None, "card_type": word or None, "protects": filter or None}`` — or None
+    if it is not that line.
 
     One matcher, asked by the interceptor below and by the claim reader, so
     what is prevented and what is claimed cannot drift. ``color`` is the mana
-    symbol of the printed colour word and None for the unnarrowed sentence.
-    ``protects`` is None for "to you" (the controller, a player) and otherwise
-    the filter payload of the permanents the line shields.
+    symbol of the printed colour word and None for the unnarrowed sentence;
+    ``card_type`` is the source's printed card type ("an artifact", Sphere of
+    Purity) and None when the sentence says "a source". ``protects`` is None
+    for "to you" (the controller, a player) and otherwise the filter payload
+    of the permanents the line shields.
     """
     match = _PREVENT_N_OF_DAMAGE_RE.match(
         " ".join(line.strip().lower().rstrip(".").split())
@@ -121,13 +137,15 @@ def static_points_shield(line: str) -> dict | None:
         if not protects:
             return None
     word = match.group("color")
+    card_type = match.group("card_type")
     if word is None:
         return {"points": int(match.group("points")), "color": None,
-                "protects": protects}
+                "card_type": card_type, "protects": protects}
     from ..oracle_types import _COLOR_WORD_TO_SYMBOL
 
     return {"points": int(match.group("points")),
-            "color": _COLOR_WORD_TO_SYMBOL[word], "protects": protects}
+            "color": _COLOR_WORD_TO_SYMBOL[word], "card_type": card_type,
+            "protects": protects}
 
 
 def prevent_n_of_damage(line: str) -> int | None:
@@ -189,6 +207,16 @@ def _static_point_lines(game, event: dict):
                     )
                 if described["color"] not in source_colors:
                     continue
+            if described["card_type"] is not None and not source_has_type(
+                # "If **an artifact** would deal damage to you" (Sphere of
+                # Purity). Asked of the source as it is when the damage would
+                # be dealt (CR 609.7c): a permanent through layer 4, so an
+                # animated artifact land is an artifact source, and a source no
+                # longer on the battlefield — a sacrificed Spellbomb — by what
+                # it last was.
+                game, event.get("source"), described["card_type"]
+            ):
+                continue
             yield permanent, described["points"]
 
 

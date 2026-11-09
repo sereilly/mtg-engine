@@ -40,6 +40,47 @@ def _is_swamp(perm: Permanent) -> bool:
     return perm.has_type("swamp")
 
 
+@effect_handler("set_land_type_while_counter")
+def set_land_type_while_counter(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"That land is an Island for as long as it has a flood counter on it."
+    (Quicksilver Fountain.)
+
+    A CR 305.7 replacement of the chosen land's basic land types (layer 4),
+    recorded with the counter kind as its source (``land_types.
+    counter_tied_source``) and timestamped now — "the timestamp … is set when
+    the triggered ability resolves" (2004-12-01). It outlives the permanent
+    that made it ("…even if Quicksilver Fountain leaves the battlefield") and
+    ends with the last counter (``named_counters.remove_counters``). A land
+    the counter never reached (nothing was chosen, or the placement did not
+    happen) is not changed: "for as long as it has" is already over.
+    """
+    from ..land_types import counter_tied_source
+    from ..named_counters import counters_on
+    from ._targets import recorded_permanent_ids
+
+    land_type = str(instruction.payload.get("land_type") or "")
+    counter = str(instruction.payload.get("counter") or "")
+    changed = 0
+    for permanent_id in recorded_permanent_ids(
+        context, instruction.payload.get("permanents_from")
+    ):
+        land = game.permanent_by_id(permanent_id)
+        if land is None or not land.has_type("land") or counters_on(land, counter) <= 0:
+            continue
+        change_land_type(
+            land, land_type, source=counter_tied_source(counter),
+            label=getattr(context.card, "name", ""),
+        )
+        changed += 1
+        game.log.append(
+            f"{land.card.name} is {'an' if land_type[0] in 'aeiou' else 'a'} "
+            f"{land_type.capitalize()} for as long as it has a {counter} counter on it"
+        )
+    if not changed:
+        game.log.append(f"{getattr(context.card, 'name', 'Effect')}: no land changed type")
+    return True, "resolved"
+
+
 @effect_handler("add_mire_counter_to_target_land")
 def add_mire_counter_to_target_land(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Cyclopean Tomb: "Put a mire counter on target non-Swamp land. That land is

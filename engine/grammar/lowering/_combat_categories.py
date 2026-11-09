@@ -176,6 +176,10 @@ COMBAT_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # down, which is why they carry the same category and the same name shape.
     "force_subject_to_attack_until_eot": "combat_restrictions",
     "force_target_to_block_until_eot": "combat_restrictions",
+    # "All creatures able to block target creature this turn do so."
+    # (Bloodscent.) Lure's CR 509.1c requirement for a turn, marked on the
+    # attacker the spell targets.
+    "force_all_able_to_block_target_until_eot": "combat_restrictions",
     "force_subject_to_block_until_eot": "combat_restrictions",
     # "This creature can attack as though it didn't have defender." with no
     # duration (the ability a kicked Prison Barricade is granted). The static

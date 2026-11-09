@@ -154,6 +154,18 @@ def _lower_prevent_damage(
     rather than being dropped.
     """
     recipient = node.to
+    # "The next time **target creature** would deal damage this turn, prevent
+    # that damage." (Awe Strike.) The whole-instance shield keyed on a source
+    # the spell *targets*, with no recipient printed — read before every guard
+    # below, each of which was written for a shield whose source is chosen or
+    # printed and refuses ``dealt_by`` outright.
+    if (
+        recipient is None
+        and isinstance(node.dealt_by, ast.TargetSpec)
+        and node.dealt_by.targeted
+        and node.from_filter == ast.ObjectFilter()
+    ):
+        return _lower_targeted_source_shield(node)
     # A printed "by X **and** Y" reaches exactly one branch below. Refused here
     # for everything else rather than in each of them, because the failure this
     # guards is a *silent* one: every branch written before the conjunction
@@ -794,6 +806,81 @@ def _lower_prevent_damage(
         raise LoweringError("no handler for this prevention recipient", node=node)
     _describe_targets(payload, recipient)
     return (OracleInstruction("grant_prevention_shield", "", payload),)
+
+
+#: The CR 615.5 riders a targeted-source shield may carry. "You gain life equal
+#: to the damage prevented this way" (Awe Strike) pays the seat that armed the
+#: shield (``Shield.payee_seat``), which is the one rider whose interceptor
+#: knows that seat; Bone Mask's exile reads the recipient's library and a
+#: reflecting rider names a source controller, and neither is printed here.
+_TARGETED_SOURCE_RIDERS = frozenset({"gain_life"})
+
+
+def _lower_targeted_source_shield(
+    node: ast.PreventDamage,
+) -> tuple[OracleInstruction, ...]:
+    """Awe Strike: "The next time target creature would deal damage this turn,
+    prevent that damage. You gain life equal to the damage prevented this way."
+
+    CR 615.8's whole-instance shield with its source named by announcement:
+    the target the spell chose is the source, rechecked as its damage would be
+    dealt by identity (``Shield.source``), and nothing is chosen on resolution.
+    No recipient is printed, so the shield is Penance's ``any_recipient``
+    reach — it stops that creature's next damage to a player, a blocker or
+    itself alike — and the source keys the instance (CR 615.8; the owner's
+    2026-11-07 ruling: everything it deals in one dealing).
+
+    ``grant_whole_prevention_shield`` with ``source_from: "target"`` rather than
+    a kind of its own, for ``_lower_named_source_shield``'s reason: it arms the
+    same shield, and only where the source comes from differs. The target
+    description rides ``targets``, which is what makes the picker ask for it.
+
+    Refused, each because it would mean more than the card prints: a counted
+    amount (a point pool, not an instance), a combat narrowing (no shield
+    interceptor here tests the event's flag), a second source, a second size,
+    a division, a recipient, a duration other than this turn, a rider whose
+    interceptor pays someone other than the arming seat, and a target phrase
+    the matcher cannot test.
+    """
+    source = node.dealt_by
+    assert isinstance(source, ast.TargetSpec)
+    if source.quantifier != "target" or source.count != 1:
+        raise LoweringError(
+            "a targeted-source shield names exactly one target", node=node
+        )
+    if not isinstance(node.amount, ast.Fixed) or node.amount.value != 1:
+        raise LoweringError(
+            "a targeted-source shield prevents the whole instance", node=node
+        )
+    if (
+        node.combat_only or node.dealt_by_others or node.to_others
+        or node.division is not None or node.from_class
+        or _alternate_amount(node) is not None
+    ):
+        raise LoweringError(
+            "a targeted-source shield carries no narrowing beyond its target",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "a targeted-source shield lasts exactly this turn", node=node
+        )
+    payload: dict[str, object] = {"source_from": "target"}
+    rider = node.prevented_rider
+    if rider is not None:
+        if rider.effect not in _TARGETED_SOURCE_RIDERS or rider.source_colors:
+            raise LoweringError(
+                "no targeted-source shield carries this rider", node=node
+            )
+        payload["rider"] = rider.effect
+    testable_filter_payload(
+        source.filter,
+        refusal="the shield's target phrase cannot be tested",
+        node=node,
+        require_narrowing=False,
+    )
+    _describe_targets(payload, source)
+    return (OracleInstruction("grant_whole_prevention_shield", "", payload),)
 
 
 def _lower_named_source_shield(

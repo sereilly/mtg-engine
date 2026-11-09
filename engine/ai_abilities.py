@@ -440,7 +440,7 @@ def _activation_candidate(
     # tables the engine enforces, so the answer is the engine's.
     if activation_denial(
         game, player_index, permanent, ability.source_line or ""
-    ) or global_activation_ban(game, permanent):
+    ) or global_activation_ban(game, permanent, ability):
         return None
 
     # "Pay enchanted creature's mana cost" (Merseine). A cost the compiled

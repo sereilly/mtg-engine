@@ -100,6 +100,14 @@ class OnBattlefield:
     """
     filter: ObjectFilter
     comparison: Comparison
+    #: "if **all lands on the battlefield** are Islands, remove all flood
+    #: counters from **them**" (Quicksilver Fountain). A universal read as
+    #: this count ("no land that is not an Island") ranges over a set the
+    #: count's own filter no longer names, and a plural pronoun after the
+    #: condition names that set: the domain, kept for
+    #: ``rebinding.bind_plural_pronoun_to_condition``. None for every count
+    #: printed as one.
+    universal: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

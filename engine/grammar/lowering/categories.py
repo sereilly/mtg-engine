@@ -152,6 +152,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # same layer-4 question the two above ask about a card type and a
     # supertype — so the same category, with the land type as payload.
     "change_land_type_until": "characteristics",
+    # "That land is an Island for as long as it has a flood counter on it."
+    # (Quicksilver Fountain.) The same layer-4 change, ended by its counter.
+    "set_land_type_while_counter": "characteristics",
     # "Choose a land type and a basic land type. Each land of the first
     # chosen type becomes the second chosen type until end of turn."
     # (Vision Charm.) The same CR 305.7 replacement over a set the *answer*

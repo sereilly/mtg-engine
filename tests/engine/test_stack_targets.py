@@ -749,6 +749,13 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # controls**" — Caustic Wasps' shape. Driven through a real combat damage
     # step it targets a creature of the damaged player's and kills it.
     "Spark Mage#0",
+    # Mirrodin, W1G12. "…you may destroy target artifact **that player**
+    # controls" (Rustmouth Ogre) — Caustic Wasps' sentence on a 5/4. Driven
+    # through a real combat damage step (tests/sets/
+    # test_mrd_creatures_later_groups.py, W1G12) only the damaged player's
+    # artifacts are offered, the attacker's own is refused, and the one named
+    # is destroyed.
+    "Rustmouth Ogre#0",
     # Onslaught, W1G13. "…that creature's controller may have target creature
     # **of their choice** get -3/-3" (Death Match) — Pandemonium's chooser on a
     # permanent slot: the seat that announces is the entering creature's
@@ -822,6 +829,14 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # player" against the chooser, "shares a card type" against the event's
     # object) in the trigger picker and in the CR 608.2b re-check.
     "Confusion in the Ranks#0",
+    # Mirrodin, W1G12. "…that player puts a flood counter on target
+    # non-Island land they control **of their choice**" (Quicksilver
+    # Fountain): The Abyss's and Ley Line's recorded CR 603.3d deviation on a
+    # named counter — the upkeep player picks as the ability resolves. Driven
+    # at an interactive seat (tests/sets/test_mrd_artifacts_later_groups.py,
+    # W1G12) that player is asked, refused an Island or another player's land,
+    # and the land named is flooded and becomes an Island.
+    "Quicksilver Fountain#0",
     # Gravegouger ("When this creature enters, exile **up to two target cards
     # from a single graveyard**") stood here from Torment's first wave, its
     # pile and cards picked as the ability resolved. They are announced as it

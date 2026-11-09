@@ -709,6 +709,12 @@ def _whole_prevention_shield_spec(payload: dict) -> dict | None:
     """
     if payload.get("from_source"):
         return None
+    if payload.get("source_from") == "target":
+        # "The next time **target creature** would deal damage this turn, …"
+        # (Awe Strike.) The source is announced rather than chosen on
+        # resolution, so it is an ordinary target the description names, and
+        # there is no source prompt behind it.
+        return _from_targets_payload(payload.get("targets"))
     if payload.get("recipient") == "target":
         # "…would deal damage to **any target** this turn" (Circle of Despair).
         # Two choices in one announcement, which is Jade Monolith's shape and

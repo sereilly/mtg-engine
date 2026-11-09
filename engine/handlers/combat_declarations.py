@@ -39,6 +39,7 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CANT_ATTACK_UNTIL_EOT,
                                   CANT_BLOCK_ATTACKERS_UNTIL_EOT,
                                   MUST_BLOCK_UNTIL_EOT,
+                                  MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..turn_state import (CANT_ATTACK_ON_SEAT_TURN_KEY,
                           THAT_PLAYERS_NEXT_TURN,
@@ -279,6 +280,40 @@ def force_bound_to_block_until_eot(game: Game, instruction: OracleInstruction, c
         return True, "resolved"
     add_turn_requirement(chosen, MUST_BLOCK_UNTIL_EOT)
     game.log.append(f"{chosen.card.name} blocks this turn if able")
+    return True, "resolved"
+
+
+@effect_handler("force_all_able_to_block_target_until_eot")
+def force_all_able_to_block_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"All creatures able to block target creature this turn do so."
+    (Bloodscent.)
+
+    Lure's CR 509.1c requirement for one turn, marked on the targeted attacker
+    (combat_permissions.MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT) and read by the
+    declare-blockers step beside Lure's printed and granted channels, so every
+    creature able to block it at declaration owes the block -- one entering
+    after this resolves included. One entry per effect: two Bloodscents are two
+    requirements (CR 509.1c counts them). The compelled phrase rides the entry
+    with the caster's seat, CR 109.5's "you" for a relative word in it.
+
+    No fallback to another creature: a mark on one the spell did not name
+    would compel blocks the card never asked for.
+    """
+    attacker = resolve_target_permanent(
+        game, context, fallback_players=(), fallback_on_invalid_choice=False,
+    )
+    if attacker is None or not attacker.is_creature:
+        game.log.append(f"{context.card.name}: its target is gone")
+        return True, "resolved"
+    seat = game.players.index(context.caster) if context.caster in game.players else None
+    attacker.metadata.setdefault(MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT, []).append({
+        "blockers": dict(instruction.payload.get("blocker_filter") or {}),
+        "seat": seat,
+    })
+    game.log.append(
+        f"{context.card.name}: all creatures able to block {attacker.card.name} "
+        "this turn do so"
+    )
     return True, "resolved"
 
 

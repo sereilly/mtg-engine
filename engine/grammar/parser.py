@@ -61,7 +61,8 @@ from .quoted_lines import (_ASSIGN_UNBLOCKED_LINE_RE,
                            _parse_becomes_with_granted_ability,
                            _parse_emblem_line,
                            _parse_reanimation_aura_line)
-from .rebinding import (bind_counter_pronoun_to_condition, bind_recorded_card,
+from .rebinding import (bind_counter_pronoun_to_condition,
+                        bind_plural_pronoun_to_condition, bind_recorded_card,
                         rebind_pronoun_to_event_subject,
                         rebind_combat_role_to_event_subject)
 from .sentence_rebinding import rebind_attachment_pronoun_to_sentence_target
@@ -455,7 +456,9 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
                     rebind_combat_role_to_event_subject(
                         event,
                         rebind_pronoun_to_event_subject(
-                            event, statement, intervening=intervening
+                            event,
+                            bind_plural_pronoun_to_condition(intervening, statement),
+                            intervening=intervening,
                         ),
                     ),
                 ),

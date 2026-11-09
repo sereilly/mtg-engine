@@ -754,6 +754,25 @@ class ChangeLandType:
 
 
 @dataclass(frozen=True)
+class LandTypeWhileCounter:
+    """``That land is an Island for as long as it has a flood counter on it.``
+    (Quicksilver Fountain.)
+
+    CR 305.7's replacement of the land's basic land types, like
+    :class:`ChangeLandType`, with a duration no window names: it lasts for as
+    long as the land has a counter of one kind on it (CR 611.2b's "for as long
+    as"), and ends for good the moment the last one is removed — whoever
+    removes it, and even if the permanent that made the change has left (the
+    ruling, 2004-12-01). Its own node because what ends it is a fact about the
+    land's counters, not a turn step, and because "that land" is a
+    back-reference the lowering must find a producer for.
+    """
+    subject: Recipient
+    land_type: str
+    counter: str
+
+
+@dataclass(frozen=True)
 class BecomeThatType:
     """``Target creature becomes that type until end of turn.`` (Unnatural
     Selection, behind "Choose a creature type other than Wall.")

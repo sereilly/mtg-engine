@@ -786,6 +786,15 @@ def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:
                 count,
             )
         stream.reset(bound)
+    # "…remove all flood counters from **them**." (Quicksilver Fountain.) A
+    # plural pronoun whose antecedent is a set the line named earlier — the
+    # intervening "if"'s — which only a reader holding the whole line can
+    # supply (``rebinding.bind_plural_pronoun_to_condition``). Left unbound it
+    # is a quantifier no lowering accepts, so the line refuses by name.
+    if stream.accept_word("them"):
+        return ast.RemoveCounter(
+            ast.TargetSpec("them", ast.ObjectFilter()), counter, count
+        )
     subject = parse_recipient(stream)
     if subject is None:
         raise stream.error("expected what to remove a counter from")

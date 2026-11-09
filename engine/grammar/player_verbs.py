@@ -627,6 +627,14 @@ def parse_player_subject_verb(
         # narrows ("a creature they control") would be read against the
         # ability's controller where the printed pronoun names the subject,
         # so that shape keeps refusing here.
+        # "…**that player puts** a flood counter on target non-Island land
+        # **they control of their choice**." (Quicksilver Fountain.) A
+        # placement whose subject is the seat that also picks the permanent
+        # and controls it — one seat named three times, which is the
+        # imperative's "…that player controls of their choice" (The Abyss)
+        # with the subject spelled out. Only that self-consistent shape: a
+        # player putting a counter on something somebody else chose, or on
+        # another player's permanent, is a sentence this does not read.
         if (
             isinstance(moved, ast.PutCounter)
             and isinstance(moved.subject, ast.TargetSpec)
@@ -634,6 +642,12 @@ def parse_player_subject_verb(
             and moved.subject.filter.controller is None
             and moved.subject.filter.owner is None
             and moved.chooser is None
+        ) or (
+            isinstance(moved, ast.PutCounter)
+            and source_spec.kind == "that_player"
+            and isinstance(moved.subject, ast.TargetSpec)
+            and moved.subject.filter.their_choice
+            and moved.subject.filter.controller == "that_player"
         ):
             return moved
         stream.reset(put_mark)

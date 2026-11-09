@@ -147,6 +147,11 @@ def _foreign_activation_candidate(
         return None
     if activation_denial(game, player_index, permanent, line):
         return None
+    # The board-wide ban asked of *this* ability: the coarse question before
+    # the loop cannot see a ban that spares mana abilities (Damping Matrix),
+    # and every ability reaching here is a non-mana one.
+    if global_activation_ban(game, permanent, ability):
+        return None
     if not _plain_activation_cost(ability.cost):
         return None
     life_cost = int(ability.cost.pay_life or 0)

@@ -116,6 +116,13 @@ def _parse_damage_dealt_event(
         # is a source too, and no ObjectFilter can name one. The narrowing rides
         # the controller field, which is what the dispatcher reads.
         subject = ast.ObjectFilter(controller="you")
+    elif stream.accept_phrase("a", "source", "an", "opponent", "controls"):
+        # "Whenever **a source an opponent controls** deals damage to you"
+        # (Farsight Mask). The same seat narrowing about the other side, on
+        # the same field for the same reason; the condition row
+        # (``whenever_triggers``) marks it and ``event_filters`` tests the
+        # seat the damage seam derived.
+        subject = ast.ObjectFilter(controller="opponent")
     elif stream.accept_phrase("a", "source"):
         # "Whenever **a source** deals damage to this creature" (Crag Saurian).
         # The unnarrowed damager, and an empty filter is exactly that — CR
