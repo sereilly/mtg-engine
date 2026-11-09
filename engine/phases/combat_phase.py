@@ -768,6 +768,74 @@ class CombatPhaseMixin:
             if any(self.can_attack(permanent, seat) for seat in opponents):
                 permanent.metadata["could_attack_this_turn"] = True
 
+    def remove_from_combat(
+        self, permanent: Permanent, *, frees_blocked_attackers: bool = False,
+    ) -> bool:
+        """Remove *permanent* from combat, whichever role it holds (CR 506.4).
+        Returns whether it was in combat to be removed.
+
+        "A creature that's removed from combat stops being an attacking,
+        blocking, blocked, and/or unblocked creature." Combat state is
+        index-keyed (see the control-seam notes), so the slot is derived once
+        through the seam (``battlefield_index_of``) and every map that carries
+        it is pruned together — an attacker's entry, its planeswalker
+        assignment, its band, and any blocker's record of blocking it. A
+        blocker goes through ``_remove_blocker_from_combat``, which keeps each
+        attacker blocked (CR 509.1h) unless the card printed the sentence that
+        says otherwise — ``frees_blocked_attackers``, which is Imprison's
+        clause and not something removal does.
+
+        A method of the game rather than of the effect that first needed it,
+        because CR 506.4 names more roads in than an effect saying so: an
+        attacking or blocking creature that **regenerates**
+        (``engine/regeneration._apply``, CR 701.19a-b) is removed by the rule
+        itself, from inside a destruction no handler is running. It lived in
+        ``handlers/combat.py`` while effects were its only callers, and the
+        regeneration seam could not reach it there — so 133 regenerating
+        cards went on attacking, blocking and dealing combat damage after
+        regenerating.
+        """
+        idx = self.battlefield_index_of(permanent)
+        if idx is None:
+            return False
+        seat = self.controller_index_of(permanent)
+        if seat == self.active_player_index and idx in self.combat_attackers:
+            # CR 702.22h: whatever blocks it blocks the rest of its band, and
+            # goes on doing so once it has gone.
+            self._keep_band_blocks_past({idx})
+            self.combat_attackers.pop(idx, None)
+            self.combat_attacked_planeswalkers.pop(idx, None)
+            # CR 702.22f: "An attacking creature that's removed from combat is
+            # also removed from the band it was in" — it, and not the band: a
+            # band of three that lost one member goes on spreading its blocks
+            # to the other two. A band left with one creature is no band
+            # (``_prune_combat_state``'s rule).
+            self.combat_bands = [
+                kept for band in self.combat_bands
+                if len(kept := [member for member in band if member != idx]) >= 2
+            ]
+            for blocker_map in self.combat_blockers.values():
+                for blocked in blocker_map.values():
+                    if idx in blocked:
+                        blocked.remove(idx)
+            self._apply_band_block_propagation()
+            # It stops being an attacking creature — the per-permanent state
+            # has to agree with the pruned maps, or a filter asking "attacking"
+            # between now and end of combat gets a different answer than the
+            # damage step does.
+            permanent.attacking = False
+            permanent.defending_player_index = None
+            permanent.blocked = False
+            self.log.append(f"{permanent.card.name} was removed from combat")
+            return True
+        if idx in self.combat_blockers.get(seat, {}):
+            self._remove_blocker_from_combat(
+                seat, idx, frees_blocked_attackers=frees_blocked_attackers
+            )
+            self.log.append(f"{permanent.card.name} was removed from combat")
+            return True
+        return False
+
     def _reset_combat_state(self, clear_damage_marked: bool) -> None:
         self.combat_attackers = {}
         self.combat_attacked_planeswalkers = {}

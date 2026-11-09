@@ -192,12 +192,20 @@ def regeneration_replaces_destruction(game: "Game", permanent: "Permanent") -> b
 
 
 def _apply(game: "Game", permanent: "Permanent", message: str) -> None:
-    """CR 701.19a-b's alternate effect: tap it and remove all damage marked on
-    it.
+    """CR 701.19a-b's alternate effect, all three parts of it: "remove all
+    damage marked on it and its controller taps it. **If it's an attacking or
+    blocking creature, remove it from combat.**"
 
-    The "remove it from combat" half of the rule is not carried out here; it was
-    absent from both destruction paths before they were consolidated, and adding
-    it is a combat-map change rather than a regeneration one.
+    The third sentence was missing for as long as the shield existed — absent
+    from both destruction paths before they were consolidated here, and left
+    out of the consolidation as "a combat-map change rather than a regeneration
+    one". It is a regeneration one: CR 506.4 lists regenerating among the ways
+    a creature leaves combat, so a Drudge Skeletons that regenerated from
+    first-strike damage went on to deal its regular damage, and a regenerated
+    attacker went on being an "attacking creature" to every filter that asked.
+    ``Game.remove_from_combat`` is the one transition; it does nothing to a
+    permanent that is not attacking or blocking, so it is asked
+    unconditionally. A creature it was blocking stays blocked (CR 509.1h).
     """
     game.become_tapped(permanent)
     permanent.damage_marked = 0
@@ -206,6 +214,7 @@ def _apply(game: "Game", permanent: "Permanent", message: str) -> None:
         int(permanent.metadata.get(REGENERATED_THIS_TURN, 0)) + 1
     )
     game.log.append(message)
+    game.remove_from_combat(permanent)
 
 
 __all__ = [
