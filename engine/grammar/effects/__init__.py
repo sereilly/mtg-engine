@@ -97,6 +97,7 @@ from .types import (
     _parse_becomes,
     _parse_becomes_aura_enchantment,
     _parse_no_longer_supertype,
+    _parse_land_type_while_counter,
 )
 from .board import (
     parse_simultaneous_phasing,
@@ -364,6 +365,7 @@ __all__ = [
     "_parse_becomes",
     "_parse_becomes_aura_enchantment",
     "_parse_no_longer_supertype",
+    "_parse_land_type_while_counter",
     "_parse_bid_life_for_control",
     "_parse_gain_control",
     "parse_mutual_control_of_sets",

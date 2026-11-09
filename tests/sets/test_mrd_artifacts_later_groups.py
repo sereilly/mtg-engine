@@ -232,4 +232,98 @@ def test_w1g12_damping_matrix_is_on_the_wire_and_ends_when_it_leaves(set_pool):
     _w1g12_resolve_stack(game)
     assert game.players[1].life == 19
 
+
+# Quicksilver Fountain. "At the beginning of each player's upkeep, that player
+# puts a flood counter on target non-Island land they control of their choice.
+# That land is an Island for as long as it has a flood counter on it." / "At
+# the beginning of each end step, if all lands on the battlefield are Islands,
+# remove all flood counters from them." The Abyss's choice made by the upkeep
+# player, a CR 305.7 land-type change ended by the last flood counter
+# (``named_counters.remove_counters``), and a universal condition whose set
+# "them" names.
+
+
+def _w1g12_flood(land):
+    from engine.named_counters import counters_on
+
+    return counters_on(land, "flood")
+
+
+def test_w1g12_quicksilver_fountain_floods_a_land_of_the_upkeep_players(set_pool):
+    game, (_fountain, plains), (mountain, forest) = _w1g12_table(
+        set_pool, mine=["Quicksilver Fountain", "Plains"], theirs=["Mountain", "Forest"],
+    )
+    # A's own upkeep ran as the table opened: A's only land is flooded.
+    assert _w1g12_flood(plains) == 1 and plains.has_type("island")
+    assert not plains.has_type("plains")
+    game.start_turn(1)
+    _w1g12_settle(game)
+    flooded = [land for land in (mountain, forest) if _w1g12_flood(land)]
+    assert len(flooded) == 1
+    (land,) = flooded
+    assert land.has_type("island")
+    assert land.effective_produced_mana == ("U",)
+
+
+def test_w1g12_quicksilver_fountain_asks_the_upkeep_player_for_their_land(set_pool):
+    game, (_fountain, plains), (mountain, forest, island) = _w1g12_table(
+        set_pool, mine=["Quicksilver Fountain", "Plains"],
+        theirs=["Mountain", "Forest", "Island"], interactive=(1,),
+    )
+    game.start_turn(1)
+    assert not game.resolve_top_of_stack()  # held for B's answer
+    (choice,) = game.pending_choices
+    assert (choice.kind, choice.player_index) == ("permanent_choice", 1)
+    # Not an Island, and not another player's land.
+    assert not game.confirm_permanent_choice(1, island.permanent_id)
+    assert not game.confirm_permanent_choice(1, plains.permanent_id)
+    assert game.confirm_permanent_choice(1, forest.permanent_id)
+    _w1g12_resolve_stack(game)
+    assert _w1g12_flood(forest) == 1 and forest.has_type("island")
+    assert _w1g12_flood(mountain) == 0 and mountain.has_type("mountain")
+
+
+def test_w1g12_quicksilver_fountain_end_step_resets_an_all_island_board(set_pool):
+    game, _, (mountain,) = _w1g12_table(
+        set_pool, mine=["Quicksilver Fountain", "Island"], theirs=["Mountain"],
+    )
+    game.start_turn(1)
+    _w1g12_settle(game)
+    assert mountain.has_type("island") and _w1g12_flood(mountain) == 1
+    game.resolve_end_step(1)
+    _w1g12_settle(game)
+    assert _w1g12_flood(mountain) == 0
+    assert mountain.has_type("mountain") and not mountain.has_type("island")
+
+
+def test_w1g12_quicksilver_fountain_end_step_waits_while_a_land_is_not_an_island(set_pool):
+    game, (_fountain, plains), (mountain, forest) = _w1g12_table(
+        set_pool, mine=["Quicksilver Fountain", "Plains"], theirs=["Mountain", "Forest"],
+    )
+    game.start_turn(1)
+    _w1g12_settle(game)
+    game.resolve_end_step(1)
+    _w1g12_settle(game)
+    # One of B's two lands is still not an Island: nothing is removed.
+    assert _w1g12_flood(plains) == 1
+    assert sum(_w1g12_flood(land) for land in (mountain, forest)) == 1
+
+
+def test_w1g12_quicksilver_fountains_island_outlives_it_and_ends_with_the_counter(set_pool):
+    # 2004-12-01: "The land stays an Island until the flood counter is
+    # removed, even if Quicksilver Fountain leaves the battlefield." And once
+    # the counter is gone the effect is over (CR 611.2b): a flood counter put
+    # back later does not revive it.
+    from engine.named_counters import add_counters, remove_counters
+
+    game, (fountain, plains), _ = _w1g12_table(
+        set_pool, mine=["Quicksilver Fountain", "Plains"],
+    )
+    game.remove_from_battlefield(fountain)
+    assert plains.has_type("island") and not plains.has_type("plains")
+    remove_counters(plains, "flood", 1)
+    assert plains.has_type("plains") and not plains.has_type("island")
+    add_counters(plains, "flood", 1)
+    assert plains.has_type("plains") and not plains.has_type("island")
+
 # ==== end W1G12 ======================================================

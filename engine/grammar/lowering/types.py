@@ -39,7 +39,7 @@ from ._common import (_check_grantable, _describe_several_targets,
                       _describe_targets, _filter_payload, _is_enchanted,
                       _is_source, _is_target, _names_several_targets,
                       _restrictions_beyond, testable_filter_payload)
-from ._events import _EVENT_SUBJECT_OBJECTS
+from ._events import CHOSEN_PERMANENT, _EVENT_SUBJECT_OBJECTS
 from ..vocabulary import BASIC_LAND_WORDS
 
 
@@ -411,6 +411,56 @@ _LAND_TYPE_DURATIONS = frozenset({
     None, "until_controllers_next_untap_step", "until_end_of_turn",
     "until_source_leaves",
 })
+
+
+def _lower_land_type_while_counter(
+    node: ast.LandTypeWhileCounter, produced: frozenset[str] = frozenset(),
+) -> tuple[OracleInstruction, ...]:
+    """"That land is an Island for as long as it has a flood counter on it."
+    (Quicksilver Fountain.)
+
+    ``set_land_type_while_counter`` over the permanent the step in front chose
+    (``CHOSEN_PERMANENT``, ``permanents_from``): one layer-4 contribution keyed
+    on the counter kind, which ``named_counters.remove_counters`` ends as the
+    last counter of that kind comes off — the one write that takes such a
+    counter away, so no road out of the counter can leave the land an Island.
+
+    "That land" names the permanent an earlier step of this effect recorded,
+    and nothing else. Over a *target* ("Put a mire counter on target non-Swamp
+    land. That land is a Swamp…", Cyclopean Tomb) the same words would need
+    the record that card's leave-the-battlefield line reads — which lands this
+    source mired — and that card's own hook writes it; admitted here, the
+    grammar would take that line over and the record would go unwritten. So
+    the targeted form refuses, naming what it lacks.
+    """
+    subject = node.subject
+    if not (
+        isinstance(subject, ast.TargetSpec) and subject.quantifier == "that"
+        and not subject.targeted
+    ):
+        raise LoweringError(
+            "a counter-tied land type over a targeted land would need the record "
+            "of which lands its source changed; only a chosen land is read",
+            node=node,
+        )
+    if CHOSEN_PERMANENT not in produced:
+        raise LoweringError(
+            "'that land' names a land no earlier step of this effect chose",
+            node=node,
+        )
+    if _restrictions_beyond(subject.filter, frozenset({"card_types"})) or (
+        subject.filter.card_types not in ((), ("land",))
+    ):
+        raise LoweringError(
+            "'that land' restates the chosen land and narrows nothing", node=node
+        )
+    return (
+        OracleInstruction("set_land_type_while_counter", "", {
+            "land_type": node.land_type,
+            "counter": node.counter,
+            "permanents_from": CHOSEN_PERMANENT,
+        }),
+    )
 
 
 def _lower_change_land_type(node: ast.ChangeLandType) -> tuple[OracleInstruction, ...]:

@@ -61,6 +61,28 @@ DERIVED_LAND_TYPES = "derived_land_type_changes"
 MIRE_COUNTER = "mire counter"
 
 
+def counter_tied_source(kind: str) -> str:
+    """The source label of a land-type change that lasts "for as long as it
+    has a *kind* counter on it" (Quicksilver Fountain's flood counter).
+
+    One label per kind, so a second such change on the same land replaces the
+    first (:func:`change_land_type`) and takes the later timestamp — "each
+    one has a different timestamp" (ruling, 2004-12-01) — and so the one write
+    that takes counters away can end it by name
+    (``named_counters.remove_counters``). Spelled apart from
+    :data:`MIRE_COUNTER`, whose mire is a flag Cyclopean Tomb's hook keeps
+    rather than a counter in the store.
+    """
+    return f"while it has a {kind} counter"
+
+
+def end_counter_tied_land_type(perm: "Permanent", kind: str) -> bool:
+    """Drop the change tied to *kind* counters on *perm*: the last one is gone
+    (CR 611.2b — the "for as long as" ends, and does not come back with a
+    later counter)."""
+    return end_land_type_change(perm, source=counter_tied_source(kind))
+
+
 def _same_source(recorded: Any, wanted: Any) -> bool:
     """Identity for live objects, equality for the string labels.
 
@@ -749,6 +771,7 @@ def static_land_type_change_applies(
 
 __all__ = [
     "DERIVED_LAND_TYPES", "LAND_TYPE_EFFECTS", "MIRE_COUNTER",
+    "counter_tied_source", "end_counter_tied_land_type",
     "STATIC_LAND_TYPE_KIND", "StaticLandTypeChange",
     "CHOSEN_LAND_TYPES", "add_derived_land_type", "added_land_types",
     "change_land_type", "clear_derived_land_types",

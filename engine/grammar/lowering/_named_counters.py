@@ -64,7 +64,8 @@ from ._common import (
     refuse_untestable,
 )
 from ._events import (
-    _EVENT_SUBJECT_OBJECTS, _REANIMATED_PERMANENTS, binds_block_pair,
+    CHOSEN_PERMANENT, EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_OBJECTS,
+    _EVENT_SUBJECT_PLAYERS, _REANIMATED_PERMANENTS, binds_block_pair,
     trigger_quantity_key,
 )
 
@@ -88,6 +89,23 @@ def lower_named_placement(
     the unfiltered one, exactly as the caller receives them: the first picks a
     dispatch path, the second names the number the firing carried.
     """
+    # "…that player puts a flood counter on target non-Island land **they
+    # control of their choice**." (Quicksilver Fountain.) Ley Line's
+    # decomposition (``_plus_one_counters``, the P/T twin of this reading) on a
+    # named counter: ``choose_permanent`` armed on the seat the firing event
+    # froze, the placement reading the recorded id through ``permanents_from``,
+    # with the same recorded deviation from CR 603.3d (the affected player
+    # picks as the ability resolves). "That player controls" narrows the
+    # candidates to that seat's own (``controlled_by``, The Abyss's spelling);
+    # Ley Line's "target creature of their choice" names no controller and
+    # offers every one. Returned as two steps side by side, so a later sentence
+    # may name the chosen permanent ("That land is an Island …").
+    if (
+        not is_pt_counter(node.counter)
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.filter.their_choice
+    ):
+        return _their_choice_placement(node, trigger_event)
     # "Whenever a permanent becomes tapped, put a wind counter on **it**."
     # (Freyalise's Winds.) The pronoun was rebound to the *event's* subject by
     # `rebinding.rebind_pronoun_to_event_subject`, so it is neither the source
@@ -346,3 +364,61 @@ def lower_named_block_pair_placement(
             "on_block_pair": True, **({"filter": described} if described else {}),
         }),)
     return None
+
+
+def _their_choice_placement(
+    node: ast.PutCounter, trigger_event: str | None,
+) -> tuple[OracleInstruction, ...]:
+    """The named counter "on target <permanent> [that player controls] of
+    their choice" (Quicksilver Fountain): see the branch that calls this.
+
+    Refused: a quantifier other than "target" (one pick, one id), a rider, a
+    seat other than "that player", an event that froze none (the
+    **unfiltered** trigger event — "that player" is the firing event's seat in
+    every clause, the first of two sentences included), and a narrowing the
+    prompt cannot test.
+    """
+    if node.subject.quantifier != "target" or node.subject.count != 1:
+        raise LoweringError(
+            "'of their choice' names one permanent to put a counter on", node=node
+        )
+    if node.up_to or node.then_double or node.cap is not None or node.distributed:
+        raise LoweringError("a chosen placement carries no rider", node=node)
+    if not isinstance(node.count, ast.Fixed) or node.count.value < 1:
+        raise LoweringError("a chosen placement counts a fixed number", node=node)
+    if trigger_event not in _EVENT_SUBJECT_PLAYERS:
+        raise LoweringError(
+            "'of their choice' names no player this placement can ask", node=node
+        )
+    described = _filter_payload(
+        node.subject.filter, carried_separately=frozenset({"their_choice"})
+    )
+    described.pop("their_choice", None)
+    chosen: dict[str, object] = {
+        "result_key": CHOSEN_PERMANENT,
+        "chooser": EVENT_SUBJECT_PLAYER,
+    }
+    controller = described.pop("controller", None)
+    if controller == "that_player":
+        chosen["controlled_by"] = "chooser"
+    elif controller is not None:
+        raise LoweringError(
+            "'of their choice' reads 'that player controls' and no other seat",
+            node=node,
+        )
+    if object_only_filter(described) is None:
+        raise LoweringError(
+            "the choice carries a restriction the prompt cannot test", node=node
+        )
+    noun = described.get("type_filter") or "permanent"
+    owned = " you control" if controller else ""
+    chosen["filter"] = described
+    chosen["prompt"] = f"Choose a {noun}{owned} to put a {node.counter} counter on."
+    return (
+        OracleInstruction("choose_permanent", "", chosen),
+        OracleInstruction("add_named_counter_to_target", "", {
+            "counter": node.counter,
+            "count": node.count.value,
+            "permanents_from": CHOSEN_PERMANENT,
+        }),
+    )

@@ -488,6 +488,30 @@ _CONDITIONS_NAMING_A_CARD: dict[type, str] = {
 }
 
 
+def bind_plural_pronoun_to_condition(condition, statement):
+    """*statement* with a plural "them" bound to the set the intervening "if"
+    ranged over.
+
+    "At the beginning of each end step, if **all lands on the battlefield**
+    are Islands, remove all flood counters from **them**." (Quicksilver
+    Fountain.) The universal is read as a count whose filter no longer names
+    its domain (``ast.OnBattlefield.universal``), and the pronoun names the
+    domain: every one of those permanents, as the effect resolves. Only that
+    condition supplies one; under any other the pronoun stays unbound and the
+    lowering refuses it.
+    """
+    domain = getattr(condition, "universal", None)
+    if not isinstance(condition, ast.OnBattlefield) or domain is None:
+        return statement
+
+    def _rewrite(node: ast.TargetSpec) -> ast.TargetSpec | None:
+        if node.quantifier == "them":
+            return ast.TargetSpec("all", domain)
+        return None
+
+    return _walk_specs(statement, _rewrite)
+
+
 def bind_recorded_card(event_kind: str, condition, statement):
     """*statement* with every bound-card entry told which event recorded it.
 

@@ -61,6 +61,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_attacks_this_turn_if_able,
     _lower_blocks_this_turn_if_able,
     _lower_blocked_by_all_able_this_turn,
+    _lower_land_type_while_counter,
                        _lower_change_text, _lower_counter_ability, _lower_choose_target,
                        _lower_destroy_countered_ability_source,
                        _lower_put_graveyard_position_onto_battlefield,
@@ -688,6 +689,10 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # ``ast.Attach``'s reason: the words are a back-reference, and with no
     # record they name nobody.
     ast.AttacksThisTurnIfAble: _lower_attacks_this_turn_if_able,
+    # "That land is an Island for as long as it has a flood counter on it."
+    # (Quicksilver Fountain.) "That land" is the permanent an earlier step
+    # chose, so the lowering asks the records.
+    ast.LandTypeWhileCounter: _lower_land_type_while_counter,
     ast.DestroyChosenThatDidntAttack: _lower_destroy_chosen_that_didnt_attack,
     # "Tap all other artifacts. **They** don't untap … for as long as this
     # artifact remains tapped." (Kill Switch.) It left the name-only table

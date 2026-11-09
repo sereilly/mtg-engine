@@ -216,6 +216,13 @@ def remove_counters(permanent, kind: str, count: int = 1) -> int:
     if total == 0:
         emptied = set(permanent.metadata.get(EMPTIED_KINDS_MARK) or ())
         permanent.metadata[EMPTIED_KINDS_MARK] = emptied | {kind}
+        # "That land is an Island **for as long as it has a flood counter on
+        # it**." (Quicksilver Fountain.) The last counter of the kind is gone,
+        # so the change it held up ends — here, at the one write that takes a
+        # counter away, so every road out of the counter ends it.
+        from .land_types import end_counter_tied_land_type
+
+        end_counter_tied_land_type(permanent, kind)
     return total
 
 

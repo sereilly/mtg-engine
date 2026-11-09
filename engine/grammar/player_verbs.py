@@ -599,6 +599,22 @@ def parse_player_subject_verb(
             return None
         if isinstance(moved, ast.PutOntoBattlefield):
             return dataclasses.replace(moved, actor=source_spec)
+        # "…**that player puts** a flood counter on target non-Island land
+        # **they control of their choice**." (Quicksilver Fountain.) A
+        # placement whose subject is the seat that also picks the permanent
+        # and controls it — one seat named three times, which is the
+        # imperative's "…that player controls of their choice" (The Abyss)
+        # with the subject spelled out. Only that self-consistent shape: a
+        # player putting a counter on something somebody else chose, or on
+        # another player's permanent, is a sentence this does not read.
+        if (
+            isinstance(moved, ast.PutCounter)
+            and source_spec.kind == "that_player"
+            and isinstance(moved.subject, ast.TargetSpec)
+            and moved.subject.filter.their_choice
+            and moved.subject.filter.controller == "that_player"
+        ):
+            return moved
         stream.reset(put_mark)
         return None
     if token.text in ("sacrifices", "sacrifice") and isinstance(source_spec, ast.PlayerRef):

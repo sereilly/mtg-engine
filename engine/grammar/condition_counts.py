@@ -71,7 +71,7 @@ from .references import parse_player_ref
 from .seat_comparisons import accept_margin
 from .seats import accept_life_total_of
 from .stream import TokenStream
-from .vocabulary import COLOR_WORDS
+from .vocabulary import BASIC_LAND_WORDS, COLOR_WORDS
 from .zones import accept_zone_scope, names_each_zone_ahead
 
 
@@ -678,6 +678,42 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                         excluded_colors=(COLOR_WORDS[colour_word],),
                     ),
                     comparison=ast.Comparison("eq", ast.Fixed(0)),
+                )
+    stream.reset(all_mark)
+    # "if **all lands on the battlefield are Islands**" (Quicksilver
+    # Fountain). The same universal read as the same count, over every
+    # battlefield instead of one seat's and with a basic land type where
+    # Zealots prints a colour: no land on the battlefield that is not an
+    # Island (CR 205.3i's subtype, read through layer 4 by the matcher), vacuous
+    # truth on an empty board included. Only the plural of a basic land type,
+    # and only with no seat and nothing already excluded, so a phrase this
+    # does not read whole refuses as it did.
+    if stream.accept_word("all"):
+        try:
+            described = parse_object_filter(stream)
+        except GrammarError:
+            described = None
+        if (
+            described is not None
+            and described.controller is None
+            and not described.excluded_subtypes
+            and (
+                described.on_the_battlefield
+                or stream.accept_phrase("on", "the", "battlefield")
+            )
+            and stream.accept_word("are")
+        ):
+            plural = stream.peek_word() or ""
+            land_type = plural[:-1] if plural.endswith("s") else plural
+            if plural == "plains":
+                land_type = "plains"
+            if land_type in BASIC_LAND_WORDS:
+                stream.advance()
+                domain = dataclasses.replace(described, on_the_battlefield=False)
+                return ast.OnBattlefield(
+                    dataclasses.replace(domain, excluded_subtypes=(land_type,)),
+                    ast.Comparison("eq", ast.Fixed(0)),
+                    universal=domain,
                 )
     stream.reset(all_mark)
 

@@ -67,6 +67,7 @@ from .effects import (
     _parse_becomes_base_pt,
     _parse_cant_attack_or_block,
     _parse_no_longer_supertype,
+    _parse_land_type_while_counter,
     _parse_can_be_targeted_as_though,
     _parse_damage,
     _parse_doesnt_untap_next_step,
@@ -555,6 +556,11 @@ def parse_subject_verb(
             thawed = _parse_no_longer_supertype(stream, source_spec)
             if thawed is not None:
                 return thawed
+            # "That land is an Island **for as long as it has a flood counter
+            # on it**." (Quicksilver Fountain.) Non-consuming on refusal.
+            flooded = _parse_land_type_while_counter(stream, source_spec)
+            if flooded is not None:
+                return flooded
         if token.text in ("phases", "phase"):
             # "Target creature you don't control phases out." (Teferi, Master
             # of Time) / "Each creature target opponent controls phases out.
