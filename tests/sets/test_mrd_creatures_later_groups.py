@@ -113,6 +113,20 @@ def test_w1g10_fatespinner_combat_phase_is_skipped_on_every_road(set_pool):
     assert "P2 skipped the combat phase" in game.log
 
 
+def test_w1g10_fatespinner_skips_a_combat_phase_added_after_it_resolved(set_pool):
+    """The ruling (2004-12-01): "This is true even if a new step or phase is
+    added to the turn after the ability resolves." An additional combat phase
+    after the postcombat main phase (Relentless Assault's shape, CR 500.8) is
+    skipped too."""
+    game = _w1g10_fatespinner_upkeep(set_pool, interactive=True)
+    _w1g10_answer(game, 2)
+    game.resolve_draw_step(1)
+    assert game.enter_next_turn_phase("beginning") == "precombat_main"
+    assert game.enter_next_turn_phase() == "postcombat_main"
+    assert game.add_extra_phase(after_phase="postcombat_main", phase_name="combat")
+    assert game.next_unskipped_phase_after("postcombat_main") == "ending"
+
+
 def test_w1g10_fatespinner_skip_ends_with_its_turn(set_pool):
     """"This turn": the cleanup sweep ends the record, so the opponent's next
     turn has its draw step."""

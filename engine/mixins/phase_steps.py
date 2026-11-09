@@ -14,6 +14,7 @@ from ._constants import _PHASE_STEPS, phases_after
 #: yes for it without spending it.
 EVERY_INSTANCE = -1
 
+
 class PhaseStepsMixin:
     @goes_no_further()
     def _resolve_priority_window(self) -> None:

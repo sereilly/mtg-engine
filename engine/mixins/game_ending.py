@@ -65,7 +65,7 @@ class GameEndingMixin:
         """
         if player.lost:
             return False
-        seat = self.players.index(player)
+        seat = self.seat_index(player)
         banners = player_cant_lose(self, seat)
         if banners:
             if not quiet_ban:

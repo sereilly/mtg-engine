@@ -8,6 +8,7 @@ from ._filters import seats_matching_deed
 from ._targets import (bound_permanent, damaged_end_seat, named_seat_still_a_target,
                        stack_target_controller_seat)
 from ..exiled_records import source_object
+from ..game_result_bans import player_cant_win
 from ..life_prohibitions import life_gain_banned
 from ..named_counters import counters_on
 from ..oracle_types import (COUNTERED_ABILITY_SOURCE,
@@ -158,9 +159,7 @@ def player_wins_game(game: Game, instruction: OracleInstruction, context: Oracle
     # standing, "overrides all effects that would preclude that player from
     # winning" and is never asked here — so the effect does nothing and nobody
     # loses to it.
-    from ..game_result_bans import player_cant_win
-
-    banners = player_cant_win(game, game.players.index(winner))
+    banners = player_cant_win(game, game.seat_index(winner))
     if banners:
         game.log.append(
             f"{card.name}: {winner.name} can't win the game ({banners[0].card.name})"
