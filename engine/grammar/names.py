@@ -14,7 +14,7 @@ the ones that were never about a noun phrase.
 
 from __future__ import annotations
 
-from .lexer import render
+from .lexer import SELF, render
 from .stream import TokenStream
 
 
@@ -72,6 +72,15 @@ def parse_card_name(stream: TokenStream) -> str:
     ignores punctuation and case on both sides.
     """
     start = stream.mark()
+    # "…return target card **named Groffskithur** from your graveyard to your
+    # hand." (Groffskithur.) A card naming *itself*: the lexer has already
+    # matched the whole printed name and collapsed it to one SELF token, so the
+    # name is exactly that token and the scan stops behind it. Read as words,
+    # "from" is no stop — and cannot be one, since "Ali from Cairo" and "Fade
+    # from Memory" print it inside their names — so the scan swallowed the
+    # zone clause into the name and the line refused.
+    if stream.at_kind(SELF):
+        return stream.next().text
     while not stream.exhausted:
         if stream.at_punct(".") or stream.at_word(*_NAME_STOPS):
             break

@@ -263,6 +263,22 @@ class Attach:
 
 
 @dataclass(frozen=True)
+class Unattach:
+    """``Unattach <subject> from <host>`` — CR 701.3d's "unattach", as an
+    effect of its own.
+
+    "Unattach all Equipment from target creature." (Disarm.) *subject* is
+    what comes off (a described set of attachments) and *host* the permanent
+    it comes off of. An Equipment unattached stays on the battlefield under
+    its controller's control (Disarm ruling, 2004-12-01; CR 301.5d), which is
+    the whole difference from destroying it.
+    """
+
+    subject: Recipient
+    host: Recipient
+
+
+@dataclass(frozen=True)
 class PayOrSacrificeGreatestManaValue:
     """``Each player sacrifices the <type> they control with the greatest mana
     value unless they pay that <type>'s mana cost. If two or more <type>s a

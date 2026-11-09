@@ -138,6 +138,32 @@ def expand_equip_lines(oracle_text: str) -> str:
     return "\n".join(rewritten)
 
 
+def is_equip_ability(card, ability) -> bool:
+    """Whether *ability* — a compiled ``ParsedActivatedAbility`` of *card* — is
+    an **equip ability** (CR 702.6a).
+
+    The rewrite erases the word, which is what lets every seam an activated
+    ability passes through ignore it; a card that asks *about* equip
+    abilities ("Equip costs you pay cost {1} less", Auriok Steelshaper) has to
+    get the word back. The derivation is the rewrite run backwards, exactly as
+    ``cycling.is_cycling_ability`` runs its own: an ability is an equip ability
+    when some printed line of its card is an equip line whose
+    :func:`expand_equip_line` is that ability's ``source_line``.
+
+    **Not "attaches this permanent to a creature".** An ability printed as
+    "{2}: Attach this permanent to target creature you control" without the
+    keyword is not an equip ability, and a reduction keyed on the effect would
+    discount it.
+    """
+    wanted = (getattr(ability, "source_line", "") or "").strip()
+    if not wanted:
+        return False
+    return any(
+        (expand_equip_line(line) or "").strip() == wanted
+        for line in (getattr(card, "oracle_text", "") or "").split("\n")
+    )
+
+
 def has_equip_ability(oracle_text: str) -> bool:
     """Whether any printed line of *oracle_text* is an equip keyword line.
 
@@ -381,6 +407,7 @@ __all__ = [
     "expand_equip_line",
     "expand_equip_lines",
     "has_equip_ability",
+    "is_equip_ability",
     "is_equip_line",
     "is_equipment",
     "unattach_equipment",

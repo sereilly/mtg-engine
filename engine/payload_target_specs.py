@@ -418,6 +418,10 @@ def _graveyard_return_spec(payload: dict) -> dict:
         spec["graveyard_colors"] = list(payload["graveyard_colors"])
     if payload.get("supertypes"):
         spec["supertypes"] = list(payload["supertypes"])
+    # "…target card **named Groffskithur**…" (Groffskithur), for the colour's
+    # reason directly above: dropped, the picker offers every card in the pile.
+    if payload.get("graveyard_named"):
+        spec["graveyard_named"] = str(payload["graveyard_named"])
     # "Return **another** target artifact card…" (Junk Diver). Carried onto the
     # spec for the subtype's reason directly above: the enumerator reads it
     # through the one predicate the handler also reads

@@ -68,6 +68,7 @@ from .seat_relations import accept_seat_relation
 from .stream import TokenStream
 from .with_clauses import accept_with_clause
 from .zones import accept_zone_scope
+from .vocabulary import CREATURE_TYPES, SUBTYPE_INDEX, match_longest
 from .vocabulary import singular as _singular
 
 
@@ -77,6 +78,38 @@ from .vocabulary import singular as _singular
 # relation dropped, and a dropped relation on a sweep takes the whole board.
 _ATTACHED_TO_REFERENTS = {("that", "creature"): "target", ("it",): "source"}
 
+
+
+def _accept_article_creature_type(stream: TokenStream) -> str | None:
+    """``a <creature type>`` / ``an <creature type>``, or None with the cursor
+    unmoved. CR 205.3m's creature types only: "that's a copy" names no type
+    and is handed back whole."""
+    mark = stream.mark()
+    if stream.accept_word("a", "an"):
+        matched = match_longest(stream.words_from(), 0, SUBTYPE_INDEX)
+        if matched is not None and matched[0] in CREATURE_TYPES:
+            stream.advance(matched[1])
+            return matched[0]
+    stream.reset(mark)
+    return None
+
+
+def _accept_creature_type_alternatives(stream: TokenStream) -> list[str]:
+    """``a Soldier`` or ``a Soldier or a Knight`` — the creature types a
+    "that's …" clause names, or an empty list with the cursor unmoved. A
+    dangling "or" is handed back to the sentence."""
+    first = _accept_article_creature_type(stream)
+    if first is None:
+        return []
+    named = [first]
+    mark = stream.mark()
+    if stream.accept_word("or"):
+        second = _accept_article_creature_type(stream)
+        if second is None:
+            stream.reset(mark)
+        else:
+            named.append(second)
+    return named
 
 
 def _parse_postmodifiers(
@@ -99,6 +132,21 @@ def _parse_postmodifiers(
         if stream.accept_phrase("that", "'s", "one", "or", "more", "colors"):
             d.colored = True
             continue
+        # "each creature you control **that's a Soldier or a Knight**" (Auriok
+        # Steelshaper). The relative-clause spelling of a leading creature type
+        # — "each Soldier or Knight you control" — so it fills the same two
+        # fields: the types as a union ("any", the "Djinn or Efreet" reading),
+        # one set either word admits. Only on a phrase that named no subtype of
+        # its own, whose types this would otherwise AND or OR into an answer the
+        # sentence did not give.
+        relative = stream.mark()
+        if not d.subtypes and stream.accept_phrase("that", "'s"):
+            named = _accept_creature_type_alternatives(stream)
+            if named:
+                d.subtypes.extend(named)
+                d.subtype_match = "any"
+                continue
+            stream.reset(relative)
         # The six clauses that narrow a noun phrase by a **record** of
         # something that already happened — an attack declaration, a block, a
         # cast, a pick a resolution has already made — rather than by

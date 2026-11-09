@@ -139,10 +139,12 @@ _CONTROLS_POWER_CONDITION = re.compile(
 #: matters" cycle (Fledgling Osprey, Metathran Elite, Thran Golem). It is the
 #: same shape as every other word here — a state read off the permanent itself
 #: — and its test lives beside them in ``_STATE_TESTS``, which is what stops
-#: "is an Aura attached?" being answered twice.
+#: "is an Aura attached?" being answered twice. ``equipped`` (CR 301.5a)
+#: joined with Mirrodin's Skyhunter Cub and Leonin Den-Guard, the same
+#: question asked of the other kind of attachment.
 _STATE_CONDITION = re.compile(
     r"^(?:it's|this creature is) "
-    r"(?P<state>tapped|untapped|attacking|blocking|blocked|unblocked|enchanted)$"
+    r"(?P<state>tapped|untapped|attacking|blocking|blocked|unblocked|enchanted|equipped)$"
 )
 
 # "as long as an opponent has eight or more cards in their graveyard"

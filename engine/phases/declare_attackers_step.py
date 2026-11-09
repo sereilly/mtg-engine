@@ -22,7 +22,8 @@ from ..handlers._amounts import evaluate_count
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..oracle_types import X_FROM_COUNT
-from ..trigger_utils import bound_event_object, matching_triggers
+from ..trigger_utils import (bound_event_object, combatant_subject_context,
+                             matching_triggers)
 from ..turn_state import record_attacked_seat, record_attack
 
 
@@ -922,6 +923,10 @@ class DeclareAttackersStepMixin:
                         trigger_context={
                             "trigger_defending_player_index":
                                 self.combat_attackers.get(idx),
+                            # "…**its controller** loses 3 life" under the
+                            # combatant's event: frozen here beside the
+                            # attached scan below, for its reason.
+                            **combatant_subject_context(self, permanent),
                         },
                     )
                 )
@@ -961,6 +966,12 @@ class DeclareAttackersStepMixin:
                         ability_effect_kind=trig.effect_kind,
                         source_permanent=attachment,
                         ability_text=trig.source_line,
+                        # "Whenever enchanted creature attacks or blocks,
+                        # **its controller** loses 3 life." (Contaminated
+                        # Bond.) The attacker's seat, frozen now (CR 603.10):
+                        # the Aura's controller is the ability's, and "its"
+                        # is the creature the event was about.
+                        trigger_context=combatant_subject_context(self, permanent),
                     )
                 )
                 self.log.append(

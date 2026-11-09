@@ -1137,8 +1137,20 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
     # than about a named one — neither is a question the pure matcher answers.
     narrowings = {
         key: value for key, value in payload.items()
-        if key not in ("mana_value", "colored_only", "name_from_event")
+        if key not in ("mana_value", "colored_only", "name_from_event", "attached_to")
     }
+    # "…and all Equipment **attached to it**." (Soul Nova.) The host is the
+    # spell's target, named by its id: the step in front may already have
+    # exiled it, and what it was wearing is still attached to that departed
+    # object until the next state-based check (CR 704.5n) — so the relation is
+    # asked of the attachment's host by id, never of the battlefield. No
+    # target ends the resolution: dropped, the relation exiles every match.
+    host_id: int | None = None
+    if payload.get("attached_to") == "target":
+        host_id = first_target_id(context.target_permanent_id)
+        if not isinstance(host_id, int):
+            game.log.append(f"{context.card.name}: nothing for 'attached to it' to name")
+            return True, "resolved"
     # "…exile all tokens **with the same name as that creature**." (Dual
     # Nature.) CR 201.2's comparison against the name the firing event froze —
     # the creature has left the battlefield by now (CR 400.7), so the id beside
@@ -1172,6 +1184,10 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
     source_permanent = context.source_permanent
 
     def matches(perm: Permanent) -> bool:
+        if host_id is not None and getattr(
+            perm.metadata.get("attached_to"), "permanent_id", None
+        ) != host_id:
+            return False
         if narrowings and not subject_matches(
             game, perm, narrowings, observer=observer, source=source_permanent
         ):

@@ -152,7 +152,8 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_upkeep_counter_toll,
                        _lower_upkeep_damage_unless_cost,
                        _lower_doesnt_untap_while_source_tapped, _lower_tap_or_untap,
-                       _lower_attach, _lower_count_objects, _lower_exchange_control,
+                       _lower_attach, _lower_unattach,
+                       _lower_count_objects, _lower_exchange_control,
                        _lower_secretly_choose_numbers,
                        _lower_exchange_greatest_mana_value,
                        _lower_exchange_chosen_sets,
@@ -221,6 +222,9 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.CopySpellForEachOtherTarget: _lower_copy_spell_for_each_other_target,
     ast.CopyTargetSpell: _lower_copy_target_spell,
     ast.BecomeBlocked: _lower_become_blocked,
+    # "Unattach all Equipment from target creature." (Disarm.) The node
+    # says everything: a described set off one chosen host.
+    ast.Unattach: _lower_unattach,
     # "Choose a card name." (Foreshadow.) The name is chosen as the spell
     # resolves (CR 608.2) and CR 202.1 lets a player name any card at all, so
     # nothing about it can be decided at lowering — the whole of the lowering

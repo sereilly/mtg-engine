@@ -18,7 +18,8 @@ calls: a creature an effect blocks becomes blocked outside any declaration.
 
 from ..delayed_triggers import fire_delayed_triggers
 from ..models import Permanent
-from ..trigger_utils import bound_event_object, matching_triggers
+from ..trigger_utils import (bound_event_object, combatant_subject_context,
+                             matching_triggers)
 
 
 #: CR 509.3e's threshold, as ``engine/whenever_triggers.py``'s condition table records it:
@@ -184,7 +185,10 @@ class BlockTriggersMixin:
                             ability_effect_kind=trig.effect_kind,
                             source_permanent=source,
                             ability_text=trig.source_line,
-                            trigger_context=firing_context,
+                            trigger_context={
+                                **firing_context,
+                                **combatant_subject_context(self, blocker),
+                            },
                         )
                     )
                     # Only if it actually went on: CR 603.4 can refuse the
@@ -240,6 +244,9 @@ class BlockTriggersMixin:
                         ability_effect_kind=trig.effect_kind,
                         source_permanent=attachment,
                         ability_text=trig.source_line,
+                        # The blocker's seat, for the attack half's reason
+                        # (Contaminated Bond's "its controller").
+                        trigger_context=combatant_subject_context(self, blocker),
                     )
                 )
                 self.log.append(

@@ -149,6 +149,8 @@ def _return_graveyard_card_to_owners_hand(
 #: "first creature card" scan, which reads none of them.
 _GRAVEYARD_NARROWING_KEYS = (
     "graveyard_subtypes", "graveyard_colors", "supertypes", "graveyard_mana_value",
+    # Groffskithur's printed name: a narrowing like any adjective above.
+    "graveyard_named",
     # Aphetto Dredging's announced type, still a flag only when the resolution
     # was handed no word — which the matcher answers with no card at all.
     GRAVEYARD_ANNOUNCED_CREATURE_TYPE,

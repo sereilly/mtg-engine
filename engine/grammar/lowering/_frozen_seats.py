@@ -137,6 +137,14 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # the source-scoped scan does for the creature it is about.
     "matching_creature_blocks",
     "creature_becomes_blocked",          # Gloom Sower — the blocker's
+    # "Whenever enchanted creature attacks or blocks, **its controller** loses
+    # 3 life." (Contaminated Bond.) The combatant's, frozen by the attack and
+    # block fire sites (``trigger_utils.combatant_subject_context``) — the
+    # Aura's controller controls the ability, and an Aura on somebody else's
+    # creature is the card. Absent from this table the phrase read the
+    # destroy step's scratchpad record, which nothing had written, and the
+    # card never made anyone lose life.
+    "creature_attacks_or_blocks",
     # Binding Agony — the **damaged** creature's, which for an Aura watching
     # its host is the host's controller. Frozen by `_fire_dealt_damage_triggers`
     # while the creature is still on the battlefield: this trigger resolves off

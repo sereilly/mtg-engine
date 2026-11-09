@@ -644,7 +644,10 @@ def _all_keyword_costs_modifier(match: "re.Match[str]") -> CostModifier | None:
 #: matches the pattern, produces no modifier, is claimed by no line and is
 #: reported unsupported -- rather than being read as a discount on abilities
 #: nothing can tell apart.
-_DERIVABLE_ABILITY_KEYWORDS = frozenset({"cycling"})
+#: Equip joined with Auriok Steelshaper ("Equip costs you pay cost {1}
+#: less"), recognised by ``equipment.is_equip_ability`` — CR 702.6a's rewrite
+#: run backwards, as cycling's is.
+_DERIVABLE_ABILITY_KEYWORDS = frozenset({"cycling", "equip"})
 
 
 @lru_cache(maxsize=None)
@@ -768,13 +771,32 @@ def _keyword_cost_modifier(match: "re.Match[str]") -> CostModifier | None:
     reader that asks for one.
     """
     keyword = match.group("keyword")
+    controller = "you" if match.group("payer") == "you" else "opponents"
+    reduces = match.group("direction") == "less"
+    # "**Equip costs you pay cost {1} less.**" (Auriok Steelshaper.) The same
+    # sentence about a keyword whose cost is an **activation** cost rather
+    # than an alternative cost to cast (CR 702.6a; CR 602.2b makes the
+    # activation cost the analog of a mana cost for 601.2f's reductions). It
+    # rides the activation reduction Fluctuator's sentence already makes —
+    # ``applies_to`` "activate", narrowed by ``ability_keyword`` to the
+    # abilities the derivation recognises — so the one charger
+    # (``Game.activation_mana_charge``) prices it, and a keyword with no
+    # derivation still produces nothing and claims nothing.
+    if keyword in _DERIVABLE_ABILITY_KEYWORDS:
+        return CostModifier(
+            amount=int(match.group("amount")),
+            applies_to="activate",
+            reduces=reduces,
+            controller=controller,
+            ability_keyword=keyword,
+        )
     if keyword not in _MODIFIABLE_COST_KEYWORDS:
         return None
     return CostModifier(
         amount=int(match.group("amount")),
         applies_to=keyword,
-        reduces=match.group("direction") == "less",
-        controller="you" if match.group("payer") == "you" else "opponents",
+        reduces=reduces,
+        controller=controller,
     )
 
 

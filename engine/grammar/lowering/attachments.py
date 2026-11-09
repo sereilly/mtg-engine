@@ -105,6 +105,9 @@ def _lower_attach(
             "nothing tests that the host is one the attachment can enchant",
             node=node,
         )
+    swept = _lower_attach_all_to_source(node)
+    if swept is not None:
+        return swept
     if not isinstance(node.subject, ast.TargetSpec) or not _is_source(node.subject):
         raise LoweringError(
             "no handler attaches anything but the source itself", node=node
@@ -119,6 +122,102 @@ def _lower_attach(
     payload = _filter_payload(node.host.filter)
     _describe_targets(payload, node.host)
     return (OracleInstruction("attach_source_to_target", "", payload),)
+
+
+def _lower_attach_all_to_source(
+    node: ast.Attach,
+) -> "tuple[OracleInstruction, ...] | None":
+    """"When this creature enters, **attach all Equipment on the battlefield
+    to it**." (Vulshok Battlemaster.) Or None for any other attach.
+
+    The keyword action (CR 701.3) with the two ends the other way round from
+    equip: what moves is a *described set* swept off every battlefield, and
+    what receives it is the ability's own source. One instruction,
+    ``attach_all_to_source``, whose payload is the set's filter — asked of
+    each permanent through ``subject_matches``, so every key must be one that
+    predicate tests or the line refuses naming it. Each member moves by
+    ``equipment.attach_equipment``, which asks its own legality: an Equipment
+    that cannot equip the source does not move and is not unattached
+    (Battlemaster ruling, 2004-12-01), and nothing changes control (CR
+    701.3a; CR 301.5d).
+    """
+    subject, host = node.subject, node.host
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("all", "each")
+        and not subject.targeted
+    ):
+        return None
+    if not (isinstance(host, ast.TargetSpec) and _is_source(host) and not host.targeted):
+        raise LoweringError(
+            "a swept set is attached only to the ability's own source", node=node
+        )
+    if node.host_it_can_enchant or node.chooser is not None:
+        raise LoweringError(
+            "the attach-all reads no host legality clause and no chooser",
+            node=node,
+        )
+    filt = subject.filter
+    # "…**on the battlefield**": the scope is nobody (CR 403.1), which is what
+    # the handler's sweep already is — every battlefield, narrowed by seat only
+    # where the phrase prints a controller. The exile sweep's reading, and its
+    # one refusal: a printed seat beside it would be two answers.
+    if filt.on_the_battlefield:
+        if filt.controller is not None:
+            raise LoweringError(
+                "an attach-all scoped to nobody cannot also name a controller",
+                node=node,
+            )
+        filt = dataclasses.replace(filt, on_the_battlefield=False)
+    payload = _filter_payload(filt)
+    untestable = untestable_filter_keys(payload)
+    if untestable:
+        raise LoweringError(
+            "the attach-all cannot test " + ", ".join(sorted(untestable)),
+            node=node,
+        )
+    return (OracleInstruction("attach_all_to_source", "", payload),)
+
+
+def _lower_unattach(node: ast.Unattach) -> tuple[OracleInstruction, ...]:
+    """"Unattach all Equipment from target creature." (Disarm; CR 701.3d.)
+
+    One instruction, ``unattach_all_from_target``: the host is the spell's
+    target — its filter on the payload for the resolution to re-check and its
+    ``targets`` description for the picker, as a tap's is — and the set that
+    comes off it rides ``attachments``, asked of each attachment through
+    ``subject_matches``. Only Equipment: CR 701.3d defines "unattach" for an
+    Equipment, which stays on the battlefield; an Aura that stops being
+    attached is a different event (CR 704.5m puts it in a graveyard), so a
+    set that is not Equipment refuses.
+    """
+    subject, host = node.subject, node.host
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("all", "each")
+        and not subject.targeted
+    ):
+        raise LoweringError("only a described set of Equipment is unattached", node=node)
+    if "equipment" not in subject.filter.subtypes:
+        raise LoweringError(
+            "CR 701.3d unattaches Equipment; nothing else stays on the battlefield "
+            "unattached",
+            node=node,
+        )
+    if not (isinstance(host, ast.TargetSpec) and _is_target(host)):
+        raise LoweringError(
+            "the unattach needs one chosen permanent to unattach from", node=node
+        )
+    attachments = _filter_payload(subject.filter)
+    untestable = untestable_filter_keys(attachments)
+    if untestable:
+        raise LoweringError(
+            "the unattach cannot test " + ", ".join(sorted(untestable)), node=node
+        )
+    payload = _filter_payload(host.filter)
+    _describe_targets(payload, host)
+    payload["attachments"] = attachments
+    return (OracleInstruction("unattach_all_from_target", "", payload),)
 
 
 def _lower_attach_to_their_choice(

@@ -119,6 +119,7 @@ from .destruction import (
 )
 from .attachments import (
     _parse_attach,
+    _parse_unattach,
     _parse_pronoun_attach_rider,
     parse_choose_host_at_random,
     parse_excess_choice_paragraph,
@@ -381,6 +382,7 @@ __all__ = [
     "_parse_tap_untap",
     "_parse_untap_chosen_by_paying",
     "_parse_attach",
+    "_parse_unattach",
     "_parse_pronoun_attach_rider",
     "_parse_exchange_control",
     "parse_exchange_zones",

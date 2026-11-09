@@ -781,6 +781,20 @@ def _lower_return_to_zone(
         and filt.supertypes
     ):
         gated = dataclasses.replace(gated, supertypes=())
+    # "…return target card **named Groffskithur** from your graveyard to your
+    # hand." (Groffskithur.) The printed name, lifted for the colour's reason
+    # above: it travels as ``graveyard_named`` and the picker, the cast gate
+    # and the handler all test it through the one predicate
+    # (``graveyard_card_matches``, by ``counted_names.card_answers_to_name``).
+    # Scoped to this zone pair, so every other zone-change handler goes on
+    # refusing a name it cannot read.
+    if (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "hand"
+        and filt.named
+    ):
+        gated = dataclasses.replace(gated, named=None)
     # "Return target **Aura** card from your graveyard to the battlefield
     # attached to Hakim." The third adjective the graveyard family reads, lifted
     # out of the blanket refusal for the colour's and the subtype's reason above

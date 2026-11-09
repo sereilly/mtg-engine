@@ -343,6 +343,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # moving an Equipment onto a creature is neither a tap nor a zone change,
     # and sharing a switch with either would let one be gated off by the other.
     "attach_source_to_target": "attachments",
+    # "…attach all Equipment on the battlefield to it" (Vulshok Battlemaster)
+    # and "Unattach all Equipment from target creature" (Disarm): CR 701.3
+    # over a described set, the same family.
+    "attach_all_to_source": "attachments",
+    "unattach_all_from_target": "attachments",
     # "…to **another permanent of that type**" (Enchantment Alteration): the
     # permanent the controller picks as the spell resolves, recorded for the
     # attach behind it. The same category, so GRAMMAR_CATEGORIES is unchanged —
