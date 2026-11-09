@@ -1282,10 +1282,19 @@ def run_ai_simulation(
             # the land drop, then casts paid for out of the lands, then
             # the activations, each planned against what is still
             # untapped. See `_play_land_drops` and `_play_casts`.
-            _play_land_drops(game, active, report, game_index, turn)
-            _play_casts(game, active, report, game_index, turn)
+            #
+            # **Only in a main phase the turn has.** "The player skips each
+            # instance of the chosen step or phase this turn" (Fatespinner's
+            # "main phase") leaves the beginning phase straight into combat
+            # (CR 500.11), and a seat playing its lands and sorceries there
+            # would be taking a main phase the card took away.
+            in_main = game.current_turn_phase == "precombat_main"
+            if in_main:
+                _play_land_drops(game, active, report, game_index, turn)
+                _play_casts(game, active, report, game_index, turn)
             lent = _casts_on_loan(game, active)
-            _play_activations(game, active, report, game_index, turn)
+            if in_main:
+                _play_activations(game, active, report, game_index, turn)
             # An activation can **lend** the seat a card: "{3}, {T}: Exile the
             # top card of your library. Until the beginning of your next
             # upkeep, you may play that card." (Elkin Bottle; Aerial Caravan,
@@ -1297,7 +1306,7 @@ def run_ai_simulation(
             # lent, or a flashback card a looter's discard just put in the
             # graveyard — so a turn in which none did is the turn it always
             # was.
-            if not game.is_game_over() and _casts_on_loan(game, active) - lent:
+            if in_main and not game.is_game_over() and _casts_on_loan(game, active) - lent:
                 _play_land_drops(game, active, report, game_index, turn)
                 _play_casts(game, active, report, game_index, turn)
 
@@ -1322,7 +1331,13 @@ def run_ai_simulation(
                 # CR 116.2d: an offer that buys a creature its attack this
                 # turn is taken, if at all, before the attack is declared.
                 _play_special_actions(game, active, report, game_index, turn)
-            if not game.is_game_over():
+            # The turn's own combat, from its main phase or — with that main
+            # phase skipped — from inside the combat phase the beginning
+            # phase handed over to. A turn already past combat (both skipped)
+            # has none to fight; what is left is `_play_rest_of_turn`'s.
+            if not game.is_game_over() and game.current_turn_phase in (
+                "precombat_main", "combat",
+            ):
                 _play_combat_phase(game, active, report, game_index, turn)
 
             # CR 512-514, the half of a turn this loop still did not have

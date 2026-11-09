@@ -1040,6 +1040,16 @@ def pay_life(game: Game, instruction: OracleInstruction, context: OracleExecutio
     return True, "resolved"
 
 
+def _event_subject_seat(game: Game, context: OracleExecutionContext) -> "int | None":
+    """The seat the firing event was about (``event_subject_player``, frozen by
+    the fire site, CR 603.10), or None when nothing recorded one or that
+    player has left the game."""
+    seat = (context.trigger_context or {}).get("event_subject_player")
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        return None
+    return None if game.players[seat].lost else seat
+
+
 @effect_handler("skip_next_step")
 def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"You skip your next draw step." (Ivory Gargoyle.)
@@ -1064,11 +1074,20 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
     who = str(instruction.payload.get("seat") or "you")
     if who == "you":
         seat = game.seat_index(context.caster)
+    elif who == "event_subject_player":
+        # "…**the player** skips each instance of the chosen step …"
+        # (Fatespinner): the seat whose upkeep fired the trigger, frozen by the
+        # upkeep loop (CR 603.10). No record skips nobody's step.
+        seat = _event_subject_seat(game, context)
+        if seat is None:
+            game.log.append(f"{context.card.name}: no recorded player, no skip")
+            return True, "resolved"
     else:
         chosen = context.target
         if chosen not in game.players:
             return False, f"no player was chosen for {who!r}"
         seat = game.players.index(chosen)
+    every_instance = bool(instruction.payload.get("every_instance"))
     # "…you skip your draw step **this turn**." (Elfhame Sanctuary.) The
     # printed window, carried as a turn stamp the way a phase skip's is: on a
     # turn that is not this seat's there is no such step to skip, and a record
@@ -1081,10 +1100,11 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
             return True, "resolved"
         game.skip_next_step(
             step, int(instruction.payload.get("count", 1) or 1), seat=seat,
-            on_turn=game.turn,
+            on_turn=game.turn, every_instance=every_instance,
         )
         game.log.append(
-            f"{game.players[seat].name} will skip their {step} step this turn"
+            f"{game.players[seat].name} will skip "
+            f"{'each' if every_instance else 'their'} {step} step this turn"
         )
         return True, "resolved"
     game.skip_next_step(step, int(instruction.payload.get("count", 1) or 1), seat=seat)
@@ -1131,6 +1151,14 @@ def skip_next_phase(game: Game, instruction: OracleInstruction, context: OracleE
     who = str(instruction.payload.get("seat") or "you")
     if who == "you":
         seat = game.seat_index(context.caster)
+    elif who == "event_subject_player":
+        # "…**the player** skips each instance of the chosen … phase this
+        # turn" (Fatespinner): the seat whose upkeep fired the trigger, read as
+        # the step skip above reads it.
+        seat = _event_subject_seat(game, context)
+        if seat is None:
+            game.log.append(f"{context.card.name}: no recorded player, no skip")
+            return True, "resolved"
     elif who in _FROZEN_SKIP_SEATS:
         # "Whenever this creature deals combat damage to a player, **that
         # player** skips their next combat phase." (Blinding Angel.) The seat
@@ -1149,6 +1177,21 @@ def skip_next_phase(game: Game, instruction: OracleInstruction, context: OracleE
             return False, f"no player was chosen for {who!r}"
         seat = game.players.index(chosen)
     on_turn = game.turn if instruction.payload.get("this_turn") else None
+    if instruction.payload.get("every_instance"):
+        # "…skips **each instance** of the chosen step or phase this turn."
+        # (Fatespinner.) "Main phase" names both (``_PHASE_REFERENCES``; the
+        # ruling: "If there are multiple phases with the same name in the turn,
+        # your opponent skips them all"), and a record per phase name that is
+        # never spent also takes one an effect adds later this turn.
+        if on_turn is None:
+            return False, "an every-instance skip needs its window"
+        names = _PHASE_REFERENCES.get(phase, (phase,))
+        for name in names:
+            game.skip_next_phase(name, seat=seat, on_turn=on_turn, every_instance=True)
+        game.log.append(
+            f"{game.players[seat].name} will skip each {phase} phase this turn"
+        )
+        return True, "resolved"
     game.skip_next_phase(
         phase,
         int(instruction.payload.get("count", 1) or 1),

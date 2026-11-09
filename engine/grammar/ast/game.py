@@ -719,6 +719,37 @@ class SkipTurn:
 
 
 @dataclass(frozen=True)
+class ChooseSkippedStepOrPhase:
+    """``<player> chooses draw step, main phase, or combat phase. The player
+    skips each instance of the chosen step or phase this turn.`` (Fatespinner.)
+
+    A choice made as the ability resolves (CR 608.2d — not a modal ability,
+    which would be a bulleted "choose one —" chosen as it is put on the
+    stack, CR 700.2), among named steps and phases, followed by a skip of the
+    one chosen. Read as one node because the second sentence is wholly about
+    the first one's answer ("the chosen step or phase"), and is lowered onto
+    the resolution-time choice every "A or B" already uses (``choose_one``)
+    with one skip per option — so the prompt, its default and its answer are
+    the ones the engine already has.
+
+    *options* are ``(level, name)`` pairs in printed order: ``("step",
+    "draw")``, ``("phase", "main")``, ``("phase", "combat")``. "Main" names
+    both main phases — the ruling (2004-12-01): "If there are multiple phases
+    with the same name in the turn, your opponent skips them all."
+
+    *every_instance* is "each instance of" — a skip that is not used up by the
+    first such step or phase, which is what the same ruling's "even if a new
+    step or phase is added to the turn after the ability resolves" needs.
+    *this_turn* is the printed window (CR 514.2 ends it).
+    """
+
+    chooser: "PlayerRef"
+    options: tuple[tuple[str, str], ...]
+    every_instance: bool = True
+    this_turn: bool = True
+
+
+@dataclass(frozen=True)
 class ExtraPhases:
     """``After this main phase, there is an additional combat phase followed by
     an additional main phase.`` (Relentless Assault, CR 500.8.)

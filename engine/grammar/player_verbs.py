@@ -89,6 +89,7 @@ from .effects import (
     accept_subject_reveals_top_of_library,
     _parse_simultaneous_untap_and_tap,
     _parse_skip_step,
+    parse_chooses_skipped_step_or_phase,
     _parse_tap_untap,
     parse_claims_one_exiled_card,
     parse_returns_one_exiled_card,
@@ -482,6 +483,15 @@ def parse_player_subject_verb(
         picked = _accept_chooses_target_player(stream, source_spec)
         if picked is not None:
             return picked
+        # "At the beginning of each opponent's upkeep, **that player chooses
+        # draw step, main phase, or combat phase. The player skips each
+        # instance of the chosen step or phase this turn.**" (Fatespinner.)
+        # A choice among named steps and phases and the skip of the one
+        # chosen, read as one node; non-consuming on refusal like every
+        # sibling here.
+        skipped = parse_chooses_skipped_step_or_phase(stream, source_spec)
+        if skipped is not None:
+            return skipped
         # "That player **chooses and sacrifices** one of those creatures."
         # (Retribution.) CR 701.21a already makes the sacrificing player the
         # one who picks, so the two printed verbs are one action — the same

@@ -617,3 +617,84 @@ def _parse_skip_step(stream: TokenStream, subject) -> ast.Statement:
     if not stream.accept_word("step"):
         raise stream.error("expected 'step' after the step's name")
     return ast.SkipStep(subject, step)
+
+
+#: The phases a printed choice of what to skip may name, mapped to the name
+#: the skip handler expands (``handlers/life_and_game._PHASE_REFERENCES``):
+#: "main phase" is both main phases — Fatespinner's ruling (2004-12-01) —
+#: which is why it is a phase *reference* and not one of the phase names
+#: ``_SKIPPABLE_PHASES`` maps onto a single phase.
+_CHOOSABLE_PHASES: dict[str, str] = {
+    "main": "main",
+    "combat": "combat",
+}
+
+
+def parse_chooses_skipped_step_or_phase(
+    stream: TokenStream, chooser,
+) -> "ast.ChooseSkippedStepOrPhase | None":
+    """``<player> chooses draw step, main phase, or combat phase. The player
+    skips each instance of the chosen step or phase this turn.`` (Fatespinner.)
+
+    Two sentences, read whole or not at all, because the second is entirely
+    about the first one's answer: "the chosen step or phase" names nothing
+    without it, and the first chooses nothing anything acts on without the
+    second. The production stops in front of the second sentence's full stop,
+    which the sequence loop consumes as it does every other's.
+
+    The options are a list of named steps and phases ("draw step", "main
+    phase", "combat phase") joined by commas and a final "or"; a step this
+    engine does not skip (``_SKIPPABLE_STEPS``) or a phase it cannot name
+    refuses the line. "The player" must be the chooser — "that player" is the
+    same seat in the other spelling — and the window ("this turn") and "each
+    instance of" are required, because a skip that waited for a later turn,
+    or one spent by the first instance, is a different card.
+
+    Non-consuming on refusal.
+    """
+    mark = stream.mark()
+    if not isinstance(chooser, ast.PlayerRef) or not stream.accept_word("chooses", "choose"):
+        stream.reset(mark)
+        return None
+    options: list[tuple[str, str]] = []
+    while True:
+        word = stream.peek_word() or ""
+        level = stream.peek_word(1)
+        if level == "step" and word in _SKIPPABLE_STEPS:
+            options.append(("step", _SKIPPABLE_STEPS[word]))
+        elif level == "phase" and word in _CHOOSABLE_PHASES:
+            options.append(("phase", _CHOOSABLE_PHASES[word]))
+        else:
+            stream.reset(mark)
+            return None
+        stream.advance(2)
+        if stream.accept_punct(","):
+            stream.accept_word("or")
+            continue
+        if stream.accept_word("or"):
+            continue
+        break
+    if len(options) < 2 or not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_phrase("the", "player") or stream.accept_phrase("that", "player")
+    ):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("skips", "each", "instance", "of", "the", "chosen"):
+        stream.reset(mark)
+        return None
+    # "…the chosen **step or phase**": the noun names the levels the options
+    # did, so a sentence offering only steps and saying "phase" is refused.
+    levels = {level for level, _ in options}
+    printed: set[str] = set()
+    while stream.peek_word() in ("step", "phase"):
+        printed.add(stream.peek_word())
+        stream.advance()
+        if not stream.accept_word("or"):
+            break
+    if printed != levels or not stream.accept_phrase("this", "turn"):
+        stream.reset(mark)
+        return None
+    return ast.ChooseSkippedStepOrPhase(chooser, tuple(options))

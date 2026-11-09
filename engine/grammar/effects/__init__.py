@@ -299,6 +299,7 @@ from .game import (
     _parse_extra_turn,
     parse_extra_phases,
     _parse_skip_step,
+    parse_chooses_skipped_step_or_phase,
 )
 # The eight choice sentences — seven "choose a <value>" and Goblin Game's
 # hidden items — left `game` at Odyssey's Phase 0 for `grammar/naming.py`, one
@@ -408,6 +409,7 @@ __all__ = [
     "_parse_mill",
     "_parse_scry",
     "_parse_skip_step",
+    "parse_chooses_skipped_step_or_phase",
     "_parse_add_mana",
     "_parse_note_mana_spent",
     "_parse_cast_permission",

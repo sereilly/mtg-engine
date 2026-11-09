@@ -142,6 +142,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_skip_phase,
                        _lower_skip_step,
                        _lower_skip_turn,
+                       _lower_choose_skipped_step_or_phase,
                        _lower_bound_permanent_activation_ban,
                        _lower_targeting_ban,
                        _lower_extra_land_plays,
@@ -469,6 +470,11 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # fired. It left the name-only table above the moment it started deciding
     # that.
     ast.SkipPhase: _lower_skip_phase,
+    # "…**that player** chooses draw step, main phase, or combat phase. The
+    # player skips each instance of the chosen step or phase this turn."
+    # (Fatespinner.) The chooser is the seat the upkeep froze, so the event
+    # rides, as it does for the skip one row up.
+    ast.ChooseSkippedStepOrPhase: _lower_choose_skipped_step_or_phase,
     # "…a card **with the same name as that creature**" (Remembrance). The
     # name is the firing event's object's, so the lowering has to know which
     # event fired — and refuses under one that records none rather than
