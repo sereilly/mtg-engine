@@ -55,8 +55,14 @@ from .subject_filters import unimplemented_filter_keywords
 _ENCHANT_LAND_SUBTYPES: tuple[str, ...] = tuple(
     sorted(_LAND_TYPES, key=len, reverse=True)
 )
-_ENCHANT_NOUNS = ("creature", "land", "artifact", "enchantment", "wall",
-                  "permanent") + _ENCHANT_LAND_SUBTYPES
+#: "Enchant **artifact creature**" (Domineer) is one noun of two words — an
+#: *intersection* of two types, which is not the union "artifact or creature"
+#: (Teferi's Curse) and not a quality on either: the card's ruling (2004-12-01)
+#: is "The enchanted permanent must be both an artifact and a creature". Listed
+#: first so the alternation tries it before its prefix "artifact"; the whole-
+#: line anchor would backtrack to it anyway, but first is the honest order.
+_ENCHANT_NOUNS = ("artifact creature", "creature", "land", "artifact",
+                  "enchantment", "wall", "permanent") + _ENCHANT_LAND_SUBTYPES
 #: A printed **negated** noun ("Enchant non-Wall creature", Aggression). The
 #: exclusion is enforced by `mixins/stack/cast_target_validation.aura_enchant_noun`, which
 #: reads the whole printed subject; what the picker needs from it is the head
@@ -328,6 +334,14 @@ def card_enchant_subject(oracle_text: str) -> str | None:
 
 _ENCHANT_NOUN_TO_SPEC: dict[str, dict] = {
     "creature": {"kind": "creature"},
+    # "Enchant **artifact creature**" (Domineer). The creature picker narrowed
+    # by the printed noun phrase's other type, through the ``filter`` the
+    # enumerator asks ``subject_matches`` of — ``type_filter_all`` is the key
+    # "target artifact creature" lowers to everywhere else, answered through
+    # layer 4, so the hosts offered are the ones the gate's row allows.
+    "artifact creature": {
+        "kind": "creature", "filter": {"type_filter_all": ["artifact", "creature"]},
+    },
     # "Enchant **Wall**" (Animate Wall). A bare creature type names any Wall
     # permanent (CR 109.2, 303.4a) — a Kindred Artifact — Wall as much as a Wall
     # creature (CR 205.3m) — which is what the gate has always asked

@@ -1050,7 +1050,14 @@ def aura_land_animation(oracle_text: str) -> MappingProxyType | None:
 #: Licid becomes an Aura through an activated ability and attaches through
 #: ``attach_source_to_target``; no Aura spell ever resolves, so the resolution-
 #: time reading reached it not at all.
-_ATTACHED_CONTROL_CHANGE = re.compile(rf"^you control {_ATTACHED} {_NOUN}$")
+#:
+#: "You control enchanted **artifact creature**." (Domineer.) The same sentence
+#: over the two-word noun its enchant clause names; the noun says nothing the
+#: attachment has not already settled, so it is admitted here alone rather than
+#: added to ``_NOUN``, which every Aura template in the family reads.
+_ATTACHED_CONTROL_CHANGE = re.compile(
+    rf"^you control {_ATTACHED} (?:artifact creature|{_NOUN})$"
+)
 
 
 def aura_grants_control(attachment) -> bool:
