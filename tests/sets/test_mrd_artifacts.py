@@ -182,4 +182,44 @@ def test_w1g7_blinkmoth_urn_tapped_in_response_pays_nothing(set_pool):
     _w1g7_settle(game)
     assert not any(p1.mana_pool.values()), game.log
 
+def test_w1g7_sculpting_steel_enters_as_a_copy_of_the_chosen_artifact(set_pool):
+    """"You may have this artifact enter as a copy of any artifact on the
+    battlefield." Clone's and Copy Artifact's sentences were two literals, and
+    "this artifact … any artifact" was neither. Aimed at the opponent's Serum
+    Tank over my Ornithopter, it is a Serum Tank — under my control, with the
+    Tank's own entry trigger counting its arrival (CR 707.5) and the original
+    Tank counting it too. The picker offers artifacts, optionally."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    pool = set_pool("MRD")
+    steel_card = pool["Sculpting Steel"]
+    assert derive_cast_spec(steel_card, compile_card_oracle(steel_card)) == {
+        "kind": "artifact", "optional": True,
+    }
+
+    game, p1, p2 = _w1g7_game(
+        set_pool, mine=["Ornithopter"], hand=["Sculpting Steel"], theirs=["Serum Tank"],
+    )
+    their_tank = p2.battlefield[0]
+    assert game.cast_from_hand(
+        0, "Sculpting Steel", target_permanent_ids=[their_tank.permanent_id]
+    ).supported
+    _w1g7_settle(game)
+    steel = next(p for p in p1.battlefield if p.card.name == "Sculpting Steel")
+    assert steel.effective_card.name == "Serum Tank"
+    assert steel.has_type("artifact") and not steel.is_creature
+    assert steel.metadata.get("charge_counters") == 1, game.log
+    assert their_tank.metadata.get("charge_counters") == 1, "another artifact entered"
+
+
+def test_w1g7_sculpting_steel_with_nothing_to_copy_is_itself(set_pool):
+    game, p1, _p2 = _w1g7_game(set_pool, hand=["Sculpting Steel", "Grizzly Bears"])
+    game.cast_from_hand(0, "Grizzly Bears")
+    _w1g7_settle(game)
+    assert game.cast_from_hand(0, "Sculpting Steel").supported
+    _w1g7_settle(game)
+    steel = next(p for p in p1.battlefield if p.card.name == "Sculpting Steel")
+    assert steel.effective_card.name == "Sculpting Steel", "a creature is not an artifact"
+
 # ==== end W1G7 ======================================================

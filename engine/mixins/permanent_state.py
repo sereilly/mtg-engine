@@ -54,7 +54,7 @@ from ..enter_effects import (ENTERED_BATTLEFIELD_TURN,
                              chooses_card_name_on_enter,
                              chooses_opponent_on_enter,
                              chooses_opponent_and_card_name_on_enter,
-                             COPY_ARTIFACT_ON_ENTER, COPY_CREATURE_ON_ENTER,
+                             copy_on_enter_type,
                              ENTERS_TAPPED, enters_with_counted_pt_counters,
                              enters_with_x_pt_counters,
                              enters_with_x_named_counters,
@@ -1177,45 +1177,35 @@ class PermanentStateMixin:
         back to, and entered as a plain blue enchantment.
         """
         program = compile_card_oracle(permanent.effective_card)
-        text = program.normalized_text
-        # copy-as-enter creature
-        if any(COPY_CREATURE_ON_ENTER == line for line in program.static_lines) or COPY_CREATURE_ON_ENTER in text:
-            source = self._resolve_copy_target(permanent, "creature")
-            if source is None:
-                source = next(
-                    (
-                        perm
-                        for perm in self.all_permanents()
-                        if perm is not permanent and perm.has_type("creature")
-                    ),
-                    None,
-                )
-            if source is not None:
-                self._apply_copy(permanent, source)
-
-        # copy-as-enter enchantment
-        if COPY_ARTIFACT_ON_ENTER in text:
-            # Honor the artifact the player chose when casting (Copy Artifact);
-            # fall back to the first artifact for AI/untargeted casts.
-            source = self._resolve_copy_target(permanent, "artifact")
-            if source is None:
-                source = next(
-                    (
-                        perm
-                        for perm in self.all_permanents()
-                        if perm is not permanent and perm.has_type("artifact")
-                    ),
-                    None,
-                )
-            if source is not None:
-                # CR 707.2 with CR 707.9b's exception ("it's an enchantment in
-                # addition to its other types"), recorded as a layer-1
-                # contribution. ``permanent.card`` stays Copy Artifact, so the
-                # copy evaporates when the permanent changes zones; what it
-                # copies is the artifact's *copiable* values, which is why this
-                # no longer reads ``source.effective_card`` — a text change on
-                # the artifact is not copied (CR 707.2's last sentence).
-                self._apply_copy(permanent, source)
+        # Which type the choice ranges over — "any creature" (Clone, Vesuvan
+        # Doppelganger), "any artifact" (Copy Artifact, Sculpting Steel) — asked
+        # of the one reader the cast-time picker asks, so the picker and the
+        # copy cannot disagree about which cards offer one or what they offer.
+        copied = copy_on_enter_type(program.normalized_text or "")
+        if copied is None:
+            return
+        # Honor the permanent the player chose when casting; fall back to the
+        # first one of the type for AI/untargeted casts.
+        source = self._resolve_copy_target(permanent, copied)
+        if source is None:
+            source = next(
+                (
+                    perm
+                    for perm in self.all_permanents()
+                    if perm is not permanent and perm.has_type(copied)
+                ),
+                None,
+            )
+        if source is not None:
+            # CR 707.2, with whatever exception the copier prints (CR 707.9b's
+            # "it's an enchantment in addition to its other types" on Copy
+            # Artifact), recorded as a layer-1 contribution. ``permanent.card``
+            # stays the copier, so the copy evaporates when the permanent
+            # changes zones; what it copies is the source's *copiable* values,
+            # which is why this does not read ``source.effective_card`` — a
+            # text change on the source is not copied (CR 707.2's last
+            # sentence).
+            self._apply_copy(permanent, source)
 
     def _apply_copy(
         self,
