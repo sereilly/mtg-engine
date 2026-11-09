@@ -275,6 +275,51 @@ def _parse_player_exiles_pile(
     return ast.Exile(subject, actor=player, face_down=face_down)
 
 
+def _parse_player_exiles_graveyard_card(
+    stream: TokenStream, player: "ast.PlayerRef"
+) -> "ast.Exile | None":
+    """``exiles a card from their graveyard`` behind a **target player** —
+    the verb and everything after it, with the subject read by the caller.
+
+    "{T}: Target player exiles a card from their graveyard." (Scrabbling
+    Claws.) One card out of the chosen seat's own pile, picked by *that*
+    player as the ability resolves: the subject performs the verb (CR 608.2c),
+    so the choice is theirs, exactly as "target opponent exiles a card from
+    their hand" (Parallax Nexus) is that opponent's. Which is why the subject
+    is kept as the node's actor rather than folded into the pile the way
+    :func:`_parse_player_exiles_pile` folds Tombfire's — there nobody picks,
+    here somebody does, and the lowering has to know who.
+
+    Narrow on purpose: a chosen subject, one card or a printed count, the
+    graveyard, and the possessive agreeing with the subject ("their"). Anything
+    else is put back unconsumed for the readers beside it.
+    """
+    if player.kind not in ("target_player", "target_opponent"):
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("exiles", "exile"):
+        stream.reset(mark)
+        return None
+    try:
+        subject = parse_recipient(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("a", "an")
+        and not subject.targeted
+        and subject.count >= 1
+        and subject.filter.is_card
+        and subject.filter.zone == "graveyard"
+        and subject.filter.zone_owner is not None
+        and subject.filter.zone_owner.kind == "owner"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.Exile(subject, actor=player)
+
+
 def _parse_player_exiles_target_spell(
     stream: TokenStream, player: "ast.PlayerRef"
 ) -> "ast.Exile | None":

@@ -601,6 +601,21 @@ def maximum_amount_spec(
     )
 
 
+def unspent_mana_spec(amount: "ast.Amount") -> dict | None:
+    """The count spec of "**the amount of unspent mana you have**" (Glissa
+    Sunseeker), or None when *amount* is something else.
+
+    A named board count (:class:`ast.BoardCount`) for the reason a life total
+    is one: a mana pool is not a pile of objects to scan, so
+    ``evaluate_count`` maps the name onto the one thing that computes it. The
+    seat is the clause's own "you" — CR 109.5's controller of the ability —
+    which is ``count_from_payload``'s ``owner: "you"``.
+    """
+    if isinstance(amount, ast.BoardCount) and amount.name == "unspent_mana":
+        return {"board_count": "unspent_mana", "owner": "you"}
+    return None
+
+
 def counted_definition_spec(
     definition: "ast.Amount", node, *, rewrite=None, nested: bool = True,
     event: str | None = None,

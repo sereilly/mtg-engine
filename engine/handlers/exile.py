@@ -1034,6 +1034,24 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
             return True, "resolved"
         game.arm_graveyard_exile_pick(seat, seat, dict(instruction.payload), context)
         return True, "resolved"
+    if owner == "target_player":
+        # "**Target player** exiles a card from their graveyard." (Scrabbling
+        # Claws.) The announced seat (CR 601.2c) picks out of its own pile as
+        # the ability resolves: the subject performs the verb, so the choice is
+        # theirs (CR 608.2c). CR 608.2b already blanked a seat that stopped
+        # being a legal target; none is no pile to exile from.
+        seat = next(
+            (index for index, player in enumerate(game.players)
+             if player is context.target),
+            None,
+        )
+        if seat is None:
+            game.log.append(f"{context.card.name}: no player was chosen")
+            context.results[EXILED_THIS_WAY_OBJECTS] = []
+            context.results[EXILED_THIS_WAY] = 0
+            return True, "resolved"
+        game.arm_graveyard_exile_pick(seat, seat, dict(instruction.payload), context)
+        return True, "resolved"
     if owner == "you" and not instruction.payload.get("targets"):
         game.arm_graveyard_exile_pick(
             caster_index, caster_index, dict(instruction.payload), context

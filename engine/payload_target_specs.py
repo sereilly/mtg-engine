@@ -518,6 +518,12 @@ def _graveyard_exile_pile_spec(payload: dict) -> dict | None:
     would be a second answer to which cards may be named.
     """
     owner = payload.get("graveyard_owner")
+    if owner == "target_player":
+        # "**Target player** exiles a card from their graveyard." (Scrabbling
+        # Claws.) What is announced is the *player* (CR 601.2c via 602.2b);
+        # the card is that player's pick as the ability resolves, so the
+        # picker is the description's player picker and no card is asked for.
+        return _from_targets_payload(payload.get("targets"))
     if owner not in ("you", "chosen") or not payload.get("targets"):
         # No ``targets``: "exile a land card from your graveyard" (Forgotten
         # Harvest) names nothing at announcement and is picked at resolution.

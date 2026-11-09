@@ -627,6 +627,21 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     # nothing rather than computing a zero. The possessive is read and dropped
     # — "they" and "you" name whichever seat is performing the sentence, and
     # which seat that is was settled before this clause was reached.
+    # "…if its mana value is equal to **the amount of unspent mana you have**."
+    # (Glissa Sunseeker.) How much mana sits in the seat's pool right now —
+    # CR 106.4's unspent mana, the pool and its restricted buckets alike
+    # (``lose_all_unspent_mana`` empties the same two). Not a pile to scan, so
+    # it is a *named* count (:class:`ast.BoardCount`), the reading a life total
+    # gets; every lowering maps a name onto the one evaluation that computes
+    # it and refuses a name it has none for. Only "you have": another seat's
+    # pool would need a seat this clause does not name.
+    unspent_mark = stream.mark()
+    if had_article and stream.accept_phrase(
+        "amount", "of", "unspent", "mana", "you", "have"
+    ):
+        return ast.BoardCount("unspent_mana")
+    stream.reset(unspent_mark)
+
     mark_mana = stream.mark()
     if stream.accept_phrase("amount", "of", "mana"):
         stream.accept_word("they", "you", "that")

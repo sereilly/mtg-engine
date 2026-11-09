@@ -72,6 +72,7 @@ from .effects import (
     parse_keep_then_sacrifice_rest,
     _parse_play_with_hand_revealed,
     _parse_player_adds_mana,
+    _parse_player_exiles_graveyard_card,
     _parse_player_exiles_pile,
     _parse_player_exiles_target_spell,
     _parse_player_puts_hand_cards_on_library,
@@ -279,6 +280,14 @@ def parse_player_subject_verb(
         chosen = parse_player_exiles_cards_from_hand(stream, source_spec)
         if chosen is not None:
             return chosen
+        # "**Target player** exiles a card from their graveyard." (Scrabbling
+        # Claws.) The hand pick above one zone over: a chosen seat picks a card
+        # out of its own pile as the ability resolves. Gated inside on the
+        # chosen subject, the graveyard and the agreeing possessive, so every
+        # other player-subject exile keeps its own reading.
+        graveyard_pick = _parse_player_exiles_graveyard_card(stream, source_spec)
+        if graveyard_pick is not None:
+            return graveyard_pick
         # "**Target spell's controller** exiles it with X delay counters on
         # it." (Ertai's Meddling.) The fourth of the family and the only one
         # whose object was printed *in front of* the verb — the seat is read

@@ -269,6 +269,25 @@ def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleIn
             return _lower_any_graveyard_card_on_library_bottom(node)
         return _lower_permanent_on_library_bottom(node)
     if (
+        isinstance(spec, ast.TargetSpec)
+        and spec.filter.zone == "battlefield"
+        and not spec.filter.is_card
+        and spec.filter.owner == "you"
+    ):
+        # "{T}: Put target permanent **you own** on the bottom of **your**
+        # library." (Tel-Jilad Stylus.) The battlefield tuck below with the
+        # destination spelled as the activator's own library — which is the
+        # owner's library exactly because the target is narrowed to what the
+        # activator owns (CR 108.3, 400.3; the 2004-12-01 ruling: it "may
+        # target a permanent you own but do not control"). The narrowing is
+        # what makes the two spellings one place, so it is required: "target
+        # permanent" alone put on "your" library would be a card moved into a
+        # library its owner does not hold, which CR 400.3 forbids and no
+        # handler here does. The tuck sends the card to its owner; the
+        # ``owner`` key rides the target description, so the picker, the gate
+        # and CR 608.2b's re-check all hold the target to it.
+        return _lower_permanent_on_library_bottom(node)
+    if (
         isinstance(spec, ast.TargetSpec) and not spec.targeted
         and spec.quantifier in ("a", "an") and spec.filter.is_card
         and spec.filter.zone == "graveyard"

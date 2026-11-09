@@ -248,6 +248,16 @@ class AddMana:
     #: the cost-record key that holds the card — ``"milled_for_cost"`` — so the
     #: lowering can demand the cost that writes it.
     colored_symbols_of_record: str | None = None
+    #: "{T}: Add an amount of {G} equal to **this creature's power**."
+    #: (Viridian Joiner.) The quantity is a characteristic of the ability's own
+    #: source, read as the ability resolves — the
+    #: :class:`CharacteristicOfSubject` ``where_x.accept_source_characteristic``
+    #: reads, whose referent is flagged ``is_source``. The symbol stays in
+    #: :attr:`pips` as one unit and this says how many of it, the arrangement
+    #: :attr:`amount_of_x` makes for an announced X. Its own field rather than
+    #: that one, because the X field's lowering reads the announcement and a
+    #: characteristic read there would be a number nothing announced.
+    amount_of_source: "Amount | None" = None
 
 
 @dataclass(frozen=True)

@@ -402,6 +402,16 @@ def _lower_where_x_characteristic(
     # hand, rather than by a resolution-time fallback order that would have to
     # guess when a sentence has both.
     referent = node.definition.referent
+    if referent is not None and referent.is_source:
+        # "…, where X is **this creature's power**" (Auriok Bladewarden's
+        # spelling, in a sentence a ``WhereX`` wraps). Not the object the
+        # sentence named: the ability's own source, which the resolution holds
+        # whether or not it is still on the battlefield (CR 608.2h).
+        return _stamp_x_from_count(inner, {"object_characteristic": {
+            "object": "source",
+            "characteristic": node.definition.characteristic,
+            "offset": node.definition.offset,
+        }})
     if (
         referent is not None
         and referent.zone == "stack"

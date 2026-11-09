@@ -658,6 +658,34 @@ def _x_definition_spec(
                 node=node,
             )
         return {"back_reference": "its_mana_value"}
+    if (
+        isinstance(definition, ast.CharacteristicOfSubject)
+        and definition.referent is not None
+        and definition.referent.is_source
+    ):
+        # "{T}: Target creature gets +X/+X until end of turn, where X is **this
+        # creature's power**." (Auriok Bladewarden.) Not the pumped creature:
+        # the ability's own source, read once as the ability resolves
+        # (CR 608.2h — current information while it is on the battlefield,
+        # its last known information once it has left; the resolution holds
+        # the permanent object either way).
+        #
+        # Only where a resolution reads this spec (*recorded* set): a
+        # durationless pump is a layer 7c contribution the P/T refresh rebuilds
+        # with no resolution context, and "the source" there would be a
+        # different question (CR 611.3a) nothing here answers.
+        if recorded is None:
+            raise LoweringError(
+                "a source's characteristic sizes a pump only as it resolves",
+                node=node,
+            )
+        return {
+            "object_characteristic": {
+                "object": "source",
+                "characteristic": definition.characteristic,
+                "offset": definition.offset,
+            }
+        }
     if isinstance(definition, ast.CharacteristicOfSubject):
         # "…, where X is **its** mana value" (Great Defender, Subdue, Kry
         # Shield), "…, where X is **its toughness minus 1**" (Blood Lust). Not

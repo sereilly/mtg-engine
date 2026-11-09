@@ -41,7 +41,7 @@ from ...oracle_types import CHOSEN_CREATURE_TYPE_THIS_WAY, REVEALED_HAND_CARDS
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import (count_filter_on_frozen_seat, count_spec,
-                       maximum_amount_spec)
+                       maximum_amount_spec, unspent_mana_spec)
 from ._common import _is_enchanted, testable_filter_payload
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CAST_SPELL_EVENTS,
                       _EVENT_SUBJECT_OBJECTS,
@@ -558,6 +558,12 @@ def _lower_condition(
         # channel and taken at the same moment (CR 608.2c) as the count above.
         if bound_count is None:
             bound_count = maximum_amount_spec(bound, condition, event=event)
+        # "Destroy target artifact if its mana value is equal to **the amount
+        # of unspent mana you have**." (Glissa Sunseeker.) The pool as the
+        # bound, taken at the same moment (CR 608.2c; the 2004-12-01 ruling:
+        # "when the ability resolves") on the same channel.
+        if bound_count is None:
+            bound_count = unspent_mana_spec(bound)
         if bound_count is None and not isinstance(bound, ast.Fixed):
             raise LoweringError(
                 "a characteristic gate compares against a printed number or a "

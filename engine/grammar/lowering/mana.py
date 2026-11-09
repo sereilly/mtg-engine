@@ -282,6 +282,30 @@ def _lower_add_mana(
                 x_offset_amount(node.amount_of_x)
                 or _amount_payload(node.amount_of_x)
             )
+        if node.amount_of_source is not None:
+            # "Add an amount of {G} equal to **this creature's power**."
+            # (Viridian Joiner.) A number read off the source as the ability
+            # resolves, so it rides the ``per_each`` count spec — the
+            # multiplier the handler already applies to every pip, and the one
+            # ``board_payment``'s tap yield evaluates too, so the planner that
+            # pays a cost with this ability and the handler that makes the
+            # mana count one number. ``count_from_payload`` answers an
+            # ``object_characteristic`` spec through the one reader every
+            # resolution-time characteristic shares.
+            own = node.amount_of_source
+            if not (
+                isinstance(own, ast.CharacteristicOfSubject)
+                and own.referent is not None
+                and own.referent.is_source
+            ):
+                raise LoweringError(
+                    "an amount of mana is read off the source alone", node=node,
+                )
+            payload["per_each"] = {"object_characteristic": {
+                "object": "source",
+                "characteristic": own.characteristic,
+                "offset": own.offset,
+            }}
         if node.per_each_counter_removed is not None:
             # "…for each charge counter removed this way" (the Mana Batteries).
             # The multiplier is the ability's own cost payment, which the

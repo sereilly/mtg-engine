@@ -150,6 +150,7 @@ from .exile import (
     parse_exile_graveyard_arrivals_this_turn,
     _parse_exile_cost_sacrifices,
     _parse_exile_graveyard,
+    _parse_player_exiles_graveyard_card,
     _parse_player_exiles_pile,
     _parse_player_exiles_target_spell,
 )
@@ -436,6 +437,7 @@ __all__ = [
     "_parse_exile_entire_library",
     "_parse_put_exiled_with_source",
     "_parse_random_exiled_with_source",
+    "_parse_player_exiles_graveyard_card",
     "_parse_player_exiles_pile",
     "_parse_player_exiles_target_spell",
     "_parse_player_returns_exiled_with_source",
