@@ -125,6 +125,24 @@ def _printed_before_creature(text: str) -> set[str]:
     return found
 
 
+#: "each creature you control **that's a Soldier or a Knight**" (Auriok
+#: Steelshaper): the types printed in a relative clause on the noun
+#: "creature" — a creature of the type, printed so, as "Soldier creature" is.
+_RELATIVE_TYPES = re.compile(
+    r"\bcreatures?\b[^.]*?\bthat's an? ([a-z'-]+)(?: or an? ([a-z'-]+))?"
+)
+
+
+def _printed_in_relative_clause(text: str) -> set[str]:
+    """The creature types a "creature … that's a <type>" clause names."""
+    found: set[str] = set()
+    for match in _RELATIVE_TYPES.finditer(text.lower()):
+        for word in match.groups():
+            if word and singular(word) in CREATURE_TYPES:
+                found.add(singular(word))
+    return found
+
+
 def _printed_bare(text: str) -> set[str]:
     """The creature types the text prints with no card-type noun after them
     ("a Caribou token" is bare: a token is no card type, CR 111.1)."""
@@ -164,7 +182,9 @@ def census():
         for printed, part in parts:
             rows: list = []
             _rows(part, rows)
-            before_creature = _printed_before_creature(printed)
+            before_creature = (
+                _printed_before_creature(printed) | _printed_in_relative_clause(printed)
+            )
             printed_bare = _printed_bare(printed)
             for kind, subtypes, names_creature in rows:
                 if names_creature:

@@ -205,16 +205,23 @@ def test_a_restriction_the_table_cannot_carry_is_refused_not_widened():
     assert "engine/lord_buffs.py" in result.failure_reason
 
 
-def test_a_subtype_union_refuses_rather_than_taking_the_first():
+def test_a_subtype_union_rides_as_disjoint_buffs_rather_than_taking_the_first():
     """The round trip cannot catch this one — a union survives it intact — so it
-    is refused on its own terms. The table's text parser reads one subtype, so a
-    grammar-only union would be a payload no printed card produces and no test
-    covers."""
+    is asked on its own terms. ``_lord_buff_matches`` ANDs a subtype list, so a
+    union is never one buff naming both (that would reach only a Djinn
+    Efreet) and never the first type alone: it rides as one buff per type, each
+    later one excluding the earlier (``statics._subtype_union_pieces``), so a
+    creature of both types is buffed once (CR 611.3a). It used to refuse; Auriok
+    Steelshaper's "each creature you control that's a Soldier or a Knight" is
+    the printed card that needed it (``tests/sets/test_mrd_creatures.py``
+    drives a Soldier Knight)."""
     result = compile_line("Other Djinn or Efreet get +1/+1.", card_name="Invented Lord")
 
     assert result.parsed, result.failure_reason
-    assert not result.lowered
-    assert "union" in result.failure_reason
+    assert result.lowered, result.failure_reason
+    buffs = [(i.payload.get("subtypes"), i.payload.get("exclude_subtypes"), i.payload.get("other"))
+             for i in result.instructions]
+    assert buffs == [(["djinn"], None, True), (["efreet"], ["djinn"], True)]
 
 
 def test_attacking_creatures_buff_keeps_the_qualifier():
