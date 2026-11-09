@@ -146,6 +146,64 @@ def test_w1g10_platinum_angel_keeps_its_controller_in_the_game(set_pool):
     assert game.players[0].lost
     assert game.get_winner() is game.players[1]
 
+def _w1g10_sifter_table(set_pool, top0, top1):
+    """P1 controls Timesifter; each library is the named cards, top first."""
+    lea = set_pool("LEA")
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState("P1", library=[lea[name] for name in top0]),
+        _w1g10_PlayerState("P2", library=[lea[name] for name in top1]),
+    ])
+    game.enforce_mana_costs = False
+    sifter = _w1g10_put(game, 0, set_pool("MRD")["Timesifter"])
+    return game, sifter
+
+
+def test_w1g10_timesifter_gives_the_greatest_mana_value_an_extra_turn(set_pool):
+    game, sifter = _w1g10_sifter_table(
+        set_pool, ["Forest", "Forest", "Forest"], ["Shivan Dragon", "Forest", "Forest"],
+    )
+    game.active_player_index = 0
+    game.turn = 1
+    game.resolve_upkeep(0)            # P1's upkeep: each upkeep, not only yours
+    _w1g10_resolve_stack(game)
+    assert [card.name for card in game.players[0].exile] == ["Forest"]
+    assert [card.name for card in game.players[1].exile] == ["Shivan Dragon"]
+    assert "P2 gained an extra turn" in game.log
+    # The extra turn comes after this one, and then the turn that was next
+    # anyway (the 2004-12-01 ruling: "Remember which player would have taken
+    # the next turn").
+    game.remove_from_battlefield(sifter)
+    game._permanent_to_graveyard(game.players[0], sifter)
+    game.players[0].library.extend([set_pool("LEA")["Forest"]] * 5)
+    game.players[1].library.extend([set_pool("LEA")["Forest"]] * 5)
+    assert game.start_next_turn() == 1
+    assert game.current_turn_is_extra
+    assert game.start_next_turn() == 1
+    assert not game.current_turn_is_extra
+    assert game.start_next_turn() == 0
+
+
+def test_w1g10_timesifter_ties_repeat_among_the_tied_players(set_pool):
+    game, _ = _w1g10_sifter_table(
+        set_pool, ["Grizzly Bears", "Forest"], ["Grizzly Bears", "Hill Giant"],
+    )
+    game.resolve_upkeep(0)
+    _w1g10_resolve_stack(game)
+    assert "Timesifter: P1, P2 tied at mana value 2 and repeat the process" in game.log
+    assert len(game.players[0].exile) == 2 and len(game.players[1].exile) == 2
+    assert game.extra_turn_queue == [1]
+
+
+def test_w1g10_timesifter_a_player_who_exiles_nothing_cannot_win(set_pool):
+    """The ruling: "If a player fails to exile a card, they can't take the
+    extra turn." The tie at 0 is repeated; P2 has nothing left to exile, so P1
+    is the only one with a card, and wins."""
+    game, _ = _w1g10_sifter_table(set_pool, ["Forest", "Forest"], ["Island"])
+    game.resolve_upkeep(1)
+    _w1g10_resolve_stack(game)
+    assert "Timesifter: P2 has no card to exile" in game.log
+    assert game.extra_turn_queue == [0]
+
 # ==== end W1G10 ======================================================
 
 

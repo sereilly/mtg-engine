@@ -654,6 +654,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # rider does to it.
     "deny_regeneration_to_block_pair": "regeneration",
     "grant_extra_turn": "turns",
+    # "Each player exiles the top card of their library. The player who exiled
+    # the card with the greatest mana value takes an extra turn after this
+    # one. …" (Timesifter.) The contest's prize is a turn, so it is a turns
+    # kind like the grant it ends in.
+    "contest_top_cards": "turns",
     # "After this main phase, there is an additional combat phase followed by an
     # additional main phase." (Relentless Assault.) CR 500.8's extra phases,
     # which is the turn's structure exactly as the extra turn above it is - so

@@ -611,6 +611,11 @@ TRIGGERED_LABELS: dict[str, str] = {
     # `is_triggered: False`, Hypnox's finding above again.
     "skip_next_turn": "triggered_turn",
     "grant_extra_turn": "triggered_turn",
+    # --- Mirrodin, W1G10 -----------------------------------------------------
+    # Timesifter's upkeep contest ends in an extra turn: what the ability does
+    # to the order of turns, beside the two rows above. Without it the trigger
+    # reached the client as `is_triggered: False` (`spell_pattern`).
+    "contest_top_cards": "triggered_turn",
     # Scalpelexis: "...that player exiles the top four cards of their library.
     # If two or more of those cards have the same name, repeat this process."
     # A **wrapper** (its payload carries the exile it repeats), so the label

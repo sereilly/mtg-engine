@@ -37,6 +37,7 @@ from .paragraphs import (
     _parse_pay_or_sacrifice_greatest_mana_value,
     _parse_random_graveyard_card_fate,
     _parse_rebalance_lands,
+    _parse_top_card_contest,
 )
 from .stream import TokenStream
 from .upkeep import parse_upkeep_paragraph
@@ -168,6 +169,12 @@ def parse_imperative(
     tariff = _parse_pay_or_sacrifice_greatest_mana_value(stream)
     if tariff is not None:
         return tariff
+    # Timesifter's three sentences, beside Tariff's for its reason: they open
+    # "Each player …" on a verb whose ordinary production would read the first
+    # sentence and strand the other two. Refuses without consuming.
+    contest = _parse_top_card_contest(stream)
+    if contest is not None:
+        return contest
     # Search for Survivors' four sentences, which open on a verb ("Reorder")
     # no production reads alone. Refuses without consuming.
     survivors = _parse_random_graveyard_card_fate(stream)

@@ -586,6 +586,30 @@ class ExtraTurn:
 
 
 @dataclass(frozen=True)
+class TopCardContest:
+    """``Each player exiles the top card of their library. The player who
+    exiled the card with the greatest mana value takes an extra turn after
+    this one. If two or more players' cards are tied for greatest, the tied
+    players repeat this process until the tie is broken.`` (Timesifter.)
+
+    A paragraph that is one effect, for the reason ``paragraphs.py`` gives
+    every node it builds: the second sentence names a seat only the first
+    sentence's cards describe, and the third repeats both among a set only the
+    second describes. Sentence by sentence it would be a per-seat exile, a
+    superlative with no reader and a loop over nothing.
+
+    *move* is what each player does with their top card ("exile"), *prize*
+    what the strict leader gets ("extra_turn", CR 500.7). The ties are
+    repeated among the tied players only (the 2004-12-01 ruling: "Each time
+    there's a tie for the highest cost, only the players involved in the tie
+    continue"), and a player who exiles nothing cannot win ("If a player fails
+    to exile a card, they can't take the extra turn").
+    """
+    move: str = "exile"
+    prize: str = "extra_turn"
+
+
+@dataclass(frozen=True)
 class WinGame:
     """"You win the game." (CR 104.2b.)"""
     player: PlayerRef

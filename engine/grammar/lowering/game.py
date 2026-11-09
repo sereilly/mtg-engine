@@ -559,6 +559,34 @@ def _lower_skip_turn(node: "ast.SkipTurn") -> tuple[OracleInstruction, ...]:
     )
 
 
+#: What a top-card contest may move and what its winner may get, each a word
+#: the handler (``handlers/top_card_contests.py``) carries out. Closed: a
+#: paragraph naming a move or a prize outside these refuses here rather than
+#: lowering onto a handler that would ignore the word.
+TOP_CARD_CONTEST_MOVES = frozenset({"exile"})
+TOP_CARD_CONTEST_PRIZES = frozenset({"extra_turn"})
+
+
+def _lower_top_card_contest(node: "ast.TopCardContest") -> tuple[OracleInstruction, ...]:
+    """Timesifter's paragraph — "each player exiles the top card of their
+    library … the tied players repeat this process until the tie is broken" —
+    onto one instruction, ``contest_top_cards``, whose handler runs the rounds
+    (``handlers/top_card_contests.py``). The move and the prize are payload, so
+    a printing that reveals instead of exiling, or that gives the leader
+    something else, is a word added to the two sets above and to the handler,
+    not a new kind.
+    """
+    if node.move not in TOP_CARD_CONTEST_MOVES:
+        raise LoweringError(f"no top-card contest moves by {node.move!r}", node=node)
+    if node.prize not in TOP_CARD_CONTEST_PRIZES:
+        raise LoweringError(f"no top-card contest awards {node.prize!r}", node=node)
+    return (
+        OracleInstruction(
+            "contest_top_cards", "", {"move": node.move, "prize": node.prize}
+        ),
+    )
+
+
 def _lower_extra_phases(node: "ast.ExtraPhases") -> tuple[OracleInstruction, ...]:
     """"After this main phase, there is an additional combat phase followed by
     an additional main phase." (Relentless Assault, CR 500.8.)
