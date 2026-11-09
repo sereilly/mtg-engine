@@ -208,4 +208,31 @@ def test_w1g7_neurok_familiar_sorts_the_revealed_card(set_pool, top, zone):
     put = "hand" if zone == "hand" else "graveyard"
     assert f"P1 revealed {top} and put it into their {put}" in game.log
 
+@pytest.mark.parametrize("pick,untapped", [("Ornithopter", True), ("Mountain", False)])
+def test_w1g7_lumengrid_augur_untaps_when_the_target_discards_an_artifact(
+    set_pool, pick, untapped
+):
+    """"{1}, {T}: Target player draws a card, then discards a card. **If that
+    player discards an artifact card this way**, untap this creature." The
+    record condition read the narrowed question with "you" as the subject
+    only. The target picks (an interactive seat), and the untap waits for the
+    answer: it reads which card went, not whether one did."""
+    game, _p1, p2 = _w1g7_game(
+        set_pool, mine=["Lumengrid Augur"], their_hand=["Ornithopter", "Mountain"],
+        interactive=(1,),
+    )
+    augur = game.players[0].battlefield[0]
+    result = game.activate_permanent_ability(0, "Lumengrid Augur", target_player_index=1)
+    assert result.supported, result.details
+    assert augur.tapped
+    prompt = _w1g7_until_owed(game, "discard", 1)
+    assert prompt is not None, game.log
+    assert len(p2.hand) == 3, "drew first"
+    index = [c.name for c in p2.hand].index(pick)
+    assert game.resolve_pending_choice("discard", 1, hand_indices=[index], to_library=False)
+    _w1g7_resolve(game)
+    assert [c.name for c in p2.graveyard] == [pick]
+    assert augur.tapped is not untapped
+    assert ("Lumengrid Augur untapped" in game.log) is untapped
+
 # ==== end W1G7 ======================================================
