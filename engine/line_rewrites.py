@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 
 from .oracle_types import strip_ability_word
+from .affinity import expand_affinity_lines
 from .cycling import expand_cycling_lines
 from .flashback import expand_flashback_lines
 from .equipment import expand_equip_lines
@@ -267,6 +268,13 @@ def expand_ability_lines(
     # second half has none: it is a fact about one cast, stamped on the stack
     # object.
     oracle_text = expand_flashback_lines(oracle_text)
+    # CR 702.41a's, for cycling's reason and with its freedom of order: a whole
+    # affinity keyword line in, the rule's own sentence out ("This spell costs
+    # {1} less to cast for each artifact you control."), read by none of the
+    # rewrites around it (``engine/affinity.py``). From there it is the
+    # self-reduction ``self_cost_modifiers`` already charges and claims, which
+    # reads the printed text through the same rewrite.
+    oracle_text = expand_affinity_lines(oracle_text)
     # A distributive list of conditional grants written out one sentence per
     # grant (Tribal Golem). Its own statement for cycling's reason; it reads
     # only a line no other rewrite produces or consumes.

@@ -255,99 +255,139 @@ class SelfCostReduction:
 # lands for the rest of the process with every instrument reading green.
 @compilation_cache
 @lru_cache(maxsize=None)
+def self_cost_reductions(oracle_text: str) -> tuple[SelfCostReduction, ...]:
+    """Every reduction *oracle_text* applies to itself, one per line read.
+
+    **Every** one, not the first: CR 601.2f applies all the reductions a
+    spell has, and CR 702.41b says so for affinity in as many words ("If a
+    spell has multiple instances of affinity, each of them applies"). Two
+    printed lines are two static abilities, and a reader that stopped at the
+    first would charge the second's discount to nobody.
+
+    Read over the text with affinity's keyword lines already rewritten
+    (``engine/affinity.py``, CR 702.41a), because this is handed the card's
+    text *as printed* and the compiler claimed the rewritten sentence: the two
+    must be one reading of one sentence, or the card reports supported and is
+    cast at full price — which is what Thoughtcast did on the day Mirrodin was
+    ingested.
+    """
+    from .affinity import expand_affinity_lines
+
+    found: list[SelfCostReduction] = []
+    for line in expand_affinity_lines(oracle_text).lower().split("\n"):
+        reduction = _line_self_cost_reduction(line)
+        if reduction is not None:
+            found.append(reduction)
+    return tuple(found)
+
+
 def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
-    """The reduction *oracle_text*'s own first line applies to itself, if any."""
-    for line in oracle_text.lower().split("\n"):
-        # CR 207.2c: "Domain — This spell costs …". An ability word has no
-        # rules meaning, and the compiler and the grammar both drop it before
-        # they read the line, so this reader has to as well — it is handed the
-        # card's text as printed, and an anchored pattern that kept the word
-        # would claim the line through one door and never apply it through
-        # this one.
-        match = _SELF_REDUCTION.match(strip_ability_word(line.strip()))
-        if match is None:
-            continue
-        condition = match.group("condition")
-        fronted = match.group("fronted")
-        if condition is not None and fronted is not None:
-            # Two printed conditions, one in each position: a conjunction
-            # nothing here reads, and either half alone is a cheaper spell.
+    """The first reduction *oracle_text* applies to itself, if any — the
+    singular, for a caller asking whether a line *is* one
+    (:func:`self_reduction_claims_line`) or reading one card's one reduction.
+    What a cast is charged is :func:`self_cost_reductions`, all of them."""
+    found = self_cost_reductions(oracle_text)
+    return found[0] if found else None
+
+
+def _line_self_cost_reduction(line: str) -> SelfCostReduction | None:
+    """The reduction one lower-cased printed *line* applies to its own spell,
+    or None when it states none this reader can apply in full."""
+    # CR 207.2c: "Domain — This spell costs …". An ability word has no
+    # rules meaning, and the compiler and the grammar both drop it before
+    # they read the line, so this reader has to as well — it is handed the
+    # card's text as printed, and an anchored pattern that kept the word
+    # would claim the line through one door and never apply it through
+    # this one.
+    match = _SELF_REDUCTION.match(strip_ability_word(line.strip()))
+    if match is None:
+        return None
+    condition = match.group("condition")
+    fronted = match.group("fronted")
+    if condition is not None and fronted is not None:
+        # Two printed conditions, one in each position: a conjunction
+        # nothing here reads, and either half alone is a cheaper spell.
+        return None
+    condition = fronted if fronted is not None else condition
+    gate = None
+    if condition is not None:
+        key = _SELF_CONDITIONS.get(condition.strip())
+        if key is None:
+            from .grammar import condition_payload_for
+
+            gate = condition_payload_for(condition)
+            if gate is None or not _cast_time_gate(gate):
+                return None
+        condition = key
+    # "{X} … where X is <count>" (Volcanic Salvo). A generic reduction whose
+    # size is a question rather than a number; the pips must be exactly
+    # "{X}" and the clause must name a count this table knows, or the line
+    # refuses as it always did.
+    counted_clause = match.group("counted")
+    if counted_clause is not None:
+        if match.group("pips").upper() != "{X}":
             return None
-        condition = fronted if fronted is not None else condition
-        gate = None
-        if condition is not None:
-            key = _SELF_CONDITIONS.get(condition.strip())
-            if key is None:
-                from .grammar import condition_payload_for
-
-                gate = condition_payload_for(condition)
-                if gate is None or not _cast_time_gate(gate):
-                    return None
-            condition = key
-        # "{X} … where X is <count>" (Volcanic Salvo). A generic reduction whose
-        # size is a question rather than a number; the pips must be exactly
-        # "{X}" and the clause must name a count this table knows, or the line
-        # refuses as it always did.
-        counted_clause = match.group("counted")
-        if counted_clause is not None:
-            if match.group("pips").upper() != "{X}":
-                return None
-            if match.group("per_each") is not None:
-                # Two sizes for one reduction; neither alone is the card.
-                return None
-            counted = _SELF_REDUCTION_COUNTS.get(counted_clause.strip())
-            if counted is None:
-                return None
-            return SelfCostReduction(
-                CostReduction(0), condition=condition,
-                during_your_turn=bool(match.group("during")), counted=counted,
-                gate=gate,
-            )
-        generic = 0
-        colored: dict[str, int] = {}
-        for symbol in re.findall(r"\{([^}]+)\}", match.group("pips").upper()):
-            if symbol.isdigit():
-                generic += int(symbol)
-            elif symbol in _MANA_SYMBOLS:
-                colored[symbol] = colored.get(symbol, 0) + 1
-            else:
-                # {X} and the hybrid symbols reduce by an amount this cannot
-                # compute; refuse rather than under-charging. A "{X} … where X
-                # is <count>" clause is handled above and never reaches here.
-                return None
-        # "…less to cast **for each basic land type among lands you control**."
-        # (Stratadon.) The printed pips are one repetition and the clause says
-        # how many. Read by the grammar's per-each reader, and refused when it
-        # refuses: a multiplier this could not count would leave the flat
-        # reduction standing — a discount the card gives only to a board that
-        # earned it.
-        per_each = None
-        per_each_clause = match.group("per_each")
-        if per_each_clause is not None:
-            if colored or not generic or condition is not None or gate is not None:
-                # A coloured pip repeated per object is CR 118.7b–c's spill
-                # arithmetic once per repetition, and a gate beside a
-                # multiplier is two riders on one cost; neither is printed and
-                # either read alone is a cheaper spell.
-                return None
-            from .grammar import per_each_count_spec_for
-
-            per_each = per_each_count_spec_for(per_each_clause)
-            if per_each is None:
-                return None
+        if match.group("per_each") is not None:
+            # Two sizes for one reduction; neither alone is the card.
+            return None
+        counted = _SELF_REDUCTION_COUNTS.get(counted_clause.strip())
+        if counted is None:
+            return None
         return SelfCostReduction(
-            reduction=CostReduction(generic, tuple(sorted(colored.items()))),
-            condition=condition,
-            during_your_turn=match.group("during") is not None,
+            CostReduction(0), condition=condition,
+            during_your_turn=bool(match.group("during")), counted=counted,
             gate=gate,
-            per_each=per_each,
         )
-    return None
+    generic = 0
+    colored: dict[str, int] = {}
+    for symbol in re.findall(r"\{([^}]+)\}", match.group("pips").upper()):
+        if symbol.isdigit():
+            generic += int(symbol)
+        elif symbol in _MANA_SYMBOLS:
+            colored[symbol] = colored.get(symbol, 0) + 1
+        else:
+            # {X} and the hybrid symbols reduce by an amount this cannot
+            # compute; refuse rather than under-charging. A "{X} … where X
+            # is <count>" clause is handled above and never reaches here.
+            return None
+    # "…less to cast **for each basic land type among lands you control**."
+    # (Stratadon.) The printed pips are one repetition and the clause says
+    # how many. Read by the grammar's per-each reader, and refused when it
+    # refuses: a multiplier this could not count would leave the flat
+    # reduction standing — a discount the card gives only to a board that
+    # earned it.
+    per_each = None
+    per_each_clause = match.group("per_each")
+    if per_each_clause is not None:
+        if colored or not generic or condition is not None or gate is not None:
+            # A coloured pip repeated per object is CR 118.7b–c's spill
+            # arithmetic once per repetition, and a gate beside a
+            # multiplier is two riders on one cost; neither is printed and
+            # either read alone is a cheaper spell.
+            return None
+        from .grammar import per_each_count_spec_for
+
+        per_each = per_each_count_spec_for(per_each_clause)
+        if per_each is None:
+            return None
+    return SelfCostReduction(
+        reduction=CostReduction(generic, tuple(sorted(colored.items()))),
+        condition=condition,
+        during_your_turn=match.group("during") is not None,
+        gate=gate,
+        per_each=per_each,
+    )
 
 
 def self_reduction_claims_line(line: str) -> bool:
-    """Whether *line* is, in its entirety, a self-reduction this can apply."""
-    return self_cost_reduction(line.strip()) is not None
+    """Whether *line* is, in its entirety, a self-reduction this can apply.
+
+    Asked of the one line as it stands, with no rewrite of its own: an
+    affinity keyword line is claimed as the sentence ``line_rewrites.
+    expand_ability_lines`` turns it into, so a reader that skipped that
+    rewrite finds the keyword unclaimed rather than claimed by a second road.
+    """
+    return _line_self_cost_reduction(line.strip().lower()) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -455,10 +495,25 @@ def _counted_reduction(game, caster_index: int, counted: str) -> int:
 
 
 def self_cost_reduction_for_cast(game, caster_index: int, card) -> CostReduction:
-    """*card*'s own reduction, if its condition holds as it is being cast."""
-    described = self_cost_reduction(card.oracle_text or "")
-    if described is None:
-        return CostReduction()
+    """Everything *card*'s own text takes off its cost as it is being cast:
+    each reduction whose condition holds, summed (CR 601.2f; CR 702.41b for
+    two affinities). The coloured parts are added symbol by symbol, so
+    ``reduce_cost`` still spills each by CR 118.7b–c's one arithmetic."""
+    generic = 0
+    colored: dict[str, int] = {}
+    for described in self_cost_reductions(card.oracle_text or ""):
+        one = _reduction_for_cast(game, caster_index, card, described)
+        generic += one.generic
+        for symbol, amount in one.colored:
+            colored[symbol] = colored.get(symbol, 0) + amount
+    return CostReduction(generic, tuple(sorted(colored.items())))
+
+
+def _reduction_for_cast(
+    game, caster_index: int, card, described: SelfCostReduction,
+) -> CostReduction:
+    """One of *card*'s own reductions, if its condition holds as it is being
+    cast."""
     if described.during_your_turn and game.active_player_index != caster_index:
         return CostReduction()
     caster = game.players[caster_index]
