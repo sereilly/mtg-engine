@@ -811,6 +811,17 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # exchange, the Grenadiers' destroy) is made as it goes on the stack.
     "The Abyss#0", "Rysorian Badger#0",
     "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",
+    # Mirrodin, W1G9. "…**its controller** chooses target permanent another
+    # player controls that shares a card type with it" (Confusion in the
+    # Ranks): Echo Chamber's printed "target" picked by a seat that is not the
+    # ability's controller, read as the resolution-time pick that production
+    # already makes (ROADMAP's CR 602.3 entry) — the entering permanent's
+    # controller is asked as the ability resolves, out of exactly the other
+    # seats' type-sharing permanents (tests/sets/test_mrd_enchantments.py,
+    # W1G9's section). Announcing it needs the two relations ("another
+    # player" against the chooser, "shares a card type" against the event's
+    # object) in the trigger picker and in the CR 608.2b re-check.
+    "Confusion in the Ranks#0",
     # Gravegouger ("When this creature enters, exile **up to two target cards
     # from a single graveyard**") stood here from Torment's first wave, its
     # pile and cards picked as the ability resolved. They are announced as it
