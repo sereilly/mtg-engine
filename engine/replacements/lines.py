@@ -22,6 +22,7 @@ them may import it back.
 
 from __future__ import annotations
 
+from .coin_flips import FLIP_TWO_COINS_TEXT
 from .damage import (DAMAGE_LIFE_FLOOR_TEXT, any_source_damage_cap,
                      damage_life_floor_condition, damage_multiplier_line,
                      source_damage_cap, source_damage_delta)
@@ -74,6 +75,8 @@ from .zone_changes import (RETURN_TO_HAND_INSTEAD_TEXT,
 #: A list in either caller would be free to drift from the interceptors. Here it
 #: cannot: the phrases *are* the constants the interceptors probe for.
 REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
+    # _flip_two_coins_instead (Krark's Thumb): the phrase is the whole line.
+    (FLIP_TWO_COINS_TEXT, ""),
     # _draw_instead_of_life_gain (Lich): the phrase is the whole line.
     (LIFE_GAIN_TO_DRAW_TEXT, ""),
     # _floor_life_at_one (Ali from Cairo): the phrase is the whole line.

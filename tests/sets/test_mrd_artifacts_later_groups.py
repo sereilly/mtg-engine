@@ -365,6 +365,100 @@ def test_w1g11_two_probes_each_burn_for_one_shuffle(set_pool):
     _w1g11_resolve_stack(game)
     assert bob.life == 16
 
+def _w1g11_rigged_coins(monkeypatch, results):
+    """Rig the engine's coin to come up *results* in order (True = a win /
+    heads), recording how many coins were flipped."""
+    import engine.handlers.control_flow as _w1g11_control_flow
+
+    queue = list(results)
+    flips = []
+
+    def coin(win_probability: float = 0.5) -> bool:
+        flips.append(1)
+        return queue.pop(0)
+
+    monkeypatch.setattr(_w1g11_control_flow, "flip_coin", coin)
+    return flips
+
+
+def test_w1g11_krarks_thumb_flips_two_coins_and_keeps_the_win(set_pool, monkeypatch):
+    """Alice flips (a "flip a coin; if you win" ability): with the Thumb out,
+    two coins, the loss ignored."""
+    from engine.handlers._common import flip_coin_for
+
+    mrd = set_pool("MRD")
+    game, alice, _bob = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, mrd["Krark's Thumb"])
+    import engine.handlers.control_flow as _w1g11_control_flow
+
+    flips = _w1g11_rigged_coins(monkeypatch, [False, True])
+    assert flip_coin_for(game, alice, flip=_w1g11_control_flow.flip_coin)
+    assert len(flips) == 2
+    assert any("flips 2 coins instead of 1" in line for line in game.log)
+
+
+def test_w1g11_krarks_thumb_both_coins_lost_is_a_loss(set_pool, monkeypatch):
+    from engine.handlers._common import flip_coin_for
+
+    mrd = set_pool("MRD")
+    game, alice, _bob = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, mrd["Krark's Thumb"])
+    import engine.handlers.control_flow as _w1g11_control_flow
+
+    _w1g11_rigged_coins(monkeypatch, [False, False])
+    assert not flip_coin_for(game, alice, flip=_w1g11_control_flow.flip_coin)
+
+
+def test_w1g11_krarks_thumb_is_only_its_controllers(set_pool, monkeypatch):
+    """"If **you** would flip a coin": Bob's flips are one coin."""
+    from engine.handlers._common import flip_coin_for
+
+    mrd = set_pool("MRD")
+    game, _alice, bob = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, mrd["Krark's Thumb"])
+    import engine.handlers.control_flow as _w1g11_control_flow
+
+    flips = _w1g11_rigged_coins(monkeypatch, [False, True])
+    assert not flip_coin_for(game, bob, flip=_w1g11_control_flow.flip_coin)
+    assert len(flips) == 1
+
+
+def test_w1g11_two_thumbs_flip_four_coins(set_pool, monkeypatch):
+    """CR 614.5: each Thumb has the flip once, the second doubling the two
+    flips the first made — four coins, three ignored."""
+    from engine.handlers._common import flip_coin_for
+
+    mrd = set_pool("MRD")
+    game, alice, _bob = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, mrd["Krark's Thumb"])
+    _w1g11_put(game, 0, mrd["Krark's Thumb"])
+    import engine.handlers.control_flow as _w1g11_control_flow
+
+    flips = _w1g11_rigged_coins(monkeypatch, [False, False, False, True])
+    assert flip_coin_for(game, alice, flip=_w1g11_control_flow.flip_coin)
+    assert len(flips) == 4
+
+
+def test_w1g11_krarks_thumb_keeps_heads_on_a_flip_nobody_wins(set_pool, monkeypatch):
+    """"Each player flips a coin" (Goblin Assassin's sentence), run through
+    its handler: Alice's Thumb turns her tails into heads; Bob's coin is one."""
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers._common import COIN_FACES_BY_SEAT
+    from engine.handlers.control_flow import flip_a_coin
+    from engine.oracle import OracleInstruction
+
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, bob = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, mrd["Krark's Thumb"])
+    # APNAP: Alice's two coins (tails, heads), then Bob's one (tails).
+    flips = _w1g11_rigged_coins(monkeypatch, [False, True, False])
+    context = OracleExecutionContext(caster=alice, target=bob, card=lea["Island"])
+    flip_a_coin(
+        game, OracleInstruction("flip_coin", "", {"flipper": "each_player"}), context,
+    )
+    assert context.results[COIN_FACES_BY_SEAT] == {0: "heads", 1: "tails"}
+    assert len(flips) == 3
+
 # ==== end W1G11 ======================================================
 
 
