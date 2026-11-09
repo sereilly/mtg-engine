@@ -380,6 +380,12 @@ class ModeChoice(BaseModel):
     # And by stable id, preferred when the client resolved one (CR 400.7): an
     # index is a slot and a slot is not an identity.
     permanent_id: int | None = Field(default=None, ge=1)
+    # …and **several** permanents, by id, for a mode that names more than one:
+    # "Tap **two** target creatures" (Blinding Beam's first mode, entwined —
+    # CR 702.42a). All on `target_seat`'s battlefield, because a mode's slots
+    # are positions on one board; ``permanent_id`` and this are one choice
+    # said two ways, so a request sending both is refused.
+    permanent_ids: list[int] | None = Field(default=None, max_length=8)
     # Top-first into the serialized stack, exactly as `target_stack_index` is;
     # converted to an engine index by the same helper.
     target_stack_index: int | None = Field(default=None, ge=0)
