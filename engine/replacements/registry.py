@@ -294,6 +294,15 @@ DRAW_BECOMES_COUNTER = 25  # Pursuit of Knowledge
 # one hands back nothing — the order a player holding both would choose, which
 # CR 616.1e permits. Declining either leaves the event for whatever is behind.
 DRAW_MAY_BE_SKIPPED = 26  # Obstinate Familiar
+# "If a player would draw a card, that player exiles the top card of one of
+# their opponents' libraries face down instead." (Shared Fate.) A mandatory
+# consuming replacement from a permanent any seat may control, so behind every
+# effect the drawing player armed for their own benefit (5-26) — and ahead of
+# Plagiarize and the consumers below it, because it hands the drawer a card
+# they may play where those take the draw away or cost more than it. CR 616.1e
+# lets the drawing player choose among them, and with two Shared Fates which
+# one replaces each draw (ruling 2004-12-01; one instance per permanent).
+DRAW_EXILES_OPPONENT_TOP = 28  # Shared Fate
 # "Until end of turn, if target player would draw a card, instead that player
 # skips that draw and you draw a card." (Plagiarize.) A mandatory consuming
 # replacement another player armed, so behind everything the drawing player

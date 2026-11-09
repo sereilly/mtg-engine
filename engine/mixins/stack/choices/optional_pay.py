@@ -850,6 +850,7 @@ class OptionalPayChoicesMixin:
         # branch hurts (`ai_prompts.chained_toll_declined`).
         from ....ai_prompts import (chained_toll_declined, copy_offer_answer,
                                     offer_buys_own_drawback,
+                                    offer_purchase_settled_against,
                                     returned_aura_lands_on_wrong_side)
 
         if floating is not None and chained_toll_declined(
@@ -904,6 +905,16 @@ class OptionalPayChoicesMixin:
             self.log.append(
                 f"{player.name} declined {entry['card_name']} "
                 "(the block it compels is not worth having)"
+            )
+        # …and an offer whose whole purchase sits behind a condition already
+        # settled against (Liar's Pendulum's reveal when the guess was right):
+        # the action would be taken for nothing
+        # (`ai_prompts.offer_purchase_settled_against`).
+        elif floating is not None and offer_purchase_settled_against(self, entry):
+            floating = None
+            self.log.append(
+                f"{player.name} declined {entry['card_name']} "
+                "(what it buys is already ruled out)"
             )
         # **A trade this policy can price on both sides is weighed, not
         # refused or taken by rule** (`ai_prompts.offer_trade_is_worth_taking`:

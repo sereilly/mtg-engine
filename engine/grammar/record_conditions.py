@@ -567,6 +567,23 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
         return ast.RevealedCardHasChosenName()
     stream.reset(named_mark)
 
+    # "…and **your opponent guessed wrong**" (Liar's Pendulum). The record a
+    # guess step of the same effect wrote, read here beside the other
+    # chosen-name clauses for their reason: it is a back-reference, and the
+    # lowering demands the guess in front of it. The guesser is a
+    # restatement of the seat that step named — "your opponent" or "that
+    # player" — and "right" is the same clause with the other answer.
+    guess_mark = stream.mark()
+    if (
+        stream.accept_phrase("your", "opponent")
+        or stream.accept_phrase("that", "player")
+    ) and stream.accept_word("guessed"):
+        if stream.accept_word("wrong"):
+            return ast.NamedCardGuessWas(correct=False)
+        if stream.accept_word("right"):
+            return ast.NamedCardGuessWas(correct=True)
+    stream.reset(guess_mark)
+
     # "…unless **it has the same name as another card exiled this way**" /
     # "…until you put a card into your hand or **you exile two cards with the
     # same name**" (Tainted Pact). CR 201.2a's relation over the cards this

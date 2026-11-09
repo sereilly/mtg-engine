@@ -148,6 +148,21 @@ class RevealedCardHasChosenName:
 
 
 @dataclass(frozen=True)
+class NamedCardGuessWas:
+    """``if … your opponent guessed wrong`` (Liar's Pendulum).
+
+    The record a :class:`GuessNamedCardInHand` step wrote, asked whether the
+    guess matched the hand it was about. ``correct`` is the printed word:
+    False for "guessed wrong", True for "guessed right". Nothing about *who*
+    guessed is a field — "your opponent" is the seat the guess step named,
+    and the lowering refuses the clause unless that step is in front of it,
+    for :class:`RevealedCardHasChosenName`'s reason.
+    """
+
+    correct: bool = False
+
+
+@dataclass(frozen=True)
 class RevealedChosenColorCount:
     """``if that opponent reveals exactly the chosen number of cards of the
     chosen color`` (Scrying Glass).

@@ -326,6 +326,22 @@ def _action_flip_again_confirm(session, req, seat_type):
     if not session.game.confirm_flip_again(req.seat, req.accept is not False):
         raise HTTPException(status_code=400, detail="invalid coin-flip answer")
 
+@action_handler("guess_named_card_confirm")
+def _action_guess_named_card_confirm(session, req, seat_type):
+    # Liar's Pendulum: the targeted seat guesses whether a card with the
+    # chosen name is in the holder's hand. Only that seat may answer, and the
+    # answer is a yes or a no — an absent ``accept`` is neither, so it is
+    # refused rather than read as one.
+    pending = session.game.pending_choice_of("guess_named_card", req.seat)
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no guess is pending for you")
+    if req.accept is None:
+        raise HTTPException(
+            status_code=400, detail="accept is required (true: it is in that hand)"
+        )
+    if not session.game.confirm_guess_named_card(req.seat, bool(req.accept)):
+        raise HTTPException(status_code=400, detail="invalid guess")
+
 @action_handler("repeat_process_confirm")
 def _action_repeat_process_confirm(session, req, seat_type):
     # Forbidden Ritual: the spell's controller says whether the printed process
@@ -398,6 +414,19 @@ def _action_graveyard_return_draw_confirm(session, req, seat_type):
         req.seat, req.hand_index, kind="return_from_graveyard_instead_of_draw"
     ):
         raise HTTPException(status_code=400, detail="invalid card choice")
+
+
+@action_handler("opponent_library_draw_confirm")
+def _action_opponent_library_draw_confirm(session, req, seat_type):
+    # Shared Fate: the drawer names which opponent's top card is exiled in
+    # place of the draw (option_index = position in the offered options).
+    # Through the generic replacement-choice resolver, as Forbidden Crypt's.
+    if req.option_index is None:
+        raise HTTPException(status_code=400, detail="option_index is required")
+    if not session.game.resolve_replacement_choice(
+        req.seat, int(req.option_index), kind="opponent_library_draw"
+    ):
+        raise HTTPException(status_code=400, detail="invalid opponent choice")
 
 
 @action_handler("enter_choice_confirm")

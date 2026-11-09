@@ -764,3 +764,191 @@ def test_w1g12_sphere_of_purity_ignores_a_spell_and_covers_only_you(set_pool):
     assert game.players[1].life == 19
 
 # ==== end W1G12 ======================================================
+
+
+# ==== W2G2 ==========================================================
+# W2G2's tests go between this line and the "end W2G2" line.
+
+from engine.cast_permissions import playable_from_zones as _w2g2_playable
+from engine.game import Game as _W2G2Game
+from engine.linked_exile import face_down_exiled_cards as _w2g2_face_down
+from engine.models import Permanent as _W2G2Permanent
+from engine.models import PlayerState as _W2G2PlayerState
+from engine.oracle import compile_card_oracle as _w2g2_compile
+
+from tests.helpers import resolve_stack as _w2g2_resolve_stack
+
+
+def _w2g2_fate_table(set_pool, *, seats=2, libraries=None, fates=1, interactive=()):
+    """Alice (seat 0) controls *fates* Shared Fates. Bob's library is a
+    Plains over a Grizzly Bears over a Lightning Bolt unless told otherwise;
+    everybody else's is Islands."""
+    lea, mrd = set_pool("LEA"), set_pool("MRD")
+    default = {
+        1: [lea["Plains"], lea["Grizzly Bears"], lea["Lightning Bolt"]],
+    }
+    libraries = {**default, **(libraries or {})}
+    players = [
+        _W2G2PlayerState(
+            name=("Alice", "Bob", "Carol", "Dave")[seat],
+            library=list(libraries.get(seat, [lea["Island"]] * 4)),
+        )
+        for seat in range(seats)
+    ]
+    game = _W2G2Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    placed = []
+    for _ in range(fates):
+        fate = _W2G2Permanent(card=mrd["Shared Fate"])
+        game._put_permanent_onto_battlefield(0, fate, None)
+        placed.append(fate)
+    game._sync_control()
+    return game, players, placed
+
+
+def _w2g2_names(cards):
+    return [card.name for card in cards]
+
+
+def test_w2g2_shared_fate_compiles_with_both_lines_carried_out(set_pool):
+    program = _w2g2_compile(set_pool("MRD")["Shared Fate"])
+    assert program.supported
+    assert sorted(i.value for i in program.instructions) == ["exiler_play", "replacements"]
+
+
+def test_w2g2_a_draw_exiles_an_opponents_top_card_face_down_instead(set_pool):
+    game, (alice, bob), _ = _w2g2_fate_table(set_pool)
+    assert game._draw_with_replacements(alice, 1) == 0
+    assert alice.hand == [] and len(alice.library) == 4
+    assert _w2g2_names(bob.exile) == ["Plains"] and len(bob.library) == 2
+    # Face down to its owner, shown to the seat that exiled it (CR 406.3).
+    assert _w2g2_names(_w2g2_face_down(game, 1, 1)) == ["Plains"]
+    assert _w2g2_face_down(game, 1, 0) == []
+    # The log counts it and never names it: it is every seat's.
+    assert not any("Plains" in line for line in game.log)
+    assert any(
+        "Alice exiles the top card of Bob's library face down instead of drawing" in line
+        for line in game.log
+    )
+    # The enchantment is Alice's, and Bob's draws are replaced too: "a player".
+    game._draw_with_replacements(bob, 2)
+    assert bob.hand == [] and _w2g2_names(alice.exile) == ["Island", "Island"]
+    assert len(alice.library) == 2
+
+
+def test_w2g2_the_exiler_plays_lands_and_casts_spells_from_among_them(set_pool):
+    game, (alice, bob), (fate,) = _w2g2_fate_table(set_pool)
+    game._draw_with_replacements(alice, 2)
+    assert _w2g2_names(bob.exile) == ["Plains", "Grizzly Bears"]
+    offered = _w2g2_playable(game, 0)
+    assert [(e["zone"], e["name"], e["owner_seat"], e["source"]) for e in offered] == [
+        ("exile", "Plains", 1, "Shared Fate"), ("exile", "Grizzly Bears", 1, "Shared Fate"),
+    ]
+    # Not their owner's: Bob exiled neither (2004-12-01 — the cards are
+    # Alice's to play).
+    assert _w2g2_playable(game, 1) == []
+    played = game.cast_from_hand(0, "Plains", from_zone="exile")
+    assert played.supported, played.details
+    cast = game.cast_from_hand(0, "Grizzly Bears", from_zone="exile")
+    assert cast.supported, cast.details
+    _w2g2_resolve_stack(game)
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Grizzly Bears", "Plains", "Shared Fate",
+    ]
+    assert bob.exile == [] and _w2g2_playable(game, 0) == []
+    # The record keeps nothing about a card that left exile (CR 400.7).
+    assert not fate.metadata.get("linked_exile")
+
+
+def test_w2g2_an_empty_opponent_library_is_nothing_exiled_and_no_loss(set_pool):
+    """2004-12-01: "Replacing your draws isn't optional. You can't draw cards
+    from your own library, even if all your opponents' libraries are empty." """
+    game, (alice, bob), _ = _w2g2_fate_table(set_pool, libraries={1: []})
+    game._draw_with_replacements(alice, 1)
+    game.check_state_based_actions()
+    assert not alice.lost and not bob.lost
+    assert alice.hand == [] and len(alice.library) == 4
+    assert any("Bob's library is empty" in line for line in game.log)
+
+
+def test_w2g2_the_draw_step_draw_is_replaced_too(set_pool):
+    game, (alice, bob), _ = _w2g2_fate_table(set_pool)
+    game._draw_with_replacements(alice, 1, turn_based=True)
+    assert alice.hand == [] and _w2g2_names(bob.exile) == ["Plains"]
+
+
+def test_w2g2_when_shared_fate_leaves_its_cards_stay_face_down_and_closed(set_pool):
+    """2008-08-01: "Each Shared Fate tracks only the cards it exiled. If the
+    Shared Fate which was responsible for a card being exiled leaves the
+    battlefield, putting another Shared Fate onto the battlefield will not
+    allow you to play that card again." """
+    mrd = set_pool("MRD")
+    game, (alice, bob), (fate,) = _w2g2_fate_table(set_pool)
+    game._draw_with_replacements(alice, 1)
+    game.sacrifice_permanent(fate)
+    # Face down to everyone now — its exiler included (the look was the
+    # enchantment's) — and nobody's to play.
+    assert _w2g2_names(_w2g2_face_down(game, 1, 0)) == ["Plains"]
+    assert _w2g2_names(_w2g2_face_down(game, 1, 1)) == ["Plains"]
+    assert _w2g2_playable(game, 0) == []
+    # Draws are draws again.
+    game._draw_with_replacements(alice, 1)
+    assert _w2g2_names(alice.hand) == ["Island"]
+    second = _W2G2Permanent(card=mrd["Shared Fate"])
+    game._put_permanent_onto_battlefield(0, second, None)
+    assert _w2g2_playable(game, 0) == []
+    assert _w2g2_names(_w2g2_face_down(game, 1, 0)) == ["Plains"]
+
+
+def test_w2g2_three_players_the_drawer_picks_whose_library(set_pool):
+    lea = set_pool("LEA")
+    game, (alice, bob, carol), _ = _w2g2_fate_table(
+        set_pool, seats=3, libraries={2: [lea["Mountain"]] * 3}, interactive=(0,),
+    )
+    game._draw_with_replacements(alice, 1)
+    (offer,) = game.pending_replacement_choices
+    assert offer.kind == "opponent_library_draw" and offer.options == ("Bob", "Carol")
+    assert game.resolve_replacement_choice(0, 1, kind="opponent_library_draw")
+    assert _w2g2_names(carol.exile) == ["Mountain"] and bob.exile == []
+    assert [e["name"] for e in _w2g2_playable(game, 0)] == ["Mountain"]
+    # A seat nobody asks takes the smallest library still holding a card —
+    # Carol's two against Bob's three — and an empty one never.
+    game.interactive_seats = set()
+    game._draw_with_replacements(alice, 1)
+    assert _w2g2_names(carol.exile) == ["Mountain", "Mountain"]
+    carol.library.clear()
+    game._draw_with_replacements(alice, 1)
+    assert _w2g2_names(bob.exile) == ["Plains"]
+
+
+def test_w2g2_two_shared_fates_the_drawer_chooses_which_replaces(set_pool):
+    """2004-12-01: "If more than one Shared Fate is on the battlefield, you
+    choose which one replaces each card draw, but you can replace a draw only
+    once." (CR 616.1e.)"""
+    game, (alice, bob), (first, second) = _w2g2_fate_table(
+        set_pool, fates=2, interactive=(0,),
+    )
+    game._draw_with_replacements(alice, 1)
+    (order,) = [c for c in game.pending_choices if c.kind == "effect_order"]
+    assert len(order.data["options"]) == 2
+    assert game.resolve_pending_choice("effect_order", 0, option_index=1)
+    # One card exiled — the draw is replaced once — linked to one of them.
+    assert _w2g2_names(bob.exile) == ["Plains"]
+    linked = [f for f in (first, second) if f.metadata.get("linked_exile")]
+    assert len(linked) == 1 and len(linked[0].metadata["linked_exile"]) == 1
+
+
+def test_w2g2_the_wire_shows_the_card_to_its_exiler_alone(set_pool):
+    from web.serialization import exile_hidden_flags
+
+    game, (alice, bob), _ = _w2g2_fate_table(set_pool)
+    game._draw_with_replacements(alice, 1)
+    assert exile_hidden_flags(game, bob, 0, 1) == [False]
+    assert exile_hidden_flags(game, bob, 1, 1) == [True]
+    assert exile_hidden_flags(game, bob, None, 1) == [True]
+
+# ==== end W2G2 ======================================================

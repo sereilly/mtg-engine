@@ -348,6 +348,11 @@ _SIMULATED_CHOICES = (
     # draw) waits for the type — so it belongs to the named pass, last, which
     # is where the catch-all answered it when nothing else was queued.
     "land_type_choice",
+    # "Target opponent guesses whether a card with that name is in your hand."
+    # (Liar's Pendulum.) Appended for the reason every entry above it is — the
+    # position cannot change an existing seed — and it suspends: the offer to
+    # reveal behind it reads the guess.
+    "guess_named_card",
 )
 
 

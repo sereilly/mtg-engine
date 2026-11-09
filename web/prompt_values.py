@@ -163,6 +163,28 @@ def _skip_draw(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("opponent_library_draw")
+def _opponent_library_draw(ctx: PromptContext, choices: list) -> dict:
+    """Shared Fate, at a table with two or more opponents: whose library the
+    drawer exiles the top card of, instead of drawing.
+
+    One offer at a time (the replacement arms one per draw) with how many are
+    queued behind it, the labels off the choice. Each opponent's library
+    *size* rides along — public (CR 402.3), and the whole decision when one
+    is empty — and nothing about any card: the card is exiled face down.
+    """
+    choice = choices[0]
+    seats = [int(seat) for seat in choice.data.get("opponent_seats") or ()]
+    return {
+        "player_seat": choice.player_index,
+        "source_name": choice.data.get("source_name", ""),
+        "options": list(choice.options),
+        "opponent_seats": seats,
+        "library_sizes": [len(ctx.game.players[seat].library) for seat in seats],
+        "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
+    }
+
+
 @prompt_renderer("pile_top_draw")
 def _pile_top_draw(ctx: PromptContext, choices: list) -> dict:
     """Parallel Thoughts: draw the card, or take the top card of the exiled
@@ -699,6 +721,27 @@ def _flip_again(ctx: PromptContext, choices: list) -> dict:
     if "flips_won" in choice.data:
         prompt["flips_won"] = int(choice.data["flips_won"])
     return prompt
+
+
+@prompt_renderer("guess_named_card")
+def _guess_named_card(ctx: PromptContext, choices: list) -> dict:
+    """Liar's Pendulum: the targeted seat guesses whether a card with the
+    chosen name is in the holder's hand.
+
+    What the guesser may know and nothing more: the name (announced as it was
+    chosen) and whose hand the guess is about — never the hand, which is
+    hidden from this seat (CR 400.2), and never whether the guess would be
+    right. Answered with ``accept``: true for "it is in that hand".
+    """
+    choice = choices[0]
+    holder_seat = int(choice.data.get("holder_seat", 0))
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "named": choice.data.get("named", ""),
+        "holder_seat": holder_seat,
+        "holder_name": ctx.game.players[holder_seat].name,
+    }
 
 
 @prompt_renderer("repeat_process")

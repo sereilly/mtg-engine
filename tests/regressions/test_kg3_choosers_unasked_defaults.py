@@ -85,6 +85,7 @@ _DEFAULTS: dict[str, str] = {
     "face_down_cast": "worth",            # Illusionary Mask: the dearest creature
     "face_down_look": "stated",           # a dismissal
     "flip_again": "stated",               # no
+    "guess_named_card": "stated",         # a coin; "not there" for an empty hand
     "graveyard_exile_pick": "worth",      # graveyard denial / price orders
     "graveyard_pick_for_price": "worth",  # least mana value
     "graveyard_pile_choice": "worth",
@@ -128,6 +129,9 @@ _DEFAULTS: dict[str, str] = {
     "pile_search": "worth",               # the card most worth holding
     "pile_split": "worth",                # the most even split by value
     "pile_top_draw": "stated",            # the pile while it holds a card
+    # The smallest library still holding a card — sizes are public and the
+    # card is the same unknown from any of them (stamped at arm).
+    "opponent_library_draw": "worth",
     "player_choice": "worth",             # the seat damaged most / least ahead
     "put_from_hand_choice": "worth",      # the dearest permanent card
     "reflexive_target": "worth",          # the toggle's / effect's side, dearest

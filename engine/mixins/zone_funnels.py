@@ -50,6 +50,7 @@ from ..face_down import forget_face_down_departure, revealed_as_it_moves
 from ..faces import whole_card
 from ..graveyard_order import (distinct_graveyard_object, held_in_a_graveyard,
                                record_arrival_history, record_graveyard_arrival)
+from ..linked_exile import forget_exiler_entries
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN, EXILED_BY_SEAT
 from ..pending_choices import spec_for
@@ -231,6 +232,10 @@ class ZoneFunnelsMixin:
                 # (CR 611.2b), for the record's own reason one line up: a grant
                 # left behind is a memory CR 400.7 says the card does not have.
                 end_while_exiled_grants(self, seat, card)
+                # …and who exiled it with a permanent that lets them play it
+                # (Shared Fate): a record naming an object that left is a
+                # memory CR 400.7 says the card does not have.
+                forget_exiler_entries(self, seat, card)
                 # …and a delayed ability lasting "for as long as any of those
                 # cards remain exiled" (Dimensional Breach), whose last card
                 # this may have been (CR 603.7b, CR 611.2b).

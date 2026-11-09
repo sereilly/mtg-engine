@@ -58,6 +58,7 @@ from ..cast_permissions import (BOARD_FREE_CAST_CLAIM,
                                 board_free_cast_line,
                                 board_graveyard_play_line)
 from ..cost_modifiers import cost_modifier_claims_line
+from ..exiler_grants import EXILER_PLAY_CLAIM, exiler_play_line
 from ..cycling import CYCLING_BAN_CLAIM, cycling_ban_line
 from ..counted_names import CLAIM as COUNTED_NAMES_CLAIM
 from ..counted_names import counts_as_claims_line
@@ -290,6 +291,15 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # ``permission_for`` enforces it with.
     if board_graveyard_play_line(normalized):
         return BOARD_GRAVEYARD_PLAY_CLAIM
+
+    # engine/exiler_grants.py — the look and the play over the cards each
+    # player exiled with this permanent: "Each player may look at cards they
+    # exiled with this enchantment, and they may play lands and cast spells
+    # from among those cards." (Shared Fate.) A static read off the board by
+    # the two enforcements (`linked_exile.face_down_exiled_cards`,
+    # `cast_permissions.permission_for`), claimed through their one reader.
+    if exiler_play_line(normalized):
+        return EXILER_PLAY_CLAIM
 
     # engine/activation_restrictions.py — the *board* half of CR 602.5:
     # "Activated abilities of creatures can't be activated." (Cursed Totem.)

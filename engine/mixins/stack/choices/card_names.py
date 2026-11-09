@@ -406,6 +406,64 @@ class CardNameChoicesMixin:
         ):
             self.discard_pending_choice(choice)
 
+    # -- "Target opponent guesses whether a card with that name is in your
+    #    hand" (Liar's Pendulum) ---------------------------------------------
+
+    def confirm_guess_named_card(self, player_index: int, in_hand: bool) -> bool:
+        """Answer Liar's Pendulum's guess: *in_hand* is the guesser's "yes"."""
+        return self.resolve_pending_choice(
+            "guess_named_card", player_index, in_hand=bool(in_hand)
+        )
+
+    def _resolve_guess_named_card(self, choice: PendingChoice, in_hand) -> bool:
+        """Record the guess and the truth it is about, for the sentences behind.
+
+        The truth is taken **now**, as the guess is made: the guess is about
+        the hand as it is at this moment, and nothing in the resolution can
+        move a card between the guess and the reveal that settles it. Asked of
+        the hand through ``has_name`` (CR 709.4a: a split card answers to
+        either half's name), and an empty name is in no hand.
+
+        The log names the guess and never the answer to it: whether the guess
+        was right is the hidden hand's to say, and the hand is shown only if
+        its holder chooses to reveal it.
+        """
+        data = choice.data
+        holder = self.players[int(data["holder_seat"])]
+        named = str(data.get("named") or "").strip()
+        guess = bool(in_hand)
+        was_in_hand = bool(named) and any(
+            has_name(card, named) for card in holder.hand
+        )
+        record = data.get("record")
+        if record is not None:
+            from ....oracle_types import NAMED_CARD_GUESS
+
+            record[NAMED_CARD_GUESS] = {"in_hand": guess, "was_in_hand": was_in_hand}
+        self.discard_pending_choice(choice)
+        guesser = self.players[choice.player_index]
+        self.log.append(
+            f"{guesser.name} guesses that a card named {named or 'nothing'} "
+            f"{'is' if guess else 'is not'} in {holder.name}'s hand"
+        )
+        return True
+
+    def _default_guess_named_card(self, choice: PendingChoice) -> None:
+        """A seat nobody asks guesses at random (``random`` — the module RNG a
+        seeded game replays). It may not read the hand it is guessing about
+        (CR 400.2), and a fixed answer is one the namer can name around.
+
+        Except where the answer is public: how many cards a hand holds is
+        every player's to know (CR 402.3), so an **empty** hand holds no card
+        of any name, and no card is named nothing — "not in that hand" is
+        then a deduction, not a guess, and no coin is spent on it."""
+        data = choice.data
+        holder = self.players[int(data["holder_seat"])]
+        if not str(data.get("named") or "").strip() or not holder.hand:
+            self._resolve_guess_named_card(choice, False)
+            return
+        self._resolve_guess_named_card(choice, random.random() < 0.5)
+
 
 # ---------------------------------------------------------------------------
 # This family's rows of the prompt table
@@ -470,4 +528,19 @@ NAME_AND_RANDOM_REVEAL_SPEC = ChoiceSpec(
     action="name_and_random_reveal_confirm",
     prompt_key="name_and_random_reveal",
     blocked_detail="name a card for the reveal before other actions",
+)
+
+GUESS_NAMED_CARD_SPEC = ChoiceSpec(
+    # "Target opponent guesses whether a card with that name is in your hand."
+    # (Liar's Pendulum.) Answered by the guesser, yes or no; the offer to
+    # reveal behind it reads the answer, so the resolution waits (CR 608.2).
+    "guess_named_card",
+    resolve=lambda game, choice, r: game._resolve_guess_named_card(
+        choice, r["in_hand"]
+    ),
+    default=lambda game, choice: game._default_guess_named_card(choice),
+    action="guess_named_card_confirm",
+    prompt_key="guess_named_card",
+    blocked_detail="guess whether the named card is in that hand before other actions",
+    suspends=True,
 )

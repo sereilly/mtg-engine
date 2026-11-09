@@ -275,6 +275,15 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(BOARD_GRAVEYARD_PLAY_CLAIM)
+    # "Each player may look at cards they exiled with this enchantment, and
+    # they may play lands and cast spells from among those cards." (Shared
+    # Fate.) The look and the play, both derived off the board over the
+    # permanent's linked record — no instruction, so its own claim, asked
+    # through the reader both enforcements use.
+    from .exiler_grants import EXILER_PLAY_CLAIM, exiler_play_line
+
+    if any(exiler_play_line(line) for line in (oracle_text or "").splitlines()):
+        claims.append(EXILER_PLAY_CLAIM)
     # "Rather than pay the mana cost for a spell, its controller may discard a
     # card that shares a color with that spell." (Dream Halls.) CR 118.9's
     # alternative cost granted from a board rather than printed on the spell,
