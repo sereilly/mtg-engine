@@ -496,7 +496,11 @@ def position_digest(game) -> dict:
     return {
         "seats": seats,
         "game": {
-            key: repr(_ledger_entries(value) if key == "damage_ledger" else value)
+            key: repr(
+                _ledger_entries(value) if key == "damage_ledger"
+                else _untap_lock_entries(game, value) if key == "untap_step_locks"
+                else value
+            )
             for key, value in vars(game).items()
             if key not in _GAME_BOOKKEEPING
         },
@@ -521,6 +525,33 @@ def _permission_entries(game) -> list:
             rest, None if cards is None else sorted(card.name for card in cards),
         ))
     return sorted(entries, key=repr)
+
+
+def _untap_lock_entries(game, locks) -> list:
+    """The untap-step locks (``engine/untap_step_locks.py``) as what each one
+    holds down on the board now: ``(seat, steps, permanent ids)`` for every
+    lock binding at least one permanent of that seat.
+
+    A lock is a record on the game, so it changed ``vars(game)`` on every
+    resolution, whatever it bound — and a "Creatures target player controls
+    don't untap …" (Misstep) aimed at a board with no creature then read as a
+    lasting change, so the AI cast it into nothing (MRD W2G4's sim
+    differential: the per-permanent marker it replaced changed nothing there,
+    and the AI never cast it). Read as what it binds, a lock over nothing is
+    no change, and one over a creature is the change the marker was.
+    """
+    from .subject_filters import subject_matches
+
+    entries = []
+    for lock in locks or ():
+        bound = sorted(
+            permanent.permanent_id
+            for permanent in game.controlled_by(lock.seat)
+            if subject_matches(game, permanent, lock.described, observer=lock.observer)
+        )
+        if bound:
+            entries.append((lock.seat, lock.steps, tuple(bound)))
+    return sorted(entries)
 
 
 def _ledger_entries(ledger):
