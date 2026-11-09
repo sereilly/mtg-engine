@@ -531,9 +531,11 @@ def test_w1g1_scythe_of_the_wretched_ignores_a_death_its_host_did_not_damage(set
     assert _w1g1_equipped(scythe) is giant
 
 def test_w1g1_scythe_destroyed_in_response_still_returns_the_card(set_pool):
-    """The trigger exists apart from its source (CR 113.7a): the Scythe is
-    destroyed while its trigger waits, the dead creature still comes back
-    under the Scythe controller's control, and there is nothing to attach."""
+    """Once triggered, the ability exists on the stack independently of its
+    source (CR 113.7a). The Scythe is destroyed while its trigger waits.
+
+    The dead creature still comes back, onto its seat 0's battlefield, and
+    there is nothing left to attach."""
     mrd, lea = set_pool("MRD"), set_pool("LEA")
     game = _w1g1_table(set_pool, interactive=(0, 1))
     scythe = _w1g1_put(game, mrd["Scythe of the Wretched"], 0)
