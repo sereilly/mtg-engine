@@ -85,6 +85,10 @@ _BASIC_MANA = {
 _SETTING_KINDS = frozenset({
     "add_mire_counter_to_target_land",
     "change_land_type_until",
+    # "That land is an Island for as long as it has a flood counter on it."
+    # (Quicksilver Fountain.) The same `change_land_type` contribution, keyed
+    # on the counter: driven in `test_mrd_w2g0_flooded_land_305_7.py`.
+    "set_land_type_while_counter",
     "swap_land_types_until_eot",
 })
 
@@ -111,6 +115,15 @@ def _walk(instruction):
 
 def _sets_a_land_type(instruction) -> bool:
     return any(step.kind in _SETTING_KINDS for step in _walk(instruction))
+
+
+def _event_subject_chooses(instruction) -> bool:
+    """Whether the land is picked by the seat the firing event is about
+    ("that player … of their choice"), not by the ability's controller."""
+    return any(
+        (step.payload or {}).get("chooser") == "event_subject_player"
+        for step in _walk(instruction)
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -440,6 +453,10 @@ class _Board:
                 ).triggered_abilities[setter.trigger_index]
                 source = self.enter(setter.card, 1)
                 self.settle()
+                if _event_subject_chooses(trigger.instruction):
+                    return self._apply_chosen_by_event_subject(
+                        setter, trigger, source, land,
+                    )
                 game._enqueue_triggered_ability(
                     controller_index=1, source_permanent=source,
                     instruction=trigger.instruction,
@@ -493,6 +510,34 @@ class _Board:
             return source
         finally:
             game.interactive_seats = interactive
+
+    def _apply_chosen_by_event_subject(self, setter: _Setter, trigger, source, land):
+        """"At the beginning of each player's upkeep, **that player** puts a
+        flood counter on target non-Island land **they control of their
+        choice**." (Quicksilver Fountain.) The land is picked by the seat the
+        firing is about, so the trigger is fired about the land's controller
+        (seat 0), under the key an upkeep firing freezes it by, and that seat
+        names the land. A land the pick cannot reach (one that is already an
+        Island) is not offered: the default picks, and the land is the
+        control arm."""
+        game = self.game
+        game._enqueue_triggered_ability(
+            controller_index=1, source_permanent=source,
+            instruction=trigger.instruction,
+            effect_kind=trigger.effect_kind,
+            ability_text=trigger.source_line,
+            about_player_index=0,
+            trigger_context={"event_subject_player": 0},
+        )
+        game.resolve_top_of_stack(pause_for_choices=True)
+        prompt = game.pending_choice_of("permanent_choice", 0)
+        if prompt is not None and any(
+            offered is land for offered in game.live_permanent_choices(prompt)
+        ):
+            if not game.confirm_permanent_choice(0, land.permanent_id):
+                raise _Refused(f"{setter.name}: the offered land was refused")
+        self.settle(land_type=self.new_type_for(land))
+        return source
 
     def _stock_costs(self, card) -> None:
         """Give the opponent what a setter's cost eats: an Island to
