@@ -369,6 +369,87 @@ def test_w1g2_groffskithur_picker_offers_only_the_named_card(set_pool):
     assert graveyard_card_matches(spec, mrd["Groffskithur"])
     assert not graveyard_card_matches(spec, lea["Grizzly Bears"])
 
+
+def _w1g2_drain(game):
+    """Answer what blocks the game and drain the stack, until nothing does."""
+    for _ in range(20):
+        if game.pending_choices:
+            game.auto_resolve_pending_choices()
+        elif game.stack:
+            _w1g2_resolve_stack(game)
+        else:
+            return
+
+
+def test_w1g2_taj_nar_swordsmith_pays_x_and_fetches_an_equipment_of_that_value(set_pool):
+    """Drive list: "When this creature enters, you may pay {X}. If you do,
+    search your library for an Equipment card with mana value X or less, put
+    that card onto the battlefield, then shuffle." A person pays X = 2 from
+    the pool through the ``pay_any_amount`` prompt; the search is held to
+    Equipment of mana value 2 or less (Leonin Scimitar, not the three-mana
+    Battlegear), and the card enters the battlefield."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, _bob = _w1g2_table(set_pool, hand=[mrd["Taj-Nar Swordsmith"]], enforce=True)
+    alice.library = [lea["Plains"], mrd["Vulshok Battlegear"], mrd["Leonin Scimitar"], lea["Plains"]]
+    alice.mana_pool.update({"W": 1, "C": 5})
+    game.interactive_seats = {0}
+    assert game.cast_from_hand(0, "Taj-Nar Swordsmith").supported
+    for _ in range(5):
+        kinds = [choice.kind for choice in game.pending_choices]
+        if "pay_any_amount" in kinds:
+            assert game.confirm_pay_any_amount(0, 2)
+        elif kinds:
+            break
+        elif game.stack:
+            game.resolve_top_of_stack()
+    assert [choice.kind for choice in game.pending_choices] == ["search_library"]
+    assert game.pending_choices[0].data["restrictions"]["mana_value"] == {"op": "le", "value": 2}
+    _w1g2_drain(game)
+    on_board = sorted(p.card.name for p in game.controlled_by(0))
+    assert on_board == ["Leonin Scimitar", "Taj-Nar Swordsmith"]
+    assert sum(alice.mana_pool.values()) == 0, "{3}{W} for the creature, {2} for X"
+    assert sorted(c.name for c in alice.library) == ["Plains", "Plains", "Vulshok Battlegear"]
+
+
+def test_w1g2_slith_strider_draws_when_blocked_and_grows_on_player_damage(set_pool):
+    """Drive list: "Whenever this creature becomes blocked, draw a card."
+    and "Whenever this creature deals combat damage to a player, put a +1/+1
+    counter on it." """
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, _bob = _w1g2_table(set_pool)
+    _w1g2_put(game, 0, mrd["Slith Strider"])
+    _w1g2_put(game, 1, lea["Grizzly Bears"])
+    _w1g2_declare_attack(game, 0, blocks={0: 0})
+    _w1g2_drain(game)
+    assert [c.name for c in alice.hand] == ["Plains"]
+
+    game, alice, bob = _w1g2_table(set_pool)
+    strider = _w1g2_put(game, 0, mrd["Slith Strider"])
+    _w1g2_declare_attack(game, 0)
+    _w1g2_drain(game)
+    assert alice.hand == [], "unblocked, it does not draw"
+    game.advance_combat_phase()
+    _w1g2_drain(game)
+    assert bob.life == 19
+    assert (strider.effective_power, strider.effective_toughness) == (2, 2)
+
+
+def test_w1g2_psychic_membrane_may_draw_when_it_blocks(set_pool):
+    """Drive list: "Defender / Whenever this creature blocks, you may draw a
+    card." The Wall's controller draws as it blocks (the headless seat takes
+    the offer), and it cannot attack (CR 702.3b)."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, _alice, bob = _w1g2_table(set_pool)
+    _w1g2_put(game, 0, lea["Grizzly Bears"])
+    membrane = _w1g2_put(game, 1, mrd["Psychic Membrane"])
+    _w1g2_declare_attack(game, 0, blocks={0: 0})
+    _w1g2_drain(game)
+    assert [c.name for c in bob.hand] == ["Island"]
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, _why = game.declare_attackers(1, [game.battlefield_index_of(membrane)], defending_player_index=0)
+    assert not ok, "defender: it can't attack"
+
 # ==== end W1G2 ======================================================
 
 
