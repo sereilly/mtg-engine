@@ -823,9 +823,9 @@ def _accept_counted_exile_search(
     #
     # No "then shuffle" in this sentence: Mangara's Tome and Parallel Thoughts
     # shuffle their library in the *next* printed sentence, "Then shuffle your
-    # library." That sentence is **this search's shuffle** (CR 701.23a: the
-    # shuffle ends the search), which the search prompt's answer performs —
-    # so the search is marked as having left it, and
+    # library." That sentence is **this search's shuffle** (CR 701.24a), the
+    # one a search's "then shuffle" names, which the search prompt's answer
+    # performs — so the search is marked as having left it, and
     # ``riders._parse_deferred_search_shuffle`` consumes the sentence rather
     # than the ordinary shuffle production lowering it to a second
     # ``shuffle_library``. Read that way the library was shuffled twice for

@@ -732,7 +732,7 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
     "reorder_target_library_top": ("you may have that player shuffle",),
     # "…exile them in a face-down pile, and shuffle that pile. Then shuffle
     # your library." (Mangara's Tome, Parallel Thoughts.) The search's own
-    # shuffle (CR 701.23a), performed by the search prompt's answer
+    # shuffle (CR 701.24a), performed by the search prompt's answer
     # (``choices/search._resolve_search_exile``) and read by the grammar as
     # the search's deferred shuffle (``riders._parse_deferred_search_shuffle``)
     # — the sentence changes no payload, so the first sentence alone

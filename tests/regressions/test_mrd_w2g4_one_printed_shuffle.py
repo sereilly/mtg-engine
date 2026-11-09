@@ -1,4 +1,4 @@
-"""One printed shuffle is one shuffle (CR 701.23a, CR 701.24a).
+"""One printed shuffle is one shuffle (CR 701.24a).
 
 "When this artifact enters, search your library for five cards, exile them in
 a face-down pile, and shuffle that pile. **Then shuffle your library.**"
