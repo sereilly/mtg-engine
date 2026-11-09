@@ -682,6 +682,12 @@ def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: Or
         card = (context.trigger_context or {}).get("dead_card")
         cards = [card] if card is not None else []
     context.results["reanimated_bound_card"] = False
+    # What this step put onto the battlefield, by id, for the sentence behind
+    # it ("Attach this Equipment to **that creature**", Scythe of the
+    # Wretched) — declared in ``lowering/_records._PRODUCES``. Written
+    # unconditionally and filled as each card arrives, so a step that brought
+    # nothing back leaves a record that says so.
+    context.results[REANIMATED_PERMANENTS] = ()
     if not cards:
         game.log.append(
             f"{context.card.name}: no recorded card to put onto the battlefield"
@@ -719,6 +725,10 @@ def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: Or
                 # enters" choice keeps it on its way).
                 def arrived(permanent=permanent, seat=seat, card=card) -> None:
                     context.results["reanimated_bound_card"] = True
+                    context.results[REANIMATED_PERMANENTS] = (
+                        *context.results.get(REANIMATED_PERMANENTS, ()),
+                        permanent.permanent_id,
+                    )
                     if instruction.payload.get("sacrifice_when_control_lost"):
                         source = context.source_permanent
                         if source is not None:

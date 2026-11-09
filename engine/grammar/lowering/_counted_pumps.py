@@ -125,6 +125,28 @@ def _per_each_shares_with_host(node: ast.Pump) -> ast.Pump:
     )
 
 
+def _per_each_attached_to_host(node: ast.Pump) -> ast.Pump:
+    """"**Equipped creature** gets +1/+0 for each Equipment attached to
+    **it**." (Golem-Skin Gauntlets.)
+
+    :func:`_per_each_shares_with_host`'s argument for the attachment relation:
+    the postmodifier reads "attached to it" as attached to the ability's
+    source, which is right for Myr Adapter's "this creature gets +1/+1 for each
+    Equipment attached to it" — and wrong here, where the source is the
+    Gauntlets and nothing is attached to an Equipment. The pump's subject is
+    the host, and the "it" the count measures cannot name anything else, so the
+    relation is bound to the host's far end (``"attached_host"``, resolved from
+    the source by ``handlers/_amounts.evaluate_count``). Left on the source the
+    count was zero on every board and the card printed +1/+0 for nothing.
+    """
+    filt = node.per_each
+    if filt is None or filt.attached_to != "source":
+        return node
+    return dataclasses.replace(
+        node, per_each=dataclasses.replace(filt, attached_to="attached_host"),
+    )
+
+
 def _lower_pump_per_milled(node: ast.Pump) -> tuple[OracleInstruction, ...]:
     """"…**it** gets +1/+0 until end of turn **for each creature card put into
     your graveyard this way**." (Song of Blood, in the sentence its delayed
@@ -432,7 +454,9 @@ def lower_counted_pump(
             # writes to has no end-of-turn sweep — it would be a permanent
             # bonus on a card that printed "until end of turn".
             if _is_enchanted(node.subject) and node.duration.kind is None:
-                node = _per_each_shares_with_host(node)
+                node = _per_each_attached_to_host(
+                    _per_each_shares_with_host(node)
+                )
                 return (
                     OracleInstruction("dynamic_pt_bonus", "", {
                         "power": _per_each_amount(

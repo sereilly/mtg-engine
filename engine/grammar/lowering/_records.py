@@ -644,6 +644,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # behind this step cannot mean the permanent that died — and every reader
     # in the resolution is still holding that one.
     "return_source_card_to_battlefield": _REANIMATED_PERMANENTS,
+    # "…return that card to the battlefield under your control. **Attach this
+    # Equipment to that creature.**" (Scythe of the Wretched.) The bound-card
+    # reanimation, recording what it put onto the battlefield under the same
+    # key for the same CR 400.7 reason: the permanent that came back is a new
+    # object, and the step behind names it.
+    "reanimate_bound_card": _REANIMATED_PERMANENTS,
     # "…**That Dragon** gains haste until end of turn. Exile **it** at the
     # beginning of the next end step." (Zirilan of the Claw.) The reanimation's
     # twin one zone over — see ``oracle_types.SEARCHED_PERMANENTS``.

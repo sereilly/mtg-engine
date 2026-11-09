@@ -316,7 +316,10 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("damage_dealt",
      r"whenever (?:"
      r"(?P<damager_self>this (?:creature|artifact|enchantment|land|aura|permanent))"
-     r"|(?P<damager_attached>enchanted (?:creature|artifact|enchantment|land|permanent))"
+     # "equipped creature" is CR 301.5f's spelling of the same referent
+     # (Mask of Memory, Worldslayer); the dispatcher reads `attached_to`.
+     r"|(?P<damager_attached>enchanted (?:creature|artifact|enchantment|land|permanent)"
+     r"|equipped creature)"
      r"|a source (?P<damager_controller>you) control"
      # "Whenever **a source** deals damage to this creature" (Crag Saurian).
      # The damager narrowed by nothing at all — CR 120.7's word covers a spell,
@@ -431,9 +434,11 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # is the narrowing, and it is payload, exactly as `combatant_attached` is on
     # `creature_attacks_or_blocks`. The two combat fire sites read the key and
     # scan the combatant's attachments beside its own abilities.
+    # "Whenever **equipped** creature blocks or becomes blocked by a creature"
+    # (Dead-Iron Sledge) is the same row: CR 301.5f's word for the referent.
     ("creature_blocks_or_blocked_by",
-     r"whenever enchanted (?P<combatant_attached>[a-z]+) blocks or becomes blocked by"
-     r" (?P<block_pair_subject>(?:a|another) [^,]+)"),
+     r"whenever (?:enchanted|equipped) (?P<combatant_attached>[a-z]+) blocks or "
+     r"becomes blocked by (?P<block_pair_subject>(?:a|another) [^,]+)"),
     ("creature_blocks_or_blocked_by",
      r"whenever this creature blocks or becomes blocked by (?P<block_pair_subject>(?:a|another) [^,]+)"),
     # "…blocks or becomes blocked by **one or more Orcs**" (Dwarven Soldier).

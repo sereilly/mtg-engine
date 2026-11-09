@@ -285,6 +285,40 @@ def _lower_destroy(
             OracleInstruction("destroy_target_permanent", "", chosen_payload),
         )
 
+    # "Whenever equipped creature blocks or becomes blocked by a creature,
+    # destroy **both creatures**." (Dead-Iron Sledge.) The whole pair the
+    # trigger bound: the creature on the other side of the block — the referent
+    # "that creature" names below — and the creature the trigger was printed
+    # about, the combatant. Both are frozen by the fire site when the ability
+    # triggers (``block_pair_permanents`` and ``combatant_permanent_id``), so
+    # the 2006-10-15 ruling holds: "Moving Dead-Iron Sledge after the ability
+    # triggers will not affect which creatures are destroyed." One destruction,
+    # so the handler destroys both together (CR 701.8a, 603.10a).
+    #
+    # Only under a firing that bound exactly one pair (``binds_block_pair``),
+    # and only the restated noun: a bare block event has several partners and
+    # no "both" among them.
+    if spec.quantifier == "both":
+        if not binds_block_pair(event, event_subject):
+            raise LoweringError(
+                "\"both creatures\" names a block pair, and this event binds none",
+                node=node,
+            )
+        if filt.card_types != ("creature",) or _restrictions_beyond(
+            filt, frozenset({"card_types"})
+        ):
+            raise LoweringError(
+                "the block-pair destroy restates the pair and carries no "
+                "narrowing of its own",
+                node=node,
+            )
+        both_payload: dict[str, object] = {"with_combatant": True}
+        if node.no_regen:
+            both_payload["bypass_regeneration"] = True
+        return (
+            OracleInstruction("destroy_block_pair_partner", "", both_payload),
+        )
+
     # "Whenever enchanted creature deals damage to a creature, destroy **the
     # other creature**." (Venomous Fangs.) English's "other" contrasts with the
     # nearest antecedent noun phrase, and a damage event has exactly two objects

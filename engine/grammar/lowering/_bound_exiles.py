@@ -57,8 +57,9 @@ from ._common import (_filter_payload, _is_created_token, _is_source,
                       _restrictions_beyond)
 from ._deaths import BOUND_CARD_EVENTS
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
-from ._events import (_RECORDED_PERMANENTS, CHOSEN_PERMANENT, CREATED_TOKEN,
-                      CREATED_TOKENS, damage_trigger_names_damaged_end)
+from ._events import (_EVENT_STAMPED_TARGET_OBJECTS, _RECORDED_PERMANENTS,
+                      CHOSEN_PERMANENT, CREATED_TOKEN, CREATED_TOKENS,
+                      damage_trigger_names_damaged_end)
 
 
 def _entering_counter_payload(
@@ -130,7 +131,19 @@ def lower_restated_noun_exile(
             raise LoweringError(
                 "the bound-object exile carries no rider", node=node
             )
-        if damage_trigger_names_damaged_end(event, event_subject):
+        # "Whenever **equipped creature** deals damage to a creature, exile
+        # that creature." (Sword of Kaldra; its 2004-10-04 ruling: "You exile
+        # the creature that gets damaged.") The attached damager has a name of
+        # its own — the sentence would say "equipped creature" again to mean
+        # it — so the restated noun is the damaged end here too, the object
+        # the fire site stamps; the same gate the destroy branch keeps for
+        # this event (``_EVENT_STAMPED_TARGET_OBJECTS``), where a dealing to a
+        # player stamps nothing and the exile resolves nothing.
+        attached_damager = (
+            event in _EVENT_STAMPED_TARGET_OBJECTS
+            and getattr(event_subject, "is_enchanted", False)
+        )
+        if damage_trigger_names_damaged_end(event, event_subject) or attached_damager:
             # "Whenever this creature deals damage to a creature, **exile that
             # creature**." (Pit Spawn.) The immediate twin of Lowland
             # Basilisk's delayed destroy, one keyword action over.

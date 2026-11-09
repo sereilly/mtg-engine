@@ -1126,13 +1126,28 @@ def evaluate_count(
         )
     attached_to = spec.get("attached_to")
     if attached_to is not None:
-        if attached_to != "source" or source is None:
+        if source is None:
+            return 0
+        # "…for each Equipment attached to **it**" printed about the host
+        # (Golem-Skin Gauntlets): the permanent the count is about is the one
+        # the source is attached to, read off the live record (CR 301.5a /
+        # 303.4b — the same slot an Equipment and an Aura both write). The
+        # source itself is counted when it answers the filter, which is the
+        # card's ruling (2020-08-07: "counted by its own ability, so it gives
+        # at least +1/+0").
+        if attached_to == "attached_host":
+            host = source.metadata.get("attached_to")
+        elif attached_to == "source":
+            host = source
+        else:
+            return 0
+        if host is None:
             return 0
         from ..aura_attachment import auras_attached_to
 
         return _scaled(
             len([
-                attachment for attachment in auras_attached_to(source)
+                attachment for attachment in auras_attached_to(host)
                 if permanent_matches_filter(attachment, filt)
             ]),
             spec,

@@ -446,7 +446,11 @@ def count_spec(
     # inherit the owner scope above (an opponent's Aura on your creature is
     # attached to your creature).
     if filt.attached_to is not None:
-        if filt.attached_to != "source":
+        # "…attached to **it**" where "it" is the pump's host rather than its
+        # source (Golem-Skin Gauntlets) arrives as ``"attached_host"`` —
+        # ``_counted_pumps._per_each_attached_to_host`` is the one rewrite that
+        # makes it, and the evaluator resolves it from the source.
+        if filt.attached_to not in ("source", "attached_host"):
             raise LoweringError(
                 f"no count resolves an attachment to the {filt.attached_to}",
                 node=node,

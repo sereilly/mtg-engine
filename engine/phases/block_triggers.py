@@ -162,6 +162,10 @@ class BlockTriggersMixin:
                     ]
                     firing_contexts = _threshold_firings(trig, admitted)
                 for firing_context in firing_contexts:
+                    # The blocking half of the pair, frozen for "destroy
+                    # **both creatures**" (Dead-Iron Sledge) — the mirror of
+                    # the becomes-blocked site's stamp below.
+                    firing_context["combatant_permanent_id"] = blocker.permanent_id
                     pushed = self._stack_push(
                         StackItem(
                             card=source.card,
@@ -644,6 +648,12 @@ class BlockTriggersMixin:
                             "blocked_permanent_ids": (
                                 [blocker.permanent_id] if blocker is not None else []
                             ),
+                            # The pair's other half: the creature this
+                            # firing was printed about, frozen now (CR
+                            # 603.10) for "destroy **both creatures**"
+                            # (Dead-Iron Sledge), which must not follow the
+                            # Equipment if it moves before resolution.
+                            "combatant_permanent_id": attacker.permanent_id,
                         },
                     )
                 )

@@ -261,6 +261,25 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         if _singular(noun) in CARD_TYPES:
             d.card_types.append(_singular(noun))
 
+    # "**Equipped creature** gets +1/+1 for each card in your hand." (Empyrial
+    # Plate.) CR 301.5a calls the creature an Equipment is attached to "the
+    # equipped creature", and CR 301.5f makes the phrase name whatever creature
+    # the permanent printing it is attached to — the referent CR 303.4b gives
+    # "enchanted" in the branch above, kept on the one attachment record both
+    # write (``aura_attachment``). So it is the same draft field rather than a
+    # second one every lowering would have to learn: the lowerings that read
+    # "enchanted creature" read this phrase with no change. Only before
+    # "creature", because that is the only noun CR 301.5a's phrase has.
+    if (
+        not d.saw_head
+        and stream.at_word("equipped")
+        and stream.peek_word(1) == "creature"
+    ):
+        stream.advance(2)
+        d.is_enchanted = True
+        d.saw_head = True
+        d.card_types.append("creature")
+
     # --- adjectives ------------------------------------------------------
     while not d.saw_head:
         # Adjectives may be comma-separated: "target nonartifact, nonblack

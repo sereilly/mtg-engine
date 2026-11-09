@@ -67,6 +67,16 @@ _EQUIP_LINE = re.compile(
     r"^equip(?:\s+(?P<quality>[a-z][a-z' -]*?))?\s+(?P<cost>(?:\{[^{}]+\})+)$",
     re.IGNORECASE,
 )
+# "Equip—Pay 3 life." (Nightmare Lash.) CR 702.6a's "[cost]" is any cost, and
+# one that is not only mana is printed behind a dash — the arrangement every
+# other cost keyword here already reads (``face_down._MORPH_DASH_PART``,
+# ``cast_costs``' kicker and buyback, ``flashback``), each with its own pattern
+# because each is charged by a different reader. Equip's reader is the
+# activated-ability cost parser the rewrite hands the cost to, so admitting the
+# dash here admits only what that parser charges: a clause it cannot read
+# leaves the expanded ability unsupported, and the Equipment gate in
+# ``engine/oracle.py`` refuses the card naming its equip line.
+_EQUIP_DASH_LINE = re.compile(r"^equip\s*[—–]\s*(?P<cost>[^{}:]+)$", re.IGNORECASE)
 _REMINDER = re.compile(r"\([^)]*\)")
 # Any line that *is* an equip keyword line, readable or not — "Equip
 # planeswalker {3}" included. The wider shape is what the support gate asks, so
@@ -93,6 +103,15 @@ def equip_line_parts(line: str) -> tuple[str, str] | None:
     resolution always declines.
     """
     stripped = " ".join(_REMINDER.sub("", line or "").split()).strip().rstrip(".")
+    dashed = _EQUIP_DASH_LINE.match(stripped)
+    if dashed is not None:
+        # The cost as printed, first letter up ("Pay 3 life"), exactly as the
+        # rules text writes "[Cost]:" — the same spelling morph's dash cost
+        # keeps. Only the bare keyword: CR 702.6c's quality sits before a
+        # mana cost in every printing, and a dash after one is not a shape
+        # this reads.
+        cost = dashed.group("cost").strip()
+        return cost[:1].upper() + cost[1:], "creature"
     match = _EQUIP_LINE.match(stripped)
     if match is None:
         return None

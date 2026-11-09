@@ -548,6 +548,15 @@ ENFORCED_ATTACHED_COMBAT_RESTRICTIONS = frozenset({
     # gate in ``_can_block_attacker`` and the charge in ``declare_blockers``
     # share one reading and a block cannot be accepted and left unpaid.
     "cant_be_blocked_unless_pay",
+    # "Equipped creature has trample and can't be blocked by more than one
+    # creature." (Vorrac Battlehorns.) Stalking Tiger prints the ceiling about
+    # itself, so it is the same table asked with the subject rewritten. Its one
+    # reader is ``phases/block_legality._maximum_blockers``, which already
+    # collects this channel beside the attacker's own program — and every
+    # caller (the declaration gate, the block requirements, the AI's
+    # declaration) asks the ceiling through it, so no reader is left asking
+    # only the creature's own text.
+    "cant_be_blocked_by_more_than",
 })
 
 #: "Enchanted creature" / "equipped creature" in the subject position, with the

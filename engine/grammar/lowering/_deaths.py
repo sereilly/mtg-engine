@@ -40,6 +40,12 @@ BOUND_CARD_EVENTS = frozenset({
     # which is why the set is what says an event is admitted rather than the
     # condition table that merely names it.
     "creature_dealt_damage_by_self_dies",
+    # "Whenever a creature dealt damage by **equipped** creature this turn
+    # dies, return that card to the battlefield under your control." (Scythe
+    # of the Wretched.) The attached twin of the row above, announced by the
+    # same branch of the same scan (``mixins/deaths._DAMAGER_DEATH_CONDITIONS``)
+    # with the same ``died_context`` — so it records the same ``dead_card``.
+    "creature_dealt_damage_by_attached_dies",
     # "Whenever another card is put into a graveyard **from anywhere**, exile
     # that card." (Planar Void.) Not a death at all — a milled card was never
     # on a battlefield — which is why the set is named for what a fire site
