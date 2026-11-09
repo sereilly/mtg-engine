@@ -25777,21 +25777,6 @@ function playHandArrivalFlights(flights, state, viewerSeat) {
   });
 }
 
-// Whether *incoming* is older than the state on screen, so rendering it would
-// step the board back: a slow HTTP response arriving after a faster
-// SSE-prompted fetch has already shown something newer.
-//
-// By the server's `revision` (web/events: one more at every change a route
-// announces) when both carry one and they differ. The log's length was the
-// only version this had, and it is not one across games: a rematch, a
-// restart and an undo each start a shorter log. Each of those was let
-// through only by the event that named it (`rematch_start`, `undo`), so a
-// seat that missed that event — its stream reconnecting, or the next event
-// replacing it in the server's one-slot queue — discarded the new game at
-// every fetch and sat on the finished game's Defeat screen, "Waiting for
-// opponent…", while the new game waited on it (driven at kg4). Between two
-// payloads of one revision (a fetch that only settled what the game owed)
-// the log's length still decides.
 // -- Controlling another player (CR 723, Mindslaver) -------------------------
 //
 // The server says who controls whom this turn (`player_controls`, controlled
@@ -25886,6 +25871,21 @@ function renderPlayerControlBanner(state) {
   el.classList.toggle("hidden", !text);
 }
 
+// Whether *incoming* is older than the state on screen, so rendering it would
+// step the board back: a slow HTTP response arriving after a faster
+// SSE-prompted fetch has already shown something newer.
+//
+// By the server's `revision` (web/events: one more at every change a route
+// announces) when both carry one and they differ. The log's length was the
+// only version this had, and it is not one across games: a rematch, a
+// restart and an undo each start a shorter log. Each of those was let
+// through only by the event that named it (`rematch_start`, `undo`), so a
+// seat that missed that event — its stream reconnecting, or the next event
+// replacing it in the server's one-slot queue — discarded the new game at
+// every fetch and sat on the finished game's Defeat screen, "Waiting for
+// opponent…", while the new game waited on it (driven at kg4). Between two
+// payloads of one revision (a fetch that only settled what the game owed)
+// the log's length still decides.
 function stateIsStale(incoming, current) {
   if (!incoming || !current) return false;
   const newer = incoming.revision;
