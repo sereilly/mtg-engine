@@ -12,7 +12,8 @@ This file is the per-kind probe that entry asked for, run as a game. For every
 kind in the registry (``engine/mixins/stack/choices/table.py``) a shipped card
 arms the prompt for an **interactive** seat on a real board — one kind,
 ``graveyard_pile_choice``, no compiled card reaches, and it is driven over the
-instruction that does — and the prompt is answered three ways: through the
+instruction that does; a kind only a measured set's cards arm yet is armed by
+one of those (``_MEASURED_CARDS``) — and the prompt is answered three ways: through the
 registry's own answer path (``resolve_pending_choice``, or
 ``resolve_replacement_choice`` for the CR 614 queue), through
 ``POST /api/sessions/{id}/action`` (the route a person's click takes), and by
