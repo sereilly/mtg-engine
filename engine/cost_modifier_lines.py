@@ -243,6 +243,22 @@ class CostModifier:
     #: coloured reduction printed *without* the rider is still refused, because
     #: no card in the pool prints one and its arithmetic is a different card's.
     colored_only: bool = False
+    #: "Each artifact spell costs {1} more to cast **for each artifact its
+    #: controller controls**." (Hum of the Radix.) How many times ``amount``
+    #: is charged: the ``handlers/_amounts.evaluate_count`` spec of the printed
+    #: noun phrase, read by the grammar's own per-each reader
+    #: (``grammar.per_each_count_spec_for``) and asked at CR 601.2f, when the
+    #: cost is determined. None when the amount is printed flat, which is
+    #: every other modifier on this table.
+    per_each: dict | None = None
+    #: *Whose* board ``per_each`` counts — the spec's "you" is this seat.
+    #: ``"caster"`` for "its controller controls": the taxed **spell's**
+    #: controller, "the player who cast it" (CR 405.4), so a Hum taxes its
+    #: own controller's artifacts by that player's board and an opponent's by
+    #: theirs. ``"source_controller"`` for "you control": the taxing
+    #: permanent's controller, the "you" of its own static ability (CR 109.5).
+    #: None exactly when ``per_each`` is.
+    per_each_seat: str | None = None
 
 
 @dataclass(frozen=True)
@@ -384,6 +400,13 @@ _SPELL_TAX = re.compile(
     r"(?P<shares> that share a creature type with this (?:creature|permanent))?"
     r" cost(?P<verb_s>s)? "
     r"(?P<amount>(?:\{(?:\d+|[wubrgc])\})+) (?P<direction>more|less) to cast"
+    # "…**for each artifact its controller controls**." (Hum of the Radix.) A
+    # multiplier on the amount, delimited to the end of its sentence (a full
+    # stop, a line break or the end of the text — never across one, since this
+    # pattern is *searched* over a whole card) and read by the grammar's per-each
+    # reader in ``_spell_tax_modifier``; see ``CostModifier.per_each``. A clause
+    # that reader refuses refuses the whole tax, so nothing is charged flat.
+    r"(?: for each (?P<per_each>[^.\n]+?)(?=\.|\n|$))?"
     # "…**except during its controller's turn**." (Defense Grid.) A timing
     # condition on the tax, optional because every other card printing this
     # sentence prints it without one -- and read here rather than left to a
@@ -928,6 +951,17 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
     # a creature or a kindred a creature type), and one subject only.
     if shares and (card_types != ("creature",) or len(subjects) > 1):
         return None
+    per_each = per_each_seat = None
+    if match.group("per_each") is not None:
+        # A coloured pip charged once per object is ``_symbol_modifiers``'
+        # loop, which charges each pip once; a multiplier beside one would be
+        # dropped there. Nothing prints it, so the sentence refuses.
+        if pips or not generic:
+            return None
+        counted = _per_each_tax_count(match.group("per_each"))
+        if counted is None:
+            return None
+        per_each, per_each_seat = counted
     return CostModifier(
         amount=generic,
         applies_to="cast",
@@ -945,7 +979,41 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
         mana_value=mana_value,
         shares_creature_type_with_source=shares,
         colored_only=colored_only,
+        per_each=per_each,
+        per_each_seat=per_each_seat,
     )
+
+
+#: The seat words a per-each tax may close its count with, and whose board each
+#: names (``CostModifier.per_each_seat``). Read off the end of the clause
+#: because the noun phrase in front of them is the grammar's to read, and the
+#: grammar's per-each reader takes "you control" and nothing else here: "its
+#: controller" names the controller of an object a *resolving* sentence is
+#: about (``event_subject_controller``), which a static ability has none of.
+#: So the words are carried here as a seat and the noun phrase is read as "you
+#: control", asked of that seat — the arrangement
+#: ``characteristic_defining._counted_noun_phrase`` makes for "its
+#: controller's graveyard". A clause ending any other way refuses the tax.
+_PER_EACH_TAX_SEATS: tuple[tuple[str, str], ...] = (
+    (" its controller controls", "caster"),
+    (" you control", "source_controller"),
+)
+
+
+def _per_each_tax_count(clause: str) -> "tuple[dict, str] | None":
+    """``(count spec, seat)`` for a per-each tax's printed *clause* ("artifact
+    its controller controls"), or None when the clause is not one this can
+    count in full."""
+    from .grammar import per_each_count_spec_for
+
+    for words, seat in _PER_EACH_TAX_SEATS:
+        if clause.endswith(words):
+            noun = clause[: -len(words)].strip()
+            if not noun:
+                return None
+            spec = per_each_count_spec_for(f"for each {noun} you control")
+            return None if spec is None else (spec, seat)
+    return None
 
 
 def _starts_its_sentence(match: "re.Match[str]") -> bool:

@@ -72,6 +72,7 @@ from .cast_costs import (unchosen_number_definition,
 from .combat_restrictions import combat_restriction_for
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from .madness import unread_madness_line
+from .affinity import unread_affinity_line
 from .storm import unread_storm_line
 from .line_normalization import (_PARENTHETICAL_RE, _normalize_text,
                                  normalize_creature_line)
@@ -474,6 +475,20 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"unimplemented madness cost: {unread_madness}",
+            normalized_text,
+        )
+    # …and an **affinity** line the CR 702.41a rewrite could not read
+    # (``engine/affinity.py``) — a [text] whose head noun the vocabulary cannot
+    # singularize, or a count the self-reduction reader refuses. Flashback's
+    # reason once more: Thoughtcast and Assert Authority were ingested
+    # supported off their other line with the keyword dropped, cast at full
+    # price.
+    unread_affinity = unread_affinity_line(oracle_text)
+    if unread_affinity is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"unimplemented affinity: {unread_affinity}",
             normalized_text,
         )
 

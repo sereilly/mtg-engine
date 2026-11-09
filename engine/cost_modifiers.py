@@ -554,10 +554,43 @@ def _tax_floored(
             # :func:`_timing_holds`.
             if not _timing_holds(game, modifier, controller_index):
                 continue
-            total += modifier.amount
+            # "…for each artifact its controller controls" (Hum of the Radix):
+            # the amount is charged once per counted object, and a count of
+            # zero charges nothing and names nobody in the log.
+            repetitions = _per_each_repetitions(
+                game, modifier, seat, controller_index
+            )
+            if not repetitions:
+                continue
+            total += modifier.amount * repetitions
             floor = max(floor, modifier.floor)
             names.append(permanent.card.name)
     return total, names, floor
+
+
+def _per_each_repetitions(
+    game, modifier: CostModifier, source_seat: int | None,
+    caster_index: int | None,
+) -> int:
+    """How many times *modifier*'s amount is charged: once for a flat amount,
+    and for a per-each one (``CostModifier.per_each``) the count asked now, at
+    CR 601.2f, of the seat ``per_each_seat`` names — the caster's board for
+    "its controller controls", the taxing object's controller's for "you
+    control". Through ``evaluate_count``, the reader every other "for each"
+    in the engine spends, so the layers decide what an artifact is.
+
+    A seat nobody can name counts nothing, for :func:`_timing_holds`' reason:
+    unreachable today (every cast caller carries the caster), and the
+    direction that declines to charge rather than inventing a seat.
+    """
+    if modifier.per_each is None:
+        return 1
+    seat = caster_index if modifier.per_each_seat == "caster" else source_seat
+    if seat is None:
+        return 0
+    from .handlers._amounts import evaluate_count
+
+    return max(0, int(evaluate_count(game, game.players[seat], modifier.per_each)))
 
 
 def _stack_tax(
@@ -608,7 +641,12 @@ def _stack_tax(
                 continue
             if not _timing_holds(game, modifier, caster_index):
                 continue
-            total += modifier.amount
+            # The same multiplier ``_tax_floored`` charges, with the stack
+            # object's caster as the taxing source's controller.
+            repetitions = _per_each_repetitions(game, modifier, seat, caster_index)
+            if not repetitions:
+                continue
+            total += modifier.amount * repetitions
             names.append(item.card.name)
     return total, names
 

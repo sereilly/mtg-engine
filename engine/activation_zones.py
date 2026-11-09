@@ -53,13 +53,11 @@ def ability_functions_from(ability) -> str:
     single answer every activation path takes: the two hand-written gates this
     replaced could disagree with the list the picker was built from, and did.
     """
-    instruction = getattr(ability, "instruction", None)
-    payload = getattr(instruction, "payload", None) or {}
     # CR 113.6b: an ability that states which zones it functions in functions
     # only from those zones. Stated wins over inferred.
-    stated = payload.get("functions_from")
+    stated = _stated_zone(getattr(ability, "instruction", None))
     if stated:
-        return str(stated)
+        return stated
     # CR 113.6j, reached through CR 701.9a: "Discard this card" moves the card
     # from its owner's *hand*, so the cost is payable there and nowhere else.
     cost = getattr(ability, "cost", None)
@@ -78,6 +76,31 @@ def ability_functions_from(ability) -> str:
     ):
         return HAND
     return BATTLEFIELD
+
+
+def _stated_zone(instruction) -> str | None:
+    """The zone *instruction* says its ability works from, or None.
+
+    The key on the instruction itself, or — for a ``sequence`` — on its
+    **first** step. "{B}{B}: Return this card from your graveyard to the
+    battlefield, then sacrifice a creature." (Nim Devourer.) The self-return
+    stamps the zone its sentence names on its own step (CR 113.6m), and the
+    "then" wraps it; read off the top alone, the ability answered
+    "battlefield" — refused from the graveyard it works from and offered on
+    the battlefield where returning the card does nothing and the sacrifice
+    still happens. Only the first step: CR 113.6m's exception is "a previous
+    part of its cost or effect" putting the object into that zone, and the
+    first part of an effect has no previous part.
+    """
+    payload = getattr(instruction, "payload", None) or {}
+    stated = payload.get("functions_from")
+    if stated:
+        return str(stated)
+    if getattr(instruction, "kind", None) == "sequence":
+        steps = payload.get("steps") or ()
+        if steps:
+            return _stated_zone(steps[0])
+    return None
 
 
 def functions_from_zone(ability, zone: str) -> bool:
