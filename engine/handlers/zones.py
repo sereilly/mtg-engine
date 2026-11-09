@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from ..exiled_records import source_object
 from ..models import Permanent
+from ..oracle_types import LAST_TARGET_CONTROLLER
 from ._filters import graveyard_card_matches
 from ._targets import (_resolve_graveyard_slots, chosen_graveyard_slot,
                        frozen_that_player_seat, pile_owner_still_a_target,
@@ -212,6 +213,13 @@ def put_target_on_library_top(game: Game, instruction: OracleInstruction, contex
     # same move to the library's other end; the lowering emits it on this
     # single-target shape only.
     end = "bottom" if instruction.payload.get("library_end") == "bottom" else "top"
+    # "…on the bottom of its owner's library. **That creature's controller**
+    # reveals cards …" (Proteus Staff.) Whose permanent it was, frozen before
+    # it leaves (CR 608.2h) — the seat the rider behind reads, which can differ
+    # from the owner whose library the card went into.
+    controller_index = game.controller_index_of(target_perm)
+    if controller_index is not None:
+        context.results[LAST_TARGET_CONTROLLER] = controller_index
     game.remove_from_battlefield(target_perm)
     game._remove_aura_effects(target_perm)
     game.put_card_into_library(

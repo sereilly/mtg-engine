@@ -55,6 +55,7 @@ from engine.game import Game as _W1G11Game
 from engine.models import Permanent as _W1G11Permanent
 from engine.models import PlayerState as _W1G11PlayerState
 from engine.oracle import compile_card_oracle as _w1g11_compile
+from engine.control import change_control as _w1g11_change_control
 from engine.targeting import derive_activation_spec as _w1g11_activation_spec
 
 from tests.helpers import resolve_stack as _w1g11_resolve_stack
@@ -150,6 +151,81 @@ def test_w1g11_charbelcher_aims_at_a_creature_and_the_picker_offers_any_target(s
     _w1g11_resolve_stack(game)
     assert dragon.damage_marked == 2
     assert bob.life == 20
+
+def test_w1g11_proteus_staff_swaps_a_creature_for_its_controllers_next_creature(set_pool):
+    """Bob's Dragon goes to the bottom of Bob's library; Bob reveals down to
+    his next creature, which enters under his control, and the rest go under."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    bob_library = [lea["Island"], lea["Lightning Bolt"], lea["Grizzly Bears"],
+                   lea["Forest"]]
+    game, alice, bob = _w1g11_table(set_pool, bob_library=bob_library)
+    staff = _w1g11_put(game, 0, mrd["Proteus Staff"])
+    dragon = _w1g11_put(game, 1, lea["Shivan Dragon"])
+    _w1g11_activate(game, 0, staff, target_permanent_ids=[dragon.permanent_id])
+    _w1g11_resolve_stack(game)
+    assert not game.is_on_battlefield(dragon)
+    bears = [p for p in game.controlled_by(1) if p.card.name == "Grizzly Bears"]
+    assert len(bears) == 1
+    assert game.controller_index_of(bears[0]) == 1
+    # Forest was never revealed and is on top; the Dragon went under first,
+    # then the two revealed cards under it.
+    assert [c.name for c in bob.library] == [
+        "Forest", "Shivan Dragon", "Island", "Lightning Bolt",
+    ]
+
+
+def test_w1g11_proteus_staff_reads_the_controller_not_the_owner(set_pool):
+    """A creature Alice controls but Bob owns: it goes to Bob's library, and
+    Alice (its controller) reveals from hers."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, bob = _w1g11_table(
+        set_pool, library=[lea["Plains"], lea["Grizzly Bears"]],
+        bob_library=[lea["Island"]] * 3,
+    )
+    staff = _w1g11_put(game, 0, mrd["Proteus Staff"])
+    dragon = _w1g11_put(game, 1, lea["Shivan Dragon"])
+    _w1g11_change_control(dragon, 0, source=lea["Control Magic"])
+    game._sync_control()
+    assert game.controller_index_of(dragon) == 0
+    _w1g11_activate(game, 0, staff, target_permanent_ids=[dragon.permanent_id])
+    _w1g11_resolve_stack(game)
+    assert bob.library[-1].name == "Shivan Dragon"
+    assert [p.card.name for p in game.controlled_by(0)
+            if p.card.name == "Grizzly Bears"] == ["Grizzly Bears"]
+    assert [c.name for c in alice.library] == ["Plains"]
+
+
+def test_w1g11_proteus_staff_is_sorcery_speed_and_picks_a_creature(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    (ability,) = _w1g11_compile(mrd["Proteus Staff"]).activated_abilities
+    spec = _w1g11_activation_spec(ability)
+    assert spec is not None and spec.get("kind") in ("permanent", "creature"), spec
+    game, alice, bob = _w1g11_table(set_pool)
+    staff = _w1g11_put(game, 0, mrd["Proteus Staff"])
+    dragon = _w1g11_put(game, 1, lea["Shivan Dragon"])
+    game.current_phase = "combat"
+    game.current_turn_phase, game.current_step = "combat", "declare_attackers"
+    result = game.activate_permanent_ability(
+        0, "Proteus Staff", permanent_index=game.battlefield_index_of(staff),
+        ability_index=0, target_permanent_ids=[dragon.permanent_id],
+    )
+    assert not result.supported
+    assert game.is_on_battlefield(dragon)
+
+def test_w1g11_proteus_staff_asks_the_revealing_player_to_order_the_rest(set_pool):
+    """CR 401.4: the pile's owner — the revealer, not the activator — orders
+    the cards put on the bottom."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    bob_library = [lea["Island"], lea["Lightning Bolt"], lea["Grizzly Bears"]]
+    game, alice, bob = _w1g11_table(set_pool, bob_library=bob_library)
+    game.interactive_seats = {1}
+    staff = _w1g11_put(game, 0, mrd["Proteus Staff"])
+    dragon = _w1g11_put(game, 1, lea["Shivan Dragon"])
+    _w1g11_activate(game, 0, staff, target_permanent_ids=[dragon.permanent_id])
+    game.resolve_top_of_stack()
+    owed = [(c.kind, c.player_index) for c in game.pending_choices]
+    assert ("reorder_library", 1) in owed, owed
+
 
 # ==== end W1G11 ======================================================
 

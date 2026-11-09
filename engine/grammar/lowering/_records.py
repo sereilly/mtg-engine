@@ -904,6 +904,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
 #: already writes.
 _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, "str | tuple[str, ...]"]] = {
     "search_library": ("destination", "exile", "exiled_cards"),
+    # "Put target creature on the bottom of its owner's library. **That
+    # creature's controller** reveals cards …" (Proteus Staff.) The bottom
+    # shape only: it is single-target (the lowering emits ``library_end`` on
+    # no other), so one seat was the controller, recorded before the move.
+    "put_target_on_library_top": ("library_end", "bottom", LAST_TARGET_CONTROLLER),
     # "Reveal cards from the top of your library until you reveal a nonland
     # card. This creature gets +X/+0 until end of turn, where X is **that
     # card's mana value**. Put **the revealed cards** on the bottom of your

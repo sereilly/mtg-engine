@@ -869,6 +869,16 @@ def _parse_that_controller_reveals_rider(
     ):
         stream.reset(mark)
         return None
+    # "The player puts that card onto the battlefield **and the rest on the
+    # bottom of their library in any order**." (Proteus Staff.) The pile goes
+    # under the library in an order its owner chooses (CR 401.4) instead of
+    # being shuffled back — the one difference from Transmogrify, so every word
+    # is required, "in any order" included.
+    if stream.accept_phrase(
+        "and", "the", "rest", "on", "the", "bottom", "of", "their", "library",
+        "in", "any", "order",
+    ):
+        return ast.RevealUntil(LAST_TARGET_CONTROLLER, filt, rest="bottom_any_order")
     stream.accept_punct(",")
     if not stream.accept_word("then"):
         stream.reset(mark)

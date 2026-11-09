@@ -640,6 +640,19 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
             game.log.append(
                 f"{player.name} exiled {len(revealed)} card(s) revealed this way"
             )
+    elif rest == "bottom_any_order":
+        # "…and the rest on the bottom of their library in any order."
+        # (Proteus Staff.) The pile never left the library (CR 701.20b), so it
+        # is laid back under it rather than through ``put_card_into_library``,
+        # and its owner orders it (CR 401.4) through the seam every "in any
+        # order" bottom reaches.
+        player.library.extend(revealed)
+        if revealed:
+            game.log.append(
+                f"{player.name} put {len(revealed)} revealed card(s) on the "
+                "bottom of their library"
+            )
+            game.offer_library_bottom_order(player, len(revealed))
     else:
         for card in revealed:
             game.put_card_into_graveyard(player, card, from_zone="library")
