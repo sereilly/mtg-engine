@@ -150,6 +150,11 @@ def _lower_chosen_counter_placement(
         "chooser": seat,
         "optional": False,
     }
+    if node.subject.quantifier == "target":
+        # "…on **target** creature of defending player's choice": the ability
+        # targets whoever picks (CR 115.1d), so the candidates are held to
+        # what it could target (``permanent_choice_candidates``).
+        chosen["announced_target"] = True
     return (
         OracleInstruction("sequence", "", {"steps": (
             OracleInstruction("choose_permanent", "", chosen),

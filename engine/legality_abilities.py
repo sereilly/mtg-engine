@@ -1113,9 +1113,17 @@ class AbilityTargetsMixin:
             if not seats:
                 continue
             described = payload.get("filter") or {}
+            # …and one the ability could target (shroud, hexproof against its
+            # controller, protection from the source), the predicate the
+            # resolution's candidates ask too (``permanent_choice_candidates``)
+            # — a gate kinder than the resolution is the {4} and {T} paid
+            # into a choice with no candidates again.
             if any(
                 subject_matches(
                     self, perm, described, observer=seat, source=source
+                )
+                and self._can_be_targeted(
+                    perm, card, caster_index=controller_index, ability_source=source,
                 )
                 for seat in seats
                 for perm in self.controlled_by(seat)
