@@ -65,6 +65,7 @@ _DEFAULTS: dict[str, str] = {
     "color_choice": "stated",             # stamped at arm
     "color_set_choice": "stated",         # stamped at arm
     "commander_zone_change": "stated",    # a CR 614 replacement's default
+    "copy_cast": "worth",                 # rehearsed (``ai_policy.choose_copy_cast``: madness's body)
     "copy_spell_target": "worth",
     "counter_distribution": "worth",      # all onto its own greatest-power creature
     "creature_type_choice": "stated",     # stamped at arm
