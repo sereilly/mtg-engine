@@ -16,9 +16,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 89.4% | 87.9% | 50.8% | 178 |
-| LEB | 292 | 389 | 89.5% | 87.9% | 50.9% | 179 |
-| 2ED | 292 | 389 | 89.5% | 87.9% | 50.9% | 179 |
+| LEA | 290 | 388 | 89.7% | 87.9% | 50.8% | 178 |
+| LEB | 292 | 389 | 89.7% | 87.9% | 50.9% | 179 |
+| 2ED | 292 | 389 | 89.7% | 87.9% | 50.9% | 179 |
 | ARN | 78 | 108 | 83.3% | 79.6% | 57.4% | 51 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
 | 3ED | 296 | 389 | 91.0% | 88.9% | 52.7% | 184 |
@@ -55,7 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | SCG | 143 | 262 | 82.4% | 82.1% | 55.0% | 120 |
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| MRD *(measured)* | 291 | 456 | 85.7% | 85.5% | 63.4% | 231 |
+| MRD *(measured)* | 291 | 456 | 87.3% | 87.1% | 64.5% | 235 |
 | **All (shipped)** | **8992** | **13323** | **90.0%** | **89.5%** | **62.1%** | **7036** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -68,8 +68,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 873 | 455 | expected a subject |  |
-| 196 | 101 | unrecognized effect verb |  |
+| 869 | 451 | expected a subject |  |
+| 190 | 97 | unrecognized effect verb |  |
 | 136 | 70 | unconsumed text |  |
 | 71 | 52 | granted ability in quotes | phase 3 (quoted abilities) |
 | 41 | 8 | expected what this creature can't block, or a duration |  |
@@ -84,6 +84,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 2 | expected 'top' |  |
+| 3 | 1 | 'that land' names a land no earlier step of this effect chose |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 3 | an Aura's continuous grant is derived by engine/auras.py |  |
@@ -92,7 +93,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
-| 1 | 1 | expected 'a' |  |
 
 ## Cards executing through the grammar
 
@@ -804,6 +804,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target instant or Aura spell that targets a permanent you control.`
 - **Awakening**
   - `At the beginning of each upkeep, untap all creatures and lands.`
+- **Awe Strike**
+  - `The next time target creature would deal damage this turn, prevent that damage. You gain life equal to the damage prevented this way.`
 - **Axelrod Gunnarson**
   - `Whenever a creature dealt damage by Axelrod Gunnarson this turn dies, you gain 1 life and Axelrod Gunnarson deals 1 damage to target player or planeswalker.`
 - **Ayesha Tanaka**
@@ -1243,6 +1245,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}, Sacrifice this creature: It deals 2 damage to each creature.`
 - **Bloodline Shaman**
   - `{T}: Choose a creature type. Reveal the top card of your library. If that card is a creature card of the chosen type, put it into your hand. Otherwise, put it into your graveyard.`
+- **Bloodscent**
+  - `All creatures able to block target creature this turn do so.`
 - **Bloodshot Cyclops**
   - `{T}, Sacrifice a creature: This creature deals damage equal to the sacrificed creature's power to any target.`
   - `{T}, Sacrifice a creature: This creature deals damage equal to the sacrificed creature's power to any target.`
@@ -4028,6 +4032,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks and isn't blocked, you may have it deal 3 damage to target creature. If you do, this creature assigns no combat damage this turn.`
 - **Farrelite Priest**
   - `{1}: Add {W}. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.`
+- **Farsight Mask**
+  - `Whenever a source an opponent controls deals damage to you, if this artifact is untapped, you may draw a card.`
 - **Fasting**
   - `At the beginning of your upkeep, put a hunger counter on this enchantment. Then destroy this enchantment if it has five or more hunger counters on it.`
   - `When you draw a card, destroy this enchantment.`
@@ -9179,6 +9185,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: If target spell has only one target and that target is this creature, change that spell's target to another creature.`
 - **Quicksilver Elemental**
   - `{U}: This creature gains all activated abilities of target creature until end of turn. (If any of the abilities use that creature's name, use this creature's name instead.)`
+- **Quicksilver Fountain**
+  - `At the beginning of each player's upkeep, that player puts a flood counter on target non-Island land they control of their choice. That land is an Island for as long as it has a flood counter on it.`
+  - `At the beginning of each end step, if all lands on the battlefield are Islands, remove all flood counters from them.`
 - **Quicksilver Wall**
   - `{4}: Return this creature to its owner's hand. Any player may activate this ability.`
 - **Quiet Speculation**
