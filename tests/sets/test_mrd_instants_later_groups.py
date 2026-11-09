@@ -180,4 +180,58 @@ def test_w1g12_bloodscent_ends_with_the_turn(set_pool):
     game.resolve_cleanup_step(0)  # CR 514.2
     assert not wurm.metadata.get("must_be_blocked_by_all_until_eot")
 
+
+# The drive list: Mirrodin instants that compiled supported on arrival.
+
+
+def test_w1g12_razor_barrier_offers_artifacts_or_a_colour(set_pool):
+    for answer, colour, protected_from in (
+        (0, None, "protection_from_artifacts"),
+        (1, "R", "protection_from_red"),
+    ):
+        game, (bears,), _ = _w1g12_table(
+            set_pool, hand=["Razor Barrier"], mine=["Grizzly Bears"], interactive=(0,),
+        )
+        assert game.queue_from_hand(
+            0, "Razor Barrier", target_permanent_ids=[bears.permanent_id],
+        ).supported
+        game.resolve_top_of_stack()
+        (choice,) = game.pending_choices
+        assert choice.kind == "mode_choice"
+        assert choice.data["labels"] == [
+            "protection from artifacts", "protection from the color of your choice",
+        ]
+        assert game.resolve_pending_choice("mode_choice", 0, mode_index=answer)
+        if colour is not None:
+            (pick,) = game.pending_choices
+            assert pick.kind == "color_choice"
+            assert game.resolve_pending_choice("color_choice", 0, mana_color=colour)
+        assert bears.metadata.get(protected_from)
+        assert game.players[0].graveyard[-1].name == "Razor Barrier"
+
+
+def test_w1g12_razor_barrier_targets_only_your_permanent(set_pool):
+    game, _, (myr,) = _w1g12_table(set_pool, hand=["Razor Barrier"], theirs=["Alpha Myr"])
+    assert not game.queue_from_hand(
+        0, "Razor Barrier", target_permanent_ids=[myr.permanent_id],
+    ).supported
+
+
+def test_w1g12_regress_and_altars_light(set_pool):
+    game, _, (myr, crusade) = _w1g12_table(
+        set_pool, hand=["Regress", "Altar's Light"], theirs=["Alpha Myr", "Crusade"],
+    )
+    assert game.queue_from_hand(0, "Regress", target_permanent_ids=[myr.permanent_id]).supported
+    _w1g12_resolve_stack(game)
+    assert [c.name for c in game.players[1].hand] == ["Alpha Myr"]
+    assert game.queue_from_hand(
+        0, "Altar's Light", target_permanent_ids=[crusade.permanent_id],
+    ).supported
+    _w1g12_resolve_stack(game)
+    assert [c.name for c in game.players[1].exile] == ["Crusade"]
+    game, (bears,), _ = _w1g12_table(set_pool, hand=["Altar's Light"], mine=["Grizzly Bears"])
+    assert not game.queue_from_hand(
+        0, "Altar's Light", target_permanent_ids=[bears.permanent_id],
+    ).supported
+
 # ==== end W1G12 ======================================================
