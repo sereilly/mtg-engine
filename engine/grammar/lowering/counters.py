@@ -423,9 +423,15 @@ def _lower_put_counter(
     # carried the same way — stripped from the target description, because no
     # read of the chosen creature alone can answer it, and re-asked by
     # `legality_enumeration.py` at activation and by the handler at resolution.
+    #
+    # "Put **X +1/+1** counters on target creature, where X is the sacrificed
+    # artifact's mana value." (Forge Armor.) The ``+1/+1`` exclusion is the
+    # source branch's below, and lifted the way that one was for Phyrexian
+    # Devourer: only for a variable count, which nothing in the +1/+1 tail
+    # reads — so every printed +1/+1 placement keeps its own payload shape.
     if (
         is_pt_counter(node.counter)
-        and node.counter != "+1/+1"
+        and (node.counter != "+1/+1" or isinstance(node.count, ast.Var))
         and not node.up_to
         and _is_target(node.subject)
         and not _names_several_targets(node.subject)

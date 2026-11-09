@@ -69,6 +69,21 @@ from ._events import (
 )
 
 
+def _names_any_permanent(filt: ast.ObjectFilter) -> bool:
+    """Whether *filt* is the generic head noun "permanent" — every permanent on
+    the battlefield, narrowed (if at all) by what ``refuse_untestable`` checks.
+
+    A card, a spell and an ability are each outside it: a battlefield picker
+    over them would offer objects the phrase does not name.
+    """
+    return (
+        filt.zone == "battlefield"
+        and not filt.is_card
+        and not filt.also_spell
+        and not filt.also_ability
+    )
+
+
 def lower_named_placement(
     node: ast.PutCounter,
     event: str | None,
@@ -285,7 +300,18 @@ def lower_named_placement(
             )
         # "…on target **Fungus**" (Fungal Bloom): a bare creature type is
         # every Fungus permanent (CR 109.2), narrowed by the subtype alone.
-        if not (node.subject.filter.card_types or node.subject.filter.subtypes):
+        #
+        # "Put a fate counter on **target permanent**." (Oblivion Stone.) The
+        # generic head noun narrows by no type at all, and offering every
+        # permanent is what it prints — the reading "Destroy target permanent"
+        # has always had. Admitted only when the phrase names permanents and
+        # nothing else: a card, a spell or an ability on the stack has no
+        # battlefield picker, so each of those keeps the refusal.
+        if not (
+            node.subject.filter.card_types
+            or node.subject.filter.subtypes
+            or _names_any_permanent(node.subject.filter)
+        ):
             raise LoweringError(
                 "a named-counter target with no card type would offer every "
                 "permanent",

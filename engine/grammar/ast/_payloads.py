@@ -420,6 +420,10 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # set, for the reason its neighbour is.
     if self.with_named_counter:
         payload["with_named_counter"] = self.with_named_counter
+    # "**without** a fate counter on it" (Oblivion Stone). The negation, emitted
+    # only when set for the same reason.
+    if self.without_named_counter:
+        payload["without_named_counter"] = self.without_named_counter
     # "with an activated ability that isn't a mana ability" (Tsabo's Web).
     # Emitted only when set, for its neighbours' reason.
     if self.with_nonmana_activated_ability:

@@ -1167,6 +1167,14 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
 
         if counters_on(perm, str(named_counter)) <= 0:
             return False
+    # "…**without** a fate counter on it" (Oblivion Stone). The same store
+    # asked the other way round: one counter of the kind is enough to fail.
+    absent_counter = payload.get("without_named_counter")
+    if absent_counter:
+        from ..named_counters import counters_on
+
+        if counters_on(perm, str(absent_counter)) > 0:
+            return False
     # "each land **with an activated ability that isn't a mana ability**"
     # (Tsabo's Web). What the permanent can do *now*: ``effective_card`` is the
     # card as it reads after a copy, a text change and any granted ability, so
