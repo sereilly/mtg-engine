@@ -96,6 +96,17 @@ def accept_seat_relation(stream: TokenStream, d) -> bool:
     if stream.accept_phrase("an", "opponent", "controls"):
         d.controller = "opponent"
         return True
+    # "…its controller chooses target permanent **another player controls**"
+    # (Confusion in the Ranks). A player other than the sentence's subject —
+    # which is "you" wherever the subject is the ability's controller, and
+    # then the relative comparison ``subject_matches`` makes for any value
+    # but "you" (not the observer) is this phrase exactly. Its own value
+    # rather than "not_you" because the subject need not be "you": a lowering
+    # whose chooser is somebody else lifts it into a seat test against that
+    # chooser, and one that cannot refuses it (``_lower_choose_permanent``).
+    if stream.accept_phrase("another", "player", "controls"):
+        d.controller = "another_player"
+        return True
     # "target nontoken permanent an opponent **owns**" (Bronze Tablet).
     # Ownership, not control (CR 108.3 against CR 613 layer 2) — a card
     # printed with "owns" excludes the permanent it stole from that

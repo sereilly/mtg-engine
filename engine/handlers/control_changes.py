@@ -1061,7 +1061,18 @@ def exchange_control_of_bound(game: Game, instruction: OracleInstruction, contex
     from ..control import change_control
 
     card = context.card
-    first = game.permanent_by_id(context.results.get(instruction.payload["first_from"]))
+    if instruction.payload.get("first") == "event_subject":
+        # "…Exchange control of **those permanents**." (Confusion in the
+        # Ranks.) One side is the object the firing event was about, frozen
+        # by id at the fire site (CR 603.10), and the other the pick the step
+        # in front of this one recorded.
+        first = game.permanent_by_id(
+            (context.trigger_context or {}).get("event_subject_permanent_id")
+        )
+    else:
+        first = game.permanent_by_id(
+            context.results.get(instruction.payload["first_from"])
+        )
     second = game.permanent_by_id(context.results.get(instruction.payload["second_from"]))
     if first is None or second is None or first is second:
         game.log.append(

@@ -284,7 +284,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.SimultaneousUntapAndTap: _lower_simultaneous_untap_and_tap,
     ast.CountObjects: _lower_count_objects,
     ast.SecretlyChooseNumbers: _lower_secretly_choose_numbers,
-    ast.ExchangeControl: _lower_exchange_control,
     ast.ExchangeGreatestManaValue: _lower_exchange_greatest_mana_value,
     ast.ExchangeChosenSets: _lower_exchange_chosen_sets,
     ast.MutualControlOfSets: _lower_mutual_control_of_sets,
@@ -544,6 +543,12 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
 #: the three above like every other pair of them.
 _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
+    # "Exchange control of target artifact … and target permanent …"
+    # (Gauntlets of Chaos) reads neither; "Exchange control of **those
+    # permanents**" (Confusion in the Ranks) reads both — the object the
+    # firing event froze and the pick the step in front of it recorded.
+    # Moved here from the node-only table when the second arrived.
+    ast.ExchangeControl: _lower_exchange_control,
     # "Add **{G}** for each …" reads only the records an earlier step wrote
     # ("the sacrificed land", "the milled card"); "…an amount of {C} equal to
     # the number of creatures you control that share a creature type **with

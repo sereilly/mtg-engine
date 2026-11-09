@@ -249,6 +249,119 @@ def test_w1g9_fractured_loyalty_own_controller_targeting_changes_nothing(set_poo
     assert "Grizzly Bears is already controlled by P1" in game.log
 
 
+def _w1g9_confusion_game(set_pool, *, mine=(), theirs=(), hands=((), ())):
+    """Confusion in the Ranks on seat 0's battlefield beside *mine*; *theirs*
+    on seat 1's; LEA cards in each hand."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g9_Game(players=[
+        _w1g9_PlayerState(
+            name="P0",
+            battlefield=[_w1g9_Permanent(card=mrd["Confusion in the Ranks"])]
+            + [_w1g9_Permanent(card=lea[n]) for n in mine],
+            hand=[lea[n] for n in hands[0]],
+        ),
+        _w1g9_PlayerState(
+            name="P1",
+            battlefield=[_w1g9_Permanent(card=lea[n]) for n in theirs],
+            hand=[lea[n] for n in hands[1]],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    return game
+
+
+def _w1g9_seats(game):
+    return {p.card.name: game.controller_index_of(p) for p in game.all_permanents()}
+
+
+def test_w1g9_confusion_in_the_ranks_exchanges_the_entering_creature(set_pool):
+    """"Whenever an artifact, creature, or enchantment enters, its controller
+    chooses target permanent another player controls that shares a card type
+    with it. Exchange control of those permanents." P0's Bears enter and are
+    traded for P1's Hill Giant — the creature, not the Sol Ring, which shares
+    no type with them."""
+    game = _w1g9_confusion_game(
+        set_pool, theirs=["Hill Giant", "Sol Ring"], hands=(["Grizzly Bears"], ())
+    )
+    game.cast_from_hand(0, "Grizzly Bears")
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert _w1g9_seats(game) == {
+        "Confusion in the Ranks": 0, "Hill Giant": 0, "Grizzly Bears": 1,
+        "Sol Ring": 1,
+    }
+
+
+def test_w1g9_confusion_in_the_ranks_entering_permanents_controller_chooses(set_pool):
+    """"**Its controller** chooses": when P1's Elves enter, the choice is
+    P1's — an interactive P1 is asked, offered P0's creatures only (not the
+    enchantment, which shares no type with the Elves), and the trigger waits
+    on the stack until the answer."""
+    game = _w1g9_confusion_game(
+        set_pool, mine=["Grizzly Bears", "Hill Giant"],
+        hands=((), ["Llanowar Elves"]),
+    )
+    game.interactive_seats = {1}
+    game.active_player_index = 1
+    game.cast_from_hand(1, "Llanowar Elves")
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("permanent_choice", 1)
+    ]
+    offered = game.live_permanent_choices(game.pending_choices[0])
+    assert sorted(p.card.name for p in offered) == ["Grizzly Bears", "Hill Giant"]
+    assert [item.card.name for item in game.stack] == ["Confusion in the Ranks"]
+    giant = _w1g9_named(game, "Hill Giant")
+    assert game.confirm_permanent_choice(1, giant.permanent_id) is True
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert _w1g9_seats(game) == {
+        "Confusion in the Ranks": 0, "Grizzly Bears": 0, "Llanowar Elves": 0,
+        "Hill Giant": 1,
+    }
+
+
+def test_w1g9_confusion_in_the_ranks_trades_itself_for_an_enchantment(set_pool):
+    """The ruling (2004-12-01): "Confusion in the Ranks triggers on itself
+    entering. If an opponent controls an enchantment, exchange Confusion in the
+    Ranks for that enchantment." And the exchange is not optional (2004-10-04)
+    — a seat nobody asks takes the one legal choice."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g9_Game(players=[
+        _w1g9_PlayerState(name="P0", hand=[mrd["Confusion in the Ranks"]]),
+        _w1g9_PlayerState(
+            name="P1",
+            battlefield=[
+                _w1g9_Permanent(card=lea["Crusade"]),
+                _w1g9_Permanent(card=lea["Grizzly Bears"]),
+            ],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Confusion in the Ranks")
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert _w1g9_seats(game) == {
+        "Confusion in the Ranks": 1, "Crusade": 0, "Grizzly Bears": 1,
+    }
+
+
+def test_w1g9_confusion_in_the_ranks_needs_both_on_the_battlefield(set_pool):
+    """The ruling (2004-12-01): "The permanents are exchanged only if they're
+    both on the battlefield when the ability resolves." The entering Bears
+    leave with the trigger on the stack, and nothing changes hands."""
+    game = _w1g9_confusion_game(
+        set_pool, theirs=["Hill Giant"], hands=(["Grizzly Bears"], ())
+    )
+    game.interactive_seats = {0}
+    game.cast_from_hand(0, "Grizzly Bears")
+    assert [item.card.name for item in game.stack] == ["Confusion in the Ranks"]
+    bears = _w1g9_named(game, "Grizzly Bears")
+    game.remove_from_battlefield(bears)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert _w1g9_seats(game) == {"Confusion in the Ranks": 0, "Hill Giant": 1}
+
+
 # ==== end W1G9 ======================================================
 
 

@@ -752,7 +752,7 @@ def lower_statement(
         announced = _lower_announced_choice(statement)
         if announced is not None:
             return announced
-        return _lower_choose_permanent(statement, produced)
+        return _lower_choose_permanent(statement, produced, event)
 
     if isinstance(statement, ast.Exile):
         # `produced` is the gate on "exile **that token**": the phrase names

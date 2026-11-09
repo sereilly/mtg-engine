@@ -1350,6 +1350,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # seat.
     ("matching_permanent_enters",
      r"whenever a player puts (?P<enterer_subject>an? [^,]+?) onto the battlefield"),
+    # "Whenever **an artifact, creature, or enchantment** enters, …" (Confusion
+    # in the Ranks.) The entry row above-but-one over a *printed list* of
+    # types — commas the general row's ``[^,]+`` cannot cross, which left the
+    # line to the grammar's own trigger production and lowered it as a spell
+    # instruction on an enchantment (the Nature's Wrath failure two rows up).
+    # Only single words joined by commas and a final "or", read by the noun
+    # parser as the union it is; an "an?" article, because the list is spelled
+    # off its first word.
+    ("matching_permanent_enters",
+     r"whenever (?P<enterer_subject>an? [a-z]+(?:, [a-z]+)+,? or [a-z]+)"
+     r" enters(?: the battlefield)?"),
     # "Whenever **a nontoken creature leaves the battlefield**, exile all tokens
     # with the same name as that creature." (Dual Nature.) CR 603.6c's event
     # watched across the whole board — the subject-led twin of the entry row

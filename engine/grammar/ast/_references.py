@@ -659,6 +659,12 @@ class ObjectFilter:
     # this position has one at all — is the lowering's to decide, and a
     # lowering not written for the field refuses it by name.
     shares_color_with_it: bool = False
+    #: "…target permanent another player controls **that shares a card type
+    #: with it**" (Confusion in the Ranks). The colour relation above over
+    #: CR 205.2a's card types, and unanswerable by a matcher for the same
+    #: reason: "it" is whatever the firing event was about. Emitted as an
+    #: untestable key, so a lowering that does not lift it out refuses.
+    shares_card_type_with_it: bool = False
     #: "…discards all cards **of each of the sacrificed creature's colors**."
     #: (Mind Extraction.) The same relation with a different referent: not
     #: the object an event was about but the permanent this spell's own

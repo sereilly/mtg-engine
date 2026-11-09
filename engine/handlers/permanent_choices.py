@@ -71,6 +71,16 @@ def _relative_object(game, payload: dict, context):
     unrecognised one resolves to nothing rather than to a default: a narrowing
     measured from the wrong object is a wider choice than the card prints.
     """
+    if payload.get("relative_to") == "event_subject":
+        # "…that shares a card type with **it**" (Confusion in the Ranks): the
+        # object the firing event was about, frozen by id at the fire site
+        # (CR 603.10). Gone by now is no anchor, and the relation then names
+        # nothing.
+        frozen = (context.trigger_context or {}).get("event_subject_permanent_id")
+        anchor = game.permanent_by_id(frozen) if isinstance(frozen, int) else None
+        if anchor is None or not game.is_on_battlefield(anchor):
+            return None
+        return anchor
     if payload.get("relative_to") != "target":
         return None
     target_id = first_target_id(context.target_permanent_id)
@@ -146,6 +156,22 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
         if payload.get("exclude_relative_host"):
             # "**another** permanent" — anything but the one it is on now.
             if host is None or perm is host:
+                continue
+        if payload.get("shares_type_with_relative"):
+            # "…**that shares a card type with it**" (Confusion in the Ranks):
+            # CR 205.2a against the anchor itself rather than its host. No
+            # anchor names nothing rather than everything.
+            if anchor is None or not shares_a_card_type(perm, anchor):
+                continue
+        if payload.get("not_controlled_by") is not None:
+            # "…target permanent **another player controls**" with somebody
+            # other than the controller choosing: any seat but the one the
+            # word names (the chooser). Unknown names nobody, so nothing is
+            # offered rather than everything.
+            excluded = _controlled_by_seat(
+                game, payload["not_controlled_by"], context, payload
+            )
+            if excluded is None or game.controls(excluded, perm):
                 continue
         if payload.get("shares_type_with_relative_host"):
             # "…of **that** type", the type of the permanent the anchor is

@@ -30,7 +30,7 @@ from ._common import (_describe_targets, _filter_payload, _is_source, _is_target
 from ._amounts import count_spec
 from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
                       CHOSEN_PLAYER, EVENT_SUBJECT_PLAYER,
-                      _EVENT_SUBJECT_CONTROLLERS,
+                      _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS)
 from ._seats import _CHOOSER_SEATS
 
@@ -508,7 +508,8 @@ def _lower_announced_choice(
 
 
 def _lower_choose_permanent(
-    node: ast.ChoosePermanent, produced: frozenset[str] = frozenset()
+    node: ast.ChoosePermanent, produced: frozenset[str] = frozenset(),
+    event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"<player> chooses <noun phrase> that this card could enchant."
     (Takklemaggot.)
@@ -521,12 +522,45 @@ def _lower_choose_permanent(
     source, which by resolution is a card in a graveyard — so the payload names
     the anchor rather than assuming one.
     """
-    if node.chooser.kind not in _CHOOSER_SEATS:
+    # "Whenever an artifact, creature, or enchantment enters, **its
+    # controller** chooses …" (Confusion in the Ranks.) The controller of the
+    # object the firing event was about — the seat ``_chooser_seat``'s
+    # ``event_subject_controller`` row reads, frozen by the fire site
+    # (CR 603.10). Only under an event that freezes it: anywhere else "its"
+    # has no object, and a prompt armed for a guessed seat is a decision taken
+    # from the wrong player.
+    event_object_chooser = (
+        node.chooser.kind == "controller" and event in _EVENT_SUBJECT_CONTROLLERS
+    )
+    if node.chooser.kind not in _CHOOSER_SEATS and not event_object_chooser:
         raise LoweringError(
             f"no prompt asks {node.chooser.kind!r} to choose a permanent", node=node
         )
     described = node.spec.filter
     scoped: dict[str, object] = {}
+    if described.controller == "another_player" and node.chooser.kind != "you":
+        # "…its controller chooses target permanent **another player
+        # controls**" (Confusion in the Ranks): a player other than the
+        # *chooser*, which is a seat test against the seat being asked — not
+        # the relative comparison ``subject_matches`` makes against the
+        # ability's controller, which is a different player whenever the
+        # entering permanent is an opponent's. Lifted into the candidate
+        # rule's ``not_controlled_by`` for ``controlled_by``'s reason below.
+        scoped["not_controlled_by"] = "chooser"
+        described = dataclasses.replace(described, controller=None)
+    if described.shares_card_type_with_it:
+        # "…**that shares a card type with it**": "it" is the object the
+        # firing event was about, frozen by id (CR 603.10) — so the anchor is
+        # that object and the candidate rule asks CR 205.2a's relation
+        # against it. Under any other event the pronoun has no referent.
+        if event not in _EVENT_SUBJECT_OBJECTS:
+            raise LoweringError(
+                "\"shares a card type with it\" needs a trigger whose event "
+                "freezes an object", node=node,
+            )
+        scoped["relative_to"] = "event_subject"
+        scoped["shares_type_with_relative"] = True
+        described = dataclasses.replace(described, shares_card_type_with_it=False)
     # "An opponent chooses **target creature they control**." (Echo Chamber.)
     # "Defending player chooses **an untapped creature they control**."
     # (Crashing Boars.) "They" is the seat this sentence has already named — the
@@ -594,7 +628,10 @@ def _lower_choose_permanent(
         # re-checked under CR 608.2b — needs a prompt owed by a seat that is not
         # the activator, which is recorded in ROADMAP.md rather than faked here.
         scoped["announced_target"] = True
-    seat = _CHOOSER_SEATS[node.chooser.kind]
+    seat = (
+        "event_subject_controller" if event_object_chooser
+        else _CHOOSER_SEATS[node.chooser.kind]
+    )
     if node.chooser.kind == "that_player" and CHOSEN_PLAYER in produced:
         # "You choose target creature an opponent controls, and **that
         # opponent** chooses target creature." (Mogg Assassin.) No event fired —
