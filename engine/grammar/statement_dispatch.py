@@ -430,7 +430,7 @@ def lower_statement(
         # event, for the reason the two readers above give: the sentence is
         # printed inside an offer's branch, so it is not the ability's whole
         # effect and `dispatch_event` is already None there.
-        return _lower_gain_control(statement, produced, event)
+        return _lower_gain_control(statement, produced, event, event_subject)
 
 
     if isinstance(statement, ast.ModalNode):

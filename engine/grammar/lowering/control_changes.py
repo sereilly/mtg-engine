@@ -34,7 +34,8 @@ from ._events import (CHOSEN_PERMANENT, CHOSEN_PLAYER, EVENT_SUBJECT_CONTROLLER,
                       EVENT_SUBJECT_PLAYER, _DAMAGED_PLAYER_EVENTS,
                       _EVENT_STAMPED_TARGET_OBJECTS,
                       _EVENT_SUBJECT_CONTROLLERS,
-                      _EVENT_SUBJECT_PLAYERS, _UNTAPPED_PERMANENTS)
+                      _EVENT_SUBJECT_PLAYERS, _UNTAPPED_PERMANENTS,
+                      names_attached_permanent)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 from ._record_keys import LOOP_BOUND_PLAYER, UNTAPPED_THIS_WAY_OBJECTS
 
@@ -225,7 +226,7 @@ _CHOSEN_GAINERS = {"opponent": "Choose an opponent to gain control of this perma
 
 def _lower_another_seat_gains_control(
     node: ast.GainControl, subject: ast.TargetSpec, event: str | None = None,
-    produced: frozenset[str] = frozenset(),
+    produced: frozenset[str] = frozenset(), event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"Target opponent gains control of this creature." (Chaos Lord.)
 
@@ -274,6 +275,38 @@ def _lower_another_seat_gains_control(
             OracleInstruction(
                 "give_control_of_chosen_to_player", "",
                 {"permanents_from": CHOSEN_PERMANENT},
+            ),
+        )
+    # "Whenever enchanted creature becomes the target of a spell or ability,
+    # **that spell or ability's controller gains control of that creature**."
+    # (Fractured Loyalty.) Not the source handing itself over but the
+    # permanent the Aura is attached to, handed to the seat the firing event
+    # froze — the targeting object's controller, which `_announce_targeting`
+    # records because nothing on a board can recover it once that spell has
+    # resolved (CR 603.10). Untimed (CR 611.2a; the reminder text: "This
+    # effect lasts indefinitely"), so the hand-over outlives the Aura and
+    # nothing sweeps it back. Both ends are gated: the subject must be the
+    # attached permanent the condition named (``names_attached_permanent``)
+    # and the event one that freezes a seat, or "that player" names nobody.
+    if (
+        node.gained_by is not None
+        and node.gained_by.kind in _EVENT_GAINERS
+        and names_attached_permanent(subject, event, event_subject)
+    ):
+        if event not in _EVENT_SUBJECT_PLAYERS:
+            raise LoweringError(
+                "a control change to \"that player\" needs a trigger whose "
+                "event freezes a seat", node=node,
+            )
+        if node.duration != "indefinite" or node.tap_when_lost or node.offered:
+            raise LoweringError(
+                "an attached permanent handed to the event's seat changes "
+                "controllers untimed", node=node,
+            )
+        return (
+            OracleInstruction(
+                "give_control_of_attached_to_player", "",
+                {"who": EVENT_SUBJECT_PLAYER},
             ),
         )
     if not _is_source(subject):
@@ -486,6 +519,7 @@ def _lower_seat_gains_target_permanent(
 
 def _lower_gain_control(
     node: ast.GainControl, produced: frozenset[str], event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """``Gain control of <subject> <duration>.``
 
@@ -528,7 +562,9 @@ def _lower_gain_control(
     # (``node.offered``, Infernal Denizen) is a different sentence and keeps its
     # own branch further down — there the seat both picks and receives.
     if node.gained_by is not None and not node.offered:
-        return _lower_another_seat_gains_control(node, subject, event, produced)
+        return _lower_another_seat_gains_control(
+            node, subject, event, produced, event_subject
+        )
     # "When this Aura enters, gain control of **enchanted land** until end
     # of turn." (Wellspring.) The permanent the Aura is attached to, which
     # is neither a target (an Aura's effect on its own host chooses nothing)

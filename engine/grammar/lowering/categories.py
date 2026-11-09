@@ -569,6 +569,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Move.) The hand-over with both ends *chosen on resolution* (CR 608.2d)
     # rather than targeted — the same family again.
     "give_control_of_chosen_to_player": "control",
+    # "…that spell or ability's controller gains control of that creature."
+    # (Fractured Loyalty.) The hand-over of the permanent an Aura is attached
+    # to, to the seat the firing event froze — the same family again.
+    "give_control_of_attached_to_player": "control",
     # The monitored linked durations (CR 611.2b): "for as long as you control
     # this creature and this creature remains tapped" (Willow Satyr, Rubinia
     # Soulsinger) and The Wretched's end-of-combat blocker steal. The
