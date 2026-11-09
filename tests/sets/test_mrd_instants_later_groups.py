@@ -435,3 +435,186 @@ def test_w1g12_regress_and_altars_light(set_pool):
     ).supported
 
 # ==== end W1G12 ======================================================
+
+
+# ==== W2G7 ==========================================================
+# W2G7's tests go between this line and the "end W2G7" line.
+#
+# Second Sunrise: "Each player returns to the battlefield all artifact,
+# creature, enchantment, and land cards in their graveyard that were put there
+# from the battlefield this turn." The sweep reanimation (All Hallow's Eve)
+# with No Rest for the Wicked's history lifted beside its filter, answered by
+# the record ``Game.put_card_into_graveyard`` keeps.
+
+from engine import Game as _w2g7_Game
+from engine import PlayerState as _w2g7_PlayerState
+from engine import targeting as _w2g7_targeting
+from engine.models import Permanent as _w2g7_Permanent
+from engine.oracle import compile_card_oracle as _w2g7_compile
+from tests.helpers import _nosick as _w2g7_nosick
+from tests.helpers import resolve_stack as _w2g7_resolve_stack
+
+
+def _w2g7_card(set_pool, name):
+    """A card by name, from Mirrodin first and Alpha for the fillers."""
+    mrd = set_pool("MRD")
+    return mrd[name] if name in mrd else set_pool("LEA")[name]
+
+
+def _w2g7_table(set_pool, *, hand=(), mine=(), theirs=(), graveyard=()):
+    card = lambda name: _w2g7_card(set_pool, name)  # noqa: E731
+    game = _w2g7_Game(players=[
+        _w2g7_PlayerState(
+            "A", hand=[card(n) for n in hand], library=[card("Forest")] * 12,
+            graveyard=[card(n) for n in graveyard],
+        ),
+        _w2g7_PlayerState("B", library=[card("Island")] * 12),
+    ])
+    game.enforce_mana_costs = False
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _w2g7_Permanent(card=card(name))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            _w2g7_nosick(permanent)
+            placed[seat].append(permanent)
+    game.start_turn(0)
+    game._settle()
+    return game, placed[0], placed[1]
+
+
+def _w2g7_names(cards):
+    return sorted(card.name for card in cards)
+
+
+def test_w2g7_second_sunrise_returns_each_players_permanents_that_died_this_turn(set_pool):
+    sunrise = _w2g7_card(set_pool, "Second Sunrise")
+    program = _w2g7_compile(sunrise)
+    assert program.supported
+    # No target, no pick: the client sends a bare cast.
+    assert _w2g7_targeting.derive_cast_spec(sunrise, program) is None
+    game, mine, _ = _w2g7_table(
+        set_pool,
+        hand=["Lightning Bolt", "Stone Rain", "Second Sunrise"],
+        mine=["Nevinyrral's Disk", "Grizzly Bears", "Bad Moon", "Forest"],
+        theirs=["Llanowar Elves"],
+        graveyard=["Grizzly Bears", "Tranquility"],
+    )
+    disk, _, _, forest = mine
+    disk.tapped = False
+    # A token dies with the rest and is not a card anyone can return (CR 111.7).
+    token = _w2g7_Permanent(
+        card=_w2g7_card(set_pool, "Grizzly Bears"), metadata={"is_token": True},
+    )
+    game._put_permanent_onto_battlefield(1, token, None)
+    # A creature B owns and A controls dies into B's graveyard (CR 400.3), and B
+    # is the player who returns it.
+    borrowed = _w2g7_Permanent(
+        card=_w2g7_card(set_pool, "Scathe Zombies"),
+        metadata={"owner_player_index": 1},
+    )
+    game._put_permanent_onto_battlefield(0, borrowed, None)
+    assert game.queue_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    _w2g7_resolve_stack(game)
+    assert game.queue_from_hand(
+        0, "Stone Rain", target_permanent_ids=[forest.permanent_id],
+    ).supported
+    _w2g7_resolve_stack(game)
+    assert game.activate_permanent_ability(0, "Nevinyrral's Disk").supported
+    _w2g7_resolve_stack(game)
+    game._settle()
+    assert not list(game.all_permanents())
+
+    assert game.queue_from_hand(0, "Second Sunrise").supported
+    _w2g7_resolve_stack(game)
+    game._settle()
+    game.auto_resolve_pending_choices()
+
+    # An artifact, a creature, an enchantment and a land, each put into A's
+    # graveyard from the battlefield this turn, come back under A.
+    assert _w2g7_names(p.card for p in game.controlled_by(0)) == [
+        "Bad Moon", "Forest", "Grizzly Bears", "Nevinyrral's Disk",
+    ]
+    # B's own Elves and the Zombies B owns come back under B; the token is gone.
+    assert _w2g7_names(p.card for p in game.controlled_by(1)) == [
+        "Llanowar Elves", "Scathe Zombies",
+    ]
+    assert not any(p.metadata.get("is_token") for p in game.all_permanents())
+    # The Bears that was there before the turn, the sorcery from an earlier
+    # turn and the spells that resolved this turn stay where they are.
+    assert _w2g7_names(game.players[0].graveyard) == [
+        "Grizzly Bears", "Lightning Bolt", "Second Sunrise", "Stone Rain",
+        "Tranquility",
+    ]
+    assert game.players[1].graveyard == []
+    assert "B returned Scathe Zombies to the battlefield from the graveyard" in game.log
+    # "Nevinyrral's Disk enters tapped." It entered.
+    returned_disk = next(
+        p for p in game.controlled_by(0) if p.card.name == "Nevinyrral's Disk"
+    )
+    assert returned_disk.tapped
+
+
+def test_w2g7_second_sunrise_a_card_that_left_the_graveyard_and_came_back_stays(set_pool):
+    # CR 400.7: the Bears Raise Dead returns and its owner then discards is a
+    # new object that was put into the graveyard from a hand, not from the
+    # battlefield — whatever its earlier self did this turn.
+    game, (bears,), _ = _w2g7_table(
+        set_pool, hand=["Lightning Bolt", "Raise Dead", "Second Sunrise"],
+        mine=["Grizzly Bears"],
+    )
+    assert game.queue_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w2g7_resolve_stack(game)
+    game._settle()
+    slot = [c.name for c in game.players[0].graveyard].index("Grizzly Bears")
+    assert game.queue_from_hand(
+        0, "Raise Dead",
+        target_role_refs=[{"graveyard_seat": 0, "graveyard_index": slot}],
+    ).supported
+    _w2g7_resolve_stack(game)
+    returned = next(c for c in game.players[0].hand if c.name == "Grizzly Bears")
+    assert game.take_card_from_hand(game.players[0], returned)
+    game._discard_card(game.players[0], returned)
+    assert "Grizzly Bears" in [c.name for c in game.players[0].graveyard]
+
+    assert game.queue_from_hand(0, "Second Sunrise").supported
+    _w2g7_resolve_stack(game)
+    game._settle()
+    assert not list(game.controlled_by(0))
+    assert "Grizzly Bears" in [c.name for c in game.players[0].graveyard]
+    assert "Second Sunrise: no cards to return" in game.log
+
+def test_w2g7_second_sunrise_tells_two_copies_of_one_card_apart(set_pool):
+    # An old Grizzly Bears in the pile and a second one Bolted this turn are
+    # two objects (CR 400.7, ``Game.put_card_into_graveyard``): Raise Dead
+    # takes back the one that died, and the one left was not put there from
+    # the battlefield this turn. They were one object, and Second Sunrise
+    # returned the old Bears.
+    game, (bears,), _ = _w2g7_table(
+        set_pool, hand=["Lightning Bolt", "Raise Dead", "Second Sunrise"],
+        mine=["Grizzly Bears"],
+    )
+    game.put_card_into_graveyard(0, _w2g7_card(set_pool, "Grizzly Bears"))
+    assert game.queue_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w2g7_resolve_stack(game)
+    game._settle()
+    pile = game.players[0].graveyard
+    assert [c.name for c in pile] == ["Grizzly Bears", "Lightning Bolt", "Grizzly Bears"]
+    assert pile[0] is not pile[2]
+    assert game.queue_from_hand(
+        0, "Raise Dead", target_permanent_index=2, target_player_index=0,
+    ).supported
+    _w2g7_resolve_stack(game)
+    assert game.queue_from_hand(0, "Second Sunrise").supported
+    _w2g7_resolve_stack(game)
+    game._settle()
+    assert not list(game.controlled_by(0))
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Grizzly Bears", "Lightning Bolt", "Raise Dead", "Second Sunrise",
+    ]
+
+# ==== end W2G7 ======================================================

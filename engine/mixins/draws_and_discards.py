@@ -525,17 +525,20 @@ class DrawsAndDiscardsMixin:
         on top of its library and the cycling ability drew it again.
         """
         cause = self.discard_cause_seat(cause_seat)
-        self.discarded_card_destination(player, card, cause, as_cost=as_cost)
+        landed = self.discarded_card_destination(player, card, cause, as_cost=as_cost)
         # The card **has been discarded** whichever way its destination is
         # settled (CR 701.9a), and even while its player is still choosing it
         # (CR 616.1e): announced once, here, never by the destination's re-run.
+        # The board's watchers hear of the object the graveyard now holds when
+        # it got there ("exile **that card** from your graveyard",
+        # Necropotence — CR 400.7, ``put_card_into_graveyard``).
         self._announce_discard_triggers(player, card, cause_seat=cause_seat)
-        self.announce_discard(player, card)
+        self.announce_discard(player, landed or card)
 
     def discarded_card_destination(
         self, player: PlayerState, card, cause: int | None, *,
         as_cost: bool = False, leng_declined: bool = False,
-    ) -> None:
+    ):
         """Where a discarded card goes: its player's graveyard, unless a CR 614
         effect sends it elsewhere — Dodecapod onto the battlefield, madness
         into exile, Library of Leng onto the library (``discard``), Forbidden
@@ -559,6 +562,9 @@ class DrawsAndDiscardsMixin:
         declined it (CR 614.5: an effect gets one opportunity at an event): the
         chosen-discard seam, whose prompt offers the top as one of its answers,
         and the Library's own answer of "graveyard".
+
+        Returns the object the graveyard now holds when the card went there
+        (``put_card_into_graveyard``), and None when anything else took it.
         """
         event = {
             "player": player, "card": card, "cause_seat": cause,
@@ -576,7 +582,8 @@ class DrawsAndDiscardsMixin:
             ),
         )
         if not consumed:
-            self.put_card_into_graveyard(player, card)
+            return self.put_card_into_graveyard(player, card) or None
+        return None
 
     def announce_discard(self, player: PlayerState, card) -> None:
         """CR 701.9a: a discard happened, for the permanents that watch one.

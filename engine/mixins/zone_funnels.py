@@ -48,7 +48,8 @@ from ..exiled_records import (forget_record, newest_record_for,
 from ..events import emit
 from ..face_down import forget_face_down_departure, revealed_as_it_moves
 from ..faces import whole_card
-from ..graveyard_order import record_graveyard_arrival
+from ..graveyard_order import (distinct_graveyard_object, held_in_a_graveyard,
+                               record_arrival_history, record_graveyard_arrival)
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN, EXILED_BY_SEAT
 from ..pending_choices import spec_for
@@ -371,7 +372,7 @@ class ZoneFunnelsMixin:
 
     def put_card_into_graveyard(
         self, owner, card, *, from_zone=None, from_battlefield=None
-    ) -> bool:
+    ):
         """Put *card* into *owner*'s graveyard, unless something diverts it.
 
         *from_zone* is the zone it came out of, named only where a card says
@@ -390,10 +391,13 @@ class ZoneFunnelsMixin:
         the same event — and twenty-six fire sites is twenty-five places to
         forget it.
 
-        Returns True when the card actually arrived. False means a CR 614
-        replacement sent it somewhere else, and every caller must read it the
-        way they read :meth:`put_card_into_hand`'s: do not also record a card
-        reaching the graveyard.
+        Returns **the object the pile now holds** when the card actually
+        arrived — *card* itself, or a new equal object when some graveyard
+        already held *card* (below; CR 400.7) — and a caller that writes the
+        card down afterwards writes that object down. Always truthy. False
+        means a CR 614 replacement sent it somewhere else, and every caller
+        must read it the way they read :meth:`put_card_into_hand`'s: do not
+        also record a card reaching the graveyard.
 
         The seat is the caller's, not derived. CR 400.3 sends a card to its
         *owner's* graveyard and almost every caller has already worked that out
@@ -442,32 +446,59 @@ class ZoneFunnelsMixin:
         )
         if consumed:
             return False
-        self.players[seat].graveyard.append(card)
+        # **No graveyard ever holds one object twice** — exile's rule
+        # (:meth:`put_card_into_exile`), at this zone's one arrival. A deck
+        # repeats one immutable ``CardDefinition`` per copy and the catalog is
+        # shared between seats, so the copy arriving can be the very object a
+        # graveyard already holds — and every record about a card in a
+        # graveyard names its object: the "put there from the battlefield this
+        # turn" record below, a ``GraveyardTarget``'s stamp, CR 613.7d's
+        # arrival stamps, a flashback grant (Recoup), "that card" on a dies
+        # trigger. With one object at two positions each of them answered for
+        # whichever copy came first: an old Grizzly Bears and one Bolted this
+        # turn were one object, so Raise Dead returning the new one left No
+        # Rest for the Wicked a Bears to return. A copy arriving as an object
+        # some graveyard holds arrives as a new, equal one (CR 400.7) — only on
+        # a collision, so a card put into a graveyard alone stays the object
+        # its caller holds, and a commander's designation (CR 903.3, by
+        # object) moves to the copy made of it.
+        landed = card
+        if held_in_a_graveyard(self.players, card):
+            landed = distinct_graveyard_object(card)
+            commanders = getattr(self.players[seat], "commanders", None) or []
+            for index, commander in enumerate(commanders):
+                if commander is card:
+                    commanders[index] = landed
+                    break
+        # "…**that were put there from the battlefield this turn**" (No Rest
+        # for the Wicked, Second Sunrise). Recorded on the one seam every
+        # arrival passes through, keyed by the pile it landed in (CR 400.3's
+        # owner) — the same place the exile replacement and the arrival event
+        # are, because "from the battlefield" is a fact about *this* move and
+        # nothing in the graveyard afterwards remembers it. Before the append,
+        # because the same call retires what the record says about a card that
+        # left a pile since (CR 400.7), and that is counted against the pile as
+        # it was. A token never gets here: the permanent path keeps its card
+        # out (CR 111.7), which is the difference between this record and the
+        # tally beside it.
+        record_arrival_history(self.players, seat, landed, from_zone)
+        self.players[seat].graveyard.append(landed)
         # CR 613.7d: the card gets its timestamp as it enters the zone, which
         # is the timestamp a static ability functioning from here carries
         # (CR 613.7a; Anger's ruling, 2004-10-04: "set at the time that this
         # card goes to your graveyard"). Recorded on the one road every
         # arrival takes, by the module that keeps the record in step with the
         # pile.
-        record_graveyard_arrival(self.players[seat], card)
-        # "…**that were put there from the battlefield this turn**" (No Rest
-        # for the Wicked). Recorded on the one seam every arrival passes
-        # through, keyed by the pile it landed in (CR 400.3's owner) — the same
-        # place the exile replacement and the arrival event are, because "from
-        # the battlefield" is a fact about *this* move and nothing in the
-        # graveyard afterwards remembers it. A token never gets here: the
-        # permanent path keeps its card out (CR 111.7), which is the difference
-        # between this record and the tally beside it.
-        if from_zone == "battlefield":
-            self.players[seat].cards_put_into_your_graveyard_from_battlefield_this_turn.append(card)
+        record_graveyard_arrival(self.players[seat], landed)
         # Announced **after** the card has arrived, because CR 603.6 has a
         # zone-change trigger look for its object in the zone it moved to — and
         # a replacement that diverted the card returned above, so nothing fires
-        # for a card that never got here.
+        # for a card that never got here. About *landed*, the object the pile
+        # holds, for the same reason: a trigger finds its card there.
         if from_zone == "library":
             emit(
                 self, "self_put_into_graveyard_from_library",
-                subject=card, owner_index=seat,
+                subject=landed, owner_index=seat,
             )
         # "When a card is put into **your** graveyard from anywhere" (Energy
         # Field), "whenever **another** card is put into a graveyard from
@@ -495,12 +526,19 @@ class ZoneFunnelsMixin:
         # see that: both statements are correct, and it is having two of them
         # that is wrong. One emit, whose payload is the union of what the three
         # sentences need.
+        #
+        # …and the id of the permanent this card was, when it left the
+        # battlefield to get here: "**another** card" (Planar Void) excludes
+        # the watcher's own card, and once the arrival can be a new object
+        # (above) the card alone cannot say that a dying Planar Void is the
+        # watcher. None for every other road.
         emit(
             self, "card_put_into_graveyard",
-            subject=card, owner_index=seat, dead_card=card,
+            subject=landed, owner_index=seat, dead_card=landed,
             graveyard_from_zone=from_zone,
+            moved_permanent_id=getattr(from_battlefield, "permanent_id", None),
         )
-        return True
+        return landed
 
     def graveyard_event(
         self, owner, card, *, from_zone=None, from_battlefield=None,
@@ -708,6 +746,17 @@ class ZoneFunnelsMixin:
             return None
         if zone == "library":
             self.put_card_into_library(owner, card)
+            return None
+        if zone == "graveyard":
+            # "When this creature leaves the battlefield, return the exiled
+            # cards to their owner's graveyard." (Gravegouger; Knowledge Vault,
+            # Gustha's Scepter, Duplicity.) Through the graveyard's one arrival
+            # like every other road there: this was an append through the
+            # computed zone name, so Forbidden Crypt never saw these cards,
+            # "whenever a card is put into a graveyard from anywhere" (Planar
+            # Void) never heard of them, and two copies of one card could land
+            # as one object.
+            self.put_card_into_graveyard(owner, card, from_zone="exile")
             return None
         if zone != "battlefield":
             getattr(owner, zone).append(card)

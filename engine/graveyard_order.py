@@ -27,6 +27,16 @@ handed only the card cannot say which copy satisfied the clause, and an identity
 filter over the list removes both. ``phases/upkeep_step._graveyard_return_candidates``
 carries the same index for the same reason, and documents the five cards that
 went missing before it did.
+
+**One object, one position** (the section of that name below). Since
+Mirrodin's wave 2 the graveyard's one arrival (``Game.put_card_into_graveyard``)
+makes a copy arriving as an object some graveyard already holds a new, equal
+object (CR 400.7), so a pile the engine built never holds one object twice and
+every record keyed by identity — the "put there from the battlefield this turn"
+record, the arrival stamps, a ``GraveyardTarget`` — names one card. Positions
+are still the answer here: a pile a test or the Debug Menu wrote directly can
+hold one object twice (the paste is held apart, ``keep_graveyards_apart``), and
+a position is what every caller removes by.
 """
 
 from __future__ import annotations
@@ -187,11 +197,14 @@ def _held_arrivals(player: Any, pile: list) -> list:
     "when it entered the zone" as a direct write leaves anyone able to say —
     and the caller keeps the stamp, so every later read gives the same answer.
 
-    The one thing a subsequence cannot say: two copies of one card are the
-    **same** ``CardDefinition`` (this module's docstring), so with two records
-    of it and one copy left, which copy left is not in the list. The earlier
-    stamp is kept. It matters only to a timestamp ordering *between* the two
-    arrivals, which no printed pair of effects in the pool asks.
+    The one thing a subsequence cannot say: two copies of one card written
+    into a pile directly can be the **same** ``CardDefinition``, so with two
+    records of it and one copy left, which copy left is not in the list. The
+    earlier stamp is kept. An arrival never makes that pile — the seam lands a
+    colliding copy as a new object (:func:`distinct_graveyard_object`) — so the
+    case is a test's or the Debug Menu's, and matters only to a timestamp
+    ordering *between* the two arrivals, which no printed pair of effects in
+    the pool asks.
     """
     from .continuous import next_timestamp
 
@@ -257,3 +270,95 @@ def graveyard_arrival_stamps(player: Any) -> "list[int | None]":
     _keep(player, held)
     stamps = iter(int(stamp) for _card, stamp in held)
     return [next(stamps) if _stamped(card) else None for card in player.graveyard]
+
+
+# ---------------------------------------------------------------------------
+# One object, one position (CR 400.7)
+# ---------------------------------------------------------------------------
+
+
+def held_in_a_graveyard(players: list, card: Any) -> bool:
+    """Whether some seat's graveyard already holds the object *card* itself."""
+    return any(held is card for player in players for held in player.graveyard)
+
+
+def distinct_graveyard_object(card: Any) -> Any:
+    """A new object equal to *card*, for a copy arriving in a graveyard while
+    some graveyard already holds *card* itself (``Game.put_card_into_graveyard``;
+    CR 400.7: a card that changes zones becomes a new object).
+
+    The object exile makes on its own collision
+    (``exiled_records.distinct_exile_object``), so the two zones answer the
+    question one way: every field the same — the card compares equal, compiles
+    to the same program and hits every fold memo keyed by
+    ``copies.card_identity`` — and a different object, which is what every
+    record about a card in a graveyard is keyed by.
+    """
+    from .exiled_records import distinct_exile_object
+
+    return distinct_exile_object(card)
+
+
+def keep_graveyards_apart(players: list) -> None:
+    """Make every position of every graveyard a distinct object, in place —
+    for a pile written whole rather than arrived at (the Debug Menu's state
+    paste builds one from names, and two copies named are the catalog's one
+    object). The first position holding an object keeps it; every later one
+    gets :func:`distinct_graveyard_object`. Records keyed on the objects a
+    pile held before the write are the writer's to retire."""
+    seen: set[int] = set()
+    for player in players:
+        for index, held in enumerate(player.graveyard):
+            if id(held) in seen:
+                player.graveyard[index] = distinct_graveyard_object(held)
+            seen.add(id(player.graveyard[index]))
+
+
+# ---------------------------------------------------------------------------
+# How a card got there ("put there from the battlefield this turn")
+# ---------------------------------------------------------------------------
+
+
+def record_arrival_history(players: list, seat: int, card: Any, from_zone: Any) -> None:
+    """Keep every seat's "put there from the battlefield this turn" record
+    (``PlayerState.cards_put_into_your_graveyard_from_battlefield_this_turn``,
+    No Rest for the Wicked, Second Sunrise) in step with the piles as *card* —
+    the object the pile is about to hold — arrives in seat *seat*'s graveyard,
+    and add it to that record when it came *from_zone* ``"battlefield"``.
+
+    Called by ``Game.put_card_into_graveyard`` **before** its append — the one
+    road every arrival takes.
+
+    **A record entry is about a card in the pile, and only while it stays
+    there.** CR 400.7: a card that leaves a graveyard and comes back is a new
+    object with no memory of how its earlier self arrived — Raise Dead the
+    Grizzly Bears that died this turn, discard it, and it is a card that was
+    put there from a hand. Nothing announces a card leaving a graveyard (the
+    departures are open-coded pops, by slot), so the record is held to the pile
+    at the next moment it could be misread: the arrival. A seat's record never
+    holds more entries of an object than its pile holds that object **before**
+    the new card lands, so an entry whose card left since is retired here,
+    every seat at once (a card arriving anywhere has left wherever it was).
+
+    **An identity record**, because the seam makes it one: no graveyard holds
+    one object twice (:func:`distinct_graveyard_object`), so an object the
+    piles do not hold as it arrives has nothing in them to be about, and every
+    entry for it is retired. Counted rather than cleared all the same, so a
+    pile a test or the Debug Menu wrote directly — where one object can sit
+    at two positions — keeps as many entries as it has copies.
+    """
+    for player in players:
+        record = player.cards_put_into_your_graveyard_from_battlefield_this_turn
+        if not record:
+            continue
+        mine = [index for index, held in enumerate(record) if held is card]
+        if not mine:
+            continue
+        excess = len(mine) - sum(1 for held in player.graveyard if held is card)
+        if excess > 0:
+            stale = set(mine[:excess])
+            player.cards_put_into_your_graveyard_from_battlefield_this_turn = [
+                held for index, held in enumerate(record) if index not in stale
+            ]
+    if from_zone == "battlefield":
+        players[seat].cards_put_into_your_graveyard_from_battlefield_this_turn.append(card)
