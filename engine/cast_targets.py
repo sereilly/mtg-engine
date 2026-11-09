@@ -350,7 +350,21 @@ def _cast_target_spec(
     # here and chooses on the stack -- see
     # ``triggered_abilities._apply_self_enters_battlefield_triggers``, which spends the
     # announcement on exactly the trigger this reads.
-    return _from_instructions(viewed(_entry_trigger_instructions(program)))
+    #
+    # **A division is not one of those fields.** "When this creature enters,
+    # distribute three +1/+1 counters among one, two, or three target
+    # creatures" (Wurmskin Forger, the one permanent in either manifest role
+    # whose entry trigger divides): the hand-over above carries a seat, a slot,
+    # an id, a stack object and a graveyard card, and no division, so a picker
+    # raised here demanded a division the cast then dropped — a bare cast was
+    # refused (CR 601.2d), a named one asked again by the trigger's own prompt
+    # (or defaulted for a seat nobody asks). No cast-time picker, then: the
+    # trigger divides as it is put on the stack, which is CR 603.3d's own
+    # moment, and the one question is asked once.
+    spec = _from_instructions(viewed(_entry_trigger_instructions(program)))
+    if spec is not None and spec.get("division"):
+        return None
+    return spec
 
 
 def _with_seat_beside_a_division(spec, instructions):
@@ -453,6 +467,10 @@ def cast_announced_entry_trigger(
             instructions = _as_kicked(instructions, kickers)
         slot = _first_described_slot(instructions)
         if slot is not None and slot[0].get("kind") != "none":
+            # A division the cast does not carry (``_cast_target_spec``'s last
+            # branch, Wurmskin Forger): the trigger chooses for itself.
+            if slot[0].get("division"):
+                return None
             return ability, instructions[0]
     return None
 

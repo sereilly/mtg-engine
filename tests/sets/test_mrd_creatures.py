@@ -147,6 +147,131 @@ def test_w1g6_war_elemental_grows_by_each_point_dealt_to_an_opponent(
     )
     assert (war.effective_power, war.effective_toughness) == (8, 8)
 
+
+# --- The supported-on-arrival family, driven ---------------------------------
+
+
+def _w1g6_attack_through(game, names, blocks=None):
+    """P1 attacks with the creatures named, P2 blocks as told, and combat runs
+    to its end."""
+    game._set_phase_and_step("combat", "declare_attackers")
+    slots = [
+        slot for slot, p in enumerate(game.players[0].battlefield)
+        if p.card.name in names
+    ]
+    ok, why = game.declare_attackers(0, slots, defending_player_index=1)
+    assert ok, why
+    _w1g6_resolve_stack(game)
+    game.advance_combat_phase()
+    ok, why = game.declare_blockers(1, dict(blocks or {}))
+    assert ok, why
+    for _ in range(6):
+        _w1g6_resolve_stack(game)
+        if game.current_phase != "combat":
+            break
+        game.advance_combat_phase()
+    _w1g6_resolve_stack(game)
+
+
+@_w1g6_pytest.mark.parametrize("name", [
+    "Slith Ascendant", "Slith Bloodletter", "Slith Firewalker", "Slith Predator",
+])
+def test_w1g6_a_slith_grows_each_time_it_connects(set_pool, name):
+    """"Whenever this creature deals combat damage to a player, put a +1/+1
+    counter on it." Two unblocked attacks: one counter each, the second hit
+    for 2."""
+    game = _w1g6_table(set_pool, mine=[set_pool("MRD")[name]])
+    (slith,) = _w1g6_on_board(game, name)
+    _w1g6_attack_through(game, [name])
+    assert slith.metadata.get("plus_counters") == 1
+    slith.tapped = False
+    _w1g6_attack_through(game, [name])
+    assert slith.metadata.get("plus_counters") == 2
+    assert game.players[1].life == 20 - 1 - 2
+
+
+def test_w1g6_slith_predator_grows_from_trample_over_a_chump(set_pool):
+    """Slith Predator's trample damage reaching the player is combat damage to
+    a player: blocked by a 1/1 with two counters on it, it still grows."""
+    from engine.named_counters import add_counters
+
+    lea = set_pool("LEA")
+    game = _w1g6_table(
+        set_pool, mine=[set_pool("MRD")["Slith Predator"]],
+        theirs=[lea["Llanowar Elves"]],
+    )
+    (predator,) = _w1g6_on_board(game, "Slith Predator")
+    add_counters(predator, "+1/+1", 2)
+    _w1g6_attack_through(game, ["Slith Predator"], blocks={0: 0})
+    assert game.players[1].life == 18
+    assert predator.metadata.get("plus_counters") == 3
+
+
+def test_w1g6_living_hive_makes_an_insect_per_point_dealt(set_pool):
+    """"Whenever this creature deals combat damage to a player, create that
+    many 1/1 green Insect creature tokens." Six damage, six Insects."""
+    game = _w1g6_table(set_pool, mine=[set_pool("MRD")["Living Hive"]])
+    _w1g6_attack_through(game, ["Living Hive"])
+    insects = _w1g6_on_board(game, "Insect Token")
+    assert game.players[1].life == 14
+    assert len(insects) == 6
+    assert all(
+        (t.effective_power, t.effective_toughness) == (1, 1) for t in insects
+    )
+    assert all(t in game.players[0].battlefield for t in insects)
+
+
+@_w1g6_pytest.mark.parametrize("interactive", [False, True])
+def test_w1g6_wurmskin_forger_divides_as_its_trigger_goes_on_the_stack(
+    set_pool, interactive,
+):
+    """"When this creature enters, distribute three +1/+1 counters among one,
+    two, or three target creatures." The division is the entry trigger's,
+    chosen as it is put on the stack (CR 603.3d, 601.2d): the creature is cast
+    with nothing announced (a cast naming a division is refused — it divides
+    nothing), and the trigger asks its controller once. A person names Bears
+    2, Giant 1; a seat nobody asks takes the default spread over its own
+    side."""
+    lea = set_pool("LEA")
+    forger = set_pool("MRD")["Wurmskin Forger"]
+    game = _w1g6_table(
+        set_pool, hand=[forger], mine=[lea["Grizzly Bears"]],
+        theirs=[lea["Hill Giant"]],
+    )
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    assert derive_cast_spec(forger, compile_card_oracle(forger)) is None
+    (bears,) = _w1g6_on_board(game, "Grizzly Bears")
+    (giant,) = _w1g6_on_board(game, "Hill Giant")
+    refused = game.queue_from_hand(
+        0, "Wurmskin Forger",
+        divided_targets=[(0, game.battlefield_index_of(bears), 3)],
+    )
+    assert not refused.supported and "divides nothing" in refused.details
+    if interactive:
+        game.interactive_seats = {0}
+
+    assert game.queue_from_hand(0, "Wurmskin Forger").supported
+    if not interactive:
+        _w1g6_resolve_stack(game)
+        (entered,) = _w1g6_on_board(game, "Wurmskin Forger")
+        placed = [
+            p.metadata.get("plus_counters", 0) for p in (bears, giant, entered)
+        ]
+        assert sum(placed) == 3 and placed[1] == 0, placed
+        return
+    game.resolve_top_of_stack()
+    (asked,) = game.pending_choices
+    assert asked.kind == "trigger_target"
+    assert (asked.data["max_targets"], asked.data["division_total"]) == (3, 3)
+    assert game.confirm_trigger_target(
+        0, permanent_ids=[bears.permanent_id, giant.permanent_id], amounts=[2, 1],
+    )
+    _w1g6_resolve_stack(game)
+    assert bears.metadata.get("plus_counters") == 2
+    assert giant.metadata.get("plus_counters") == 1
+
 # ==== end W1G6 ======================================================
 
 

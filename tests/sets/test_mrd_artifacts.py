@@ -531,6 +531,172 @@ def test_w1g6_power_conduit_unnamed_gives_up_the_inert_counter_first(set_pool):
         "Clockwork Beetle gave up 1 charge counter(s)" in line for line in game.log
     ), game.log
 
+
+# --- The supported-on-arrival family, driven ---------------------------------
+
+
+def _w1g6_table_of(set_pool, mine=(), theirs=(), *, interactive=()):
+    """Permanents by card name (MRD first, then LEA) on each side, past their
+    summoning sickness, with libraries to draw from."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g6_Game(players=[
+        _w1g6_PlayerState(name="P1", library=[lea["Island"]] * 20),
+        _w1g6_PlayerState(name="P2", library=[lea["Island"]] * 20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    placed = []
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _w1g6_nosick(
+                _w1g6_Permanent(card=mrd[name] if name in mrd else lea[name])
+            )
+            game.players[seat].battlefield.append(permanent)
+            placed.append(permanent)
+    game._sync_control()
+    return game, placed
+
+
+def _w1g6_fight_to_the_end_of_combat(game, attacker_seat, attackers, blocks=None):
+    """Declare *attackers* for *attacker_seat* and *blocks* (``{blocker slot:
+    attacker slot}``), then step out of combat — the end-of-combat step's
+    delayed triggers fire as it is left."""
+    game.active_player_index = attacker_seat
+    game._set_phase_and_step("combat", "declare_attackers")
+    slots = [_w1g6_slot(game, attacker_seat, p) for p in attackers]
+    ok, why = game.declare_attackers(
+        attacker_seat, slots, defending_player_index=1 - attacker_seat,
+    )
+    assert ok, why
+    _w1g6_resolve_stack(game)
+    game.advance_combat_phase()
+    ok, why = game.declare_blockers(1 - attacker_seat, dict(blocks or {}))
+    assert ok, why
+    for _ in range(6):
+        _w1g6_resolve_stack(game)
+        if game.current_phase != "combat":
+            break
+        game.advance_combat_phase()
+    _w1g6_resolve_stack(game)
+    assert game.current_phase != "combat", game.current_step
+
+
+def test_w1g6_altar_of_shadows_destroys_then_banks_black_mana(set_pool):
+    """"{7}, {T}: Destroy target creature. Then put a charge counter on this
+    artifact." / "At the beginning of your first main phase, add {B} for each
+    charge counter on this artifact." The Giant dies and the Altar takes its
+    counter; the next turn's first main phase holds {B}."""
+    game, (altar, giant) = _w1g6_table_of(set_pool, ["Altar of Shadows"], ["Hill Giant"])
+    game.start_turn(0)
+    game._close_current_priority_step()
+
+    used = game.activate_permanent_ability(
+        0, "Altar of Shadows", target_permanent_ids=[giant.permanent_id],
+    )
+    assert used.supported, used.details
+    _w1g6_resolve_stack(game)
+    assert not game.is_on_battlefield(giant)
+    assert _w1g6_counters_on(altar, "charge") == 1
+
+    game.start_turn(0)
+    _w1g6_resolve_stack(game)
+    assert game.current_step == "precombat_main", game.current_step
+    assert game.players[0].mana_pool["B"] == 1
+    assert "Altar of Shadows produced {B}" in game.log
+
+
+@_w1g6_pytest.mark.parametrize("interactive", [(), (0,)])
+def test_w1g6_sun_droplet_banks_damage_and_pays_it_back_a_life_a_turn(
+    set_pool, interactive,
+):
+    """"Whenever you're dealt damage, put that many charge counters on this
+    artifact." / "At the beginning of each upkeep, you may remove a charge
+    counter from this artifact. If you do, you gain 1 life." A Bolt is three
+    counters; each upkeep — its controller's and the opponent's — trades one
+    for a life, the "may" asked of an interactive seat and taken by default."""
+    game, (droplet,) = _w1g6_table_of(set_pool, ["Sun Droplet"], interactive=interactive)
+    game.players[1].hand.append(set_pool("LEA")["Lightning Bolt"])
+    game.start_turn(1)
+    game._close_current_priority_step()
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g6_resolve_stack(game)
+    assert game.players[0].life == 17
+    assert _w1g6_counters_on(droplet, "charge") == 3
+
+    for seat in (0, 1):
+        game.start_turn(seat)
+        _w1g6_resolve_stack(game)
+        if game.pending_choices:
+            (asked,) = game.pending_choices
+            assert asked.kind == "optional_pay"
+            assert game.confirm_optional_pay(0, accept=True)
+            _w1g6_resolve_stack(game)
+        game._close_current_priority_step()
+    assert game.players[0].life == 19
+    assert _w1g6_counters_on(droplet, "charge") == 1
+
+
+def test_w1g6_pentavus_trades_counters_for_pentavites_and_back(set_pool):
+    """"This creature enters with five +1/+1 counters on it." / "{1}, Remove a
+    +1/+1 counter from this creature: Create a 1/1 colorless Pentavite artifact
+    creature token with flying." / "{1}, Sacrifice a Pentavite: Put a +1/+1
+    counter on this creature." """
+    pentavus_card = set_pool("MRD")["Pentavus"]
+    game = _w1g6_game(hand=[pentavus_card])
+    assert game.queue_from_hand(0, "Pentavus").supported
+    _w1g6_resolve_stack(game)
+    (pentavus,) = [p for p in game.all_permanents() if p.card.name == "Pentavus"]
+    assert pentavus.metadata.get("plus_counters") == 5
+    assert (pentavus.effective_power, pentavus.effective_toughness) == (5, 5)
+
+    assert game.activate_permanent_ability(0, "Pentavus", ability_index=0).supported
+    _w1g6_resolve_stack(game)
+    (token,) = [p for p in game.all_permanents() if "Pentavite" in p.card.type_line]
+    assert (token.effective_power, token.effective_toughness) == (1, 1)
+    assert game._has_keyword(token, "flying")
+    assert token.has_type("artifact")
+    assert pentavus.metadata.get("plus_counters") == 4
+
+    assert game.activate_permanent_ability(0, "Pentavus", ability_index=1).supported
+    _w1g6_resolve_stack(game)
+    assert not game.is_on_battlefield(token)
+    assert pentavus.metadata.get("plus_counters") == 5
+
+
+@_w1g6_pytest.mark.parametrize("name,counters", [
+    ("Clockwork Beetle", 2), ("Clockwork Condor", 3),
+    ("Clockwork Vorrac", 4), ("Clockwork Dragon", 6),
+])
+def test_w1g6_a_clockwork_creature_winds_down_by_one_each_combat(
+    set_pool, name, counters,
+):
+    """"This creature enters with N +1/+1 counters on it." / "Whenever this
+    creature attacks or blocks, remove a +1/+1 counter from it at end of
+    combat." Cast, it enters with its N; an attack costs one counter at end of
+    combat, and so does a block (against a 0/1 it survives)."""
+    card = set_pool("MRD")[name]
+    game = _w1g6_game(hand=[card])
+    assert game.queue_from_hand(0, name).supported
+    _w1g6_resolve_stack(game)
+    (clockwork,) = [p for p in game.all_permanents() if p.card.name == name]
+    _w1g6_nosick(clockwork)
+    assert clockwork.metadata.get("plus_counters") == counters
+
+    _w1g6_fight_to_the_end_of_combat(game, 0, [clockwork])
+    assert clockwork.metadata.get("plus_counters") == counters - 1
+    assert game.players[1].life == 20 - counters
+
+    raider = _w1g6_nosick(_w1g6_Permanent(card=_w1g6_creature("Raider", 0, 1)))
+    game.players[1].battlefield.append(raider)
+    game._sync_control()
+    clockwork.tapped = False
+    _w1g6_fight_to_the_end_of_combat(
+        game, 1, [raider],
+        blocks={_w1g6_slot(game, 0, clockwork): _w1g6_slot(game, 1, raider)},
+    )
+    assert not game.is_on_battlefield(raider)
+    assert clockwork.metadata.get("plus_counters") == counters - 2
+
 # ==== end W1G6 ======================================================
 
 

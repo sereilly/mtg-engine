@@ -1384,12 +1384,19 @@ class CastTargetValidationMixin:
                     card.name, classification.effect_kind, miscounted,
                 )
 
+        # Only a spell's own effect is divided as it is cast. A permanent's
+        # program holds its abilities' steps too, and a division there is an
+        # entry trigger's (Wurmskin Forger's "distribute three +1/+1 counters
+        # among one, two, or three target creatures"), chosen as that trigger
+        # is put on the stack (CR 603.3d) — ``cast_targets._cast_target_spec``
+        # raises no cast-time picker for it, so neither does this gate.
+        type_line = card.type_line.lower()
         found = divided_description(
             instructions_as_announced(
                 card, compile_card_oracle(card), optional_paid,
                 mode_index=mode_index,
             )
-        )
+        ) if ("instant" in type_line or "sorcery" in type_line) else None
         if found is None and divided_targets:
             # CR 601.2d is about a spell that **divides or distributes**. A
             # division announced for one that does not is not an announcement
