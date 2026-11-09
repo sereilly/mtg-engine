@@ -1358,6 +1358,26 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     # player declares rather than only in the refusal. Three Watchdogs under a
     # Caverns of Despair: three requirements, two obeyable.
     combat_state["block_requirements"] = []
+    # CR 509.1b's ceiling on one attacker: "can't be blocked by more than one
+    # creature" (Stalking Tiger; Vorrac Battlehorns' equipped creature;
+    # Familiar Ground's board-wide spelling) — ``_maximum_blockers``, the
+    # number the declaration gate refuses by, per attacker that has one. Every
+    # legal pairing is legal alone, so ``legal_blocker_assignments`` cannot
+    # say it, and a double block was refused only once it was sent.
+    combat_state["blocker_ceilings"] = []
+    if (
+        game.current_turn_phase == "combat"
+        and game.current_step == "declare_blockers"
+        and not game.combat_blockers_locked
+    ):
+        attacking_seat = game.active_player_index
+        for attacker_index in sorted(game.combat_attackers):
+            attacker = game.permanent_at(attacking_seat, attacker_index)
+            ceiling = game._maximum_blockers(attacker) if attacker is not None else None
+            if ceiling is not None:
+                combat_state["blocker_ceilings"].append(
+                    {"attacker_index": attacker_index, "max_blockers": ceiling}
+                )
     if (
         game.current_turn_phase == "combat"
         and game.current_step == "declare_blockers"

@@ -119,6 +119,9 @@ function activationCostAnswered() { return false; }
 function carryCastMode(body) { return body; }
 function carryCastZoneAndCost(body) { return body; }
 function carryMadnessAnswer(body) { return body; }
+function carryCopyCastAnswer(body) { return body; }
+function carryAbilityCostAlternative(body) { return body; }
+function captureModeCollectionTarget() { return false; }
 function snapStateRefetchBackoff() {}
 function castManaSplitFor() { return null; }
 function startCastDividedPrompt(card) { shown.push({ kind: "divided", seat: pendingAnnouncedSeat }); }
