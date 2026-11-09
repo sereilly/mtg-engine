@@ -454,10 +454,11 @@ class SpellCastingMixin:
         # where no mode was listed (``entwine.entwined_mode_choices``).
         mode_choices, entwine_denial = entwined_mode_choices(
             card, mode_choices, _taken_offers(optional_cost_payments),
-            names_cast_targets=names_an_object(
+            names_cast_targets=target_player_index is not None or names_an_object(
                 target_permanent_index, target_permanent_ids,
                 target_stack_index, target_role_refs, divided_targets,
             ),
+            mode_index=mode_index,
         )
         if entwine_denial is not None:
             return refuse(card.name, classification.effect_kind, entwine_denial)

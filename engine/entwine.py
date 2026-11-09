@@ -224,6 +224,7 @@ def entwine_mode_refusal(
 def entwined_mode_choices(
     card: "CardDefinition", mode_choices: "list[dict] | None",
     taken: "dict[str, int] | None", *, names_cast_targets: bool,
+    mode_index: "int | None" = None,
 ) -> "tuple[list[dict] | None, str | None]":
     """``(mode_choices, refusal)`` for a cast of *card* that took the offers
     *taken* — the cast's own *mode_choices* unchanged unless it paid the
@@ -236,10 +237,13 @@ def entwined_mode_choices(
     each mode's targets), so each mode's target is defaulted on the mode, as a
     "choose one or more" mode's is.
 
-    A cast that paid the entwine, named no mode and named targets on the
-    *cast* (*names_cast_targets*) is refused: those fields are one
-    announcement's, and spreading them over several modes would be the engine
-    guessing which mode each target was meant for.
+    A cast that paid the entwine, named no mode list and named targets on the
+    *cast* (*names_cast_targets*: a seat or an object) is refused: those
+    fields are one announcement's, and spreading them over several modes
+    would be the engine guessing which mode each target was meant for. So is
+    one that named a **single** mode (*mode_index*): paying the entwine is
+    choosing every mode, and the two answers contradict each other — the
+    caller asked for one bullet and paid for all of them.
     """
     if mode_choices or entwine_cost(getattr(card, "oracle_text", "") or "") is None:
         return mode_choices, None
@@ -250,6 +254,11 @@ def entwined_mode_choices(
     modes = compile_card_oracle(card).modes
     if not modes:
         return mode_choices, None
+    if mode_index is not None:
+        return None, (
+            f"{card.name}: an entwined cast chooses every mode (CR 702.42a), "
+            f"not mode {mode_index} alone"
+        )
     if names_cast_targets:
         return None, (
             f"{card.name}: an entwined cast names each mode's targets on that "

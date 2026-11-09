@@ -156,7 +156,10 @@ def kickers(game: Game, card) -> dict:
     taken = {}
     for offer in game.cast_cost_offers(0, card, from_zone="hand") or ():
         key = offer.get("key") or offer.get("symbols")
-        if key and offer.get("kind") != "alternative":
+        # Not an entwine (CR 702.42a, Mirrodin): taking it is choosing every
+        # mode, which a one-mode announcement — what each row here is —
+        # cannot also be. Each mode's seat is asked of the mode alone.
+        if key and offer.get("kind") != "alternative" and offer.get("label") != "entwine":
             taken[key] = 1
     return taken
 

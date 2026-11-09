@@ -81,6 +81,10 @@ def test_every_mode_without_the_cost_and_the_cost_without_every_mode_are_refused
         mode_choices=every[1:],
     )
     assert not partial.supported, partial.details
+    one_named = game.cast_from_hand(
+        0, "One Dozen Eyes", optional_cost_payments={"{G}{G}{G}": 1}, mode_index=0,
+    )
+    assert not one_named.supported and "every mode" in one_named.details
     assert not game.players[0].battlefield
     single = game.cast_from_hand(0, "One Dozen Eyes", mode_index=1)
     assert single.supported, single.details
