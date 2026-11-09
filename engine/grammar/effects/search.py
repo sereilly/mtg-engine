@@ -432,10 +432,13 @@ def _parse_search_single_find(
         # recording the find, and the line's closing "Then shuffle." is this
         # search's shuffle (``riders._parse_deferred_search_shuffle``). Only
         # where that sentence is printed: a search that neither places its
-        # find nor shuffles is a different card.
+        # find nor shuffles is a different card — and only where a sentence
+        # stands between the two to read the find: "…and reveal that card.
+        # Then shuffle." with nothing in between is a search whose
+        # destination is missing, and it keeps refusing.
         if (
             not graveyard and not hand and not alternatives
-            and stream.at_punct(".") and stream.peek_word(1) != "put"
+            and stream.at_punct(".") and stream.peek_word(1) not in ("put", "then")
             and _names_a_trailing_shuffle(stream)
         ):
             return ast.SearchLibrary(

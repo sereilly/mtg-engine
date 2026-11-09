@@ -61,6 +61,12 @@ _ONE_EFFECT = {
         "registered here too and is not a replacement of the untap at all "
         "(its ruling, 2004-10-04): it is the untap step's own action now",
     ),
+    ("handlers/_common.py", "coins_for_one_flip"): (
+        ("coin_flip",),
+        "one effect (Krark's Thumb), standing for every copy: each doubles "
+        "the coins once (CR 614.5), so their order changes nothing — and a "
+        "flip is made mid-resolution at sites that cannot suspend",
+    ),
     ("mixins/land_tapped_for_mana.py", "_land_tapped_for_mana"): (
         ("land_mana_produced",),
         "one registration; the several producers that print it (Infernal "
