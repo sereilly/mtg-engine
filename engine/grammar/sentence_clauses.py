@@ -597,12 +597,35 @@ def _distribute_duration(
         ):
             raise stream.error("this sentence prints two different durations")
         return dataclasses.replace(statement, until_end_of_turn=True)
+    # A control change keeps its window as a **name** — ``"indefinite"`` is
+    # CR 611.2a's untimed steal, the value its production writes when nothing
+    # follows the object — so it takes the prefix by translation, exactly as
+    # the nodes above do and for their reason.
+    #
+    # "• **Until end of turn,** you gain control of target creature and it
+    # gains haste." (Grab the Reins.) Before this branch the recursion reached
+    # ``existing.kind`` on the string and raised ``AttributeError``, which
+    # escaped the parser instead of refusing the line.
+    if isinstance(statement, (ast.GainControl, ast.MutualControlOfSets)):
+        if duration.kind != "until_end_of_turn":
+            raise stream.error(
+                "a control change's leading duration is until end of turn"
+            )
+        if statement.duration not in ("indefinite", "until_end_of_turn"):
+            raise stream.error("this sentence prints two different durations")
+        return dataclasses.replace(statement, duration="until_end_of_turn")
     fields = {field.name for field in dataclasses.fields(statement)}
     if "duration" not in fields:
         raise stream.error(
             f"a leading duration has nothing to attach to in {type(statement).__name__}"
         )
     existing = getattr(statement, "duration")
+    # Any other node keeping its window as something other than a ``Duration``
+    # refuses rather than raising: a translation belongs in a branch above.
+    if not isinstance(existing, ast.Duration):
+        raise stream.error(
+            f"a leading duration cannot be translated onto {type(statement).__name__}"
+        )
     if existing.kind is not None and existing.kind != duration.kind:
         raise stream.error("this sentence prints two different durations")
     return dataclasses.replace(statement, duration=duration)
