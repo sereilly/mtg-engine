@@ -199,3 +199,71 @@ def test_every_key_a_graveyard_return_carries_is_one_its_fallback_reads():
         "Lord of the Undead", "Mtenda Griffin", "Strongarm Thug",
     }
     assert "Crypt Angel" in carriers.get("graveyard_colors", set())
+
+
+def _graveyard_return_step(instruction):
+    found: list = []
+    _returns_in(instruction, found)
+    (step,) = found
+    return step
+
+
+def test_an_artifact_creature_return_takes_neither_a_bear_nor_a_sol_ring(set_pool):
+    """"Return target **artifact creature** card from your graveyard to your
+    hand." (Skeleton Shard's ability; Moriok Scavenger's entry trigger.) The
+    payload is ``card_types_all`` with no ``card_type``, and down the fallback
+    road — the step run with no graveyard slot announced, the census's case —
+    it reached the generic "first creature card" scan and returned the Grizzly
+    Bears lying ahead of the Ornithopter, and returned it from a pile holding
+    no artifact creature at all. Both types are asked now (an artifact
+    creature card has each, CR 205.2b): the Ornithopter comes back, and from
+    a Bears and a Sol Ring nothing does."""
+    from engine.game_types import OracleExecutionContext
+
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    sources = {
+        "Skeleton Shard": lambda program: program.activated_abilities[0].instruction,
+        "Moriok Scavenger": lambda program: program.triggered_abilities[0].instruction,
+    }
+    for name, root in sources.items():
+        step = _graveyard_return_step(root(compile_card_oracle(mrd[name])))
+        assert step.payload.get("card_types_all") == ["artifact", "creature"], name
+        for pile, back in (
+            (["Grizzly Bears", "Sol Ring", "Ornithopter"], ["Ornithopter"]),
+            (["Grizzly Bears", "Sol Ring"], []),
+        ):
+            cards = {**lea, "Ornithopter": mrd["Ornithopter"]}
+            game = Game(players=[
+                PlayerState(name="A", graveyard=[cards[n] for n in pile],
+                            library=[lea["Forest"]] * 5),
+                PlayerState(name="B", library=[lea["Forest"]] * 5),
+            ])
+            player = game.players[0]
+            game._execute_oracle_instruction(step, OracleExecutionContext(
+                caster=player, target=game.players[1], card=mrd[name],
+            ))
+            assert [card.name for card in player.hand] == back, (name, pile)
+            assert [card.name for card in player.graveyard] == [
+                n for n in pile if n not in back
+            ], (name, pile)
+
+
+def test_moriok_scavenger_cast_returns_the_artifact_creature_card(set_pool):
+    """The ordinary cast at a seat nobody asks: the entry trigger's target is
+    the Ornithopter behind the Bears and the Sol Ring, and with no artifact
+    creature card in the pile the trigger has no legal target (CR 603.3d)."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    cards = {**lea, "Ornithopter": mrd["Ornithopter"], "Moriok Scavenger": mrd["Moriok Scavenger"]}
+    for pile, back in (
+        (["Grizzly Bears", "Sol Ring", "Ornithopter"], ["Ornithopter"]),
+        (["Grizzly Bears", "Sol Ring"], []),
+    ):
+        game, player = _graveyard_game(cards, hand=["Moriok Scavenger"], graveyard=pile)
+
+        assert game.cast_from_hand(0, "Moriok Scavenger").supported
+        _settle(game)
+
+        assert [card.name for card in player.hand] == back, pile
+        assert [card.name for card in player.graveyard] == [
+            n for n in pile if n not in back
+        ], pile

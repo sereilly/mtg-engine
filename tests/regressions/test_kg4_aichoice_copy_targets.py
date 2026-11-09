@@ -53,6 +53,13 @@ OTHER_COPY_KINDS = {
     "become_copy_of_bound_permanent": "a permanent becomes a copy",
     "create_copy_token": "a token copy of a permanent",
     "put_exiled_card_onto_stack_as_copy": "a card put back as a copy, no new targets",
+    # Isochron Scepter, Spellweaver Helix: a copy of an exiled card **cast**
+    # (CR 707.12 follows 601.2a-h), so its targets are announced as the cast's
+    # own (601.2c) — there are none to change — and a seat nobody asks
+    # announces them through the rehearsed cast chooser
+    # (``ai_policy.choose_copy_cast``). Driven below
+    # (``test_a_copy_cast_from_exile_by_a_seat_nobody_asks_aims_away_from_its_side``).
+    "cast_copy_of_exiled_card": "a copy cast: its caster announces targets (CR 707.12)",
 }
 
 
@@ -289,3 +296,52 @@ def test_a_headless_quanar_turned_up_aims_its_copy_at_the_opponent(set_pool, cat
     assert not game.is_on_battlefield(giant)
     assert not game.is_on_battlefield(bears)
     assert (me.life, you.life) == (20, 20)
+
+
+@pytest.mark.cr("707.12", "601.2c")
+def test_a_copy_cast_from_exile_by_a_seat_nobody_asks_aims_away_from_its_side(set_pool):
+    """``cast_copy_of_exiled_card``'s row above, driven: Isochron Scepter with
+    Lightning Bolt imprinted, activated by a seat nobody asks that has a
+    Grizzly Bears beside an opponent's Hill Giant. The copy is *cast*
+    (CR 707.12), so it announces its own target (CR 601.2c) through the
+    rehearsed cast chooser — at the opponent's side, never at the caster's
+    Bears or face."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    me = PlayerState(name="P0", library=[lea["Mountain"]] * 5,
+                     hand=[mrd["Isochron Scepter"], lea["Lightning Bolt"]])
+    you = PlayerState(name="P1", library=[lea["Mountain"]] * 5)
+    game = Game(players=[me, you])
+    game.enforce_mana_costs = False
+    game.active_player_index = game.priority_player_index = 0
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    bears = Permanent(card=lea["Grizzly Bears"])
+    giant = Permanent(card=lea["Hill Giant"])
+    game._put_permanent_onto_battlefield(0, bears, None)
+    game._put_permanent_onto_battlefield(1, giant, None)
+    # The imprint as a person answers it, so the exiled card is the Bolt.
+    game.interactive_seats = {0}
+    assert game.cast_from_hand(0, "Isochron Scepter").supported
+    assert game.resolve_top_of_stack() is False
+    assert game.confirm_optional_pay(0, accept=True)
+    assert game.confirm_exile_from_hand_choice(0, 0)
+    resolve_stack(game)
+    assert [card.name for card in me.exile] == ["Lightning Bolt"]
+    scepter = next(p for p in game.controlled_by(0) if p.card.name == "Isochron Scepter")
+    scepter.metadata["summoning_sickness_turn"] = -99
+
+    game.interactive_seats = set()
+    log = len(game.log)
+    assert game.activate_permanent_ability(
+        0, "Isochron Scepter", permanent_index=game.battlefield_index_of(scepter),
+        ability_index=0,
+    ).supported
+    resolve_stack(game)
+    game.check_state_based_actions()
+
+    assert any("cast a copy of Lightning Bolt" in line for line in game.log[log:]), game.log[log:]
+    assert game.is_on_battlefield(bears)
+    assert me.life == 20
+    assert not game.is_on_battlefield(giant) or you.life == 17, game.log[log:]
+    assert game.pending_choices == []
+    assert [card.name for card in me.exile] == ["Lightning Bolt"]

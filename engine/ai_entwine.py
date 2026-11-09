@@ -141,7 +141,9 @@ def entwined_cast(
             # 2004-12-01 ruling). A mode that names no target needs no
             # candidate to be announced; one that does is left to the single
             # modes, whose targets this seat has weighed.
-            if derive_cast_spec(card, program, mode_index=index) is not None:
+            if derive_cast_spec(
+                card, program, from_zone=from_zone, mode_index=index,
+            ) is not None:
                 return None
             entries.append({"index": index})
             continue

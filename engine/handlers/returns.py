@@ -151,6 +151,11 @@ _GRAVEYARD_NARROWING_KEYS = (
     "graveyard_subtypes", "graveyard_colors", "supertypes", "graveyard_mana_value",
     # Groffskithur's printed name: a narrowing like any adjective above.
     "graveyard_named",
+    # "target **artifact creature** card" (Skeleton Shard, Moriok
+    # Scavenger): every printed type at once. With ``card_type`` None and no
+    # ``card_types`` union, the payload fell through to the "first creature
+    # card" scan and returned a Grizzly Bears.
+    "card_types_all",
     # Aphetto Dredging's announced type, still a flag only when the resolution
     # was handed no word — which the matcher answers with no card at all.
     GRAVEYARD_ANNOUNCED_CREATURE_TYPE,
