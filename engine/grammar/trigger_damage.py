@@ -101,6 +101,12 @@ def _parse_damage_dealt_event(
             return None
         stream.advance()
         subject = ast.ObjectFilter(is_enchanted=True)
+    elif stream.accept_phrase("equipped", "creature"):
+        # "Whenever **equipped creature** deals combat damage to a player"
+        # (Mask of Memory). CR 301.5f's spelling of the referent the branch
+        # above reads, and the condition table's ``damager_attached`` group
+        # takes both words.
+        subject = ast.ObjectFilter(is_enchanted=True)
     elif stream.accept_phrase("a", "source", "you", "control"):
         # "A source you control" is a *seat*, not a set of permanents: a spell
         # is a source too, and no ObjectFilter can name one. The narrowing rides

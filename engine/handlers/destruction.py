@@ -734,12 +734,26 @@ def destroy_block_pair_partner(game: Game, instruction: OracleInstruction, conte
     regeneration and indestructibility behave as they do for a targeted one. A
     creature that has already left is destroyed by nothing, which is CR 608.2b
     doing as much as it can.
+
+    ``with_combatant`` is "destroy **both creatures**" (Dead-Iron Sledge): the
+    partner and the creature the firing was printed about, in the one
+    destruction. The combatant is the id the fire site froze
+    (``combatant_permanent_id``), never the live attachment — the card's
+    2006-10-15 ruling: moving the Sledge after it triggers does not change
+    which creatures are destroyed.
     """
     destroyed: list[str] = []
+    victims = list(block_pair_permanents(game, context))
+    if instruction.payload.get("with_combatant"):
+        combatant = game.permanent_by_id(
+            (context.trigger_context or {}).get("combatant_permanent_id")
+        )
+        if combatant is not None and not any(v is combatant for v in victims):
+            victims.append(combatant)
     # One destruction (CR 603.10a): every victim looks back at the others
     # (``Game.leaving_together``), and what they give back enters together.
     with game.entering_together(), game.leaving_together():
-        for victim in block_pair_permanents(game, context):
+        for victim in victims:
             seat = game.controller_index_of(victim)
             if seat is None:
                 continue

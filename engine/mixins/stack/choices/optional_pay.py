@@ -638,6 +638,14 @@ class OptionalPayChoicesMixin:
             return False
         context = entry.get("_context")
         steps = tuple(entry.get("_on_accept") or ())
+        # The offered action alone, never the "if you do" steps behind it —
+        # ``_offer_to_seat``'s rule (CR 608.2c: the consequence follows the
+        # action, so "draw two cards. If you do, discard a card" is not refused
+        # for the hand it had before the draw). An entry armed without the
+        # count keeps the whole branch, as before.
+        action_count = entry.get("_action_count")
+        if isinstance(action_count, int):
+            steps = steps[:action_count]
         if context is None or not steps:
             return True
         _, offerable = _narrow_to_takeable_actions(

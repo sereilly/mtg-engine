@@ -28,7 +28,7 @@ import dataclasses
 from .. import ast
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
-from ..phrases import _parse_per_each_objects
+from ..phrases import _parse_per_each_objects, _parse_that_object
 from ..rebinding import statement_bound_target
 from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
@@ -56,7 +56,12 @@ def _parse_attach(stream: TokenStream) -> ast.Statement:
         raise stream.error("expected what to attach")
     if not stream.accept_word("to"):
         raise stream.error("expected 'to' after what is attached")
-    host = parse_recipient(stream)
+    # "…Attach this Equipment to **that creature**." (Scythe of the Wretched,
+    # after "return that card to the battlefield".) The bound-object reader,
+    # asked first for the reason ``_parse_destroy`` asks it first: the shared
+    # noun parser never reads "that <noun>", and the lowering admits the
+    # phrase only where an earlier step recorded the permanent it names.
+    host = _parse_that_object(stream) or parse_recipient(stream)
     if host is None:
         raise stream.error("expected what to attach to")
     # "…to another permanent **it can enchant**." (Aura Graft.) CR 303.4j's

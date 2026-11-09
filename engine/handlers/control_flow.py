@@ -1108,7 +1108,18 @@ def _offer_to_seat(
     # the whole offer go unmade. Rebuilding the accept branch is what carries
     # that through to the prompt — an unofferable mode left in the list is one
     # the player can pick and then not get.
-    on_accept, offerable = _narrow_to_takeable_actions(game, player, on_accept, context)
+    #
+    # **Only the offered action is asked, never the "if you do" steps behind
+    # it.** CR 608.2c follows the instructions in order, so the consequence is
+    # measured after the action has happened: "you may draw two cards. If you
+    # do, discard a card" (Mask of Memory, Jeskai Elder, Sanctum of Calm
+    # Waters) asked its discard of an empty hand *before* the draw and
+    # withdrew the whole offer — a seat with no cards in hand never drew.
+    action_steps = _steps(instruction, "action")
+    action_steps, offerable = _narrow_to_takeable_actions(
+        game, player, action_steps, context
+    )
+    on_accept = action_steps + _steps(instruction, "then")
     if not offerable:
         if on_decline:
             _run(game, on_decline, context)
@@ -1132,6 +1143,10 @@ def _offer_to_seat(
         # Instructions to run on accept/decline, with the resolution context
         # they belong to. _pay_optional executes these when present.
         "_on_accept": on_accept,
+        # How many of those steps are the offered action — what the answer
+        # re-checks (``_optional_action_still_takeable``); the rest are the
+        # "if you do" steps that follow it.
+        "_action_count": len(action_steps),
         "_on_decline": on_decline,
         "_on_reflexive": on_reflexive,
         "_context": context,

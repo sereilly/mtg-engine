@@ -380,6 +380,10 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         quantifier = "this"
     elif stream.at_word("enchanted"):
         quantifier = "this"
+    elif stream.at_word("equipped") and stream.peek_word(1) == "creature":
+        # CR 301.5f's referent, read by the noun parser as the one
+        # "enchanted" names (see ``nouns.parse_object_filter``).
+        quantifier = "this"
     elif stream.accept_word("a", "an"):
         quantifier = "a"
 
@@ -393,9 +397,19 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
             return None
         return ast.TargetSpec("all", filt)
 
+    # "…**target equipped creature**" / "each equipped creature" would be a
+    # *restriction* — a creature with an Equipment attached — where the noun
+    # parser reads the words as CR 301.5f's referent. Nothing tests that
+    # restriction (the Aura spelling has ``enchanted_only``; the Equipment one
+    # has no key), so the phrase refuses under every quantifier but the
+    # referent's own rather than naming the wrong object.
+    names_equipped = stream.at_word("equipped")
     try:
         filt = parse_object_filter(stream)
     except Exception:
+        stream.reset(mark)
+        return None
+    if names_equipped and filt.is_enchanted and quantifier != "this":
         stream.reset(mark)
         return None
     if other_before_target:

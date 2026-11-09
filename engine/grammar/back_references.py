@@ -112,6 +112,21 @@ def parse_pair_ordinal_subject(stream: TokenStream) -> "ast.TargetSpec | None":
     would come to disagree about which creature they meant.
     """
     mark = stream.mark()
+    # "…destroy **both creatures**." (Dead-Iron Sledge.) The whole pair rather
+    # than one position in it, so its own quantifier for the ordinals' reason:
+    # nothing accepts "both" unless it says so, and today only the block-pair
+    # destroy does (``lowering/destruction.py``). The plural noun is the card
+    # type the pair restates; anything else after the word is not this phrase.
+    if stream.accept_word("both"):
+        noun = stream.peek_word()
+        singular = noun[:-1] if noun and noun.endswith("s") else noun
+        if singular is not None and singular in CARD_TYPES and singular != noun:
+            stream.advance()
+            return ast.TargetSpec(
+                "both", ast.ObjectFilter(card_types=(singular,))
+            )
+        stream.reset(mark)
+        return None
     if not stream.accept_word("the"):
         return None
     ordinal = _accept_pair_ordinal(stream)

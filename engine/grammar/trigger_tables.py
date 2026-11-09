@@ -393,6 +393,9 @@ _FILTERED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # all.
     (("enchanted", "creature", "blocks", "or", "becomes", "blocked", "by"),
      "creature_blocks_or_blocked_by"),
+    # Dead-Iron Sledge's spelling of the row above (CR 301.5f).
+    (("equipped", "creature", "blocks", "or", "becomes", "blocked", "by"),
+     "creature_blocks_or_blocked_by"),
     (("this", "creature", "blocks"), "creature_blocks"),
     (("this", "creature", "becomes", "blocked", "by"), "creature_becomes_blocked"),
     # "Whenever you activate a loyalty ability of **a Chandra planeswalker**"
