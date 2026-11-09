@@ -689,6 +689,14 @@ def _lower_mill(
         if event in _EVENT_SUBJECT_PLAYERS:
             payload["recipient"] = EVENT_SUBJECT_PLAYER
             return (OracleInstruction("mill_target_player", "", payload),)
+        # "Whenever a permanent becomes untapped, **that permanent's
+        # controller** mills a card." (Mesmeric Orb.) The seat that controlled
+        # the object the event was about, frozen by its fire site — the reading
+        # the damage recipient (`_recipients`) and the life loss take of the
+        # same words, from the same table.
+        if event in _EVENT_SUBJECT_CONTROLLERS and event not in _DAMAGED_PLAYER_EVENTS:
+            payload["recipient"] = EVENT_SUBJECT_CONTROLLER
+            return (OracleInstruction("mill_target_player", "", payload),)
         if event not in _DAMAGED_PLAYER_EVENTS:
             raise LoweringError(
                 '"that player" mills only under a trigger whose event froze a '

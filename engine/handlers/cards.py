@@ -543,6 +543,18 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
             game.log.append(f"{context.card.name}: no recorded player, no mill")
             return True, "resolved"
         victims = [game.players[seat]]
+    elif recipient == "event_subject_controller":
+        # "Whenever a permanent becomes untapped, **that permanent's
+        # controller** mills a card." (Mesmeric Orb.) The seat that controlled
+        # the untapped permanent, frozen by the untap seam (CR 603.10) — read
+        # from the record and never re-derived, since the permanent may have
+        # left by resolution. No record mills nobody, for the branches above'
+        # reason.
+        seat = (context.trigger_context or {}).get("event_subject_controller")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{context.card.name}: no recorded player, no mill")
+            return True, "resolved"
+        victims = [game.players[seat]]
     elif recipient == "defending_player":
         # "Whenever this creature becomes blocked, **defending player** mills
         # three cards." (Flint Golem.) CR 506.2's seat, read from the key the

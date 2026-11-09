@@ -19,7 +19,6 @@ there, are ``permanents.py``'s.
 
 from __future__ import annotations
 
-import random
 import re
 
 from ..effect_ordering import source_names
@@ -762,7 +761,7 @@ def _shuffle_into_library_instead_of_graveyard(game, payload: dict) -> Replaceme
     card = payload["card"]
     game.record_reveal(game.players.index(player), [card.name])
     game.put_card_into_library(player, card)
-    random.shuffle(player.library)
+    game.shuffle_library_of(player)
     game.log.append(
         f"{card.name} was revealed and shuffled into {player.name}'s library "
         "instead of going to a graveyard"

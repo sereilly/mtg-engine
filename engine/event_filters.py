@@ -193,8 +193,28 @@ def _self_untapped_filter(
 ) -> bool:
     """"Whenever **this** creature becomes untapped" — the permanent's own
     event and nobody else's, so a board of Pilferers does not all fire when one
-    untaps. By identity, because two of them compare equal by value."""
-    return event.subject is permanent
+    untaps. By identity, because two of them compare equal by value.
+
+    "Whenever **a permanent** becomes untapped" (Mesmeric Orb) carries the
+    printed noun phrase as ``untapped_filter`` instead, asked of the permanent
+    that untapped through ``subject_matches`` with the trigger's controller as
+    observer (CR 109.5) — an empty filter is "a permanent", every one."""
+    payload = trig.condition.payload
+    if "untapped_filter" not in payload:
+        return event.subject is permanent
+    untapped = event.subject
+    if untapped is None or not hasattr(untapped, "tapped"):
+        return False
+    described = payload.get("untapped_filter") or {}
+    if not described:
+        return True
+    from .subject_filters import subject_matches
+
+    return subject_matches(
+        game, untapped, described,
+        observer=game.players.index(_controller_of(game, permanent)),
+        source=permanent,
+    )
 
 
 @event_filter("revealed_drawn_card")

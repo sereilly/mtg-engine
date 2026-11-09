@@ -424,6 +424,28 @@ def _parse_search_single_find(
         broken = stream.mark()
         if not (stream.accept_punct(".") and stream.at_word("put")):
             stream.reset(broken)
+        # "Search your library for a nonland card **and reveal it.** Each
+        # opponent who cast a spell this turn with the same name as that card
+        # loses 6 life. **Then shuffle.**" (Grim Reminder.) The find goes
+        # nowhere: it is revealed (CR 701.20a) and stays in the library, and
+        # the sentence behind reads it — so the search ends at its full stop,
+        # recording the find, and the line's closing "Then shuffle." is this
+        # search's shuffle (``riders._parse_deferred_search_shuffle``). Only
+        # where that sentence is printed: a search that neither places its
+        # find nor shuffles is a different card — and only where a sentence
+        # stands between the two to read the find: "…and reveal that card.
+        # Then shuffle." with nothing in between is a search whose
+        # destination is missing, and it keeps refusing.
+        if (
+            not graveyard and not hand and not alternatives
+            and stream.at_punct(".") and stream.peek_word(1) not in ("put", "then")
+            and _names_a_trailing_shuffle(stream)
+        ):
+            return ast.SearchLibrary(
+                ast.PlayerRef("you"), filt, ast.Zone("library_revealed"),
+                graveyard, tapped=(False,), reveal=True,
+                shuffle_deferred=True,
+            )
     # "…, **then shuffle and put that card on top**." (Enlightened Tutor,
     # Mystical Tutor, Worldly Tutor.) The same search with its last two clauses
     # in the other order, and the order is the effect: the card is placed
@@ -811,12 +833,42 @@ def _accept_counted_exile_search(
             filt, zones=zones, count=count,
             face_down_pile=True, shuffle_pile=shuffled,
         )
+    # "…exile them, **then create that many** 1/1 colorless Myr artifact
+    # creature tokens. **Then shuffle.**" (Myr Incubator.) The search's shuffle
+    # printed as a sentence of its own behind a step that reads the finds: the
+    # search ends here, the sentence loop reads the step behind it, and the
+    # trailing "Then shuffle." is consumed as this search's by
+    # ``riders._parse_deferred_search_shuffle``. Only where that sentence is
+    # printed — a search whose shuffle is never stated is a different card.
+    deferred = stream.mark()
+    if (
+        stream.accept_punct(",") and stream.accept_word("then")
+        and not stream.at_word("shuffle")
+        and _names_a_trailing_shuffle(stream)
+    ):
+        stream.reset(deferred)
+        return ast.SearchAndExile(
+            filt, zones=zones, count=count, shuffle_deferred=True,
+        )
+    stream.reset(deferred)
     stream.accept_punct(",")
     stream.accept_word("then")
     if not stream.accept_word("shuffle"):
         stream.reset(mark)
         return None
     return ast.SearchAndExile(filt, zones=zones, count=count)
+
+
+def _names_a_trailing_shuffle(stream: TokenStream) -> bool:
+    """Whether the line ends with the bare sentence "Then shuffle." — a token
+    scan with the cursor unmoved, for ``_reveal_until.
+    names_the_revealed_cards_placed``' reason: the sentence that states this
+    search's shuffle is not the next clause but the one after the step that
+    reads the finds."""
+    words = [str(token.text).lower() for token in stream.tokens[stream.pos:]]
+    return words[-3:] == [".", "then", "shuffle"] or words[-4:] == [
+        ".", "then", "shuffle", ".",
+    ]
 
 
 def _accept_each_searcher_shuffle(stream: TokenStream) -> bool:

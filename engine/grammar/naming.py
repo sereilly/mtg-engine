@@ -176,6 +176,10 @@ def _parse_name_then_consult(stream: TokenStream) -> "ast.Statement | None":
     if not stream.accept_punct("."):
         stream.reset(mark)
         return None
+    # Spoils of the Vault's printing: no unseen exile, and a price on the pile.
+    spoils = _accept_spoils_dig(stream)
+    if spoils is not None:
+        return spoils
     if not stream.accept_phrase("exile", "the", "top"):
         stream.reset(mark)
         return None
@@ -209,6 +213,61 @@ def _parse_name_then_consult(stream: TokenStream) -> "ast.Statement | None":
             stream.reset(mark)
             return None
     return ast.NameThenConsult(count)
+
+
+def _accept_spoils_dig(stream: TokenStream) -> "ast.NameThenConsult | None":
+    """``Reveal cards from the top of your library until you reveal a card with
+    that name, then put that card into your hand. Exile all other cards
+    revealed this way, and you lose 1 life for each of the exiled cards.``
+    (Spoils of the Vault), read after "Choose a card name." — or None with the
+    cursor where it was.
+
+    Demonic Consultation's dig with nothing exiled unseen in front of it and a
+    price behind it. Every word is required, the price especially: it is the
+    whole cost of the card (the ruling, 2018-12-07: a name the library does not
+    hold exiles the library and costs a life for each card), and a line that
+    dropped it would be a tutor for {B}.
+    """
+    mark = stream.mark()
+    for word in ("reveal", "cards", "from", "the", "top", "of", "your",
+                 "library", "until", "you", "reveal", "a", "card", "with",
+                 "that", "name"):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    for word in ("then", "put", "that", "card", "into", "your", "hand"):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    for word in ("exile", "all", "other", "cards", "revealed", "this", "way"):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("and", "you", "lose"):
+        stream.reset(mark)
+        return None
+    try:
+        rate = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(rate, ast.Fixed) or rate.value < 1:
+        stream.reset(mark)
+        return None
+    for word in ("life", "for", "each", "of", "the", "exiled", "cards"):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    return ast.NameThenConsult(ast.Fixed(0), life_per_exiled=rate.value)
 
 
 def _parse_name_then_random_reveal(stream: TokenStream) -> "ast.Statement | None":

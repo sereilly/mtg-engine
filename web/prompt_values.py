@@ -688,11 +688,17 @@ def _flip_again(ctx: PromptContext, choices: list) -> dict:
     the round just played is already paid for.
     """
     choice = choices[0]
-    return {
+    prompt = {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
         "stake": int(choice.data.get("stake", 0)),
     }
+    # "Flip a coin until you lose a flip or choose to stop flipping." (Fiery
+    # Gambit.) No stake there — the decision is how far a run of wins has got,
+    # so that is what the prompt shows; absent for Game of Chaos.
+    if "flips_won" in choice.data:
+        prompt["flips_won"] = int(choice.data["flips_won"])
+    return prompt
 
 
 @prompt_renderer("repeat_process")

@@ -122,7 +122,21 @@ def _lower_search_library(
     to_graveyard = node.to.name == "graveyard" and (
         node.to.owner is not None and node.to.owner.kind == "you"
     )
-    if not to_battlefield and not to_library_top and not to_library_from_top and not to_graveyard and (
+    # "Search your library for a nonland card **and reveal it.** … Then
+    # shuffle." (Grim Reminder.) The find stays in the library, revealed, for
+    # the sentence behind to read — one card of the searcher's own library,
+    # and nothing else the search might carry.
+    revealed_in_library = node.to.name == "library_revealed"
+    if revealed_in_library and (
+        node.extra_destinations or node.count_amount is not None
+        or node.unbounded or node.one_of_each or node.graveyard or node.hand
+        or node.named_alternatives or not node.reveal
+    ):
+        raise LoweringError(
+            "a find revealed and left in the library is one revealed card",
+            node=node,
+        )
+    if not revealed_in_library and not to_battlefield and not to_library_top and not to_library_from_top and not to_graveyard and (
         node.to.name != "hand" or node.to.owner is None or node.to.owner.kind != "you"
     ):
         raise LoweringError(
@@ -163,6 +177,11 @@ def _lower_search_library(
     restrictions: dict[str, object] = {}
     if filt.named is not None:
         restrictions["named"] = filt.named
+    # "Search your library for a **nonland** card" (Grim Reminder). Emitted
+    # only when printed, so every search payload written before it is
+    # byte-identical; ``search_matches`` reads it among the restrictions.
+    if filt.excluded_types:
+        restrictions["exclude_types"] = list(filt.excluded_types)
     # "…a card **with the same name as target nontoken creature**" (Mask of the
     # Mimic). The name is not knowable here — the target is chosen as the spell
     # is cast (CR 601.2c) — so what travels is the *question*, and the handler
@@ -443,6 +462,8 @@ def _lower_search_library(
     if to_library_from_top:
         payload["destination"] = "library_from_top"
         payload["from_top"] = node.from_top
+    if revealed_in_library:
+        payload["destination"] = "revealed"
     if to_graveyard and len(destinations) == 1:
         # The single-find spelling (Entomb). The counted one carries its zone in
         # ``destinations`` above, which is the list `_place_found_card` walks;
@@ -517,7 +538,11 @@ _SEARCH_DESTINATIONS = {
 #: (Long-Term Plans): the depth rides as ``from_top``. Kept out of the table
 #: above, which the counted flow reads per find and which has no branch that
 #: places a card at a depth — so a counted search naming it refuses there.
-_SINGLE_FIND_DESTINATIONS = {**_SEARCH_DESTINATIONS, "library_from_top": "library_from_top"}
+_SINGLE_FIND_DESTINATIONS = {
+    **_SEARCH_DESTINATIONS, "library_from_top": "library_from_top",
+    # "…and reveal it." with the find left where it is (Grim Reminder).
+    "library_revealed": "revealed",
+}
 
 #: The same question for a search of *somebody else's* library. Exile is here
 #: and not above because only this sentence prints it, and the hand is the

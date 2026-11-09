@@ -392,6 +392,9 @@ EXILE_INSTEAD_OF_GRAVEYARD = 10  # Forbidden Crypt
 # example under 616.1f is this pair) — and the exile is the default because it
 # is the one a *different* permanent's controller put there on purpose.
 SHUFFLE_INSTEAD_OF_GRAVEYARD = 20  # Legacy Weapon
+#: "If you would flip a coin, instead flip two coins and ignore one." (Krark's
+#: Thumb.) The ``coin_flip`` kind's one contender today, in a space of its own.
+COIN_FLIP_DOUBLED = 10  # Krark's Thumb
 
 # Set on the event once an interceptor consumes it. It lives on the payload
 # because the payload is the one piece of state the 616.1 loop threads through

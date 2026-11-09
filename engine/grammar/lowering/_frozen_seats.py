@@ -169,6 +169,9 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # Venom damaged the Aura controller's opponent, and did it even when the
     # enchanted land was the Aura controller's own.
     "permanent_becomes_tapped",
+    # Mesmeric Orb — the untapped permanent's, frozen by the one untap seam
+    # (`become_untapped`) for `become_tapped`'s reason one event over.
+    "permanent_becomes_untapped",
     # Haunting Wind, Artifact Possession — the tapped artifact's, for the same
     # reason and from the same stamp. This condition has two announcements (a
     # tap, and an ability activated without {T}); both freeze the *subject's*
@@ -253,6 +256,11 @@ OPPONENT_CHOSE_MODE = "mode_chosen_by_opponent"
 
 _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     "upkeep_each",
+    # "Whenever a spell or ability causes a player to shuffle their library,
+    # this artifact deals 2 damage to **that player**." (Psychogenic Probe.)
+    # The seat whose library was shuffled, frozen by the one effect-shuffle
+    # seam (``Game.shuffle_library_of``) under the same key.
+    "library_shuffled",
     # "…at the beginning of each player's upkeep, **that player** returns one
     # of the exiled cards they own to the battlefield." (Dimensional Breach.)
     # The row above as a *delayed* event: the same seat, frozen under the same

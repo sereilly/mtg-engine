@@ -495,7 +495,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # back-references behind it care about: "that card" names what this step
     # exiled, whoever exiled it.
     "exile_random_card_from_hand": "exiled_cards",
-    "search_and_exile_matching": "exiled_cards",
+    # …and how many it exiled: "…exile them, then create **that many** 1/1
+    # colorless Myr artifact creature tokens" (Myr Incubator) — the quantity
+    # key a bare "that many" resolves against, beside the list for
+    # ``exile_hand_pile``'s reason (a list is not a quantity).
+    "search_and_exile_matching": ("exiled_cards", "exiled_count"),
     # "**Choose a card name**, then target opponent mills a card. If a card
     # with the chosen name was milled this way, …" (Foreshadow.) The name is the
     # whole of what the first sentence does, and the only place the third can
@@ -912,8 +916,24 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
 #: One table rather than a predicate, for :data:`_PRODUCES`' own reason: this is
 #: a registry, and the thing being registered is a payload entry the lowering
 #: already writes.
-_PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, "str | tuple[str, ...]"]] = {
-    "search_library": ("destination", "exile", "exiled_cards"),
+_PRODUCES_FOR_PAYLOAD: dict[
+    str,
+    "tuple[str, object, str | tuple[str, ...]] | "
+    "list[tuple[str, object, str | tuple[str, ...]]]",
+] = {
+    # A list where one kind writes different records for different payloads:
+    # the find exiled (Grinning Totem) or the find revealed and left in the
+    # library — "Each opponent who cast a spell this turn with the same name
+    # as **that card** …" (Grim Reminder) reads the card it showed.
+    "search_library": [
+        ("destination", "exile", "exiled_cards"),
+        ("destination", "revealed", "revealed_card"),
+    ],
+    # "Put target creature on the bottom of its owner's library. **That
+    # creature's controller** reveals cards …" (Proteus Staff.) The bottom
+    # shape only: it is single-target (the lowering emits ``library_end`` on
+    # no other), so one seat was the controller, recorded before the move.
+    "put_target_on_library_top": ("library_end", "bottom", LAST_TARGET_CONTROLLER),
     # "Reveal cards from the top of your library until you reveal a nonland
     # card. This creature gets +X/+0 until end of turn, where X is **that
     # card's mana value**. Put **the revealed cards** on the bottom of your
@@ -923,8 +943,15 @@ _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, "str | tuple[str, ...]"]] = 
     # admit "the revealed cards" behind a run whose pile is already gone.
     # Two records, the pile and the find's mana value (0 when the run found
     # nothing, CR 107.2 — the rulings' "X is zero").
+    #
+    # And a third, the find itself under ``revealed_card``: "If **the revealed
+    # land card** was a Mountain, this artifact deals double that damage
+    # instead." (Goblin Charbelcher.) Written only when the run stopped on a
+    # match, so a run that found nothing answers every question about the
+    # find False — there is no revealed land card to be a Mountain.
     "reveal_until_match": (
-        "destination", "revealed", ("revealed_until_cards", "its_mana_value"),
+        "destination", "revealed",
+        ("revealed_until_cards", "its_mana_value", "revealed_card"),
     ),
     # "Reveal the top three cards of your library and put one of them into
     # your hand. You gain life equal to **that card's mana value**." (Reviving
@@ -1052,8 +1079,10 @@ def _produced_by_kind(instruction) -> frozenset[str]:
         else frozenset((recorded,) if isinstance(recorded, str) else recorded)
     )
     conditional = _PRODUCES_FOR_PAYLOAD.get(kind)
-    if conditional is not None:
-        payload_key, payload_value, record = conditional
+    for payload_key, payload_value, record in (
+        conditional if isinstance(conditional, list)
+        else [conditional] if conditional is not None else []
+    ):
         if (instruction.payload or {}).get(payload_key) == payload_value:
             keys = keys | ({record} if isinstance(record, str) else set(record))
     unless = _PRODUCES_FOR_PAYLOAD_WITHOUT.get(kind)

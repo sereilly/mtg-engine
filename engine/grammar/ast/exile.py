@@ -418,6 +418,14 @@ class SearchAndExile:
     #: card at a time from the top — a searched pile in library order would let
     #: the searcher choose what comes back and in what sequence.
     shuffle_pile: bool = False
+    #: "…exile them, then create that many … tokens. **Then shuffle.**" (Myr
+    #: Incubator.) The search's own shuffle (CR 701.23a), printed as a later
+    #: sentence behind a step that reads the finds rather than at the end of
+    #: this one. The search prompt performs it either way — the answer shuffles
+    #: the library it searched — so the flag changes nothing that executes; it
+    #: is what lets ``riders._parse_deferred_search_shuffle`` read the trailing
+    #: "Then shuffle." as this search's and nothing else's.
+    shuffle_deferred: bool = False
 
 
 @dataclass(frozen=True)

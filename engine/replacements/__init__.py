@@ -21,6 +21,7 @@ Event kinds and their payload keys:
 - ``would_leave_battlefield``: {player, permanent, destination}
 - ``discard``:            {player, card}
 - ``draw``:               {player, count, drawn}
+- ``coin_flip``:          {player, coins, exclude_sources}
 
 ``discard`` and ``draw`` are *interactive*: their interceptors offer a
 :class:`~engine.replacement_choices.ReplacementChoice` rather than applying
@@ -93,6 +94,7 @@ from .registry import (REPLACEMENTS, ReplacementOutcome, answered_restart,
                        replacement_candidates,
                        replacement_effect, take_replaced, was_replaced)
 from . import (  # noqa: F401  (each registers its interceptors)
+    coin_flips,
     damage,
     redirects,
     damage_substitutions,

@@ -74,7 +74,7 @@ from ._common import (
     search_slot,
 )
 from ._filters import chargeable_card_filter
-from ._record_keys import CHOSEN_PLAYER
+from ._record_keys import CHOSEN_PLAYER, REVEALED_UNTIL_CARDS
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
@@ -162,10 +162,6 @@ def _lower_put_revealed_cards_on_bottom(
     return (OracleInstruction("put_revealed_cards_on_bottom", "", {}),)
 
 
-#: The pile a fateless reveal-until leaves revealed on top of its library —
-#: the scratchpad key ``handlers/reveal.reveal_until_match`` writes, spelled
-#: there as ``REVEALED_UNTIL_CARDS`` too.
-REVEALED_UNTIL_CARDS = "revealed_until_cards"
 
 
 def _lower_reveal_top(node: ast.RevealTopToHandOrBottom) -> tuple[OracleInstruction, ...]:

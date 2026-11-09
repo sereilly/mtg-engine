@@ -14,7 +14,6 @@ object end up in" — does not.
 
 from __future__ import annotations
 
-import random
 from typing import TYPE_CHECKING
 
 from ..oracle_types import HAND_CARDS_TO_LIBRARY, LAST_TARGET_OWNER
@@ -46,7 +45,7 @@ def shuffle_library(game: Game, instruction: OracleInstruction, context: OracleE
     player = context.caster if whose == "you" else context.target
     if player is None:
         return False, "no player to shuffle"
-    random.shuffle(player.library)
+    game.shuffle_library_of(player)
     game.log.append(f"{player.name} shuffled their library")
     return True, "resolved"
 
@@ -169,7 +168,7 @@ def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, contex
             player.graveyard.clear()
         # Through the module-level RNG every other shuffle uses, so a seeded run
         # stays reproducible (the determinism invariant).
-        random.shuffle(player.library)
+        game.shuffle_library_of(player)
         game.log.append(
             f"{player.name} shuffled {moved} card(s) from their hand"
             + (f" and {buried} from their graveyard" if with_graveyard else "")
@@ -230,7 +229,7 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
         # be told apart there (they are one ``CardDefinition`` object).
         for card in picked:
             game.put_card_into_library(player, card, position="top")
-        random.shuffle(player.library)
+        game.shuffle_library_of(player)
         game.log.append(
             f"{player.name} shuffled {len(picked)} chosen card(s) from their "
             "graveyard into their library"
@@ -264,7 +263,7 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
                 f"{context.card.name}: no creature type was chosen, so no card "
                 "is shuffled in"
             )
-            random.shuffle(player.library)
+            game.shuffle_library_of(player)
             return True, "resolved"
     if described:
         moving = [
@@ -283,7 +282,7 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
     # Through the module-level RNG every other shuffle uses, so a seeded run
     # stays reproducible (the determinism invariant). CR 701.24a: the library is
     # shuffled even when nothing moved into it, because the sentence says to.
-    random.shuffle(player.library)
+    game.shuffle_library_of(player)
     game.log.append(
         f"{player.name} shuffled {moved} card(s) from their graveyard into their library"
     )
@@ -340,7 +339,7 @@ def shuffle_source_card_into_library(game: Game, instruction: OracleInstruction,
         game.log.append(f"{card.name} was no longer in a graveyard")
     else:
         game.log.append(f"{card.name} was shuffled into {owner.name}'s library")
-    random.shuffle(owner.library)
+    game.shuffle_library_of(owner)
     return True, "resolved"
 
 
@@ -386,7 +385,7 @@ def shuffle_target_permanent_into_library(game: Game, instruction: OracleInstruc
     )
     if target_perm is None or not game.is_on_battlefield(target_perm):
         game.log.append(f"{context.card.name}: no valid permanent to shuffle away")
-        random.shuffle(context.caster.library)
+        game.shuffle_library_of(context.caster)
         return True, "resolved"
     owner_index = game.owner_index_of(target_perm)
     owner = (
@@ -400,7 +399,7 @@ def shuffle_target_permanent_into_library(game: Game, instruction: OracleInstruc
     game.remove_from_battlefield(target_perm)
     game._remove_aura_effects(target_perm)
     game.put_card_into_library(owner, card, from_battlefield=target_perm)
-    random.shuffle(owner.library)
+    game.shuffle_library_of(owner)
     game.log.append(
         f"{context.card.name}: {card.name} was shuffled into "
         f"{owner.name}'s library"

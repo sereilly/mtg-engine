@@ -504,7 +504,7 @@ class LibraryChoicesMixin:
         # "You may have that player shuffle" (Natural Selection): only honored when
         # the effect allows it.
         if shuffle and choice.data.get("may_shuffle"):
-            random.shuffle(target.library)
+            self.shuffle_library_of(target)
             self.log.append(f"{target.name}'s library was shuffled")
         else:
             self.log.append(f"Top {top_count} cards of {target.name}'s library reordered")
@@ -625,14 +625,9 @@ class LibraryChoicesMixin:
         default and action, and a decision armed by answering another stays
         inside the same resolution.
         """
-        import random
-
         player = self.players[choice.player_index]
         count = min(int(choice.data.get("count", 0)), len(player.library))
-        kept = player.library[:count]
-        rest = player.library[count:]
-        random.shuffle(rest)
-        player.library = kept + rest
+        self.shuffle_library_of(player, below=count)
         self.log.append(f"{player.name} shuffled their library")
         if count > 1:
             self.arm_pending_choice(

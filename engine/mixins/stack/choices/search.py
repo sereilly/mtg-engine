@@ -92,7 +92,7 @@ class LibrarySearchChoicesMixin:
             if enforce_floor and self._search_floor(choice) > 0:
                 return False
             if "library" in zones:
-                random.shuffle(caster.library)
+                self.shuffle_library_of(caster)
             self._record_search_reveal(choice)
             self.discard_pending_choice(choice)
             # A search that found nothing still *searched*, so a printed "exile
@@ -125,6 +125,22 @@ class LibrarySearchChoicesMixin:
             card, choice.data, game=self, owner=choice.player_index
         ):
             return False
+        if choice.data.get("destination") == "revealed":
+            # "Search your library for a nonland card **and reveal it.** Each
+            # opponent who cast a spell this turn with the same name as that
+            # card loses 6 life. Then shuffle." (Grim Reminder.) The find is
+            # shown (CR 701.20a) and never leaves the library (CR 701.20b):
+            # it is recorded for the sentence behind, and the library —
+            # the find in it — is shuffled as the search ends.
+            record = choice.data.get("record")
+            if record is not None:
+                record["revealed_card"] = card
+            choice.data.setdefault("revealed_names", []).append(card.name)
+            self.log.append(f"{caster.name} searched {zone} and revealed {card.name}")
+            self.shuffle_library_of(caster)
+            self._record_search_reveal(choice)
+            self.discard_pending_choice(choice)
+            return True
         self._take_found_card(caster, zone, source, library_index)
         # "…, reveal it, …" (CR 701.20): a search armed with the printed word
         # shows the find's face to every player when the search ends.
@@ -149,7 +165,7 @@ class LibrarySearchChoicesMixin:
                 record["found_card"] = card
             self.log.append(f"{caster.name} searched {zone} and found {card.name}")
             if zone == "library":
-                random.shuffle(caster.library)
+                self.shuffle_library_of(caster)
             self._record_search_reveal(choice)
             self.discard_pending_choice(choice)
             return True
@@ -227,7 +243,7 @@ class LibrarySearchChoicesMixin:
             # shuffle below — reaching that one would put the card on top and
             # then shuffle it back in, which is the card doing nothing.
             if zone == "library":
-                random.shuffle(caster.library)
+                self.shuffle_library_of(caster)
             self.put_card_into_library(caster, card, "top")
             shown = (
                 card.name if self.find_is_public(choice.data, destination, zone)
@@ -249,7 +265,7 @@ class LibrarySearchChoicesMixin:
             # "If there are fewer than 3 cards in your library, put the card
             # on the bottom of your library"), which the funnel's depth does.
             if zone == "library":
-                random.shuffle(caster.library)
+                self.shuffle_library_of(caster)
             depth = int(choice.data.get("from_top") or 0)
             if depth < 2:
                 # A depth the lowering always writes; without it the card
@@ -318,7 +334,7 @@ class LibrarySearchChoicesMixin:
         # and randomising a library the player did not search would destroy
         # information they were entitled to keep.
         if zone == "library":
-            random.shuffle(caster.library)
+            self.shuffle_library_of(caster)
         self._record_search_reveal(choice)
         self.discard_pending_choice(choice)
         return True
@@ -450,7 +466,7 @@ class LibrarySearchChoicesMixin:
         # The search is over once the finds are named (CR 701.23h): shuffle
         # before the destination question, which happens after the search.
         if "library" in zones:
-            random.shuffle(caster.library)
+            self.shuffle_library_of(caster)
         self._record_search_reveal(choice)
         self.discard_pending_choice(choice)
         # "…**and exile the rest**." (Doomsday.) Before the finds are placed,
@@ -916,6 +932,23 @@ class LibrarySearchChoicesMixin:
                         choice, -1, "none", enforce_floor=False
                     )
             return
+        if choice.data.get("destination") == "revealed":
+            # "…and reveal it. Each opponent who cast a spell this turn with
+            # the same name as that card loses 6 life." (Grim Reminder.) A find
+            # that stays in the library is worth only what the sentence behind
+            # reads off it, and the one reader is a name against the turn's
+            # casts — public information (CR 601.2a casts are announced) — so
+            # a card an opponent cast is shown first, before the generic pick.
+            cast = {
+                card.name
+                for seat in self.opponents_of(choice.player_index)
+                for card in self.players[seat].spells_cast_this_turn
+            }
+            for zone, index, card in self._search_findable_entries(choice):
+                if card.name in cast and self._resolve_search_library(
+                    choice, index, zone
+                ):
+                    return
         found = choose_search_card(self, choice.player_index, choice.data)
         if found is None or not self._resolve_search_library(choice, found[1], found[0]):
             # A search that must find (CR 701.23d: "a card", with no quality
@@ -1057,7 +1090,7 @@ class LibrarySearchChoicesMixin:
         # The library was searched whether or not anything was taken from it,
         # and the printed "then shuffle" applies to the search, not the find.
         if "library" in zones:
-            random.shuffle(caster.library)
+            self.shuffle_library_of(caster)
         ctx = choice.data.get("_context")
         # "…exile them **in a face-down pile**, and shuffle that pile."
         # (Mangara's Tome.) The finds become one linked pile on the exiling
@@ -1092,6 +1125,8 @@ class LibrarySearchChoicesMixin:
                 shuffle_linked_pile(source, random.shuffle)
         if ctx is not None:
             ctx.results["exiled_cards"] = exiled
+            # "…then create **that many** … tokens" (Myr Incubator).
+            ctx.results["exiled_count"] = len(exiled)
         self.discard_pending_choice(choice)
         # "…exile them **in a face-down pile**" (Mangara's Tome, Parallel
         # Thoughts): a face-down exiled card is hidden from every player

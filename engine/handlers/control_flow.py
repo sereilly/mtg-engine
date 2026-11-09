@@ -51,7 +51,8 @@ from ..resumption import run_resumable
 from ..mana_payment import mana_cost_label
 from ..models import Permanent
 from ._color_conditions import evaluate_color_condition
-from ._common import COIN_FACES_BY_SEAT, damage_dealer, flip_coin, flip_coin_for
+from ._common import (COIN_FACES_BY_SEAT, damage_dealer, flip_coin,
+                      flip_coin_for, flip_face_for)
 from ._conditions import evaluate_state_condition
 from ._filters import permanent_matches_filter
 from ._record_conditions import evaluate_record_condition
@@ -611,7 +612,11 @@ def flip_a_coin(game: Game, instruction: OracleInstruction, context: OracleExecu
         # after it read is each seat's face (``COIN_FACES_BY_SEAT``).
         faces: dict[int, str] = {}
         for seat in game.apnap_seats():
-            faces[seat] = "heads" if flip_coin() else "tails"
+            faces[seat] = (
+                "heads"
+                if flip_face_for(game, game.players[seat], flip=flip_coin)
+                else "tails"
+            )
             game.log.append(
                 f"{context.card.name}: {game.players[seat].name} flipped "
                 f"{faces[seat]}"
@@ -670,6 +675,10 @@ def flip_coins_until_loss(game: Game, instruction: OracleInstruction, context: O
     there: the rules put no ceiling on it, but a coin a test or a future
     effect rigs to always win must not hang the game.
     """
+    if instruction.payload.get("may_stop"):
+        from .coin_runs import flip_until_loss_or_stop
+
+        return flip_until_loss_or_stop(game, instruction, context)
     bounded = instruction.payload.get("amount_from") is not None
     limit = (
         max(0, int(context.results.get(str(instruction.payload["amount_from"]), 0) or 0))

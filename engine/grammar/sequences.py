@@ -108,6 +108,8 @@ from .stream import TokenStream
 # line of their own rather than in the list above: that list is one long line
 # every round appends to, and a second import statement cannot collide with it.
 from .riders import _attach_silent_target_change, _attach_tied_reveals_unchanged
+# "…exile them, then create that many … tokens. Then shuffle." (Myr Incubator.)
+from .riders import _parse_deferred_search_shuffle
 # "This cost is reduced by {2} for each …" (Draco) — a rider on the toll in
 # front of it, and it lives with the tolls because what it narrows is a price.
 from .tolls import _attach_toll_cost_reduction
@@ -737,6 +739,11 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             reveals = _parse_that_controller_reveals_rider(stream, steps)
             if reveals is not None:
                 steps.append(reveals)
+                continue
+            # "…exile them, then create that many … tokens. **Then
+            # shuffle.**" (Myr Incubator.) The search's own shuffle, printed
+            # after the step that reads its finds.
+            if _parse_deferred_search_shuffle(stream, steps):
                 continue
             controller_token = _parse_its_controller_creates_rider(stream, steps)
             if controller_token is not None:

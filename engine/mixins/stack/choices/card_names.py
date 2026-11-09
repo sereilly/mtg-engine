@@ -68,7 +68,7 @@ class CardNameChoicesMixin:
                 self.put_cards_into_exile(target, taken)
         # "That player shuffles" — once, after the search, and only their
         # library is disturbed (CR 701.24).
-        random.shuffle(target.library)
+        self.shuffle_library_of(target)
 
         spec = data["token"]
         made = taken_from.get(data["token_zone"], 0)
@@ -308,15 +308,24 @@ class CardNameChoicesMixin:
                 break
         # "…and exile all other cards revealed this way" — everything the
         # reveal turned over except the find, in the order it was turned over.
+        exiled = 0
         for card in revealed:
             if card is found:
                 continue
             self.put_card_into_exile(player, card)
+            exiled += 1
         if found is not None:
             # Through the CR 614 seam every "put this card into a hand" uses,
             # so a commander headed for a hand goes to the command zone instead
             # (CR 903.9b).
             self.put_card_into_hand(player, found)
+        # "…and you lose 1 life for each of the exiled cards." (Spoils of the
+        # Vault.) The reveal's pile only — the unseen exile in front of it is
+        # Demonic Consultation's, which prints no price.
+        loss = exiled * int(choice.data.get("life_per_exiled", 0) or 0)
+        if loss:
+            player.life -= loss
+            self.log.append(f"{player.name} loses {loss} life")
         self.discard_pending_choice(choice)
         self.log.append(
             f"{player.name} named {named or 'nothing'}, exiled {len(paid)} card(s) "

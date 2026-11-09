@@ -15,7 +15,6 @@ Split out of ``zones.py`` at the 2,000-line cap's split round.
 
 from __future__ import annotations
 
-import random
 from typing import TYPE_CHECKING
 
 from ..faces import has_name
@@ -243,7 +242,7 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # fail-to-find without the prompt: there is no card a seat could name.
         searched = game.players[seats.get("zone_seat", caster_index)]
         if "library" in zones:
-            random.shuffle(searched.library)
+            game.shuffle_library_of(searched)
         whose = "their" if searched is caster else f"{searched.name}'s"
         ceiling = "up to " if instruction.payload.get("up_to") else ""
         game.log.append(
@@ -520,7 +519,7 @@ def strip_cards_with_chosen_name(game: Game, instruction: OracleInstruction, con
             f"{context.card.name}: nothing was chosen, so nothing is exiled"
         )
         if "library" in zones:
-            random.shuffle(target.library)
+            game.shuffle_library_of(target)
         return True, "resolved"
     taken: list[str] = []
     for zone in zones:
@@ -537,7 +536,7 @@ def strip_cards_with_chosen_name(game: Game, instruction: OracleInstruction, con
             game.put_cards_into_exile(target, found)
             taken.extend(card.name for card in found)
     if "library" in zones:
-        random.shuffle(target.library)
+        game.shuffle_library_of(target)
     game.log.append(
         f"{target.name} lost {len(taken)} copies of {named} to "
         f"{context.card.name}"
@@ -600,7 +599,7 @@ def _strip_by_recorded_cards(
         ]
         taken.extend(game.put_cards_into_exile(target, found))
     if "library" in zones:
-        random.shuffle(target.library)
+        game.shuffle_library_of(target)
     game.log.append(
         f"{context.card.name} exiled {len(taken)} card(s) from {target.name}'s "
         + " and ".join(zones)

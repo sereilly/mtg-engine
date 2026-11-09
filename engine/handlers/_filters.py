@@ -1445,6 +1445,36 @@ def _seat_coin_came_up_tails(game, seat, deed, source, results) -> bool:
     return faces.get(seat) == "tails"
 
 
+def _seat_cast_spell_this_turn(game, seat, deed, source, results) -> bool:
+    # "Each opponent **who cast a spell this turn with the same name as that
+    # card** loses 6 life." (Grim Reminder.) The seat's own record of what it
+    # cast this turn (``PlayerState.spells_cast_this_turn``, the card each
+    # spell was cast from), narrowed by the printed types and, where printed,
+    # by the name of the card an earlier step of this resolution recorded
+    # (``named_from_record``) — CR 201.2's "same name", through ``has_name``
+    # so a split card answers to either half. No recorded card names nothing,
+    # and no seat cast a spell with no name.
+    from ..faces import has_name
+
+    named_key = deed.get("named_from_record")
+    name = None
+    if named_key is not None:
+        recorded = (results or {}).get(str(named_key))
+        name = getattr(recorded, "name", None)
+        if not name:
+            return False
+    described = deed.get("filter") or {}
+    for card in game.players[seat].spells_cast_this_turn:
+        if name is not None and not has_name(card, name):
+            continue
+        if described and not _card_matches_filter(
+            card, described, game=game, owner=seat,
+        ):
+            continue
+        return True
+    return False
+
+
 @dataclass(frozen=True)
 class PlayerDeedKind:
     """How one ``who <did …>`` kind is read, and when it can be.
@@ -1482,6 +1512,9 @@ PLAYER_DEEDS: dict[str, PlayerDeedKind] = {
     "sacrificed_this_way": PlayerDeedKind(True, False, _seat_sacrificed_this_way),
     "discarded_this_way": PlayerDeedKind(True, False, _seat_discarded_this_way),
     "coin_came_up_tails": PlayerDeedKind(False, False, _seat_coin_came_up_tails),
+    # A record of the turn, but the name it is narrowed by is this
+    # resolution's (Grim Reminder's revealed card), so no picker answers it.
+    "cast_spell_this_turn": PlayerDeedKind(True, False, _seat_cast_spell_this_turn),
 }
 
 

@@ -51,6 +51,7 @@ from ...oracle_types import (COUNTERED_SPELL_CONTROLLER,
 from .. import ast
 from ..errors import LoweringError
 from ._seats import _player_recipient
+from ._targets import NAMED_FROM_REVEALED_CARD
 from ._amounts import (count_spec, halved_count_spec, seat_scoped_count_spec,
                        x_offset_amount)
 from ._cost_records import cost_record_spec
@@ -320,6 +321,10 @@ def _stamp_loss_deed(payload: dict, node: ast.LoseLife, produced) -> None:
     if deed is None:
         return
     needed = _DEED_PRODUCERS.get(deed.kind)
+    # "…who cast a spell this turn **with the same name as that card**"
+    # (Grim Reminder): the name is the card an earlier step revealed.
+    if deed.filter is not None and deed.filter.name_from_recorded_card:
+        needed = NAMED_FROM_REVEALED_CARD
     if needed is not None and needed not in produced:
         raise LoweringError(
             f"back-reference to {needed!r} with no producer in this effect",

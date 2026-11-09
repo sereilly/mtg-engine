@@ -529,6 +529,8 @@ def _deed_payload(deed: "ast.PlayerDeed", node) -> dict[str, object]:
                 f"the {deed.kind!r} narrowing names no objects", node=node
             )
         return payload
+    if deed.kind == "cast_spell_this_turn" and deed.filter is not None:
+        return _cast_deed_payload(deed, payload, node)
     if deed.filter is None:
         raise LoweringError(
             f"the {deed.kind!r} narrowing needs the noun phrase it counts",
@@ -552,6 +554,45 @@ def _deed_payload(deed: "ast.PlayerDeed", node) -> dict[str, object]:
     if not described:
         raise LoweringError("a seat record cannot test this restriction", node=node)
     payload["filter"] = described
+    return payload
+
+
+#: The record "with the same name as **that card**" reads in a ``who cast …``
+#: clause: the card an earlier step of this same effect revealed (Grim
+#: Reminder's search). Spelled once here for the lowering that demands its
+#: producer (``life._stamp_loss_deed``).
+NAMED_FROM_REVEALED_CARD = "revealed_card"
+
+
+def _cast_deed_payload(
+    deed: "ast.PlayerDeed", payload: dict[str, object], node,
+) -> dict[str, object]:
+    """"…**who cast a spell this turn with the same name as that card**"
+    (Grim Reminder): the ``cast_spell_this_turn`` clause's payload.
+
+    The noun is a *spell*, so the printed filter is a stack filter; what the
+    record holds is the card each spell was cast from (CR 601.2a), which is
+    asked what a printed card can answer — its types (``card_only_filter``,
+    every other word refused rather than dropped). The name rides as the
+    record it is read from (``named_from_record``), never as a printed name.
+    """
+    from ...subject_filters import card_only_filter
+
+    filt = deed.filter
+    named = filt.name_from_recorded_card
+    bare = dataclasses.replace(
+        filt, name_from_recorded_card=False, zone=ast.ObjectFilter().zone,
+    )
+    raw = bare.to_payload()
+    described = card_only_filter(raw) if raw else {}
+    if described is None or dropped_narrowings(bare, raw):
+        raise LoweringError(
+            "a cast record cannot test this restriction", node=node
+        )
+    if described:
+        payload["filter"] = described
+    if named:
+        payload["named_from_record"] = NAMED_FROM_REVEALED_CARD
     return payload
 
 

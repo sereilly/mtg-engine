@@ -66,6 +66,8 @@ module reads neither it nor ``condition_counts``.
 
 from __future__ import annotations
 
+import dataclasses
+
 from . import ast
 from .errors import GrammarError
 from .nouns import parse_object_filter
@@ -176,6 +178,44 @@ def _accept_quality_with_implied_noun(
         return None
     stream.advance(count)
     return filt
+
+
+def _accept_revealed_card_was(stream: TokenStream) -> "ast.Condition | None":
+    """``<card noun> was a <filter>`` after "the revealed" — the card named
+    and what it is asked to be, as one ``RevealedCardIs`` — or None (the
+    caller resets the cursor).
+
+    The two noun phrases are one card: "the revealed **land card** was a
+    **Mountain**" is a land card with the subtype Mountain, so the predicate's
+    filter carries the noun's card types. A noun narrowed by anything beyond
+    its card types, or a predicate naming card types of its own, refuses —
+    no card prints either, and merging two type lists would be a guess at
+    which one wins.
+    """
+    try:
+        named = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not (named.is_card and named.card_types) or dataclasses.replace(
+        named, card_types=(), type_match=ast.ObjectFilter().type_match,
+        is_card=False,
+    ) != ast.ObjectFilter():
+        return None
+    if not stream.accept_word("was", "is"):
+        return None
+    stream.accept_word("a", "an")
+    try:
+        asked = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if asked.card_types or asked.excluded_types or not asked.subtypes:
+        return None
+    return ast.RevealedCardIs(
+        dataclasses.replace(
+            asked, card_types=named.card_types, type_match=named.type_match,
+            is_card=True,
+        )
+    )
 
 
 def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
@@ -353,6 +393,21 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     if stream.accept_phrase("the", "discarded", "card", "was"):
         stream.accept_word("a", "an")
         return ast.DiscardedCardWas(parse_object_filter(stream))
+
+    # "If **the revealed land card was a Mountain**, this artifact deals double
+    # that damage instead." (Goblin Charbelcher.) The card a reveal of this
+    # same effect turned up, named by its type rather than by "it" — the
+    # present-tense ``RevealedCardIs`` question (the card still sits in the
+    # library: CR 701.20b), asked of a card that is both what the noun names
+    # and what the predicate names. Only a noun narrowed by card types alone:
+    # it restates which revealed card is meant, and anything more would be a
+    # narrowing the record cannot be asked.
+    revealed_mark = stream.mark()
+    if stream.accept_phrase("the", "revealed"):
+        revealed = _accept_revealed_card_was(stream)
+        if revealed is not None:
+            return revealed
+    stream.reset(revealed_mark)
 
     # "if **the exiled creature was a Thrull**" (Soul Exchange); "if **the
     # sacrificed creature was a Thrull**" (Ebon Praetor). The same past-tense

@@ -1021,6 +1021,14 @@ COIN_FLIPS_MADE = "coin_flips_made"
 #: subtracting one would be right for one card and wrong for the other.
 COIN_FLIPS_WON = "coin_flips_won"
 
+#: Whether a run of flips was **voided by a loss**: "Flip a coin until you lose
+#: a flip or choose to stop flipping. **If you lose a flip, Fiery Gambit has no
+#: effect.** If you win one or more flips, …" (Fiery Gambit.) Written True by
+#: ``flip_coins_until_loss`` only for a run printed with that sentence, and
+#: read by every "if you win N or more flips" behind it, so a loss after two
+#: wins makes all of them false — which is what "no effect" is.
+COIN_FLIP_RUN_VOIDED = "coin_flip_run_voided"
+
 #: ``{seat: number}`` for a number **every player names at once, in secret**:
 #: "Each player hides at least one item, then all players reveal them
 #: simultaneously. Each player loses life equal to **the number of items they

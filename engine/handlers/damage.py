@@ -39,7 +39,8 @@ from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..mana_payment import generic_cost
 from ._amounts import per_recipient_amount, resolve_amount
-from ._common import apply_damage_to_creature, damage_dealer, flip_coin
+from ._common import (apply_damage_to_creature, damage_dealer, flip_coin,
+                      flip_face_for)
 from ._filters import (permanent_matches_filter, seats_controlling,
                        seats_matching_deed)
 from ._targets import (departed_object_said, damaged_end_seat, divided_target_permanent, recorded_permanent_ids,
@@ -1242,8 +1243,10 @@ def coin_flip_damage_loop(
                 finish()
                 return
             rounds["flipped"] += 1
-            caster_heads = flip_coin()
-            opponent_heads = flip_coin()
+            # Each coin through the heads-or-tails seam, so a Krark's Thumb
+            # its flipper controls has the flip (CR 614.1a over CR 705.2).
+            caster_heads = flip_face_for(game, caster, flip=flip_coin)
+            opponent_heads = flip_face_for(game, opponent, flip=flip_coin)
             game.log.append(
                 f"{card.name}: {caster.name} flipped "
                 f"{'heads' if caster_heads else 'tails'}, {opponent.name} flipped "

@@ -54,7 +54,7 @@ from __future__ import annotations
 
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WAY,
-                             CHOSEN_NUMBER_THIS_WAY,
+                             CHOSEN_NUMBER_THIS_WAY, COIN_FLIPS_WON,
                              DISCARDED_THIS_WAY,
                              MILLED_THIS_WAY, PUT_INTO_HAND_THIS_WAY,
                              REVEALED_HAND_CARDS, SECRET_NUMBERS_BY_SEAT)
@@ -149,6 +149,18 @@ def lower_record_condition(
                 "'the flip' with no coin flip before it in this effect",
                 node=condition,
             )
+        if condition.at_least:
+            # "If you win **two or more flips**" (Fiery Gambit) counts a run's
+            # won flips, so the run — the one producer of the count — must be
+            # in front of it, not a single flip.
+            if COIN_FLIPS_WON not in produced:
+                raise LoweringError(
+                    "'or more flips' with no run of flips before it in this "
+                    "effect", node=condition,
+                )
+            return {
+                "kind": "coin_flip", "won": True, "at_least": condition.at_least,
+            }
         return {"kind": "coin_flip", "won": condition.won}
     if isinstance(condition, ast.EnteredFrom):
         # CR 603.4's intervening-if, asked of the permanent that fired the

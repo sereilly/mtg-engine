@@ -628,6 +628,10 @@ class CoinFlipResult:
     """
     won: bool = True
     who: str = "you"
+    #: "If you win **two or more** flips, …" (Fiery Gambit): a run's won flips
+    #: counted rather than one flip's result — at least this many, read off
+    #: ``COIN_FLIPS_WON``. 0 is "the flip", every spelling before it.
+    at_least: int = 0
 @dataclass(frozen=True)
 class RevealedCardIs:
     """``if it's a <filter>`` — a *present-tense* test on a card a previous

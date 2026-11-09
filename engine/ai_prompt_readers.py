@@ -915,6 +915,15 @@ def exiled_search_pile_comes_back(card: CardDefinition) -> bool:
             "face_down_pile"
         ):
             return True
+        # "…exile them, then create **that many** 1/1 colorless Myr artifact
+        # creature tokens." (Myr Incubator.) The pile is not handed back but
+        # *paid for*, one token a card, which is the same reason to take the
+        # maximum: a step that reads how many were exiled.
+        if any(
+            isinstance(value, dict) and value.get("amount_from") == "exiled_count"
+            for value in instruction.payload.values()
+        ):
+            return True
     return False
 
 

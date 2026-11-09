@@ -249,7 +249,7 @@ def reveal_library_opponent_chooses(game: Game, instruction: OracleInstruction, 
     if not isinstance(chooser, int) or not names:
         if names:
             game.log.append(f"{card_name}: no opponent to choose")
-        random.shuffle(caster.library)
+        game.shuffle_library_of(caster)
         return True, "resolved"
     slots = [dict(slot) for slot in instruction.payload.get(ONE_OF_EACH) or ()]
     destination = str(instruction.payload.get("destination", "hand"))
@@ -628,7 +628,7 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
         player.library.extend(revealed)
         # Through the module RNG `run_ai_simulation` seeds, like every other
         # shuffle in the engine, so a given seed still replays exactly.
-        random.shuffle(player.library)
+        game.shuffle_library_of(player)
     elif rest == "exile":
         # "…and **exile** all other cards revealed this way." (Sacred Guide.)
         # The third printed fate, and the one that costs the revealer the
@@ -640,6 +640,19 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
             game.log.append(
                 f"{player.name} exiled {len(revealed)} card(s) revealed this way"
             )
+    elif rest == "bottom_any_order":
+        # "…and the rest on the bottom of their library in any order."
+        # (Proteus Staff.) The pile never left the library (CR 701.20b), so it
+        # is laid back under it rather than through ``put_card_into_library``,
+        # and its owner orders it (CR 401.4) through the seam every "in any
+        # order" bottom reaches.
+        player.library.extend(revealed)
+        if revealed:
+            game.log.append(
+                f"{player.name} put {len(revealed)} revealed card(s) on the "
+                "bottom of their library"
+            )
+            game.offer_library_bottom_order(player, len(revealed))
     else:
         for card in revealed:
             game.put_card_into_graveyard(player, card, from_zone="library")
@@ -648,7 +661,7 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
 
 #: The pile a fateless reveal-until left revealed on top of its library, in
 #: the order it was turned over — the find last. Spelled once more in
-#: ``grammar/lowering/reveal.REVEALED_UNTIL_CARDS``, which the record
+#: ``grammar/lowering/_record_keys.REVEALED_UNTIL_CARDS``, which the record
 #: declaration reads.
 REVEALED_UNTIL_CARDS = "revealed_until_cards"
 
@@ -683,6 +696,11 @@ def _reveal_until_match_in_place(
             break
     context.results[REVEALED_UNTIL_CARDS] = pile
     context.results["its_mana_value"] = int(found.cmc or 0) if found is not None else 0
+    # "If **the revealed land card** was a Mountain, …" (Goblin Charbelcher.)
+    # The find, for the condition behind the run — written only when there is
+    # one, so a run that found nothing has no revealed land card to ask about.
+    if found is not None:
+        context.results["revealed_card"] = found
     if pile:
         game.record_reveal(seat, [card.name for card in pile])
     if found is not None:

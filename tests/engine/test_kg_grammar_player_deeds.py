@@ -75,6 +75,11 @@ _PRINTED = (
     (re.compile(
         r"(?:^|\. )each player whose coin comes up tails\b", re.I | re.M,
     ), "coin_came_up_tails"),
+    # "Each opponent who cast a spell this turn with the same name as that
+    # card loses 6 life." (Grim Reminder, MRD.) The turn's cast record.
+    (re.compile(
+        r"\b(?:players?|opponents?) who cast an? [\w ]*?spell this turn\b", re.I,
+    ), "cast_spell_this_turn"),
 )
 
 

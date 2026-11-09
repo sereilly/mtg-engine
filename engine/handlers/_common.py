@@ -86,6 +86,41 @@ def flip_coin(win_probability: float = 0.5) -> bool:
     return random.random() < win_probability
 
 
+def coins_for_one_flip(game: Game, flipper) -> int:
+    """How many coins one flip by *flipper* becomes (CR 614 over CR 705).
+
+    Asked of the ``coin_flip`` replacements (``replacements/coin_flips``,
+    Krark's Thumb) before the coins are flipped. 1 where nothing applies, and
+    for a flip nobody makes. No *restart*: a flip happens part-way through a
+    resolution that cannot suspend for CR 616.1e's question, and the one
+    contender there is has no order to choose.
+    """
+    if flipper is None or flipper not in game.players:
+        return 1
+    from ..replacements import apply_replacements
+
+    _, payload = apply_replacements(
+        game, "coin_flip", {"player": flipper, "coins": 1},
+    )
+    return max(1, int(payload.get("coins", 1) or 1))
+
+
+def flip_face_for(game: Game, flipper, *, flip=None) -> bool:
+    """A heads-or-tails flip by *flipper* (CR 705.2's flip nobody wins):
+    True for heads.
+
+    The seam for the flips :func:`flip_coin_for` does not make — "each player
+    flips a coin" (Goblin Assassin), Mana Clash's two coins — so a Krark's
+    Thumb its flipper controls replaces these too: the flip becomes its coins
+    and the flipper keeps heads when any came up, since every reader of a
+    face in the pool punishes tails (``replacements/coin_flips``). One draw
+    from *flip* (the caller's own coin, for :func:`flip_coin_for`'s reason)
+    where nothing applies.
+    """
+    coin = flip or flip_coin
+    return any([coin() for _ in range(coins_for_one_flip(game, flipper))])
+
+
 def flip_coin_for(game: Game, flipper, *, flip=None) -> bool:
     """A coin flip *flipper* **wins or loses** (CR 705.2), announced.
 
@@ -110,7 +145,14 @@ def flip_coin_for(game: Game, flipper, *, flip=None) -> bool:
     every one of those rigs a patch on a name nothing calls. A name a test
     patches is an interface, exactly as a log line is.
     """
-    won = (flip or flip_coin)()
+    coin = flip or flip_coin
+    # "If you would flip a coin, instead flip two coins and ignore one."
+    # (Krark's Thumb.) The flip becomes however many coins the CR 614
+    # replacements make of it — one with none in play, so a seeded game draws
+    # exactly the coins it always drew — and the flipper keeps a win when any
+    # came up (``replacements/coin_flips``: the ignored coin is the loss).
+    results = [coin() for _ in range(coins_for_one_flip(game, flipper))]
+    won = any(results)
     if won and flipper is not None:
         seat = next(
             (index for index, player in enumerate(game.players) if player is flipper),
