@@ -916,6 +916,45 @@ def named_counter_marks_for_harm(
     return False
 
 
+def sweep_a_named_counter_spares(
+    card: CardDefinition, instruction: OracleInstruction | None
+) -> "tuple[str, dict] | None":
+    """``(counter, swept)`` when *instruction* puts a named counter on its
+    target that **this same card's** sweep spares — *swept* the sweep's own
+    filter, the counter set aside — or None.
+
+    "{4}, {T}: Put a fate counter on target permanent. / {5}, {T}, Sacrifice
+    this artifact: Destroy each nonland permanent **without a fate counter on
+    it** …" (Oblivion Stone.) :func:`named_counter_marks_for_harm`'s question
+    the other way round: what the counter means is what the card's other line
+    does with it (CR 122.1), and here that is a shelter. So it belongs on the
+    activator's own permanent, on one the sweep would take, and on one that
+    has none yet — a second fate counter shelters nothing more, and an AI
+    seat stacked three on one Grizzly Bears while its Stone never swept.
+    """
+    if instruction is None:
+        return None
+    placed = {
+        str((step.payload or {}).get("counter"))
+        for step in _effect_steps(instruction)
+        if step.kind == "add_named_counter_to_target"
+        and isinstance((step.payload or {}).get("targets"), dict)
+    }
+    if not placed:
+        return None
+    for ability in compile_card_oracle(card).activated_abilities:
+        for step in _effect_steps(ability.instruction) if ability.instruction else ():
+            payload = step.payload or {}
+            spared = payload.get("without_named_counter")
+            if step.kind == "destroy_all_matching" and str(spared) in placed:
+                swept = {
+                    key: value for key, value in payload.items()
+                    if key != "without_named_counter"
+                }
+                return str(spared), swept
+    return None
+
+
 def _side_steps(instruction: OracleInstruction) -> tuple[OracleInstruction, ...]:
     """*instruction*'s leaf steps (``_effect_steps``) with every ``choose_one``
     **opened into its modes** ("loses flying, first strike, or trample",
@@ -1146,6 +1185,36 @@ def toggle_target_order(game, chooser: int, permanents: list) -> list:
     return sorted(permanents, key=rank)
 
 
+def toll_effect_side(instruction: OracleInstruction | None) -> str | None:
+    """The side of the effect a **toll** imposes on its target — "<effect>
+    unless its controller pays {N}" — read off the branch the toll guards,
+    or None for any other shape.
+
+    "Return target creature to its owner's hand unless its controller pays
+    {1}." (Crystal Shard, Erratic Portal.) It compiles to an offer to the
+    target's controller (``may``, actor ``controller``) whose unpaid branch is
+    the bounce — and that bounce prints no ``targets`` payload, so every step
+    reader above had nothing to read and the chooser aimed at the largest
+    creature on either board: an AI seat bounced its own and then paid its
+    own toll. The penalty is the effect; its family says whose creature it is
+    for."""
+    if instruction is None or instruction.kind != "may":
+        return None
+    payload = instruction.payload or {}
+    if payload.get("actor") != "controller" or not payload.get("otherwise"):
+        return None
+    sides = {
+        activation_target_side(step)
+        for branch in payload["otherwise"]
+        for step in (branch, *_effect_steps(branch))
+    } - {None}
+    if "opponent" in sides:
+        return "opponent"
+    if "you" in sides:
+        return "you"
+    return None
+
+
 #: The steps that untap their target and do nothing else to it. An untap is a
 #: second use of a permanent that has been used (``_OWN_KINDS``), so its worth
 #: is a **state** as well as a seat: an untapped target gains nothing.
@@ -1193,7 +1262,9 @@ __all__ = [
     "instruction_target_side",
     "spell_denies_its_own_target",
     "spell_target_side",
+    "sweep_a_named_counter_spares",
     "toggle_target_order",
+    "toll_effect_side",
     "toggles_its_target",
     "untap_target_order",
     "untaps_its_target",
