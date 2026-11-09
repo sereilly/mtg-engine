@@ -230,6 +230,175 @@ def test_w1g1_vorrac_battlehorns_moved_away_lifts_the_ceiling(set_pool):
     assert game._maximum_blockers(bears) == 1
     assert bears.has_keyword("trample")
 
+
+def test_w1g1_banshees_blade_charges_on_combat_damage_and_keeps_its_counters(set_pool):
+    """"Whenever equipped creature deals combat damage, put a charge counter on
+    this Equipment." and "+1/+1 for each charge counter on this Equipment."
+    Its 2004-12-01 ruling: the counters stay when the Blade moves."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    blade = _w1g1_put(game, mrd["Banshee's Blade"], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 0)
+    _w1g1_equip(game, 0, blade, bears)
+    assert _w1g1_pt(bears) == (2, 2)
+
+    _w1g1_declare_attack(game, 0)
+    _w1g1_fight(game)
+
+    assert game.players[1].life == 18, game.log[-6:]
+    assert _w1g1_counters_on(blade, "charge") == 1
+    assert _w1g1_pt(bears) == (3, 3)
+
+    # Unattached, it keeps the counter; the next creature gets the bonus.
+    ogre = _w1g1_put(game, lea["Gray Ogre"], 0)
+    _w1g1_attach(game, blade, ogre)
+    game._settle()
+    assert _w1g1_counters_on(blade, "charge") == 1
+    assert _w1g1_pt(bears) == (2, 2)
+    assert _w1g1_pt(ogre) == (3, 3)
+
+
+def test_w1g1_banshees_blade_does_not_charge_when_its_creature_deals_no_damage(set_pool):
+    """A blocked creature whose blocker is removed deals no combat damage
+    (CR 510.1c) — no counter. Here: the equipped creature does not attack at
+    all, and an unequipped attacker's damage is not the Blade's event."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    blade = _w1g1_put(game, mrd["Banshee's Blade"], 0)
+    _w1g1_put(game, lea["Grizzly Bears"], 0)
+
+    _w1g1_declare_attack(game, 0)
+    _w1g1_fight(game)
+
+    assert game.players[1].life == 18
+    assert _w1g1_counters_on(blade, "charge") == 0
+
+
+@_w1g1_pytest.mark.parametrize("interactive", [False, True])
+def test_w1g1_mask_of_memory_draws_two_then_discards_one(set_pool, interactive):
+    """"Whenever equipped creature deals combat damage to a player, you may draw
+    two cards. If you do, discard a card." Driven as a headless seat and as an
+    interactive one answering the offer and the discard."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool, interactive=(0,) if interactive else ())
+    mask = _w1g1_put(game, mrd["Mask of Memory"], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 0)
+    _w1g1_equip(game, 0, mask, bears)
+    hand_before = len(game.players[0].hand)
+    library_before = len(game.players[0].library)
+
+    _w1g1_declare_attack(game, 0)
+    game.advance_combat_phase()
+    # The trigger resolves in the damage step and offers the draw (an
+    # ``optional_pay`` prompt, CR 608.2d).
+    offer = game.pending_choices[0]
+    assert offer.kind == "optional_pay", offer
+    if interactive:
+        assert game.resolve_pending_choice("optional_pay", 0, accept=True)
+        # "If you do, discard a card": the discard is the seat's to pick.
+        discard = game.pending_choices[0]
+        assert discard.kind == "discard", discard
+        drawn = game.players[0].hand[-1]
+        assert game.resolve_pending_choice(
+            "discard", 0, hand_indices=[len(game.players[0].hand) - 1],
+            to_library=False,
+        )
+        assert game.players[0].graveyard[-1] is drawn
+    else:
+        # A seat nobody sits in takes the default: a free draw-two-discard-one
+        # is a gift, and it is taken.
+        game.auto_resolve_pending_choices()
+    _w1g1_resolve_stack(game)
+    game._settle()
+
+    assert game.players[1].life == 18, game.log[-6:]
+    assert len(game.players[0].library) == library_before - 2, game.log[-8:]
+    assert len(game.players[0].hand) == hand_before + 1, game.log[-8:]
+    assert len(game.players[0].graveyard) == 1
+
+
+def test_w1g1_mask_of_memory_does_not_trigger_on_damage_to_a_creature(set_pool):
+    """The trigger names a *player* recipient: a blocked attacker's damage to
+    the blocker draws nothing."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    mask = _w1g1_put(game, mrd["Mask of Memory"], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 0)
+    _w1g1_put(game, lea["Grizzly Bears"], 1)
+    _w1g1_equip(game, 0, mask, bears)
+    library_before = len(game.players[0].library)
+
+    _w1g1_declare_attack(game, 0, blocks={0: game.battlefield_index_of(bears)})
+    _w1g1_fight(game)
+
+    assert game.players[1].life == 20
+    assert len(game.players[0].library) == library_before
+
+
+def test_w1g1_sword_of_kaldra_does_not_chase_a_creature_that_already_died(set_pool):
+    """"Equipped creature gets +5/+5." / "Whenever equipped creature deals
+    damage to a creature, exile that creature. (Exile it only if it's still on
+    the battlefield.)" The Wurm takes 7, the state-based check puts it in the
+    graveyard before the trigger resolves (CR 704.3, 603.3), and the exile
+    then finds nothing — the card stays in the graveyard."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    sword = _w1g1_put(game, mrd["Sword of Kaldra"], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 0)
+    wurm = _w1g1_put(game, lea["Craw Wurm"], 1)
+    _w1g1_equip(game, 0, sword, bears)
+    assert _w1g1_pt(bears) == (7, 7)
+
+    _w1g1_declare_attack(game, 0, blocks={
+        game.battlefield_index_of(wurm): game.battlefield_index_of(bears),
+    })
+    _w1g1_fight(game)
+
+    assert [card.name for card in game.players[1].graveyard] == ["Craw Wurm"]
+    assert game.players[1].exile == []
+    assert game.is_on_battlefield(bears)
+
+
+def test_w1g1_sword_of_kaldra_exiles_a_survivor(set_pool):
+    """A creature the damage does not kill is exiled all the same — the
+    trigger, not lethal damage, removes it: a 7/7 into an 0/8 Wall."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    sword = _w1g1_put(game, mrd["Sword of Kaldra"], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 0)
+    wall = _w1g1_put(game, lea["Wall of Stone"], 1)
+    _w1g1_equip(game, 0, sword, bears)
+
+    _w1g1_declare_attack(game, 0, blocks={
+        game.battlefield_index_of(wall): game.battlefield_index_of(bears),
+    })
+    _w1g1_fight(game)
+
+    assert "Wall of Stone" in [card.name for card in game.players[1].exile], game.log[-8:]
+    assert not game.is_on_battlefield(wall)
+
+
+def test_w1g1_worldslayer_destroys_every_other_permanent(set_pool):
+    """"Whenever equipped creature deals combat damage to a player, destroy all
+    permanents other than this Equipment." Its 2011-09-22 ruling: "The
+    equipped creature is also destroyed." Lands go too."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w1g1_table(set_pool)
+    slayer = _w1g1_put(game, mrd["Worldslayer"], 0)
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 0)
+    _w1g1_put(game, lea["Forest"], 0)
+    _w1g1_put(game, lea["Island"], 1)
+    _w1g1_put(game, lea["Wall of Stone"], 1)
+    _w1g1_equip(game, 0, slayer, bears)
+
+    _w1g1_declare_attack(game, 0)
+    _w1g1_fight(game)
+
+    assert game.players[1].life == 18
+    assert [p.card.name for p in game.controlled_by(0)] == ["Worldslayer"], game.log[-8:]
+    assert list(game.controlled_by(1)) == []
+    assert _w1g1_equipped(slayer) is None
+
 # ==== end W1G1 ======================================================
 
 
