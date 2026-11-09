@@ -1,5 +1,11 @@
 ﻿let sessionId = null;
 let seat = null;
+// The seat this browser **joined** as. `seat` is the seat it acts and views
+// as, which differs only while this person controls another player's turn
+// (CR 723, Mindslaver): then it follows the server's `act_as`
+// (`followActingSeat`). Presence, the event stream and a rematch vote are
+// always this seat's.
+let homeSeat = null;
 let currentState = null;
 let stateSyncSource = null;
 let pendingActivation = null;
@@ -185,6 +191,10 @@ let autoPassTurnEndEnabled = false;
 let autoPassTurnEndInFlight = false;
 let autoPassTurnEndRequestedStateKey = "";
 let autoPassMode = null;
+// The turn End Turn was pressed in: its auto-pass ends with that turn, so
+// pressing it in your own turn does not also pass through the next turn
+// when that is a turn you control (CR 723, `turnIsDrivenHere`).
+let autoPassTurnNumber = null;
 let holdPriorityActive = false;
 // Click-held stack item, or null. Tracked as {bottomOffset, sig} rather than
 // an array index: the serialized stack is top-first, so responses cast while
@@ -1264,7 +1274,8 @@ function openStateSyncStream() {
   // The seat rides on the stream so the server knows who is connected: this
   // stream staying closed past the grace period is what marks the seat
   // disconnected. Spectators (seat null) send none.
-  const seatParam = Number.isInteger(seat) ? `?seat=${seat}` : "";
+  const presenceSeat = Number.isInteger(homeSeat) ? homeSeat : seat;
+  const seatParam = Number.isInteger(presenceSeat) ? `?seat=${presenceSeat}` : "";
   const source = new EventSource(`/api/sessions/${sessionId}/events${seatParam}`);
   source.addEventListener("state", (event) => {
     // The server changed something: the next re-ask need not wait.
@@ -1308,6 +1319,7 @@ function resetToSetup(message = "Session not found. Start a new game.") {
   closeStateSyncStream();
   sessionId = null;
   seat = null;
+  homeSeat = null;
   currentState = null;
   previousLifeBySeat = {};
   aiAutoStepInFlight = false;
@@ -1410,10 +1422,10 @@ function shouldAutoPassUntilTurnEnd(state = currentState) {
   if (!state || seat === null) return false;
   if (!autoPassTurnEndEnabled) return false;
   if (autoPassMode === "self") {
-    return state.current_turn === seat;
+    return turnIsDrivenHere(state);
   }
   if (autoPassMode === "opponent") {
-    return state.current_turn !== seat;
+    return !turnIsDrivenHere(state);
   }
   return false;
 }
@@ -1797,7 +1809,7 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
     seat === state.current_turn &&
     !Number.isInteger(state.priority_player)
   ) {
-    const seatTypes = state.seat_types || {};
+    const seatTypes = state.decider_types || state.seat_types || {};
     const defender = combat.defending_player_index;
     const noAttackers = !Array.isArray(combat.attackers) || combat.attackers.length === 0;
     const defenderIsAi = Number.isInteger(defender) ? seatTypes[defender] === "ai" : true;
@@ -1868,7 +1880,10 @@ function shouldAutoStepAi(state = currentState) {
   // Hold the AI while a human player is disconnected: the game is waiting for
   // them to rejoin, and every remaining client is behind the blocking dialog.
   if (blockingDisconnectSeats(state).length > 0) return false;
-  const seatTypes = state?.seat_types || {};
+  // Who *decides* for the active seat (`decider_types`, CR 723.5): a person
+  // controlling an AI seat's turn plays it, and an AI controlling a person's
+  // turn is stepped from that person's browser.
+  const seatTypes = state?.decider_types || state?.seat_types || {};
   if (seatTypes?.[state?.current_turn] !== "ai") return false;
   // In AI vs AI, respect the manual toggle; in human vs AI always auto-step.
   if (shouldShowAiControls(state)) {
@@ -25774,6 +25789,82 @@ function playHandArrivalFlights(flights, state, viewerSeat) {
 // opponent…", while the new game waited on it (driven at kg4). Between two
 // payloads of one revision (a fetch that only settled what the game owed)
 // the log's length still decides.
+// -- Controlling another player (CR 723, Mindslaver) -------------------------
+//
+// The server says who controls whom this turn (`player_controls`, controlled
+// seat -> controller seat), who will next (`player_controls_waiting`), and
+// the seat this viewer's decider acts as right now (`act_as`). A person
+// controlling another seat follows `act_as`: while the controlled seat owes a
+// decision, holds priority or is declaring, this browser looks and acts as
+// that seat (its hand is the one at the bottom, its prompts are the ones
+// shown), and goes back to its own seat for its own decisions (CR 723.8) and
+// when the turn is over. Every action sent as another seat carries
+// `controller_seat` (`sendAction`). A person another player controls is
+// asked nothing; this browser steps the AI that plays their turn and may
+// concede (CR 723.6), and sends nothing else.
+
+// What a person another player controls may still send: a concession, and
+// the AI step that plays their controlled turn.
+const CONTROLLED_SEAT_ACTIONS = new Set(["concede", "ai_step"]);
+
+// Whether the turn in progress is one this browser plays: its own seat's,
+// or the seat it controls this turn (CR 723) — which it plays while it acts
+// as either seat, so End Turn's auto-pass is not dropped when it answers its
+// own priority in the controlled turn (`followActingSeat`).
+function turnIsDrivenHere(state) {
+  if (!state || seat === null) return false;
+  if (state.current_turn === seat) return true;
+  return Number.isInteger(homeSeat)
+    && (state.player_controls || {})[String(state.current_turn)] === homeSeat;
+}
+
+function controllerOfHomeSeat(state) {
+  if (!state || !Number.isInteger(homeSeat)) return null;
+  const controller = (state.player_controls || {})[String(homeSeat)];
+  return Number.isInteger(controller) && controller !== homeSeat ? controller : null;
+}
+
+// Switch `seat` to the seat this person acts as now; true when it changed
+// (the caller fetches the state again, as the new seat).
+function followActingSeat(state) {
+  if (!state || !Number.isInteger(homeSeat)) return false;
+  const actAs = Number.isInteger(state.act_as) && controllerOfHomeSeat(state) === null
+    ? state.act_as
+    : homeSeat;
+  if (actAs === seat) return false;
+  seat = actAs;
+  return true;
+}
+
+function renderPlayerControlBanner(state) {
+  const el = document.getElementById("playerControlBanner");
+  if (!el) return;
+  const players = state?.players || [];
+  const nameOf = (s) => players?.[s]?.name || `Seat ${s}`;
+  const controls = state?.player_controls || {};
+  const waiting = state?.player_controls_waiting || {};
+  let text = "";
+  const controller = controllerOfHomeSeat(state);
+  if (Number.isInteger(controller)) {
+    text = `${nameOf(controller)} controls your turn (Mindslaver): they make your decisions. You may only concede.`;
+  } else {
+    const mine = Object.entries(controls)
+      .filter(([, by]) => by === homeSeat)
+      .map(([controlled]) => Number(controlled));
+    if (mine.length) {
+      const actingAs = seat === homeSeat ? "yourself" : nameOf(seat);
+      text = `You control ${mine.map(nameOf).join(", ")} this turn (Mindslaver) — acting as ${actingAs}.`;
+    } else {
+      const next = Object.entries(waiting).map(
+        ([controlled, by]) => `${nameOf(by)} will control ${nameOf(Number(controlled))}'s next turn (Mindslaver).`,
+      );
+      text = next.join(" ");
+    }
+  }
+  el.textContent = text;
+  el.classList.toggle("hidden", !text);
+}
+
 function stateIsStale(incoming, current) {
   if (!incoming || !current) return false;
   const newer = incoming.revision;
@@ -25788,6 +25879,14 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   // Discard stale responses (`stateIsStale`). skipStaleCheck is set where the
   // caller knows its state is the newest: its own undo or rematch response.
   if (!skipStaleCheck && stateIsStale(state, currentState)) return;
+  // CR 723 (Mindslaver): a person controlling another seat's turn acts and
+  // looks through the seat the server names; the state is fetched again
+  // as that seat before anything is drawn.
+  if (followActingSeat(state)) {
+    getState(true).catch(() => {});
+    return;
+  }
+  renderPlayerControlBanner(state);
   // The re-ask back-off (`retryAutoAdvanceAfterFlight`) counts unchanged renders.
   noteStateForRefetchBackoff(state);
   // Kicked from a still-open lobby: our seat is no longer joined (we lost the
@@ -25813,13 +25912,18 @@ function renderState(state, { skipStaleCheck = false } = {}) {
     autoPassMode = null;
   }
 
-  if (autoPassTurnEndEnabled && autoPassMode === "self" && state.current_turn !== seat) {
+  if (
+    autoPassTurnEndEnabled && autoPassMode === "self"
+    && (!turnIsDrivenHere(state) || (
+      Number.isInteger(autoPassTurnNumber) && state.turn_number !== autoPassTurnNumber
+    ))
+  ) {
     autoPassTurnEndEnabled = false;
     autoPassTurnEndRequestedStateKey = "";
     autoPassMode = null;
   }
 
-  if (autoPassTurnEndEnabled && autoPassMode === "opponent" && state.current_turn === seat) {
+  if (autoPassTurnEndEnabled && autoPassMode === "opponent" && turnIsDrivenHere(state)) {
     autoPassTurnEndEnabled = false;
     autoPassTurnEndRequestedStateKey = "";
     autoPassMode = null;
@@ -27109,6 +27213,7 @@ async function createSession() {
   const data = await postJson("/api/sessions", req);
   sessionId = data.session_id;
   seat = data.seat;
+  homeSeat = data.seat;
   openStateSyncStream();
   setJoinUrls(data.join_url, data.lan_join_url, data.public_join_url);
   setVisible(true);
@@ -27160,6 +27265,7 @@ async function joinSession() {
     guest_colors: Number(q("joinColors")?.value) || 2,
   });
   seat = data.seat;
+  homeSeat = data.seat;
   openStateSyncStream();
   setJoinUrls(data.join_url, data.lan_join_url, data.public_join_url);
   setVisible(true);
@@ -27285,6 +27391,7 @@ async function rejoinSession(seatIndex) {
   stopJoinTargetPolling();
   sessionId = data.session_id;
   seat = data.seat;
+  homeSeat = data.seat;
   openStateSyncStream();
   setJoinUrls(data.join_url, data.lan_join_url, data.public_join_url);
   setVisible(true);
@@ -27981,6 +28088,18 @@ function carryCastZoneAndCost(body) {
 
 async function sendAction(actionBody) {
   if (!sessionId) return;
+  const controlledBy = controllerOfHomeSeat(currentState);
+  if (
+    Number.isInteger(controlledBy)
+    && !CONTROLLED_SEAT_ACTIONS.has(actionBody?.action)
+    && !String(actionBody?.action || "").startsWith("debug_")
+  ) {
+    const name = currentState?.players?.[controlledBy]?.name || "Another player";
+    throw new Error(`${name} controls your turn (Mindslaver) — you may only concede.`);
+  }
+  if (Number.isInteger(homeSeat) && Number.isInteger(actionBody?.seat) && actionBody.seat !== homeSeat) {
+    actionBody.controller_seat = homeSeat;
+  }
   snapStateRefetchBackoff();
   // Always carry the current phase-rail hold preferences so the server knows where
   // to stop on the AI's turn — including steps it resolves itself (turn start, end).
@@ -28155,7 +28274,9 @@ async function requestRematch() {
     btn.textContent = currentState?.mode === "human_vs_human" ? "Waiting for opponent…" : "Starting…";
   }
   try {
-    const payload = await postJson(`/api/sessions/${sessionId}/rematch`, { seat });
+    const payload = await postJson(`/api/sessions/${sessionId}/rematch`, {
+      seat: Number.isInteger(homeSeat) ? homeSeat : seat,
+    });
     renderState(payload, { skipStaleCheck: true });
   } catch (e) {
     if (btn) {
@@ -28173,6 +28294,7 @@ function restartLocalGame() {
   closeStateSyncStream();
   sessionId = null;
   seat = null;
+  homeSeat = null;
   currentState = null;
   previousLifeBySeat = {};
   return createSession().catch((e) => resetToSetup(e.message));
@@ -28626,6 +28748,7 @@ q("endTurnBtn").addEventListener("click", async () => {
     const isSelfTurn = !!currentState && seat !== null && currentState.current_turn === seat;
     autoPassTurnEndEnabled = true;
     autoPassMode = isSelfTurn ? "self" : "opponent";
+    autoPassTurnNumber = currentState?.turn_number ?? null;
     autoPassTurnEndRequestedStateKey = "";
     renderBoard(currentState);
     renderActivationPrompt();
