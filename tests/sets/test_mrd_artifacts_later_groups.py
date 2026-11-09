@@ -175,4 +175,61 @@ def test_w1g12_farsight_mask_asks_an_interactive_seat(set_pool):
         _w1g12_settle(game)
         assert len(game.players[0].hand) == drawn
 
+
+# Damping Matrix: "Activated abilities of artifacts and creatures can't be
+# activated unless they're mana abilities." Null Rod's board-wide row
+# (``activation_prohibitions``) with a type list and CR 605.1a's exception,
+# asked of the ability on every road: the activation path, the wire's
+# ``ability_denials`` and the AI's choosers.
+
+
+def test_w1g12_damping_matrix_stops_nonmana_abilities_of_artifacts_and_creatures(set_pool):
+    game, (_matrix, sorcerer, _elves, bomb, scimitar), (exile,) = _w1g12_table(
+        set_pool,
+        mine=["Damping Matrix", "Prodigal Sorcerer", "Llanowar Elves",
+              "Pyrite Spellbomb", "Leonin Scimitar"],
+        theirs=["Tel-Jilad Exile"],
+    )
+    refused = game.activate_permanent_ability(0, "Prodigal Sorcerer", target_player_index=1)
+    assert not refused.supported
+    assert "(Damping Matrix)" in refused.details
+    # Refused before the cost: the Spellbomb is not sacrificed.
+    assert not game.activate_permanent_ability(
+        0, "Pyrite Spellbomb", target_player_index=1, ability_index=0,
+    ).supported
+    assert game.is_on_battlefield(bomb)
+    # Equip is an activated ability of an artifact (2017-03-14).
+    assert not game.activate_permanent_ability(
+        0, "Leonin Scimitar", target_permanent_ids=[sorcerer.permanent_id],
+    ).supported
+    assert not game.activate_permanent_ability(1, "Tel-Jilad Exile").supported
+    assert game.players[1].life == 20
+
+
+def test_w1g12_damping_matrix_leaves_mana_abilities_open(set_pool):
+    game, _, _ = _w1g12_table(
+        set_pool, mine=["Damping Matrix", "Llanowar Elves", "Sol Ring", "Seat of the Synod"],
+    )
+    assert game.activate_permanent_ability(0, "Llanowar Elves").supported
+    assert game.activate_permanent_ability(0, "Sol Ring").supported
+    assert game.players[0].mana_pool["G"] == 1
+    assert game.players[0].mana_pool["C"] == 2
+
+
+def test_w1g12_damping_matrix_is_on_the_wire_and_ends_when_it_leaves(set_pool):
+    from web.offers import _ability_denial
+
+    game, (matrix, sorcerer, elves), _ = _w1g12_table(
+        set_pool, mine=["Damping Matrix", "Prodigal Sorcerer", "Llanowar Elves"],
+    )
+    (ping,) = game.usable_abilities_of(sorcerer)
+    (tap,) = game.usable_abilities_of(elves)
+    assert "(Damping Matrix)" in (_ability_denial(game, 0, sorcerer, ping) or "")
+    assert _ability_denial(game, 0, elves, tap) is None
+    game.remove_from_battlefield(matrix)
+    assert _ability_denial(game, 0, sorcerer, ping) is None
+    assert game.activate_permanent_ability(0, "Prodigal Sorcerer", target_player_index=1).supported
+    _w1g12_resolve_stack(game)
+    assert game.players[1].life == 19
+
 # ==== end W1G12 ======================================================

@@ -151,7 +151,7 @@ def _priced_mana_source(
             return None
         if (
             permanent_activations_forbidden(game, permanent)
-            or global_activation_ban(game, permanent) is not None
+            or global_activation_ban(game, permanent, ability) is not None
             or activation_denial(game, seat, permanent, line)
             or activation_permission_denial(game, seat, permanent, line)
             or aura_restriction_active(permanent, "all_activated_abilities_shut_off")
@@ -315,7 +315,7 @@ def _nonland_mana_source(
         line = ability.source_line or ""
         if (
             permanent_activations_forbidden(game, permanent)
-            or global_activation_ban(game, permanent) is not None
+            or global_activation_ban(game, permanent, ability) is not None
             or activation_denial(game, seat, permanent, line)
             or activation_permission_denial(game, seat, permanent, line)
             or aura_restriction_active(permanent, "all_activated_abilities_shut_off")
@@ -410,7 +410,7 @@ def tap_cost_mana_activations(
         line = ability.source_line or ""
         if (
             permanent_activations_forbidden(game, permanent)
-            or global_activation_ban(game, permanent) is not None
+            or global_activation_ban(game, permanent, ability) is not None
             or activation_denial(game, seat, permanent, line)
             or activation_permission_denial(game, seat, permanent, line)
             or aura_restriction_active(permanent, "all_activated_abilities_shut_off")
