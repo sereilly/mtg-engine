@@ -629,7 +629,7 @@ def put_chosen_hand_cards_onto_battlefield(game: Game, instruction: OracleInstru
         if not legal:
             hosts[position] = None
             continue
-        if len(legal) > 1 and seat in game.interactive_seats:
+        if len(legal) > 1 and game.asks_a_person(seat):
             asks.append((position, seat, card, legal))
             continue
         from ..ai_targets import choose_returning_aura_host

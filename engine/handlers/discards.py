@@ -282,7 +282,7 @@ def _ask_seat_to_discard(
     if count <= 0:
         game.log.append(f"{player.name} has no cards to discard")
         return
-    if inline_default and seat not in game.interactive_seats:
+    if inline_default and not game.asks_a_person(seat):
         took: list = []
         weighed: dict = {}
         # One event: a discard an opponent causes can put the card onto the

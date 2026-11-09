@@ -129,7 +129,7 @@ class PermanentStateMixin:
         exists. The prompt still carries the default (``default_*``), which is
         what a person's prompt answered by default writes
         (``_default_enter_choice``, ``_default_body_choice``)."""
-        return chooser not in self.interactive_seats
+        return not self.asks_a_person(chooser)
 
     def _perform_entry_state(
         self,

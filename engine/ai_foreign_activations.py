@@ -41,6 +41,7 @@ from .ai_actions import ActivationAction
 from .ai_scoring import _permanent_value, _score_activation
 from .ai_declarations import legal_attackers
 from .ai_abilities import _choose_target_for_instruction
+from .ai_player_control import plays_for_another
 
 
 #: Life a seat keeps back when it pays life to use an opponent's ability.
@@ -107,6 +108,10 @@ def choose_foreign_activation_action(
     turn", `activation_restrictions.activation_denial`), a board-wide ban, and
     CR 602.2b's target gate.
     """
+    # CR 723.5: a seat another player decides for plays nothing
+    # optional for itself (``ai_player_control``'s measured policy).
+    if plays_for_another(game, player_index):
+        return None
     from .activation_permissions import card_widens_activation
 
     player = game.players[player_index]

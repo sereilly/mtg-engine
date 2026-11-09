@@ -56,7 +56,7 @@ class PendingChoicesMixin:
         # Contest has a step behind it, and "if you win the bidding" ran after
         # the first raise, before anybody had won.
         choice.data.pop("_answered", None)
-        if player_index not in self.interactive_seats and (
+        if not self.asks_a_person(player_index) and (
             spec.default_at_arm or self._an_entry_nobody_waits_for()
         ):
             spec.default(self, choice)

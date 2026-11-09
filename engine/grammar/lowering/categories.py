@@ -659,6 +659,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # rider does to it.
     "deny_regeneration_to_block_pair": "regeneration",
     "grant_extra_turn": "turns",
+    # "You control target player during that player's next turn."
+    # (Mindslaver, CR 723.) Who decides during a turn is part of the turn,
+    # not of the board (CR 723.3: no object changes controller) — the
+    # family the extra turn beside it is in.
+    "control_player_next_turn": "turns",
     # "Each player exiles the top card of their library. The player who exiled
     # the card with the greatest mana value takes an extra turn after this
     # one. …" (Timesifter.) The contest's prize is a turn, so it is a turns

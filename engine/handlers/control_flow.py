@@ -1254,7 +1254,7 @@ def _offer_to_seat(
     if (
         choice is not None
         and game.resolving_stack_item is None
-        and player_index not in game.interactive_seats
+        and not game.asks_a_person(player_index)
         and any(
             step.kind in _STACK_OBJECT_KINDS
             for step in (*on_accept, *on_decline)

@@ -940,6 +940,33 @@ def grant_extra_turn(game: Game, instruction: OracleInstruction, context: Oracle
     return True, "resolved"
 
 
+@effect_handler("control_player_next_turn")
+def control_player_next_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You control target player during that player's next turn."
+    (Mindslaver, CR 723.)
+
+    Records the control as pending for the targeted seat
+    (``player_control.record_player_control``); it starts as that seat's
+    next turn actually taken begins and ends as the turn after it begins
+    (CR 723.1, 723.1b), and a later effect for the same seat replaces it
+    (CR 723.1a). The controller is the effect's (CR 109.5). Nothing here
+    decides anything for the seat — every reader asks ``Game.decider_of``.
+    """
+    from ..player_control import record_player_control
+
+    target = context.target
+    if target is None or target not in game.players:
+        return False, "no player to control"
+    controlled = game.players.index(target)
+    controller = game.players.index(context.caster)
+    record_player_control(game, controlled, controller)
+    game.log.append(
+        f"{context.caster.name} will control {target.name} during "
+        f"{target.name}'s next turn"
+    )
+    return True, "resolved"
+
+
 #: What a printed "this <x> phase" reference resolves to. "main" is either main
 #: phase, because a sorcery can be cast in both and "this main phase" names the
 #: one it was cast in; "this" is whichever phase is in progress.

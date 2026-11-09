@@ -148,7 +148,7 @@ def offer_replacement_choice(game, choice: ReplacementChoice) -> tuple[bool, int
     not carry on with it. For any other seat the default is applied at once and
     the resolver's result comes back with ``suspended`` False.
     """
-    if choice.player_index not in game.interactive_seats:
+    if not game.asks_a_person(choice.player_index):
         return False, resolve_choice(game, choice, choice.default_option)
     stamp_draw_of(game, choice)
     # Which stack object is still resolving because of this offer (CR 608.2):

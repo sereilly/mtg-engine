@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..game_over_guard import goes_no_further
+from ..player_control import return_skipped_control
 
 """Beginning phase (CR 501).
 
@@ -77,6 +78,9 @@ class BeginningPhaseMixin:
             return False
         self.become_untapped(permanent)
         self.log.append(f"{player.name} skipped their turn to untap {permanent_name}")
+        # A control that began with this turn waits for the next turn the
+        # player actually takes (CR 723.1b).
+        return_skipped_control(self, player_index)
         return True
 
     @goes_no_further(True)

@@ -413,7 +413,7 @@ def _reanimate_onto_chosen_host(
     if not hosts:
         stays()
         return True, "resolved"
-    if len(hosts) == 1 or seat not in game.interactive_seats:
+    if len(hosts) == 1 or not game.asks_a_person(seat):
         from ..ai_targets import choose_returning_aura_host
 
         finish(
@@ -1382,7 +1382,7 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
                         f"{player.name}'s graveyard"
                     )
                     continue
-                if len(legal) > 1 and seat in game.interactive_seats:
+                if len(legal) > 1 and game.asks_a_person(seat):
                     asks.append((seat, index, card, legal))
                     continue
                 from ..ai_targets import choose_returning_aura_host

@@ -307,6 +307,41 @@ def _parse_extra_turn(
     return ast.ExtraTurn(player or ast.PlayerRef("you"), count)
 
 
+def parse_control_player_next_turn(
+    stream: TokenStream, controller: "ast.PlayerRef"
+) -> "ast.Statement | None":
+    """``You control target player during that player's next turn.``
+    (Mindslaver, CR 723.1.)
+
+    *controller* is the printed subject, handed in with the cursor on the
+    verb. The window is required whole and must be **the controlled
+    player's own** next turn ("that player's" or "their"): CR 723.1 is a
+    turn the affected player takes, and a sentence naming somebody else's
+    turn would be a different effect, so it is refused rather than read as
+    this one.
+
+    Declines without consuming unless the verb is followed by a player
+    reference and "during" — "control" opens no other sentence a seat is the
+    subject of, but a production that claimed the bare verb would take the
+    refusal away from whatever sentence comes to print one.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("control", "controls"):
+        return None
+    player = parse_player_ref(stream)
+    if player is None or not stream.accept_word("during"):
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_phrase("that", "player", "'s")
+        or stream.accept_word("their")
+    ):
+        raise stream.error("expected the controlled player's own next turn")
+    stream.expect_word("next")
+    stream.expect_word("turn")
+    return ast.ControlPlayerNextTurn(controller, player)
+
+
 #: The phases a printed "additional <x> phase" can name, and the engine phase
 #: each one is. Held to the phases ``Game.enter_turn_phase`` can actually begin
 #: by ``tests/rules/test_turn_phases.py``: a word admitted here that no driver

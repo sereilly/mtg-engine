@@ -728,7 +728,13 @@ def entry_trigger_target_side(card: CardDefinition) -> str | None:
 #: player loses 6 life" (Laquatus's Champion, Soul Scourge) has no family that
 #: says whose, so an AI casting either named its own seat and lost the life
 #: itself. Only "loses" — the gain beside it is a gift (``_SEAT_GIFT_KINDS``).
-_SEAT_DENIAL_KINDS = frozenset({"discard_target_cards", "target_loses_life"})
+#:
+#: Controlling a player's next turn is the third (Mindslaver, CR 723): its
+#: family is ``turns``, beside the extra turn that is a gift, and an AI
+#: controlling its own seat does nothing at all (CR 723.9).
+_SEAT_DENIAL_KINDS = frozenset({
+    "discard_target_cards", "target_loses_life", "control_player_next_turn",
+})
 
 #: The spec kinds whose candidates include a player's face
 #: (``trigger_targets._CHOOSABLE_TRIGGER_PLAYER_KINDS``, the picker's own set).

@@ -112,6 +112,7 @@ from .ai_casts import (
     _every_mode_worth_casting,
     _modes_weighed,
 )
+from .ai_player_control import plays_for_another
 
 
 def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
@@ -126,6 +127,10 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
     is a function of the game, which no chooser moves, and a rehearsal is kept
     under everything that tells two of them apart (`_rehearse_announcement`).
     """
+    # CR 723.5: a seat another player decides for plays nothing
+    # optional for itself (``ai_player_control``'s measured policy).
+    if plays_for_another(game, player_index):
+        return None
     with deliberating():
         return _choose_cast_action(game, player_index)
 
@@ -342,6 +347,10 @@ def choose_land_drop(game: Game, player_index: int) -> CastAction | None:
     price can be met (`ai_valuation.entry_sacrifice_is_unavoidable`), so the
     seat plays the basic beside it, or holds.
     """
+    # CR 723.5: a seat another player decides for plays nothing
+    # optional for itself (``ai_player_control``'s measured policy).
+    if plays_for_another(game, player_index):
+        return None
     if not game._may_play_another_land(player_index):
         return None
     best: CastAction | None = None

@@ -67,6 +67,7 @@ from .effects import (
     _parse_exile_entire_library,
     parse_player_exiles_top_of_library,
     _parse_extra_turn,
+    parse_control_player_next_turn,
     _parse_mill,
     parse_choose_each_then_return,
     parse_keep_then_sacrifice_rest,
@@ -623,6 +624,14 @@ def parse_player_subject_verb(
     # to Time Walk is which seat gets the turn.
     if token.text in ("takes", "take") and isinstance(source_spec, ast.PlayerRef):
         return _parse_extra_turn(stream, source_spec)
+    # "**You control target player** during that player's next turn."
+    # (Mindslaver, CR 723.) A seat controlling a seat: the subject is who
+    # decides, the object who is decided for. Declines without consuming, so
+    # a sentence that opens on the verb some other way keeps its refusal.
+    if token.text in ("controls", "control") and isinstance(source_spec, ast.PlayerRef):
+        controlled = parse_control_player_next_turn(stream, source_spec)
+        if controlled is not None:
+            return controlled
     # "Each player antes the top card of their library." (Demonic
     # Attorney.) The subject is who antes (CR 407.4: a card is anted by
     # its owner), so it is handed to the production rather than read back

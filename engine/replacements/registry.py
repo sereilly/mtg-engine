@@ -587,7 +587,7 @@ def order_prompt_asker(kind: str, restart: Callable[[], Any]) -> Callable:
                 if key in by_key:
                     return by_key[key]
             return choose_effect(game, chooser_index, applicable)
-        if chooser_index is None or chooser_index not in game.interactive_seats:
+        if chooser_index is None or not game.asks_a_person(chooser_index):
             return choose_effect(game, chooser_index, applicable)
         # "<effect> (<source>)": what each effect does and what generates it,
         # so two that do the same thing — or one that does what an exemplar

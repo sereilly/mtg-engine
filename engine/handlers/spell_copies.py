@@ -204,7 +204,7 @@ def _offer_copy_new_target(
     if not options:
         game.announce_copy_put_onto_stack(copy, chooser=seat)
         return
-    if seat not in game.interactive_seats:
+    if not game.asks_a_person(seat):
         from ..ai_prompts import choose_copy_retarget
 
         pick = choose_copy_retarget(game, seat, copy, slots, options)

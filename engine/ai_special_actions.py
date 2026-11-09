@@ -66,6 +66,7 @@ from .special_actions import (
     available_permanent_special_actions,
     take_permanent_special_action,
 )
+from .ai_player_control import plays_for_another
 
 #: The offer kinds this chooser weighs — the ones whose good a rehearsal run
 #: through the turn's fight can see. See the module docstring for the kinds
@@ -272,6 +273,10 @@ def special_action_before_combat(
     not asked at all. The one entry point the simulator and the web AI seat
     share.
     """
+    # CR 723.5: a seat another player decides for plays nothing
+    # optional for itself (``ai_player_control``'s measured policy).
+    if plays_for_another(game, seat):
+        return None
     if game.stack:
         return None
     held = (game.priority_player_index, game.priority_pass_count)

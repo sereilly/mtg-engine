@@ -586,6 +586,21 @@ class ExtraTurn:
 
 
 @dataclass(frozen=True)
+class ControlPlayerNextTurn:
+    """``You control target player during that player's next turn.``
+    (Mindslaver, CR 723.)
+
+    *controller* is the sentence's subject — who makes the decisions — and
+    *player* is the seat controlled. Beside :class:`ExtraTurn` because it is
+    about a turn of the game, not about any object: CR 723.3 is explicit that
+    only control of the *player* changes, and every permanent stays under its
+    own controller.
+    """
+    controller: PlayerRef
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class TopCardContest:
     """``Each player exiles the top card of their library. The player who
     exiled the card with the greatest mana value takes an extra turn after

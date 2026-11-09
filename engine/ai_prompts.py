@@ -1016,7 +1016,7 @@ def copy_offer_answer(game: Game, choice) -> "tuple[bool, str] | None":
     entry = choice.data
     if not _accept_copies_this_spell(entry.get("_on_accept")):
         return None
-    if choice.player_index not in game.interactive_seats:
+    if not game.asks_a_person(choice.player_index):
         from .ai_prompt_picks import copy_offer_pick
 
         taken = copy_offer_pick(game, choice)

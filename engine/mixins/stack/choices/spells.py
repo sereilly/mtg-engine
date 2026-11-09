@@ -851,7 +851,7 @@ class SpellChoicesMixin:
         # A seat nobody asks takes the measured answer; an interactive seat's
         # offer taken by default (a drain, an abandoned seat) declines, as the
         # graveyard-or-spell offer's does (``_default_retarget_choice``).
-        if choice.player_index not in self.interactive_seats:
+        if not self.asks_a_person(choice.player_index):
             from ....ai_prompts import choose_copy_target
 
             chosen = choose_copy_target(self, choice, current)

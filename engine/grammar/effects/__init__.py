@@ -298,6 +298,7 @@ from .game import (
     _parse_enchant,
     _parse_end_the_turn,
     _parse_extra_turn,
+    parse_control_player_next_turn,
     parse_extra_phases,
     _parse_skip_step,
     parse_chooses_skipped_step_or_phase,
@@ -524,5 +525,6 @@ __all__ = [
     "_parse_enchant",
     "_parse_end_the_turn",
     "_parse_extra_turn",
+    "parse_control_player_next_turn",
     "parse_extra_phases",
 ]
