@@ -97,7 +97,51 @@ def _parse_count_bound(stream: TokenStream) -> ast.Comparison:
     """
     if stream.accept_word("no"):
         return ast.Comparison("eq", ast.Fixed(0))
+    # "if you have **a** card in hand" (Imaginary Pet) / "if you had **a** card
+    # in hand" (Mindstorm Crown). The article is "at least one", the
+    # complement of the "no" above — the two spellings of one hand are what
+    # Mindstorm Crown prints back to back. ``parse_comparison`` reads the
+    # article as the number one and compares for *equality*, so Imaginary Pet
+    # went home with one card in hand and stayed with two.
+    if stream.accept_word("a", "an"):
+        return ast.Comparison("ge", ast.Fixed(1))
     return parse_comparison(stream)
+
+
+def _accept_hand_at_turn_start(
+    stream: TokenStream, counted: ast.PlayerRef,
+) -> "ast.HandSizeAtTurnStart | None":
+    """"<seat> **had** <bound> card(s) in hand [at the beginning of this turn]".
+
+    "…draw a card if you had no cards in hand at the beginning of this turn.
+    If you had a card in hand, this artifact deals 1 damage to you." (Mindstorm
+    Crown.) The "has … cards in hand" clause in the past tense, which is a
+    different question: the hand as the turn began, recorded then
+    (``Game.hand_sizes_at_turn_start``), not the hand now. Only the hand is
+    read — no card prints a past-tense count of any other pile — and a clause
+    that says more refuses by handing the stream back.
+
+    The moment is the printed "at the beginning of this turn". A clause that
+    prints "had" with no moment is the Crown's second sentence, whose moment is
+    the first sentence's: it comes back *elided*, and only the sequence's
+    rebinder can give it a time (a lone one refuses at lowering).
+
+    Non-consuming on refusal, the contract every reader in this module keeps.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("had"):
+        return None
+    try:
+        comparison = _parse_count_bound(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (stream.accept_word("cards", "card") and stream.accept_phrase("in", "hand")):
+        stream.reset(mark)
+        return None
+    if stream.accept_phrase("at", "the", "beginning", "of", "this", "turn"):
+        return ast.HandSizeAtTurnStart(counted, comparison)
+    return ast.HandSizeAtTurnStart(counted, comparison, elided=True)
 
 
 def _parse_blockers_of_bound_creature(
@@ -272,6 +316,13 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
     # into every effect the grammar reads.
     any_player = stream.accept_phrase("a", "player")
     counted = ast.PlayerRef("any_player") if any_player else parse_player_ref(stream)
+    if counted is not None and not any_player:
+        # "if you **had** no cards in hand at the beginning of this turn"
+        # (Mindstorm Crown) — the clause below in the past tense, settled by
+        # its verb before the present tense is asked.
+        had = _accept_hand_at_turn_start(stream, counted)
+        if had is not None:
+            return had
     if counted is not None and stream.accept_word("has", "have"):
         # "if **a player has more life than each other player**" (Wild Dogs).
         # A superlative rather than a bound: the seat must beat every other

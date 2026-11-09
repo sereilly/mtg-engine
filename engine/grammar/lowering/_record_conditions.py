@@ -455,6 +455,40 @@ def lower_record_condition(
             "state": condition.state,
             "negated": condition.negated,
         }
+    if isinstance(condition, ast.HandSizeAtTurnStart):
+        # "…if you had no cards in hand at the beginning of this turn"
+        # (Mindstorm Crown). The seat's hand as its turn began, which the game
+        # records then (``Game.hand_sizes_at_turn_start``) — never the hand
+        # now, which is what ``zone_card_count`` reads and the ruling rules out.
+        #
+        # An elided moment ("If you had a card in hand, …" with nothing in
+        # front of it to name *when*) is refused: the sequence's rebinder is
+        # what supplies it, and an elided node reaching here had no sentence to
+        # take it from.
+        if condition.elided:
+            raise LoweringError(
+                "'had … in hand' names no moment and no sentence in front of "
+                "it named one",
+                node=condition,
+            )
+        if condition.player.kind != "you":
+            raise LoweringError(
+                "the turn-start hand record is read for the ability's "
+                f"controller only, not {condition.player.kind!r}",
+                node=condition,
+            )
+        bound = condition.comparison.value
+        if not isinstance(bound, ast.Fixed):
+            raise LoweringError(
+                "a turn-start hand count compares against a printed number",
+                node=condition,
+            )
+        return {
+            "kind": "hand_size_at_turn_start",
+            "player": "you",
+            "op": condition.comparison.op,
+            "value": bound.value,
+        }
     if isinstance(condition, ast.SharedColorMilledThisWay):
         # One producer, demanded like every other back-reference: with no mill
         # before it there is no set to compare, and Grindstone's loop would

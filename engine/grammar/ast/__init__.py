@@ -204,6 +204,7 @@ from .records import (
     ManaAddedWithThisAbility,
     SourceAbilityActivations,
     StartedTheTurnState,
+    HandSizeAtTurnStart,
 )
 from .loops import (
     CardsDrawnThisWay,
@@ -651,6 +652,7 @@ __all__ = [
     "SameNamedObject",
     "IsState",
     "StartedTheTurnState",
+    "HandSizeAtTurnStart",
     "SubjectCharacteristicIs",
     "DamagedBySourceDiedThisTurn",
     "DiedThisTurn",

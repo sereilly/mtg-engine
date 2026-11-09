@@ -820,6 +820,41 @@ def rebind_token_maker_to_previous_player(node: "ast.Statement") -> "ast.Stateme
     return replace(node, steps=tuple(steps)) if changed else node
 
 
+def rebind_elided_turn_start(node: "ast.Statement") -> "ast.Statement":
+    """"…draw a card if you had no cards in hand **at the beginning of this
+    turn**. If you had a card in hand, this artifact deals 1 damage to you."
+    (Mindstorm Crown.)
+
+    The second sentence's "had" names no moment; English takes it from the
+    sentence in front, which named the turn's beginning. So an elided
+    ``HandSizeAtTurnStart`` guarding a sentence of the sequence takes the time
+    from the **nearest earlier** sentence whose condition asked the same seat's
+    turn-start hand with the moment printed. Narrow the way this module is:
+    only a condition that guards a whole sentence, only a moment an earlier
+    sentence of the same printed line stated, only for the same seat. Anything
+    else stays elided and refuses at lowering.
+    """
+    if not isinstance(node, ast.Sequence):
+        return node
+    steps = list(node.steps)
+    changed = False
+    stated: set[str] = set()
+    for index, step in enumerate(steps):
+        condition = getattr(step, "condition", None)
+        if not (
+            isinstance(step, ast.Conditional)
+            and isinstance(condition, ast.HandSizeAtTurnStart)
+        ):
+            continue
+        seat = condition.player.kind
+        if not condition.elided:
+            stated.add(seat)
+        elif seat in stated:
+            steps[index] = replace(step, condition=replace(condition, elided=False))
+            changed = True
+    return replace(node, steps=tuple(steps)) if changed else node
+
+
 def _names_a_seat(node) -> bool:
     """Whether any part of *node* names a player other than "you" — the
     antecedent a sentence-initial "they" would otherwise have."""

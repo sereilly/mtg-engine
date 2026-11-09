@@ -54,7 +54,7 @@ from .records import (AdditionalCostWasPaid, AttackedOrBlockedThisCombat,
                       ReturnedToHandThisTurn, RevealedCardIs,
                       ManaAddedWithThisAbility,
                       SacrificedThisWay, SourceAbilityActivations,
-                      StartedTheTurnState, WasKicked,
+                      StartedTheTurnState, HandSizeAtTurnStart, WasKicked,
                       ExiledThisWayShareAName, PutIntoHandThisWay)
 
 @dataclass(frozen=True)
@@ -826,4 +826,5 @@ Condition = Union[
     ManaAddedWithThisAbility,
     SourceAbilityActivations,
     StartedTheTurnState,
+    HandSizeAtTurnStart,
 ]

@@ -395,6 +395,23 @@ def evaluate_record_condition(
             return False
         return (not value) if payload.get("negated") else value
 
+    if kind == "hand_size_at_turn_start":
+        # "…if you had no cards in hand at the beginning of this turn"
+        # (Mindstorm Crown). The record the turn's beginning wrote
+        # (``begin_turn_bookkeeping``), never the hand now: the ruling
+        # (2004-12-01) says the Crown "cares about the number of cards in your
+        # hand at the time the turn started, not as the ability resolves". No
+        # record — a table that never began a turn — is False for every
+        # spelling of the clause, so neither the draw nor the damage is a
+        # guess.
+        if context.caster not in game.players:
+            return False
+        seat = game.players.index(context.caster)
+        held = (getattr(game, "hand_sizes_at_turn_start", None) or {}).get(seat)
+        if held is None:
+            return False
+        return _compare_count(int(held), str(payload.get("op", "")), payload.get("value"))
+
     if kind == "exiled_card_was":
         # "If it was a creature card" (Scavenging Ooze). The card is in exile by
         # now, and CR 400.7 makes that a new object, so the only honest source
