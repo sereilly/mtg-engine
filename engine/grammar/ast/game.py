@@ -586,6 +586,30 @@ class ExtraTurn:
 
 
 @dataclass(frozen=True)
+class TopCardContest:
+    """``Each player exiles the top card of their library. The player who
+    exiled the card with the greatest mana value takes an extra turn after
+    this one. If two or more players' cards are tied for greatest, the tied
+    players repeat this process until the tie is broken.`` (Timesifter.)
+
+    A paragraph that is one effect, for the reason ``paragraphs.py`` gives
+    every node it builds: the second sentence names a seat only the first
+    sentence's cards describe, and the third repeats both among a set only the
+    second describes. Sentence by sentence it would be a per-seat exile, a
+    superlative with no reader and a loop over nothing.
+
+    *move* is what each player does with their top card ("exile"), *prize*
+    what the strict leader gets ("extra_turn", CR 500.7). The ties are
+    repeated among the tied players only (the 2004-12-01 ruling: "Each time
+    there's a tie for the highest cost, only the players involved in the tie
+    continue"), and a player who exiles nothing cannot win ("If a player fails
+    to exile a card, they can't take the extra turn").
+    """
+    move: str = "exile"
+    prize: str = "extra_turn"
+
+
+@dataclass(frozen=True)
 class WinGame:
     """"You win the game." (CR 104.2b.)"""
     player: PlayerRef
@@ -716,6 +740,37 @@ class SkipTurn:
 
     subject: "PlayerRef"
     count: int = 1
+
+
+@dataclass(frozen=True)
+class ChooseSkippedStepOrPhase:
+    """``<player> chooses draw step, main phase, or combat phase. The player
+    skips each instance of the chosen step or phase this turn.`` (Fatespinner.)
+
+    A choice made as the ability resolves (CR 608.2d — not a modal ability,
+    which would be a bulleted "choose one —" chosen as it is put on the
+    stack, CR 700.2), among named steps and phases, followed by a skip of the
+    one chosen. Read as one node because the second sentence is wholly about
+    the first one's answer ("the chosen step or phase"), and is lowered onto
+    the resolution-time choice every "A or B" already uses (``choose_one``)
+    with one skip per option — so the prompt, its default and its answer are
+    the ones the engine already has.
+
+    *options* are ``(level, name)`` pairs in printed order: ``("step",
+    "draw")``, ``("phase", "main")``, ``("phase", "combat")``. "Main" names
+    both main phases — the ruling (2004-12-01): "If there are multiple phases
+    with the same name in the turn, your opponent skips them all."
+
+    *every_instance* is "each instance of" — a skip that is not used up by the
+    first such step or phase, which is what the same ruling's "even if a new
+    step or phase is added to the turn after the ability resolves" needs.
+    *this_turn* is the printed window (CR 514.2 ends it).
+    """
+
+    chooser: "PlayerRef"
+    options: tuple[tuple[str, str], ...]
+    every_instance: bool = True
+    this_turn: bool = True
 
 
 @dataclass(frozen=True)

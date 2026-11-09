@@ -772,12 +772,15 @@ class CommanderMixin:
             for (owner, name), dealt in player.commander_damage_taken.items():
                 if dealt < LETHAL_COMMANDER_DAMAGE:
                     continue
-                player.lost = True
-                self.log.append(
+                # Through the loss funnel, so a "can't lose the game" ban
+                # (Platinum Angel) answers this way to lose too (CR 104.3j).
+                if self.lose_the_game(
+                    player,
                     f"{player.name} lost the game (903.10a: {dealt} combat damage from "
-                    f"{name}, {self.players[owner].name}'s commander)"
-                )
-                changed = True
+                    f"{name}, {self.players[owner].name}'s commander)",
+                    quiet_ban=True,
+                ):
+                    changed = True
                 break
         return changed
 

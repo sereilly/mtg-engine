@@ -56,6 +56,7 @@ from engine.cast_timing import (flash_permission_sentence,  # noqa: E402
                                 static_flash_permission)
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.life_prohibitions import life_gain_ban_line  # noqa: E402
+from engine.game_result_bans import game_result_ban_line  # noqa: E402
 from engine.unspent_mana import unspent_mana_kept_line  # noqa: E402
 from engine.target_requirements import must_choose_claims_line  # noqa: E402
 from engine.counted_names import counts_as_claims_line  # noqa: E402
@@ -443,6 +444,11 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # gain does nothing — so it is its own channel beside the row above,
     # asking the module that carries the sentence out.
     ("life_prohibitions.py", lambda s: life_gain_ban_line(s) is not None),
+    # "You can't lose the game and your opponents can't win the game."
+    # (Platinum Angel, CR 104.3 / 104.2b.) An outcome taken away, asked by the
+    # loss funnel and the win handler — its own channel, asking the module
+    # that carries the sentence out.
+    ("game_result_bans.py", lambda s: game_result_ban_line(s) is not None),
     # "Players don't lose unspent mana as steps and phases end." (Upwelling,
     # CR 500.5.) A static that switches the pool-emptying turn-based action
     # off, asked by `Game.clear_mana_pools` — its own channel, asking the

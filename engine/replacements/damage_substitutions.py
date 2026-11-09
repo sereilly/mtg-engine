@@ -461,12 +461,11 @@ def _damage_becomes_graveyard_exile(game, payload: dict) -> ReplacementOutcome |
     amount = int(payload["amount"])
     available = len(recipient.graveyard) - _graveyard_cards_already_owed(game, seat)
     if available < amount:
-        if not recipient.lost:
-            recipient.lost = True
-            game.log.append(
-                f"{source.card.name}: {recipient.name} could not exile {amount} "
-                f"card(s) from their graveyard and lost the game (104.3e)"
-            )
+        game.lose_the_game(
+            recipient,
+            f"{source.card.name}: {recipient.name} could not exile {amount} "
+            f"card(s) from their graveyard and lost the game (104.3e)",
+        )
         return ReplacementOutcome(replaced=True)
     game.log.append(
         f"{source.card.name}: {amount} damage to {recipient.name} becomes "

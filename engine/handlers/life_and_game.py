@@ -8,6 +8,7 @@ from ._filters import seats_matching_deed
 from ._targets import (bound_permanent, damaged_end_seat, named_seat_still_a_target,
                        stack_target_controller_seat)
 from ..exiled_records import source_object
+from ..game_result_bans import player_cant_win
 from ..life_prohibitions import life_gain_banned
 from ..named_counters import counters_on
 from ..oracle_types import (COUNTERED_ABILITY_SOURCE,
@@ -33,9 +34,9 @@ def player_loses_game(game: Game, instruction: OracleInstruction, context: Oracl
     card = context.card
     # "you lose the game" triggers apply to caster; targeted spells apply to target
     loser = target if instruction.kind == "target_player_loses_game" else caster
-    if not loser.lost:
-        loser.lost = True
-        game.log.append(f"{card.name}: {loser.name} lost the game (104.3e)")
+    # Through the loss funnel, which asks the printed "can't lose the game"
+    # bans (Platinum Angel, CR 104.3e's effect answered by a static ability).
+    game.lose_the_game(loser, f"{card.name}: {loser.name} lost the game (104.3e)")
     return True, "resolved"
 
 
@@ -153,13 +154,25 @@ def player_wins_game(game: Game, instruction: OracleInstruction, context: Oracle
             )
             return True, "resolved"
         winner = game.players[seat]
+    # "…your opponents can't win the game." (Platinum Angel.) CR 104.2b's
+    # effect is the only win a ban answers — CR 104.2a, the last player
+    # standing, "overrides all effects that would preclude that player from
+    # winning" and is never asked here — so the effect does nothing and nobody
+    # loses to it.
+    banners = player_cant_win(game, game.seat_index(winner))
+    if banners:
+        game.log.append(
+            f"{card.name}: {winner.name} can't win the game ({banners[0].card.name})"
+        )
+        return True, "resolved"
     # 104.3f: if the winner would also lose simultaneously, they lose instead
     if not winner.lost:
         # Mark all opponents as lost so the winner is last standing (104.2a)
         for player in game.players:
             if player is not winner and not player.lost:
-                player.lost = True
-                game.log.append(f"{card.name}: {player.name} lost (104.2b: opponent loses)")
+                game.lose_the_game(
+                    player, f"{card.name}: {player.name} lost (104.2b: opponent loses)"
+                )
         game.log.append(f"{card.name}: {winner.name} wins the game (104.2b)")
     return True, "resolved"
 
@@ -1026,6 +1039,16 @@ def pay_life(game: Game, instruction: OracleInstruction, context: OracleExecutio
     return True, "resolved"
 
 
+def _event_subject_seat(game: Game, context: OracleExecutionContext) -> "int | None":
+    """The seat the firing event was about (``event_subject_player``, frozen by
+    the fire site, CR 603.10), or None when nothing recorded one or that
+    player has left the game."""
+    seat = (context.trigger_context or {}).get("event_subject_player")
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        return None
+    return None if game.players[seat].lost else seat
+
+
 @effect_handler("skip_next_step")
 def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"You skip your next draw step." (Ivory Gargoyle.)
@@ -1050,11 +1073,20 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
     who = str(instruction.payload.get("seat") or "you")
     if who == "you":
         seat = game.seat_index(context.caster)
+    elif who == "event_subject_player":
+        # "…**the player** skips each instance of the chosen step …"
+        # (Fatespinner): the seat whose upkeep fired the trigger, frozen by the
+        # upkeep loop (CR 603.10). No record skips nobody's step.
+        seat = _event_subject_seat(game, context)
+        if seat is None:
+            game.log.append(f"{context.card.name}: no recorded player, no skip")
+            return True, "resolved"
     else:
         chosen = context.target
         if chosen not in game.players:
             return False, f"no player was chosen for {who!r}"
         seat = game.players.index(chosen)
+    every_instance = bool(instruction.payload.get("every_instance"))
     # "…you skip your draw step **this turn**." (Elfhame Sanctuary.) The
     # printed window, carried as a turn stamp the way a phase skip's is: on a
     # turn that is not this seat's there is no such step to skip, and a record
@@ -1067,10 +1099,11 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
             return True, "resolved"
         game.skip_next_step(
             step, int(instruction.payload.get("count", 1) or 1), seat=seat,
-            on_turn=game.turn,
+            on_turn=game.turn, every_instance=every_instance,
         )
         game.log.append(
-            f"{game.players[seat].name} will skip their {step} step this turn"
+            f"{game.players[seat].name} will skip "
+            f"{'each' if every_instance else 'their'} {step} step this turn"
         )
         return True, "resolved"
     game.skip_next_step(step, int(instruction.payload.get("count", 1) or 1), seat=seat)
@@ -1117,6 +1150,14 @@ def skip_next_phase(game: Game, instruction: OracleInstruction, context: OracleE
     who = str(instruction.payload.get("seat") or "you")
     if who == "you":
         seat = game.seat_index(context.caster)
+    elif who == "event_subject_player":
+        # "…**the player** skips each instance of the chosen … phase this
+        # turn" (Fatespinner): the seat whose upkeep fired the trigger, read as
+        # the step skip above reads it.
+        seat = _event_subject_seat(game, context)
+        if seat is None:
+            game.log.append(f"{context.card.name}: no recorded player, no skip")
+            return True, "resolved"
     elif who in _FROZEN_SKIP_SEATS:
         # "Whenever this creature deals combat damage to a player, **that
         # player** skips their next combat phase." (Blinding Angel.) The seat
@@ -1135,6 +1176,21 @@ def skip_next_phase(game: Game, instruction: OracleInstruction, context: OracleE
             return False, f"no player was chosen for {who!r}"
         seat = game.players.index(chosen)
     on_turn = game.turn if instruction.payload.get("this_turn") else None
+    if instruction.payload.get("every_instance"):
+        # "…skips **each instance** of the chosen step or phase this turn."
+        # (Fatespinner.) "Main phase" names both (``_PHASE_REFERENCES``; the
+        # ruling: "If there are multiple phases with the same name in the turn,
+        # your opponent skips them all"), and a record per phase name that is
+        # never spent also takes one an effect adds later this turn.
+        if on_turn is None:
+            return False, "an every-instance skip needs its window"
+        names = _PHASE_REFERENCES.get(phase, (phase,))
+        for name in names:
+            game.skip_next_phase(name, seat=seat, on_turn=on_turn, every_instance=True)
+        game.log.append(
+            f"{game.players[seat].name} will skip each {phase} phase this turn"
+        )
+        return True, "resolved"
     game.skip_next_phase(
         phase,
         int(instruction.payload.get("count", 1) or 1),

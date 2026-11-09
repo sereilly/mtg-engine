@@ -75,6 +75,28 @@ class StartedTheTurnState:
     state: str          # tapped
     negated: bool = False
 @dataclass(frozen=True)
+class HandSizeAtTurnStart:
+    """"if you **had** no cards in hand **at the beginning of this turn**"
+    (Mindstorm Crown).
+
+    :class:`ZoneHasCards`' question asked of a past moment, so its own node for
+    :class:`StartedTheTurnState`'s reason: a reader of ``ZoneHasCards`` that
+    had not learned a time would answer about the hand at the upkeep, and the
+    ruling (2004-12-01) says the Crown "cares about the number of cards in your
+    hand at the time the turn started, not as the ability resolves". The game
+    records every seat's hand as the turn begins
+    (``Game.hand_sizes_at_turn_start``) and the evaluator reads that.
+
+    *elided* is the Crown's second sentence: "If you had a card in hand, …"
+    names no moment, and the moment is the one the sentence in front of it
+    named. A lone elided node refuses at lowering; the sequence's rebinder
+    (``sentence_rebinding.rebind_elided_turn_start``) hands it the earlier
+    sentence's time, which is the only reading English gives it.
+    """
+    player: PlayerRef
+    comparison: Comparison
+    elided: bool = False
+@dataclass(frozen=True)
 class DiedThisTurn:
     filter: ObjectFilter = field(default_factory=ObjectFilter)
 @dataclass(frozen=True)

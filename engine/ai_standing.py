@@ -28,6 +28,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 
+from .game_result_bans import player_cant_lose
 from .phasing_locks import waits_for_its_source
 
 
@@ -206,9 +207,18 @@ def seat_standing(game, seat: int, *, now: bool = True) -> float:
     out: CR 702.26 brings it back.
     """
     player = game.players[seat]
-    if player.lost or player.life <= 0:
+    if player.lost:
         return -LOST
-    worth = life_worth(player.life) + CARD_WORTH * len(player.hand)
+    if player.life <= 0:
+        # "You can't lose the game …" (Platinum Angel): a seat at 0 life
+        # behind the ban is still playing (CR 104.3b answered by a static), so
+        # its position is its cards and board with nothing left for its life —
+        # not a loss every line of play reads as already decided.
+        if not player_cant_lose(game, seat):
+            return -LOST
+        worth = CARD_WORTH * len(player.hand)
+    else:
+        worth = life_worth(player.life) + CARD_WORTH * len(player.hand)
     if not player.library:
         worth -= LOST / 2
     lands = 0

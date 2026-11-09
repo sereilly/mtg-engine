@@ -393,6 +393,67 @@ def _parse_pay_or_sacrifice_greatest_mana_value(
     return ast.PayOrSacrificeGreatestManaValue(card_type)
 
 
+def _parse_top_card_contest(stream: TokenStream) -> ast.Statement | None:
+    """``Each player exiles the top card of their library. The player who
+    exiled the card with the greatest mana value takes an extra turn after
+    this one. If two or more players' cards are tied for greatest, the tied
+    players repeat this process until the tie is broken.`` (Timesifter.)
+
+    Read whole, for this module's standing reason: the second sentence names
+    a seat by a comparison only the first sentence's cards make, and the third
+    repeats both among a set only the second describes. The verb of the first
+    sentence and the verb of the second's relative clause are checked to be
+    one verb ("exiles" … "who exiled"), because the comparison is of the cards
+    *that* step moved; the prize is read by its fixed words, because nothing
+    here calls back into the sentence parser and an extra turn is the one prize
+    printed.
+
+    Refuses without consuming, so a sentence merely opening "Each player …"
+    keeps its own reading — "each player exiles the top card of their library"
+    alone is the per-seat exile's.
+    """
+    mark = stream.mark()
+    moves = {"exiles": ("exile", "exiled")}
+    if not stream.accept_phrase("each", "player"):
+        stream.reset(mark)
+        return None
+    verb = stream.peek_word()
+    if verb not in moves:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    move, past = moves[verb]
+    if not stream.accept_phrase("the", "top", "card", "of", "their", "library"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("the", "player", "who", past, "the", "card",
+                                "with", "the", "greatest", "mana", "value"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("takes", "an", "extra", "turn", "after", "this", "one"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    # "**If two or more players' cards are tied for greatest, the tied players
+    # repeat this process until the tie is broken.**" Required: without it a
+    # tie would have to name somebody or nobody, and the card says neither.
+    if not stream.accept_phrase("if", "two", "or", "more", "players'", "cards",
+                                "are", "tied", "for", "greatest"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("the", "tied", "players", "repeat", "this",
+                                "process", "until", "the", "tie", "is", "broken"):
+        stream.reset(mark)
+        return None
+    return ast.TopCardContest(move=move, prize="extra_turn")
+
+
 def _parse_exchange_greatest_mana_value(stream: TokenStream) -> ast.Statement | None:
     """Juxtapose's whole three-sentence effect, as one statement.
 

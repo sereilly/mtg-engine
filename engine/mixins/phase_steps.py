@@ -4,6 +4,17 @@ from ..game_over_guard import goes_no_further
 
 from ._constants import _PHASE_STEPS, phases_after
 
+#: A skip record that is never used up within its window: "The player skips
+#: **each instance** of the chosen step or phase this turn." (Fatespinner.) The
+#: ruling (2004-12-01): "If there are multiple phases with the same name in the
+#: turn, your opponent skips them all. This is true even if a new step or phase
+#: is added to the turn after the ability resolves." Always written with a turn
+#: stamp, so ``expire_stamped_phase_skips`` ends it at that turn's cleanup like
+#: every other stamped record; :meth:`PhaseStepsMixin._consume_skip` answers
+#: yes for it without spending it.
+EVERY_INSTANCE = -1
+
+
 class PhaseStepsMixin:
     @goes_no_further()
     def _resolve_priority_window(self) -> None:
@@ -637,7 +648,8 @@ class PhaseStepsMixin:
         self.skip_turn_counts[player_index] = self.skip_turn_counts.get(player_index, 0) + max(0, count)
 
     def skip_next_step(
-        self, step_name: str, count: int = 1, *, seat=None, on_turn: int | None = None
+        self, step_name: str, count: int = 1, *, seat=None, on_turn: int | None = None,
+        every_instance: bool = False,
     ) -> None:
         """CR 500.7 / CR 614.10: skip the next *step_name*, once per *count*.
 
@@ -658,10 +670,20 @@ class PhaseStepsMixin:
             key = (None if seat is None else self.seat_index(seat), step_name, on_turn)
         else:
             key = step_name if seat is None else (self.seat_index(seat), step_name)
+        if every_instance:
+            # "…skips each instance of the chosen step … this turn"
+            # (Fatespinner): never spent, so only a window may bound it.
+            if on_turn is None:
+                raise ValueError("an every-instance skip needs the turn it is for")
+            self.skip_step_counts[key] = EVERY_INSTANCE
+            return
+        if self.skip_step_counts.get(key) == EVERY_INSTANCE:
+            return
         self.skip_step_counts[key] = self.skip_step_counts.get(key, 0) + max(0, count)
 
     def skip_next_phase(
-        self, phase_name: str, count: int = 1, *, seat=None, on_turn: int | None = None
+        self, phase_name: str, count: int = 1, *, seat=None, on_turn: int | None = None,
+        every_instance: bool = False,
     ) -> None:
         """CR 500.11 / CR 614.10: skip the next *phase_name*, once per *count*.
 
@@ -685,6 +707,15 @@ class PhaseStepsMixin:
             phase_name if seat is None and on_turn is None
             else (None if seat is None else self.seat_index(seat), phase_name, on_turn)
         )
+        if every_instance:
+            # "…skips each instance of the chosen … phase this turn"
+            # (Fatespinner): never spent, so only a window may bound it.
+            if on_turn is None:
+                raise ValueError("an every-instance skip needs the turn it is for")
+            self.skip_phase_counts[key] = EVERY_INSTANCE
+            return
+        if self.skip_phase_counts.get(key) == EVERY_INSTANCE:
+            return
         self.skip_phase_counts[key] = self.skip_phase_counts.get(key, 0) + max(0, count)
 
     def _consume_phase_skip(self, phase: str, seat) -> bool:
@@ -769,6 +800,9 @@ class PhaseStepsMixin:
 
     def _consume_skip(self, bucket: dict[object, int], key: object) -> bool:
         amount = bucket.get(key, 0)
+        if amount == EVERY_INSTANCE:
+            # Each instance in its window is skipped, and none spends it.
+            return True
         if amount <= 0:
             return False
         if amount == 1:

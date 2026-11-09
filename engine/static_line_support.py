@@ -357,6 +357,14 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if hand_size_line(normalized):
         return True
+    # "You can't lose the game and your opponents can't win the game."
+    # (Platinum Angel.) Asked of the reader the loss funnel and the win handler
+    # enforce with (``engine/game_result_bans.py``), so the claim and the
+    # enforcement are one table.
+    from .game_result_bans import game_result_ban_line
+
+    if game_result_ban_line(normalized) is not None:
+        return True
     # "Reveal the first card you draw each turn." (Rowen.) Asked of the reader
     # the draw seam carries it out with, so what is claimed and what is done are
     # one table.

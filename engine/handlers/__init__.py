@@ -65,6 +65,7 @@ from . import (  # noqa: E402,F401
     stack,
     tapping,
     tokens,
+    top_card_contests,
     types,
     value_choices,
     zones,

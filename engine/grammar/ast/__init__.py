@@ -204,6 +204,7 @@ from .records import (
     ManaAddedWithThisAbility,
     SourceAbilityActivations,
     StartedTheTurnState,
+    HandSizeAtTurnStart,
 )
 from .loops import (
     CardsDrawnThisWay,
@@ -493,6 +494,8 @@ from .game import (
     SkipPhase,
     SkipStep,
     SkipTurn,
+    ChooseSkippedStepOrPhase,
+    TopCardContest,
     ExtraPhases,
     BoundPermanentActivationBan,
     TargetingBan,
@@ -651,6 +654,7 @@ __all__ = [
     "SameNamedObject",
     "IsState",
     "StartedTheTurnState",
+    "HandSizeAtTurnStart",
     "SubjectCharacteristicIs",
     "DamagedBySourceDiedThisTurn",
     "DiedThisTurn",
@@ -792,6 +796,8 @@ __all__ = [
     "PutGraveyardPositionOntoBattlefield",
     "PutOntoBattlefield",
     "SkipPhase",
+    "ChooseSkippedStepOrPhase",
+    "TopCardContest",
     "SkipStep",
     "SkipTurn",
     "ExtraPhases",

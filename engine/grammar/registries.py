@@ -78,6 +78,7 @@ from ..flashback import FLASHBACK_CLAIM, flashback_claims_line
 from ..land_play_allowance import land_play_line
 from ..landwalk import landwalk_per_type_spec
 from ..life_prohibitions import life_gain_ban_line
+from ..game_result_bans import game_result_ban_line
 from ..unspent_mana import unspent_mana_kept_line
 from ..prevention import prevention_claims_line
 from ..regeneration import denies_regeneration_line, self_regeneration_line
@@ -471,6 +472,14 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # seam reads.
     if life_gain_ban_line(line) is not None:
         return "life_prohibitions"
+
+    # engine/game_result_bans.py — "You can't lose the game and your opponents
+    # can't win the game." (Platinum Angel, CR 104.3 / 104.2b.) The sibling of
+    # the life-gain ban above: an outcome taken away, asked by the one loss
+    # funnel (`Game.lose_the_game`) and by the win handler, so nothing to lower
+    # and the matcher asked here is the one those seams read.
+    if game_result_ban_line(line) is not None:
+        return "game_result_bans"
 
     # engine/unspent_mana.py — "Players don't lose unspent mana as steps and
     # phases end." (Upwelling, CR 500.5.) A static that switches a turn-based

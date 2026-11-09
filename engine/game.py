@@ -435,6 +435,17 @@ class Game(
     priority_player_index: int | None = None
     priority_pass_count: int = 0
     untapped_lands_at_turn_start: dict[int, int] = field(default_factory=dict)
+    # How many cards each seat held as the turn began — "draw a card if you had
+    # no cards in hand **at the beginning of this turn**" (Mindstorm Crown).
+    # The hand at the upkeep is not that hand: the ruling (2004-12-01) says the
+    # Crown "cares about the number of cards in your hand at the time the turn
+    # started, not as the ability resolves". Written once per turn, by
+    # ``begin_turn_bookkeeping`` (the hook both drivers call as a turn begins),
+    # so nothing a cast does moves it — which is why the rehearsal's
+    # ``position_digest`` needs no bookkeeping entry for it. Empty before the
+    # first turn has begun: no seat began a turn, and the record answers "not
+    # known" for both spellings of the clause rather than a guess.
+    hand_sizes_at_turn_start: dict[int, int] = field(default_factory=dict)
     # Every decision a seat owes part-way through a spell, an ability or a turn
     # step — a library search, a discard, Balance's removals, Power Sink's
     # payment, Word of Command's borrowed card. One queue rather than one field

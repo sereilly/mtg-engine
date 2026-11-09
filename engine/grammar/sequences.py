@@ -81,6 +81,7 @@ from .second_pumps import (_parse_conditional_additional_pump_rider,
 from .sentence_rebinding import (
     rebind_alternative_pronoun_to_choice_target,
     rebind_delayed_pronoun_to_sentence_target,
+    rebind_elided_turn_start,
     rebind_keyword_loss_pronoun_to_clause_target,
     rebind_permanent_or_player_to_chosen_target,
     rebind_pump_pronoun_to_sentence_target,
@@ -867,6 +868,10 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
     # …and "**They** gain haste" after a sentence that ended on a set of
     # permanents and named no seat (Insurrection), a third adjacent-pair
     # rewrite composed beside the token maker's.
-    return rebind_they_to_previous_set(rebind_token_maker_to_previous_player(
-        rebind_delayed_pronoun_to_sentence_target(sequence)
+    # …and "If you had a card in hand" after a sentence that said when
+    # (Mindstorm Crown): the elided moment is the earlier sentence's.
+    return rebind_elided_turn_start(rebind_they_to_previous_set(
+        rebind_token_maker_to_previous_player(
+            rebind_delayed_pronoun_to_sentence_target(sequence)
+        )
     ))

@@ -15,7 +15,8 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (RESTRICTION_TURNS, _REST_OF_TURN, _amount_payload,
                       _describe_targets, _filter_payload)
-from ._events import (_DEFENDING_PLAYER_EVENTS, COUNTED_NUMBER,
+from ._events import (_DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_PLAYERS,
+                      COUNTED_NUMBER, EVENT_SUBJECT_PLAYER,
                       frozen_seat_record)
 from ._seats import _player_recipient
 
@@ -476,6 +477,63 @@ def _lower_skip_phase(
     )
 
 
+def _lower_choose_skipped_step_or_phase(
+    node: "ast.ChooseSkippedStepOrPhase", event: str | None = None
+) -> tuple[OracleInstruction, ...]:
+    """"…that player chooses draw step, main phase, or combat phase. The player
+    skips each instance of the chosen step or phase this turn." (Fatespinner.)
+
+    Onto the resolution-time choice every "A or B" already lowers to
+    (``choose_one``, CR 608.2d): one mode per printed option, each the skip of
+    that step or phase, so the prompt (``mode_choice``), its stated default
+    (the first printed option) and its answer are the ones the engine has.
+    ``chooser`` is the seat the firing event froze — the opponent whose upkeep
+    it is — read by ``offers._offered_seats``; the skip names the same seat.
+
+    Each skip carries ``every_instance`` (the record is not used up by the
+    first instance — "each instance of", and the ruling's "even if a new step
+    or phase is added to the turn after the ability resolves") and
+    ``this_turn`` (the window the cleanup sweep ends). Only that shape is
+    admitted: a choice of what to skip "next", or with no window, is a
+    different card and refuses here.
+    """
+    who = getattr(node.chooser, "kind", None)
+    if who == "you":
+        seat, chooser = "you", None
+    elif who == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+        seat, chooser = EVENT_SUBJECT_PLAYER, EVENT_SUBJECT_PLAYER
+    else:
+        raise LoweringError(
+            f"no seat to choose a skipped step or phase for {who!r} under "
+            f"{event!r}",
+            node=node,
+        )
+    if not (node.every_instance and node.this_turn):
+        raise LoweringError(
+            "only 'skips each instance of the chosen … this turn' is carried",
+            node=node,
+        )
+    modes = []
+    for level, name in node.options:
+        if level == "step":
+            kind, key = "skip_next_step", "step"
+        elif level == "phase":
+            kind, key = "skip_next_phase", "phase"
+        else:  # pragma: no cover - the production reads only these two
+            raise LoweringError(f"no skip for a {level!r}", node=node)
+        modes.append({
+            "label": f"{name} {level}",
+            "instruction": OracleInstruction(kind, "", {
+                key: name, "seat": seat, "count": 1,
+                "this_turn": True, "every_instance": True,
+            }),
+        })
+    payload: dict[str, object] = {"modes": tuple(modes)}
+    if chooser is not None:
+        payload["chooser"] = chooser
+    return (OracleInstruction("choose_one", "", payload),)
+
+
 def _lower_skip_turn(node: "ast.SkipTurn") -> tuple[OracleInstruction, ...]:
     """"You skip your next turn." (Chronatog.)
 
@@ -497,6 +555,34 @@ def _lower_skip_turn(node: "ast.SkipTurn") -> tuple[OracleInstruction, ...]:
     return (
         OracleInstruction(
             "skip_next_turn", "", {"seat": "you", "count": int(node.count)}
+        ),
+    )
+
+
+#: What a top-card contest may move and what its winner may get, each a word
+#: the handler (``handlers/top_card_contests.py``) carries out. Closed: a
+#: paragraph naming a move or a prize outside these refuses here rather than
+#: lowering onto a handler that would ignore the word.
+TOP_CARD_CONTEST_MOVES = frozenset({"exile"})
+TOP_CARD_CONTEST_PRIZES = frozenset({"extra_turn"})
+
+
+def _lower_top_card_contest(node: "ast.TopCardContest") -> tuple[OracleInstruction, ...]:
+    """Timesifter's paragraph — "each player exiles the top card of their
+    library … the tied players repeat this process until the tie is broken" —
+    onto one instruction, ``contest_top_cards``, whose handler runs the rounds
+    (``handlers/top_card_contests.py``). The move and the prize are payload, so
+    a printing that reveals instead of exiling, or that gives the leader
+    something else, is a word added to the two sets above and to the handler,
+    not a new kind.
+    """
+    if node.move not in TOP_CARD_CONTEST_MOVES:
+        raise LoweringError(f"no top-card contest moves by {node.move!r}", node=node)
+    if node.prize not in TOP_CARD_CONTEST_PRIZES:
+        raise LoweringError(f"no top-card contest awards {node.prize!r}", node=node)
+    return (
+        OracleInstruction(
+            "contest_top_cards", "", {"move": node.move, "prize": node.prize}
         ),
     )
 

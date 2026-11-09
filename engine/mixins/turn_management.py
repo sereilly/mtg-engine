@@ -270,6 +270,14 @@ class TurnManagementMixin:
                     self.players[prev_seat].spells_cast_this_turn
                 ) or self.nontoken_permanents_entered_this_turn.get(prev_seat, 0) > 0
         self.nontoken_permanents_entered_this_turn = {}
+        # "…if you had no cards in hand **at the beginning of this turn**"
+        # (Mindstorm Crown). Taken here, as the turn begins and before its
+        # untap step, because nothing after this moment is still that moment:
+        # the upkeep that asks has its own hand. Every seat, for the reason the
+        # per-turn records below reset every seat — the turn began for all.
+        self.hand_sizes_at_turn_start = {
+            seat: len(player.hand) for seat, player in enumerate(self.players)
+        }
         # The turn's phase plan (CR 500.1's five phases, in order), reset here
         # because this is the one hook both drivers call as a turn begins - the
         # headless ``start_turn`` and the web layer's ``_begin_turn``. The

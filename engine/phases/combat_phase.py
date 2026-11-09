@@ -397,6 +397,29 @@ class CombatPhaseMixin:
         # other stepping entry point.
         combat_steps = list(self._phase_steps("combat"))
         if self.current_turn_phase != "combat":
+            # Asked to begin the combat phase from outside it by a driver that
+            # names combat rather than asking the turn's plan — the AI's combat
+            # walker (`ai_combat.run_ai_combat_phase`) and the rehearsal's. A
+            # skipped combat phase (CR 500.11: "proceed past it as though it
+            # didn't exist") is spent and proceeded past here too, exactly as
+            # `next_unskipped_phase_after` does for the plan's own road, or
+            # Moment of Silence and Fatespinner's "combat phase" skipped
+            # nothing in a simulated turn. Only when combat is what the plan
+            # has next: called from anywhere else, nothing is consumed and the
+            # phase is entered as it always was.
+            if (
+                self._next_phase_after(self.current_turn_phase) == "combat"
+                and self._consume_phase_skip("combat", self.active_player_index)
+            ):
+                remaining = self._remaining_turn_phases()
+                if remaining and remaining[0] == "combat":
+                    remaining.pop(0)
+                self.log.append(
+                    f"{self.players[self.active_player_index].name} skipped "
+                    "the combat phase"
+                )
+                self.enter_next_turn_phase()
+                return
             self._enter_combat_step(combat_steps[0])
             return
 
