@@ -413,6 +413,14 @@ def _parse_create_token(
     if stream.accept_word("token", "tokens") and stream.accept_phrase(
         "that", "'s", "a", "copy", "of"
     ):
+        # "…a copy of **the exiled card**." (Soul Foundry.) The card the
+        # permanent's linked exile holds (CR 607.2a) — read before the target
+        # reader, which has no spelling for a card in exile by back-reference.
+        if stream.accept_phrase("the", "exiled", "card"):
+            return ast.CreateCopyToken(
+                count, ast.TargetSpec("that", ast.ObjectFilter(is_card=True)),
+                of_exiled_card=True,
+            )
         subject = parse_target_spec(stream)
         if subject is None:
             # "Create a token that's a copy of **that creature**." (Echo

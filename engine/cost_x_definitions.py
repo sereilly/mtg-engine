@@ -97,6 +97,27 @@ def _twice_target_spell_mana_value(
     return 2 * stack_object_mana_value(target)
 
 
+def _exiled_card_mana_value(
+    game: "Game", source: "Permanent", match: re.Match, target=None
+) -> int | None:
+    """"X is the mana value of **that card**." (Soul Foundry.)
+
+    "That card" is the one the sentence in front of it named — "a copy of
+    **the exiled card**" — which is the card this permanent's imprint exiled
+    and is still in exile (CR 607.2a, ``linked_exile.cards_still_exiled_with``).
+    Several is CR 607.3's case and its own rule: "If these answers are used to
+    determine the value of a variable, the sum of the answers is used." None
+    exiled is CR 107.2's number that can't be determined, which is 0 — an
+    activation for {0} that copies nothing, the card as printed.
+    """
+    from .linked_exile import cards_still_exiled_with
+
+    return sum(
+        max(0, int(card.cmc or 0))
+        for card, _owner in cards_still_exiled_with(game, source)
+    )
+
+
 #: ``(pattern, reader)``. The pattern matches the whole sentence, lowercased and
 #: stripped of its full stop; the reader turns the ability's own source into the
 #: number. One row today, and the noun it ends on is any permanent word, because
@@ -126,6 +147,14 @@ COST_X_DEFINITIONS: tuple[tuple[re.Pattern[str], Callable[..., int]], ...] = (
         # from it at all.
         re.compile(r"^x is the number of cards in an opponent's hand$"),
         _opponent_hand_count,
+    ),
+    (
+        # "X is the mana value of that card." (Soul Foundry.) "That card" is the
+        # exiled card the effect sentence copies; the reader takes it off the
+        # source's linked exile, so the definition means nothing on a source
+        # that never exiled one (0, CR 107.2).
+        re.compile(r"^x is the mana value of that card$"),
+        _exiled_card_mana_value,
     ),
 )
 

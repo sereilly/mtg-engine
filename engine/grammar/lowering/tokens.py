@@ -170,6 +170,16 @@ def _lower_create_copy_token(
     referent. A record of this effect is asked first because it is the closer
     binder; under neither, the words still refuse.
     """
+    if node.of_exiled_card:
+        # "Create a token that's a copy of the exiled card." (Soul Foundry.)
+        # The handler reads the source's linked exile
+        # (``linked_exile.cards_still_exiled_with``) — a token per card still
+        # there, CR 607.3 — and copies each card's copiable values (CR 707.2).
+        exiled: dict[str, object] = {
+            "count": _amount_payload(node.count), "copied": "exiled_card",
+        }
+        _stamp_token_recipient(exiled, node, event, produced)
+        return (OracleInstruction("create_copy_token", "", exiled),)
     if node.recipient_players == "target_opponent":
         # Two announced slots in one sentence — the seat and the creature —
         # and ``_describe_targets`` writes one. A card printing it would need

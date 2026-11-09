@@ -91,6 +91,8 @@ def create_copy_token(game: Game, instruction: OracleInstruction, context: Oracl
     # seat as this ability resolved, so there is no target on the stack to
     # resolve and no legality to re-check (CR 608.2b is about targets).
     recorded_key = instruction.payload.get("permanents_from")
+    if instruction.payload.get("copied") == "exiled_card":
+        return _copy_exiled_cards(game, instruction, context, controller_index)
     if instruction.payload.get("copied") == "loop_object":
         # "For each creature token on the battlefield, its controller creates a
         # token that's a copy of **that creature**." (Parallel Evolution.) The
@@ -179,6 +181,49 @@ def create_copy_token(game: Game, instruction: OracleInstruction, context: Oracl
             game.log.append(
                 f"{context.card.name} created a token copy of {source.card.name}"
             )
+    return True, "resolved"
+
+
+def _copy_exiled_cards(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
+    controller_index: int,
+) -> tuple[bool, str]:
+    """"Create a token that's a copy of **the exiled card**." (Soul Foundry.)
+
+    The cards the source's imprint exiled that are still in exile
+    (``linked_exile.cards_still_exiled_with``, CR 607.2a) — read off the
+    source even once it has left the battlefield, the record being the
+    object's. CR 607.3: "If that ability creates a token that is a copy of
+    'the' card, then for each exiled card, it creates a token that is a copy of
+    that card." None is a token of nothing: nothing is made.
+
+    A card in exile has no layers applied (CR 613.1), so its copiable values
+    are the card's own (CR 707.2) — mana cost and mana value included (the
+    2004-12-01 ruling); it is read through a stand-in permanent, the shape
+    ``Game.create_token_copy`` copies, which carries the card and nothing else.
+    The token is put onto the battlefield, not cast (the same ruling).
+    """
+    from ..linked_exile import cards_still_exiled_with
+
+    exiled = cards_still_exiled_with(game, context.source_permanent)
+    if not exiled:
+        game.log.append(f"{context.card.name}: no card is exiled with it to copy")
+        return True, "resolved"
+    count = resolve_amount(instruction.payload.get("count", 1), context.x_value)
+    makers = token_recipient_seats(game, instruction.payload, context, controller_index)
+    with game.entering_together():
+        for card, _owner in exiled:
+            for seat in makers:
+                for _ in range(max(0, count)):
+                    token = game.create_token_copy(seat, Permanent(card=card))
+                    if context.source_permanent is not None:
+                        token.metadata[CREATED_WITH_PERMANENT_ID] = (
+                            context.source_permanent.permanent_id
+                        )
+                    context.results[CREATED_TOKEN_RESULT_KEY] = token.permanent_id
+                    game.log.append(
+                        f"{context.card.name} created a token copy of {card.name}"
+                    )
     return True, "resolved"
 
 

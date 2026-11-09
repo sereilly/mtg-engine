@@ -308,6 +308,62 @@ def test_w1g5_duplicant_follows_an_exiled_cards_characteristic_defining_pt(set_p
     game._recompute_continuous_effects()
     assert (duplicant.effective_power, duplicant.effective_toughness) == (3, 3)
 
+def test_w1g5_soul_foundry_makes_a_copy_of_the_imprinted_creature_for_its_mana_value(set_pool):
+    """"{X}, {T}: Create a token that's a copy of the exiled card. X is the mana
+    value of that card." Hill Giant imprinted: X is 4 — two mana is refused —
+    and the token is a Hill Giant with the card's mana cost and mana value
+    (the 2004-12-01 rulings)."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, _bob = _w1g5_table(
+        set_pool, [mrd["Soul Foundry"], lea["Hill Giant"], lea["Grizzly Bears"]],
+        interactive=True,
+    )
+    alice.mana_pool["C"] = 4
+    foundry = _w1g5_imprint_from_hand(game, alice, "Soul Foundry", "Hill Giant")
+    foundry.metadata["summoning_sickness_turn"] = -99
+    assert [c.name for c in alice.exile] == ["Hill Giant"]
+
+    alice.mana_pool.update({"C": 0, "R": 2})
+    refused = game.activate_permanent_ability(
+        0, "Soul Foundry", permanent_index=game.battlefield_index_of(foundry),
+        ability_index=0,
+    )
+    assert not refused.supported and foundry.tapped is False
+    alice.mana_pool["R"] = 4
+    assert game.activate_permanent_ability(
+        0, "Soul Foundry", permanent_index=game.battlefield_index_of(foundry),
+        ability_index=0,
+    ).supported
+    assert alice.mana_pool["R"] == 0
+    _w1g5_resolve_stack(game)
+    (token,) = [p for p in game.controlled_by(0) if p.metadata.get("is_token")]
+    assert token.effective_card.name == "Hill Giant"
+    assert (token.effective_power, token.effective_toughness) == (3, 3)
+    assert token.effective_card.mana_cost == "{3}{R}" and token.effective_card.cmc == 4
+    assert [c.name for c in alice.exile] == ["Hill Giant"], "the card stays imprinted"
+
+
+def test_w1g5_soul_foundry_with_nothing_imprinted_makes_nothing(set_pool):
+    """A declined imprint: X is 0 (CR 107.2) and the token copies nothing."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, _bob = _w1g5_table(
+        set_pool, [mrd["Soul Foundry"], lea["Hill Giant"]], interactive=True,
+    )
+    alice.mana_pool["C"] = 4
+    assert game.cast_from_hand(0, "Soul Foundry").supported
+    assert game.resolve_top_of_stack() is False
+    assert game.confirm_optional_pay(0, accept=False)
+    _w1g5_resolve_stack(game)
+    foundry = _w1g5_named(game, "Soul Foundry")
+    foundry.metadata["summoning_sickness_turn"] = -99
+    assert game.activate_permanent_ability(
+        0, "Soul Foundry", permanent_index=game.battlefield_index_of(foundry),
+        ability_index=0,
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert [p for p in game.controlled_by(0) if p.metadata.get("is_token")] == []
+    assert any("no card is exiled with it" in line for line in game.log)
+
 # ==== end W1G5 ======================================================
 
 
