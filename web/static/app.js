@@ -10464,7 +10464,9 @@ function applyFlipAgainPrompt(info) {
   if (Number.isInteger(info.flips_won)) {
     const n = info.flips_won;
     const spell = (currentState?.stack || []).find(
-      (item) => item && typeof item === "object" && item.name === info.card_name,
+      // A stack object names its card under `card` (and `label`).
+      (item) => item && typeof item === "object"
+        && (item.card?.name || item.label || item.name) === info.card_name,
     );
     body.textContent = `You have won ${n} flip${n === 1 ? "" : "s"} in a row. `
       + "Flip again to win more, or stop now — a lost flip ends the run.";
