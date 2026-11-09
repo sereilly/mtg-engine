@@ -117,6 +117,8 @@ def _edited_homes(number: str, text: str, old: dict[str, str], new: dict[str, st
 
 def citing_files() -> list[Path]:
     files = [REPO_ROOT / name for name in _CITING_DOCS]
+    # CLAUDE.md's subject files (path-scoped rules), which cite as it does.
+    files.extend((REPO_ROOT / ".claude" / "rules").rglob("*.md"))
     for directory in _CITING_DIRS:
         for suffix in ("py", "md", "js"):
             files.extend((REPO_ROOT / directory).rglob(f"*.{suffix}"))

@@ -1046,8 +1046,9 @@ set's execution proved wrong, and Known gaps no entry that is no longer true.
      rule once, so the next reader gets current truth and not a patch series.
    - **Engine changes**: a new seam the set forced gets a pointer line in the
      phase that meets it; its documentation is in `engine/ARCHITECTURE.md` and
-     CLAUDE.md, which the change itself updated. Edit a CLAUDE.md **rule** in
-     place only when the set changed one — CLAUDE.md carries no counts
+     CLAUDE.md (with its subject files in `.claude/rules/`), which the change
+     itself updated. Edit a CLAUDE.md **rule** in place, in whichever of those
+     files holds it, only when the set changed one — CLAUDE.md carries no counts
      (`SET_PROGRESS.md` and `CARD_VERIFICATION.md` do).
    - **New sharp edges**: add to Known gaps with why, the phase that clears it,
      and the parts. Read the list first — a duplicate under a near-identical
