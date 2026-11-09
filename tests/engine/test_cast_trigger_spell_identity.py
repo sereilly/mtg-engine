@@ -212,7 +212,9 @@ def _stacked(by_name, reader, kind):
         for (first_seat, second_seat), primed in rows:
             boards: list[list] = [[], []]
             if kind != "self_cast":
-                boards[0].append(_nosick(Permanent(card=reader)))
+                held = _nosick(Permanent(card=reader))
+                _prime_source_count(held, reader, spell)
+                boards[0].append(held)
             boards[1 - second_seat] += [
                 _nosick(Permanent(card=by_name[name]))
                 for name in ("Mountain", "Plains", "Forest", "Island", "Swamp")
@@ -262,6 +264,20 @@ def _stacked(by_name, reader, kind):
             game.players[second_seat].mana_pool["C"] = 5
             return game, earlier, later, fired[0]
     return None
+
+
+def _prime_source_count(permanent, reader, spell) -> None:
+    """"Whenever a player casts a spell with mana value equal to the number of
+    charge counters on this artifact, counter that spell." (Chalice of the
+    Void, MRD W1G6.) The narrowing is a count on the reader itself, so the
+    reader holds as many of its counter as the spell tried costs: the board on
+    which the trigger fires, which is the board this census asks about."""
+    from engine.named_counters import add_counters
+
+    for trigger in compile_card_oracle(reader).triggered_abilities:
+        counted = trigger.condition.payload.get("cast_mana_value_source_counters")
+        if counted:
+            add_counters(permanent, str(counted), int(spell.cmc or 0))
 
 
 def _on_stack(game, item) -> bool:
