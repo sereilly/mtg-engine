@@ -182,6 +182,67 @@ def test_w1g5_chrome_mox_adds_nothing_with_no_card_or_once_the_card_leaves(set_p
     assert game.take_card_from_exile(0, bolt)
     assert _w1g5_tap_for(game, mox, "R") == {}
 
+
+def _w1g5_golem_imprints(set_pool, graveyard_index, *, interactive=True):
+    """Mirror Golem cast with Terror and Grizzly Bears in Bob's graveyard; the
+    imprint's target is the card at *graveyard_index* (an interactive seat
+    names it on the trigger's target prompt, CR 603.3d)."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, bob = _w1g5_table(
+        set_pool, [mrd["Mirror Golem"]], interactive=interactive,
+        bob_hand=[lea["Lightning Bolt"], lea["Terror"]],
+    )
+    game.enforce_mana_costs = False
+    bob.graveyard.extend([lea["Terror"], lea["Grizzly Bears"]])
+    assert game.cast_from_hand(0, "Mirror Golem").supported
+    if interactive:
+        assert game.resolve_top_of_stack() is False
+        assert [c.kind for c in game.pending_choices] == ["trigger_target"]
+        assert game.confirm_trigger_target(0, seat=1, graveyard_index=graveyard_index)
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    return game, alice, bob, _w1g5_named(game, "Mirror Golem")
+
+
+def test_w1g5_mirror_golem_is_protected_from_the_exiled_instants_type(set_pool):
+    """"This creature has protection from each of the exiled card's card
+    types." Terror imprinted: an instant cannot target the Golem (CR 702.16b)
+    — Bob's Terror and Lightning Bolt are both refused — and its damage would
+    be prevented (CR 702.16e)."""
+    game, _alice, bob, golem = _w1g5_golem_imprints(set_pool, 0)
+    assert [c.name for c in bob.exile] == ["Terror"]
+    assert game._protection_qualities(golem) == {("card_type", "instant")}
+    bolt = set_pool("LEA")["Lightning Bolt"]
+    assert not game._can_be_targeted(golem, bolt, caster_index=1)
+    assert game._is_protected_from(golem, bolt, as_damage_source=True, seat=1)
+    refused = game.cast_from_hand(1, "Lightning Bolt", target_permanent_ids=[golem.permanent_id])
+    assert not refused.supported
+    assert game.is_on_battlefield(golem)
+
+
+def test_w1g5_mirror_golem_with_a_creature_imprinted_answers_creatures_only(set_pool):
+    """Grizzly Bears imprinted: protection from creatures (a creature cannot
+    block it or damage it, CR 702.16e/f) and nothing else — an instant
+    targets it as usual."""
+    game, _alice, bob, golem = _w1g5_golem_imprints(set_pool, 1)
+    assert [c.name for c in bob.exile] == ["Grizzly Bears"]
+    assert game._protection_qualities(golem) == {("card_type", "creature")}
+    bears = _w1g5_put(game, 1, set_pool("LEA")["Grizzly Bears"])
+    assert game._is_protected_from(golem, bears)
+    bolt = set_pool("LEA")["Lightning Bolt"]
+    assert game._can_be_targeted(golem, bolt, caster_index=1)
+
+
+def test_w1g5_mirror_golem_loses_the_protection_with_the_card(set_pool):
+    """The exiled card leaving exile takes the protection with it, and a
+    Golem that never imprinted (the seat nobody asks takes the first legal
+    target) has the one quality its card gives."""
+    game, _alice, bob, golem = _w1g5_golem_imprints(set_pool, 0, interactive=False)
+    assert game._protection_qualities(golem) == {("card_type", "instant")}
+    (terror,) = bob.exile
+    assert game.take_card_from_exile(1, terror)
+    assert game._protection_qualities(golem) == set()
+
 # ==== end W1G5 ======================================================
 
 

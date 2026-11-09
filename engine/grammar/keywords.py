@@ -181,6 +181,15 @@ def _protection_quality_name(stream: TokenStream) -> str | None:
     # ``protection_qualities_named`` is what answers them.
     if stream.accept_phrase("each", "of", "its", "colors"):
         return "protection from each of its colors"
+    # "…from **each of the exiled card's card types**" (Mirror Golem). CR
+    # 702.16i's shorthand again, over the card this permanent's imprint exiled
+    # (CR 607.2a) rather than over the holder — one protection ability per card
+    # type that card has, read as the question is asked
+    # (``mixins/protection._protection_qualities``).
+    if stream.accept_phrase(
+        "each", "of", "the", "exiled", "card", "'s", "card", "types"
+    ):
+        return "protection from each of the exiled card's card types"
     if stream.accept_phrase("each", "color"):
         return "protection from each color"
     colour = stream.peek_word()

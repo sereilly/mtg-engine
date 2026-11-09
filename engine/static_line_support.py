@@ -147,6 +147,13 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # "text too complex" for a line the noncreature path has claimed since
         # Alpha.
         LAND_ANIMATION_KIND,
+        # "This creature has protection from each of the exiled card's card
+        # types." (Mirror Golem.) A printed protection ability spelled as a
+        # sentence about its own source, which the grammar lowers to the
+        # ``static_line`` the bare "Protection from …" line compiles to — the
+        # record ``mixins/protection._protection_qualities`` reads, gated on
+        # the same quality vocabulary (``grammar/statics.py``).
+        "static_line",
     }
 )
 

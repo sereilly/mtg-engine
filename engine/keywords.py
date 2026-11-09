@@ -329,11 +329,17 @@ EACH_COLOR = "each color"
 #: is asked, and a colourless holder has no protection at all.
 EACH_OF_ITS_COLORS = "each of its colors"
 
+#: "…protection from **each of the exiled card's card types**" (Mirror
+#: Golem). CR 702.16i's shorthand over a set read off the card the holder's
+#: imprint exiled (CR 607.2a) — one protection ability per card type of it,
+#: and none while nothing is exiled with the holder.
+EACH_OF_THE_EXILED_CARDS_CARD_TYPES = "each of the exiled card's card types"
+
 _WUBRG = ("W", "U", "B", "R", "G")
 
 
 def protection_qualities_named(
-    word: str, *, holder_colors=None,
+    word: str, *, holder_colors=None, exiled_card_types=None,
 ) -> tuple[tuple[str, str], ...] | None:
     """Every quality one member of a protection clause names — or **None**
     when it names nothing a shield answers to.
@@ -348,6 +354,11 @@ def protection_qualities_named(
     **on**, for "each of its colors" alone. A gate asking whether the phrase is
     readable passes nothing and gets ``()`` — readable, and naming no quality
     until a holder is known — which is deliberately not None.
+
+    *exiled_card_types* is the same for "each of the exiled card's card types"
+    (Mirror Golem): the card types of the cards the holder's imprint exiled,
+    which only the reader holding the permanent can ask
+    (``mixins/protection._protection_qualities``).
     """
     text = " ".join((word or "").strip().lower().split())
     if text == EACH_COLOR:
@@ -355,6 +366,10 @@ def protection_qualities_named(
     if text == EACH_OF_ITS_COLORS:
         held = set(holder_colors or ())
         return tuple(("color", symbol) for symbol in _WUBRG if symbol in held)
+    if text == EACH_OF_THE_EXILED_CARDS_CARD_TYPES:
+        return tuple(
+            ("card_type", card_type) for card_type in sorted(set(exiled_card_types or ()))
+        )
     quality = protection_quality(text)
     return None if quality is None else (quality,)
 

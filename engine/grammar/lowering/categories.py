@@ -202,6 +202,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # not a one-shot pump with a duration. Who it applies to — the whole board
     # or the source alone — is not what the category is about.
     "dynamic_pt_bonus": "static_buffs",
+    # "This creature has protection from each of the exiled card's card
+    # types." (Mirror Golem.) A printed protection ability on its own source,
+    # lowered to the ``static_line`` the bare keyword line compiles to — the
+    # same continuous family as the self-conditional static above.
+    "static_line": "static_buffs",
     # A permanent's board-wide static effect on *lands* (CR 613 layer 4):
     # Kormus Bell animating every Swamp, Conversion turning every Mountain into
     # a Plains. Their own category rather than "static_buffs" because the two
