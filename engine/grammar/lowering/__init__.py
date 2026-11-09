@@ -270,6 +270,7 @@ from .control_changes import (
     _lower_gain_control,
 )
 from .exchanges import (
+    _fused_event_object_exchange,
     _lower_exchange_control,
     _lower_exchange_greatest_mana_value,
     _lower_exchange_chosen_sets,
@@ -606,6 +607,7 @@ __all__ = [
     "_lower_announced_choice",
     "_lower_choose_permanent",
     "_lower_choose_permanents",
+    "_fused_event_object_exchange",
     "_lower_exchange_control",
     "_lower_exchange_greatest_mana_value",
     "_lower_exchange_chosen_sets",

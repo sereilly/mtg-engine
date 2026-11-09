@@ -818,16 +818,17 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # exchange, the Grenadiers' destroy) is made as it goes on the stack.
     "The Abyss#0", "Rysorian Badger#0",
     "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",
-    # Mirrodin, W1G9. "…**its controller** chooses target permanent another
-    # player controls that shares a card type with it" (Confusion in the
-    # Ranks): Echo Chamber's printed "target" picked by a seat that is not the
-    # ability's controller, read as the resolution-time pick that production
-    # already makes (ROADMAP's CR 602.3 entry) — the entering permanent's
-    # controller is asked as the ability resolves, out of exactly the other
-    # seats' type-sharing permanents (tests/sets/test_mrd_enchantments.py,
-    # W1G9's section). Announcing it needs the two relations ("another
-    # player" against the chooser, "shares a card type" against the event's
-    # object) in the trigger picker and in the CR 608.2b re-check.
+    # Mirrodin, W1G9 / W2G4. "…**its controller** chooses target permanent
+    # another player controls that shares a card type with it" (Confusion in
+    # the Ranks): Death Match's chooser with two relations — the seat that
+    # announces is the entering object's controller, and "another player" and
+    # "shares a card type with it" are measured from that seat and that
+    # object, all three frozen only by a real entry event (CR 603.10), which
+    # this mirrored board does not fire. Driven through a real entry
+    # (tests/sets/test_mrd_enchantments.py, W2G4's section) the seat is asked
+    # as the ability goes on the stack, offered exactly the other seats'
+    # type-sharing permanents, its answer is the stacked target, and a target
+    # the chooser has taken by resolution is illegal (CR 608.2b).
     "Confusion in the Ranks#0",
     # Mirrodin, W1G12. "…that player puts a flood counter on target
     # non-Island land they control **of their choice**" (Quicksilver

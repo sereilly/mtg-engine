@@ -29,6 +29,8 @@ without the parse family having to split with it.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction
 from ...subject_filters import object_only_filter
 from .. import ast
@@ -36,6 +38,7 @@ from ..errors import LoweringError
 from ._common import (_optional_slot_key, _describe_targets, _filter_payload,
                       _is_source, _is_target)
 from ._events import CHOSEN_PERMANENT, _EVENT_SUBJECT_OBJECTS
+from ._frozen_seats import _EVENT_SUBJECT_CONTROLLERS
 
 
 def _lower_exchange_control(
@@ -386,3 +389,90 @@ def _lower_exchange_chosen_sets(
         ),
     )
     return (OracleInstruction("sequence", "", {"steps": steps}),)
+
+
+def _fused_event_object_exchange(
+    steps: tuple, event: str | None,
+) -> tuple[OracleInstruction, ...] | None:
+    """"Whenever an artifact, creature, or enchantment enters, **its controller
+    chooses target permanent another player controls that shares a card type
+    with it. Exchange control of those permanents.**" (Confusion in the
+    Ranks.) One targeted exchange, or None for any other pair.
+
+    The two sentences are one announcement and one effect. "Target" is printed
+    on the permanent and "its controller" — the entering object's, not the
+    ability's (CR 603.3d with the seat the card names) — is who announces it,
+    as the ability is put on the stack; the exchange then acts on that target
+    and the event's object (CR 701.12a). Lowered step by step, the pick was a
+    value chosen as the ability resolved (Echo Chamber's reading,
+    ``choose_permanent``): nothing could respond to a target nobody had named,
+    and CR 608.2b never asked it again — the card's ruling (2004-12-01) is
+    that "the permanents have to share a permanent type both when the target
+    is chosen and when the ability resolves".
+
+    Fused rather than announced from ``choose_permanent`` itself, because that
+    kind is also Echo Chamber's and Mogg Assassin's — activated abilities whose
+    opponent-announced target ROADMAP's CR 602.3 entry records as still owed —
+    and a trigger's announcement has a seat to ask (the fire site froze the
+    event object's controller, CR 603.10) where an activation's does not.
+
+    The chooser and the two relations ride the ``targets`` description under
+    the names ``choose_permanent``'s payload has carried them under since
+    W1G9, so one idea keeps one spelling: ``not_controlled_by: "chooser"``
+    ("another player controls", against the seat that picks) and
+    ``relative_to`` / ``shares_type_with_relative`` ("that shares a card type
+    with it", against the firing event's object). ``target_descriptions``
+    carries them onto the picker's spec, ``trigger_targets.
+    _trigger_candidates_by_relation`` narrows the offer by them as the ability
+    goes on the stack, and the handler re-asks them at CR 608.2b
+    (``control_changes._announced_relation_refusal``).
+    """
+    if len(steps) != 2 or event not in _EVENT_SUBJECT_OBJECTS:
+        return None
+    choose, exchange = steps
+    if not isinstance(choose, ast.ChoosePermanent) or not isinstance(
+        exchange, ast.ExchangeControl
+    ):
+        return None
+    if not (
+        isinstance(exchange.first, ast.TargetSpec)
+        and exchange.first.quantifier == "those"
+        and exchange.second is exchange.first
+        and not exchange.shares_a_type
+        and not exchange.destroy_attached_auras
+    ):
+        return None
+    spec = choose.spec
+    if (
+        choose.chooser.kind != "controller"
+        or event not in _EVENT_SUBJECT_CONTROLLERS
+        or choose.optional or choose.host_for_source or choose.at_random
+        or not isinstance(spec, ast.TargetSpec)
+        or not spec.targeted or spec.quantifier != "target" or spec.count != 1
+    ):
+        return None
+    described = spec.filter
+    relations: dict[str, object] = {}
+    if described.controller == "another_player":
+        relations["not_controlled_by"] = "chooser"
+        described = dataclasses.replace(described, controller=None)
+    if described.shares_card_type_with_it:
+        relations["relative_to"] = "event_subject"
+        relations["shares_type_with_relative"] = True
+        described = dataclasses.replace(described, shares_card_type_with_it=False)
+    if described.controller is not None:
+        # Any other controller word is measured from a seat this fusion does
+        # not name; the step-by-step lowering keeps its reading of it.
+        return None
+    payload: dict[str, object] = {"first": "event_subject"}
+    _describe_targets(payload, dataclasses.replace(spec, filter=described))
+    if "targets" not in payload:
+        return None
+    payload["targets"] = {
+        **payload["targets"],
+        "chooser": "event_subject_controller",
+        **relations,
+    }
+    payload["shares_a_type"] = False
+    payload["destroy_attached_auras"] = False
+    return (OracleInstruction("exchange_control_of_targets", "", payload),)
