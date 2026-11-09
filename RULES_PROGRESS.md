@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**433 / 641 tracked rules covered (67%)** — 3521 tests, 0 unannotated.
+**434 / 642 tracked rules covered (67%)** — 3525 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -89,7 +89,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/16 | 12% |
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 36/36 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 37/37 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 4/4 | 100% |
 | [704. State-Based Actions](#704-state-based-actions) | 8/8 | 100% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -207,7 +207,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d... *(39 tests, subrules ab)*
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
 - [x] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th... *(4 tests, subrules b)*
-- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(25 tests)*
+- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(26 tests)*
 
 ### 110. Permanents
 
@@ -532,7 +532,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **405.1** When a spell is cast, the physical card is put on the stack (see rule 601.2a). When an ability is... *(3 tests)*
 - [x] **405.2** The stack keeps track of the order that spells and/or abilities were added to it. Each time an ob... *(2 tests)*
 - [x] **405.3** If an effect puts two or more objects on the stack at the same time, those controlled by the acti... *(3 tests)*
-- [x] **405.4** Each spell has all the characteristics of the card associated with it. Each activated or triggere... *(2 tests)*
+- [x] **405.4** Each spell has all the characteristics of the card associated with it. Each activated or triggere... *(3 tests)*
 - [x] **405.5** When all players pass in succession, the top (last-added) spell or ability on the stack resolves.... *(4 tests)*
 - [x] **405.6** Some things that happen during the game don’t use the stack. *(4 tests, subrules ce)*
 
@@ -669,7 +669,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(341 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(343 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(32 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [ ] **601.5** While announcing the choices of any targets and/or the division or distribution of any effects as...
@@ -910,6 +910,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.38** Amplify *(12 tests, subrules ab)*
 - [x] **702.39** Provoke *(5 tests, subrules ab)*
 - [x] **702.40** Storm *(8 tests, subrules ab)*
+- [x] **702.41** Affinity *(3 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
 

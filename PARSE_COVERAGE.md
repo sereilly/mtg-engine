@@ -25,10 +25,8 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**28 unclaimed sentence(s) across 26 supported card(s).**
+**24 unclaimed sentence(s) across 22 supported card(s).**
 
-- **Assert Authority**
-  - `affinity for artifacts`
 - **Betrayal of Flesh**
   - `entwine—sacrifice three lands`
 - **Chalice of the Void**
@@ -62,8 +60,6 @@ anything anyone did, and every ingest would arrive red.
   - `entwine {4}`
 - **Roar of the Kha**
   - `entwine {1}{w}`
-- **Scale of Chiss-Goria**
-  - `affinity for artifacts`
 - **Scrabbling Claws**
   - `{t}: target player exiles a card from their graveyard`
 - **Solar Tide**
@@ -75,12 +71,8 @@ anything anyone did, and every ingest would arrive red.
   - `if you do, you may cast the copy without paying its mana cost`
 - **Temporal Cascade**
   - `entwine {2}`
-- **Thoughtcast**
-  - `affinity for artifacts`
 - **Tooth and Nail**
   - `entwine {2}`
-- **Tooth of Chiss-Goria**
-  - `affinity for artifacts`
 
 ## Acknowledged simplifications
 
