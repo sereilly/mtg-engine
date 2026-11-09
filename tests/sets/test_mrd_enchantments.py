@@ -70,8 +70,8 @@ def _w1g3_tap_all(game, seat):
 
 def test_w1g3_hum_taxes_each_artifact_spell_by_its_casters_artifacts(set_pool):
     """"Each artifact spell costs {1} more to cast for each artifact its
-    controller controls." "Its controller" is the spell's (CR 109.5), the
-    caster at CR 601.2f — so the Hum taxes its own controller by that
+    controller controls." "Its controller" is the spell's — the player who
+    cast it (CR 405.4) — so the Hum taxes its own controller by that
     player's board and an opponent by theirs, and a nonartifact spell not at
     all. Under it, with four artifact lands, Iron Myr is {2}+{4}; Frogmite is
     {4}+{4}-{4} (CR 601.2f: increases, then reductions); a Thoughtcast is just

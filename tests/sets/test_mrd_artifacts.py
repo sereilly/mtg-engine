@@ -123,8 +123,8 @@ def test_w1g3_frogmite_reprices_as_artifacts_enter_and_leave(set_pool):
     assert len(_w1g3_on_board(game, "Frogmite")) == 2
     assert "Frogmite costs less to cast (Frogmite)" in game.log
 
-    # Five artifacts; one leaves (CR 701.17a's sacrifice through the seam),
-    # and with the other four Frogmite would still be free — so take two.
+    # Five artifacts; one leaving (CR 701.21a's sacrifice, through the seam)
+    # would leave four and Frogmite still free — so two leave.
     game.sacrifice_permanents(mine[:2])
     assert len(_w1g3_on_board(game, "Seat of the Synod")) == 1
     assert _w1g3_charge(game, 0, frogmite).get("generic") == 1

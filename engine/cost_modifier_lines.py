@@ -253,10 +253,10 @@ class CostModifier:
     per_each: dict | None = None
     #: *Whose* board ``per_each`` counts — the spec's "you" is this seat.
     #: ``"caster"`` for "its controller controls": the taxed **spell's**
-    #: controller (CR 109.5), who at CR 601.2f is the player casting it, so
-    #: a Hum taxes its own controller's artifacts by that player's board and an
-    #: opponent's by theirs. ``"source_controller"`` for "you control": the
-    #: taxing permanent's controller, the "you" of its own static ability.
+    #: controller, "the player who cast it" (CR 405.4), so a Hum taxes its
+    #: own controller's artifacts by that player's board and an opponent's by
+    #: theirs. ``"source_controller"`` for "you control": the taxing
+    #: permanent's controller, the "you" of its own static ability (CR 109.5).
     #: None exactly when ``per_each`` is.
     per_each_seat: str | None = None
 

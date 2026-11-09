@@ -28,7 +28,7 @@ applies") is the self-reduction reader summing every line it reads
 (``self_cost_modifiers.self_cost_reductions``), not anything here: two keyword
 lines are two sentences.
 
-The reminder text is not the rule (CR 207.2) and is never read: the rewritten
+The reminder text is not the rule (CR 207.2a) and is never read: the rewritten
 sentence is built from the keyword's own [text], so a printing whose reminder
 disagreed with its keyword would still cost what CR 702.41a says.
 """
@@ -39,8 +39,8 @@ import re
 
 #: "Affinity for artifacts (This spell costs {1} less to cast for each artifact
 #: you control.)" — the keyword, its [text], and an optional parenthesised
-#: reminder, alone on a line. Anchored at both ends: a keyword line is the
-#: whole line (CR 702.1), and a sentence that merely *mentions* affinity
+#: reminder (CR 207.2a), alone on a line. Anchored at both ends: the
+#: keyword is the whole printed line, and a sentence that merely *mentions* affinity
 #: ("Creatures you control have affinity for …") is a grant this rewrite must
 #: not read as the card's own keyword.
 _AFFINITY_LINE = re.compile(
@@ -65,12 +65,16 @@ def _counted_phrase(text: str) -> str | None:
     words = text.split()
     if not words:
         return None
-    head = words[-1].lower()
+    printed = words[-1]
+    head = printed.lower()
     single = singular(head)
-    if single == head and not (
-        head in CARD_TYPES or head in ALL_SUBTYPES or head in GENERIC_NOUNS
-    ):
-        return None
+    if single == head:
+        if not (head in CARD_TYPES or head in ALL_SUBTYPES or head in GENERIC_NOUNS):
+            return None
+        single = printed
+    elif printed[:1].isupper():
+        # "Affinity for Islands" counts an Island, as printed.
+        single = single[:1].upper() + single[1:]
     return " ".join([*words[:-1], single])
 
 
