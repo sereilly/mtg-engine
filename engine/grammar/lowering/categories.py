@@ -207,6 +207,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # lowered to the ``static_line`` the bare keyword line compiles to — the
     # same continuous family as the self-conditional static above.
     "static_line": "static_buffs",
+    # "…this creature has the power, toughness, and creature types of the last
+    # creature card exiled with it." (Duplicant.) A self static over layers 4
+    # and 7b, the family of the self-conditional static above.
+    "adopt_exiled_creature_body": "static_buffs",
     # A permanent's board-wide static effect on *lands* (CR 613 layer 4):
     # Kormus Bell animating every Swamp, Conversion turning every Mountain into
     # a Plains. Their own category rather than "static_buffs" because the two

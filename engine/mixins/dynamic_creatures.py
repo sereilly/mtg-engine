@@ -35,6 +35,7 @@ from ..subject_filters import subject_matches
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..pt import clear_cda_pt, set_cda_pt
+from ..exiled_card_bodies import refresh_exiled_card_bodies
 from ..static_bonuses import (BASIC_LAND_WORDS, conditional_static_holds,
                               singular_land_type)
 
@@ -650,6 +651,12 @@ class DynamicCreaturesMixin:
             perm.metadata.pop("derived_buff_power", None)
             perm.metadata.pop("derived_buff_toughness", None)
         self._refresh_linked_tapped_pumps(all_permanents)
+        # "…has the power, toughness, and creature types of the last creature
+        # card exiled with it." (Duplicant.) Derived off the linked exile, and
+        # ahead of the layer-4 pass below, which orders each permanent's own
+        # type effects — this body's creature types among them — against the
+        # board-wide statics (``engine/exiled_card_bodies.py``).
+        refresh_exiled_card_bodies(self, all_permanents)
         # Layer 4 before layer 7: a characteristic-defining P/T that counts
         # creatures must see the lands this pass animates, not last pass's.
         # One call, because layer 4 is one application: the land-type statics,

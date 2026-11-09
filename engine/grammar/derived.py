@@ -10,7 +10,7 @@ its phrases into the grammar; they differ only in what that code produces:
   the instruction *and* its payload — the grammar's whole job is to hand that
   over unchanged.
 
-Six entries qualify today, each of them already the single source of truth for
+Seven entries qualify today, each of them already the single source of truth for
 its family:
 
 ============================  =======================================
@@ -29,6 +29,13 @@ its family:
                               full text of that card…" (Volrath's
                               Shapeshifter) — a copy effect whose source
                               is a zone position rather than an event
+``engine/exiled_card_bodies.py``
+                              "As long as a card exiled with this creature
+                              is a creature card, this creature has the
+                              power, toughness, and creature types of the
+                              last creature card exiled with it…"
+                              (Duplicant) — layers 4 and 7b off the
+                              permanent's linked exile
 ============================  =======================================
 
 **Consulted only where the grammar has already refused the line in full.**
@@ -74,6 +81,11 @@ from ..zone_copies import (
     ZONE_TOP_COPY_KIND,
     zone_top_copy_for,
     zone_top_copy_payload,
+)
+from ..exiled_card_bodies import (
+    EXILED_CARD_BODY_KIND,
+    exiled_card_body_for,
+    exiled_card_body_payload,
 )
 
 
@@ -122,6 +134,12 @@ TABLES: tuple[DerivationTable, ...] = (
         zone_top_copy_for,
         ZONE_TOP_COPY_KIND,
         zone_top_copy_payload,
+    ),
+    DerivationTable(
+        "exiled_card_bodies",
+        exiled_card_body_for,
+        EXILED_CARD_BODY_KIND,
+        exiled_card_body_payload,
     ),
 )
 

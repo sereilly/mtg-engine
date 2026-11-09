@@ -30,6 +30,7 @@ from .combat_restrictions import combat_restriction_for
 from .target_immunity import immunity_claims_line
 from .lord_buffs import lord_buff_for
 from .zone_copies import ZONE_TOP_COPY_KIND
+from .exiled_card_bodies import EXILED_CARD_BODY_KIND
 from .land_animation import LAND_ANIMATION_KIND
 from .static_bonuses import static_bonus_for
 from .grammar import compile_line as compile_grammar_line
@@ -154,6 +155,13 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # record ``mixins/protection._protection_qualities`` reads, gated on
         # the same quality vocabulary (``grammar/statics.py``).
         "static_line",
+        # "As long as a card exiled with this creature is a creature card, this
+        # creature has the power, toughness, and creature types of the last
+        # creature card exiled with it." (Duplicant.) Layers 4 and 7b derived
+        # off the permanent's linked exile by ``engine/exiled_card_bodies.py``
+        # on every refresh — the record its readers read, handed over whole by
+        # ``engine/grammar/derived.py`` as Volrath's Shapeshifter's is.
+        EXILED_CARD_BODY_KIND,
     }
 )
 

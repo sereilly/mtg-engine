@@ -33,6 +33,7 @@ from .land_types import DERIVED_LAND_TYPES, LAND_TYPE_EFFECTS, land_type_changes
 from .late_modules import LateModules
 from .printed_characteristics import COPIABLE_VALUE, printed_shape
 from .land_animation import LAND_ANIMATIONS_REACHING
+from .exiled_card_bodies import EXILED_CARD_BODY
 from .type_changes import (
     LAND_ANIMATION_ORDER,
     LAYER_4_CHANNELS,
@@ -99,6 +100,7 @@ TYPE_EFFECT_CHANNELS: tuple[str, ...] = (
     # The rest of what is recorded on the permanent
     # (:func:`collect_own_type_effects`).
     *_ANIMATION_RECORDS, SET_CARD_TYPES, "chosen_body", "attached_auras",
+    EXILED_CARD_BODY,
     LAND_TYPE_EFFECTS,
     # …and what the board says of it (:func:`collect_static_type_effects`).
     "land_animated", "global_static_sources", STACK_STATICS_KEY,
@@ -273,6 +275,19 @@ def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect
     # Elf; stamped with the permanent's own timestamp, the older Conspiracy
     # would have applied first and the Clay been an Elf Wall.
     # ``COPIABLE_VALUE`` says which kind of zero this one is.
+    # "…has the power, toughness, and creature types of the last creature card
+    # exiled with it. It's still a Shapeshifter." (Duplicant.) The creature
+    # types of the body the refresh derived (``engine/exiled_card_bodies.py``),
+    # *added* at the permanent's own timestamp (CR 613.7a): "still a
+    # Shapeshifter" keeps the printed type.
+    exiled_body = meta.get(EXILED_CARD_BODY) or {}
+    if exiled_body.get("subtypes"):
+        effects.append(add_types(
+            only, subtypes=list(exiled_body["subtypes"]),
+            timestamp=perm.timestamp,
+            label=f"exiled card's body ({exiled_body.get('card_name', 'card')})",
+        ))
+
     chosen_body = meta.get("chosen_body") or {}
     body_subtypes = list(chosen_body.get("subtypes") or ())
     if body_subtypes:

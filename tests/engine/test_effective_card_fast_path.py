@@ -48,6 +48,8 @@ from engine.models import Permanent
 from engine.stack_statics import stack_static_grants
 from engine.text_changes import change_color_word
 from engine.type_changes import gain_types, lose_types
+from engine.linked_exile import link_exiled_card
+from tests.helpers import _mk_card
 
 ACCESSORS = {
     "effective_card": lambda permanent: permanent.effective_card,
@@ -148,6 +150,21 @@ def _board(by_name):
         SimpleNamespace(payload={"card_types": ["enchantment"]}),
         SimpleNamespace(card=None),
     )
+    # A creature with the body of the last creature card exiled with it
+    # (Duplicant, Mirrodin — measured, so minted here with its printed text):
+    # the derived ``exiled_card_body`` channel, written by the recompute below
+    # off a card linked to it in exile (CR 607.2a).
+    duplicant = _put(game, _mk_card(
+        name="Duplicant", mana_cost="{6}", type_line="Artifact Creature — Shapeshifter",
+        oracle_text=(
+            "As long as a card exiled with this creature is a creature card, this "
+            "creature has the power, toughness, and creature types of the last "
+            "creature card exiled with it. It's still a Shapeshifter."
+        ),
+        power=2, toughness=4,
+    ))
+    exiled = game.put_card_into_exile(0, by_name["Grizzly Bears"])
+    link_exiled_card(duplicant, exiled, 0)
     game._recompute_continuous_effects()
     # …and a spell on the stack granting an ability (CR 113.6b), recorded after
     # the recompute, which would otherwise clear it: there is no spell.

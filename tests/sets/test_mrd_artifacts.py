@@ -243,6 +243,71 @@ def test_w1g5_mirror_golem_loses_the_protection_with_the_card(set_pool):
     assert game.take_card_from_exile(1, terror)
     assert game._protection_qualities(golem) == set()
 
+
+def _w1g5_duplicant_exiles(set_pool, victim_name, *, interactive=True, bob_lands=()):
+    """Duplicant cast at Bob's *victim_name* — named on the trigger's target
+    prompt and the imprint taken, for an interactive seat 0."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, _alice, bob = _w1g5_table(set_pool, [mrd["Duplicant"]], interactive=interactive)
+    game.enforce_mana_costs = False
+    for land in bob_lands:
+        _w1g5_put(game, 1, lea[land])
+    victim = _w1g5_put(game, 1, lea[victim_name])
+    assert game.cast_from_hand(0, "Duplicant").supported
+    if interactive:
+        assert game.resolve_top_of_stack() is False
+        assert [c.kind for c in game.pending_choices] == ["trigger_target"]
+        assert game.confirm_trigger_target(0, permanent_id=victim.permanent_id)
+        game.resolve_top_of_stack()
+        assert [c.kind for c in game.pending_choices] == ["optional_pay"]
+        assert game.confirm_optional_pay(0, accept=True)
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    return game, bob, _w1g5_named(game, "Duplicant")
+
+
+def test_w1g5_duplicant_takes_the_exiled_creatures_body_and_types(set_pool):
+    """"…this creature has the power, toughness, and creature types of the
+    last creature card exiled with it. It's still a Shapeshifter." Hill Giant
+    exiled: a 3/3 Giant Shapeshifter, and a +1/+1 modification still applies on
+    top of the new base (the 2020-08-07 ruling)."""
+    from engine.pt import add_pt_modifier as _w1g5_add_pt
+
+    game, bob, duplicant = _w1g5_duplicant_exiles(set_pool, "Hill Giant")
+    assert [c.name for c in bob.exile] == ["Hill Giant"]
+    assert list(game.controlled_by(1)) == []
+    assert (duplicant.effective_power, duplicant.effective_toughness) == (3, 3)
+    assert duplicant.has_type("giant") and duplicant.has_type("shapeshifter")
+    _w1g5_add_pt(duplicant, 1, 1)
+    game._recompute_continuous_effects()
+    assert (duplicant.effective_power, duplicant.effective_toughness) == (4, 4)
+
+
+def test_w1g5_duplicant_is_its_printed_self_once_the_card_leaves_exile(set_pool):
+    """CR 607.2a: only a card still in exile is "a card exiled with this
+    creature". The seat nobody asks takes the opposing creature too."""
+    game, bob, duplicant = _w1g5_duplicant_exiles(set_pool, "Hill Giant", interactive=False)
+    assert (duplicant.effective_power, duplicant.effective_toughness) == (3, 3)
+    (giant,) = bob.exile
+    assert game.take_card_from_exile(1, giant)
+    game._recompute_continuous_effects()
+    assert (duplicant.effective_power, duplicant.effective_toughness) == (2, 4)
+    assert not duplicant.has_type("giant") and duplicant.has_type("shapeshifter")
+
+
+def test_w1g5_duplicant_follows_an_exiled_cards_characteristic_defining_pt(set_pool):
+    """Ruling 2020-08-07: a */* defined by the card's own ability applies in
+    exile, and Duplicant's P/T "are constantly updated". Nightmare counts the
+    Swamps its owner controls: two, then three."""
+    game, _bob, duplicant = _w1g5_duplicant_exiles(
+        set_pool, "Nightmare", bob_lands=("Swamp", "Swamp"),
+    )
+    assert (duplicant.effective_power, duplicant.effective_toughness) == (2, 2)
+    assert duplicant.has_type("nightmare")
+    _w1g5_put(game, 1, set_pool("LEA")["Swamp"])
+    game._recompute_continuous_effects()
+    assert (duplicant.effective_power, duplicant.effective_toughness) == (3, 3)
+
 # ==== end W1G5 ======================================================
 
 
