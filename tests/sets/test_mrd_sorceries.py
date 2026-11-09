@@ -97,8 +97,9 @@ def test_w1g7_wrench_mind_a_headless_target_pays_with_its_artifact(set_pool):
 
 
 def test_w1g7_wrench_mind_without_an_artifact_card_two_go(set_pool):
-    """No artifact card in hand: the offer cannot be taken (CR 601.2h asks what
-    a player is able to do) — the takeability check counted the whole hand, so
+    """No artifact card in hand: the offer cannot be taken (CR 118.3: a cost
+    is paid only with the resources to pay it fully) and two cards go. What
+    the takeability check counted was the whole hand, so
     a narrowed price would have been "paid" with nothing."""
     game, p2 = _w1g7_wrench_mind(
         set_pool, ["Grizzly Bears", "Island", "Mountain"], interactive=(1,),

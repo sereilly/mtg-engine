@@ -1198,7 +1198,7 @@ COPY_ARTIFACT_ON_ENTER = (
     "you may have this enchantment enter as a copy of any artifact on the battlefield"
 )
 
-#: The copy-on-enter sentence read **by shape** (CR 707.9a): "you may have this
+#: The copy-on-enter sentence read **by shape** (CR 707.5): "you may have this
 #: <noun the card calls itself> enter as a copy of any <card type> on the
 #: battlefield". The two literals above are its first two printings; Sculpting
 #: Steel prints the third ("this artifact … any artifact") and was refused for
