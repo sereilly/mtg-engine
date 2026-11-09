@@ -1099,6 +1099,10 @@ def exiled_search_pile_comes_back_one_at_a_time(card: CardDefinition) -> bool:
 _OWN_ZONE_NAME_READERS = {
     "reveal_top_sorting_by_chosen_name": "library",
     "reveal_random_card_from_hand": "hand",
+    # "…Target opponent guesses whether a card with that name is in **your
+    # hand**." (Liar's Pendulum.) The name is guessed about against the
+    # chooser's own hand, which the chooser sees.
+    "guess_named_card_in_hand": "hand",
 }
 
 

@@ -67,6 +67,10 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Mulch's sorted reveal, the same pile split by a printed filter.
     "reveal_top_sorting_by_filter": "zones",
     "choose_card_name": "zones",
+    # "Target opponent guesses whether a card with that name is in your
+    # hand." (Liar's Pendulum.) The naming step's sibling: a value about a
+    # zone, read back by the sentence behind it — the same family.
+    "guess_named_card_in_hand": "zones",
     "graveyard_top_to_library": "zones",
     "shuffle_graveyard_into_library": "zones",
     # "Exchange your graveyard and library." (Morality Shift.) Two zones'

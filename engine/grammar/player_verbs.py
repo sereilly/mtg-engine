@@ -42,6 +42,7 @@ from .nouns import parse_object_filter
 from .naming import (
     _parse_name_then_reveal_top,
     parse_choose_card_type,
+    parse_guesses_named_card_in_hand,
     parse_hides_items,
     parse_reveal_chosen_hand_cards,
     parse_secretly_chooses_number,
@@ -183,6 +184,14 @@ def parse_player_subject_verb(
         secret = parse_secretly_chooses_number(stream, source_spec)
         if secret is not None:
             return secret
+    # "Target opponent **guesses whether a card with that name is in your
+    # hand**." (Liar's Pendulum.) A yes-or-no answer about a hidden zone,
+    # dispatched on the verb like every other player action; the production
+    # declines without consuming, so "guesses" keeps its refusal elsewhere.
+    if token.text in ("guesses", "guess") and isinstance(source_spec, ast.PlayerRef):
+        guess = parse_guesses_named_card_in_hand(stream, source_spec)
+        if guess is not None:
+            return guess
     if token.text in ("discards", "discard") and isinstance(source_spec, ast.PlayerRef):
         # "…**discards it unless they pay 1 life**." (Wand of Ith.) "It" is
         # the card the sentence in front of this one revealed, so nothing is

@@ -26,6 +26,7 @@ from ..damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ..oracle_types import (BIDDING_WINNER, CHOSEN_COLOR_THIS_WAY,
                             CHOSEN_NUMBER_THIS_WAY, REVEALED_HAND_CARDS,
                             REVEALED_TOP_CARDS_BY_SEAT, MILLED_THIS_WAY,
+                            NAMED_CARD_GUESS,
                             DISCARDED_THIS_WAY, PROCESS_ROUNDS_SO_FAR)
 from ..turn_state import started_the_turn
 from ._conditions import _compare_count
@@ -502,6 +503,18 @@ def evaluate_record_condition(
             if _card_matches_filter(card, described, game=game, owner=owner)
         )
         return _compare_count(count, str(payload.get("op", "eq")), int(wanted))
+
+    if kind == "named_card_guess_was":
+        # "If you do and **your opponent guessed wrong**, draw a card."
+        # (Liar's Pendulum.) The guess prompt's record: the guess, and the
+        # truth taken as it was made. No record means no guess was made (the
+        # target left before it could be asked), which is neither right nor
+        # wrong — False either way, so nothing a guess would gate runs.
+        guess = context.results.get(NAMED_CARD_GUESS)
+        if not isinstance(guess, dict):
+            return False
+        right = bool(guess.get("in_hand")) == bool(guess.get("was_in_hand"))
+        return right == bool(payload.get("correct"))
 
     if kind == "revealed_card_has_chosen_name":
         # "**If that card has the chosen name**, this artifact deals 2 damage

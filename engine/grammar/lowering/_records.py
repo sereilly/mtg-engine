@@ -73,6 +73,7 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              LAST_TARGET_OWNER, LIFE_LOST_THIS_WAY,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                              MANA_PAID_BY_SEAT, MILLED_THIS_WAY,
+                             NAMED_CARD_GUESS,
                              DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
                              PER_OBJECT_SEAT_RECORDS, PUT_INTO_HAND_THIS_WAY,
                              REVEALED_HAND_CARDS,
@@ -506,6 +507,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # read it from — CR 202.1 lets a player name any card, so nothing on a board
     # records the choice.
     "choose_card_name": "chosen_card_name",
+    # "Target opponent **guesses whether a card with that name is in your
+    # hand**." (Liar's Pendulum.) The guess and what it was about, which
+    # "if your opponent guessed wrong" two sentences on reads back — the
+    # guesser's answer is in no zone, so nothing else can say it.
+    "guess_named_card_in_hand": NAMED_CARD_GUESS,
     # "…then you choose a card other than a basic land card from it. Search
     # that player's … library for all cards with the same name as **the chosen
     # card**…" (Lobotomy.) The pick records the chosen card's *name*, under the

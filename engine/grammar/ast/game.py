@@ -440,6 +440,27 @@ class ChooseCardName:
 
 
 @dataclass(frozen=True)
+class GuessNamedCardInHand:
+    """``Target opponent guesses whether a card with that name is in your
+    hand.`` (Liar's Pendulum.)
+
+    A **guess about a hidden zone**, made by one seat about another seat's
+    hand: yes or no, answered by ``guesser`` with nothing to go on but what it
+    may see (CR 400.2 hides the hand). Like :class:`ChooseCardName` in front
+    of it, the sentence produces a value and no effect of its own — the guess
+    and whether it was right — and a later sentence reads it back ("if your
+    opponent guessed wrong").
+
+    ``holder`` is whose hand the guess is about. "That name" is the name the
+    "choose a card name" step in front of this one recorded, so it is not a
+    field: the lowering refuses the sentence unless that producer is there.
+    """
+
+    guesser: PlayerRef
+    holder: PlayerRef
+
+
+@dataclass(frozen=True)
 class ChooseColor:
     """``Choose a color.`` (Chromatic Armor's activated ability.)
 

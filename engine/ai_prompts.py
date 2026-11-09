@@ -901,6 +901,55 @@ def offer_trade_is_worth_taking(
     return None
 
 
+#: Condition kinds whose answer is **settled before the offer is put**: each
+#: reads a record an earlier step of the same resolution wrote, and nothing
+#: the offered action does can change it. "…guesses whether a card with that
+#: name is in your hand. You may reveal your hand. If you do and your opponent
+#: guessed wrong, draw a card." (Liar's Pendulum.) Only a kind listed here is
+#: read ahead of the action — a condition about what the action itself does
+#: ("if you sacrifice a Goblin this way") cannot be, and asking it early would
+#: be answering a question the action has not posed yet.
+_SETTLED_CONDITION_KINDS = frozenset({"named_card_guess_was"})
+
+
+def offer_purchase_settled_against(game: Game, entry: dict) -> bool:
+    """Whether everything a "you may A. If you do and C, B." offer buys is
+    gated behind conditions already settled — and settled against.
+
+    Liar's Pendulum's reveal buys a card only when the guess was wrong; with
+    the guess right, revealing shows the hand for nothing, and "take gifts"
+    read a free reveal as a gift and showed it every time. The condition is
+    the guess prompt's record, written before the offer was made, so a seat
+    nobody asks may read it: it is that seat's own hand and an announced
+    guess. Answers False — the standing policy — for an offer with a price, a
+    decline branch, or any purchase not wholly behind a settled condition.
+    """
+    if (
+        entry.get("cost") or entry.get("life_cost")
+        or entry.get("cost_alternatives") or entry.get("_on_decline")
+    ):
+        return False
+    context = entry.get("_context")
+    accept = list(entry.get("_on_accept") or ())
+    purchase = accept[int(entry.get("_action_count", 0) or 0):]
+    if context is None or not purchase:
+        return False
+    from .handlers.control_flow import evaluate_condition
+
+    for step in purchase:
+        payload = getattr(step, "payload", None) or {}
+        condition = payload.get("condition") or {}
+        if (
+            getattr(step, "kind", None) != "if_then"
+            or payload.get("else")
+            or condition.get("kind") not in _SETTLED_CONDITION_KINDS
+        ):
+            return False
+        if evaluate_condition(game, context, condition):
+            return False
+    return True
+
+
 def offer_buys_own_drawback(game: Game, player_index: int, entry: dict) -> bool:
     """Whether a seat nobody asks would, by taking this offer, buy the
     drawback its **own** permanent prints.

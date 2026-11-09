@@ -56,7 +56,8 @@ from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WAY,
                              CHOSEN_NUMBER_THIS_WAY, COIN_FLIPS_WON,
                              DISCARDED_THIS_WAY,
-                             MILLED_THIS_WAY, PUT_INTO_HAND_THIS_WAY,
+                             MILLED_THIS_WAY, NAMED_CARD_GUESS,
+                             PUT_INTO_HAND_THIS_WAY,
                              REVEALED_HAND_CARDS, SECRET_NUMBERS_BY_SEAT)
 from ...subject_filters import card_only_filter, untestable_filter_keys
 from .. import ast
@@ -566,6 +567,17 @@ def lower_record_condition(
                 node=condition,
             )
         return {"kind": "revealed_card_has_chosen_name"}
+    if isinstance(condition, ast.NamedCardGuessWas):
+        # "…and **your opponent guessed wrong**" (Liar's Pendulum). The guess
+        # step's record, demanded for the reason every back-reference above
+        # is: with no guess in front of it the clause asks about nothing and
+        # would answer the same way for ever on a card reporting supported.
+        if NAMED_CARD_GUESS not in produced:
+            raise LoweringError(
+                "'guessed wrong' with no guess before it in this effect",
+                node=condition,
+            )
+        return {"kind": "named_card_guess_was", "correct": condition.correct}
     if isinstance(condition, ast.RevealedChosenColorCount):
         # "**If that opponent reveals exactly the chosen number of cards of the
         # chosen color**, you draw a card." (Scrying Glass.) *Three* producers,

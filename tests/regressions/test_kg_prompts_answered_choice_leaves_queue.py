@@ -1809,6 +1809,39 @@ def _kaboom_orders_one_players_group():
     return game
 
 
+@scenario(
+    "guess_named_card", "Liar's Pendulum",
+    # Seat 1 guesses "not in that hand"; the Shivan Dragon is there, so the
+    # guess is wrong — and the offer to reveal that the answer lets through is
+    # seat 0's next prompt, the resolution still held behind it.
+    answer=lambda g, c: {"in_hand": False},
+    wire=lambda g, c: {"accept": False},
+    then=lambda g: _assert(
+        any(c.kind == "optional_pay" and c.player_index == 0 for c in g.pending_choices)
+    ),
+)
+def _liars_pendulum():
+    """Mirrodin, still under ``measured`` when this row was written: the
+    artifact is read off its own set file. Activated aimed at seat 1, with
+    seat 0's name answered so the guess is the prompt owed."""
+    from engine.card_loader import load_cards, manifest_set_path
+
+    pendulum = next(
+        c for c in load_cards(manifest_set_path("MRD", include_measured=True))
+        if c.name == "Liar's Pendulum"
+    )
+    permanent = Permanent(card=pendulum)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game = duel(hands=(("Shivan Dragon",), ()), boards=((permanent,), ()))
+    game.activate_permanent_ability(
+        0, "Liar's Pendulum", permanent_index=game.battlefield_index_of(permanent),
+        target_player_index=1,
+    )
+    resolve_until_owed(game, "choose_card_name")
+    assert game.confirm_choose_card_name(0, "Shivan Dragon")
+    return game
+
+
 # ---------------------------------------------------------------------------
 # Helpers the table reads
 # ---------------------------------------------------------------------------

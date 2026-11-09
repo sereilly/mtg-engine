@@ -701,6 +701,27 @@ def _flip_again(ctx: PromptContext, choices: list) -> dict:
     return prompt
 
 
+@prompt_renderer("guess_named_card")
+def _guess_named_card(ctx: PromptContext, choices: list) -> dict:
+    """Liar's Pendulum: the targeted seat guesses whether a card with the
+    chosen name is in the holder's hand.
+
+    What the guesser may know and nothing more: the name (announced as it was
+    chosen) and whose hand the guess is about — never the hand, which is
+    hidden from this seat (CR 400.2), and never whether the guess would be
+    right. Answered with ``accept``: true for "it is in that hand".
+    """
+    choice = choices[0]
+    holder_seat = int(choice.data.get("holder_seat", 0))
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "named": choice.data.get("named", ""),
+        "holder_seat": holder_seat,
+        "holder_name": ctx.game.players[holder_seat].name,
+    }
+
+
 @prompt_renderer("repeat_process")
 def _repeat_process(ctx: PromptContext, choices: list) -> dict:
     """Forbidden Ritual: whether the controller runs the printed process again.

@@ -58,6 +58,7 @@ from dataclasses import replace
 
 from . import ast
 from .amounts import parse_amount
+from .conditions import _parse_condition
 from .effects import _parse_loses
 from .errors import GrammarError
 from .nouns import parse_object_filter
@@ -668,8 +669,21 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         target.action if isinstance(target, ast.May) else target
     )
     narrowed = None
+    # "If you do **and your opponent guessed wrong**, draw a card." (Liar's
+    # Pendulum.) A second condition on the accept branch, beside the narrowed
+    # restatement below and for its reason: the offer can be taken and the
+    # branch still not run. Read through the one condition reader, so any
+    # clause it knows may stand here; admitted only over an offer (below),
+    # where "do" names a decision the branch can be gated behind.
+    also = None
     if stream.accept_word("does" if singular else "do"):
         declined = False
+        if stream.accept_word("and"):
+            try:
+                also = _parse_condition(stream)
+            except GrammarError:
+                stream.reset(mark)
+                return False
     elif (
         stream.accept_word("doesn't" if singular else "don't")
         or stream.accept_phrase("does" if singular else "do", "not")
@@ -754,6 +768,14 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         # do, … 2 damage to **the permanent or player**." (Rhystic Lightning.)
         branch = rebind_permanent_or_player_to_offer_target(target, branch)
 
+    if also is not None and not isinstance(target, ast.May):
+        # Only an offer's accept branch takes the second condition: over a
+        # choice or a mandatory step "do" names no decision to gate behind,
+        # and folding the clause into some other node would be a reading
+        # nothing here has been asked to make.
+        stream.reset(mark)
+        return False
+
     if chooser_person and (choice_at := _choice_step_index(steps)) is not None:
         # "…chooses a creature …. **If the player does**, <A>. **If they
         # don't**, <B>." (Takklemaggot.) One offer with two consequences, so the
@@ -832,6 +854,8 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         ast.Conditional(ast.SacrificedThisWay(narrowed), branch)
         if narrowed is not None else branch
     )
+    if also is not None:
+        accepted = ast.Conditional(also, accepted)
     # ``replace``, never a field-by-field rebuild. The offer node carries
     # nine fields and this fold is about two of them; naming the rest by hand
     # dropped every one it did not mention, silently — Emberwilde Djinn's

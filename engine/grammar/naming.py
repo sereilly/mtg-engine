@@ -455,6 +455,40 @@ def _parse_name_then_reveal_top(
     return ast.NameThenRevealTop(who, match_zone, miss_zone, miss_damage)
 
 
+def parse_guesses_named_card_in_hand(
+    stream: TokenStream, guesser: ast.PlayerRef
+) -> "ast.GuessNamedCardInHand | None":
+    """``<seat> guesses whether a card with that name is in your hand`` —
+    Liar's Pendulum's second sentence, from the verb.
+
+    The guess is a value, as the name in front of it is: what reads it is a
+    later sentence ("if your opponent guessed wrong"), so this production stops
+    at the end of its own sentence. Declines without consuming on any other
+    "guesses …", so the verb keeps its refusal under a sentence this does not
+    read.
+
+    Whose hand is read rather than assumed: "your hand" is the only printing,
+    and the holder is carried so a card asking about "their hand" is this
+    production with one word changed — a seat reference, through the shared
+    reader, so the possessive means what it means everywhere else.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "guesses", "whether", "a", "card", "with", "that", "name", "is", "in",
+    ):
+        stream.reset(mark)
+        return None
+    if stream.accept_word("your"):
+        holder = ast.PlayerRef("you")
+    else:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("hand"):
+        stream.reset(mark)
+        return None
+    return ast.GuessNamedCardInHand(guesser=guesser, holder=holder)
+
+
 # The bare sentences. Each makes one choice and stops; a different printed
 # sentence reads the record back. Moved whole from ``effects/game.py`` at
 # Odyssey's Phase 0, in the order they stood there.

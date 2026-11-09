@@ -208,6 +208,37 @@ def lower_naming_statement(
             payload["miss_damage"] = statement.miss_damage
         return (OracleInstruction("name_then_reveal_top", "", payload),)
 
+    if isinstance(statement, ast.GuessNamedCardInHand):
+        # "Target opponent guesses whether a card with that name is in your
+        # hand." (Liar's Pendulum.) "That name" is the record the naming step
+        # in front of this one wrote, demanded for every back-reference's
+        # reason: with no name the guess is about nothing, and the clause that
+        # reads it would answer for a question nobody was asked.
+        if "chosen_card_name" not in produced:
+            raise LoweringError(
+                "'a card with that name' with no name chosen before it in "
+                "this effect",
+                node=statement,
+            )
+        # The guesser is the targeted seat, chosen as the ability is
+        # activated (CR 601.2c); whose hand it is about is the ability's
+        # controller's. Any other pair would be a different card, refused
+        # rather than lowered onto seats the handler would then have to guess.
+        if statement.guesser.kind not in ("target_opponent", "target_player"):
+            raise LoweringError(
+                "the guess is made by the player the ability targets",
+                node=statement,
+            )
+        if statement.holder.kind != "you":
+            raise LoweringError(
+                "the guess is about the ability's controller's hand",
+                node=statement,
+            )
+        return (OracleInstruction("guess_named_card_in_hand", "", {
+            "targets": _targets_payload(statement.guesser),
+            "holder": "you",
+        }),)
+
     if isinstance(statement, ast.RevealUntil):
         return _lower_reveal_until(statement, produced)
 

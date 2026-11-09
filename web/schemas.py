@@ -75,6 +75,10 @@ ActionKind = Literal[
     "choose_card_name_confirm",
     "name_then_reveal_top_confirm",
     "name_then_consult_confirm",
+    # "Target opponent guesses whether a card with that name is in your hand."
+    # (Liar's Pendulum.) The guesser answers with ``accept``: true guesses the
+    # named card is in that hand, false that it is not.
+    "guess_named_card_confirm",
     "graveyard_pick_for_price_confirm",
     "exiled_pile_claim_confirm",
     "reorder_library_confirm",
