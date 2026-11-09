@@ -886,11 +886,16 @@ class UntapStepMixin:
             ):
                 continue
 
-            if permanent.is_creature:
-                if aura_restriction_active(
-                    permanent, "doesnt_untap", game=self, seat=player_index
-                ):
-                    continue
+            # "Enchanted **artifact** doesn't untap during its controller's
+            # untap step." (Inertia Bubble.) The attached Aura's restriction,
+            # asked of every permanent rather than of creatures alone: the
+            # template reads any enchant noun (``aura_restrictions``' row is
+            # over ``_NOUN``), and behind an ``is_creature`` guard Inertia
+            # Bubble's artifact untapped as if nothing were attached to it.
+            if aura_restriction_active(
+                permanent, "doesnt_untap", game=self, seat=player_index
+            ):
+                continue
 
             # The per-type cap and the controller's choice within it, asked the
             # same way for every constrained type. This was two copies keyed on

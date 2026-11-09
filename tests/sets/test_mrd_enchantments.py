@@ -362,6 +362,60 @@ def test_w1g9_confusion_in_the_ranks_needs_both_on_the_battlefield(set_pool):
     assert _w1g9_seats(game) == {"Confusion in the Ranks": 0, "Hill Giant": 1}
 
 
+def _w1g9_aura_on_ring(set_pool, aura_name):
+    """*aura_name* (seat 0's) cast onto seat 1's Sol Ring."""
+    lea = set_pool("LEA")
+    game = _w1g9_Game(players=[
+        _w1g9_PlayerState(name="P0", hand=[set_pool("MRD")[aura_name]]),
+        _w1g9_PlayerState(name="P1", battlefield=[_w1g9_Permanent(card=lea["Sol Ring"])]),
+    ])
+    game.enforce_mana_costs = False
+    ring = _w1g9_named(game, "Sol Ring")
+    game.cast_from_hand(
+        0, aura_name, target_player_index=1, target_permanent_ids=[ring.permanent_id],
+    )
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert _w1g9_named(game, aura_name).metadata.get("attached_to") is ring
+    return game, ring
+
+
+def test_w1g9_inertia_bubble_keeps_the_artifact_tapped(set_pool):
+    """"Enchanted artifact doesn't untap during its controller's untap step."
+    The untap step asked the Aura restriction of creatures only, so the Sol
+    Ring untapped as if nothing were attached (the shipped Paralyze, on a
+    creature, was unaffected). It stays tapped now, and untaps once the Aura
+    is gone."""
+    game, ring = _w1g9_aura_on_ring(set_pool, "Inertia Bubble")
+    ring.tapped = True
+    game.active_player_index = 1
+    game.resolve_untap_step(1)
+    assert ring.tapped
+    game._destroy_target_permanent(
+        game.players[0], described={"named": "Inertia Bubble"}
+    )
+    game.resolve_untap_step(1)
+    assert not ring.tapped
+
+
+def test_w1g9_relic_bane_drains_the_artifacts_controller(set_pool):
+    """"Enchanted artifact has 'At the beginning of your upkeep, you lose 2
+    life.'" A granted ability is the artifact's, so "you" is the artifact's
+    controller (CR 113.8): P1 loses 2 on P1's upkeep and P0, the Aura's
+    controller, loses nothing on P0's."""
+    game, _ = _w1g9_aura_on_ring(set_pool, "Relic Bane")
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert [p.life for p in game.players] == [20, 18]
+    game.active_player_index = 0
+    game.resolve_upkeep(0)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert [p.life for p in game.players] == [20, 18]
+
+
 # ==== end W1G9 ======================================================
 
 
