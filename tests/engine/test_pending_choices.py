@@ -378,6 +378,11 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # the answer — and a seat that saw the milled card before naming would
         # be choosing with information the card does not give them.
         "choose_card_name",
+        # "Target opponent guesses whether a card with that name is in your
+        # hand. You may reveal your hand. If you do and your opponent guessed
+        # wrong, draw a card." (Liar's Pendulum.) The offer to reveal is the
+        # next step and the draw behind it reads the guess.
+        "guess_named_card",
         # The picks are the cards the same resolution's next step ("You may
         # cast them this turn.") grants permission over.
         "search_exile_cards",
