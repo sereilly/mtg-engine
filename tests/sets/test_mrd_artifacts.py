@@ -141,6 +141,70 @@ def test_w1g6_oblivion_stone_spares_only_what_carries_a_fate_counter(set_pool):
     assert _w1g6_counters_on(keeper, "fate") == 0
     assert _w1g6_counters_on(marked_land, "fate") == 0
 
+
+def _w1g6_slot(game, seat, permanent):
+    return next(
+        index for index, candidate in enumerate(game.players[seat].battlefield)
+        if candidate is permanent
+    )
+
+
+def test_w1g6_myr_prototype_grows_each_upkeep_and_prices_both_combat_steps(
+    set_pool,
+):
+    """"At the beginning of your upkeep, put a +1/+1 counter on this creature."
+    / "This creature can't attack or block unless you pay {1} for each +1/+1
+    counter on it."
+
+    Two upkeeps make a 4/4 whose attack costs {2}: refused with one land
+    (nothing tapped), paid with two. The same pile prices its block — and a
+    Prototype whose counters are gone owes nothing ("for each" at zero).
+    """
+    pool = set_pool("MRD")
+    prototype = _w1g6_nosick(_w1g6_Permanent(card=pool["Myr Prototype"]))
+    game = _w1g6_Game(players=[
+        _w1g6_PlayerState(name="P1", battlefield=[prototype],
+                          library=[pool["Island"]] * 10),
+        _w1g6_PlayerState(name="P2", library=[pool["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    for _ in range(2):
+        game.start_turn(0)
+        _w1g6_resolve_stack(game)
+    assert prototype.metadata.get("plus_counters") == 2, game.log
+    assert (prototype.effective_power, prototype.effective_toughness) == (4, 4)
+    assert game._attack_mana_costs_of(prototype, 1) == [{"generic": 2}]
+
+    land = _w1g6_Permanent(card=pool["Plains"])
+    game.players[0].battlefield.append(land)
+    game._sync_control()
+    game.enforce_mana_costs = True
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, _why = game.declare_attackers(
+        0, [_w1g6_slot(game, 0, prototype)], defending_player_index=1,
+    )
+    assert not ok and not prototype.tapped and not land.tapped, "{2} owed, one land"
+
+    second = _w1g6_Permanent(card=pool["Plains"])
+    game.players[0].battlefield.append(second)
+    game._sync_control()
+    ok, why = game.declare_attackers(
+        0, [_w1g6_slot(game, 0, prototype)], defending_player_index=1,
+    )
+    assert ok, why
+    assert land.tapped and second.tapped
+    assert any("paid {2} to declare attackers" in line for line in game.log)
+
+    # The block half reads the same pile, per attacker blocked.
+    attacker = _w1g6_nosick(_w1g6_Permanent(card=_w1g6_creature("Raider")))
+    assert game._block_mana_costs_of(prototype, attacker) == [{"generic": 2}]
+    from engine.named_counters import remove_counters
+
+    remove_counters(prototype, "+1/+1", 2)
+    assert game._block_mana_costs_of(prototype, attacker) == []
+    assert game._attack_mana_costs_of(prototype, 1) == []
+
 # ==== end W1G6 ======================================================
 
 

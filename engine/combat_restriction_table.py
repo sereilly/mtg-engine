@@ -259,10 +259,18 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         # grant.) The two rows above as one sentence over one price — the
         # ``also_kinds`` union Light of Day's "can't attack or block" already
         # is — so the price is read once and both steps charge it.
+        #
+        # "This creature can't attack or block unless you pay {1} **for each
+        # +1/+1 counter on it**." (Myr Prototype.) The attack row's counter
+        # multiplier on the union, spelled with that row's group so the one
+        # converter turns it into ``per_counter`` and ``toll_mana`` — the
+        # reader both steps share — counts the creature's own pile. Before the
+        # board multiplier, which would refuse "counter on it" as no board.
         re.compile(
             r"^this creature can't attack or block unless (?:you pay|its "
             r"controller pays) (?P<attack_mana>(?:\{[^}]+\})+)"
-            r"(?: (?P<toll_per_each>for each .+))?$"
+            r"(?: for each (?P<attack_per_counter>[+-]\d+/[+-]\d+|[a-z][a-z-]*) "
+            r"counter on it| (?P<toll_per_each>for each .+))?$"
         ),
         ("cant_attack_unless_pay", "cant_block_unless_pay"),
     ),
