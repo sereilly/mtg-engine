@@ -148,6 +148,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # record: an unnamed seat the effect picks is written where every chosen
     # player is written, so the hand-over behind it needs no key of its own.
     "choose_opponent": CHOSEN_PLAYER,
+    # "…you choose one of them, and **that player** gains control of this
+    # creature." (Loxodon Peacekeeper.) The described seat, or the tied one
+    # the controller picked, written where every chosen player is written.
+    "choose_player_by_superlative": CHOSEN_PLAYER,
     # "Destroy all creatures **of the creature type of your choice**."
     # (Extinction.) See ``oracle_types.CHOSEN_CREATURE_TYPE_THIS_WAY``.
     "choose_creature_type": CHOSEN_CREATURE_TYPE_THIS_WAY,

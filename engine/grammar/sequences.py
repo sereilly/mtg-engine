@@ -54,7 +54,9 @@ from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_can
                           _attach_if_you_are_among_those_players,
                           _attach_if_you_do, _attach_otherwise, _attach_when_you_do,
                           _attach_tied_for_fewest, _attach_to_conditional_choice,
-                          _attach_tied_life_draw, _parse_who_cant_rider)
+                          _attach_tied_life_draw,
+                          _attach_tied_lowest_life_choice,
+                          _parse_who_cant_rider)
 from .effects import (
     _attach_damage_redirect_offer,
     _parse_damage_rider_sentence,
@@ -503,6 +505,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # reason: both open on "if two or more" and each refuses without
             # consuming whatever the other one reads.
             if _attach_tied_life_draw(stream, steps):
+                continue
+            # "If two or more players are tied for lowest life total, you
+            # choose one of them, and that player gains control of this
+            # creature." (Loxodon Peacekeeper.) The tie arm of the hand-over
+            # in front of it, beside the draw arm above for the order's
+            # reason: each opens on "if two or more" and refuses without
+            # consuming whatever the others read.
+            if _attach_tied_lowest_life_choice(stream, steps):
                 continue
             # "If two or more players are tied for fewest, each loses half
             # their life, rounded up." (Goblin Game.) The tie arm of the loss

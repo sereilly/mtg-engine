@@ -902,6 +902,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the step behind it reads back, and the hand-over that reads it carries the
     # control family's category of its own.
     "choose_opponent": "chosen_players",
+    # "…the player with the lowest life total … If two or more players are
+    # tied for lowest life total, you choose one of them" (Loxodon
+    # Peacekeeper). The same category for the same reason: a seat one step
+    # records and the hand-over behind it reads back.
+    "choose_player_by_superlative": "chosen_players",
     # "Choose target opponent." (Soldevi Sentry.) The targeted twin of the row
     # above — CR 601.2c rather than CR 608.2c — and the same category, because
     # what the category names is the answer the sentence produces.

@@ -381,6 +381,32 @@ def _lower_another_seat_gains_control(
                 },
             ),
         )
+    if who == "least_life_chosen_on_tie":
+        # "…**the player with the lowest life total** gains control of this
+        # creature. If two or more players are tied for lowest life total,
+        # **you choose one of them**, and that player gains control of this
+        # creature." (Loxodon Peacekeeper; the tie arm is folded in by
+        # ``control_flow._attach_tied_lowest_life_choice``.) The
+        # ``_CHOSEN_GAINERS`` shape below with the candidates described by
+        # the board: the pick names the lone lowest outright and asks the
+        # ability's controller among a tie (CR 608.2d), and the hand-over
+        # reads the seat back under the one key a chosen player is written to.
+        return (
+            OracleInstruction(
+                "choose_player_by_superlative", "",
+                {
+                    "result_key": CHOSEN_PLAYER,
+                    "superlative": {"extreme": "least", "characteristic": "life"},
+                    "prompt": (
+                        "Choose which player tied for lowest life total gains "
+                        "control of this permanent."
+                    ),
+                },
+            ),
+            OracleInstruction(
+                "give_control_of_source_to_player", "", {"who": "chosen"}
+            ),
+        )
     prompt = _CHOSEN_GAINERS.get(who)
     if prompt is not None:
         # Two steps for one sentence, the same shape ``choose_permanent`` +
