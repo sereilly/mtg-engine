@@ -55,7 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | SCG | 143 | 262 | 82.4% | 82.1% | 55.0% | 120 |
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| MRD *(measured)* | 291 | 456 | 81.4% | 80.9% | 59.0% | 223 |
+| MRD *(measured)* | 291 | 456 | 81.6% | 81.4% | 59.4% | 223 |
 | **All (shipped)** | **8992** | **13323** | **90.0%** | **89.5%** | **62.1%** | **7036** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -1185,6 +1185,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals combat damage to a player, that player skips their next combat phase.`
 - **Blinding Beam**
   - `• Tap two target creatures.`
+  - `• Creatures don't untap during target player's next untap step.`
 - **Blinding Light**
   - `Tap all nonwhite creatures.`
   - `Tap all nonwhite creatures.`
@@ -13262,6 +13263,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Vulshok Battlemaster**
   - `When this creature enters, attach all Equipment on the battlefield to it. (Control of the Equipment doesn't change.)`
 - **Wail of the Nim**
+  - `• Regenerate each creature you control.`
   - `• Wail of the Nim deals 1 damage to each creature and each player.`
 - **Waiting in the Weeds**
   - `Each player creates a 1/1 green Cat creature token for each untapped Forest they control.`

@@ -25,43 +25,21 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**18 unclaimed sentence(s) across 17 supported card(s).**
+**7 unclaimed sentence(s) across 6 supported card(s).**
 
-- **Betrayal of Flesh**
-  - `entwine—sacrifice three lands`
 - **Chrome Mox**
   - `{t}: add one mana of any of the exiled card's colors`
-- **Dream's Grip**
-  - `entwine {1}`
 - **Extraplanar Lens**
   - `whenever a land with the same name as the exiled card is tapped for mana, its controller adds one mana of any type that land produced`
-- **Grab the Reins**
-  - `entwine {2}{r}`
-- **Incite War**
-  - `entwine {2}`
 - **Isochron Scepter**
   - `{2}, {t}: you may copy the exiled card. if you do, you may cast the copy without paying its mana cost`
-- **Journey of Discovery**
-  - `entwine {2}{g}`
 - **Mourner's Shield**
   - `{2}, {t}: prevent all damage that would be dealt this turn by a source of your choice that shares a color with the exiled card`
-- **One Dozen Eyes**
-  - `entwine {g}{g}{g}`
-- **Promise of Power**
-  - `entwine {4}`
-- **Roar of the Kha**
-  - `entwine {1}{w}`
-- **Solar Tide**
-  - `entwine—sacrifice two lands`
 - **Soul Foundry**
   - `{x}, {t}: create a token that's a copy of the exiled card. x is the mana value of that card`
 - **Spellweaver Helix**
   - `whenever a player casts a card, if it has the same name as one of the cards exiled with this artifact, you may copy the other`
   - `if you do, you may cast the copy without paying its mana cost`
-- **Temporal Cascade**
-  - `entwine {2}`
-- **Tooth and Nail**
-  - `entwine {2}`
 
 ## Acknowledged simplifications
 
