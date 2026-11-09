@@ -64,6 +64,7 @@ from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.mixins.land_tapped_for_mana import (TAP_TRIGGER_KINDS,
                                                 _tap_trigger_steps)
 from engine.models import Permanent
+from engine.linked_exile import link_exiled_card
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
 from tests.helpers import _mk_card, resolve_stack
@@ -210,6 +211,18 @@ def _first_color(game, land) -> str:
     return str(colors[0]).upper() if colors else "C"
 
 
+def _watches_its_exiled_name(card) -> bool:
+    """Whether *card*'s tapped-for-mana trigger is narrowed to a land named
+    like a card exiled with it (``shares_name_with_exiled_card``)."""
+    return any(
+        (trigger.condition.payload.get("tapped_land_filter") or {}).get(
+            "shares_name_with_exiled_card"
+        )
+        for trigger in compile_card_oracle(card).triggered_abilities
+        if trigger.condition.kind == "land_tapped_for_mana"
+    )
+
+
 def drive(pool, road, land_card, tapper, active, watcher=None, how=None,
           ability_index=None):
     """One road on one board: what the game looks like afterwards, or None
@@ -227,6 +240,13 @@ def drive(pool, road, land_card, tapper, active, watcher=None, how=None,
     if watcher is not None and how != "aura":
         seen = _place(game, 0, watcher)
     land = _place(game, tapper, land_card)
+    # "Whenever a land **with the same name as the exiled card** is tapped for
+    # mana" (Extraplanar Lens): a watcher whose narrowing is its own imprint
+    # (CR 607.2a) is handed a card of the tapped land's name as exiled with
+    # it — what its entry would have taken had a land been there to take —
+    # so it has something to watch for on every road.
+    if seen is not None and _watches_its_exiled_name(watcher):
+        link_exiled_card(seen, game.put_card_into_exile(0, land_card), 0)
     # A second copy of the same land, behind it: something for a sweep over
     # "lands that could produce any type that land could produce" (Mana Web)
     # to find, and a land no plan for a cost of {1} reaches unless the first
@@ -477,9 +497,13 @@ NON_MANA_TAP_TRIGGERS_RESOLVED_INLINE = frozenset({
 #: Judgment's Mirari's Wake joined when its "add one mana of any type that land
 #: produced" (Mana Flare's clause with the subject left implied) compiled: it
 #: adds mana, so it is a mana ability by the same rule.
+#: Mirrodin's Extraplanar Lens joined when "Whenever a land with the same
+#: name as the exiled card is tapped for mana, its controller adds one mana of
+#: any type that land produced" compiled (W1G5): Mana Flare's clause over a
+#: land named like the imprinted card.
 TRIGGERED_MANA_ABILITIES = frozenset({
     "Gauntlet of Might", "Mana Flare", "Snowfall", "Vernal Bloom",
-    "Overabundance", "Winter's Night", "Mirari's Wake",
+    "Overabundance", "Winter's Night", "Mirari's Wake", "Extraplanar Lens",
 })
 
 
