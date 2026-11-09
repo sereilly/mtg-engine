@@ -773,6 +773,11 @@ class RevealTopToHandOrBottom:
     sentences reference one revealed card, so parsing them separately would
     leave two of them meaning nothing on their own."""
     filter: ObjectFilter
+    #: Where the card goes when it is not one: "library_bottom" (Garruk) or
+    #: "graveyard" — "Otherwise, put it into your graveyard." (Neurok
+    #: Familiar). Each value is a branch ``reveal_top_to_hand_or_bottom``
+    #: performs, so the list is closed at the parser.
+    otherwise_zone: str = "library_bottom"
 
 @dataclass(frozen=True)
 class LookAtHand:

@@ -195,8 +195,15 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
         raise stream.error("expected the 'Otherwise' sentence")
     stream.expect_word("otherwise")
     stream.accept_punct(",")
+    # "Otherwise, put it **into your graveyard**." (Neurok Familiar.) The
+    # template's second destination; both are the reader's own zones, which is
+    # what the "your library" gate above holds the whole template to.
+    if stream.accept_phrase("put", "it", "into", "your", "graveyard"):
+        return ast.RevealTopToHandOrBottom(filt, otherwise_zone="graveyard")
     if not stream.accept_phrase("put", "it", "on", "the", "bottom", "of", "your", "library"):
-        raise stream.error("expected 'put it on the bottom of your library'")
+        raise stream.error(
+            "expected 'put it on the bottom of your library' or 'put it into your graveyard'"
+        )
     return ast.RevealTopToHandOrBottom(filt)
 
 

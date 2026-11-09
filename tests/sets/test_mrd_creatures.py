@@ -44,12 +44,14 @@ log), not instruction kinds alone.
 
 # ==== W1G7 ==========================================================
 # W1G7's tests go between this line and the "end W1G7" line.
+import pytest
 from engine import Game as _w1g7_Game, PlayerState as _w1g7_PlayerState
 from engine.models import Permanent as _w1g7_Permanent
 from tests.helpers import _nosick as _w1g7_nosick, resolve_stack as _w1g7_resolve
 
 
-def _w1g7_game(set_pool, mine=(), hand=(), theirs=(), their_hand=(), interactive=()):
+def _w1g7_game(set_pool, mine=(), hand=(), theirs=(), their_hand=(), interactive=(),
+               library=None):
     pool = set_pool("MRD")
     other = set_pool("LEA")
 
@@ -59,7 +61,11 @@ def _w1g7_game(set_pool, mine=(), hand=(), theirs=(), their_hand=(), interactive
     p1 = _w1g7_PlayerState(
         name="P1",
         battlefield=[_w1g7_nosick(_w1g7_Permanent(card=card(n))) for n in mine],
-        hand=[card(n) for n in hand], library=[other["Island"]] * 10,
+        hand=[card(n) for n in hand],
+        library=(
+            [card(n) for n in library] if library is not None
+            else [other["Island"]] * 10
+        ),
     )
     p2 = _w1g7_PlayerState(
         name="P2",
@@ -177,5 +183,29 @@ def test_w1g7_vedalken_archmage_draws_for_artifact_spells_only(set_pool):
     game.cast_from_hand(1, "Ornithopter")
     _w1g7_settle(game)
     assert len(p1.hand) == 1, "an opponent's artifact spell is not yours"
+
+@pytest.mark.parametrize(
+    "top,zone",
+    [("Ornithopter", "hand"), ("Leonin Elder", "graveyard"), ("Island", "graveyard")],
+)
+def test_w1g7_neurok_familiar_sorts_the_revealed_card(set_pool, top, zone):
+    """"…reveal the top card of your library. If it's an artifact card, put it
+    into your hand. **Otherwise, put it into your graveyard.**" The reveal-top
+    template knew one "otherwise" (the library's bottom). Ornithopter is an
+    *artifact creature* card, which is an artifact card (CR 205.2) — the handler
+    asked ``primary_type``, which answers "creature" for it."""
+    game, p1, _p2 = _w1g7_game(
+        set_pool, hand=["Neurok Familiar"], library=[top, "Island", "Island"],
+    )
+    game.cast_from_hand(0, "Neurok Familiar")
+    _w1g7_settle(game)
+    names = {
+        "hand": [c.name for c in p1.hand],
+        "graveyard": [c.name for c in p1.graveyard],
+    }
+    assert names[zone] == [top], game.log
+    assert len(p1.library) == 2
+    put = "hand" if zone == "hand" else "graveyard"
+    assert f"P1 revealed {top} and put it into their {put}" in game.log
 
 # ==== end W1G7 ======================================================
