@@ -345,6 +345,14 @@ class FlipCoinsUntilLoss:
     #: +1/+1 counter on this creature for each flip you won", which reads the
     #: run's ``COIN_FLIPS_WON`` record like any back-reference).
     draw_per_flip: "Amount | None" = None
+    #: "Flip a coin until you lose a flip **or choose to stop flipping**."
+    #: (Fiery Gambit.) A second bound, the flipper's: after each won flip
+    #: they are asked whether to go on (the ruling, 2004-12-01: "After each
+    #: flip, you choose whether to continue flipping").
+    may_stop: bool = False
+    #: "**If you lose a flip, Fiery Gambit has no effect.**" — a loss voids
+    #: every reward behind the run (``COIN_FLIP_RUN_VOIDED``).
+    void_on_loss: bool = False
 
 
 @dataclass(frozen=True)

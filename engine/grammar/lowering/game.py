@@ -212,7 +212,15 @@ def _lower_flip_coins_until_loss(
     only bound — and the sentence behind it reads the record the run writes.
     """
     if node.times is None and node.draw_per_flip is None:
-        return (OracleInstruction("flip_coins_until_loss", "", {}),)
+        # "…or choose to stop flipping. If you lose a flip, Fiery Gambit has
+        # no effect." (Fiery Gambit.) The flipper's own bound and the void,
+        # each emitted only when printed so Crazed Firecat's payload stays {}.
+        run: dict[str, object] = {}
+        if node.may_stop:
+            run["may_stop"] = True
+        if node.void_on_loss:
+            run["void_on_loss"] = True
+        return (OracleInstruction("flip_coins_until_loss", "", run),)
     if node.times is None or node.draw_per_flip is None:
         raise LoweringError(
             "a flip run bounded by a number pays what its own sentence prints",

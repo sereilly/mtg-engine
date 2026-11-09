@@ -675,6 +675,10 @@ def flip_coins_until_loss(game: Game, instruction: OracleInstruction, context: O
     there: the rules put no ceiling on it, but a coin a test or a future
     effect rigs to always win must not hang the game.
     """
+    if instruction.payload.get("may_stop"):
+        from .coin_runs import flip_until_loss_or_stop
+
+        return flip_until_loss_or_stop(game, instruction, context)
     bounded = instruction.payload.get("amount_from") is not None
     limit = (
         max(0, int(context.results.get(str(instruction.payload["amount_from"]), 0) or 0))

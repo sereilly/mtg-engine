@@ -370,6 +370,17 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             return ast.CoinFlipResult(won=True)
         if stream.accept_phrase("lose", "the", "flip"):
             return ast.CoinFlipResult(won=False)
+        # "If you win **two or more flips**, …" (Fiery Gambit.) The run's won
+        # flips counted, at least the printed number — the same back-reference
+        # one record over (``COIN_FLIPS_WON``), so the lowering demands the run.
+        counted_mark = stream.mark()
+        if stream.accept_word("win"):
+            word = stream.peek_word()
+            if word in NUMBER_WORDS and stream.peek_word(1) == "or":
+                stream.advance()
+                if stream.accept_phrase("or", "more", "flips"):
+                    return ast.CoinFlipResult(won=True, at_least=NUMBER_WORDS[word])
+        stream.reset(counted_mark)
         # "if **you cast it from your hand**" (Hypnox). The cast half of
         # Archfiend's Vessel's pair below, printed alone — so it is its own
         # node, not that one with a half missing. The zone word is required

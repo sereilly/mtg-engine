@@ -39,6 +39,7 @@ Masques without it.
 from .. import ast
 from ..amounts import parse_amount
 from ..errors import GrammarError
+from ..lexer import SELF
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref
 from ..stream import TokenStream
@@ -197,6 +198,14 @@ def _accept_flip_run_tail(stream: TokenStream) -> "ast.FlipCoinsUntilLoss | None
     statement reader rather than folded in here.
     """
     if stream.accept_phrase("until", "you", "lose", "a", "flip"):
+        # "…until you lose a flip **or choose to stop flipping**. If you lose
+        # a flip, Fiery Gambit has no effect." (Fiery Gambit.) The flipper's
+        # own bound beside the first loss, and the sentence that voids the
+        # rewards on a loss — read here because it is about the run.
+        if stream.accept_phrase("or", "choose", "to", "stop", "flipping"):
+            return ast.FlipCoinsUntilLoss(
+                may_stop=True, void_on_loss=_accept_loss_voids_the_run(stream),
+            )
         return ast.FlipCoinsUntilLoss()
     if not stream.accept_phrase(
         "that", "many", "times", "or", "until", "you", "lose", "a", "flip"
@@ -216,6 +225,44 @@ def _accept_flip_run_tail(stream: TokenStream) -> "ast.FlipCoinsUntilLoss | None
     for word in ("for", "each", "flip"):
         stream.expect_word(word)
     return ast.FlipCoinsUntilLoss(ast.ThatMuch(None), per_flip)
+
+
+def _accept_loss_voids_the_run(stream: TokenStream) -> bool:
+    """``. If you lose a flip, <this spell> has no effect`` behind a flip run,
+    consumed — or False with the cursor where it was. (Fiery Gambit.)
+
+    "No effect" is honoured by every reward behind the run reading the void
+    (``COIN_FLIP_RUN_VOIDED``), and so the words are admitted only where every
+    sentence left on the line *is* such a reward — "If you win …" — by a token
+    scan: an unconditional sentence behind them would run after a loss, and
+    the line refuses instead.
+    """
+    mark = stream.mark()
+    if not (
+        stream.accept_punct(".")
+        and stream.accept_phrase("if", "you", "lose", "a", "flip")
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if stream.at_kind(SELF):
+        stream.advance()
+    elif not stream.accept_phrase("this", "spell"):
+        stream.reset(mark)
+        return False
+    if not stream.accept_phrase("has", "no", "effect"):
+        stream.reset(mark)
+        return False
+    words = [str(token.text).lower() for token in stream.tokens[stream.pos:]]
+    sentences = [
+        sentence for sentence in " ".join(words).split(".") if sentence.strip()
+    ]
+    if not sentences or not all(
+        sentence.split()[:3] == ["if", "you", "win"] for sentence in sentences
+    ):
+        stream.reset(mark)
+        return False
+    return True
 
 
 def _parse_count_objects(stream: TokenStream) -> "ast.CountObjects | None":

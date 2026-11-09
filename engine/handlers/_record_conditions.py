@@ -376,6 +376,16 @@ def evaluate_record_condition(
         # so this is unreachable from a compiled card.
         if "coin_flip" not in context.results:
             return False
+        # "If you win **two or more flips**" (Fiery Gambit): the run's won
+        # flips against the printed floor — and none at all once a loss voided
+        # the run ("If you lose a flip, Fiery Gambit has no effect").
+        at_least = int(payload.get("at_least", 0) or 0)
+        if at_least:
+            from ..oracle_types import COIN_FLIP_RUN_VOIDED, COIN_FLIPS_WON
+
+            if context.results.get(COIN_FLIP_RUN_VOIDED):
+                return False
+            return int(context.results.get(COIN_FLIPS_WON, 0) or 0) >= at_least
         return bool(context.results["coin_flip"]) is bool(payload.get("won", True))
 
     if kind == "started_turn_state":
