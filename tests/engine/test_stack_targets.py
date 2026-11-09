@@ -749,6 +749,13 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # controls**" — Caustic Wasps' shape. Driven through a real combat damage
     # step it targets a creature of the damaged player's and kills it.
     "Spark Mage#0",
+    # Mirrodin, W1G12. "…you may destroy target artifact **that player**
+    # controls" (Rustmouth Ogre) — Caustic Wasps' sentence on a 5/4. Driven
+    # through a real combat damage step (tests/sets/
+    # test_mrd_creatures_later_groups.py, W1G12) only the damaged player's
+    # artifacts are offered, the attacker's own is refused, and the one named
+    # is destroyed.
+    "Rustmouth Ogre#0",
     # Onslaught, W1G13. "…that creature's controller may have target creature
     # **of their choice** get -3/-3" (Death Match) — Pandemonium's chooser on a
     # permanent slot: the seat that announces is the entering creature's
