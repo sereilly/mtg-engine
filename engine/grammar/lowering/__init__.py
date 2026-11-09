@@ -396,6 +396,7 @@ from .prohibitions import _lower_cant_be
 from .requirements import (_lower_attacks_this_turn_if_able,
                            _lower_destroy_chosen_that_didnt_attack,
                            _lower_blocks_this_turn_if_able,
+                           _lower_blocked_by_all_able_this_turn,
                            _lower_force_chosen_creature_to_attack)
 from .assignment import (_lower_assigns_combat_damage_as_unblocked,
                          _lower_assigns_no_combat_damage,
@@ -739,6 +740,7 @@ __all__ = [
     "_lower_combat_restriction",
     "lower_block_count_grant",
     "_lower_blocks_this_turn_if_able",
+    "_lower_blocked_by_all_able_this_turn",
     "_lower_cant_be",
     "_lower_attack_as_though",
     "_lower_assigns_combat_damage_as_unblocked",

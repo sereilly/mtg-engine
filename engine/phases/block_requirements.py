@@ -58,7 +58,8 @@ from dataclasses import dataclass, field
 from itertools import combinations
 
 from ..aura_restrictions import auras_imposing
-from ..combat_permissions import (MUST_BLOCK_ALL_UNTIL_EOT,
+from ..combat_permissions import (MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT,
+                                  MUST_BLOCK_ALL_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_THIS_COMBAT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   MUST_BLOCK_UNTIL_EOT, turn_requirements)
@@ -157,32 +158,38 @@ class BlockRequirementsMixin:
         ]
         found: list[BlockRequirement] = []
 
-        # "All creatures able to block enchanted creature do so." (Lure.) Two
-        # channels for one requirement — an Aura granting it, and the
-        # creature's own printed line (Elvish Bard), which may narrow which
-        # creatures it compels ("All **Walls** able to block this creature do
-        # so", Marble Priest; "…creatures **with flying**…", Talruum Piper).
-        # Every source separately: a Lure on Marble Priest compels every
-        # creature, its printed line only the Walls, and both apply.
+        # "All creatures able to block enchanted creature do so." (Lure.) Three
+        # channels for one requirement — an Aura granting it, the creature's
+        # own printed line (Elvish Bard), which may narrow which creatures it
+        # compels ("All **Walls** able to block this creature do so", Marble
+        # Priest; "…creatures **with flying**…", Talruum Piper), and a spell's
+        # mark for the turn ("All creatures able to block target creature this
+        # turn do so", Bloodscent). Every source separately: a Lure on Marble
+        # Priest compels every creature, its printed line only the Walls, and
+        # both apply.
         for attacker_idx, attacker in own_attackers:
-            sources: list[dict] = [
-                dict(instr.payload.get("blocker_filter") or {})
+            # The **attacker's** controller is the observer of a printed line,
+            # because the sentence is printed on the attacker: CR 109.5's
+            # "you" is the seat whose ability it is, not the seat asked to
+            # block. A spell's mark carries its own caster's seat.
+            observer = self.controller_index_of(attacker)
+            sources: list[tuple[dict, object]] = [
+                (dict(instr.payload.get("blocker_filter") or {}), observer)
                 for instr in compile_card_oracle(attacker.effective_card).instructions
                 if instr.kind == "must_be_blocked_by_all_able"
             ]
             sources.extend(
-                {} for _aura in auras_imposing(attacker, "must_be_blocked_by_all_able")
+                ({}, observer)
+                for _aura in auras_imposing(attacker, "must_be_blocked_by_all_able")
             )
-            for compelled in sources:
+            sources.extend(
+                (dict(entry.get("blockers") or {}), entry.get("seat"))
+                for entry in attacker.metadata.get(MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT) or ()
+            )
+            for compelled, seat in sources:
                 for blocker_idx, blocker in blockers:
-                    # The **attacker's** controller is the observer, because
-                    # the sentence is printed on the attacker: CR 109.5's "you"
-                    # is the seat whose ability it is, not the seat asked to
-                    # block.
                     if compelled and not subject_matches(
-                        self, blocker, compelled,
-                        observer=self.controller_index_of(attacker),
-                        source=attacker,
+                        self, blocker, compelled, observer=seat, source=attacker,
                     ):
                         continue
                     found.append(BlockRequirement(

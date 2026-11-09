@@ -125,4 +125,59 @@ def test_w1g12_awe_strike_on_a_creature_that_leaves_does_nothing(set_pool):
     assert game.players[0].life == 20
     assert not any("the next damage" in line for line in game.log)
 
+
+# Bloodscent: "All creatures able to block target creature this turn do so."
+# Lure's CR 509.1c requirement for a turn, marked on the targeted attacker and
+# read where Lure's printed and granted channels are, so it binds every
+# creature able to block at declaration — one that entered after the spell
+# resolved included (CR 611.2c fixes no set for a requirement).
+
+
+def _w1g12_lured_attack(set_pool):
+    game, (wurm,), theirs = _w1g12_table(
+        set_pool, hand=["Bloodscent"], mine=["Craw Wurm"],
+        theirs=["Grizzly Bears", "Grizzly Bears", "Llanowar Elves"],
+    )
+    theirs[2].tapped = True  # a tapped creature is not able to block
+    assert game.queue_from_hand(
+        0, "Bloodscent", target_permanent_ids=[wurm.permanent_id],
+    ).supported
+    _w1g12_resolve_stack(game)
+    late = _w1g12_Permanent(card=_w1g12_card(set_pool, "Grizzly Bears"))
+    game._put_permanent_onto_battlefield(1, late, None)
+    _w1g12_nosick(late)
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game.advance_combat_phase()
+    assert game.current_step == "declare_blockers"
+    return game, wurm
+
+
+def test_w1g12_bloodscent_compels_every_untapped_creature_to_block_it(set_pool):
+    game, wurm = _w1g12_lured_attack(set_pool)
+    bears = [
+        game.battlefield_index_of(p) for p in game.controlled_by(1)
+        if p.card.name == "Grizzly Bears"
+    ]
+    assert len(bears) == 3
+    assert sorted(req.blocker for req in game.block_requirements(1)) == sorted(bears)
+    assert not game.declare_blockers(1, {})[0]
+    assert not game.declare_blockers(1, {bears[0]: 0, bears[1]: 0})[0]
+    ok, why = game.declare_blockers(1, {slot: 0 for slot in bears})
+    assert ok, why
+    game.advance_combat_phase()
+    assert game.players[1].life == 20
+
+
+def test_w1g12_bloodscent_ends_with_the_turn(set_pool):
+    game, wurm = _w1g12_lured_attack(set_pool)
+    bears = [
+        game.battlefield_index_of(p) for p in game.controlled_by(1)
+        if p.card.name == "Grizzly Bears"
+    ]
+    assert game.declare_blockers(1, {slot: 0 for slot in bears})[0]
+    assert wurm.metadata.get("must_be_blocked_by_all_until_eot")
+    game.resolve_cleanup_step(0)  # CR 514.2
+    assert not wurm.metadata.get("must_be_blocked_by_all_until_eot")
+
 # ==== end W1G12 ======================================================

@@ -264,6 +264,7 @@ from .requirements import (
     _parse_attacks_this_turn_if_able,
     _parse_destroy_chosen_that_didnt_attack,
     _parse_blocks_this_turn_if_able,
+    _parse_able_to_block_do_so,
     _parse_force_chosen_creature_to_attack,
 )
 from .combat import (
@@ -498,6 +499,7 @@ __all__ = [
     "_parse_attacks_this_turn_if_able",
     "_parse_destroy_chosen_that_didnt_attack",
     "_parse_blocks_this_turn_if_able",
+    "_parse_able_to_block_do_so",
     "_parse_force_chosen_creature_to_attack",
     "_parse_attacking_doesnt_tap",
     "_parse_becomes_blocked",

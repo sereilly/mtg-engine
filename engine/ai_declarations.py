@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from .game import Game
 from .aura_restrictions import aura_restriction_active
+from .combat_permissions import MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT
 from .models import Permanent
 from .ai_combat_triggers import (attack_is_worth_its_trigger, block_is_worth_its_trigger,
                                  expected_attack_damage)
@@ -211,8 +212,12 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     # so the AI doesn't decline to attack with it (which would skip the defender's
     # block step entirely from the human's perspective).
     for idx in legal_attackers_list:
-        if idx not in forced and aura_restriction_active(
-            player.battlefield[idx], "must_be_blocked_by_all_able"
+        if idx not in forced and (
+            aura_restriction_active(
+                player.battlefield[idx], "must_be_blocked_by_all_able"
+            )
+            # …and one a spell made a Lure for the turn (Bloodscent).
+            or player.battlefield[idx].metadata.get(MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT)
         ):
             forced.append(idx)
 

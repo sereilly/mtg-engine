@@ -60,6 +60,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_assigns_no_combat_damage, _lower_attacking_doesnt_tap,
                        _lower_attacks_this_turn_if_able,
     _lower_blocks_this_turn_if_able,
+    _lower_blocked_by_all_able_this_turn,
                        _lower_change_text, _lower_counter_ability, _lower_choose_target,
                        _lower_destroy_countered_ability_source,
                        _lower_put_graveyard_position_onto_battlefield,
@@ -207,6 +208,9 @@ _BY_NODE_TYPE: dict[type, object] = {
     # was the one this file already is: a registry inside a dispatcher is the
     # half that grows, so it is the half that leaves.
     ast.MoveCounter: _lower_move_counter,
+    # "All creatures able to block target creature this turn do so."
+    # (Bloodscent.) Names one announced attacker and a phrase; no record.
+    ast.BlockedByAllAbleThisTurn: _lower_blocked_by_all_able_this_turn,
     ast.NoteManaSpent: _lower_note_mana_spent,
     # Illicit Auction. Beside the control change above rather than inside
     # it: what the two share is where the permanent ends up, and what

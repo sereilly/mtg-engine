@@ -81,6 +81,10 @@ _OWN_CATEGORIES = frozenset({"pump", "counters", "regeneration", "evasion", "att
 #: really is the opponent's.
 _OWN_KINDS = frozenset({
     "redirect_next_damage_to_source_until_eot",
+    # "All creatures able to block target creature this turn do so."
+    # (Bloodscent.) A Lure for the turn: the creature it is put on is the
+    # caster's attacker, whose blockers are all made to meet it.
+    "force_all_able_to_block_target_until_eot",
     # The same shape with the source chosen at resolution or left open: "All
     # damage that would be dealt to target creature this turn is dealt to you
     # instead" (Sivvi's Valor), "...to target creature this turn by a source of

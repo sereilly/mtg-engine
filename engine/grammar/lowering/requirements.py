@@ -586,3 +586,68 @@ def _lower_blocks_this_turn_if_able(
     return (
         OracleInstruction("force_target_to_block_until_eot", "", payload),
     )
+
+
+def _lower_blocked_by_all_able_this_turn(
+    node: ast.BlockedByAllAbleThisTurn,
+) -> tuple[OracleInstruction, ...]:
+    """"All creatures able to block target creature this turn do so."
+    (Bloodscent.)
+
+    ``force_all_able_to_block_target_until_eot``: a mark on the announced
+    attacker, read by the declare-blockers step beside Lure's printed and
+    granted requirement. The compelled set travels as a filter the step tests
+    at declaration, through the one matcher, observed from the caster's seat.
+
+    Refused: an attacker that is not one targeted creature (a self-reference
+    or a bound creature would need a reader this handler is not), a compelled
+    set that is not "all" of some creatures, and any narrowing of either
+    phrase the matcher cannot test -- a dropped narrowing compels or names
+    more creatures than the card does.
+    """
+    attacker = node.attacker
+    if not (
+        isinstance(attacker, ast.TargetSpec) and attacker.targeted
+        and attacker.quantifier == "target" and attacker.count == 1
+    ):
+        raise LoweringError(
+            "the turn-long Lure is marked on one targeted creature", node=node
+        )
+    blockers = node.blockers
+    if not (
+        isinstance(blockers, ast.TargetSpec) and blockers.quantifier == "all"
+        and not blockers.targeted
+    ):
+        raise LoweringError(
+            "the turn-long Lure compels every creature a phrase describes",
+            node=node,
+        )
+    compelled = testable_filter_payload(
+        blockers.filter,
+        refusal=(
+            "the turn-long Lure tests its compelled creatures at declaration, "
+            "and a narrowing the matcher cannot test would compel more"
+        ),
+        node=node,
+        require_narrowing=False,
+    )
+    if compelled.get("type_filter") != "creature":
+        raise LoweringError("a block requirement names creatures", node=node)
+    described = testable_filter_payload(
+        attacker.filter,
+        refusal="the turn-long Lure's target phrase cannot be tested",
+        node=node,
+        require_narrowing=False,
+    )
+    if described.get("type_filter") != "creature":
+        raise LoweringError("a block requirement names a creature", node=node)
+    blocker_filter = {
+        key: value for key, value in compelled.items() if key != "type_filter"
+    }
+    payload: dict[str, object] = {}
+    if blocker_filter:
+        payload["blocker_filter"] = blocker_filter
+    _describe_targets(payload, attacker)
+    return (
+        OracleInstruction("force_all_able_to_block_target_until_eot", "", payload),
+    )

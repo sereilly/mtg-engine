@@ -52,6 +52,7 @@ from .phrases import (
 from .effects import (
     _parse_attacks_this_turn_if_able,
     _parse_blocks_this_turn_if_able,
+    _parse_able_to_block_do_so,
     parse_block_count_grant,
     parse_cant_activate_nonmana_abilities,
     parse_cant_cast_spell_types,
@@ -498,6 +499,13 @@ def parse_subject_verb(
         # production that consumed the verb would take the table's line away.
         if token.text in ("blocks", "block"):
             requirement = _parse_blocks_this_turn_if_able(stream, source_spec)
+            if requirement is not None:
+                return requirement
+        # "**All creatures** able to block target creature this turn do so."
+        # (Bloodscent.) Lure's requirement for a turn, printed with the
+        # compelled creatures as the subject; non-consuming on refusal.
+        if token.text == "able":
+            requirement = _parse_able_to_block_do_so(stream, source_spec)
             if requirement is not None:
                 return requirement
         if token.text in ("becomes", "become"):

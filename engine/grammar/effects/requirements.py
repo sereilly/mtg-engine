@@ -349,3 +349,26 @@ def _parse_blocks_this_turn_if_able(
         stream.reset(mark)
         return None
     return ast.BlocksThisTurnIfAble(subject, attacker)
+
+
+def _parse_able_to_block_do_so(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.BlockedByAllAbleThisTurn | None":
+    """``All <blockers> able to block <attacker> this turn do so.``
+    (Bloodscent.)
+
+    The subject has been read ("all creatures"); this starts at "able". Lure's
+    printed static ("...able to block this creature do so") has no duration
+    and is the derivation table's line (``combat_restriction_table``), so
+    every word of "this turn do so" is required here and the production
+    refuses without consuming otherwise. The attacker is any recipient the
+    shared reader takes; which ones are honoured is the lowering's to say.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("able", "to", "block"):
+        return None
+    attacker = parse_recipient(stream)
+    if attacker is None or not stream.accept_phrase("this", "turn", "do", "so"):
+        stream.reset(mark)
+        return None
+    return ast.BlockedByAllAbleThisTurn(subject, attacker)
