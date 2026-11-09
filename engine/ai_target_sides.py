@@ -386,10 +386,20 @@ def _silences_its_object(instruction: OracleInstruction) -> bool:
     denial wins, :func:`spell_target_side`'s rule; a printed seat still
     outranks it ("…by target creature **you control**", Cephalid Illusionist),
     because :func:`instruction_target_side` asks the noun phrase first.
+
+    …and the whole-instance shield keyed on the **target as the source** ("The
+    next time target creature would deal damage this turn, prevent that
+    damage", Awe Strike): its kind is the gift shield, and ``source_from:
+    "target"`` makes the object the one whose damage is stopped — measured in
+    seeded games aimed at the AI's own attacker, preventing its own damage to
+    the opponent.
     """
+    payload = instruction.payload or {}
+    if instruction.kind == "grant_whole_prevention_shield":
+        return payload.get("source_from") == "target"
     return (
         instruction.kind == "prevent_damage_to_target_until_eot"
-        and bool((instruction.payload or {}).get("to_and_by"))
+        and bool(payload.get("to_and_by"))
     )
 
 
