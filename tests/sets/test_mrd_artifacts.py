@@ -43,6 +43,8 @@ log), not instruction kinds alone.
 # as a cast's mana-value gate, remove-all-and-count, a counter removed as a cost
 # from any permanent.
 
+import pytest as _w1g6_pytest
+
 from engine import Game as _w1g6_Game, PlayerState as _w1g6_PlayerState
 from engine.models import (
     CardDefinition as _w1g6_CardDefinition, Permanent as _w1g6_Permanent,
@@ -204,6 +206,130 @@ def test_w1g6_myr_prototype_grows_each_upkeep_and_prices_both_combat_steps(
     remove_counters(prototype, "+1/+1", 2)
     assert game._block_mana_costs_of(prototype, attacker) == []
     assert game._attack_mana_costs_of(prototype, 1) == []
+
+
+def _w1g6_chalice_table(set_pool, x_value, *, their_hand=(), interactive=()):
+    """Chalice of the Void cast by P1 for *x_value*, paid for in full ({X}{X}
+    is twice X, the 2021-03-19 ruling), resolved; P2 holds *their_hand*."""
+    lea = set_pool("LEA")
+    chalice = set_pool("MRD")["Chalice of the Void"]
+    game = _w1g6_Game(players=[
+        _w1g6_PlayerState(name="P1", hand=[chalice],
+                          library=[lea["Island"]] * 10),
+        _w1g6_PlayerState(name="P2", hand=list(their_hand),
+                          library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    if x_value:
+        game.players[0].mana_pool.update({"R": 2 * x_value - 1})
+        short = game.queue_from_hand(0, "Chalice of the Void", x_value=x_value)
+        assert not short.supported, "X is paid twice"
+    game.players[0].mana_pool.update({"R": 2 * x_value})
+    assert game.queue_from_hand(0, "Chalice of the Void", x_value=x_value).supported
+    assert all(amount == 0 for amount in game.players[0].mana_pool.values())
+    _w1g6_resolve_stack(game)
+    (permanent,) = [
+        p for p in game.all_permanents() if p.card.name == "Chalice of the Void"
+    ]
+    game.enforce_mana_costs = False
+    return game, permanent
+
+
+
+@_w1g6_pytest.mark.parametrize("interactive", [(), (0, 1)])
+def test_w1g6_chalice_of_the_void_counters_each_spell_of_its_count(
+    set_pool, interactive,
+):
+    """"This artifact enters with X charge counters on it." / "Whenever a
+    player casts a spell with mana value equal to the number of charge counters
+    on this artifact, counter that spell."
+
+    Cast for X=1 it pays {2} and holds one counter: the opponent's Lightning
+    Bolt (mana value 1) is countered, their Grizzly Bears (2) resolves, and
+    its own controller's one-drop is countered too — "a player". Nothing to
+    answer: an interactive table arms no prompt.
+    """
+    lea = set_pool("LEA")
+    game, chalice = _w1g6_chalice_table(
+        set_pool, 1, their_hand=[lea["Lightning Bolt"], lea["Grizzly Bears"]],
+        interactive=interactive,
+    )
+    assert _w1g6_counters_on(chalice, "charge") == 1
+
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert [item.card.name for item in game.stack] == [
+        "Lightning Bolt", "Chalice of the Void",
+    ]
+    _w1g6_resolve_stack(game)
+    assert game.players[0].life == 20
+    assert "Lightning Bolt was countered by Chalice of the Void" in " ".join(game.log)
+    assert not game.pending_choices
+
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+    assert [item.card.name for item in game.stack] == ["Grizzly Bears"]
+    _w1g6_resolve_stack(game)
+    assert any(p.card.name == "Grizzly Bears" for p in game.all_permanents())
+
+    game.players[0].hand.append(lea["Lightning Bolt"])
+    assert game.queue_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    _w1g6_resolve_stack(game)
+    assert game.players[1].life == 20, "its own controller's spell too"
+
+
+def test_w1g6_chalice_reads_its_counters_only_as_the_spell_is_cast(set_pool):
+    """The 2021-03-19 rulings: the count matters only when the spell is cast,
+    and once the ability has triggered it counters the spell even if Chalice
+    leaves the battlefield. So a Bolt cast into one counter is countered after
+    the counter is removed and the Chalice destroyed in response; a Bolt cast
+    after that, into no Chalice at all, resolves."""
+    lea = set_pool("LEA")
+    game, chalice = _w1g6_chalice_table(
+        set_pool, 1,
+        their_hand=[lea["Lightning Bolt"], lea["Shatter"], lea["Lightning Bolt"]],
+    )
+    from engine.named_counters import remove_counters
+
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    remove_counters(chalice, "charge", 1)
+    # Shatter (mana value 2) in response, above the trigger: Chalice is gone
+    # before its ability resolves.
+    assert game.queue_from_hand(
+        1, "Shatter", target_permanent_ids=[chalice.permanent_id],
+    ).supported
+    assert [item.card.name for item in game.stack] == [
+        "Lightning Bolt", "Chalice of the Void", "Shatter",
+    ]
+    _w1g6_resolve_stack(game)
+    assert not game.is_on_battlefield(chalice)
+    assert game.players[0].life == 20
+
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g6_resolve_stack(game)
+    assert game.players[0].life == 17
+
+
+def test_w1g6_chalice_for_zero_counters_the_mana_value_zero_spells(set_pool):
+    """"If there are zero charge counters on Chalice of the Void, it counters
+    each spell with a mana value of 0" (2021-03-19). A second Chalice cast for
+    X=0 has mana value 0 on the stack (CR 202.3e) and is countered; one cast
+    for X=1 has mana value 2 and is not."""
+    chalice_card = set_pool("MRD")["Chalice of the Void"]
+    game, chalice = _w1g6_chalice_table(
+        set_pool, 0, their_hand=[chalice_card, chalice_card],
+    )
+    assert _w1g6_counters_on(chalice, "charge") == 0
+
+    assert game.queue_from_hand(1, "Chalice of the Void", x_value=0).supported
+    _w1g6_resolve_stack(game)
+    assert [p.card.name for p in game.all_permanents()] == ["Chalice of the Void"]
+    assert [c.name for c in game.players[1].graveyard] == ["Chalice of the Void"]
+
+    assert game.queue_from_hand(1, "Chalice of the Void", x_value=1).supported
+    _w1g6_resolve_stack(game)
+    assert len(game.players[1].battlefield) == 1
 
 # ==== end W1G6 ======================================================
 

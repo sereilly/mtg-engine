@@ -1154,6 +1154,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("spell_cast",
      r"whenever a player casts a spell with mana value (?P<cast_mana_value>\d+) "
      r"or (?P<cast_mana_value_bound>greater|less)"),
+    # "Whenever a player casts a spell with mana value **equal to the number
+    # of charge counters on this artifact**, counter that spell." (Chalice of
+    # the Void.) The bound is a count on the trigger's *source*, so the kind
+    # is payload and the number is read off the permanent as the spell is
+    # cast (`cast_event_filters`) — the card's 2021-03-19 ruling: "The number
+    # of charge counters … matters only at the time the spell is cast." Before
+    # the bare row, its strict prefix.
+    ("spell_cast",
+     r"whenever a player casts a spell with mana value equal to the number of "
+     r"(?P<cast_mana_value_source_counters>[a-z]+) counters on "
+     r"this (?:artifact|creature|enchantment|land|permanent)"),
     ("spell_cast",                  r"whenever a player casts a spell"),
     # "Whenever a player **kicks** a spell" (Saproling Infestation). CR 702.33d:
     # a spell is kicked when "its controller declared the intention to pay" its

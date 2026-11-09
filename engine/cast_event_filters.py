@@ -339,6 +339,27 @@ def _cast_narrowing_admits(
             # trigger cannot say which spells it watches, and firing on every
             # one is the widening a narrowing exists to prevent.
             return False
+    # "…a spell with mana value **equal to the number of charge counters on
+    # this artifact**" (Chalice of the Void). The same CR 202.3e value against
+    # a count on the trigger's own source, taken now — as the spell becomes
+    # cast — and never again: "Changing the number of charge counters on
+    # Chalice of the Void after a spell has been cast won't change whether the
+    # ability triggers or counters the spell" (2021-03-19). Zero counters is a
+    # count like any other and answers the mana-value-0 spells (same ruling
+    # set). No source permanent is no count, and no count fires nothing.
+    counted_kind = trig.condition.payload.get("cast_mana_value_source_counters")
+    if counted_kind:
+        from .named_counters import counters_on
+        from .targeting import stack_object_mana_value
+
+        if permanent is None:
+            return False
+        value = (
+            stack_object_mana_value(item) if item is not None
+            else int(getattr(card, "cmc", 0) or 0)
+        )
+        if value != counters_on(permanent, str(counted_kind)):
+            return False
     return True
 
 

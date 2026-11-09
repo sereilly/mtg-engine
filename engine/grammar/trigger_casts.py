@@ -24,7 +24,7 @@ from __future__ import annotations
 import dataclasses
 
 from . import ast
-from .bounds import parse_comparison
+from .bounds import accept_source_counter_bound, parse_comparison
 from .errors import GrammarError
 from .nouns import parse_object_filter
 from .stream import TokenStream
@@ -195,6 +195,24 @@ def _parse_cast_event(
     # here for the chosen colour's reason: the bare "a player casts a spell"
     # entry behind this is its strict prefix.
     if stream.accept_phrase("a", "player", "casts", "a", "spell"):
+        # "…a spell with mana value **equal to the number of charge counters
+        # on this artifact**" (Chalice of the Void). The bound is a count on
+        # the trigger's own source, read by the reader Wave of Terror's sweep
+        # uses, and carried in the filter field that sweep fills; the table's
+        # ``cast_mana_value_source_counters`` row names the same kind and
+        # ``cast_event_filters`` compares as the spell is cast (the card's
+        # 2021-03-19 ruling: the counters matter only then).
+        counter_mark = stream.mark()
+        if stream.accept_phrase("with", "mana", "value"):
+            kind = accept_source_counter_bound(stream)
+            if kind is not None:
+                return ast.TriggerEvent(
+                    "spell_cast", trigger_word,
+                    subject=ast.ObjectFilter(
+                        mana_value_equals_source_counters=kind,
+                    ),
+                )
+        stream.reset(counter_mark)
         bound = _accept_mana_value_bound(stream)
         if bound is not None and bound is not _REFUSED:
             return ast.TriggerEvent(
