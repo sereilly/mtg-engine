@@ -723,8 +723,10 @@ rather than assumed:
 
 ## Scale properties
 
-- **Compile once:** `compile_card_oracle` is cached unbounded; parsing cost is
-  paid once per distinct card per process, regardless of how many games run.
+- **Compile once:** `compile_card_oracle` is cached unbounded, and each card
+  keeps its program on the card object once read; parsing cost is paid once
+  per distinct (line, card name) per process, regardless of how many games run
+  (`grammar.parser.each_line_parsed_once`, while a card compiles).
 - **O(1) execution:** instruction dispatch is a dict lookup. Adding the
   1000th effect kind does not slow down the 1st.
 - **Parsing was the real growth term, and no longer is.**

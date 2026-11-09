@@ -188,7 +188,7 @@ def test_the_aura_claim_is_what_holds_those_cards_up():
     cards it names must fall over.
     """
     import engine.derived_static_claims as derived_static_claims
-    import engine.oracle as oracle
+    from engine.oracle_types import clear_compilation_caches
 
     sample = ["Pacifism", "Armor of Thorns", "Animate Wall", "Wild Growth"]
     catalog = {c.name: c for c in load_catalog()}
@@ -202,14 +202,14 @@ def test_the_aura_claim_is_what_holds_those_cards_up():
     original = derived_static_claims.aura_claim
     try:
         derived_static_claims.aura_claim = lambda *a, **k: None
-        oracle._compile_card_oracle.cache_clear()
+        clear_compilation_caches()
         fell_over = [
             name for name in sample
             if not compile_card_oracle(catalog[name]).supported
         ]
     finally:
         derived_static_claims.aura_claim = original
-        oracle._compile_card_oracle.cache_clear()
+        clear_compilation_caches()
         rewarm_compile_cache()
 
     assert sorted(fell_over) == sorted(sample), (

@@ -50,7 +50,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
-from .models import CardDefinition
+from .models import COMPILED_PROGRAM_SLOT, CardDefinition
 from .faces import CAST_FACE_LAYOUTS, face_cards, is_multi_face
 from .program_store import seedable
 from .activated_ability_cost import ActivatedAbilityCost
@@ -80,6 +80,9 @@ from .static_line_support import _grammar_static_creature_instructions
 from .amplify import amplify_amounts
 from .keyword_lines import UNSUPPORTED_KEYWORDS, _is_supported_keyword_line
 from .front_ends import _grammar_static_coeffects
+# After ``front_ends``, which loads the grammar package in the order the engine
+# needs (the grammar's lowering reaches the handlers, which import this module).
+from .grammar.parser import each_line_parsed_once
 from .ability_lines import _modal_at_least, _modal_chooser, _modal_options
 from .derived_static_claims import (SUPPORTED_SPELL_PATTERNS,
                                     _derived_static_claims)
@@ -1018,7 +1021,46 @@ def compiled_units(cards) -> list[tuple[CardDefinition, OracleProgram]]:
     return [pair for card in cards for pair in compiled_faces(card)]
 
 
+class _ProgramsHeldOnCards:
+    """The clearing half of :func:`compile_card_oracle`'s memo.
+
+    A card's program is a function of the card, which is immutable, so it is
+    kept on the card object (:data:`models.COMPILED_PROGRAM_SLOT`) under the
+    generation it was compiled in. Clearing the compilation caches moves the
+    generation on, and every program held under an older one is compiled
+    again on its next read — so this is a compilation cache like the
+    ``lru_cache`` beneath it, registered as one (``oracle_types``), and the
+    answer it holds is the one that cache gives.
+
+    Why it exists: the engine asks for a permanent's program on every scan of
+    the board — 5.6 million times in four seeded games — and a read through
+    the ``lru_cache`` re-derives its six-part key and re-asks the multi-face
+    and flashback questions on every call (0.31 µs against 0.06).
+    """
+
+    __wrapped__ = None  # set below, to the function whose answer is held
+    generation = 0
+
+    def cache_clear(self) -> None:
+        self.generation += 1
+
+
+_HELD = compilation_cache(_ProgramsHeldOnCards())
+
+
 def compile_card_oracle(card: CardDefinition) -> OracleProgram:
+    """*card*'s compiled program (:func:`_compile_card_program`), kept on the
+    card object once compiled (:class:`_ProgramsHeldOnCards`)."""
+    held = card.__dict__.get(COMPILED_PROGRAM_SLOT)
+    if held is not None and held[0] == _HELD.generation:
+        return held[1]
+    with each_line_parsed_once():
+        program = _compile_card_program(card)
+    card.__dict__[COMPILED_PROGRAM_SLOT] = (_HELD.generation, program)
+    return program
+
+
+def _compile_card_program(card: CardDefinition) -> OracleProgram:
     if is_multi_face(card):
         # CR 709.3a: "Only the chosen half is evaluated to see if it can be
         # cast." The whole card is never a spell, so it has no instructions to
@@ -1058,6 +1100,9 @@ def compile_card_oracle(card: CardDefinition) -> OracleProgram:
                 program.normalized_text,
             )
     return program
+
+
+_ProgramsHeldOnCards.__wrapped__ = staticmethod(_compile_card_program)
 
 
 def simple_card_keywords(card: CardDefinition) -> tuple[str, ...] | None:

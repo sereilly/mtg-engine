@@ -45,7 +45,12 @@ lives, held to that by a whole-pool snapshot of every compiled program diffed
 before and after.
 """
 
-from ..oracle_types import strip_ability_word
+import copy
+from contextlib import contextmanager
+from contextvars import ContextVar
+from functools import lru_cache
+
+from ..oracle_types import compilation_cache, strip_ability_word
 from . import ast
 from .costs import _parse_costs
 from .derived import derived_instruction_for_line
@@ -220,12 +225,68 @@ def parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
     line parses.
     """
     try:
-        return _parse_line(line, card_name=card_name)
+        return _parse_line_once(line, card_name)
     except GrammarError:
         derived = derived_instruction_for_line(line)
         if derived is not None:
             return ast.DerivedLine(derived[0], line)
         raise
+
+
+#: Whether a card's compile is running (:func:`each_line_parsed_once`).
+_COMPILING: ContextVar[bool] = ContextVar("grammar_compiling", default=False)
+
+
+@contextmanager
+def each_line_parsed_once():
+    """While a card compiles, each (line, card name) is parsed once.
+
+    The compiler asks for the same line more than once — a modal head and a
+    triggered-ability reading each try a line before the front end that
+    claims it parses it again, and a line printed on many cards ("Flying",
+    "Enchant creature") is asked with no card name by each of them: 29,962
+    parses of 15,772 distinct questions over the pool. The parse is a function
+    of the line, the card's name and the grammar, and the tree it returns is
+    frozen, so the second asking is handed the first answer
+    (:func:`_parsed_while_compiling`).
+
+    Only inside a compile (``oracle.compile_card_oracle``), so the memo is
+    filled by the questions a compile asks and no others: the parse-coverage
+    probe re-parses every sentence once per word deleted from it, and those
+    throwaway lines would otherwise be kept for the life of the process.
+    """
+    token = _COMPILING.set(True)
+    try:
+        yield
+    finally:
+        _COMPILING.reset(token)
+
+
+def _parse_line_once(line: str, card_name: str | None) -> ast.AbilityNode:
+    """:func:`_parse_line`, answered from the compile's memo while a compile
+    runs. A refusal is raised again as a fresh copy of the first, so no two
+    raises share a traceback."""
+    if not _COMPILING.get():
+        return _parse_line(line, card_name=card_name)
+    node, refused = _parsed_while_compiling(line, card_name)
+    if refused is not None:
+        raise copy.copy(refused)
+    return node
+
+
+@compilation_cache
+@lru_cache(maxsize=None)
+def _parsed_while_compiling(
+    line: str, card_name: str | None,
+) -> tuple[ast.AbilityNode | None, GrammarError | None]:
+    """``(tree, None)`` for a line the grammar reads, ``(None, refusal)`` for
+    one it refuses — the refusal copied, which leaves its traceback (and the
+    parser frames it holds) behind. Registered with the compilation caches,
+    so swapping a production out and clearing them reaches this too."""
+    try:
+        return _parse_line(line, card_name=card_name), None
+    except GrammarError as refusal:
+        return None, copy.copy(refusal)
 
 
 def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:

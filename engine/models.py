@@ -125,6 +125,13 @@ class CardFace:
 # needs face-aware handling before it can be compiled — see LAYOUT_SUPPORTED.
 SINGLE_FACE_LAYOUTS = frozenset({"normal", "leveler", "class", "saga", "case", "planar", "scheme", "vanguard"})
 
+# The instance-dict key under which ``oracle.compile_card_oracle`` keeps a
+# card's compiled program on the card (``faces.face_cards``' arrangement: a
+# frozen dataclass's instance dict is an ordinary dict, and nothing in it is a
+# field, so equality, ``replace`` and the repr never see it). Named here
+# because ``CardDefinition.__getstate__`` leaves it out of every copy.
+COMPILED_PROGRAM_SLOT = "_compiled_program"
+
 
 @dataclass(frozen=True)
 class CardDefinition:
@@ -217,6 +224,18 @@ class CardDefinition:
     @property
     def printed_power(self) -> str | None:
         return self._printed_stat(self.power, "power")
+
+    def __getstate__(self) -> dict[str, Any]:
+        """What a copy or a pickle of this card carries: its instance dict,
+        less the compiled program ``oracle.compile_card_oracle`` keeps on it
+        (:data:`COMPILED_PROGRAM_SLOT`). The undo snapshot deep-copies the
+        game, its cards included, and a copied card would otherwise carry a
+        deep copy of its whole program; the copy compiles again on first
+        read, from the same cache, to the same program."""
+        state = self.__dict__
+        if COMPILED_PROGRAM_SLOT in state:
+            state = {key: value for key, value in state.items() if key != COMPILED_PROGRAM_SLOT}
+        return state
 
     @property
     def printed_toughness(self) -> str | None:
