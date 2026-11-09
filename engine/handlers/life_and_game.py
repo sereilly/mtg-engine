@@ -33,9 +33,9 @@ def player_loses_game(game: Game, instruction: OracleInstruction, context: Oracl
     card = context.card
     # "you lose the game" triggers apply to caster; targeted spells apply to target
     loser = target if instruction.kind == "target_player_loses_game" else caster
-    if not loser.lost:
-        loser.lost = True
-        game.log.append(f"{card.name}: {loser.name} lost the game (104.3e)")
+    # Through the loss funnel, which asks the printed "can't lose the game"
+    # bans (Platinum Angel, CR 104.3e's effect answered by a static ability).
+    game.lose_the_game(loser, f"{card.name}: {loser.name} lost the game (104.3e)")
     return True, "resolved"
 
 
@@ -153,13 +153,27 @@ def player_wins_game(game: Game, instruction: OracleInstruction, context: Oracle
             )
             return True, "resolved"
         winner = game.players[seat]
+    # "…your opponents can't win the game." (Platinum Angel.) CR 104.2b's
+    # effect is the only win a ban answers — CR 104.2a, the last player
+    # standing, "overrides all effects that would preclude that player from
+    # winning" and is never asked here — so the effect does nothing and nobody
+    # loses to it.
+    from ..game_result_bans import player_cant_win
+
+    banners = player_cant_win(game, game.players.index(winner))
+    if banners:
+        game.log.append(
+            f"{card.name}: {winner.name} can't win the game ({banners[0].card.name})"
+        )
+        return True, "resolved"
     # 104.3f: if the winner would also lose simultaneously, they lose instead
     if not winner.lost:
         # Mark all opponents as lost so the winner is last standing (104.2a)
         for player in game.players:
             if player is not winner and not player.lost:
-                player.lost = True
-                game.log.append(f"{card.name}: {player.name} lost (104.2b: opponent loses)")
+                game.lose_the_game(
+                    player, f"{card.name}: {player.name} lost (104.2b: opponent loses)"
+                )
         game.log.append(f"{card.name}: {winner.name} wins the game (104.2b)")
     return True, "resolved"
 

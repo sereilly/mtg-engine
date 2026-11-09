@@ -14,6 +14,7 @@ from ..control import (
 from ..aura_grants import aura_grants_control
 from ..aura_attachment import auras_attached_to, unsatisfied_enchant_clause
 from ..equipment import is_equipment, unattach_illegal_equipment
+from ..game_result_bans import player_cant_lose
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..pt import toughness_has_been_set
@@ -45,6 +46,36 @@ class GameEndingMixin:
             # A concession can decide the game without any state-based action
             # running, so the ante is settled here too (CR 407.2).
             self._maybe_award_ante()
+
+    def lose_the_game(self, player: PlayerState, message: str, *, quiet_ban: bool = False) -> bool:
+        """CR 104.3b–e and 104.3j: *player* loses the game — unless an effect
+        says they can't (Platinum Angel, ``engine/game_result_bans.py``).
+
+        The one place the engine performs a loss, so the ban is asked of every
+        way to lose there is: 0 life, an empty-library draw, poison, commander
+        damage and every effect that states it. A concession (CR 104.3a) is
+        not one: :meth:`concede` does not come here, because a player who
+        concedes leaves the game whatever they control.
+
+        Returns whether the player lost. A banned loss is logged once per call
+        unless *quiet_ban* — the state-based checks pass it, because they ask
+        again on every check for as long as the condition lasts and would
+        repeat the line each time; the effect that *says* a player loses is
+        logged, because that is a single event a player watched not happen.
+        """
+        if player.lost:
+            return False
+        seat = self.players.index(player)
+        banners = player_cant_lose(self, seat)
+        if banners:
+            if not quiet_ban:
+                self.log.append(
+                    f"{player.name} can't lose the game ({banners[0].card.name})"
+                )
+            return False
+        player.lost = True
+        self.log.append(message)
+        return True
 
     def get_winner(self) -> PlayerState | None:
         """Return the single player who has won the game, or None if the game is not yet won.
@@ -227,33 +258,50 @@ class GameEndingMixin:
         # that drops to lethal/0 toughness as a result dies in the same pass.
         self._recompute_continuous_effects()
 
-        # 704.5a: player with 0 or less life loses the game
+        # 704.5a: player with 0 or less life loses the game. Every loss below
+        # goes through `lose_the_game`, which asks the printed "can't lose the
+        # game" bans (Platinum Angel, `engine/game_result_bans.py`) — quietly,
+        # because this check asks again on every pass for as long as the
+        # condition lasts, and the loss lands on the first pass after the ban
+        # lifts (CR 611.3b: the Angel's effect ends the moment it leaves).
         for player in self.players:
             if not player.lost and player.life <= 0:
-                # e.g. Lich / Platinum Angel-style replacement
+                # Lich's "you don't lose the game for having 0 or less life":
+                # a narrower ban than the Angel's, about this one condition.
                 if self._player_controls_text(
                     player, "you don't lose the game for having 0 or less life"
                 ):
                     continue
-                player.lost = True
-                self.log.append(f"{player.name} lost the game (704.5a: 0 or less life)")
-                changed = True
+                if self.lose_the_game(
+                    player, f"{player.name} lost the game (704.5a: 0 or less life)",
+                    quiet_ban=True,
+                ):
+                    changed = True
 
-        # 704.5b: player who attempted to draw from empty library loses
+        # 704.5b: player who attempted to draw from empty library loses. The
+        # attempt is spent whether or not the loss lands: CR 704.5b asks about
+        # a draw "since the last time state-based actions were checked", so a
+        # draw the Angel answered is not owed again when the Angel leaves.
         for player in self.players:
             if player.drew_from_empty:
                 player.drew_from_empty = False
                 if not player.lost:
-                    player.lost = True
-                    self.log.append(f"{player.name} lost the game (704.5b: drew from empty library)")
+                    self.lose_the_game(
+                        player,
+                        f"{player.name} lost the game (704.5b: drew from empty library)",
+                        quiet_ban=True,
+                    )
                 changed = True
 
         # 704.5c / 104.3d: player with 10 or more poison counters loses
         for player in self.players:
             if not player.lost and player.poison_counters >= 10:
-                player.lost = True
-                self.log.append(f"{player.name} lost the game (704.5c / 104.3d: {player.poison_counters} poison counters)")
-                changed = True
+                if self.lose_the_game(
+                    player,
+                    f"{player.name} lost the game (704.5c / 104.3d: {player.poison_counters} poison counters)",
+                    quiet_ban=True,
+                ):
+                    changed = True
 
         # 704.6c / 903.10a: a player dealt 21 or more combat damage by the
         # same commander over the course of the game loses. Only in a

@@ -1189,12 +1189,11 @@ def _return_from_graveyard_instead_of_drawing(game, payload: dict) -> Replacemen
         # "If you can\'t, you lose the game." CR 104.3e — an effect that states
         # a player loses the game, applied here and not left to a state-based
         # action, exactly as the `player_loses_game` handler applies it.
-        if not player.lost:
-            player.lost = True
-            game.log.append(
-                f"{player.name} had no card to return from their graveyard and "
-                f"lost the game (104.3e)"
-            )
+        game.lose_the_game(
+            player,
+            f"{player.name} had no card to return from their graveyard and "
+            f"lost the game (104.3e)",
+        )
         payload["drawn"] = 0
         return ReplacementOutcome(replaced=True)
     suspended, drawn = offer_replacement_choice(

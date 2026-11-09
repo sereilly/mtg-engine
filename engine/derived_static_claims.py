@@ -109,6 +109,7 @@ def _derived_static_claims(
     from .global_statics import global_static_for
     from .land_play_allowance import land_play_allowance_for
     from .life_prohibitions import life_gain_ban_line
+    from .game_result_bans import game_result_ban_line
     from .mana_spending import spending_permission_line
     from .prevention import prevention_claims_line
     from .regeneration import denies_regeneration_line, self_regeneration_line
@@ -349,6 +350,15 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append("life_prohibitions")
+    # "You can't lose the game and your opponents can't win the game."
+    # (Platinum Angel.) The loss funnel and the win handler ask this same table
+    # at every loss and every win, so there is no instruction to produce — its
+    # own claim name for the life-gain ban's reason above.
+    if any(
+        game_result_ban_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("game_result_bans")
     # "Players don't lose unspent mana as steps and phases end." (Upwelling,
     # CR 500.5.) The pool-emptying seam asks this same table as each step
     # ends, so there is no instruction to produce — and the enchantment's whole

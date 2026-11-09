@@ -127,6 +127,25 @@ def test_w1g10_mindstorm_crown_ignores_the_hand_at_the_upkeep(set_pool):
     assert game.players[0].life == 19
     assert not game.players[0].hand
 
+
+def test_w1g10_platinum_angel_keeps_its_controller_in_the_game(set_pool):
+    """A Lightning Bolt to 0 life with the Angel out: no loss, and the game
+    goes on; the Angel dies and the next state-based check takes the game.
+    The whole of CR 104.3 is in tests/rules/test_mrd_w1g10_cant_lose_the_game.py."""
+    game = _w1g10_table(set_pool, their_hand=[set_pool("LEA")["Lightning Bolt"]])
+    angel = _w1g10_put(game, 0, set_pool("MRD")["Platinum Angel"])
+    game.players[0].life = 2
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g10_resolve_stack(game)
+    game.check_state_based_actions()
+    assert game.players[0].life == -1
+    assert not game.players[0].lost and not game.is_game_over()
+    game.remove_from_battlefield(angel)
+    game._permanent_to_graveyard(game.players[0], angel)
+    game.check_state_based_actions()
+    assert game.players[0].lost
+    assert game.get_winner() is game.players[1]
+
 # ==== end W1G10 ======================================================
 
 
