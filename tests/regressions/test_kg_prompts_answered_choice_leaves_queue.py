@@ -53,7 +53,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from engine import Game, PlayerState
-from engine.card_loader import load_catalog
+from engine.card_loader import (load_cards, load_catalog,
+                                manifest_measured_codes, manifest_set_path)
 from engine.mixins.stack.choices.queue import PendingChoicesMixin
 from engine.models import Permanent
 from engine.pending_choices import CHOICE_SPECS, spec_for
@@ -64,13 +65,26 @@ from web.prompts import blocking_prompt
 client = TestClient(app)
 _CARDS = {card.name: card for card in load_catalog()}
 
+#: The cards of a set under the manifest's ``measured`` role, for a kind only
+#: that set's cards arm yet (``copy_cast``: Isochron Scepter, Mirrodin, until
+#: the set is promoted). Asked only for a name the shipped pool does not
+#: hold, so every scenario naming a shipped card resolves exactly what it
+#: did; empty between sets.
+_MEASURED_CARDS = {
+    card.name: card
+    for code in manifest_measured_codes()
+    for card in load_cards(manifest_set_path(code, include_measured=True))
+}
+
 
 # ---------------------------------------------------------------------------
 # Boards
 # ---------------------------------------------------------------------------
 
 def card(name: str):
-    return _CARDS[name]
+    if name in _CARDS:
+        return _CARDS[name]
+    return _MEASURED_CARDS[name]
 
 
 def perm(name: str, *, tapped: bool = False) -> Permanent:
@@ -779,6 +793,34 @@ def _arrogant_wurm():
     game.cast_from_hand(0, "Mind Rot", target_player_index=1)
     assert game.confirm_discard(1, [0])
     resolve_until_owed(game, "madness_cast")
+    return game
+
+
+@scenario(
+    "copy_cast", "Isochron Scepter",
+    answer=lambda g, c: {"accept": True, "announcement": {"target_player_index": 1}},
+    wire=lambda g, c: {"accept": True, "target_player_index": 1},
+    then=lambda g: _resolved_then(g, lambda: _assert(
+        g.players[1].life == 17 and names(g.players[0].exile) == ["Lightning Bolt"]
+    )),
+)
+def _isochron_scepter():
+    """Lightning Bolt imprinted (the imprint's own offer and pick), then the
+    Scepter's "{2}, {T}: You may copy the exiled card…" resolving to the
+    offer (CR 707.12)."""
+    game = duel(hands=(("Isochron Scepter", "Lightning Bolt"), ()))
+    game.cast_from_hand(0, "Isochron Scepter")
+    resolve_until_owed(game, "optional_pay")
+    assert game.confirm_optional_pay(0, accept=True)
+    assert game.confirm_exile_from_hand_choice(0, names(game.players[0].hand).index("Lightning Bolt"))
+    resolve_until_owed(game)
+    scepter = on_board(game, 0, "Isochron Scepter")
+    scepter.metadata["summoning_sickness_turn"] = -99
+    assert game.queue_permanent_ability(
+        0, "Isochron Scepter", permanent_index=game.battlefield_index_of(scepter),
+        ability_index=0,
+    ).supported
+    resolve_until_owed(game, "copy_cast")
     return game
 
 
