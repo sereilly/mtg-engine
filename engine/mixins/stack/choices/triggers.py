@@ -832,6 +832,22 @@ class TriggerChoicesMixin:
                                                    graveyard_denial_order)
 
                 piles = list(dict.fromkeys(target["seat"] for target in cards))
+                if choice.data.get("exact_targets"):
+                    # "…exile **two** target sorcery cards from a single
+                    # graveyard" (Spellweaver Helix): a pile offering fewer
+                    # than the printed count is no answer (CR 601.2c), so
+                    # the pile is one that can meet it — another seat's first,
+                    # as for "up to". Taken from every pile, the default named
+                    # an opponent's lone sorcery, the answer was refused, and
+                    # an unasked seat's Helix imprinted nothing beside two of
+                    # its own. The push already removed a trigger no pile can
+                    # answer (CR 603.3d), so one is left.
+                    wanted = int(choice.data["max_targets"])
+                    deep = [
+                        seat for seat in piles
+                        if sum(target["seat"] == seat for target in cards) >= wanted
+                    ]
+                    piles = deep or piles
                 pile = denied_graveyard_pile(choice.player_index, piles)
                 slots = [
                     target["graveyard_index"] for target in cards

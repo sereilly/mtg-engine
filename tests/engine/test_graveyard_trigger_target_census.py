@@ -36,11 +36,14 @@ correct. ``_YARDS`` holds two of each for that reason.
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from engine import Game, PlayerState
 from engine.events import FUNCTIONS_FROM, graveyard_trigger_events
 from engine.faces import compilation_units
+from engine.handlers._filters import graveyard_card_matches
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.stack_targets import names_a_target
@@ -124,7 +127,101 @@ def _tribes(_pool, catalog):
         )
         assert len(tribe) >= 2, subtype
         found.extend(tribe[:2])
+    # "…return target card **named Groffskithur** from your graveyard"
+    # (Groffskithur, at Mirrodin's promotion rehearsal): a printed name
+    # narrows like a tribe, and with no such card on the table CR 603.3d took
+    # the trigger off the stack and the census read "nobody was asked". Two
+    # copies of the named card, found by its name — the card names itself, as
+    # Aphetto Vulture names itself among the Zombies, so the subject
+    # exclusion above does not apply. Two *objects*: two references to one
+    # ``CardDefinition`` in a pile are one card to a stamp, by design
+    # (``Game.graveyard_index_of`` re-locates a stamp to a surviving copy), so
+    # the response test could not tell the exiled copy from the one left.
+    by_name = {card.name.lower(): card for card in catalog}
+    for _card, _trigger, spec, targeted in rows:
+        named = str(spec.get("graveyard_named") or "").lower()
+        if targeted and named in by_name:
+            found.extend([by_name[named], dataclasses.replace(by_name[named])])
+    # "…exile **two** target sorcery cards from a single graveyard"
+    # (Spellweaver Helix, the same rehearsal): a count printed without "up
+    # to" is owed whole (CR 601.2c), and the tests below take a named card
+    # away and ask for the count again — so the controller's pile holds one
+    # card of the type more than the count, found in the catalog as the
+    # tribes are.
+    pile = [_pool[name] for name in _YARDS[0]] + found
+    for _card, _trigger, spec, targeted in rows:
+        count, card_type = spec.get("max_targets"), spec.get("card_type")
+        if not (targeted and spec.get("exact_targets") and isinstance(count, int) and card_type):
+            continue
+        held = {card.name for card in pile if card_type in _printed_types(card)}
+        spares = sorted(
+            (
+                card for card in catalog
+                if card.name not in subjects and card.name not in held
+                and card_type in _printed_types(card)
+            ),
+            key=lambda card: card.name,
+        )
+        extra = spares[: max(0, count + 1 - len(held))]
+        found.extend(extra)
+        pile.extend(extra)
     return found
+
+
+def _printed_types(card) -> set[str]:
+    """The words left of a type line's dash, lowercased."""
+    types, _dash, _subtypes = (card.type_line or "").partition("—")
+    return {word.lower() for word in types.split()}
+
+
+def _count_owed(data) -> int:
+    """How many cards one answer names: the printed count where it is owed
+    whole (``exact_targets`` — Spellweaver Helix's "two target sorcery cards
+    from a single graveyard"), else one. *data* is a prompt's data or a
+    picker's spec; both carry the two keys."""
+    ceiling = data.get("max_targets")
+    if data.get("exact_targets") and isinstance(ceiling, int) and ceiling > 1:
+        return ceiling
+    return 1
+
+
+def _pick(offers, count: int, *, last: bool = True):
+    """``(seat, slots, names)`` — *count* cards out of one pile among
+    *offers* (``(seat, slot, name)``, the order offered): the last pile
+    offering that many and its last cards, or (*last* False) the first pile
+    and its first. None when no pile offers *count*."""
+    by_seat: dict = {}
+    for seat, slot, name in offers:
+        by_seat.setdefault(seat, []).append((slot, name))
+    seats = [seat for seat, cards in by_seat.items() if len(cards) >= count]
+    if not seats:
+        return None
+    seat = seats[-1] if last else seats[0]
+    chosen = by_seat[seat][-count:] if last else by_seat[seat][:count]
+    return seat, [slot for slot, _name in chosen], [name for _slot, name in chosen]
+
+
+def _cast_announcement(probe, card):
+    """``(seat, slots)`` — what the census announces for *card*'s entry
+    trigger as the permanent is cast, read off the cast's own picker on the
+    *probe* table: the first card listed, or, for a count owed whole, that
+    many out of the first pile listing them. None when the picker lists
+    nothing to announce."""
+    spec = probe.cast_target_spec(0, card, optional_cost_payments={}) or {}
+    listed = [
+        (entry["seat"], entry["index"], entry.get("name"))
+        for entry in spec.get("valid_targets") or ()
+    ]
+    picked = _pick(listed, _count_owed(spec), last=False)
+    return None if picked is None else (picked[0], picked[1])
+
+
+def _confirm(game, seat: int, slots: list) -> bool:
+    """Answer the trigger-target prompt with *slots* in *seat*'s pile — one
+    slot as one card, several as one pile's list (``graveyard_indices``)."""
+    if len(slots) == 1:
+        return game.confirm_trigger_target(0, seat=seat, graveyard_index=slots[0])
+    return game.confirm_trigger_target(0, seat=seat, graveyard_indices=list(slots))
 
 
 def test_every_narrowed_trigger_has_a_tribe_on_the_table(_pool, _tribes):
@@ -140,6 +237,18 @@ def test_every_narrowed_trigger_has_a_tribe_on_the_table(_pool, _tribes):
     assert "mercenary" in wanted
     for subtype in wanted:
         assert sum(subtype in _printed_subtypes(card) for card in pile) >= 2, subtype
+    # …and a printed name has two copies, and a count owed whole one card of
+    # its type to spare.
+    for _card, _trigger, spec, targeted in _rows(_pool):
+        if not targeted:
+            continue
+        named = str(spec.get("graveyard_named") or "").lower()
+        if named:
+            assert sum(card.name.lower() == named for card in pile) >= 2, named
+        if spec.get("exact_targets") and spec.get("card_type"):
+            assert sum(
+                spec["card_type"] in _printed_types(card) for card in pile
+            ) > int(spec["max_targets"]), spec
 
 
 def _rows(pool) -> list:
@@ -377,21 +486,29 @@ def test_a_seat_that_can_be_asked_is_asked_and_its_answer_is_the_card_that_moves
             )
             if listed != sorted((seat, slot) for seat, slot, _name in offers):
                 findings.append(f"{label}: the prompt and the cast picker list different cards")
-        seat, slot, name = offers[-1]
-        if not game.confirm_trigger_target(0, seat=seat, graveyard_index=slot):
+        # The last card offered — or, for a count owed whole, that many out of
+        # the last pile offering them (Spellweaver Helix).
+        count = _count_owed(prompt.data)
+        picked = _pick(offers, count)
+        if picked is None:
+            findings.append(f"{label}: no pile offers the {count} cards it owes")
+            continue
+        seat, slots, names_ = picked
+        if not _confirm(game, seat, slots):
             findings.append(f"{label}: the answer was refused")
             continue
         if game.pending_choices_of("trigger_target"):
             findings.append(f"{label}: still owed after the answer")
         if not item.targets_chosen or item.target_graveyard_card is None:
             findings.append(f"{label}: the answer is not on the stack object")
-        if f"targets {name} in {game.players[seat].name}'s graveyard" not in game.log[-1]:
+        named = ", ".join(names_)
+        if f"targets {named} in {game.players[seat].name}'s graveyard" not in game.log[-1]:
             findings.append(f"{label}: the choice was not logged ({game.log[-1]!r})")
         _drain(game)
         gone = _left(before, _yards(game))
-        if gone != [(name, seat)]:
-            findings.append(f"{label}: named {name} in pile {seat}; {gone} left a graveyard")
-        elif len(offers) > 1:
+        if sorted(gone) != sorted((name, seat) for name in names_):
+            findings.append(f"{label}: named {named} in pile {seat}; {gone} left a graveyard")
+        elif len(offers) > count:
             off_default += 1
 
     assert asked >= _MIN_TARGETED, f"only {asked} triggers asked"
@@ -425,8 +542,21 @@ def test_a_seat_nobody_asks_takes_the_card_the_resolution_used_to_find(_pool, _t
             findings.append(f"{label}: nothing was chosen as it went on the stack")
             continue
         own_only = bool(spec.get("own_graveyard_only"))
+        expected = 0 if own_only else 1
+        count = _count_owed(spec)
+        if count > 1 and not own_only and sum(
+            graveyard_card_matches(spec, card, game=game, owner=1)
+            for card in game.players[1].graveyard
+        ) < count:
+            # A count owed whole is answered out of a pile that can meet it
+            # (CR 601.2c): the opposing one where it holds that many, else
+            # the controller's (Spellweaver Helix beside one opposing
+            # sorcery and its controller's own).
+            expected = 0
+        if count > 1 and len(stamps) != count:
+            findings.append(f"{label}: chose {len(stamps)} cards where it owes {count}")
         for stamp in stamps:
-            if stamp.seat != (0 if own_only else 1):
+            if stamp.seat != expected:
                 findings.append(f"{label}: chose from pile {stamp.seat}")
         _drain(game)
         gone = _left(before, _yards(game))
@@ -457,8 +587,10 @@ def test_the_named_card_exiled_in_response_is_not_replaced_by_another(
         _fire(game, card, trigger)
         prompt = _prompt(game, trigger)
         if prompt is not None:
-            seat, slot, _name = _offers(prompt)[0]
-            assert game.confirm_trigger_target(0, seat=seat, graveyard_index=slot), label
+            seat, slots, _names = _pick(
+                _offers(prompt), _count_owed(prompt.data), last=False,
+            )
+            assert _confirm(game, seat, slots), label
         item = _object(game, trigger)
         if item is None or item.target_graveyard_card is None:
             findings.append(f"{label}: no chosen card on the stack")
@@ -499,17 +631,15 @@ def test_a_card_named_at_the_cast_and_exiled_in_response_to_the_trigger_is_not_r
         if not targeted or trigger.condition.kind != "enters_battlefield":
             continue
         probe = _table(_pool, _tribes, hand=[card])
-        listed = [
-            (entry["seat"], entry["index"])
-            for entry in probe.cast_target_spec(0, card, optional_cost_payments={}).get("valid_targets") or ()
-        ]
-        if not listed:
+        announced = _cast_announcement(probe, card)
+        if announced is None:
             continue
-        seat, slot = listed[0]
+        seat, slots = announced
         game = _table(_pool, _tribes, hand=[card])
-        named = game.players[seat].graveyard[slot]
+        named = [game.players[seat].graveyard[slot] for slot in slots]
         assert game.queue_from_hand(
-            0, card.name, target_player_index=seat, target_permanent_index=slot,
+            0, card.name, target_player_index=seat,
+            target_permanent_index=slots[0] if len(slots) == 1 else list(slots),
         ).supported, card.name
         game.resolve_top_of_stack()
         item = _object(game, trigger)
@@ -518,12 +648,15 @@ def test_a_card_named_at_the_cast_and_exiled_in_response_to_the_trigger_is_not_r
             continue
         examined += 1
         pile = game.players[seat]
-        pile.exile.append(pile.graveyard.pop(pile.graveyard.index(named)))
+        for each in named:
+            pile.exile.append(pile.graveyard.pop(pile.graveyard.index(each)))
         before = _yards(game)
         _drain(game)
         gone = _left(before, _yards(game))
         if gone:
-            findings.append(f"{card.name}: {named.name} was exiled and {gone} moved instead")
+            findings.append(
+                f"{card.name}: {[each.name for each in named]} were exiled and {gone} moved instead"
+            )
 
     assert examined >= _MIN_ENTRY, f"only {examined} examined"
     assert not findings, "\n".join(findings)
@@ -550,38 +683,44 @@ def test_a_card_the_cast_named_stands_and_one_that_left_is_chosen_again(_pool, _
             (entry["seat"], entry["index"])
             for entry in probe.cast_target_spec(0, card, optional_cost_payments={}).get("valid_targets") or ()
         ]
-        if len(listed) < 2:
+        announced = _cast_announcement(probe, card)
+        if len(listed) < 2 or announced is None:
             continue
-        seat, slot = listed[0]
+        seat, slots = announced
+        announcement = slots[0] if len(slots) == 1 else list(slots)
 
         # Named, and still there: it stands.
         game = _table(_pool, _tribes, interactive={0}, hand=[card])
-        named = game.players[seat].graveyard[slot]
+        named = [game.players[seat].graveyard[slot] for slot in slots]
         before = _yards(game)
         assert game.queue_from_hand(
-            0, card.name, target_player_index=seat, target_permanent_index=slot,
+            0, card.name, target_player_index=seat, target_permanent_index=announcement,
         ).supported, label
         game.resolve_top_of_stack()
         item = _object(game, trigger)
         if item is None or _prompt(game, trigger) is not None:
             findings.append(f"{label}: a card named at the cast was asked for again")
             continue
-        stamps = item.target_graveyard_card or [None]
-        if not item.targets_chosen or getattr(stamps[0], "card", None) is not named:
-            findings.append(f"{label}: the cast's card is not the trigger's chosen target")
+        chosen = [getattr(stamp, "card", None) for stamp in _stamps(item)]
+        if not item.targets_chosen or len(chosen) != len(named) or any(
+            got is not want for got, want in zip(chosen, named)
+        ):
+            findings.append(f"{label}: the cast's cards are not the trigger's chosen targets")
         _drain(game)
-        if _left(before, _yards(game)) != [(named.name, seat)]:
-            findings.append(f"{label}: named {named.name}; {_left(before, _yards(game))} moved")
+        moved = sorted(_left(before, _yards(game)))
+        if moved != sorted((each.name, seat) for each in named):
+            findings.append(f"{label}: named {[each.name for each in named]}; {moved} moved")
         else:
             stood += 1
 
-        # Named, and exiled in response to the permanent spell.
+        # Named, and one of them exiled in response to the permanent spell.
         game = _table(_pool, _tribes, interactive={0}, hand=[card])
         assert game.queue_from_hand(
-            0, card.name, target_player_index=seat, target_permanent_index=slot,
+            0, card.name, target_player_index=seat, target_permanent_index=announcement,
         ).supported, label
         pile = game.players[seat]
-        pile.exile.append(pile.graveyard.pop(slot))
+        left_card = pile.graveyard[slots[0]]
+        pile.exile.append(pile.graveyard.pop(slots[0]))
         game.resolve_top_of_stack()
         prompt = _prompt(game, trigger)
         if prompt is None:
@@ -589,17 +728,20 @@ def test_a_card_the_cast_named_stands_and_one_that_left_is_chosen_again(_pool, _
             continue
         offers = _offers(prompt)
         if not offers or any(
-            game.players[s].graveyard[i] is not None and (s, i) == (seat, slot)
-            and game.players[s].graveyard[i] is named
-            for s, i, _n in offers
+            game.players[s].graveyard[i] is left_card for s, i, _n in offers
         ):
             findings.append(f"{label}: the card that left is still on offer")
-        again_seat, again_slot, again_name = offers[-1]
+        picked = _pick(offers, _count_owed(prompt.data))
+        if picked is None:
+            findings.append(f"{label}: asked again, and no pile offers what it owes")
+            continue
+        again_seat, again_slots, again_names = picked
         before = _yards(game)
-        assert game.confirm_trigger_target(0, seat=again_seat, graveyard_index=again_slot), label
+        assert _confirm(game, again_seat, again_slots), label
         _drain(game)
-        if _left(before, _yards(game)) != [(again_name, again_seat)]:
-            findings.append(f"{label}: chose {again_name}; {_left(before, _yards(game))} moved")
+        moved = sorted(_left(before, _yards(game)))
+        if moved != sorted((name, again_seat) for name in again_names):
+            findings.append(f"{label}: chose {again_names}; {moved} moved")
         else:
             rechosen += 1
 
