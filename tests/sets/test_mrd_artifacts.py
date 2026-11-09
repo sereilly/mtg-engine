@@ -364,6 +364,78 @@ def test_w1g5_soul_foundry_with_nothing_imprinted_makes_nothing(set_pool):
     assert [p for p in game.controlled_by(0) if p.metadata.get("is_token")] == []
     assert any("no card is exiled with it" in line for line in game.log)
 
+def _w1g5_shield_imprints(set_pool, graveyard_index):
+    """Mourner's Shield cast for an interactive seat 0, its imprint aimed at
+    Bob's graveyard card at *graveyard_index* (Shatter, then Grizzly Bears)
+    and taken; Bob controls Mons's Goblin Raiders and Grizzly Bears."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, _alice, bob = _w1g5_table(set_pool, [mrd["Mourner's Shield"]], interactive=True)
+    game.enforce_mana_costs = False
+    bob.graveyard.extend([lea["Shatter"], lea["Grizzly Bears"]])
+    goblin = _w1g5_put(game, 1, lea["Mons's Goblin Raiders"])
+    bears = _w1g5_put(game, 1, lea["Grizzly Bears"])
+    assert game.cast_from_hand(0, "Mourner's Shield").supported
+    assert game.resolve_top_of_stack() is False
+    assert game.confirm_trigger_target(0, seat=1, graveyard_index=graveyard_index)
+    game.resolve_top_of_stack()
+    assert [c.kind for c in game.pending_choices] == ["optional_pay"]
+    assert game.confirm_optional_pay(0, accept=True)
+    _w1g5_resolve_stack(game)
+    shield = _w1g5_named(game, "Mourner's Shield")
+    shield.metadata["summoning_sickness_turn"] = -99
+    return game, bob, shield, goblin, bears
+
+
+def _w1g5_shield_against(game, shield, source):
+    result = game.activate_permanent_ability(
+        0, "Mourner's Shield", permanent_index=game.battlefield_index_of(shield),
+        ability_index=0, source_seat=game.controller_index_of(source),
+        source_permanent_index=game.battlefield_index_of(source),
+    )
+    assert result.supported, result.details
+    _w1g5_resolve_stack(game)
+
+
+def test_w1g5_mourners_shield_stops_a_source_sharing_the_imprinted_cards_color(set_pool):
+    """"{2}, {T}: Prevent all damage that would be dealt this turn by a source
+    of your choice that shares a color with the exiled card." Shatter (red)
+    imprinted, a red Goblin chosen: none of its damage this turn is dealt, to
+    a player or to a creature; a green source's damage still is."""
+    from tests.helpers import _damage_dealt as _w1g5_damage_dealt
+
+    game, bob, shield, goblin, bears = _w1g5_shield_imprints(set_pool, 0)
+    assert [c.name for c in bob.exile] == ["Shatter"]
+    _w1g5_shield_against(game, shield, goblin)
+    alice = game.players[0]
+    assert _w1g5_damage_dealt(game, alice, 2, source=goblin, combat=True) == 0
+    assert _w1g5_damage_dealt(game, bears, 1, source=goblin) == 0
+    assert _w1g5_damage_dealt(game, alice, 2, source=bears, combat=True) == 2
+
+
+def test_w1g5_mourners_shield_chosen_source_must_share_the_color(set_pool):
+    """A green source chosen against a red imprint shares nothing: the shield
+    is rechecked as the damage would be dealt (CR 609.7b) and prevents none."""
+    from tests.helpers import _damage_dealt as _w1g5_damage_dealt
+
+    game, _bob, shield, _goblin, bears = _w1g5_shield_imprints(set_pool, 0)
+    _w1g5_shield_against(game, shield, bears)
+    assert _w1g5_damage_dealt(game, game.players[0], 2, source=bears) == 2
+
+
+def test_w1g5_mourners_shield_arms_nothing_once_the_imprinted_card_leaves(set_pool):
+    """Grizzly Bears imprinted, then taken out of exile: no card is "the exiled
+    card" any more (CR 607.2a), no colour is left to share, and the shield is
+    not armed at all — the green Bears' damage is dealt."""
+    from tests.helpers import _damage_dealt as _w1g5_damage_dealt
+
+    game, bob, shield, goblin, bears = _w1g5_shield_imprints(set_pool, 1)
+    assert [c.name for c in bob.exile] == ["Grizzly Bears"]
+    (exiled,) = bob.exile
+    assert game.take_card_from_exile(1, exiled)
+    _w1g5_shield_against(game, shield, bears)
+    assert "no colored card is exiled with it" in " ".join(game.log[-3:])
+    assert _w1g5_damage_dealt(game, game.players[0], 2, source=bears) == 2
+
 # ==== end W1G5 ======================================================
 
 

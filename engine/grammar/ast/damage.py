@@ -621,6 +621,12 @@ class PreventDamage:
     #: been paid. So it is a flag beside ``from_filter`` rather than a colour on
     #: it — the filter holds printed words, and there is no word here to hold.
     source_shares_spent_mana_color: bool = False
+    #: "…by a source of your choice **that shares a color with the exiled
+    #: card**." (Mourner's Shield.) The same property tested against the
+    #: colours of the card this permanent's imprint exiled (CR 607.2a), read
+    #: at resolution off the linked exile — a record, so a flag beside the
+    #: spent-mana one for that one's reason: no colour word is printed.
+    source_shares_exiled_card_color: bool = False
     alternate_amount: "Amount | None" = None
     alternate_subject: "ObjectFilter | None" = None
     #: "Prevent the next 5 damage that would be dealt this turn to any number

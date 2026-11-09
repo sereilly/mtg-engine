@@ -134,7 +134,7 @@ def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
     )
 
 
-def _accept_chosen_source(stream: TokenStream) -> "tuple[bool, bool] | None":
+def _accept_chosen_source(stream: TokenStream) -> "tuple[bool, str | None] | None":
     """``by a source of your choice [that shares a color with the mana spent on
     this activation cost]``, or None with the cursor unmoved.
 
@@ -143,9 +143,12 @@ def _accept_chosen_source(stream: TokenStream) -> "tuple[bool, bool] | None":
     Protective Sphere). Read before the ordinary "by <noun phrase>" reader,
     which takes "a source" for a described object and strands "of your choice".
 
-    Returns ``(True, shares)`` where *shares* is Protective Sphere's property
-    clause — a restriction on which source may be chosen, so it is consumed
-    here with the phrase it narrows or the whole clause is refused. Nothing
+    Returns ``(True, shares)`` where *shares* names what the chosen source
+    must share a colour with — ``"spent_mana"`` for Protective Sphere's "the
+    mana spent on this activation cost", ``"exiled_card"`` for Mourner's
+    Shield's "the exiled card" (CR 607.2a), None when nothing is printed. A
+    restriction on which source may be chosen, so it is consumed here with
+    the phrase it narrows or the whole clause is refused. Nothing
     else may follow "of your choice" in this position: a colour word or a card
     type would be printed *in front* of "source" ("a red source of your
     choice"), which this does not read and therefore leaves to refuse.
@@ -154,10 +157,16 @@ def _accept_chosen_source(stream: TokenStream) -> "tuple[bool, bool] | None":
     if not stream.accept_phrase("by", "a", "source", "of", "your", "choice"):
         stream.reset(mark)
         return None
-    shares = bool(stream.accept_phrase(
+    shares: str | None = None
+    if stream.accept_phrase(
         "that", "shares", "a", "color", "with", "the", "mana", "spent", "on",
         "this", "activation", "cost",
-    ))
+    ):
+        shares = "spent_mana"
+    elif stream.accept_phrase(
+        "that", "shares", "a", "color", "with", "the", "exiled", "card",
+    ):
+        shares = "exiled_card"
     return True, shares
 
 
@@ -469,7 +478,8 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
         return ast.PreventDamage(
             ast.AllOf(), to=recipient, duration=duration,
             combat_only=combat_only, from_filter=ast.ObjectFilter(),
-            source_shares_spent_mana_color=chosen_source[1],
+            source_shares_spent_mana_color=chosen_source[1] == "spent_mana",
+            source_shares_exiled_card_color=chosen_source[1] == "exiled_card",
             prevented_rider=_parse_prevented_this_way_rider(stream),
         )
     if dealt_by is None and stream.accept_word("by"):
