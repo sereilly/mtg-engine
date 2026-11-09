@@ -787,6 +787,38 @@ def test_w1g5_spellweaver_helix_with_one_card_left_does_nothing(set_pool):
     assert game.is_on_battlefield(moon)
     assert not any("Spellweaver Helix" in line for line in game.log[before:])
 
+def test_w1g5_synod_sanctum_exiles_your_own_permanent_and_returns_the_pile(set_pool):
+    """Drive list. "{2}, {T}: Exile target permanent you control." — an
+    opponent's creature is no target — and "{2}, Sacrifice this artifact:
+    Return all cards exiled with this artifact to the battlefield under your
+    control." The Bears comes back a new object (CR 400.7)."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, _bob = _w1g5_table(set_pool, interactive=True)
+    sanctum = _w1g5_put(game, 0, mrd["Synod Sanctum"])
+    bears = _w1g5_put(game, 0, lea["Grizzly Bears"])
+    giant = _w1g5_put(game, 1, lea["Hill Giant"])
+    alice.mana_pool["C"] = 2
+    refused = game.activate_permanent_ability(
+        0, "Synod Sanctum", permanent_index=game.battlefield_index_of(sanctum),
+        ability_index=0, target_permanent_ids=[giant.permanent_id],
+    )
+    assert not refused.supported and game.is_on_battlefield(giant)
+    assert game.activate_permanent_ability(
+        0, "Synod Sanctum", permanent_index=game.battlefield_index_of(sanctum),
+        ability_index=0, target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert [c.name for c in alice.exile] == ["Grizzly Bears"]
+    alice.mana_pool["C"] = 2
+    assert game.activate_permanent_ability(
+        0, "Synod Sanctum", permanent_index=game.battlefield_index_of(sanctum),
+        ability_index=1,
+    ).supported
+    _w1g5_resolve_stack(game)
+    returned = _w1g5_named(game, "Grizzly Bears")
+    assert returned is not bears and alice.exile == []
+    assert [c.name for c in alice.graveyard] == ["Synod Sanctum"]
+
 # ==== end W1G5 ======================================================
 
 
