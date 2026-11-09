@@ -265,7 +265,7 @@ def copied_activated_ability_lines(
     triggered one does not (2004-12-01: "gains only activated abilities").
 
     The target's name becomes the gainer's (the reminder text's "use this
-    creature's name instead"; CR 201.5a makes the name the object itself),
+    creature's name instead"; CR 201.5b: the first name is treated as the second),
     whole-name and case-insensitive the way :func:`bind_granter` matches. A
     line the gainer could not then compile is left out, which is the
     probe's rule for every grant: an ability recorded and never read would be

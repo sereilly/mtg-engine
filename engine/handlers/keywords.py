@@ -700,7 +700,7 @@ def gain_activated_abilities_of_target(
 
     Read off the target **as the ability resolves** (2004-12-01: the abilities
     are gained then, and it can be any creature it can target, whoever
-    controls it), renamed to the gainer (CR 201.5a), and recorded on the one
+    controls it), renamed to the gainer (CR 201.5b), and recorded on the one
     quoted-grant channel (``_grant_ability_texts``) with the printed duration —
     so each copy is an ability of the gainer from then on: its own costs, its
     own "activate only once each turn" budget (2004-10-04: two copies are
