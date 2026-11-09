@@ -10,6 +10,8 @@ every other module asks at least one of them.
 
 from __future__ import annotations
 
+from engine.game_result_bans import player_cant_lose
+
 from .session_store import Session
 
 
@@ -39,9 +41,13 @@ def _player_has_lost(game, seat: int) -> bool:
     player = game.players[seat]
     if getattr(player, "lost", False):
         return True
+    # "You can't lose the game …" (Platinum Angel): the fallback is CR 704.5a
+    # read early, so it asks the same ban the engine's loss funnel asks
+    # (``engine/game_result_bans.py``) — without it a player at 0 life behind
+    # an Angel was shown the game as lost while the engine played on.
     if player.life <= 0 and not game._player_controls_text(
         player, "you don't lose the game for having 0 or less life"
-    ):
+    ) and not player_cant_lose(game, seat):
         return True
     return False
 

@@ -30,6 +30,7 @@ from .ai_weighed_cast import permitted_casts
 from .card_loader import load_cards
 from .face_down import cast_announces_morph
 from .game import Game
+from .game_result_bans import player_cant_lose
 from .oracle import compile_card_oracle
 from .models import CardDefinition, PlayerState
 from .limited_deck import build_limited_deck, limited_sideboard
@@ -1380,7 +1381,13 @@ def run_ai_simulation(
                 # turn of the game and buries whatever comes next.
                 initial_cards = current
 
-            if active_player.life <= 0 or opponent.life <= 0 or active_player.lost or opponent.lost:
+            if active_player.lost or opponent.lost or any(
+                # A seat at 0 life ends the game unless a printed ban keeps
+                # it playing (Platinum Angel, ``engine/game_result_bans.py``):
+                # the engine plays on, so the simulation does too.
+                player.life <= 0 and not player_cant_lose(game, seat)
+                for seat, player in ((active, active_player), (1 - active, opponent))
+            ):
                 break
 
         report.cards_from_outside_game += sum(
