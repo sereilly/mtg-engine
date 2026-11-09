@@ -55,7 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | SCG | 143 | 262 | 82.4% | 82.1% | 55.0% | 120 |
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| MRD *(measured)* | 291 | 456 | 72.6% | 70.4% | 50.0% | 188 |
+| MRD *(measured)* | 291 | 456 | 74.8% | 72.6% | 52.0% | 197 |
 | **All (shipped)** | **8992** | **13323** | **90.0%** | **89.5%** | **62.1%** | **7036** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -68,7 +68,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 902 | 484 | expected a subject |  |
+| 893 | 475 | expected a subject |  |
 | 199 | 104 | unrecognized effect verb |  |
 | 145 | 79 | unconsumed text |  |
 | 71 | 52 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -889,6 +889,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature is turned face up, all creatures get -X/-X until end of turn.`
 - **Banshee**
   - `{X}, {T}: This creature deals half X damage, rounded down, to any target, and half X damage, rounded up, to you.`
+- **Banshee's Blade**
+  - `Whenever equipped creature deals combat damage, put a charge counter on this Equipment.`
 - **Barbarian Bully**
   - `Discard a card at random: This creature gets +2/+2 until end of turn unless a player has this creature deal 4 damage to them. Activate only once each turn.`
 - **Barbarian Guides**
@@ -2742,6 +2744,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Dead Ringers**
   - `Destroy two target nonblack creatures unless either one is a color the other isn't. They can't be regenerated.`
+- **Dead-Iron Sledge**
+  - `Whenever equipped creature blocks or becomes blocked by a creature, destroy both creatures.`
 - **Deadapult**
   - `{R}, Sacrifice a Zombie: This enchantment deals 2 damage to any target.`
 - **Deadshot**
@@ -3695,6 +3699,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}{U}, {T}: Gain control of target legendary permanent. (This effect lasts indefinitely.)`
 - **Empyrial Armor**
   - `Enchanted creature gets +1/+1 for each card in your hand.`
+- **Empyrial Plate**
+  - `Equipped creature gets +1/+1 for each card in your hand.`
 - **Enchantment Alteration**
   - `Attach target Aura attached to a creature or land to another permanent of that type.`
   - `Attach target Aura attached to a creature or land to another permanent of that type.`
@@ -5016,6 +5022,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {W}.`
 - **Golden Wish**
   - `You may reveal an artifact or enchantment card you own from outside the game and put it into your hand. Exile Golden Wish.`
+- **Golem-Skin Gauntlets**
+  - `Equipped creature gets +1/+0 for each Equipment attached to it.`
 - **Golgothian Sylex**
   - `{1}, {T}: Each nontoken permanent with a name originally printed in the Antiquities expansion is sacrificed by its controller.`
 - **Goremand**
@@ -7204,6 +7212,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Pay 2 life: Prevent the next 1 damage that would be dealt to target creature this turn.`
 - **Mask of Intolerance**
   - `At the beginning of each player's upkeep, if there are four or more basic land types among lands that player controls, this artifact deals 3 damage to that player.`
+- **Mask of Memory**
+  - `Whenever equipped creature deals combat damage to a player, you may draw two cards. If you do, discard a card.`
 - **Mask of the Mimic**
   - `Search your library for a card with the same name as target nontoken creature, put that card onto the battlefield, then shuffle.`
 - **Masked Blackguard**
@@ -7968,6 +7978,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Creatures target player controls get +1/+1 until end of turn.`
 - **Night Soil**
   - `{1}, Exile two creature cards from a single graveyard: Create a 1/1 green Saproling creature token.`
+- **Nightmare Lash**
+  - `Equipped creature gets +1/+1 for each Swamp you control.`
 - **Nightscape Apprentice**
   - `{U}, {T}: Put target creature you control on top of its owner's library.`
   - `{R}, {T}: Target creature gains first strike until end of turn.`
@@ -10236,6 +10248,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}: Exile any number of cards from your hand face down. Put that many cards from the top of your library into your hand. Then look at the exiled cards and put them on top of your library in any order.`
 - **Scrying Glass**
   - `{3}, {T}: Choose a number greater than 0 and a color. Target opponent reveals their hand. If that opponent reveals exactly the chosen number of cards of the chosen color, you draw a card.`
+- **Scythe of the Wretched**
+  - `Whenever a creature dealt damage by equipped creature this turn dies, return that card to the battlefield under your control. Attach this Equipment to that creature.`
 - **Sea Kings' Blessing**
   - `One or more target creatures become blue until end of turn.`
 - **Sea Monster**
@@ -11755,6 +11769,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Sword Dancer**
   - `{W}{W}: Target attacking creature gets -1/-0 until end of turn.`
   - `{W}{W}: Target attacking creature gets -1/-0 until end of turn.`
+- **Sword of Kaldra**
+  - `Whenever equipped creature deals damage to a creature, exile that creature. (Exile it only if it's still on the battlefield.)`
 - **Sword of the Ages**
   - `{T}, Sacrifice this artifact and any number of creatures you control: This artifact deals X damage to any target, where X is the total power of the creatures sacrificed this way, then exile this artifact and those creature cards.`
 - **Sword of the Chosen**
@@ -13699,6 +13715,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Worldly Tutor**
   - `Search your library for a creature card, reveal it, then shuffle and put the card on top.`
   - `Search your library for a creature card, reveal it, then shuffle and put the card on top.`
+- **Worldslayer**
+  - `Whenever equipped creature deals combat damage to a player, destroy all permanents other than this Equipment.`
 - **Wormfang Behemoth**
   - `When this creature enters, exile all cards from your hand.`
   - `When this creature leaves the battlefield, return the exiled cards to their owner's hand.`
