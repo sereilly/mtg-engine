@@ -176,12 +176,14 @@ def lower_naming_statement(
         return (OracleInstruction("exile_bound_card_from_graveyard", "", {}),)
 
     if isinstance(statement, ast.NameThenConsult):
-        return (
-            OracleInstruction(
-                "name_then_consult", "",
-                {"exile_count": _amount_payload(statement.exile_count)},
-            ),
-        )
+        consult: dict[str, object] = {
+            "exile_count": _amount_payload(statement.exile_count),
+        }
+        # "…and you lose 1 life for each of the exiled cards." (Spoils of the
+        # Vault.) Omitted at 0 so Demonic Consultation's payload is unchanged.
+        if statement.life_per_exiled:
+            consult["life_per_exiled"] = statement.life_per_exiled
+        return (OracleInstruction("name_then_consult", "", consult),)
 
     if isinstance(statement, ast.NameThenRevealTop):
         # "Target player chooses…" is the only subject printed on this

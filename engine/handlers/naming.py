@@ -309,6 +309,9 @@ def name_then_consult(game: Game, instruction: OracleInstruction, context: Oracl
         "name_then_consult", seat,
         card_name=context.card.name if context.card is not None else "",
         exile_count=int(instruction.payload.get("exile_count", 0) or 0),
+        # "…and you lose 1 life for each of the exiled cards" (Spoils of the
+        # Vault): the price on the reveal's pile, paid in the answer.
+        life_per_exiled=int(instruction.payload.get("life_per_exiled", 0) or 0),
         # A player knows what is in their own library, only not its order
         # (CR 400.2), so naming its commonest remaining card is a choice a human
         # at the table could make — and it is deterministic, which is what a

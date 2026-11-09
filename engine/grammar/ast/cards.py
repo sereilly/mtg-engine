@@ -752,10 +752,21 @@ class NameThenConsult:
     the named card may be among them. A reading that searched for the name
     first would be Demonic Tutor with extra words.
 
-    ``exile_count`` is the only number the sentence carries, so it is the only
-    field — a card printing "the top three cards" is this same paragraph.
+    ``exile_count`` is the number of cards exiled unseen before the reveal — a
+    card printing "the top three cards" is this same paragraph.
+
+    ``Choose a card name. Reveal cards from the top of your library until you
+    reveal a card with that name, then put that card into your hand. Exile all
+    other cards revealed this way, and you lose 1 life for each of the exiled
+    cards.`` (Spoils of the Vault.) The same dig with no unseen exile in front
+    of it (``exile_count`` is ``Fixed(0)``) and a price on the pile behind it:
+    ``life_per_exiled`` is the life lost for each card the reveal exiled,
+    0 where nothing is printed. Only the reveal's own pile is counted — the
+    ruling (2018-12-07): "If no card with the chosen name is in your library,
+    you exile your library and lose 1 life for each of those cards."
     """
     exile_count: Amount
+    life_per_exiled: int = 0
 
 
 @dataclass(frozen=True)
