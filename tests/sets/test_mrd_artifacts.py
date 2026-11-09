@@ -308,6 +308,7 @@ def test_w1g5_duplicant_follows_an_exiled_cards_characteristic_defining_pt(set_p
     game._recompute_continuous_effects()
     assert (duplicant.effective_power, duplicant.effective_toughness) == (3, 3)
 
+
 def test_w1g5_soul_foundry_makes_a_copy_of_the_imprinted_creature_for_its_mana_value(set_pool):
     """"{X}, {T}: Create a token that's a copy of the exiled card. X is the mana
     value of that card." Hill Giant imprinted: X is 4 — two mana is refused —
@@ -363,6 +364,7 @@ def test_w1g5_soul_foundry_with_nothing_imprinted_makes_nothing(set_pool):
     _w1g5_resolve_stack(game)
     assert [p for p in game.controlled_by(0) if p.metadata.get("is_token")] == []
     assert any("no card is exiled with it" in line for line in game.log)
+
 
 def _w1g5_shield_imprints(set_pool, graveyard_index):
     """Mourner's Shield cast for an interactive seat 0, its imprint aimed at
@@ -486,6 +488,7 @@ def test_w1g5_extraplanar_lens_without_its_card_adds_nothing(set_pool):
     _w1g5_resolve_stack(game)
     assert game.is_on_battlefield(target)
     assert _w1g5_tapped_for(game, 0, forest) == {"G": 1}
+
 
 def _w1g5_prison_imprints(set_pool, pick_name, *, interactive=True):
     """Thought Prison cast at Bob for an interactive seat 0: the offer taken
@@ -701,6 +704,7 @@ def test_w1g5_isochron_scepter_offer_is_answered_on_the_wire(set_pool):
     )
     _w1g5_resolve_stack(game)
     assert bob.life == 17 and game.pending_choices == []
+
 
 def _w1g5_helix_imprints(set_pool, buried, *, interactive=True):
     """Spellweaver Helix with the two sorceries *buried* in Bob's graveyard
