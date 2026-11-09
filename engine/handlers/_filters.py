@@ -431,6 +431,11 @@ def graveyard_card_matches(spec: dict, card, *, game=None, owner=None) -> bool:
     # would have gone on being wrong.
     if card_types and not any(card_has_type(card, name) for name in card_types):
         return False
+    # "target **artifact creature** card" (Skeleton Shard): every printed type
+    # at once — a conjunction, where the key above is a union.
+    every_type = tuple(spec.get("card_types_all") or ())
+    if every_type and not all(card_has_type(card, name) for name in every_type):
+        return False
     # "target **white or black** creature card" (Dreams of the Dead). A union:
     # the card answers when it is any one of the printed colours. It was a
     # single symbol read as ``colors[0]`` off a phrase that could name several,
@@ -484,7 +489,7 @@ def graveyard_card_matches(spec: dict, card, *, game=None, owner=None) -> bool:
         spec.get("graveyard_mana_value"), int(getattr(card, "cmc", 0) or 0)
     ):
         return False
-    if card_types or spec.get("any_card"):
+    if card_types or every_type or spec.get("any_card"):
         return True
     card_type = spec.get("card_type")
     if card_type is not None:

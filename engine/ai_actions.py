@@ -214,6 +214,12 @@ class ActivationAction:
     # for every other ability. See `ai_text_changes.ranked_word_choices`.
     old_color: str | None = None
     new_color: str | None = None
+    # Which printed activation cost "{3}, {T} or {U}, {T}" announces (the
+    # Mirrodin Shards; CR 602.2b through 601.2b) — `CastAction`'s
+    # ``alternative_cost_index``, the same name for the same idea. None for an
+    # ability printing one cost, and the engine's default
+    # (`activation_cost_alternatives.default_alternative_index`) otherwise.
+    alternative_cost_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -353,6 +359,8 @@ def activation_announcement(action: ActivationAction) -> dict:
         # uses.
         "old_color": action.old_color,
         "mana_color": action.new_color,
+        # Which printed activation cost ("{3}, {T} or {U}, {T}") is paid.
+        "alternative_cost_index": action.alternative_cost_index,
     }
 
 

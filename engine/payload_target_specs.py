@@ -389,6 +389,10 @@ def _graveyard_return_spec(payload: dict) -> dict:
         # "target instant or sorcery card" (Shipwreck Dowser) — the union the
         # round-19 graveyard picker already tests by primary type.
         spec["card_types"] = list(payload["card_types"])
+    elif payload.get("card_types_all"):
+        # "target **artifact creature** card" (Skeleton Shard): the
+        # conjunction, handed over in the key ``graveyard_card_matches`` reads.
+        spec["card_types_all"] = list(payload["card_types_all"])
     elif payload.get("any_card"):
         spec["any_card"] = True
     elif payload.get("card_type") not in (None, "creature"):

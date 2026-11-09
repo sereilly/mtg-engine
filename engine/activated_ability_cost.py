@@ -440,6 +440,23 @@ class ActivatedAbilityCost:
     #: moves cards **to a library**. CR 118.3 makes it unpayable from a pile
     #: holding fewer cards. Last for ``mill_cards``' stated reason.
     graveyard_to_library_bottom: int = 0
+    #: "**{3}, {T} or {U}, {T}**: Return target creature to its owner's hand
+    #: …" (Crystal Shard and the four other Mirrodin Shards). The *other*
+    #: printed activation costs, each a symbol dict like :attr:`mana`, that the
+    #: activator may pay **instead of** it — one ability with a choice of
+    #: costs (the 2004-10-04 ruling: "You can pay either of the two costs (but
+    #: not both at the same time) to activate the ability"), announced as the
+    #: ability is activated (CR 602.2b through CR 601.2b) and charged by
+    #: ``Game.activation_mana_charge`` for the one chosen
+    #: (``engine/activation_cost_alternatives.py``).
+    #:
+    #: Only the mana differs: the reader admits an "or" whose halves print the
+    #: same non-mana costs, which every field above already says once.
+    #: Empty for every other ability. Separate from :attr:`alternative_mana`,
+    #: which is a mana payment offered instead of a *life* payment ("Pay 2
+    #: life or {2}") and is folded into the price beside :attr:`mana`; these
+    #: replace :attr:`mana` whole. Last for ``mill_cards``' stated reason.
+    mana_alternatives: tuple[dict[str, int], ...] = ()
 
     @property
     def is_loyalty(self) -> bool:

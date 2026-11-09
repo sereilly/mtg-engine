@@ -819,6 +819,13 @@ def _action_activate(session, req, seat_type):
                 # damage that would be dealt to target creature" (Samite Pilgrim)
                 # returned 200 and shielded the opponent.
                 seat_announced=req.target_seat is not None,
+                # "{3}, {T} or {U}, {T}" (the Mirrodin Shards): which printed
+                # cost the player announced (CR 602.2b through 601.2b), on the
+                # request field the cast path already reads for CR 118.9a's
+                # choice — one idea, one name. The prices are offered as the
+                # permanent's ``ability_cost_alternatives``; absent is the
+                # engine's default (the cost the pool, else the board, pays).
+                alternative_cost_index=req.alternative_cost_index,
             )
 
         # The auto-tap, where every gate of this route has passed: tap what

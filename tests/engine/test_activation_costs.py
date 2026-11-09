@@ -399,4 +399,37 @@ def test_every_admitted_cost_clause_is_charged(pool):
                             f"{card.name}: charged alternative "
                             f"{charged.alternative_mana!r} for {alternative!r}"
                         )
+            # "{3}, {T} **or {U}, {T}**" (the Mirrodin Shards). One ability
+            # with a choice of printed costs, so the failure a comparison
+            # catches is the flat one again: a charger that does not split the
+            # "or" charges {3} **and** {U}, and one that drops the second half
+            # offers no {U} at all. Compared as non-zero symbol counts, in
+            # printed order — the grammar spells pips sparsely and the charger
+            # as a full symbol dict.
+            def _sparse(mana) -> dict:
+                return {symbol: count for symbol, count in dict(mana).items() if count}
+
+            wanted_alternatives = [
+                _sparse(cost.pips) for cost in node.costs
+                if isinstance(cost, ast.AlternativeManaCost)
+            ]
+            charged_alternatives = [
+                _sparse(mana) for mana in charged.mana_alternatives
+            ]
+            if charged_alternatives != wanted_alternatives:
+                unpaid.append(
+                    f"{card.name}: charged alternative costs "
+                    f"{charged_alternatives!r} for {wanted_alternatives!r}"
+                )
+            if wanted_alternatives:
+                first = next(
+                    (_sparse(cost.pips) for cost in node.costs
+                     if isinstance(cost, ast.ManaCost)),
+                    {},
+                )
+                if _sparse(charged.mana) != first:
+                    unpaid.append(
+                        f"{card.name}: charged {_sparse(charged.mana)!r} as the "
+                        f"first printed cost {first!r}"
+                    )
     assert not unpaid, "cost clauses parsed but never charged: " + "; ".join(unpaid)

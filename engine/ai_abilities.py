@@ -62,7 +62,8 @@ from .targeting import (
 from .target_descriptions import SINGLE_GRAVEYARD
 from .target_roles import OPTIONAL_ROLE, role_is_seat
 from .cost_pickers import spec_is_a_cost
-from .ai_payment import _plan_land_taps, tap_planned_lands
+from .ai_payment import (_plan_land_taps, plan_printed_activation_cost,
+                         tap_planned_lands)
 from .ai_rehearsal import Rehearsal, deliberating, rehearse
 from .ai_weighed_cast import _effect_steps
 from .ai_actions import ActivationAction, activation_announcement
@@ -833,9 +834,14 @@ def _activation_candidate(
 
     land_taps: tuple[int, ...] = ()
     tap_colors: tuple[str, ...] = ()
-    required = dict(ability.cost.mana)
-    if game.enforce_mana_costs and any(required.values()) and not x_symbols:
-        plan = _plan_land_taps(game, player, required, paying_for=permanent)
+    # "{3}, {T} or {U}, {T}" (the Mirrodin Shards): which printed cost is
+    # announced, and its plan — the cheapest the board pays. None for an
+    # ability printing one cost.
+    alternative_cost_index = None
+    if game.enforce_mana_costs and not x_symbols:
+        alternative_cost_index, plan = plan_printed_activation_cost(
+            game, player, ability.cost, paying_for=permanent,
+        )
         if plan is None:
             return None
         land_taps, tap_colors = plan
@@ -855,6 +861,7 @@ def _activation_candidate(
         cost_hand_index=madness_discard,
         ability_index=ability_index,
         chosen_keyword=chosen_keyword,
+        alternative_cost_index=alternative_cost_index,
     )
     if x_symbols:
         return _sized_x_activation(

@@ -490,8 +490,23 @@ class EventSpellManaCost:
     """
 
 
+@dataclass(frozen=True)
+class AlternativeManaCost:
+    """"{3}, {T} **or {U}, {T}**: …" (the Mirrodin Shards) — the mana a printed
+    "or" offers *instead of* the :class:`ManaCost` beside it.
+
+    One ability with a choice of costs (2004-10-04: "You can pay either of the
+    two costs (but not both at the same time)"), so it is one more entry in the
+    ability's cost tuple rather than a second ability: everything the halves
+    share is said once by the entries beside it, and the parse admits an "or"
+    only where the halves share every non-mana cost — exactly what
+    ``ActivatedAbilityCost.mana_alternatives`` can charge.
+    """
+    pips: tuple[tuple[str, int], ...] = ()
+
+
 Cost = Union[
-    ManaCost, TapSelf, SacrificeCost, DiscardCost, PayLifeCost,
+    ManaCost, TapSelf, AlternativeManaCost, SacrificeCost, DiscardCost, PayLifeCost,
     EventSpellManaCost,
     PayManaPerCounterCost, ExileSelf,
     ExileCost, ExileTopOfLibraryCost, ExileGraveyardPositionCost,

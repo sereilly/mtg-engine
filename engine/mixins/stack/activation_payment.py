@@ -24,6 +24,7 @@ it.
 
 from __future__ import annotations
 
+from ...activation_cost_alternatives import printed_mana_costs
 from ...aura_grants import attached_ability_cost_reduction
 from ...cost_modifiers import (ability_cost_reduction, ability_cost_tax,
                                 sacrifice_taxes)
@@ -190,6 +191,7 @@ class ActivationPaymentMixin:
     def activation_mana_charge(
         self, controller_index, permanent, ability, *, x_value=None,
         alternative_mana=None, target_stack_item=None,
+        alternative_cost_index=None,
     ):
         """The mana activating *ability* of *permanent* charges (CR 601.2f
         via 602.2b): the printed symbols, a per-counter rate, the "…or {2}"
@@ -209,7 +211,15 @@ class ActivationPaymentMixin:
         alternative_mana = alternative_mana or {}
         price_notes: list[str] = []
         log_lines: list[str] = []
-        required_cost = dict(ability.cost.mana)
+        # "{3}, {T} **or {U}, {T}**" (the Mirrodin Shards): the printed cost
+        # the activator announced (*alternative_cost_index*, CR 602.2b through
+        # 601.2b), which replaces the first one whole — every tax and
+        # reduction below then applies to it, CR 601.2f totalling the cost
+        # that is actually being paid. An index naming no printed cost is the
+        # path's refusal (``activation_cost_alternatives``), asked before this.
+        costs = printed_mana_costs(ability.cost)
+        chosen = alternative_cost_index or 0
+        required_cost = dict(costs[chosen] if 0 <= chosen < len(costs) else costs[0])
         # "Pay {1} **for each +1/+1 counter on this creature**" (Skeleton
         # Scavengers). CR 601.2f computes the cost as the ability is
         # activated, so the rate is multiplied here -- the same moment

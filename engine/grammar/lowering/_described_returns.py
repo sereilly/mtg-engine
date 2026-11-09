@@ -135,6 +135,19 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
     # picker, cast gate and handler all ask that one predicate.
     if filt.colors:
         subtypes = {**subtypes, "graveyard_colors": list(filt.colors)}
+    if len(filt.card_types) > 1 and filt.type_match == "all":
+        # "Return target **artifact creature** card from your graveyard to your
+        # hand." (Skeleton Shard, Moriok Scavenger.) Two types the card must
+        # **both** have (CR 205.2a), which the union key below cannot say: read
+        # as one, the Shard returned a Grizzly Bears or a Sol Ring. Its own
+        # additive key, read by the same ``graveyard_card_matches``, so every
+        # union's payload is byte-identical.
+        return {
+            "any_card": False,
+            "card_type": None,
+            "card_types_all": list(filt.card_types),
+            **subtypes,
+        }
     if len(filt.card_types) > 1:
         return {
             "any_card": False,

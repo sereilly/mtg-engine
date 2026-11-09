@@ -30,6 +30,9 @@ from engine.mana_payment import taps_for_payment
 from engine.object_colors import card_colors
 from engine.line_classification import LOYALTY_ANY_TIME_STATIC
 from engine.oracle import compile_card_oracle
+from engine.activation_cost_alternatives import (has_alternative_costs,
+                                              mana_cost_text,
+                                              printed_mana_costs)
 from engine.keywords import abilities_lost_at, derived_ability_lines
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
@@ -1529,6 +1532,19 @@ def _serialize_player(
             text_change = [ability_text_change_offer(game, ability) for ability in usable]
             if any(entry is not None for entry in text_change):
                 perm_dict["ability_text_change"] = text_change
+            # The printed activation costs each ability offers a choice
+            # between ("{3}, {T} or {U}, {T}", the Mirrodin Shards), as mana
+            # strings in printed order — the index of the one chosen is what
+            # the activate action's ``alternative_cost_index`` sends back
+            # (CR 602.2b through 601.2b). Indexed like ``ability_index``;
+            # absent where no ability prints an "or" between costs.
+            cost_choices = [
+                [mana_cost_text(mana) for mana in printed_mana_costs(ability.cost)]
+                if has_alternative_costs(ability.cost) else None
+                for ability in usable
+            ]
+            if any(entry is not None for entry in cost_choices):
+                perm_dict["ability_cost_alternatives"] = cost_choices
     # …and, after them, the permanents on their way onto this seat's board
     # (``_serialize_arriving``), after the board's own so no slot a client
     # addresses an action by moves.

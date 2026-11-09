@@ -953,6 +953,45 @@ def _asked_color(
     return next(iter(option.units[0]))
 
 
+def plan_printed_activation_cost(
+    game: Game, player: PlayerState, cost, *,
+    paying_for: "Permanent | None" = None,
+) -> "tuple[int | None, tuple[tuple[int, ...], tuple[str, ...]] | None]":
+    """Which printed activation cost to announce and how to pay it:
+    ``(alternative_cost_index, plan)`` — the plan :func:`_plan_land_taps`
+    makes, or None when no printed cost can be paid from this board.
+
+    "{3}, {T} **or** {U}, {T}" (the Mirrodin Shards) is one ability with two
+    prices (CR 602.2b through 601.2b), and the policy pays the **cheapest** it
+    can plan — the one that taps the fewest sources, ties to the printed
+    order — so a Shard is not passed over for want of three mana when one {U}
+    pays it. The index is None for an ability printing one cost, which keeps
+    every such action's announcement exactly what it was.
+    """
+    from .activation_cost_alternatives import (has_alternative_costs,
+                                               printed_mana_costs)
+
+    costs = printed_mana_costs(cost)
+    if not has_alternative_costs(cost):
+        required = costs[0]
+        if not any(required.values()):
+            return None, ((), ())
+        return None, _plan_land_taps(game, player, required, paying_for=paying_for)
+    best: "tuple[int, tuple] | None" = None
+    for index, required in enumerate(costs):
+        plan = (
+            ((), ()) if not any(required.values())
+            else _plan_land_taps(game, player, required, paying_for=paying_for)
+        )
+        if plan is None:
+            continue
+        if best is None or len(plan[0]) < len(best[1][0]):
+            best = (index, plan)
+    if best is None:
+        return None, None
+    return best
+
+
 def _plan_land_taps(
     game: Game, player: PlayerState, required: dict[str, int],
     *, paying_for: "Permanent | None" = None,

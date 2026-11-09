@@ -138,6 +138,174 @@ def test_w1g8_scrabbling_claws_target_player_picks_from_their_own_graveyard(set_
     assert "B exiled Grizzly Bears from B's graveyard (Scrabbling Claws)" in game.log
 
 
+_W1G8_SHARDS = {
+    "Crystal Shard": "U", "Granite Shard": "R", "Heartwood Shard": "G",
+    "Pearl Shard": "W", "Skeleton Shard": "B",
+}
+
+
+def _w1g8_granite(set_pool, pool, **announced):
+    """Granite Shard activated at seat 1's face from *pool*, costs enforced."""
+    game, (shard,) = _w1g8_board(set_pool, [set_pool("MRD")["Granite Shard"]])
+    game.enforce_mana_costs = True
+    game.players[0].mana_pool.update(pool)
+    result = game.activate_permanent_ability(
+        0, "Granite Shard", target_player_index=1, **announced
+    )
+    _w1g8_resolve_stack(game)
+    left = {s: n for s, n in game.players[0].mana_pool.items() if n}
+    return game, shard, result, left
+
+
+def test_w1g8_the_shards_print_one_ability_with_two_costs(set_pool):
+    """2004-10-04: "You can pay either of the two costs (but not both at the
+    same time) to activate the ability." One activated ability per Shard,
+    charged {3} or its colour, never both."""
+    mrd = set_pool("MRD")
+    for name, colour in _W1G8_SHARDS.items():
+        program = _w1g8_compile(mrd[name])
+        assert program.supported, name
+        (ability,) = program.activated_abilities
+        assert ability.cost.requires_tap
+        assert {s: n for s, n in ability.cost.mana.items() if n} == {"generic": 3}
+        assert [
+            {s: n for s, n in mana.items() if n} for mana in ability.cost.mana_alternatives
+        ] == [{colour: 1}], name
+
+
+def test_w1g8_granite_shard_pays_whichever_cost_was_announced(set_pool):
+    """CR 602.2b through 601.2b: the activator announces which printed cost,
+    and CR 601.2f totals that one. With none announced the pool decides —
+    the cheapest cost it covers — and a pool covering both pays one."""
+    for pool, announced, paid, left in (
+        ({"R": 1}, {}, "{R}", {}),
+        ({"C": 3}, {}, "{3}", {}),
+        ({"R": 1, "C": 3}, {}, "{R}", {"C": 3}),
+        ({"R": 3}, {"alternative_cost_index": 0}, "{3}", {}),
+        ({"R": 3}, {"alternative_cost_index": 1}, "{R}", {"R": 2}),
+    ):
+        game, shard, result, remaining = _w1g8_granite(set_pool, pool, **announced)
+        assert result.supported, (pool, announced, result.details)
+        assert game.players[1].life == 19 and shard.tapped
+        assert f"Granite Shard: activated for {paid}" in game.log
+        assert remaining == left, (pool, announced, remaining)
+
+
+def test_w1g8_granite_shard_refuses_a_cost_it_cannot_pay_or_does_not_print(set_pool):
+    for pool, announced, why in (
+        ({"C": 2}, {}, "insufficient mana"),
+        ({"R": 1}, {"alternative_cost_index": 0}, "insufficient mana"),
+        ({"R": 1}, {"alternative_cost_index": 2}, "no printed activation cost 2"),
+    ):
+        game, shard, result, remaining = _w1g8_granite(set_pool, pool, **announced)
+        assert not result.supported and why in result.details, result.details
+        assert not shard.tapped and game.players[1].life == 20
+        assert remaining == pool
+
+
+def test_w1g8_the_ai_announces_the_cheapest_cost_its_lands_pay(set_pool):
+    """The planner sees both prices: one Mountain pays {R}; three other lands
+    pay {3}; with neither the Shard is not proposed."""
+    from engine.ai_abilities import choose_activation_action
+
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    for lands, expected in (
+        (["Mountain"], 1),
+        (["Island", "Forest", "Swamp"], 0),
+        (["Island", "Forest"], None),
+    ):
+        game, _placed = _w1g8_board(
+            set_pool, [mrd["Granite Shard"], *(lea[name] for name in lands)],
+            [lea["Hill Giant"]],
+        )
+        game.enforce_mana_costs = True
+        action = choose_activation_action(game, 0)
+        if expected is None:
+            assert action is None or action.permanent_name != "Granite Shard"
+            continue
+        assert action is not None and action.permanent_name == "Granite Shard"
+        assert action.alternative_cost_index == expected, lands
+
+
+def test_w1g8_crystal_shard_bounces_unless_the_creatures_controller_pays(set_pool):
+    """"…unless its controller pays {1}": the offer is the *creature's*
+    controller's. Driven as an interactive defender who pays and who
+    declines, and as a defender with no mana to pay."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    for answer in (True, False):
+        game, (shard, bears, swamp) = _w1g8_board(
+            set_pool, [mrd["Crystal Shard"]], [lea["Grizzly Bears"], lea["Swamp"]],
+        )
+        game.enforce_mana_costs = True
+        game.interactive_seats = {0, 1}
+        game.players[0].mana_pool["U"] = 1
+        assert game.activate_permanent_ability(
+            0, "Crystal Shard", target_permanent_ids=[bears.permanent_id]
+        ).supported
+        assert "Crystal Shard: activated for {U}" in game.log
+        owed = [(c.kind, c.player_index) for c in game.pending_choices]
+        assert owed == [("optional_pay", 1)], owed
+        assert game.resolve_pending_choice("optional_pay", 1, accept=answer)
+        assert game.is_on_battlefield(bears) is answer
+        assert swamp.tapped is answer
+    game, (shard, bears) = _w1g8_board(
+        set_pool, [mrd["Crystal Shard"]], [lea["Grizzly Bears"]],
+    )
+    game.players[0].mana_pool["C"] = 3
+    game.enforce_mana_costs = True
+    assert game.activate_permanent_ability(
+        0, "Crystal Shard", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert not game.is_on_battlefield(bears)
+    assert [c.name for c in game.players[1].hand] == ["Grizzly Bears"]
+
+
+def test_w1g8_skeleton_shard_returns_only_an_artifact_creature_card(set_pool):
+    """"target **artifact creature** card": both types (CR 205.2a). Read as a
+    union the picker offered a Grizzly Bears and a Sol Ring and the default
+    returned the Bears."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, (shard,) = _w1g8_board(set_pool, [mrd["Skeleton Shard"]])
+    game.players[0].graveyard = [lea["Grizzly Bears"], lea["Sol Ring"], mrd["Ornithopter"]]
+    ability = _w1g8_compile(shard.card).activated_abilities[0]
+    offered = [e.get("name") for e in game.activation_offer(0, shard, ability)["valid_targets"]]
+    assert offered == ["Ornithopter"]
+    refused = game.activate_permanent_ability(
+        0, "Skeleton Shard", target_permanent_index=0, target_player_index=0,
+    )
+    assert not refused.supported and not shard.tapped
+    assert game.activate_permanent_ability(0, "Skeleton Shard").supported
+    _w1g8_resolve_stack(game)
+    assert [c.name for c in game.players[0].hand] == ["Ornithopter"]
+    assert [c.name for c in game.players[0].graveyard] == ["Grizzly Bears", "Sol Ring"]
+
+
+def test_w1g8_heartwood_pearl_and_granite_shards_resolve(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, (heartwood, pearl, granite, bears) = _w1g8_board(
+        set_pool,
+        [mrd["Heartwood Shard"], mrd["Pearl Shard"], mrd["Granite Shard"], lea["Grizzly Bears"]],
+        hand=[lea["Lightning Bolt"]],
+    )
+    assert game.activate_permanent_ability(
+        0, "Heartwood Shard", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert game._has_keyword(bears, "trample")
+    # "Prevent the next 2 damage that would be dealt to any target this turn."
+    assert game.activate_permanent_ability(0, "Pearl Shard", target_player_index=0).supported
+    _w1g8_resolve_stack(game)
+    game.cast_from_hand(0, "Lightning Bolt", target_player_index=0)
+    _w1g8_resolve_stack(game)
+    assert game.players[0].life == 19
+    assert game.activate_permanent_ability(
+        0, "Granite Shard", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert bears.damage_marked == 1
+
+
 def test_w1g8_scrabbling_claws_on_an_empty_graveyard_exiles_nothing(set_pool):
     mrd = set_pool("MRD")
     game, (claws,) = _w1g8_board(set_pool, [mrd["Scrabbling Claws"]])

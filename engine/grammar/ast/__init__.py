@@ -43,6 +43,7 @@ family — which is what makes moving a node between families a non-event.
 """
 
 from .costs import (
+    AlternativeManaCost,
     ManaCost,
     TapSelf,
     SacrificeCost,
@@ -586,6 +587,7 @@ __all__ = [
     "Duration",
     "Zone",
     "GraveyardPosition",
+    "AlternativeManaCost",
     "ManaCost",
     "TapSelf",
     "SacrificeCost",
