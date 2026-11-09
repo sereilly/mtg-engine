@@ -187,6 +187,61 @@ def test_the_copy_cast_offer_is_read_by_its_seat_alone_and_can_be_declined():
     assert any("did not cast a copy of Lightning Bolt" in line for line in game.log)
 
 
+@needs_node
+def test_a_copy_of_a_card_in_another_seats_exile_asks_for_its_spec():
+    """Spellweaver Helix exiles from any graveyard, so the card a copy is made
+    from can sit in another player's exile, serialized for its owner with no
+    cast spec. ``beginCopyCast`` asks ``card_target_spec`` for it (as this
+    caster, from exile) before opening the cast chain, and an X in the mana
+    cost is not asked: a copy cast without paying it has X = 0 (CR 107.3b)."""
+    out = run_app_js(
+        ["beginCopyCast", "copyCastExiledCard", "copyCastWay", "normalizeCardName", "xLivesInManaCost"],
+        """
+        currentState = { players: [
+          { exile: [] },
+          { exile: [{ name: "Blaze", mana_cost: "{X}{R}" }] },
+        ] };
+        await beginCopyCast({ player_seat: 0, card_name: "Blaze", source_name: "Spellweaver Helix",
+          exile_seat: 1, exile_index: 0 });
+        return { fetched, zoneCasts };
+        """,
+        {},
+        prelude="""
+let seat = 0, sessionId = "s", currentState = null;
+const fetched = [];
+const zoneCasts = [];
+async function fetch(url) {
+  fetched.push(url);
+  return { ok: true, async json() {
+    return { target_spec: { kind: "any", announces_x: true, valid_targets: [] }, modes: [] };
+  } };
+}
+function beginZoneCast(card, zone, entry, way, opts) { zoneCasts.push({ card, zone, entry, way, opts }); }
+function updateActionHint() {}
+""",
+    )
+    (url,) = out["fetched"]
+    assert "/card_target_spec?" in url and "from_zone=exile" in url and "card_name=Blaze" in url
+    (cast,) = out["zoneCasts"]
+    assert cast["zone"] == "exile" and cast["opts"] == {"copyCastSlot": 0}
+    assert cast["card"]["target_spec"]["kind"] == "any"
+    assert cast["card"]["target_spec"]["announces_x"] is False
+    assert cast["way"]["price"] == "{0}" and cast["way"]["free"] is True
+
+
+def test_every_cast_body_passes_through_the_copy_cast_rewrite():
+    """``sendAction`` is the one place every cast prompt ends: the copy cast's
+    rewrite is made there, after the zone is carried, and the panel yields to
+    the cast's own prompts once it has begun; a cancelled cast clears it."""
+    from tests.helpers import app_js_function_body
+
+    sender = app_js_function_body("sendAction")
+    assert "carryCopyCastAnswer(body)" in sender
+    assert sender.index("carryCastZoneAndCost(body)") < sender.index("carryCopyCastAnswer(body)")
+    assert "applyCopyCastPrompt(copyCastInfo)" in app_js_function_body("renderActivationPrompt")
+    assert "pendingCopyCast = null" in app_js_function_body("clearPendingHandCast")
+
+
 # ---------------------------------------------------------------------------
 # The Shards' cost choice
 # ---------------------------------------------------------------------------
