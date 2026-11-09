@@ -174,6 +174,19 @@ def _recipient_board(card: CardDefinition, trig):
     dealt to the subject)."""
     game = _table()
     payload = trig.condition.payload or {}
+    if trig.condition.kind == "damage_dealt" and payload.get("damage_recipient") == "an opponent":
+        # "Whenever **an opponent** is dealt damage" (War Elemental, MRD W1G6):
+        # the same two unblocked attackers, with the watcher on their side so
+        # the seat dealt damage is its controller's opponent. Placed without
+        # its entry, because War Elemental's own entry trigger sacrifices it on
+        # a turn no opponent has been dealt damage.
+        watcher = Permanent(card=card)
+        game.players[0].battlefield.append(watcher)
+        game._sync_control()
+        before = game.players[1].life
+        attackers = [_put(game, 0, _test_creature(f"Attacker {i}", 1, 1)) for i in range(2)]
+        _combat(game, attackers, [])
+        return game, watcher, game.players[1], before - game.players[1].life
     if trig.condition.kind == "damage_dealt":
         # "Whenever you're dealt damage": the watcher's controller is dealt
         # damage by two unblocked attackers at once.
