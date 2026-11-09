@@ -175,6 +175,15 @@ CHOICE_KEYS = (
     # announcement to the matcher is what keeps a cast-time choice and an
     # entry-time choice (An-Zerrin Ruins) answerable by one reader.
     "chosen_creature_type",
+    # The copy-as-it-enters "may" answered **no** ("You may have this creature
+    # enter as a copy of any creature on the battlefield" — Clone, Sculpting
+    # Steel; the rulings: "You can choose not to copy anything"). Announced
+    # with the cast in place of the copy target (``decline_copy``) and copied
+    # onto the entering permanent by the resolution, for
+    # ``chosen_creature_type``'s reason: the permanent does not exist yet.
+    # ``enter_effects.COPY_DECLINED`` names the key; written only where
+    # declined.
+    "copy_declined",
     # The announcement named **no target, legally** ("up to one target
     # creature" at zero — CR 601.2c, CR 115.6). Not a choice beyond the target
     # but the record that the target choice was *made and came back empty*,
