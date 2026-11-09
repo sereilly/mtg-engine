@@ -555,7 +555,8 @@ _BOARD_DEPENDENT_MANA_KEYS = ("per_each", "per_each_counter_on_source")
 def _land_mana_is_unplannable(game: Game, land: Permanent) -> bool:
     """Whether the mana *land*'s default tap makes is **restricted** ("Spend
     this mana only …", CR 106.6 — the ``spend_only`` the add-mana handler
-    files it under) or **board-dependent** (`_BOARD_DEPENDENT_MANA_KEYS`).
+    files it under) or **board-dependent** (`_BOARD_DEPENDENT_MANA_KEYS`)
+    and decided by this board at nothing.
 
     This was the planner's exclusion list: such a land was left out of every
     plan rather than guessed at. `ai_payment._plan_land_taps` no longer asks it — it
@@ -577,7 +578,18 @@ def _land_mana_is_unplannable(game: Game, land: Permanent) -> bool:
         for key in _BOARD_DEPENDENT_MANA_KEYS
         if hasattr(step, "payload")
     ):
-        return True
+        # An amount the board decides is unplannable where it decides at
+        # **nothing** — the reading ``Game.payment_lands`` states for
+        # it and the colour branch below already makes — and plannable for
+        # what the seam makes from it now (``board_payment.land_tap_yields``,
+        # the AI cast plan's own reading). Cloudpost ("{T}: Add {C} for each
+        # Locus on the battlefield") is the land that showed it: a Locus
+        # itself, it makes {C} alone, and the old blanket answer left it out
+        # of every counter-unless and upkeep payment while the cast plan
+        # counted it — the tap census's one disagreeing row (MRD W1G3).
+        from .board_payment import land_tap_yields
+
+        return not land_tap_yields(game, land)
     # A land whose *colours* the board decides and whose amount it does not
     # ("Choose a color of a permanent you control. Add one mana of that
     # color.", Meteor Crater) is plannable for exactly what that board offers

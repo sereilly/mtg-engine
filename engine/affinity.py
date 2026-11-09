@@ -36,9 +36,6 @@ disagreed with its keyword would still cost what CR 702.41a says.
 from __future__ import annotations
 
 import re
-from functools import lru_cache
-
-from .oracle_types import compilation_cache
 
 #: "Affinity for artifacts (This spell costs {1} less to cast for each artifact
 #: you control.)" — the keyword, its [text], and an optional parenthesised
@@ -77,8 +74,6 @@ def _counted_phrase(text: str) -> str | None:
     return " ".join([*words[:-1], single])
 
 
-@compilation_cache
-@lru_cache(maxsize=None)
 def affinity_sentence(line: str) -> str | None:
     """The rules sentence CR 702.41a says the affinity keyword *line* means,
     or None when *line* is not one or this cannot write it.
@@ -88,6 +83,11 @@ def affinity_sentence(line: str) -> str | None:
     reader applies it in full (``self_cost_modifiers.self_cost_reduction``), so
     a rewrite never produces text that would be claimed by nothing — the line
     stays as printed instead, and :func:`unread_affinity_line` names it.
+
+    Uncached: the answer depends on the grammar's per-each reader, and the
+    cache that holds that answer is the self-reduction reader's own
+    (registered with ``clear_compilation_caches``) — a second cache here would
+    keep a stubbed grammar's answer after the stub was gone.
     """
     match = _AFFINITY_LINE.match((line or "").strip())
     if match is None:

@@ -247,14 +247,6 @@ class SelfCostReduction:
     per_each: dict | None = None
 
 
-# ``@compilation_cache`` since a reduction may be sized by a count: the spec
-# in ``per_each`` comes out of the grammar's lowering, so a caller that swaps
-# a piece of that out and back (``tests/engine/test_domain_count.py`` swaps
-# the very line that makes a domain count a count of *types*) must be able to
-# empty this too — left holding the swapped answer, Stratadon would count
-# lands for the rest of the process with every instrument reading green.
-@compilation_cache
-@lru_cache(maxsize=None)
 def self_cost_reductions(oracle_text: str) -> tuple[SelfCostReduction, ...]:
     """Every reduction *oracle_text* applies to itself, one per line read.
 
@@ -270,6 +262,11 @@ def self_cost_reductions(oracle_text: str) -> tuple[SelfCostReduction, ...]:
     must be one reading of one sentence, or the card reports supported and is
     cast at full price — which is what Thoughtcast did on the day Mirrodin was
     ingested.
+
+    Uncached on purpose: what is cached is each line's reading
+    (:func:`_line_self_cost_reduction`), the function that asks the grammar,
+    so ``clear_compilation_caches()`` empties the one place a count spec is
+    held. This is a substring test, a split and a lookup per line.
     """
     from .affinity import expand_affinity_lines
 
@@ -290,6 +287,14 @@ def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
     return found[0] if found else None
 
 
+# ``@compilation_cache`` since a reduction may be sized by a count: the spec
+# in ``per_each`` comes out of the grammar's lowering, so a caller that swaps
+# a piece of that out and back (``tests/engine/test_domain_count.py`` swaps
+# the very line that makes a domain count a count of *types*) must be able to
+# empty this too — left holding the swapped answer, Stratadon would count
+# lands for the rest of the process with every instrument reading green.
+@compilation_cache
+@lru_cache(maxsize=None)
 def _line_self_cost_reduction(line: str) -> SelfCostReduction | None:
     """The reduction one lower-cased printed *line* applies to its own spell,
     or None when it states none this reader can apply in full."""
