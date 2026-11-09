@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **6144**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **643**
+- With deletion-probe findings (ignored words): **639**
 
 ## Measured sets — reported, not gated
 
@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**19 unclaimed sentence(s) across 18 supported card(s).**
+**18 unclaimed sentence(s) across 17 supported card(s).**
 
 - **Betrayal of Flesh**
   - `entwine—sacrifice three lands`
@@ -51,8 +51,6 @@ anything anyone did, and every ingest would arrive red.
   - `entwine {4}`
 - **Roar of the Kha**
   - `entwine {1}{w}`
-- **Scrabbling Claws**
-  - `{t}: target player exiles a card from their graveyard`
 - **Solar Tide**
   - `entwine—sacrifice two lands`
 - **Soul Foundry**
@@ -108,7 +106,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Apocalypse Chime | `destroy all nontoken permanents with a name originally printed in the ` | all |
 | Arc Lightning | `arc lightning deals 3 damage divided as you choose among one, two, or ` | or |
 | Arena of the Ancients | `tap all legendary creatures` | all |
-| Argivian Find | `return target artifact or enchantment card from your graveyard to your` | or |
 | Armageddon | `destroy all lands` | all |
 | Ashen Firebeast | `this creature deals 1 damage to each creature without flying` | each |
 | Aura Graft | `gain control of target aura that's attached to a permanent. attach it ` | that's |
@@ -251,7 +248,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Escape Routes | `return target white or black creature you control to its owner's hand` | or |
 | Evacuation | `return all creatures to their owners' hands` | all |
 | Evaporate | `evaporate deals 1 damage to each white and/or blue creature` | each and/or |
-| Experimental Overload | `create an x/x blue and red weird creature token, where x is the number` | cards or |
+| Experimental Overload | `create an x/x blue and red weird creature token, where x is the number` | cards |
 | Explosive Growth | `target creature gets +2/+2 until end of turn. if this spell was kicked` | spell |
 | Extinction | `destroy all creatures of the creature type of your choice` | all |
 | Extruder | `if this permanent came under your control since the beginning of your ` | permanent |
@@ -304,7 +301,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Hail Storm | `hail storm deals 2 damage to each attacking creature and 1 damage to y` | each |
 | Hakim, Loreweaver | `destroy all auras attached to hakim` | all |
 | Hammer Mage | `destroy all artifacts with mana value x or less` | all |
-| Hanna, Ship's Navigator | `return target artifact or enchantment card from your graveyard to your` | or |
 | Harbinger of Night | `put a -1/-1 counter on each creature` | each |
 | Harmonic Convergence | `put all enchantments on top of their owners' libraries` | all |
 | Harsh Mercy | `each player chooses a creature type. destroy all creatures that aren't` | all |
@@ -524,7 +520,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Rebuild | `return all artifacts to their owners' hands` | all |
 | Recantation | `return up to x target permanents to their owners' hands, where x is th` | enchantment |
 | Reins of Power | `untap all creatures you control and all creatures target opponent cont` | all all all |
-| Relearn | `return target instant or sorcery card from your graveyard to your hand` | or |
 | Relentless Assault | `untap all creatures that attacked this turn. after this main phase, th` | all |
 | Remote Farm | `add {w}{w}. if there are no depletion counters on this land, sacrifice` | land, |
 | Remove Enchantments | `return to your hand all enchantments you both own and control, all aur` | all all all all all all |
@@ -583,7 +578,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Shard Phoenix | `it deals 2 damage to each creature without flying` | each |
 | Shatterstorm | `destroy all artifacts. they can't be regenerated` | all |
 | Shelkin Brownie | `target creature loses all "bands with other" abilities until end of tu` | all abilities |
-| Shipwreck Dowser | `return target instant or sorcery card from your graveyard to your hand` | or |
 | Shivan Raptor | `if this permanent came under your control since the beginning of your ` | permanent |
 | Shivan Wurm | `return a red or green creature you control to its owner's hand` | or |
 | Shoving Match | `until end of turn, all creatures gain "{t}: tap target creature."` | all |

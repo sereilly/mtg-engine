@@ -55,7 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | SCG | 143 | 262 | 82.4% | 82.1% | 55.0% | 120 |
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| MRD *(measured)* | 291 | 456 | 79.2% | 78.5% | 56.6% | 213 |
+| MRD *(measured)* | 291 | 456 | 81.4% | 80.9% | 59.0% | 223 |
 | **All (shipped)** | **8992** | **13323** | **90.0%** | **89.5%** | **62.1%** | **7036** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -69,11 +69,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 883 | 465 | expected a subject |  |
-| 198 | 103 | unrecognized effect verb |  |
-| 140 | 74 | unconsumed text |  |
+| 197 | 102 | unrecognized effect verb |  |
+| 139 | 73 | unconsumed text |  |
 | 71 | 52 | granted ability in quotes | phase 3 (quoted abilities) |
 | 41 | 8 | expected what this creature can't block, or a duration |  |
-| 38 | 38 | unrecognized activation cost |  |
+| 33 | 33 | unrecognized activation cost |  |
 | 24 | 20 | expected 'unless defending player controls' |  |
 | 22 | 16 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 7 | 1 | no lowering for RawEffect |  |
@@ -85,14 +85,14 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 2 | expected 'top' |  |
 | 3 | 1 | expected 'of' |  |
-| 3 | 2 | expected 'the number of' in a where-clause |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 3 | an Aura's continuous grant is derived by engine/auras.py |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | expected a keyword ability |  |
 | 2 | 2 | expected 'put' |  |
 | 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
 
 ## Cards executing through the grammar
 
@@ -727,6 +727,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Aurification**
   - `Whenever a creature deals damage to you, put a gold counter on it.`
   - `When this enchantment leaves the battlefield, remove all gold counters from all creatures.`
+- **Auriok Bladewarden**
+  - `{T}: Target creature gets +X/+X until end of turn, where X is this creature's power.`
 - **Auriok Steelshaper**
   - `As long as this creature is equipped, each creature you control that's a Soldier or a Knight gets +1/+1.`
 - **Auriok Transfixer**
@@ -2557,6 +2559,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.`
+- **Crystal Shard**
+  - `{3}, {T} or {U}, {T}: Return target creature to its owner's hand unless its controller pays {1}.`
 - **Crystal Spray**
   - `Change the text of target spell or permanent by replacing all instances of one color word with another or one basic land type with another until end of turn.`
   - `Draw a card.`
@@ -4836,6 +4840,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add one mana of any color.`
 - **Glintwing Invoker**
   - `{7}{U}: This creature gets +3/+3 and gains flying until end of turn.`
+- **Glissa Sunseeker**
+  - `{T}: Destroy target artifact if its mana value is equal to the amount of unspent mana you have.`
 - **Glittering Lion**
   - `{3}: Until end of turn, this creature loses "Prevent all damage that would be dealt to this creature." Any player may activate this ability.`
 - **Glittering Lynx**
@@ -5088,6 +5094,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Granite Grip**
   - `Enchanted creature gets +1/+0 for each Mountain you control.`
   - `Enchanted creature gets +1/+0 for each Mountain you control.`
+- **Granite Shard**
+  - `{3}, {T} or {R}, {T}: This artifact deals 1 damage to any target.`
 - **Grapeshot Catapult**
   - `{T}: This creature deals 1 damage to target creature with flying.`
   - `{T}: This creature deals 1 damage to target creature with flying.`
@@ -5398,6 +5406,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Target creature with power 2 or less can't be blocked this turn.`
 - **Heartwood Giant**
   - `{T}, Sacrifice a Forest: This creature deals 2 damage to target player or planeswalker.`
+- **Heartwood Shard**
+  - `{3}, {T} or {G}, {T}: Target creature gains trample until end of turn.`
 - **Heat Ray**
   - `Heat Ray deals X damage to target creature.`
 - **Heat Stroke**
@@ -8483,6 +8493,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Pearl Dragon**
   - `{1}{W}: This creature gets +0/+1 until end of turn.`
   - `{1}{W}: This creature gets +0/+1 until end of turn.`
+- **Pearl Shard**
+  - `{3}, {T} or {W}, {T}: Prevent the next 2 damage that would be dealt to any target this turn.`
 - **Pearlspear Courier**
   - `{2}{W}, {T}: Target Soldier creature gets +2/+2 and has vigilance for as long as this creature remains tapped.`
 - **Peat Bog**
@@ -9145,6 +9157,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{4}, {T}: You may put a creature card from your hand onto the battlefield.`
 - **Quicksilver Dragon**
   - `{U}: If target spell has only one target and that target is this creature, change that spell's target to another creature.`
+- **Quicksilver Elemental**
+  - `{U}: This creature gains all activated abilities of target creature until end of turn. (If any of the abilities use that creature's name, use this creature's name instead.)`
 - **Quicksilver Wall**
   - `{4}: Return this creature to its owner's hand. Any player may activate this ability.`
 - **Quiet Speculation**
@@ -10256,6 +10270,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Scouting Trek**
   - `Search your library for any number of basic land cards, reveal those cards, then shuffle and put them on top.`
 - **Scrabbling Claws**
+  - `{T}: Target player exiles a card from their graveyard.`
   - `{1}, Sacrifice this artifact: Exile target card from a graveyard. Draw a card.`
 - **Scrap**
   - `Destroy target artifact.`
@@ -10801,6 +10816,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, it deals 1 damage to any target.`
 - **Skeleton Scavengers**
   - `Pay {1} for each +1/+1 counter on this creature: Regenerate this creature. When it regenerates this way, put a +1/+1 counter on it.`
+- **Skeleton Shard**
+  - `{3}, {T} or {B}, {T}: Return target artifact creature card from your graveyard to your hand.`
 - **Skeleton Ship**
   - `When you control no Islands, sacrifice Skeleton Ship.`
   - `{T}: Put a -1/-1 counter on target creature.`
@@ -11985,6 +12002,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, you may search your library and/or graveyard for a card named Teferi, Timeless Voyager, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Tel-Jilad Exile**
   - `{1}{G}: Regenerate this creature.`
+- **Tel-Jilad Stylus**
+  - `{T}: Put target permanent you own on the bottom of your library.`
 - **Telekinesis**
   - `Tap target creature. Prevent all combat damage that would be dealt by that creature this turn. It doesn't untap during its controller's next two untap steps.`
 - **Telekinetic Bonds**
@@ -13127,6 +13146,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}: This creature loses trample until end of turn. Any player may activate this ability.`
 - **Violent Eruption**
   - `Violent Eruption deals 4 damage divided as you choose among any number of targets.`
+- **Viridian Joiner**
+  - `{T}: Add an amount of {G} equal to this creature's power.`
 - **Viridian Shaman**
   - `When this creature enters, destroy target artifact.`
 - **Visara the Dreadful**
