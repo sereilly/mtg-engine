@@ -258,10 +258,9 @@ def test_w1g1_banshees_blade_charges_on_combat_damage_and_keeps_its_counters(set
     assert _w1g1_pt(ogre) == (3, 3)
 
 
-def test_w1g1_banshees_blade_does_not_charge_when_its_creature_deals_no_damage(set_pool):
-    """A blocked creature whose blocker is removed deals no combat damage
-    (CR 510.1c) — no counter. Here: the equipped creature does not attack at
-    all, and an unequipped attacker's damage is not the Blade's event."""
+def test_w1g1_banshees_blade_unattached_does_not_charge(set_pool):
+    """The trigger watches the creature the Blade is attached to: with the
+    Blade equipping nothing, an attacker's combat damage is not its event."""
     mrd, lea = set_pool("MRD"), set_pool("LEA")
     game = _w1g1_table(set_pool)
     blade = _w1g1_put(game, mrd["Banshee's Blade"], 0)
@@ -508,7 +507,8 @@ def test_w1g1_scythe_of_the_wretched_steals_the_creature_its_host_killed(set_poo
     assert _w1g1_pt(stolen[0]) == (4, 4)
     assert _w1g1_pt(giant) == (3, 3)
     assert game.players[1].graveyard == []
-    # Ownership never moved (CR 400.3): it is still the opponent's card.
+    # Control moved, ownership did not (CR 108.3): it is still the
+    # opponent's card.
     assert game.owner_index_of(stolen[0]) == 1
 
 
