@@ -499,16 +499,24 @@ def _activation_candidate(
     # **An X that sizes only the effect is announced now** (ONS W2G5: Silklash
     # Spider was never activated), sized by rehearsal (`_sized_x_activation`).
     # Still declined: an X that sizes the target list (the spec's
-    # ``x_targets``, Candelabra, CR 601.2c) and one the card defines (Voodoo
-    # Doll — the engine computes it, and refuses where it cannot).
+    # ``x_targets``, Candelabra, CR 601.2c).
+    #
+    # **An X the card defines is priced as the engine charges it** (MRD W2G5):
+    # "{X}, {T}: Create a token that's a copy of the exiled card. X is the
+    # mana value of that card." (Soul Foundry; Voodoo Doll, Bargaining Table.)
+    # Nobody announces it, so there is nothing to size: the charge below
+    # (`Game.activation_mana_charge`, which reads `cost_x_definitions`) is the
+    # price, planned like a printed one, and the rehearsal judges the rest.
+    # Declined outright, a Soul Foundry that had taken its imprint made no
+    # token all game.
     from .cost_x_definitions import cost_x_is_defined
 
     x_symbols = (ability.source_line or "").lower().split(":", 1)[0].count("{x}")
-    if x_symbols and (
-        (spec or {}).get("x_targets")
-        or cost_x_is_defined(ability.source_line or "")
-    ):
+    if x_symbols and (spec or {}).get("x_targets"):
         return None
+    if x_symbols and cost_x_is_defined(ability.source_line or ""):
+        # The X the activator announces: none, here.
+        x_symbols = 0
     # An ability naming several targets of *different* kinds, chosen in
     # dependency order (CR 602.2b reaches CR 601.2c). Asked before the
     # single-target block below, which has no arm for it: the kind is

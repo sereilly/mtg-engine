@@ -304,10 +304,20 @@ def choose_copy_cast(
     mana cost rather than naming an alternative one (``free``, CR 118.9), so
     it is asked the same way: the same candidate builder, gates, choosers and
     rehearsal, weighed in the abstract because it is asked mid-resolution.
+
+    **Inside a rehearsal it is weighed one level down**
+    (``ai_prompt_picks._one_level_deeper``), as a copy offer's reply is: the
+    copy is the whole of what "{2}, {T}: You may copy the exiled card. If you
+    do, you may cast the copy" buys, so a rehearsal of that activation whose
+    copy was answered by "a rehearsal may not rehearse" cast nothing, moved
+    nothing, and the AI's Isochron Scepter was never activated.
     """
-    return _choose_exile_cast(
-        game, player_index, held, permission, alternative_cost=False,
-    )
+    from .ai_prompt_picks import _one_level_deeper
+
+    with _one_level_deeper():
+        return _choose_exile_cast(
+            game, player_index, held, permission, alternative_cost=False,
+        )
 
 
 def _choose_exile_cast(

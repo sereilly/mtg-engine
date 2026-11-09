@@ -30,6 +30,7 @@ that asks.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from .models import CardDefinition
@@ -460,6 +461,48 @@ def offer_trade(steps) -> OfferTrade | None:
     ):
         return OfferTrade(price="source", purchase="target_permanent")
     return None
+
+
+#: CR 607.2a's two phrases: an ability printed on an object that refers to
+#: "the exiled card(s)" or to cards "exiled with [this object]" is linked to
+#: the ability of that object that exiled them.
+_LINKED_EXILE_PHRASE = re.compile(
+    r"\bthe exiled cards?\b|\bexiled with (?:this|that) ", re.IGNORECASE,
+)
+
+
+def offers_a_hand_imprint(steps, source) -> bool:
+    """Whether an offer is an **imprint** taken out of the taker's hand: its
+    whole accept branch is "you may exile <a card> from your hand", and
+    *source* — the permanent whose ability made the offer — prints another
+    ability linked to that exile (CR 607.2a).
+
+    "Imprint — When this artifact enters, you may exile a nonartifact,
+    nonland card from your hand. / {T}: Add one mana of any of **the exiled
+    card's** colors." (Chrome Mox; Isochron Scepter and Soul Foundry print the
+    same pair.) The exile is the leading step of the offer and a payment out
+    of the seat's own hand, so "make no trades" declined every one — and the
+    purchase is not in the offer at all but in the linked ability, which with
+    nothing exiled does nothing: a Chrome Mox that taps for no mana, an
+    Isochron Scepter that copies nothing, every game.
+
+    The link is read as CR 607.2a states it, off the other abilities the
+    permanent has (its *effective* card's lines, so a copy of one is read as
+    what it copies). An offer whose purchase follows in the same branch
+    (Forsaken City's untap, Ice Cauldron's cast permission) is not this
+    shape: there the price and the purchase are both in front of the
+    reader (:func:`offer_trade`).
+    """
+    steps = [step for step in steps or () if getattr(step, "kind", None)]
+    if len(steps) != 1 or steps[0].kind not in _HAND_CARD_PRICE_KINDS:
+        return False
+    if source is None:
+        return False
+    program = compile_card_oracle(source.effective_card)
+    return any(
+        _LINKED_EXILE_PHRASE.search(line)
+        for line in (program.normalized_text or "").splitlines()
+    )
 
 
 #: The alternatives whose whole effect is to give one permanent a keyword, or

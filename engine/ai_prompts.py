@@ -31,7 +31,7 @@ from __future__ import annotations
 from .ai_target_sides import ability_target_side, spell_seat_side, spell_target_side
 from .ai_rehearsal import deliberating, rehearse, rehearsing
 from .ai_standing import permanent_worth
-from .ai_prompt_readers import offer_trade, TollLoss, toll_branch_loss
+from .ai_prompt_readers import offer_trade, offers_a_hand_imprint, TollLoss, toll_branch_loss
 from .ai_valuation import offer_buys_a_drawback_to_its_source
 from .game import Game
 from .models import CardDefinition, Permanent
@@ -872,7 +872,16 @@ def offer_trade_is_worth_taking(
       standing and once onto the seat's (``ai_standing.permanent_worth``,
       read as the board will be once the turn is over) — and never for a
       target the seat already controls or that has gone.
+    * **A card from hand for an imprint** (Chrome Mox, Isochron Scepter, Soul
+      Foundry — ``ai_prompt_readers.offers_a_hand_imprint``): taken. The
+      source's linked ability is the card (CR 607.2a), and with nothing
+      exiled it does nothing for the rest of the game: declining keeps one
+      card and turns a permanent the seat paid for into a blank. Which card
+      goes is the pick's (``_default_exile_from_hand_choice``: the lowest mana
+      value the phrase admits).
     """
+    if offers_a_hand_imprint(entry.get("_on_accept") or (), entry.get("_source_permanent")):
+        return True
     trade = offer_trade(entry.get("_on_accept") or ())
     if trade is None:
         return None
