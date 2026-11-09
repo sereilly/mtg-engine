@@ -487,6 +487,96 @@ def test_w1g5_extraplanar_lens_without_its_card_adds_nothing(set_pool):
     assert game.is_on_battlefield(target)
     assert _w1g5_tapped_for(game, 0, forest) == {"G": 1}
 
+def _w1g5_prison_imprints(set_pool, pick_name, *, interactive=True):
+    """Thought Prison cast at Bob for an interactive seat 0: the offer taken
+    and *pick_name* chosen out of Bob's revealed hand."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, bob = _w1g5_table(
+        set_pool, [mrd["Thought Prison"], lea["Lightning Bolt"]],
+        interactive=interactive,
+        bob_hand=[
+            lea["Lightning Bolt"], lea["Mountain"], lea["Grizzly Bears"],
+            lea["Shatter"], lea["Giant Growth"],
+        ],
+    )
+    game.enforce_mana_costs = False
+    assert game.cast_from_hand(0, "Thought Prison", target_player_index=1).supported
+    if interactive:
+        assert game.resolve_top_of_stack() is False
+        assert [c.kind for c in game.pending_choices] == ["optional_pay"]
+        assert game.confirm_optional_pay(0, accept=True)
+        (pick,) = game.pending_choices
+        assert pick.kind == "revealed_hand_pick" and pick.player_index == 0
+        legal = pick.data["legal_indices"]
+        assert all(bob.hand[i].name != "Mountain" for i in legal), "a nonland card"
+        slot = next(i for i in legal if bob.hand[i].name == pick_name)
+        assert game.confirm_revealed_hand_pick(0, slot)
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    return game, alice, bob, _w1g5_named(game, "Thought Prison")
+
+
+def test_w1g5_thought_prison_burns_a_caster_sharing_a_color_or_mana_value(set_pool):
+    """"Whenever a player casts a spell that shares a color or mana value with
+    the exiled card, this artifact deals 2 damage to that player." Lightning
+    Bolt (red, 1) imprinted out of Bob's hand: Giant Growth (green, 1) and
+    Shatter (red, 2) each cost their caster 2; Grizzly Bears (green, 2) does
+    not; and Alice's own red spell burns Alice ("that player")."""
+    game, alice, bob, prison = _w1g5_prison_imprints(set_pool, "Lightning Bolt")
+    assert [c.name for c in bob.exile] == ["Lightning Bolt"]
+    assert "Lightning Bolt" not in [c.name for c in bob.hand]
+    game.active_player_index = game.priority_player_index = 1
+
+    assert game.cast_from_hand(1, "Grizzly Bears").supported
+    _w1g5_resolve_stack(game)
+    assert bob.life == 20
+    bears = _w1g5_named(game, "Grizzly Bears")
+    assert game.cast_from_hand(
+        1, "Giant Growth", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert bob.life == 18
+    assert game.cast_from_hand(
+        1, "Shatter", target_permanent_ids=[prison.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert bob.life == 16
+    assert not game.is_on_battlefield(prison)
+
+    game, alice, bob, _prison = _w1g5_prison_imprints(set_pool, "Lightning Bolt")
+    game.active_player_index = game.priority_player_index = 0
+    assert game.cast_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    _w1g5_resolve_stack(game)
+    assert (alice.life, bob.life) == (18, 17)
+
+
+def test_w1g5_thought_prison_declined_or_emptied_burns_nobody(set_pool):
+    """A declined offer exiles nothing, and a card that leaves exile shares
+    nothing: no spell burns anyone."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, _alice, bob = _w1g5_table(
+        set_pool, [mrd["Thought Prison"]], interactive=True,
+        bob_hand=[lea["Lightning Bolt"], lea["Shatter"]],
+    )
+    game.enforce_mana_costs = False
+    assert game.cast_from_hand(0, "Thought Prison", target_player_index=1).supported
+    assert game.resolve_top_of_stack() is False
+    assert game.confirm_optional_pay(0, accept=False)
+    _w1g5_resolve_stack(game)
+    assert bob.exile == [] and len(bob.hand) == 2
+    game.active_player_index = game.priority_player_index = 1
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g5_resolve_stack(game)
+    assert bob.life == 20
+
+    game, _alice, bob, _prison = _w1g5_prison_imprints(set_pool, "Shatter")
+    (shatter,) = bob.exile
+    assert game.take_card_from_exile(1, shatter)
+    game.active_player_index = game.priority_player_index = 1
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g5_resolve_stack(game)
+    assert bob.life == 20
+
 # ==== end W1G5 ======================================================
 
 

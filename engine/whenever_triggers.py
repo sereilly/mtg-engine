@@ -1146,6 +1146,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("spell_cast",
      r"whenever a player casts a spell with mana value (?P<cast_mana_value>\d+) "
      r"or (?P<cast_mana_value_bound>greater|less)"),
+    # "Whenever a player casts a spell **that shares a color or mana value
+    # with the exiled card**" (Thought Prison). A comparison against the card
+    # the source's imprint exiled (CR 607.2a), so — like "of the chosen color"
+    # above — the answer comes off the *source*, and the group is a marker
+    # (`cast_event_filters._cast_narrowing_admits` reads it). Before the bare
+    # row below, its strict prefix.
+    ("spell_cast",
+     r"whenever a player casts a spell that shares a color or mana value with "
+     r"the exiled (?P<cast_shares_with_exiled_card>)card"),
     ("spell_cast",                  r"whenever a player casts a spell"),
     # "Whenever a player **kicks** a spell" (Saproling Infestation). CR 702.33d:
     # a spell is kicked when "its controller declared the intention to pay" its

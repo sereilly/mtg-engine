@@ -172,6 +172,29 @@ def _cast_colour_union_admits(printed: str | None, colors) -> bool:
     return not wanted or bool(wanted & set(colors))
 
 
+def _shares_with_exiled_card(game, permanent, card, caster, item) -> bool:
+    """Whether the cast *card* shares a colour or a mana value with a card
+    *permanent*'s linked ability exiled (Thought Prison) — see the call site."""
+    from .linked_exile import cards_still_exiled_with
+    from .object_colors import card_colors, share_a_color
+    from .targeting import stack_object_mana_value
+
+    exiled = cards_still_exiled_with(game, permanent)
+    if not exiled:
+        return False
+    cast_colors = tuple(_cast_colors(game, card, caster))
+    cast_value = (
+        stack_object_mana_value(item) if item is not None
+        else int(getattr(card, "cmc", 0) or 0)
+    )
+    for exiled_card, owner in exiled:
+        if share_a_color(cast_colors, tuple(card_colors(game, exiled_card, seat=owner))):
+            return True
+        if int(getattr(exiled_card, "cmc", 0) or 0) == cast_value:
+            return True
+    return False
+
+
 def _cast_narrowing_admits(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, card,
     caster: int | None = None, item=None,
@@ -253,6 +276,16 @@ def _cast_narrowing_admits(
     if "cast_chosen_color" in trig.condition.payload:
         recorded = (getattr(permanent, "metadata", {}) or {}).get("chosen_color")
         if not recorded or str(recorded) not in _cast_colors(game, card, caster):
+            return False
+    # "…casts a spell **that shares a color or mana value with the exiled
+    # card**" (Thought Prison). The card the source's imprint exiled and still
+    # in exile (CR 607.2a, ``linked_exile.cards_still_exiled_with``): a colour
+    # in common (CR 105.2, the spell's colours as cast) **or** an equal mana
+    # value (the spell's on the stack, CR 202.3e) — one disjunction, so a spell
+    # sharing both is one trigger (the 2004-12-01 ruling: "2 damage, not 4").
+    # Nothing exiled shares nothing, and fires nothing.
+    if "cast_shares_with_exiled_card" in trig.condition.payload:
+        if not _shares_with_exiled_card(game, permanent, card, caster, item):
             return False
     cast_types = trig.condition.payload.get("cast_types")
     if cast_types and not any(word in type_line for word in cast_types.split(" or ")):

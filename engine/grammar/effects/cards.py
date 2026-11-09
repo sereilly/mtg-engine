@@ -702,6 +702,9 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     different cards.
     """
     mark = stream.mark()
+    offered = _parse_offered_hand_reveal(stream)
+    if offered is not None:
+        return offered
     player = parse_player_ref(stream)
     if player is None or player.kind not in (
         "target_player", "target_opponent", "that_player",
@@ -816,6 +819,50 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     # and Mind Warp opens on "look at".
     stream.reset(tail)
     return ast.RevealHandAndChoose(player, chosen.filter, fate="name")
+
+
+def _parse_offered_hand_reveal(stream: TokenStream) -> "ast.May | None":
+    """``You may have <target player> reveal their hand. If you do, choose a
+    <filter> card from it and exile that card.`` (Thought Prison.)
+
+    Psychic Theft's reveal, pick and exile as an **offer** its controller may
+    decline: "you may have" puts the whole of it behind one yes (CR 608.2d),
+    and "If you do" is everything after the reveal — so it is one ``May`` over
+    the template's own node, with nothing left to branch on. The pick is the
+    offer-taker's ("choose" with no subject is "you", the sentence's), and the
+    exile is linked to the permanent whose ability it is (CR 607.2a), which is
+    what "the exiled card" on the same card reads.
+
+    Every word required; anything else declines with the cursor unmoved, so an
+    ordinary "you may …" keeps the reading it has.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("you", "may", "have"):
+        return None
+    player = parse_player_ref(stream)
+    if player is None or player.kind not in ("target_player", "target_opponent"):
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_phrase("reveal", "their", "hand")
+        and stream.accept_punct(".")
+        and stream.accept_phrase("if", "you", "do")
+        and stream.accept_punct(",")
+        and stream.accept_word("choose")
+    ):
+        stream.reset(mark)
+        return None
+    chosen = parse_target_spec(stream)
+    if chosen is None or chosen.quantifier != "a" or not chosen.filter.is_card:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("from", "it", "and", "exile", "that", "card"):
+        stream.reset(mark)
+        return None
+    return ast.May(
+        ast.PlayerRef("you"),
+        action=ast.RevealHandAndChoose(player, chosen.filter, fate="exile"),
+    )
 
 
 def _accept_reveals_cards_from_hand(

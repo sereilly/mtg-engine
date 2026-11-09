@@ -190,6 +190,21 @@ def _parse_cast_event(
             subject=ast.ObjectFilter(chosen_color=True),
         )
     stream.reset(mark)
+    # "…a player casts a spell **that shares a color or mana value with the
+    # exiled card**" (Thought Prison). The table's
+    # ``cast_shares_with_exiled_card`` row, read whole here for the chosen
+    # colour's reason: a comparison against the source's linked exile (CR
+    # 607.2a), which the dispatcher answers off the source
+    # (``cast_event_filters._shares_with_exiled_card``) — so the event carries
+    # the bare spell and the condition carries the narrowing.
+    if stream.accept_phrase("a", "player", "casts", "a", "spell") and (
+        stream.accept_phrase(
+            "that", "shares", "a", "color", "or", "mana", "value", "with",
+            "the", "exiled", "card",
+        )
+    ):
+        return ast.TriggerEvent("spell_cast", trigger_word)
+    stream.reset(mark)
     # "…a player casts a spell **with mana value 3 or less**" (Pyrostatic
     # Pillar). The table's ``cast_mana_value`` row on this scope, read whole
     # here for the chosen colour's reason: the bare "a player casts a spell"
