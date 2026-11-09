@@ -416,7 +416,13 @@ def _parse_cast_event(
                 )
     stream.reset(mark)
     mark = stream.mark()
-    if stream.accept_phrase("you", "cast", "a"):
+    # "…you cast **an** artifact spell" (Vedalken Archmage) beside "a
+    # creature spell": the article is English's, picked off the next word, and
+    # both name the type narrowing below — `engine/trigger_conditions.py`'s row
+    # reads ``an?`` for the same reason. The subtype reading further down stays
+    # on "a" alone, because that is the only article its table row carries.
+    article = stream.peek_word(2)
+    if article in ("a", "an") and stream.accept_phrase("you", "cast", article):
         word = stream.peek_word()
         narrowed = _CAST_TYPE_FILTERS.get(word or "")
         if narrowed is not None:
@@ -440,7 +446,7 @@ def _parse_cast_event(
         # literal list, and *after* the type words above so a card type
         # keeps its own narrowing — "creature" is both a type word and, in
         # no set, a subtype, but the ordering is what guarantees it.
-        if word in CREATURE_TYPES:
+        if article == "a" and word in CREATURE_TYPES:
             stream.advance()
             if stream.accept_word("spell"):
                 return ast.TriggerEvent(

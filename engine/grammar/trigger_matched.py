@@ -49,6 +49,7 @@ from .trigger_phrases import accept_event_phrase
 from .trigger_tables import (
     _BECOMES_TARGET_CONTROLLERS,
     _BECOMES_TARGET_OBJECTS,
+    _DAMAGER_NOUNS,
     _WHENEVER_EVENTS,
     _BARE_BOARD_WIDE_BLOCK_EVENTS,
     _BOARD_WIDE_BLOCK_EVENTS,
@@ -656,7 +657,13 @@ def _parse_matched_event(
     # source is in the set as well (``includes_source``). Undoing the
     # exclusion instead read the union as "a Rogue you control", which is the
     # same set only while the source is itself a Rogue.
-    explicit_self = bool(stream.accept_phrase("this", "creature", "or"))
+    # Any permanent noun the card calls itself: "whenever **this artifact or**
+    # another artifact enters" (Serum Tank) is the same union printed on an
+    # artifact. ``engine/whenever_triggers.py``'s ``_SOURCE_UNION_HEAD`` names
+    # the same nouns.
+    explicit_self = any(
+        stream.accept_phrase("this", noun, "or") for noun in _DAMAGER_NOUNS
+    )
     subject = parse_subject_filter_at(stream)
     if subject is not None:
         # "Whenever **a creature** becomes blocked by **a creature with lesser

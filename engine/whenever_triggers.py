@@ -47,6 +47,17 @@ from .grammar.vocabulary import TYPE_LINE_SUPERTYPES as _TYPE_LINE_SUPERTYPES
 #: the pool prints it.
 _NEGATED_ADJECTIVE_RUN = r"(?:non-?[a-z'-]+, )*"
 
+#: The source naming itself at the head of a **union** subject -- "whenever
+#: **this creature or** another Rogue you control enters" (Thieves' Guild
+#: Enforcer), "whenever **this artifact or** another artifact enters" (Serum
+#: Tank). Every permanent noun a card calls itself, because which one it prints
+#: is its card type and not a different event: written "this creature" alone,
+#: Serum Tank's line matched no row and its charge counters never arrived while
+#: the card reported supported on its other line. The grammar reads the same
+#: nouns (``trigger_matched``'s explicit-self prefix), so the two front ends
+#: agree on which lines are a union (``trigger_tables._DAMAGER_NOUNS``).
+_SOURCE_UNION_HEAD = r"this (?:creature|artifact|enchantment|land|aura|permanent) or "
+
 
 # "whenever" triggers
 WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
@@ -1266,10 +1277,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # beside it — Pyrostatic Pillar's two payload keys, read by the one helper.
     # Before the bare type row below, its strict prefix.
     ("you_cast_spell",
-     r"whenever you cast a (?P<cast_type>noncreature|nonartifact|creature|artifact|instant|sorcery) spell"
+     r"whenever you cast an? (?P<cast_type>noncreature|nonartifact|creature|artifact|instant|sorcery) spell"
      r" with mana value (?P<cast_mana_value>\d+) or (?P<cast_mana_value_bound>greater|less)"),
+    # ``an?``: "whenever you cast **an** artifact spell" (Vedalken Archmage).
+    # The list carried "artifact" from the first day and the article kept it
+    # from ever matching, so the one type word only "an" precedes was a row no
+    # card could reach. "enchantment" is still not in the list, so this cannot
+    # take `enchantment_cast`'s lines below.
     ("you_cast_spell",
-     r"whenever you cast a (?P<cast_type>noncreature|nonartifact|creature|artifact|instant|sorcery) spell"),
+     r"whenever you cast an? (?P<cast_type>noncreature|nonartifact|creature|artifact|instant|sorcery) spell"),
     # "…a **Dog** spell" (Rin and Seri, Inseparable). A creature *subtype*
     # rather than a card type, which the row above deliberately refused: its
     # word list is exactly what the event filter tests against the type line,
@@ -1327,10 +1343,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # whatever its types now are, and every other object by the phrase, which
     # keeps its "another". Mapping both onto one kind keeps one dispatcher.
     ("matching_permanent_enters",
-     r"whenever this creature or (?P<enterer_subject>another [^,]+?) enters"
+     r"whenever " + _SOURCE_UNION_HEAD + r"(?P<enterer_subject>another [^,]+?) enters"
      r"(?: the battlefield)?(?P<enterer_includes_source>)"),
+    # ``an?`` for the reason the "a player puts" row below gives: English picks
+    # the article off the next word, and "whenever **an** artifact enters"
+    # (Leonin Elder, Vermiculos; "an artifact you control", Lumengrid Sentinel)
+    # is this row's condition. Written "a" it matched nothing, so the line was
+    # no trigger at all and the creature refused as "text too complex" while
+    # the grammar read every word of it.
     ("matching_permanent_enters",
-     r"whenever (?P<enterer_subject>(?:a|another) [^,]+) enters(?: the battlefield)?"),
+     r"whenever (?P<enterer_subject>(?:an?|another) [^,]+) enters(?: the battlefield)?"),
     # "Whenever **a player puts a Swamp onto the battlefield**" (Thelon's
     # Chant, Tourach's Chant) — the same event named from the player's side.
     # One kind, because it is one event: the engine announces a permanent
@@ -1690,7 +1712,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # whose controller-scoped kind it would otherwise claim, and before the
     # bare row below, which cannot match it ("this" is not an article).
     ("permanent_dies",
-     r"whenever this creature or (?P<dying_subject>another [^,]+?) dies"
+     r"whenever " + _SOURCE_UNION_HEAD + r"(?P<dying_subject>another [^,]+?) dies"
      r"(?P<dying_includes_source>)"),
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) dies"),
