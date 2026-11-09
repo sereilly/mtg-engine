@@ -753,6 +753,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # exile rather than one still on the stack, which changes where the
     # decisions are read from and not what the sentence does.
     "put_exiled_card_onto_stack_as_copy": "counterspells",
+    # "You may copy the exiled card. If you do, you may cast the copy without
+    # paying its mana cost." (Isochron Scepter.) CR 707.12's copy of a card,
+    # the copy family above.
+    "cast_copy_of_exiled_card": "counterspells",
     # CR 115.7a, changing a spell's target. Its own category rather than the
     # counterspells one beside it: a counter removes an object from the stack
     # and a retarget leaves it there resolving in full, so filing them together

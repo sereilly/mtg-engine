@@ -274,6 +274,36 @@ def put_exiled_card_onto_stack_as_copy(game: Game, instruction: OracleInstructio
     return True, "resolved"
 
 
+@effect_handler("cast_copy_of_exiled_card")
+def cast_copy_of_exiled_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You may copy the exiled card. If you do, you may cast the copy without
+    paying its mana cost." (Isochron Scepter.) CR 707.12, and
+    ``engine/copy_casts.py`` is the whole of it: this asks which cards and
+    offers each one.
+
+    "The exiled card" is the source's linked exile still in exile (CR 607.2a,
+    ``linked_exile.cards_still_exiled_with``) — read off the source even once
+    it has left the battlefield (Isochron Scepter's 2020-08-07 ruling: "the
+    ability can still make a copy"), and empty once the card itself has left
+    exile ("the copy can't be made"). Several is CR 607.3: one offer per card
+    (CR 707.12a).
+    """
+    from ..copy_casts import arm_copy_cast
+    from ..linked_exile import cards_still_exiled_with
+
+    seat = next(
+        (i for i, seated in enumerate(game.players) if seated is context.caster),
+        None,
+    )
+    exiled = cards_still_exiled_with(game, context.source_permanent)
+    if seat is None or not exiled:
+        game.log.append(f"{context.card.name}: no card is exiled with it to copy")
+        return True, "resolved"
+    for card, _owner in exiled:
+        arm_copy_cast(game, seat, card, context.card.name)
+    return True, "resolved"
+
+
 def _stack_ability_kind(item) -> str | None:
     """Which kind of ability *item* is, or None when it is not one.
 

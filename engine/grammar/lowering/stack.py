@@ -759,6 +759,16 @@ def _lower_put_exiled_card_on_stack_as_copy(
     )
 
 
+def _lower_cast_copy_of_exiled_card(
+    node: "ast.CastCopyOfExiledCard",
+) -> tuple[OracleInstruction, ...]:
+    """"You may copy the exiled card. If you do, you may cast the copy without
+    paying its mana cost." (Isochron Scepter.) The handler reads the source's
+    linked exile and offers each copy (``engine/copy_casts.py``), so nothing
+    rides the payload."""
+    return (OracleInstruction("cast_copy_of_exiled_card", "", {}),)
+
+
 #: The instruction an auction of life lowers to when nothing is handed to the
 #: winner by the auction itself. Who bids and the opening number are payload;
 #: what winning buys is the *next* step of the sequence, read off the record.

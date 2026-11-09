@@ -577,6 +577,131 @@ def test_w1g5_thought_prison_declined_or_emptied_burns_nobody(set_pool):
     _w1g5_resolve_stack(game)
     assert bob.life == 20
 
+def _w1g5_scepter_with(set_pool, imprint="Lightning Bolt", *, interactive=True):
+    """Isochron Scepter on the battlefield with *imprint* exiled with it — by
+    the imprint's own offer and pick — and ready to activate."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, bob = _w1g5_table(
+        set_pool, [mrd["Isochron Scepter"], lea[imprint]], interactive=True,
+    )
+    alice.mana_pool["C"] = 2
+    scepter = _w1g5_imprint_from_hand(game, alice, "Isochron Scepter", imprint)
+    scepter.metadata["summoning_sickness_turn"] = -99
+    game.interactive_seats = {0} if interactive else set()
+    alice.mana_pool["C"] = 2
+    return game, alice, bob, scepter
+
+
+def _w1g5_activate_scepter(game, scepter):
+    result = game.activate_permanent_ability(
+        0, "Isochron Scepter", permanent_index=game.battlefield_index_of(scepter),
+        ability_index=0,
+    )
+    assert result.supported, result.details
+
+
+def test_w1g5_isochron_scepter_casts_a_copy_of_the_imprinted_instant(set_pool):
+    """"{2}, {T}: You may copy the exiled card. If you do, you may cast the
+    copy without paying its mana cost." Lightning Bolt imprinted: the ability
+    resolving offers the cast (CR 707.12, made during the resolution — the
+    2020-08-07 ruling); the copy is cast free, aimed at Bob, resolves for 3
+    and ceases to exist (CR 707.10a) while the imprinted Bolt stays in exile.
+    Twice, on two turns' worth of activations."""
+    game, alice, bob, scepter = _w1g5_scepter_with(set_pool)
+    for expected in (17, 14):
+        _w1g5_activate_scepter(game, scepter)
+        assert game.resolve_top_of_stack() is False
+        (offer,) = game.pending_choices
+        assert offer.kind == "copy_cast" and offer.data["card_name"] == "Lightning Bolt"
+        outcome = []
+        assert game.confirm_copy_cast(0, True, outcome=outcome, target_player_index=1)
+        (copy,) = [item for item in game.stack if item.card.name == "Lightning Bolt"]
+        assert copy.is_copy, "the spell is the copy, not the card"
+        _w1g5_resolve_stack(game)
+        assert bob.life == expected
+        assert [c.name for c in alice.exile] == ["Lightning Bolt"]
+        assert alice.graveyard == [] and bob.graveyard == []
+        assert alice.mana_pool["C"] == 0, "{2} paid; the copy's own cost waived"
+        scepter.tapped = False
+        alice.mana_pool["C"] = 2
+
+
+def test_w1g5_isochron_scepter_declined_or_emptied_casts_nothing(set_pool):
+    """A declined offer makes no copy; and once the imprinted card has left
+    exile the ability resolves with nothing to copy (the ruling's "the copy
+    can't be made")."""
+    game, alice, bob, scepter = _w1g5_scepter_with(set_pool)
+    _w1g5_activate_scepter(game, scepter)
+    assert game.resolve_top_of_stack() is False
+    assert game.confirm_copy_cast(0, False)
+    _w1g5_resolve_stack(game)
+    assert bob.life == 20 and [c.name for c in alice.exile] == ["Lightning Bolt"]
+    assert game.pending_choices == []
+
+    game, alice, bob, scepter = _w1g5_scepter_with(set_pool)
+    # Queued, not settled: the ability waits on the stack for a response.
+    assert game.queue_permanent_ability(
+        0, "Isochron Scepter", permanent_index=game.battlefield_index_of(scepter),
+        ability_index=0,
+    ).supported
+    assert [item.card.name for item in game.stack] == ["Isochron Scepter"]
+    assert game.pending_choices == [], "not yet resolving"
+    (bolt,) = alice.exile
+    assert game.take_card_from_exile(0, bolt), "removed in response"
+    _w1g5_resolve_stack(game)
+    assert game.pending_choices == [] and bob.life == 20
+    assert "no card is exiled with it to copy" in " ".join(game.log[-3:])
+
+
+def test_w1g5_isochron_scepter_still_copies_after_it_leaves(set_pool):
+    """Ruling 2020-08-07: "If Isochron Scepter leaves the battlefield while
+    the activated ability is on the stack, the ability can still make a
+    copy." A seat nobody asks takes the offer with its rehearsed chooser."""
+    game, alice, bob, scepter = _w1g5_scepter_with(set_pool, interactive=False)
+    assert game.queue_permanent_ability(
+        0, "Isochron Scepter", permanent_index=game.battlefield_index_of(scepter),
+        ability_index=0,
+    ).supported
+    assert bob.life == 20 and len(game.stack) == 1
+    game.remove_from_battlefield(scepter)
+    assert not game.is_on_battlefield(scepter)
+    _w1g5_resolve_stack(game)
+    assert bob.life == 17
+    assert [c.name for c in alice.exile] == ["Lightning Bolt"]
+
+
+def test_w1g5_isochron_scepter_offer_is_answered_on_the_wire(set_pool):
+    """The ``copy_cast`` prompt renders with the exiled card's place (the
+    client's cast dialog opens on it), and the ``copy_cast_confirm`` action
+    casts the copy with the ordinary cast fields."""
+    from types import SimpleNamespace as _W1G5Namespace
+
+    from web.action_prompt_board import _action_copy_cast_confirm
+    from web.prompts import PromptContext, render_prompts
+    from web.schemas import GameActionRequest
+
+    game, alice, bob, scepter = _w1g5_scepter_with(set_pool)
+    _w1g5_activate_scepter(game, scepter)
+    assert game.resolve_top_of_stack() is False
+    offered = render_prompts(PromptContext(
+        game=game, viewer_seat=0,
+        serialize_card=lambda card: {"name": getattr(card, "name", str(card))},
+        seat_type=lambda index: "human" if index in game.interactive_seats else "ai",
+    ))["copy_cast"]
+    assert offered["card_name"] == "Lightning Bolt"
+    assert (offered["exile_seat"], offered["exile_index"]) == (0, 0)
+    assert alice.exile[offered["exile_index"]].name == "Lightning Bolt"
+
+    _action_copy_cast_confirm(
+        _W1G5Namespace(game=game),
+        GameActionRequest(
+            seat=0, action="copy_cast_confirm", accept=True, target_player_index=1,
+        ),
+        None,
+    )
+    _w1g5_resolve_stack(game)
+    assert bob.life == 17 and game.pending_choices == []
+
 # ==== end W1G5 ======================================================
 
 

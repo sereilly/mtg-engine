@@ -756,6 +756,36 @@ def _parse_put_exiled_card_on_stack_as_copy(
     return ast.PutExiledCardOnStackAsCopy(player=player)
 
 
+def _parse_cast_copy_of_exiled_card(
+    stream: TokenStream,
+) -> "ast.CastCopyOfExiledCard | None":
+    """``You may copy the exiled card. If you do, you may cast the copy without
+    paying its mana cost.`` (Isochron Scepter.)
+
+    Two printed sentences and one offer: the copy and its cast are both
+    optional (Spellweaver Helix's 2005-03-01 ruling), and a copy made and not
+    cast ceases to exist with nothing having seen it (CR 707.10a) — so "if you
+    do" is the cast's own condition and the pair is read whole, the way
+    Skyship Weatherlight's "choose …. Put that card …" is. Every word
+    required, "without paying its mana cost" included: a copy cast for its
+    cost is a different card. Declines with the cursor unmoved.
+    """
+    mark = stream.mark()
+    if not (
+        stream.accept_phrase("you", "may", "copy", "the", "exiled", "card")
+        and stream.accept_punct(".")
+        and stream.accept_phrase("if", "you", "do")
+        and stream.accept_punct(",")
+        and stream.accept_phrase(
+            "you", "may", "cast", "the", "copy", "without", "paying", "its",
+            "mana", "cost",
+        )
+    ):
+        stream.reset(mark)
+        return None
+    return ast.CastCopyOfExiledCard()
+
+
 def _parse_bid_life_contest(stream: TokenStream) -> ast.Statement | None:
     """``You and <player> bid life. You start the bidding with a bid of N. In
     turn order, each player may top the high bid. The bidding ends if the high

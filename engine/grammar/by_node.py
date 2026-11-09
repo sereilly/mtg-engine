@@ -65,6 +65,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_put_graveyard_position_onto_battlefield,
                        _lower_waive_shroud, _lower_change_event_targets, _lower_change_target, _lower_counter_spell,
                        _lower_put_exiled_card_on_stack_as_copy,
+                       _lower_cast_copy_of_exiled_card,
                        _lower_create_emblem, _lower_create_copy_token,
                        _lower_damage_dealt_riders, _lower_coin_flip_damage_loop,
                        _lower_coin_flip_stakes_loop, _lower_damage_this_game_history,
@@ -399,6 +400,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     # copy inherits was frozen into the exile register when the spell left the
     # stack, so the lowering reads the node and nothing else.
     ast.PutExiledCardOnStackAsCopy: _lower_put_exiled_card_on_stack_as_copy,
+    ast.CastCopyOfExiledCard: _lower_cast_copy_of_exiled_card,
     ast.ChooseBlocksForDefenders: _lower_choose_blocks_for_defenders,
     ast.ReassignBlockersBetweenAttackers: _lower_reassign_blockers_between_attackers,
     ast.ReturnSelfInsteadOfUntapping: _lower_return_self_instead_of_untapping,

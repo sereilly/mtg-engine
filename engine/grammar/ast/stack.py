@@ -447,6 +447,19 @@ class WaiveShroud:
 
 
 @dataclass(frozen=True)
+class CastCopyOfExiledCard:
+    """``You may copy the exiled card. If you do, you may cast the copy without
+    paying its mana cost.`` (Isochron Scepter.)
+
+    CR 707.12's copy of a **card** cast during the resolution, where every
+    other copy node here copies a spell already on the stack (CR 707.10):
+    the object is the card the permanent's imprint exiled (CR 607.2a), and the
+    copy is made in exile and cast from there (``engine/copy_casts.py``).
+    Nothing is chosen at announcement, so the node carries nothing.
+    """
+
+
+@dataclass(frozen=True)
 class PutExiledCardOnStackAsCopy:
     """``the player puts it onto the stack as a copy of the original spell``
     (Ertai's Meddling).

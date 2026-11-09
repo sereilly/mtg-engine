@@ -249,6 +249,7 @@ from .retargeting import _parse_change_event_targets, _parse_change_target
 from .stack import (
     _parse_bid_life_contest,
     _parse_put_exiled_card_on_stack_as_copy,
+    _parse_cast_copy_of_exiled_card,
     _parse_copy_target_spell,
     _parse_copy_that_spell,
     _parse_copy_this_spell,
@@ -440,6 +441,7 @@ __all__ = [
     "_parse_player_exiles_target_spell",
     "_parse_player_returns_exiled_with_source",
     "_parse_put_exiled_card_on_stack_as_copy",
+    "_parse_cast_copy_of_exiled_card",
     "_parse_put_exiled_this_way",
     "parse_put_exiled_pile_on_library",
     "parse_put_milled_card_onto_battlefield",
