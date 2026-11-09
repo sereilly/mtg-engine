@@ -36,9 +36,10 @@ def _seat_type(session: Session, seat: int) -> str:
 
 
 def _mark_interactive_seats(session: Session) -> None:
-    """Tell the engine which seats a person answers for
-    (``Game.interactive_seats``), so a decision owed to one of them is asked
-    rather than defaulted. Before anything the server runs for a seat: every
+    """Tell the engine which seats a person sits at
+    (``Game.interactive_seats``), so a decision owed to one of them — or to a
+    seat one of them controls this turn (``Game.asks_a_person``, CR 723) — is
+    asked rather than defaulted. Before anything the server runs for a seat: every
     action (``actions.do_action``), and turn 1's beginning phase, which a
     route may run before any action has been sent
     (``turn_steps._begin_first_turn``)."""
@@ -306,7 +307,6 @@ def acting_seat_for(session: Session, viewer_seat: int | None, owed_seat) -> int
     active player's attack, CR 509.1 a defending player's blocks), the seat
     holding priority, and otherwise the active player (CR 723.3: the
     controlled player is still the active player)."""
-
     game = session.game
     if viewer_seat is None or not 0 <= viewer_seat < len(game.players):
         return None
