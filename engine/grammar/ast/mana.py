@@ -319,6 +319,11 @@ class AddManaForTappedLand:
     #: .spend_only` carries it — which spells the mana may pay for is that
     #: module's question, asked again by the payer.
     spend_only: str | None = None
+    #: "…that player adds {C} **for each artifact they control**." (Blinkmoth
+    #: Urn.) A multiplier over :attr:`pips`, read by the multiplier reader
+    #: :class:`AddMana` uses. Only the frozen-seat reading lowers it; the tap
+    #: seam's instruction refuses one.
+    per_each: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

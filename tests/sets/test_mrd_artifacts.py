@@ -120,4 +120,66 @@ def test_w1g7_serum_tank_counts_its_own_entry_and_every_other_artifact(set_pool)
     assert len(p1.hand) == hand_before + 1
 
 
+def _w1g7_open_main(game, seat, *, before_main=None):
+    """Step *seat*'s turn to its first main phase and return each pool, emptied
+    first. *before_main* runs after the untap step (a tap in upkeep)."""
+    for player in game.players:
+        for symbol in list(player.mana_pool):
+            player.mana_pool[symbol] = 0
+    game.start_turn(seat)
+    if before_main is not None:
+        before_main()
+    while game.current_turn_phase != "precombat_main":
+        game.advance_phase()
+    _w1g7_settle(game)
+    return [
+        {sym: n for sym, n in player.mana_pool.items() if n}
+        for player in game.players
+    ]
+
+
+def test_w1g7_blinkmoth_urn_pays_each_player_for_their_own_artifacts(set_pool):
+    """"At the beginning of **each player's** first main phase, if this
+    artifact is untapped, **that player** adds {C} for each artifact **they**
+    control." The trigger, the frozen seat and the intervening-if all shipped
+    (Eladamri's Vineyard, Farsight-style "if this artifact is untapped"); the
+    count behind the mana did not. The Urn counts itself for its controller,
+    and the opponent's turn counts the opponent's board."""
+    game, _p1, p2 = _w1g7_game(
+        set_pool, mine=["Blinkmoth Urn", "Ornithopter", "Ornithopter"],
+        theirs=["Ornithopter"],
+    )
+    assert _w1g7_open_main(game, 0) == [{"C": 3}, {}], game.log
+    assert _w1g7_open_main(game, 1) == [{}, {"C": 1}], game.log
+    p2.battlefield.append(_w1g7_Permanent(card=set_pool("MRD")["Ornithopter"]))
+    game._settle()
+    assert _w1g7_open_main(game, 1) == [{}, {"C": 2}], "counted at resolution"
+
+
+def test_w1g7_blinkmoth_urn_tapped_pays_nobody(set_pool):
+    """The intervening "if" (CR 603.4): tapped as the main phase begins, the
+    Urn does not trigger — on the opponent's turn its controller's untap step
+    has not come round."""
+    game, p1, _p2 = _w1g7_game(
+        set_pool, mine=["Blinkmoth Urn", "Ornithopter"], theirs=["Ornithopter"],
+    )
+    urn = _w1g7_named(p1, "Blinkmoth Urn")
+    urn.tapped = True
+    assert _w1g7_open_main(game, 1) == [{}, {}], game.log
+    assert _w1g7_open_main(game, 0) == [{"C": 2}, {}], "untapped in its untap step"
+
+
+def test_w1g7_blinkmoth_urn_tapped_in_response_pays_nothing(set_pool):
+    """CR 603.4 asks the intervening "if" again on resolution: an Urn tapped
+    while its trigger waits on the stack adds nothing."""
+    game, p1, _p2 = _w1g7_game(set_pool, mine=["Blinkmoth Urn", "Ornithopter"])
+    urn = _w1g7_named(p1, "Blinkmoth Urn")
+    game.start_turn(0)
+    while game.current_turn_phase != "precombat_main":
+        game.advance_phase()
+    assert any(item.card.name == "Blinkmoth Urn" for item in game.stack), game.log
+    urn.tapped = True
+    _w1g7_settle(game)
+    assert not any(p1.mana_pool.values()), game.log
+
 # ==== end W1G7 ======================================================
