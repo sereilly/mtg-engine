@@ -1211,6 +1211,16 @@ _COPY_ON_ENTER = re.compile(
     r"on the battlefield"
 )
 
+#: The copy-on-enter "may" answered **no** — "You can choose not to copy
+#: anything" (Clone's and Sculpting Steel's rulings; CR 707.5). One name for
+#: the record on its whole trip: the ``StackItem.choices`` key the cast
+#: announces it on (``casting._cast_onto_stack``'s ``decline_copy``), and the
+#: ``Permanent.metadata`` key the resolution copies it onto, which
+#: ``_enter_as_a_copy`` reads in place of falling back to the first permanent
+#: of the type. Written only where declined, and popped as the permanent
+#: enters, so no other object ever carries it.
+COPY_DECLINED = "copy_declined"
+
 # Standing permissions stamped on the controller as the permanent enters.
 NO_MAXIMUM_HAND_SIZE = "you have no maximum hand size"
 SPEND_WHITE_AS_RED = "you may spend white mana as though it were red mana"
@@ -1477,6 +1487,7 @@ __all__ = [
     "sacrifice_all_on_enter",
     "SPEND_ANY_COLOR",
     "SPEND_WHITE_AS_RED",
+    "COPY_DECLINED",
     "copy_on_enter_type",
     "enter_effect_line",
     "ENTRY_CHOICES",

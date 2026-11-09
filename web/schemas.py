@@ -696,6 +696,16 @@ class GameActionRequest(BaseModel):
     # AI seat and an old client casting rather than blocked. The picker that
     # fills it reads `announces_creature_type` off the card's target spec.
     chosen_creature_type: str | None = None
+    # "**You may** have this creature enter as a copy of any creature on the
+    # battlefield" (Clone, Vesuvan Doppelganger, Copy Artifact, Sculpting
+    # Steel) answered *no*, sent with `cast`: true enters the permanent as
+    # itself (the rulings: "You can choose not to copy anything"). The copy
+    # target is announced at cast — the card's `target_spec` is
+    # `{"kind": "creature"|"artifact", "optional": true}` — so a cast naming no
+    # target and not sending this copies the first permanent of the type, which
+    # is what an old client and an AI seat do. Naming a target *and* sending
+    # this is refused; ignored for a card that offers no copy.
+    decline_copy: bool | None = None
     # Which zone `hand_index` addresses when a search may look in more than one
     # ("search your library and/or graveyard"). Absent means the library, so
     # every existing client is unchanged.

@@ -1790,3 +1790,66 @@ def test_w1g7_sculpting_steel_with_nothing_to_copy_is_itself(set_pool):
     assert steel.effective_card.name == "Sculpting Steel", "a creature is not an artifact"
 
 # ==== end W1G7 ======================================================
+
+
+# ==== W2G4 ==========================================================
+from engine import Game as _w2g4_Game
+from engine import PlayerState as _w2g4_PlayerState
+from engine.models import Permanent as _w2g4_Permanent
+from tests.helpers import resolve_stack as _w2g4_resolve_stack
+
+
+def _w2g4_steel_table(set_pool):
+    """Sculpting Steel in seat 0's hand; an Ornithopter on each side and the
+    opponent's Serum Tank, so there is always something to copy."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w2g4_Game(players=[
+        _w2g4_PlayerState(name="P0", library=[lea["Island"]] * 5,
+                          hand=[mrd["Sculpting Steel"]]),
+        _w2g4_PlayerState(name="P1", library=[lea["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    for seat, card in ((0, mrd["Ornithopter"]), (1, mrd["Serum Tank"])):
+        game._put_permanent_onto_battlefield(seat, _w2g4_Permanent(card=card), None)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    _w2g4_resolve_stack(game)
+    return game
+
+
+def test_w2g4_sculpting_steel_declined_stays_an_artifact_doing_nothing(set_pool):
+    """The ruling (2007-07-15): "You can choose not to copy anything. In that
+    case, Sculpting Steel stays on the battlefield as an artifact that doesn't
+    do much of anything." Declined at cast, with two artifacts to copy, it is
+    itself: no Serum Tank's trigger counted its arrival as a copy would, and
+    the board's first artifact (the fallback a bare cast takes) was not
+    copied."""
+    game = _w2g4_steel_table(set_pool)
+    tank = next(p for p in game.all_permanents() if p.card.name == "Serum Tank")
+    before = tank.metadata.get("charge_counters") or 0
+
+    assert game.cast_from_hand(0, "Sculpting Steel", decline_copy=True).supported
+    _w2g4_resolve_stack(game)
+
+    steel = next(p for p in game.controlled_by(0) if p.card.name == "Sculpting Steel")
+    assert steel.effective_card.name == "Sculpting Steel", game.log
+    assert steel.has_type("artifact") and not steel.is_creature
+    assert not steel.metadata.get("charge_counters")
+    # The original Tank still saw an artifact enter — the Steel itself.
+    assert (tank.metadata.get("charge_counters") or 0) == before + 1
+    assert "Sculpting Steel entered as itself, copying nothing" in game.log
+
+
+def test_w2g4_sculpting_steel_naming_nothing_still_copies(set_pool):
+    """The default a seat nobody asks takes (and an AI cast that names no
+    model): it copies — the first artifact of the type, as before."""
+    game = _w2g4_steel_table(set_pool)
+
+    assert game.cast_from_hand(0, "Sculpting Steel").supported
+    _w2g4_resolve_stack(game)
+
+    steel = next(p for p in game.controlled_by(0) if p.card.name == "Sculpting Steel")
+    assert steel.effective_card.name != "Sculpting Steel", game.log
+
+# ==== end W2G4 ======================================================

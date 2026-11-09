@@ -316,6 +316,11 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         # dropped, the cast silently takes the engine's default and the one
         # choice Caller of the Hunt is about is made by nobody.
         chosen_creature_type=req.chosen_creature_type,
+        # …and the copy-as-it-enters "may" declined (Clone, Sculpting Steel),
+        # forwarded for the same reason: dropped, a cast naming no copy target
+        # copies the first permanent of the type, which is the answer the
+        # player just refused.
+        decline_copy=getattr(req, "decline_copy", None),
         # CR 609.7a's "a source of your choice", on its own trio of fields for
         # the reason the cost fields above are on theirs: a spell may name a
         # source *and* its own targets (Kor Chant names two), so one field could

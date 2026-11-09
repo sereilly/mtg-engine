@@ -41,6 +41,7 @@ from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
 from ...damage_ledger import record_cast
 from ...counter_conditions import spend_next_spell_promises
 from ...divided_damage import divided_entry, stamped_entry
+from ...enter_effects import COPY_DECLINED, copy_on_enter_type
 from ...entwine import entwined_mode_choices
 from ...face_down import announced_morph_cost, face_down_card
 from ...faces import choose_a_face_refusal, spell_named
@@ -54,7 +55,8 @@ from ...self_cost_modifiers import self_per_target_tax
 from ...flashback import is_flashback
 from ...game_types import (as_graveyard_stamps, as_target_ids,
                            as_target_slots, chosen_damage_source,
-                           SimulationResult, StackItem, target_slots)
+                           first_target_id, SimulationResult, StackItem,
+                           target_slots)
 from ...models import CardDefinition
 from ...oracle import compile_card_oracle
 from ...oracle_types import _COLOR_WORD_TO_SYMBOL
@@ -182,6 +184,15 @@ class SpellCastingMixin:
         chosen_source_seat: int | None = None,
         chosen_source_permanent_index: int | None = None,
         chosen_source_stack_index: int | None = None,
+        # "**You may** have this creature enter as a copy of any creature on
+        # the battlefield" (Clone, Sculpting Steel) answered *no*: the
+        # permanent enters as itself (the rulings: "You can choose not to
+        # copy anything"). The cast is where the copy target is announced
+        # (``cast_targets._cast_target_spec``'s optional picker), so the
+        # decline is announced beside it; absent, a cast naming no target
+        # copies the first permanent of the type, which is what keeps an AI
+        # and a headless cast copying. Ignored for a card offering no copy.
+        decline_copy: bool | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
@@ -215,6 +226,7 @@ class SpellCastingMixin:
             chosen_source_seat=chosen_source_seat,
             chosen_source_permanent_index=chosen_source_permanent_index,
             chosen_source_stack_index=chosen_source_stack_index,
+            decline_copy=decline_copy,
         )
         if not queued.supported:
             return queued
@@ -363,6 +375,15 @@ class SpellCastingMixin:
         chosen_source_seat: int | None = None,
         chosen_source_permanent_index: int | None = None,
         chosen_source_stack_index: int | None = None,
+        # "**You may** have this creature enter as a copy of any creature on
+        # the battlefield" (Clone, Sculpting Steel) answered *no*: the
+        # permanent enters as itself (the rulings: "You can choose not to
+        # copy anything"). The cast is where the copy target is announced
+        # (``cast_targets._cast_target_spec``'s optional picker), so the
+        # decline is announced beside it; absent, a cast naming no target
+        # copies the first permanent of the type, which is what keeps an AI
+        # and a headless cast copying. Ignored for a card offering no copy.
+        decline_copy: bool | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
         # CR 601.2c, said one role at a time. Turned **here**, before anything
@@ -799,6 +820,23 @@ class SpellCastingMixin:
                 f"{caster.name} chose "
                 f"{display_type_word(chosen_type_word) if chosen_type_word else 'no creature type'} "
                 f"to cast {card.name}"
+            )
+
+        # The copy-as-it-enters "may" declined (``decline_copy``), announced
+        # with the copy target it replaces and checked here, before anything
+        # is paid. Naming a permanent to copy *and* declining to copy is two
+        # answers to one question, refused rather than ranked.
+        copy_declined = bool(decline_copy) and copy_on_enter_type(
+            compile_card_oracle(card).normalized_text or ""
+        ) is not None
+        if copy_declined and (
+            target_permanent_index is not None
+            or first_target_id(target_permanent_ids) is not None
+        ):
+            return refuse(
+                card.name, classification.effect_kind,
+                "a cast cannot both name a permanent to copy and decline "
+                "to copy (CR 707.5)",
             )
 
         # "Buyback costs cost {2} less." (Memory Crystal.) CR 601.2f applied to
@@ -1539,6 +1577,12 @@ class SpellCastingMixin:
             )
             if controllers is not None:
                 spell_item.choices[ANNOUNCED_TARGET_CONTROLLERS] = controllers
+            # The declined copy rides to resolution on the announcement's
+            # channel, the one the chosen creature type rides on — the
+            # permanent does not exist yet (``_resolve_card`` copies it on).
+            # Only where declined, so every other stack item is unchanged.
+            if copy_declined:
+                spell_item.choices[COPY_DECLINED] = True
             self._stack_push(spell_item)
             self.log.append(f"{card.name} added to stack")
             if any(cost.choose_number is not None for cost in cast_costs):
