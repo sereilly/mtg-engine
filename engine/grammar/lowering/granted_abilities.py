@@ -246,3 +246,41 @@ def _lower_gain_ability_text(
     assert isinstance(node.subject, ast.TargetSpec)
     _describe_targets(payload, node.subject)
     return (OracleInstruction("grant_target_ability_text", "", payload),)
+
+
+def _lower_gain_activated_abilities_of(
+    node: "ast.GainActivatedAbilitiesOf",
+) -> tuple[OracleInstruction, ...]:
+    """"{U}: This creature gains all activated abilities of target creature
+    until end of turn." (Quicksilver Elemental.) CR 113.3, layer 6.
+
+    The abilities are the *target's*, so no text is printed here for the
+    quoted grant's probe to read: the handler reads them off the target's
+    effective card as the ability resolves (the 2004-12-01 ruling — the gainer
+    treats them as printed on itself), keeps the ones the compiler reads, and
+    records them on the granted-ability-lines channel ``_lower_gain_ability_text``
+    writes — so the activation enumerator, the client's ability list and the
+    AI find them without knowing where they came from.
+
+    Gated the way that lowering is: a gainer that is the ability's own source
+    (the only one the handler can name), a chosen target whose every printed
+    key the target matcher tests, and a duration a sweep ends.
+    """
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "only the ability's own source gains another creature's activated "
+            "abilities", node=node,
+        )
+    if not _is_target(node.source):
+        raise LoweringError(
+            "the abilities are copied from a chosen target", node=node,
+        )
+    if node.duration.kind is None or node.duration.kind not in _GRANT_DURATIONS:
+        raise LoweringError(
+            f"no granted-ability channel expires {node.duration.kind!r}", node=node
+        )
+    payload: dict[str, object] = {
+        "duration": _GRANT_DURATIONS[node.duration.kind],
+    }
+    _describe_targets(payload, node.source)
+    return (OracleInstruction("gain_activated_abilities_of_target", "", payload),)

@@ -335,6 +335,24 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     if gained is not None:
         return gained
 
+    # "This creature gains **all activated abilities of target creature** until
+    # end of turn." (Quicksilver Elemental.) The abilities are the target's,
+    # read off it as the ability resolves — so nothing is printed here for the
+    # quoted-text reader below to take, and the keyword list would refuse
+    # "all". Only an object may be copied from, and only a chosen one: the
+    # noun phrase is required to be a target, or nothing says whose abilities.
+    copied_mark = stream.mark()
+    if stream.accept_phrase("all", "activated", "abilities", "of"):
+        try:
+            source = parse_recipient(stream)
+        except GrammarError:
+            source = None
+        if isinstance(source, ast.TargetSpec) and source.targeted:
+            return ast.GainActivatedAbilitiesOf(
+                subject, source, _parse_duration(stream)
+            )
+    stream.reset(copied_mark)
+
     # "…gains "Remove a matrix counter from this creature: Regenerate this
     # creature."" (Life Matrix.) CR 113.3: what a card grants in quotes is a
     # whole printed ability, not a keyword — so it is read out as text and the

@@ -39,6 +39,7 @@ from ..oracle_types import OracleInstruction
 from . import ast
 from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discard_rest, _lower_add_mana_for_tapped_land, _lower_activate_each_lands_mana_ability, _lower_lose_unspent_mana,
                        _lower_discard, _lower_exile_entire_library,
+                       _lower_gain_activated_abilities_of,
                        _lower_exile_random_from_hand, _lower_mill,
                        _lower_exile_cards_from_hand,
                        _lower_move_counter, _lower_note_mana_spent,
@@ -266,6 +267,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ExchangeLifeTotals: _lower_exchange_life_totals,
     ast.SetLifeTotal: _lower_set_life_total,
     ast.LoseAbilityText: _lower_lose_ability_text,
+    ast.GainActivatedAbilitiesOf: _lower_gain_activated_abilities_of,
     ast.PayLife: _lower_pay_life,
     ast.DamageReducedByPaidMana: _lower_damage_reduced_by_paid_mana,
     ast.SkipStep: _lower_skip_step,

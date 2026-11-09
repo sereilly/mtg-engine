@@ -174,6 +174,109 @@ def test_w1g8_glissa_sunseeker_destroys_only_on_an_exact_match(set_pool):
     assert not game.is_on_battlefield(vise)
     assert "Glissa Sunseeker destroyed Black Vise" in game.log
 
+
+def _w1g8_usable_lines(game, perm):
+    return [
+        ability.source_line
+        for ability in game.usable_abilities_of(perm, card=perm.effective_card)
+    ]
+
+
+def test_w1g8_quicksilver_elemental_gains_an_opponents_activated_abilities(set_pool):
+    """2004-12-01: it gains the activated abilities of any creature it can
+    target, whoever controls it; only activated ones (Shivan Dragon's flying
+    stays behind); "this creature" in them is the Elemental. Its blue pays the
+    gained {R} cost (its second ability, CR 609.4b), and the abilities are gone
+    after the cleanup step (CR 514.2)."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, (quick, shivan, sorcerer) = _w1g8_board(
+        set_pool, [mrd["Quicksilver Elemental"]],
+        [lea["Shivan Dragon"], lea["Prodigal Sorcerer"]],
+    )
+    game.enforce_mana_costs = True
+    game.players[0].mana_pool["U"] = 4
+    assert game.activate_permanent_ability(
+        0, "Quicksilver Elemental", target_permanent_ids=[shivan.permanent_id]
+    ).supported
+    _w1g8_resolve_stack(game)
+    gained = _w1g8_usable_lines(game, quick)
+    assert gained[1:] == ["{R}: This creature gets +1/+0 until end of turn."]
+    assert not game._has_keyword(quick, "flying")
+    firebreathing = gained.index("{R}: This creature gets +1/+0 until end of turn.")
+    assert game.activate_permanent_ability(
+        0, "Quicksilver Elemental", ability_index=firebreathing
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert quick.effective_power == 4 and shivan.effective_power == 5
+    assert game.players[0].mana_pool["U"] == 2
+    # Collected from a second creature (2004-10-04: "collecting abilities from
+    # multiple creatures"), and the ping is the Elemental's own.
+    assert game.activate_permanent_ability(
+        0, "Quicksilver Elemental", ability_index=0,
+        target_permanent_ids=[sorcerer.permanent_id],
+    ).supported
+    _w1g8_resolve_stack(game)
+    gained = _w1g8_usable_lines(game, quick)
+    ping = gained.index("{T}: This creature deals 1 damage to any target.")
+    assert game.activate_permanent_ability(
+        0, "Quicksilver Elemental", ability_index=ping, target_player_index=1
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert game.players[1].life == 19 and quick.tapped and not sorcerer.tapped
+    assert "Quicksilver Elemental dealt 1 damage to B" in game.log
+    game.resolve_cleanup_step(0)
+    assert len(_w1g8_usable_lines(game, quick)) == 1
+
+
+def test_w1g8_quicksilver_elemental_uses_its_own_name_for_the_targets(set_pool):
+    """The reminder text: "If any of the abilities use that creature's name,
+    use this creature's name instead." Lord of Tresserhorn's "{B}: Regenerate
+    Lord of Tresserhorn." becomes the Elemental's own regeneration."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    lord_card = set_pool("ALL")["Lord of Tresserhorn"]
+    game, (quick, lord) = _w1g8_board(
+        set_pool, [mrd["Quicksilver Elemental"]], [lord_card], hand=[lea["Fireball"]],
+    )
+    assert game.activate_permanent_ability(
+        0, "Quicksilver Elemental", target_permanent_ids=[lord.permanent_id]
+    ).supported
+    _w1g8_resolve_stack(game)
+    gained = _w1g8_usable_lines(game, quick)
+    assert gained[1:] == ["{B}: Regenerate Quicksilver Elemental."]
+    assert game.activate_permanent_ability(
+        0, "Quicksilver Elemental", ability_index=1
+    ).supported
+    _w1g8_resolve_stack(game)
+    # The shield is the Elemental's: four damage destroys nothing, it
+    # regenerates (CR 701.19a).
+    assert game.cast_from_hand(
+        0, "Fireball", x_value=4, target_permanent_ids=[quick.permanent_id]
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert game.is_on_battlefield(quick) and quick.tapped
+
+
+def test_w1g8_quicksilver_blue_pays_only_its_own_abilities(set_pool):
+    """The spending permission is scoped to this creature's abilities: blue
+    still cannot pay a red pip anywhere else (a Shivan Dragon's own {R})."""
+    from engine.restricted_mana import ACTIVATE, PaymentPurpose
+
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, (quick, shivan, _island) = _w1g8_board(
+        set_pool, [mrd["Quicksilver Elemental"], lea["Shivan Dragon"], lea["Island"]],
+    )
+    game.enforce_mana_costs = True
+    assert _w1g8_board_can_pay(
+        game, 0, {"R": 1}, purpose=PaymentPurpose(ACTIVATE, source=quick),
+    )
+    assert not _w1g8_board_can_pay(
+        game, 0, {"R": 1}, purpose=PaymentPurpose(ACTIVATE, source=shivan),
+    )
+    game.players[0].mana_pool["U"] = 1
+    refused = game.activate_permanent_ability(0, "Shivan Dragon")
+    assert not refused.supported and "insufficient mana" in refused.details
+    assert game.players[0].mana_pool["U"] == 1
+
 # ==== end W1G8 ======================================================
 
 
