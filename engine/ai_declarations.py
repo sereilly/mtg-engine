@@ -212,12 +212,11 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     # so the AI doesn't decline to attack with it (which would skip the defender's
     # block step entirely from the human's perspective).
     for idx in legal_attackers_list:
+        lured = player.battlefield[idx]
         if idx not in forced and (
-            aura_restriction_active(
-                player.battlefield[idx], "must_be_blocked_by_all_able"
-            )
+            aura_restriction_active(lured, "must_be_blocked_by_all_able")
             # …and one a spell made a Lure for the turn (Bloodscent).
-            or player.battlefield[idx].metadata.get(MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT)
+            or lured.metadata.get(MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT)
         ):
             forced.append(idx)
 

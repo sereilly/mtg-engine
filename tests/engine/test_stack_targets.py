@@ -818,6 +818,14 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # exchange, the Grenadiers' destroy) is made as it goes on the stack.
     "The Abyss#0", "Rysorian Badger#0",
     "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",
+    # Mirrodin, W1G12. "…that player puts a flood counter on target
+    # non-Island land they control **of their choice**" (Quicksilver
+    # Fountain): The Abyss's and Ley Line's recorded CR 603.3d deviation on a
+    # named counter — the upkeep player picks as the ability resolves. Driven
+    # at an interactive seat (tests/sets/test_mrd_artifacts_later_groups.py,
+    # W1G12) that player is asked, refused an Island or another player's land,
+    # and the land named is flooded and becomes an Island.
+    "Quicksilver Fountain#0",
     # Gravegouger ("When this creature enters, exile **up to two target cards
     # from a single graveyard**") stood here from Torment's first wave, its
     # pile and cards picked as the ability resolved. They are announced as it
