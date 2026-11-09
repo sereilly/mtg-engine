@@ -834,6 +834,16 @@ def _activation_candidate(
     land_taps: tuple[int, ...] = ()
     tap_colors: tuple[str, ...] = ()
     required = dict(ability.cost.mana)
+    if game.enforce_mana_costs and not x_symbols:
+        # The price the activation will charge, from the one charger every
+        # reader asks (CR 601.2f via 602.2b: taxes, then reductions) — not
+        # the printed cost. "Equip costs you pay cost {1} less" (Auriok
+        # Steelshaper) makes Leonin Scimitar's {1} free, and a plan for the
+        # printed {1} refused the equip on a board with no untapped land.
+        charge = game.activation_mana_charge(player_index, permanent, ability)
+        if isinstance(charge, str):
+            return None
+        required = dict(charge[0])
     if game.enforce_mana_costs and any(required.values()) and not x_symbols:
         plan = _plan_land_taps(game, player, required, paying_for=permanent)
         if plan is None:

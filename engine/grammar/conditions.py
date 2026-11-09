@@ -82,6 +82,12 @@ _PRESENT_STATES: tuple[tuple[str, str, bool], ...] = (
     # answer. A row here rather than a production for the reason this table has
     # rows at all: it is "it is <word>" with a different field name.
     ("enchanted", "enchanted", False),
+    # "As long as this creature is **equipped**, each creature you control
+    # that's a Soldier or a Knight gets +1/+1." (Auriok Steelshaper.) CR
+    # 301.5a's word for a creature an Equipment is attached to — the same
+    # attachment record, asked for the other kind of attachment, through the
+    # same ``_STATE_TESTS`` table.
+    ("equipped", "equipped", False),
 )
 
 #: The characteristics a "…'s <X> is N or greater" / "…has <X> N or greater"

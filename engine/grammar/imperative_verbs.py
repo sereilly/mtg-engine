@@ -63,6 +63,7 @@ from .effects import (
     _parse_ante,
     _parse_assign_divided_among_defenders,
     _parse_attach,
+    _parse_unattach,
     _parse_note_mana_spent,
     _parse_change_base_pt,
     _parse_change_event_targets,
@@ -199,6 +200,9 @@ def parse_imperative_verb(
             return both
     if stream.at_word("attach"):
         return _parse_attach(stream)
+    # "**Unattach** all Equipment from target creature." (Disarm.)
+    if stream.at_word("unattach"):
+        return _parse_unattach(stream)
     # "You may **assign this creature's combat damage divided as you choose
     # among defending player and/or any number of creatures they control**."
     # (Butcher Orgg.) Declines without consuming, so no other "assign" reading

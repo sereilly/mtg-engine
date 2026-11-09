@@ -449,9 +449,9 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # (Dead-Iron Sledge) is the same row: CR 301.5f's word for the referent.
     ("creature_blocks_or_blocked_by",
      r"whenever (?:enchanted|equipped) (?P<combatant_attached>[a-z]+) blocks or "
-     r"becomes blocked by (?P<block_pair_subject>(?:a|another) [^,]+)"),
+     r"becomes blocked by (?P<block_pair_subject>(?:an?|another) [^,]+)"),
     ("creature_blocks_or_blocked_by",
-     r"whenever this creature blocks or becomes blocked by (?P<block_pair_subject>(?:a|another) [^,]+)"),
+     r"whenever this creature blocks or becomes blocked by (?P<block_pair_subject>(?:an?|another) [^,]+)"),
     # "…blocks or becomes blocked by **one or more Orcs**" (Dwarven Soldier).
     # CR 509.3e: an ability that triggers on blocking or being blocked by *at
     # least* a number of creatures triggers **once**, however many answer — the
@@ -677,7 +677,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # strict prefix: matching that first is what made Snarespinner compile to an
     # unnarrowed condition with its rider dropped on the floor.
     ("creature_blocks",
-     r"whenever this creature blocks (?P<blocked_subject>(?:a|another) [^,]+)"),
+     r"whenever this creature blocks (?P<blocked_subject>(?:an?|another) [^,]+)"),
     # "…blocks **one or more black creatures**" (Rashka the Slayer). The counted
     # spelling of the row above, arranged exactly as the joined
     # `creature_blocks_or_blocked_by` family already arranges its own: singular
@@ -722,10 +722,10 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # comparison's source.
     ("matching_creature_blocks",
      r"whenever (?P<combatant_subject>(?:a|another) [^,]+?) blocks "
-     r"(?P<blocked_subject>(?:a|another) [^,]+)"),
+     r"(?P<blocked_subject>(?:an?|another) [^,]+)"),
     ("matching_creature_becomes_blocked",
      r"whenever (?P<combatant_subject>(?:a|another) [^,]+?) becomes blocked by "
-     r"(?P<blocker_subject>(?:a|another) [^,]+)"),
+     r"(?P<blocker_subject>(?:an?|another) [^,]+)"),
     # The **bare** spellings of the same two events: "Whenever a creature
     # blocks, …" (Heat of Battle), "Whenever a Sliver becomes blocked, …"
     # (Spined Sliver). CR 509.3c/509.3d is the whole difference between these
@@ -752,9 +752,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # "…becomes blocked by **a creature**" (Gloom Sower): once per blocking
     # creature that answers the filter (CR 509.1h), where the bare form below
     # fires once for the block itself. Same ordering rule.
+    #
+    # The article is "an?" here and on every partner phrase of the block rows
+    # above: "…becomes blocked by **an artifact creature**, destroy that
+    # creature" (Ogre Leadfoot) missed a bare "a", fell to the bare row — its
+    # strict prefix — and compiled with the narrowing left on the effect's
+    # side of the line, destroying any blocker. A pool census of every
+    # condition this table matches short of its clause boundary named that
+    # line and two spell-cast ones (Chalice of the Void, Thought Prison).
     ("creature_becomes_blocked",
      r"whenever this creature becomes blocked by "
-     r"(?P<blocker_subject>(?:a|another) " + _NEGATED_ADJECTIVE_RUN + r"[^,]+)"),
+     r"(?P<blocker_subject>(?:an?|another) " + _NEGATED_ADJECTIVE_RUN + r"[^,]+)"),
     ("creature_becomes_blocked",    r"whenever this creature becomes blocked"),
     # "Whenever **enchanted creature** becomes blocked" (Bestial Fury). The
     # attacking half of the pair above watched by an Aura rather than by the

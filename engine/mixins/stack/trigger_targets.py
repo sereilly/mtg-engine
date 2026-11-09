@@ -544,6 +544,19 @@ class TriggerTargetsMixin:
         if not announced and (
             item.target_permanent_id is not None
             or item.about_permanent_id is not None
+        ) and not (
+            # …except a **card in a graveyard**, which no event names: "Whenever
+            # this creature becomes blocked, you may return target card named
+            # Groffskithur from your graveyard to your hand." The about-object
+            # is a permanent and the target a card, two different slots — but
+            # a graveyard return records its target with no ``targets``
+            # description, so ``bound_event_object`` could not see the printed
+            # word and stamped the creature, and this gate then skipped the
+            # choice: the handler's fallback returned whatever card came first.
+            item.target_permanent_id is None
+            and _names_a_graveyard_target(
+                derive_instruction_spec([instruction]), item.ability_text
+            )
         ):
             return
         spec = derive_instruction_spec([instruction])

@@ -434,7 +434,8 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
                 "a conditional static bonus is derived by engine/static_bonuses.py",
                 node=node,
             )
-        buff = _lower_lord_effects(node, effects)
+        pieces = _subtype_union_pieces(effects)
+        buffs = [_lower_lord_effects(node, piece) for piece in pieces or (effects,)]
         condition = _recipient_seat_condition(node.condition, subject, node)
         if condition is None:
             # ``graveyard_ok``: the anthem is the one static the recompute
@@ -445,6 +446,12 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
                 node.condition, node, graveyard_ok=True
             )
         if condition.get("kind") == "all_share_a_color":
+            if pieces:
+                raise LoweringError(
+                    "\"they\" names the whole buffed set, and a subtype union "
+                    "rides as several disjoint buffs",
+                    node=node,
+                )
             # "**They**" is the very set this anthem buffs, so the filter is
             # copied from the buff rather than parsed a second time — and it is
             # copied from `lord_buff_payload`'s own rendering, so the evaluator
@@ -469,18 +476,21 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
                 "no referent",
                 node=node,
             )
-        payload = lord_buff_payload(dataclasses.replace(buff, condition=condition))
-        # CR 113.6b: "As long as **this card is in your graveyard** …" (the
-        # Incarnations, Riftstone Portal) says where the anthem functions, and
-        # the condition is the only place the card says it. Stamped on the
-        # instruction under the key a graveyard trigger and a graveyard
-        # activation already carry (``functions_from``), which is what the
-        # recompute's graveyard gather reads — and only once
-        # :func:`_graveyard_anthem_condition` has refused every part a card
-        # in a graveyard could not honour.
-        if _graveyard_anthem_condition(condition, buff, node):
-            payload["functions_from"] = "graveyard"
-        return (OracleInstruction(LORD_BUFF_KIND, "", payload),)
+        instructions: list[OracleInstruction] = []
+        for buff in buffs:
+            payload = lord_buff_payload(dataclasses.replace(buff, condition=condition))
+            # CR 113.6b: "As long as **this card is in your graveyard** …" (the
+            # Incarnations, Riftstone Portal) says where the anthem functions,
+            # and the condition is the only place the card says it. Stamped on
+            # the instruction under the key a graveyard trigger and a graveyard
+            # activation already carry (``functions_from``), which is what the
+            # recompute's graveyard gather reads — and only once
+            # :func:`_graveyard_anthem_condition` has refused every part a
+            # card in a graveyard could not honour.
+            if _graveyard_anthem_condition(condition, buff, node):
+                payload["functions_from"] = "graveyard"
+            instructions.append(OracleInstruction(LORD_BUFF_KIND, "", payload))
+        return tuple(instructions)
     # A static ability on the *source itself* whose size is computed (Carrion
     # Grub's "gets +X/+0, where X is the greatest power among creature cards in
     # your graveyard"). Not a lord buff — it buffs nobody else — and not a
@@ -503,8 +513,56 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
     union = _lower_lord_union(node, effects)
     if union is not None:
         return union
+    pieces = _subtype_union_pieces(effects)
+    if pieces is not None:
+        return tuple(
+            OracleInstruction(
+                LORD_BUFF_KIND, "", lord_buff_payload(_lower_lord_effects(node, piece))
+            )
+            for piece in pieces
+        )
     buff = _lower_lord_effects(node, effects)
     return (OracleInstruction(LORD_BUFF_KIND, "", lord_buff_payload(buff)),)
+
+
+def _subtype_union_pieces(
+    effects: tuple[ast.Statement, ...],
+) -> "tuple[tuple[ast.Statement, ...], ...] | None":
+    """One anthem over a **subtype union** — "each creature you control that's
+    a Soldier or a Knight gets +1/+1" (Auriok Steelshaper), "each Soldier or
+    Knight you control" — as one effect tuple per creature type, made
+    disjoint; or None for every anthem that names no such union.
+
+    ``_lord_buff_matches`` ANDs a subtype list, so the union rides as
+    :func:`_lower_lord_union`'s disjoint buffs: the first piece the first type,
+    each later one its own type less every earlier one (``excluded_subtypes``),
+    so a Soldier Knight is reached once and gets the one +1/+1 the sentence
+    gives it (CR 611.3a). Every other narrowing travels on every piece.
+    """
+    if not effects:
+        return None
+    subject = getattr(effects[0], "subject", None)
+    if not isinstance(subject, ast.TargetSpec):
+        return None
+    if any(getattr(effect, "subject", None) != subject for effect in effects):
+        return None
+    filt = subject.filter
+    if len(filt.subtypes) < 2 or filt.subtype_match != "any":
+        return None
+    pieces: list[tuple[ast.Statement, ...]] = []
+    for position, word in enumerate(filt.subtypes):
+        narrowed = dataclasses.replace(
+            subject,
+            filter=dataclasses.replace(
+                filt,
+                subtypes=(word,),
+                excluded_subtypes=filt.excluded_subtypes + filt.subtypes[:position],
+            ),
+        )
+        pieces.append(
+            tuple(dataclasses.replace(effect, subject=narrowed) for effect in effects)
+        )
+    return tuple(pieces)
 
 
 def _lower_lord_union(

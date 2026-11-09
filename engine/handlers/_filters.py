@@ -484,6 +484,12 @@ def graveyard_card_matches(spec: dict, card, *, game=None, owner=None) -> bool:
         spec.get("graveyard_mana_value"), int(getattr(card, "cmc", 0) or 0)
     ):
         return False
+    # "target card **named Groffskithur**" (Groffskithur). A name is a
+    # characteristic a card has in every zone (CR 201.2), asked through the one
+    # reader of "is this card named N?" the battlefield and hand matchers use.
+    named = spec.get("graveyard_named")
+    if named and not card_answers_to_name(card, str(named), zone="graveyard"):
+        return False
     if card_types or spec.get("any_card"):
         return True
     card_type = spec.get("card_type")
@@ -598,6 +604,13 @@ _STATE_TESTS = {
     # this entry independently and agreed on the reading; the helper is the one
     # copy.
     "enchanted": lambda perm: _is_enchanted(perm),
+    # "As long as this creature is **equipped**, it gets +1/+1 and has
+    # flying." (Skyhunter Cub, Leonin Den-Guard, Auriok Steelshaper.) CR
+    # 301.5a: the creature an Equipment is attached to is the equipped
+    # creature. The Aura test's mirror over the one attachment list — an Aura
+    # does not equip, so Fledgling Osprey's enchanted and Skyhunter Cub's
+    # equipped never answer for each other's attachment.
+    "equipped": lambda perm: _is_equipped(perm),
 }
 
 
@@ -611,6 +624,20 @@ def _is_enchanted(perm) -> bool:
 
     return any(
         attachment.has_type("aura") for attachment in auras_attached_to(perm)
+    )
+
+
+def _is_equipped(perm) -> bool:
+    """Whether an Equipment is attached to *perm* (CR 301.5a).
+
+    Through the layers (``has_type``), for the Aura test's reason: CR 301.5c
+    makes losing the subtype something that happens, and an attachment that
+    stopped being an Equipment no longer equips anything.
+    """
+    from ..aura_attachment import auras_attached_to
+
+    return any(
+        attachment.has_type("equipment") for attachment in auras_attached_to(perm)
     )
 
 

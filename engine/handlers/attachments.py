@@ -188,3 +188,100 @@ def _attach_chosen_to_chosen(
     game.check_state_based_actions()
     return True, "resolved"
 
+
+
+@effect_handler("attach_all_to_source")
+def attach_all_to_source(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"When this creature enters, attach all Equipment on the battlefield to
+    it." (Vulshok Battlemaster.)
+
+    CR 701.3 once per member of the described set, every battlefield swept,
+    each move through ``attach_equipment`` and so through its own legality
+    (``attachment_refusal``): an Equipment that can't equip the source does
+    not move, and one already attached elsewhere is not unattached from there
+    (the card's 2004-12-01 rulings). Nothing changes control — "Other
+    players' Equipment is moved onto the Battlemaster as well as your own.
+    This doesn't change who controls the Equipment" (same date) — because
+    attaching never does (CR 301.5d).
+
+    The set is read before anything moves, so an attachment that changes the
+    board cannot add itself to or take itself out of the sweep mid-way. A
+    source that has left the battlefield before its entry trigger resolves
+    receives nothing.
+    """
+    from ..subject_filters import subject_matches
+
+    source = context.source_permanent
+    card_name = getattr(context.card, "name", "")
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{card_name}: nothing to attach to — it has left the battlefield")
+        return True, "resolved"
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    described = dict(instruction.payload)
+    movers = [
+        permanent for permanent in game.all_permanents()
+        if permanent is not source
+        and subject_matches(game, permanent, described, observer=observer, source=source)
+    ]
+    if not movers:
+        game.log.append(f"{card_name}: nothing to attach")
+    for permanent in movers:
+        attach_equipment(game, permanent, source)
+    return True, "resolved"
+
+
+@effect_handler("unattach_all_from_target")
+def unattach_all_from_target(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"Unattach all Equipment from target creature." (Disarm; CR 701.3d.)
+
+    The target is re-checked against the printed host filter as the spell
+    resolves (CR 608.2b) — an illegal target is not affected and nothing takes
+    its place — and every attachment the ``attachments`` filter admits comes
+    off it through ``equipment.unattach_equipment``. "The Equipment remains on
+    the battlefield under its controller's control, but is no longer attached
+    to that creature." (Disarm ruling, 2004-12-01.)
+    """
+    from ..aura_attachment import auras_attached_to
+    from ..equipment import unattach_equipment
+    from ..subject_filters import subject_matches
+    from ._targets import resolve_target_permanent
+
+    card_name = getattr(context.card, "name", "")
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    host_described = {
+        key: value for key, value in instruction.payload.items()
+        if key not in ("targets", "attachments")
+    }
+    attachments_described = dict(instruction.payload.get("attachments") or {})
+    host = resolve_target_permanent(
+        game, context,
+        predicate=lambda permanent: subject_matches(
+            game, permanent, host_described, observer=observer,
+            source=context.source_permanent,
+        ),
+        fallback_players=(context.target, caster),
+        fallback_on_invalid_choice=False,
+    )
+    if host is None:
+        game.log.append(f"{card_name}: its target is no longer legal")
+        return True, "resolved"
+    coming_off = [
+        attachment for attachment in auras_attached_to(host)
+        if subject_matches(
+            game, attachment, attachments_described, observer=observer,
+            source=context.source_permanent,
+        )
+    ]
+    if not coming_off:
+        game.log.append(f"{card_name}: nothing is attached to {host.card.name}")
+    for attachment in coming_off:
+        unattach_equipment(game, attachment, f"{card_name}")
+    if coming_off:
+        game._recompute_continuous_effects()
+    return True, "resolved"

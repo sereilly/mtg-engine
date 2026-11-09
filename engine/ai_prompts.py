@@ -1426,7 +1426,9 @@ def choose_amount_paid(game: Game, choice) -> int:
     cards from their hand and you choose one of them" buys one more card to
     choose from per mana up to the size of that hand — public information
     (CR 402.3), whatever its cards are — and "creates a number of … tokens
-    equal to the amount of mana they paid" buys a token per mana. A sentence
+    equal to the amount of mana they paid" buys a token per mana, and "search
+    your library for an Equipment card with mana value X or less" (Taj-Nar
+    Swordsmith) a wider search per mana. A sentence
     this does not read buys nothing it can price, so it pays nothing, the
     prompt's stated default. Always 0 where the board pays nothing.
 
@@ -1500,6 +1502,17 @@ def _amount_worth_paying(game: Game, choice) -> "int | None":
             ):
                 continue
             return len(game.players[victim].hand)
+        if step.kind == "search_library" and (
+            ((payload.get("restrictions") or {}).get("mana_value") or {}).get("value")
+            == "x"
+        ):
+            # "…you may pay {X}. If you do, search your library for an
+            # Equipment card with mana value X or less…" (Taj-Nar Swordsmith).
+            # Each mana widens the search; the library is hidden (CR 401.2),
+            # so the policy reads no card in it and puts no ceiling on the
+            # amount but the board's.
+            worth = None
+            continue
         if step.kind == "create_token" and payload.get("recipient_players") in (
             None, "each_player",
         ):

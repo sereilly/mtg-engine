@@ -135,6 +135,12 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
     # picker, cast gate and handler all ask that one predicate.
     if filt.colors:
         subtypes = {**subtypes, "graveyard_colors": list(filt.colors)}
+    # "…target card **named Groffskithur**…" (Groffskithur.) A printed name,
+    # additive like the three above, and lifted out of
+    # ``_reads_no_return_restriction`` only by the targeted graveyard-to-hand
+    # branch — every other caller still refuses a name at that gate.
+    if filt.named:
+        subtypes = {**subtypes, "graveyard_named": str(filt.named)}
     if len(filt.card_types) > 1:
         return {
             "any_card": False,

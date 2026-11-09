@@ -72,6 +72,25 @@ def _parse_attach(stream: TokenStream) -> ast.Statement:
     return ast.Attach(subject, host, host_it_can_enchant=legal)
 
 
+def _parse_unattach(stream: TokenStream) -> ast.Statement:
+    """``Unattach <subject> from <host>`` (CR 701.3d).
+
+    "Unattach all Equipment from target creature." (Disarm.) Both halves go
+    through `parse_recipient`, as the attach above does; the whole line must
+    be consumed.
+    """
+    stream.expect_word("unattach")
+    subject = parse_recipient(stream)
+    if subject is None:
+        raise stream.error("expected what to unattach")
+    if not stream.accept_word("from"):
+        raise stream.error("expected 'from' after what is unattached")
+    host = parse_recipient(stream)
+    if host is None:
+        raise stream.error("expected what to unattach it from")
+    return ast.Unattach(subject, host)
+
+
 def _parse_pronoun_attach_rider(
     stream: TokenStream, steps: "list[ast.Statement]"
 ) -> "ast.Statement | None":

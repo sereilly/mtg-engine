@@ -40,7 +40,8 @@ from engine.text_changes import changed_words, spell_text_card
 
 from .offers import (
     _ability_denial, _ability_mana_payload, _offered_mana, ability_text_change_offer,
-    ability_x_payable, cast_mana_offer, cast_x_payable, text_change_offer,
+    ability_price, ability_x_payable, cast_mana_offer, cast_x_payable,
+    text_change_offer,
 )
 from .runtime import CARD_BY_NAME
 from .seats import _player_has_lost
@@ -1523,6 +1524,13 @@ def _serialize_player(
             x_payable = [ability_x_payable(game, seat, perm, ability) for ability in usable]
             if any(entry is not None for entry in x_payable):
                 perm_dict["ability_x_payable"] = x_payable
+            # The mana each ability's activation will charge now, where a tax
+            # or a reduction moves it off the printed cost (``offers.
+            # ability_price``: Auriok Steelshaper's free equip), indexed like
+            # ``ability_index``; absent where every ability costs as printed.
+            prices = [ability_price(game, seat, perm, ability) for ability in usable]
+            if any(entry is not None for entry in prices):
+                perm_dict["ability_prices"] = prices
             # The two words each ability's text change announces
             # (``offers.ability_text_change_offer``: Balduvian Shaman), indexed
             # like ``ability_index``; absent where no ability announces any.

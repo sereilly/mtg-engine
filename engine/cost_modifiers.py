@@ -440,15 +440,17 @@ def _ability_subject_holds(modifier: CostModifier, card, ability) -> bool:
     if ability is None:
         return False
     from .cycling import is_cycling_ability
+    from .equipment import is_equip_ability
 
-    # One keyword, one derivation, and the table above admits no other -- so
-    # this is a lookup with a single row rather than a dispatch waiting to be
-    # written. A keyword reaching here without one would discount every
-    # activated ability on the card, which is why the pattern refuses it first.
-    return (
-        modifier.ability_keyword == "cycling"
-        and is_cycling_ability(card, ability)
-    )
+    # One derivation per keyword the pattern admits
+    # (``cost_modifier_lines._DERIVABLE_ABILITY_KEYWORDS``), and a keyword
+    # with none answers False: reaching here without one would otherwise
+    # discount every activated ability on the card.
+    derivation = {
+        "cycling": is_cycling_ability,
+        "equip": is_equip_ability,
+    }.get(modifier.ability_keyword)
+    return derivation is not None and derivation(card, ability)
 
 
 def _tax_floored(

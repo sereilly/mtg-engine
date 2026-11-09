@@ -594,6 +594,25 @@ def lower_exile_sweep(
                 node=node,
             )
         filt = dataclasses.replace(filt, on_the_battlefield=False)
+    # "Exile target attacking creature and all Equipment **attached to it**."
+    # (Soul Nova.) "It" is the sentence's target, the referent the noun
+    # parser records as ``target`` — the destroy sweep's reading of Turn to
+    # Slag's identical phrase. Lifted off the filter and put back as its own
+    # key, which the handler answers by the target's **id** (CR 400.7): the
+    # target step in front exiles the creature first, and its Equipment are
+    # still attached to that departed object until the next state-based
+    # check (CR 704.5n), so one exile of the creature and its Equipment is
+    # what the two steps do together. Only the target: no other referent has
+    # a handler here, and dropped the relation would exile every Equipment.
+    if filt.attached_to is not None:
+        if filt.attached_to != "target":
+            raise LoweringError(
+                "the exile sweep reads 'attached to' only of the sentence's "
+                "target",
+                node=node,
+            )
+        payload["attached_to"] = "target"
+        filt = dataclasses.replace(filt, attached_to=None)
     rest = dataclasses.replace(
         filt, colored=False, mana_value=None, name_from_event=False,
     )

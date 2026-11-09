@@ -595,3 +595,32 @@ def ability_x_payable(game: Game, seat: int, perm: Permanent, ability) -> dict |
     if not prices(0):
         return None
     return _x_payable_by(game, seat, prices, purpose, colors)
+
+
+def ability_price(game: Game, seat: int, perm: Permanent, ability) -> str | None:
+    """The mana the activation path will charge for *ability* now, as a cost
+    label (``"{0}"`` when nothing is owed), where the taxes and reductions in
+    force move it off the printed cost — or None where nothing moves it.
+
+    "Equip costs you pay cost {1} less." (Auriok Steelshaper.) The printed
+    "Equip {1}" is what the button says and {0} is what the activation
+    charges (CR 601.2f via 602.2b); without this the client had only the
+    printed line to show. Priced by ``Game.activation_mana_charge``, the one
+    charger the path, the AI's planner and :func:`ability_x_payable` ask. An
+    {X} cost is :func:`ability_x_payable`'s, and a cost the charger refuses
+    (an Aura with no host) shows nothing here — its denial says why.
+    """
+    from engine.mana_payment import mana_cost_label
+
+    line = (getattr(ability, "source_line", None) or "").lower()
+    if "{x}" in line.split(":", 1)[0]:
+        return None
+    charge = game.activation_mana_charge(seat, perm, ability)
+    if isinstance(charge, str):
+        return None
+    owed = charge[0]
+    printed = dict(ability.cost.mana)
+    keys = set(owed) | set(printed)
+    if all(int(owed.get(k, 0) or 0) == int(printed.get(k, 0) or 0) for k in keys):
+        return None
+    return mana_cost_label(owed) if any(owed.values()) else "{0}"

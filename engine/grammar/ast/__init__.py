@@ -286,6 +286,7 @@ from .board import (
     DelayedSelfAction,
     RebalanceLands,
     Attach,
+    Unattach,
     PayOrSacrificeGreatestManaValue,
     Destroy,
     Sacrifice,
@@ -764,6 +765,7 @@ __all__ = [
     "BecomeCreature",
     # board
     "Attach",
+    "Unattach",
     "ExchangeControl",
     "ExchangeLifeTotals",
     "ExchangeGreatestManaValue",
