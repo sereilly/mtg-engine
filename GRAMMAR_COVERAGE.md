@@ -55,7 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | SCG | 143 | 262 | 82.4% | 82.1% | 55.0% | 120 |
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| MRD *(measured)* | 291 | 456 | 81.6% | 81.4% | 59.4% | 223 |
+| MRD *(measured)* | 291 | 456 | 83.6% | 83.3% | 61.2% | 230 |
 | **All (shipped)** | **8992** | **13323** | **90.0%** | **89.5%** | **62.1%** | **7036** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -68,9 +68,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 883 | 465 | expected a subject |  |
-| 197 | 102 | unrecognized effect verb |  |
-| 139 | 73 | unconsumed text |  |
+| 879 | 461 | expected a subject |  |
+| 196 | 101 | unrecognized effect verb |  |
+| 138 | 72 | unconsumed text |  |
 | 71 | 52 | granted ability in quotes | phase 3 (quoted abilities) |
 | 41 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -90,9 +90,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | expected 'put' |  |
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
+| 1 | 1 | expected 'a' |  |
 
 ## Cards executing through the grammar
 
@@ -4135,6 +4135,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Fierce Empath**
   - `When this creature enters, you may search your library for a creature card with mana value 6 or greater, reveal it, put it into your hand, then shuffle.`
   - `When this creature enters, you may search your library for a creature card with mana value 6 or greater, reveal it, put it into your hand, then shuffle.`
+- **Fiery Gambit**
+  - `Flip a coin until you lose a flip or choose to stop flipping. If you lose a flip, Fiery Gambit has no effect. If you win one or more flips, Fiery Gambit deals 3 damage to target creature. If you win two or more flips, Fiery Gambit deals 6 damage to each opponent. If you win three or more flips, draw nine cards and untap all lands you control.`
 - **Fiery Justice**
   - `Fiery Justice deals 5 damage divided as you choose among any number of targets. Target opponent gains 5 life.`
 - **Fiery Mantle**
@@ -4896,6 +4898,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature blocks or becomes blocked, target opponent gains control of it. (This removes this creature from combat.)`
 - **Goblin Caves**
   - `As long as enchanted land is a basic Mountain, Goblin creatures get +0/+2.`
+- **Goblin Charbelcher**
+  - `{3}, {T}: Reveal cards from the top of your library until you reveal a land card. This artifact deals damage equal to the number of nonland cards revealed this way to any target. If the revealed land card was a Mountain, this artifact deals double that damage instead. Put the revealed cards on the bottom of your library in any order.`
 - **Goblin Chirurgeon**
   - `Sacrifice a Goblin: Regenerate target creature.`
 - **Goblin Clearcutter**
@@ -5185,6 +5189,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}{C}{C}.`
   - `{4}: Untap this artifact.`
 - **Grim Reminder**
+  - `Search your library for a nonland card and reveal it. Each opponent who cast a spell this turn with the same name as that card loses 6 life. Then shuffle.`
   - `{B}{B}: Return this card from your graveyard to your hand. Activate only during your upkeep.`
 - **Grim Tutor**
   - `Search your library for a card, put that card into your hand, then shuffle. You lose 3 life.`
@@ -7377,6 +7382,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Mesmeric Fiend**
   - `When this creature enters, target opponent reveals their hand and you choose a nonland card from it. Exile that card.`
   - `When this creature leaves the battlefield, return the exiled card to its owner's hand.`
+- **Mesmeric Orb**
+  - `Whenever a permanent becomes untapped, that permanent's controller mills a card.`
 - **Mesmeric Trance**
   - `{U}, Discard a card: Draw a card.`
 - **Metalworker**
@@ -7814,6 +7821,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `All creatures get -1/-1 until end of turn for each Swamp you control.`
 - **Myr Adapter**
   - `This creature gets +1/+1 for each Equipment attached to it.`
+- **Myr Incubator**
+  - `{6}, {T}, Sacrifice this artifact: Search your library for any number of artifact cards, exile them, then create that many 1/1 colorless Myr artifact creature tokens. Then shuffle.`
 - **Myr Mindservant**
   - `{2}, {T}: Shuffle your library.`
 - **Myr Prototype**
@@ -9001,6 +9010,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, Pay 1 life: Prevent all damage that would be dealt to you this turn by a source of your choice that shares a color with the mana spent on this activation cost. (Colorless mana prevents no damage.)`
 - **Proteus Machine**
   - `When this creature is turned face up, it becomes the creature type of your choice. (This effect lasts indefinitely.)`
+- **Proteus Staff**
+  - `{2}{U}, {T}: Put target creature on the bottom of its owner's library. That creature's controller reveals cards from the top of their library until they reveal a creature card. The player puts that card onto the battlefield and the rest on the bottom of their library in any order. Activate only as a sorcery.`
 - **Provoke**
   - `Untap target creature you don't control. That creature blocks this turn if able.`
   - `Draw a card.`
@@ -9043,6 +9054,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever enchanted land becomes tapped, this Aura deals 2 damage to that land's controller.`
 - **Psychic Vortex**
   - `At the beginning of your end step, sacrifice a land and discard your hand.`
+- **Psychogenic Probe**
+  - `Whenever a spell or ability causes a player to shuffle their library, this artifact deals 2 damage to that player.`
 - **Psychotic Haze**
   - `Psychotic Haze deals 1 damage to each creature and each player.`
 - **Puffer Extract**
@@ -11378,6 +11391,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `For each artifact or creature card in target opponent's graveyard, add {C} and you gain 1 life.`
 - **Spoils of War**
   - `Distribute X +1/+1 counters among any number of target creatures.`
+- **Spoils of the Vault**
+  - `Choose a card name. Reveal cards from the top of your library until you reveal a card with that name, then put that card into your hand. Exile all other cards revealed this way, and you lose 1 life for each of the exiled cards.`
 - **Spontaneous Combustion**
   - `Spontaneous Combustion deals 3 damage to each creature.`
 - **Spontaneous Generation**
