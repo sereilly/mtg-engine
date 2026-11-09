@@ -51,11 +51,12 @@ def characteristic_read_off_the_sacrifice(instructions) -> str | None:
 
 
 def sacrificed_reading(permanent: Permanent, characteristic: str) -> int:
-    """What *characteristic* reads off *permanent* if it is sacrificed now —
-    the handler's own read (``handlers/_amounts.py``): a mana value off the
-    card, power and toughness off the permanent as layer 7 has them."""
+    """What *characteristic* reads off *permanent* if it is sacrificed now: a
+    mana value off its effective card (CR 707.2 copies it), power and
+    toughness off the permanent as layer 7 has them. Only a grouping key —
+    what the sacrifice actually buys is the rehearsal's to measure."""
     if characteristic == "mana_value":
-        return int(getattr(permanent.card, "cmc", 0) or 0)
+        return int(getattr(permanent.effective_card, "cmc", 0) or 0)
     return int(getattr(permanent, f"effective_{characteristic}", 0) or 0)
 
 
