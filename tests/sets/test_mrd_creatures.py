@@ -472,6 +472,24 @@ def test_w1g2_the_ai_equips_for_the_price_steelshaper_leaves(set_pool):
         if proposed:
             assert action.land_tap_indices == ()
 
+
+def test_w1g2_taj_nar_swordsmith_seat_nobody_asks_pays_what_it_can(set_pool):
+    """The same trigger for a seat nobody asks: the default pays what the
+    board can (``ai_prompts.choose_amount_paid`` — a search widened by X is
+    worth every mana, the library being hidden, CR 401.2), so the {2} left
+    in the pool fetches the Scimitar. It used to pay nothing and search for
+    mana value 0."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game, alice, _bob = _w1g2_table(set_pool, hand=[mrd["Taj-Nar Swordsmith"]], enforce=True)
+    alice.library = [lea["Plains"], mrd["Vulshok Battlegear"], mrd["Leonin Scimitar"], lea["Plains"]]
+    alice.mana_pool.update({"W": 1, "C": 5})
+    assert game.cast_from_hand(0, "Taj-Nar Swordsmith").supported
+    _w1g2_drain(game)
+    assert any("Alice paid 2 mana" in line for line in game.log)
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Leonin Scimitar", "Taj-Nar Swordsmith",
+    ]
+
 # ==== end W1G2 ======================================================
 
 

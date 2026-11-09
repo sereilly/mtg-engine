@@ -177,22 +177,20 @@ def bound_event_object(instruction, permanent) -> int | None:
 
 def combatant_subject_context(game, combatant) -> dict:
     """The ``trigger_context`` a combat fire site freezes about the creature
-    its event was about: its id and its controller's seat
-    (``event_subject_permanent_id`` / ``event_subject_controller``).
+    its event was about: its controller's seat (``event_subject_controller``).
 
     "Whenever enchanted creature attacks or blocks, **its controller** loses
     3 life." (Contaminated Bond.) The Aura's controller controls the ability
     (CR 603.3a) and "its" is the attacker or blocker, whose seat is read now
     (CR 603.10) — by resolution the creature may have died or changed hands.
-    The same keys the other fire sites in ``_EVENT_SUBJECT_CONTROLLERS``
-    stamp, so the lowering's one branch for the phrase reads them.
+    The key the other fire sites in ``_EVENT_SUBJECT_CONTROLLERS`` stamp, so
+    the lowering's one branch for the phrase reads it. The seat alone: the
+    object itself already rides ``StackItem.about_permanent_id``, and the
+    readers of ``event_subject_permanent_id`` are other events' business.
     """
     if combatant is None:
         return {}
-    return {
-        "event_subject_permanent_id": combatant.permanent_id,
-        "event_subject_controller": game.controller_index_of(combatant),
-    }
+    return {"event_subject_controller": game.controller_index_of(combatant)}
 
 
 def bound_event_seat(instruction, seat) -> int | None:

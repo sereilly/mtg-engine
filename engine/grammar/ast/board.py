@@ -232,9 +232,10 @@ class ExileUntilLeavesOrUntaps:
 class Attach:
     """``Attach <subject> to <host>`` — the keyword action of CR 701.3.
 
-    *subject* is what moves (the Equipment; for every card in the pool it is
-    the source itself, "this permanent", because CR 702.6a's expansion of
-    equip is the only printing) and *host* is what it is attached to. Two
+    *subject* is what moves (the Equipment; nearly always the source itself,
+    "this permanent", CR 702.6a's expansion of equip — and a described set
+    for "attach all Equipment on the battlefield to it", Vulshok Battlemaster,
+    whose host is the source) and *host* is what it is attached to. Two
     recipients rather than one, because "Attach target Equipment you control
     to target creature you control" is a real sentence (Brass Squire) and a
     node with one slot would have to be replaced rather than extended.
