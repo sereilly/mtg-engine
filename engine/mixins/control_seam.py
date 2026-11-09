@@ -30,6 +30,8 @@ Beside the seam, the three things it is the reason for:
 from __future__ import annotations
 
 from contextlib import contextmanager
+from itertools import repeat
+from operator import is_
 
 from ..aura_attachment import (auras_attached_to, detach_aura,
                                left_attached_to)
@@ -147,12 +149,14 @@ class ControlSeamMixin:
         Matches by identity, not ``in``: Permanent is a dataclass with value
         equality, so ``in`` would match a look-alike (an opponent's copy of the
         same card in the same state) after this object has left the battlefield.
+        The identity test runs in C (``operator.is_`` over the list), which is
+        the same question a generator asks one Python frame at a time.
         """
         return next(
             (
                 i
                 for i, p in enumerate(self.players)
-                if any(perm is permanent for perm in p.battlefield)
+                if any(map(is_, p.battlefield, repeat(permanent)))
             ),
             None,
         )

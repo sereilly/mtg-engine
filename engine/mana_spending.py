@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
 #: The five colours, as the payment code spells them.
 COLOR_SYMBOLS: tuple[str, ...] = ("W", "U", "B", "R", "G")
@@ -225,12 +226,20 @@ def permissions_for_seat(game, seat: int) -> tuple[ManaSpending, ...]:
         # ``effective_card``, not ``card``: a permanent that copies one of these
         # grants the permission, and one whose text has been changed no longer
         # grants what it no longer says.
-        text = getattr(perm.effective_card, "oracle_text", "") or ""
-        for line in text.splitlines():
-            permission = mana_spending_for(line)
-            if permission is not None:
-                found.append(permission)
+        found.extend(_text_permissions(getattr(perm.effective_card, "oracle_text", "") or ""))
     return tuple(found)
+
+
+@lru_cache(maxsize=None)
+def _text_permissions(oracle_text: str) -> tuple[ManaSpending, ...]:
+    """The spending permissions *oracle_text*'s lines grant, in printed order.
+    Kept per text: the recompute asks it of every permanent on every pass, and
+    the answer is the text's."""
+    return tuple(
+        permission
+        for line in oracle_text.splitlines()
+        if (permission := mana_spending_for(line)) is not None
+    )
 
 
 __all__ = [

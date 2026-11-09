@@ -984,34 +984,42 @@ one card prints this") reads as a work item long after it stopped being true.
     The simulator's honesty count of steps ending with something owed must
     also skip a finished game (`ai_simulator._owed_when_leaving`), or USG
     and M21 exit 1.
-  * *The folds that do run* (perf). Measured again on 2026-11-08 over four
-    seeded games (SCG, ONS, MIR, M21; 35.0 s): the state-based check was 55%
-    of the run and the continuous-effect recompute inside it 21%. What was
-    exact went in — the Aura text readers cached on their text, each sweep
-    asking its metadata test before a layer read, `has_type` / `is_creature`
-    / `has_supertype` answered without building sets — and took the four
-    games to 23.3 s and the full pass from 2,068 s to 1,660 s at `-n 10`.
-    What is left is remembered state, which this entry is about: skipping a
-    recompute (or a whole state-based check) when nothing changed since the
-    last one needs a signal for every write below, and the full
-    `effective_card` fold (~15% of a profile; a permanent with a recorded
-    static or an attached Aura folds on every read) needs the same inputs
-    as a key. Earlier readings: about 6 s of a 47.6 s Mirage profile
-    and 31 s of 81 in Planeshift, mostly `global_static_sources` per source.
-    An epoch memo would need every input, not only the permanent's own
-    channels. Those are each source's `card_through_layer_3` text, CR 305.7
-    strike and timestamp; each attached Aura's effective text,
-    `aura_timestamp`, `permanent_id` and `ANIMATES_HOST`; and live zones
-    (`copies._derived_entries` reads the owner's graveyard on every call,
-    for Volrath's Shapeshifter). It would also need a bump at every write to
-    the 14 fold channels and 15 layer-4 channels, direct `metadata[...]`
-    writes included, and at every zone move, attach, detach and text
-    change. The checking harness exists for whoever builds it. Smaller: the
-    through-combat reading could resume from the first reading's copy
-    (about 5%). That is decision-identical only if fewer
-    `next_permanent_id` / `next_timestamp` draws never reach a log line or
-    a decision, which is unverified. And `_cast_onto_stack` enumerates
-    targets twice, each candidate scanning the whole board.
+  * *The folds that do run* (perf). Measured on 2026-11-09 over four seeded
+    games (SCG, ONS, MIR, M21), side by side with the commit before: 31.0 s
+    to 22.0 s. What went in is exact — a predicate over the current state or
+    a cache on immutable text, each held by `fast_paths.CHECKING`: a card's
+    program kept on the card, the fold's first question one set test over
+    the record's keys, the attachment-only fold (586,054 of 754,731 folds were
+    a creature wearing an Aura that grants nothing, read through every
+    channel to hand back the printed card), the same first question on
+    `card_before_layer_6` / `card_through_layer_3`, and spending permissions
+    kept per text. The recompute went from 6.5 s to 4.2 s of the run and the
+    folds from 4.3 s to 2.2 s; the state-based check is still half of it.
+    What is left is remembered state, and it was measured before anyone
+    builds it: of 5,393 recomputes in two games, 2,287 (42%) started on the
+    position the previous one on that game had ended on, which caps a skip
+    at about 40% of the recompute — under a tenth of the run — before the
+    cost of tracking. Most of those are a rehearsal's scratch copy checking
+    the board its original had just checked (so a skip's mark would have to
+    ride the deep copy), and a check right after a step's turn-based actions
+    followed by the window's own; reusing the no-cast baseline across
+    decisions would save 0.1 s of 9.3 (412 of 425 baselines are at different
+    positions). A skip needs a signal for every write: the 14 fold channels
+    and 15 layer-4 channels, direct `metadata[...]` writes included — and
+    nested values mutated in place (a counters dict, an `attached_auras`
+    list), which no dict subclass sees — every zone move, attach, detach and
+    text change, each source's `card_through_layer_3` text, CR 305.7 strike
+    and timestamp, each attached Aura's effective text, `aura_timestamp`,
+    `permanent_id` and `ANIMATES_HOST`, and live zones (`copies._derived_entries`
+    reads the owner's graveyard for Volrath's Shapeshifter). The checking
+    harness exists for whoever builds it. Smaller: the through-combat reading
+    could resume from the first reading's copy (about 5%), decision-identical
+    only if fewer `next_permanent_id` / `next_timestamp` draws never reach a
+    log line or a decision, which is unverified; `_cast_onto_stack`
+    enumerates targets twice, each candidate scanning the whole board; and
+    the store build could key a parse on the text alone where the line does
+    not name its card (7,486 texts against 15,772 (line, name) pairs), once
+    every grammar module's use of the name is shown to need it present.
   * *The other priority windows* (windows). These are the opponent's
     upkeep, draw, beginning of combat, combat damage, end of combat,
     postcombat main and the seat's own end step, each about 1,970

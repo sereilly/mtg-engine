@@ -884,8 +884,18 @@ def displayed_type_line(perm: Permanent) -> str:
 
 
 def _without_type_effects(perm: Permanent) -> bool:
-    """Whether no layer-4 effect can apply to *perm* (:data:`TYPE_EFFECT_CHANNELS`)."""
-    return not any(map(perm.metadata.get, TYPE_EFFECT_CHANNELS))
+    """Whether no layer-4 effect can apply to *perm* (:data:`TYPE_EFFECT_CHANNELS`).
+
+    A record holding none of those keys is answered by one set test, in C;
+    one holding a key, empty or not, is asked whether any holds something
+    (``models.fold_channel_set``'s arrangement)."""
+    metadata = perm.metadata
+    return metadata.keys().isdisjoint(_TYPE_EFFECT_CHANNEL_SET) or not any(
+        map(metadata.get, TYPE_EFFECT_CHANNELS)
+    )
+
+
+_TYPE_EFFECT_CHANNEL_SET = frozenset(TYPE_EFFECT_CHANNELS)
 
 
 def computed_types(perm: Permanent) -> tuple[set[str], set[str]]:

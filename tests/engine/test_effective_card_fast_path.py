@@ -213,11 +213,14 @@ def test_the_fold_reads_no_key_the_shortcut_does_not_name(by_name, name, present
     empty, recording each metadata key it reads. It must read nothing outside
     ``fold_channels()`` and must come back with the printed card — together,
     exactly the claim the shortcut makes. A channel added to the fold and not
-    to the tuple fails here, before any permanent is misread."""
+    to the tuple fails here, before any permanent is misread. The fold run is
+    the full one (``_folded_in_full``): ``_folded_card`` itself would take the
+    attachment-only path over this record and read one channel."""
     card = by_name[name]
     channels = models.fold_channels()
     metadata = _RecordingDict({key: [] for key in channels} if present else {})
     permanent = Permanent(card=card, metadata=metadata)
+    assert permanent._folded_in_full() is card
     assert permanent._folded_card() is card
     assert metadata.read, "the fold read nothing at all: the recorder is not wired"
     assert metadata.read <= set(channels), sorted(metadata.read - set(channels))
@@ -289,6 +292,34 @@ def test_every_shortcut_answer_on_the_board_is_the_full_one(by_name, monkeypatch
     # …and the template every recorded source's text matches (Energy Flux's,
     # read off each artifact it reaches).
     assert fast_paths.CHECKED["global_static_for"] >= len(permanents)
+
+
+def test_an_aura_wearer_is_folded_by_its_attachments_alone(by_name, monkeypatch):
+    """The fold's first question (``Permanent._folded_attachments``): a
+    permanent whose only filled channel is its attached Auras is folded by
+    the attachment loop alone, and the full fold agrees — for an Aura that
+    grants nothing, which hands back the printed card itself, and for one
+    granting a quoted line. Most folds in play are the first kind."""
+    game = Game(players=[PlayerState(name=f"P{seat}") for seat in range(2)])
+    game.interactive_seats = set()
+    pumped = _put(game, by_name["Grizzly Bears"])
+    studied = _put(game, by_name["Savannah Lions"])
+    attach_aura(_put(game, by_name["Holy Strength"]), pumped)
+    attach_aura(_put(game, by_name["Hermetic Study"]), studied)
+    game._recompute_continuous_effects()
+    for permanent in (pumped, studied):
+        assert permanent.metadata.get("attached_auras")
+        assert not any(map(permanent.metadata.get, models.attachment_free_fold_channels()))
+    monkeypatch.setattr(fast_paths, "CHECKING", True)
+    monkeypatch.setattr(fast_paths, "CHECKED", {})
+
+    assert pumped.effective_card is pumped.card
+    granted = studied.effective_card
+    assert granted is not studied.card
+    assert "{t}: this creature deals 1 damage to any target." in granted.oracle_text.lower()
+    # The two wearers, and the checking mode's own folds of every permanent
+    # answered unfolded (``_check_unfolded`` asks ``_folded_card``).
+    assert fast_paths.CHECKED["folded_attachments"] >= 2
 
 
 def test_a_global_static_is_matched_once_per_text_and_built_as_it_was(by_name):

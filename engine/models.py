@@ -74,6 +74,51 @@ def fold_channels() -> tuple[str, ...]:
     )
 
 
+@functools.cache
+def fold_channel_set() -> frozenset[str]:
+    """:func:`fold_channels` as a set, for the first question
+    ``effective_card`` asks: whether the permanent's record holds any of
+    those keys at all. A record holding none of them has nothing to fold —
+    one membership test per key, in C, where reading each channel is a call
+    per key (0.07 µs against 0.27). A record that holds one, empty or not,
+    goes on to read them."""
+    return frozenset(fold_channels())
+
+
+@functools.cache
+def attachment_free_fold_channels() -> tuple[str, ...]:
+    """:func:`fold_channels` less ``attached_auras``: with every one of these
+    empty, the fold is the attachment loop alone
+    (``Permanent._folded_attachments``)."""
+    return tuple(channel for channel in fold_channels() if channel != "attached_auras")
+
+
+def _check_attachments_only(permanent: "Permanent", folded: "CardDefinition") -> None:
+    """``engine/fast_paths.py``'s check of the attachment-only fold: the full
+    fold, run anyway, must come to the same card."""
+    full = permanent._folded_in_full()
+    fast_paths.checked(
+        "folded_attachments", folded == full and (folded is permanent.card) == (full is permanent.card),
+        lambda: (
+            f"{permanent.card.name!r}'s attachment-only fold reads "
+            f"{folded.oracle_text!r}, and the full fold {full.oracle_text!r}"
+        ),
+    )
+
+
+def _check_printed(permanent: "Permanent", label: str, full: "CardDefinition") -> None:
+    """``engine/fast_paths.py``'s check of a partial reading's shortcut
+    (``card_before_layer_6``, ``card_through_layer_3``): over a record holding
+    no fold channel, the full reading must be the printed card itself."""
+    fast_paths.checked(
+        label, full is permanent.card,
+        lambda: (
+            f"{permanent.card.name!r} was answered as printed, and {label} in "
+            f"full reads {full.oracle_text!r}"
+        ),
+    )
+
+
 def _check_unfolded(permanent: "Permanent") -> None:
     """``engine/fast_paths.py``'s check of one shortcut answer: the fold,
     run anyway, must hand back the printed card itself."""
@@ -183,6 +228,18 @@ class CardDefinition:
     # print the hidden card.
     face_down_of: "CardDefinition | None" = field(default=None, compare=False, repr=False)
 
+    def __getstate__(self) -> dict[str, Any]:
+        """What a copy or a pickle of this card carries: its instance dict,
+        less the compiled program ``oracle.compile_card_oracle`` keeps on it
+        (:data:`COMPILED_PROGRAM_SLOT`). The undo snapshot deep-copies the
+        game, its cards included, and a copied card would otherwise carry a
+        deep copy of its whole program; the copy compiles again on first
+        read, from the same cache, to the same program."""
+        state = self.__dict__
+        if COMPILED_PROGRAM_SLOT in state:
+            state = {key: value for key, value in state.items() if key != COMPILED_PROGRAM_SLOT}
+        return state
+
     @property
     def is_legendary(self) -> bool:
         """CR 205.4a — the supertype, read off the printed type line.
@@ -224,18 +281,6 @@ class CardDefinition:
     @property
     def printed_power(self) -> str | None:
         return self._printed_stat(self.power, "power")
-
-    def __getstate__(self) -> dict[str, Any]:
-        """What a copy or a pickle of this card carries: its instance dict,
-        less the compiled program ``oracle.compile_card_oracle`` keeps on it
-        (:data:`COMPILED_PROGRAM_SLOT`). The undo snapshot deep-copies the
-        game, its cards included, and a copied card would otherwise carry a
-        deep copy of its whole program; the copy compiles again on first
-        read, from the same cache, to the same program."""
-        state = self.__dict__
-        if COMPILED_PROGRAM_SLOT in state:
-            state = {key: value for key, value in state.items() if key != COMPILED_PROGRAM_SLOT}
-        return state
 
     @property
     def printed_toughness(self) -> str | None:
@@ -669,8 +714,14 @@ class Permanent:
         folding: with every channel :func:`fold_channels` names empty, the
         fold would return ``card`` itself. Not a cache — nothing is
         remembered, and a channel that fills is read on the very next call.
+        A record holding none of the channels' keys is that case at once
+        (:func:`fold_channel_set`); one holding a key is asked whether any
+        holds something.
         """
-        if not any(map(self.metadata.get, fold_channels())):
+        metadata = self.metadata
+        if metadata.keys().isdisjoint(fold_channel_set()) or not any(
+            map(metadata.get, fold_channels())
+        ):
             if fast_paths.CHECKING:
                 _check_unfolded(self)
             return self.card
@@ -678,6 +729,43 @@ class Permanent:
 
     def _folded_card(self) -> "CardDefinition":
         """:attr:`effective_card`, folded layer by layer."""
+        if not any(map(self.metadata.get, attachment_free_fold_channels())):
+            folded = self._folded_attachments()
+            if fast_paths.CHECKING:
+                _check_attachments_only(self, folded)
+            return folded
+        return self._folded_in_full()
+
+    def _folded_attachments(self) -> "CardDefinition":
+        """The fold of a permanent whose only filled channel is its attached
+        Auras: the printed card with what those Auras grant appended.
+
+        That is the full fold (:meth:`_folded_in_full`) with every other
+        channel empty, step by step: no copy and no text change leave the
+        printed card; no CR 305.7 strike; no board-wide or stack static, so
+        nothing is lost (``lost_at`` is None, and every attachment is kept)
+        and nothing granted by a static; no grant or removal recorded on the
+        permanent itself. What is left is the attachment loop. Asked first
+        because it is most of the folds that run — 586,054 of 754,731 in four
+        seeded games, each a creature wearing an Aura that grants no ability
+        (a pump, a Pacifism), for which the full fold read every channel to
+        hand back the printed card.
+        """
+        attachments, grants = _late.aura_attachment, _late.aura_grants
+        granted: list[str] = []
+        for aura in attachments.auras_attached_to(self):
+            aura_card = aura.effective_card
+            granted.extend(grants.aura_granted_ability_lines(
+                aura_card.oracle_text, granter_name=aura_card.name,
+                granter_id=aura.permanent_id,
+            ))
+            granted.extend(grants.aura_granted_line_derived_lines(aura_card.oracle_text))
+        if granted:
+            return _with_granted_abilities(self.card, tuple(granted))
+        return self.card
+
+    def _folded_in_full(self) -> "CardDefinition":
+        """:attr:`effective_card`, folded layer by layer, every channel read."""
         base = copiable_card(self)
         if has_text_changes(self):
             base = apply_text_changes(base, text_changes(self))
@@ -861,7 +949,19 @@ class Permanent:
 
         Here rather than beside its readers because layer 3 is applied in one
         place (``tests/engine/test_layer_reads.py``), and this is that place.
+
+        A record holding no fold channel (:func:`fold_channel_set`) is the
+        printed card at once, as :attr:`effective_card` answers it: every
+        question below reads one of those channels.
         """
+        if self.metadata.keys().isdisjoint(fold_channel_set()):
+            if fast_paths.CHECKING:
+                _check_printed(self, "card_before_layer_6", self._card_before_layer_6_in_full())
+            return self.card
+        return self._card_before_layer_6_in_full()
+
+    def _card_before_layer_6_in_full(self) -> "CardDefinition":
+        """:attr:`card_before_layer_6`, every channel asked."""
         if lost_abilities_to_type_change(self) or not (
             _abilities_stripped(self)
             or _late.keywords.removed_ability_lines(self)
@@ -885,7 +985,18 @@ class Permanent:
         layers that have no cycle in them: a Darkest Hour whose "black" a
         Sleight of Mind had made "white" went on making creatures black, and a
         Copy Artifact that had become a Thran Lens was a source of nothing.
+
+        A record holding no fold channel is the printed card at once: layer
+        1 and layer 3 each read one (:func:`fold_channel_set`).
         """
+        if self.metadata.keys().isdisjoint(fold_channel_set()):
+            if fast_paths.CHECKING:
+                _check_printed(self, "card_through_layer_3", self._card_through_layer_3_in_full())
+            return self.card
+        return self._card_through_layer_3_in_full()
+
+    def _card_through_layer_3_in_full(self) -> "CardDefinition":
+        """:attr:`card_through_layer_3`, both layers asked."""
         base = copiable_card(self)
         if has_text_changes(self):
             base = apply_text_changes(base, text_changes(self))
