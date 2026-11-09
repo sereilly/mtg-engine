@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**24 unclaimed sentence(s) across 22 supported card(s).**
+**23 unclaimed sentence(s) across 21 supported card(s).**
 
 - **Betrayal of Flesh**
   - `entwine—sacrifice three lands`
@@ -52,8 +52,6 @@ anything anyone did, and every ingest would arrive red.
   - `at the beginning of your upkeep, if this artifact has five or more charge counters on it, remove all of them from it and create that many 3/1 red elemental creature tokens with haste. exile them at the beginning of the next end step`
 - **Mourner's Shield**
   - `{2}, {t}: prevent all damage that would be dealt this turn by a source of your choice that shares a color with the exiled card`
-- **Ogre Leadfoot**
-  - `by an artifact creature, destroy that creature`
 - **One Dozen Eyes**
   - `entwine {g}{g}{g}`
 - **Promise of Power**

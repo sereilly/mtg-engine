@@ -55,7 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | SCG | 143 | 262 | 82.4% | 82.1% | 55.0% | 120 |
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| MRD *(measured)* | 291 | 456 | 75.9% | 73.7% | 52.6% | 200 |
+| MRD *(measured)* | 291 | 456 | 76.8% | 75.0% | 53.7% | 205 |
 | **All (shipped)** | **8992** | **13323** | **90.0%** | **89.5%** | **62.1%** | **7036** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -68,7 +68,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 892 | 474 | expected a subject |  |
+| 888 | 470 | expected a subject |  |
 | 198 | 103 | unrecognized effect verb |  |
 | 144 | 78 | unconsumed text |  |
 | 71 | 52 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -727,6 +727,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Aurification**
   - `Whenever a creature deals damage to you, put a gold counter on it.`
   - `When this enchantment leaves the battlefield, remove all gold counters from all creatures.`
+- **Auriok Steelshaper**
+  - `As long as this creature is equipped, each creature you control that's a Soldier or a Knight gets +1/+1.`
 - **Auriok Transfixer**
   - `{W}, {T}: Tap target artifact.`
 - **Aurochs**
@@ -3065,6 +3067,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +2/+2 and can't block.`
 - **Disappear**
   - `{U}: Return enchanted creature and this Aura to their owners' hands.`
+- **Disarm**
+  - `Unattach all Equipment from target creature.`
 - **Disciple of Kangee**
   - `{U}, {T}: Target creature gains flying and becomes blue until end of turn.`
 - **Disciple of the Vault**
@@ -5181,6 +5185,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: This creature gets +2/+0 until end of turn. Activate only during the declare blockers step, only if at least one creature is blocking this creature, and only once each turn.`
 - **Grizzly Fate**
   - `Create two 2/2 green Bear creature tokens.`
+- **Groffskithur**
+  - `Whenever this creature becomes blocked, you may return target card named Groffskithur from your graveyard to your hand.`
 - **Grollub**
   - `Whenever this creature is dealt damage, each opponent gains that much life.`
 - **Grotesque Hybrid**
@@ -11124,6 +11130,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
+- **Soul Nova**
+  - `Exile target attacking creature and all Equipment attached to it.`
 - **Soul Rend**
   - `Destroy target creature if it's white. A creature destroyed this way can't be regenerated.`
   - `Draw a card at the beginning of the next turn's upkeep.`
@@ -13212,6 +13220,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{X}{X}, {T}: This artifact deals damage equal to the number of pin counters on it to any target. X is the number of pin counters on this artifact.`
 - **Voracious Cobra**
   - `Whenever this creature deals combat damage to a creature, destroy that creature.`
+- **Vulshok Battlemaster**
+  - `When this creature enters, attach all Equipment on the battlefield to it. (Control of the Equipment doesn't change.)`
 - **Wail of the Nim**
   - `• Wail of the Nim deals 1 damage to each creature and each player.`
 - **Waiting in the Weeds**
