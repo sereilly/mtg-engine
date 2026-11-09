@@ -400,6 +400,31 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         return None
     if other_before_target:
         filt = dataclasses.replace(filt, other_than_source=True)
+    if (
+        targeted
+        and filt.superlative is not None
+        and filt.superlative.among is None
+    ):
+        # "Destroy **target nonland permanent with the lowest mana value**."
+        # (Culling Scales.) With "target" printed, the superlative is a
+        # restriction on the one object chosen (CR 601.2c, re-asked at CR
+        # 608.2b — the card's ruling: "If the targeted permanent doesn't have
+        # the lowest mana value when the ability resolves, the ability doesn't
+        # resolve"), and the set the extreme is taken over is the noun phrase
+        # the target is described by: the reminder text says so ("If two or
+        # more **permanents** are tied for lowest, target any one of them").
+        # So it is Topple's "…among <set>" with the set left unprinted, and it
+        # is written as that here, once, where both halves are known — so the
+        # matcher's ``superlative_among`` answers it and no lowering learns a
+        # second spelling. Untargeted, the bare superlative stays a pick
+        # (``lowering/_superlatives``).
+        filt = dataclasses.replace(
+            filt,
+            superlative=dataclasses.replace(
+                filt.superlative,
+                among=dataclasses.replace(filt, superlative=None),
+            ),
+        )
     if targeted and filt.is_enchanted:
         # "Destroy **target enchanted creature**." (Ramses Overdark.) The noun
         # parser reads "enchanted <noun>" as the referent CR 303.4b gives an
