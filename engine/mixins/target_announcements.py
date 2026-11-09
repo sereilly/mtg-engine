@@ -524,6 +524,7 @@ class TargetAnnouncementsMixin:
         # one is stamped here for the same reason the item's own target is: the
         # index was chosen while it still meant what it said, and this is the
         # boundary it stops being safe to hold one across (CR 400.7).
+        program = compile_card_oracle(item.card)
         for mode in item.chosen_modes:
             if mode.target_permanent_index is None or mode.target_permanent_id is not None:
                 continue
@@ -532,9 +533,7 @@ class TargetAnnouncementsMixin:
             # graveyard", CR 702.42a): its slot names a card in a pile, not a
             # permanent, so it is stamped onto the mode's own graveyard channel
             # exactly as the item's is below — never read as a battlefield slot.
-            mode_spec = graveyard_target_spec(
-                item.card, compile_card_oracle(item.card), mode_index=mode.index,
-            )
+            mode_spec = graveyard_target_spec(item.card, program, mode_index=mode.index)
             if mode_spec is not None:
                 if mode_spec.get("own_graveyard_only"):
                     pile_seat = item.caster_index
@@ -561,7 +560,7 @@ class TargetAnnouncementsMixin:
             mode.target_permanent_index = None
         spec = graveyard_target_spec(
             item.card,
-            compile_card_oracle(item.card),
+            program,
             mode_index=item.chosen_mode_index,
             instruction=item.ability_instruction,
         )

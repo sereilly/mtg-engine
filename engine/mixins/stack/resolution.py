@@ -977,6 +977,8 @@ class StackResolutionMixin:
                 # and this arm read the first one alone, so a Forked entwined
                 # One Dozen Eyes made the Beast and no Insects. The modes in
                 # printed order, resumable for the main path's reason.
+                copied_card = item.card
+
                 def apply_copied_mode(mode) -> None:
                     seat = (
                         mode.target_player_index
@@ -987,7 +989,7 @@ class StackResolutionMixin:
                     self._apply_spell_text(
                         caster,
                         self.players[seat],
-                        item.card,
+                        copied_card,
                         text_card=spell_text_card(item),
                         target_permanent_index=mode.target_permanent_index,
                         target_permanent_id=mode.target_permanent_id,
@@ -1004,7 +1006,7 @@ class StackResolutionMixin:
 
                 run_resumable(
                     self, item.chosen_modes, apply_copied_mode,
-                    then=lambda: self.log.append(f"{item.card.name} (copy) resolved"),
+                    then=lambda: self.log.append(f"{copied_card.name} (copy) resolved"),
                 )
                 return
             self._apply_spell_text(
