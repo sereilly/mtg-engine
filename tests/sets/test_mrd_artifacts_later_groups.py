@@ -1564,10 +1564,17 @@ def test_w2g2_the_engine_played_controller_reveals_only_for_a_wrong_guess(set_po
 
 def test_w2g2_an_engine_played_guess_never_reads_the_hand(set_pool):
     """The guesser's default is a coin from the seeded RNG: the same seed
-    gives the same guess whatever the hidden hand holds (CR 400.2)."""
+    gives the same guess whatever the hidden hand holds (CR 400.2) — and an
+    empty hand, whose size is public (CR 402.3), is deduced rather than
+    guessed."""
     lea = set_pool("LEA")
+    game, _alice, _bob, pendulum = _w2g2_pendulum_table(set_pool, interactive=(0,))
+    _w2g2_swing(game, pendulum)
+    assert game.confirm_choose_card_name(0, "Shivan Dragon")
+    game.auto_resolve_pending_choices()
+    assert any("Shivan Dragon is not in Alice's hand" in line for line in game.log)
     guesses = []
-    for hand in ([lea["Shivan Dragon"]], [lea["Island"]], []):
+    for hand in ([lea["Shivan Dragon"]], [lea["Island"]], [lea["Island"], lea["Island"]]):
         game, _alice, _bob, pendulum = _w2g2_pendulum_table(set_pool, hand=hand, interactive=(0,))
         _w2g2_swing(game, pendulum)
         assert game.confirm_choose_card_name(0, "Shivan Dragon")

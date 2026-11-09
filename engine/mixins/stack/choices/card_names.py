@@ -444,7 +444,17 @@ class CardNameChoicesMixin:
     def _default_guess_named_card(self, choice: PendingChoice) -> None:
         """A seat nobody asks guesses at random (``random`` — the module RNG a
         seeded game replays). It may not read the hand it is guessing about
-        (CR 400.2), and a fixed answer is one the namer can name around."""
+        (CR 400.2), and a fixed answer is one the namer can name around.
+
+        Except where the answer is public: how many cards a hand holds is
+        every player's to know (CR 402.3), so an **empty** hand holds no card
+        of any name, and no card is named nothing — "not in that hand" is
+        then a deduction, not a guess, and no coin is spent on it."""
+        data = choice.data
+        holder = self.players[int(data["holder_seat"])]
+        if not str(data.get("named") or "").strip() or not holder.hand:
+            self._resolve_guess_named_card(choice, False)
+            return
         self._resolve_guess_named_card(choice, random.random() < 0.5)
 
 
