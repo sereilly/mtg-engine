@@ -131,6 +131,84 @@ def test_w1g9_culling_scales_can_destroy_itself(set_pool):
     assert [c.name for c in game.players[0].graveyard] == ["Culling Scales"]
 
 
+def _w1g9_choker_game(set_pool):
+    from engine.named_counters import counters_on
+
+    choker = _w1g9_Permanent(card=set_pool("MRD")["Jinxed Choker"])
+    game = _w1g9_Game(players=[
+        _w1g9_PlayerState(name="P0", battlefield=[choker]),
+        _w1g9_PlayerState(name="P1"),
+    ])
+    game.enforce_mana_costs = False
+    return game, choker, (lambda: counters_on(choker, "charge"))
+
+
+def test_w1g9_jinxed_choker_end_step_hands_itself_over_with_a_counter(set_pool):
+    """"At the beginning of your end step, target opponent gains control of
+    this artifact and puts a charge counter on it." Then the new controller's
+    upkeep deals them damage equal to the counters — the ruling (2004-12-01):
+    "'You' is always Jinxed Choker's current controller." """
+    game, choker, charge = _w1g9_choker_game(set_pool)
+    game.resolve_end_step(0)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert game.controller_index_of(choker) == 1
+    assert charge() == 1
+    assert "P1 gains control of Jinxed Choker" in game.log
+
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert [p.life for p in game.players] == [20, 19]
+
+    # And back again at P1's end step, with a second counter.
+    game.resolve_end_step(1)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert game.controller_index_of(choker) == 0
+    assert charge() == 2
+
+
+def test_w1g9_jinxed_choker_activation_chooses_put_or_remove_on_resolution(set_pool):
+    """"{3}: Put a charge counter on this artifact or remove one from it." The
+    ruling (2004-12-01): "you choose to either add or remove a counter when the
+    ability resolves." An interactive controller is asked as it resolves and
+    removes one; a seat nobody asks takes the first printed option."""
+    game, choker, charge = _w1g9_choker_game(set_pool)
+    game.resolve_end_step(0)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert charge() == 1
+
+    game.interactive_seats = {1}
+    logged = len(game.log)
+    game.activate_permanent_ability(1, "Jinxed Choker")
+    # Announced with nothing chosen, and asked as it resolves (CR 608.2d):
+    # the object is held on the stack while the answer is owed.
+    assert game.log[logged:] == [
+        "Jinxed Choker ability added to stack",
+        "Jinxed Choker ability is resolving, awaiting a choice",
+    ]
+    assert [item.resolution_held for item in game.stack] == [True]
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("mode_choice", 1)
+    ]
+    assert game.pending_choices[0].data["labels"] == [
+        "put a charge counter", "remove a charge counter",
+    ]
+    assert game.resolve_pending_choice("mode_choice", 1, mode_index=1)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert charge() == 0
+
+    game.interactive_seats = set()
+    game.activate_permanent_ability(1, "Jinxed Choker")
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert charge() == 1
+
+
 # ==== end W1G9 ======================================================
 
 
