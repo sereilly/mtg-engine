@@ -12,6 +12,76 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **643**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**28 unclaimed sentence(s) across 26 supported card(s).**
+
+- **Assert Authority**
+  - `affinity for artifacts`
+- **Betrayal of Flesh**
+  - `entwine—sacrifice three lands`
+- **Chalice of the Void**
+  - `whenever a player casts a spell with mana value equal to the number of charge counters on this artifact, counter that spell`
+- **Chrome Mox**
+  - `{t}: add one mana of any of the exiled card's colors`
+- **Dream's Grip**
+  - `entwine {1}`
+- **Extraplanar Lens**
+  - `whenever a land with the same name as the exiled card is tapped for mana, its controller adds one mana of any type that land produced`
+- **Grab the Reins**
+  - `entwine {2}{r}`
+- **Incite War**
+  - `entwine {2}`
+- **Isochron Scepter**
+  - `{2}, {t}: you may copy the exiled card. if you do, you may cast the copy without paying its mana cost`
+- **Jinxed Choker**
+  - `at the beginning of your end step, target opponent gains control of this artifact and puts a charge counter on it`
+  - `{3}: put a charge counter on this artifact or remove one from it`
+- **Journey of Discovery**
+  - `entwine {2}{g}`
+- **Lightning Coils**
+  - `at the beginning of your upkeep, if this artifact has five or more charge counters on it, remove all of them from it and create that many 3/1 red elemental creature tokens with haste. exile them at the beginning of the next end step`
+- **Mourner's Shield**
+  - `{2}, {t}: prevent all damage that would be dealt this turn by a source of your choice that shares a color with the exiled card`
+- **Ogre Leadfoot**
+  - `by an artifact creature, destroy that creature`
+- **One Dozen Eyes**
+  - `entwine {g}{g}{g}`
+- **Promise of Power**
+  - `entwine {4}`
+- **Roar of the Kha**
+  - `entwine {1}{w}`
+- **Scale of Chiss-Goria**
+  - `affinity for artifacts`
+- **Scrabbling Claws**
+  - `{t}: target player exiles a card from their graveyard`
+- **Solar Tide**
+  - `entwine—sacrifice two lands`
+- **Soul Foundry**
+  - `{x}, {t}: create a token that's a copy of the exiled card. x is the mana value of that card`
+- **Spellweaver Helix**
+  - `whenever a player casts a card, if it has the same name as one of the cards exiled with this artifact, you may copy the other`
+  - `if you do, you may cast the copy without paying its mana cost`
+- **Temporal Cascade**
+  - `entwine {2}`
+- **Thoughtcast**
+  - `affinity for artifacts`
+- **Tooth and Nail**
+  - `entwine {2}`
+- **Tooth of Chiss-Goria**
+  - `affinity for artifacts`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
