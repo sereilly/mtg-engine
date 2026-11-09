@@ -48,7 +48,7 @@ from ..exiled_records import (forget_record, newest_record_for,
 from ..events import emit
 from ..face_down import forget_face_down_departure, revealed_as_it_moves
 from ..faces import whole_card
-from ..graveyard_order import record_graveyard_arrival
+from ..graveyard_order import record_arrival_history, record_graveyard_arrival
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN, EXILED_BY_SEAT
 from ..pending_choices import spec_for
@@ -442,6 +442,18 @@ class ZoneFunnelsMixin:
         )
         if consumed:
             return False
+        # "…**that were put there from the battlefield this turn**" (No Rest
+        # for the Wicked, Second Sunrise). Recorded on the one seam every
+        # arrival passes through, keyed by the pile it landed in (CR 400.3's
+        # owner) — the same place the exile replacement and the arrival event
+        # are, because "from the battlefield" is a fact about *this* move and
+        # nothing in the graveyard afterwards remembers it. Before the append,
+        # because the same call retires what the record says about a card that
+        # left a pile since (CR 400.7), and that is counted against the pile as
+        # it was. A token never gets here: the permanent path keeps its card
+        # out (CR 111.7), which is the difference between this record and the
+        # tally beside it.
+        record_arrival_history(self.players, seat, card, from_zone)
         self.players[seat].graveyard.append(card)
         # CR 613.7d: the card gets its timestamp as it enters the zone, which
         # is the timestamp a static ability functioning from here carries
@@ -450,16 +462,6 @@ class ZoneFunnelsMixin:
         # arrival takes, by the module that keeps the record in step with the
         # pile.
         record_graveyard_arrival(self.players[seat], card)
-        # "…**that were put there from the battlefield this turn**" (No Rest
-        # for the Wicked). Recorded on the one seam every arrival passes
-        # through, keyed by the pile it landed in (CR 400.3's owner) — the same
-        # place the exile replacement and the arrival event are, because "from
-        # the battlefield" is a fact about *this* move and nothing in the
-        # graveyard afterwards remembers it. A token never gets here: the
-        # permanent path keeps its card out (CR 111.7), which is the difference
-        # between this record and the tally beside it.
-        if from_zone == "battlefield":
-            self.players[seat].cards_put_into_your_graveyard_from_battlefield_this_turn.append(card)
         # Announced **after** the card has arrived, because CR 603.6 has a
         # zone-change trigger look for its object in the zone it moved to — and
         # a replacement that diverted the card returned above, so nothing fires

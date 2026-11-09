@@ -679,9 +679,18 @@ def lower_described_return(
                 "'a type chosen this way' names creature types no step of "
                 "this effect chose", node=node,
             )
+        # "Each player returns to the battlefield all artifact, creature,
+        # enchantment, and land cards in their graveyard **that were put there
+        # from the battlefield this turn**." (Second Sunrise.) The history the
+        # sweep to a hand lifts one branch up (No Rest for the Wicked), lifted
+        # here for the same reason and answered by the same record — how a
+        # card reached a pile is not on the card (CR 400.7), so the key inside
+        # the filter would reach a matcher with no answer for it.
+        history = subject.filter.put_there_from_battlefield_this_turn
         scoped = dataclasses.replace(
             subject.filter, zone="battlefield", zone_owner=None,
             destroyed_this_way=False, of_a_type_chosen_this_way=False,
+            put_there_from_battlefield_this_turn=False,
         )
         swept = chargeable_card_filter(scoped)
         if swept is None:
@@ -703,6 +712,8 @@ def lower_described_return(
             tapped = {**tapped, "destroyed_this_way": True}
         if chosen_types:
             tapped = {**tapped, "subtype_filter_from": CHOSEN_CREATURE_TYPES_THIS_WAY}
+        if history:
+            tapped = {**tapped, "put_there_this_turn": True}
         return (
             OracleInstruction(
                 "return_all_cards_from_graveyard", "",

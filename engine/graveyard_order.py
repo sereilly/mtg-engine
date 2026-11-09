@@ -257,3 +257,55 @@ def graveyard_arrival_stamps(player: Any) -> "list[int | None]":
     _keep(player, held)
     stamps = iter(int(stamp) for _card, stamp in held)
     return [next(stamps) if _stamped(card) else None for card in player.graveyard]
+
+
+# ---------------------------------------------------------------------------
+# How a card got there ("put there from the battlefield this turn")
+# ---------------------------------------------------------------------------
+
+#: The ``PlayerState`` field holding the cards put into that seat's graveyard
+#: from the battlefield this turn (No Rest for the Wicked, Second Sunrise).
+FROM_BATTLEFIELD_THIS_TURN = "cards_put_into_your_graveyard_from_battlefield_this_turn"
+
+
+def record_arrival_history(players: list, seat: int, card: Any, from_zone: Any) -> None:
+    """Keep every seat's "put there from the battlefield this turn" record in
+    step with the piles as *card* arrives in seat *seat*'s graveyard, and add
+    it to that record when it came *from_zone* ``"battlefield"``.
+
+    Called by ``Game.put_card_into_graveyard`` **before** its append — the one
+    road every arrival takes.
+
+    **A record entry is about a card in the pile, and only while it stays
+    there.** CR 400.7: a card that leaves a graveyard and comes back is a new
+    object with no memory of how its earlier self arrived — Raise Dead the
+    Grizzly Bears that died this turn, discard it, and it is a card that was
+    put there from a hand. Nothing announces a card leaving a graveyard (the
+    departures are open-coded pops, by slot), so the record is held to the pile
+    at the next moment it could be misread: the arrival. A seat's record never
+    holds more entries of an object than its pile holds that object **before**
+    the new card lands, so an entry whose card left since is retired here,
+    every seat at once (a card arriving anywhere has left wherever it was).
+
+    Counted rather than matched, because two copies of one card in a deck are
+    the same ``CardDefinition``: which copy left is not in the pile. The
+    excess entries are the ones retired; with one copy of the card in play
+    that is exact, and with two copies of it in one graveyard it is the
+    residual the module docstring names.
+    """
+    for player in players:
+        record = getattr(player, FROM_BATTLEFIELD_THIS_TURN, None)
+        if not record:
+            continue
+        mine = [index for index, held in enumerate(record) if held is card]
+        if not mine:
+            continue
+        excess = len(mine) - sum(1 for held in player.graveyard if held is card)
+        if excess > 0:
+            stale = set(mine[:excess])
+            setattr(
+                player, FROM_BATTLEFIELD_THIS_TURN,
+                [held for index, held in enumerate(record) if index not in stale],
+            )
+    if from_zone == "battlefield":
+        getattr(players[seat], FROM_BATTLEFIELD_THIS_TURN).append(card)
