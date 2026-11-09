@@ -34,6 +34,7 @@ from .ai_target_sides import (
     host_effect_side,
     named_counter_marks_for_harm,
     sweep_a_named_counter_spares,
+    sweeps_what_its_counter_shelters,
     toll_effect_side,
     instruction_target_side,
     untaps_its_target,
@@ -956,14 +957,18 @@ def _activation_candidate(
         worth = _land_ability_worth(game, player_index, candidate)
         if worth is None:
             return None
-        if _gives_up_its_source(ability.cost) and not _exists_to_be_given_up(permanent):
-            # **A permanent given up is scored by what its rehearsal measured**
-            # (MRD W2G5), never below the flat score. "{5}, {T}, Sacrifice
-            # this artifact: Destroy each nonland permanent without a fate
-            # counter on it" (Oblivion Stone) is the trade of a whole board,
-            # and at the flat 2.5 it tied the Stone's own "put a fate counter"
-            # beside it — which the chooser's strict comparison then kept,
-            # every turn, so the Stone never swept.
+        if sweeps_what_its_counter_shelters(permanent.effective_card, ability.instruction):
+            # **A sweep whose shelter the same card sells is scored by what
+            # its rehearsal measured** (MRD W2G5), never below the flat score.
+            # "{5}, {T}, Sacrifice this artifact: Destroy each nonland
+            # permanent without a fate counter on it" (Oblivion Stone) is the
+            # trade of a whole board, and at the flat 2.5 it tied the Stone's
+            # own "put a fate counter" beside it — which the chooser's strict
+            # comparison then kept, every turn, so the Stone never swept.
+            # Narrowed to the pair on purpose: every ability giving up its
+            # source scored this way outranked the flat abilities beside it
+            # (sim_fingerprint TOR: Narcissism's sacrifice beat its own
+            # madness discard and the seat lost the Narcissism it then needed).
             from dataclasses import replace
 
             return replace(candidate, score=max(candidate.score, worth))

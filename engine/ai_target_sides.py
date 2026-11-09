@@ -955,6 +955,29 @@ def sweep_a_named_counter_spares(
     return None
 
 
+def sweeps_what_its_counter_shelters(
+    card: CardDefinition, instruction: OracleInstruction | None
+) -> bool:
+    """Whether *instruction* is the sweep :func:`sweep_a_named_counter_spares`
+    reads from the other side: it destroys everything **without** a named
+    counter that another ability of this same card puts on a target (Oblivion
+    Stone's "{5}, {T}, Sacrifice this artifact: Destroy each nonland permanent
+    without a fate counter on it")."""
+    if instruction is None:
+        return False
+    spared = {
+        str((step.payload or {}).get("without_named_counter"))
+        for step in _effect_steps(instruction)
+        if step.kind == "destroy_all_matching"
+        and (step.payload or {}).get("without_named_counter")
+    }
+    return bool(spared) and any(
+        (sheltered := sweep_a_named_counter_spares(card, ability.instruction)) is not None
+        and sheltered[0] in spared
+        for ability in compile_card_oracle(card).activated_abilities
+    )
+
+
 def _side_steps(instruction: OracleInstruction) -> tuple[OracleInstruction, ...]:
     """*instruction*'s leaf steps (``_effect_steps``) with every ``choose_one``
     **opened into its modes** ("loses flying, first strike, or trample",
@@ -1263,6 +1286,7 @@ __all__ = [
     "spell_denies_its_own_target",
     "spell_target_side",
     "sweep_a_named_counter_spares",
+    "sweeps_what_its_counter_shelters",
     "toggle_target_order",
     "toll_effect_side",
     "toggles_its_target",
