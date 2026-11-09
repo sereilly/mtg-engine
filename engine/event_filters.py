@@ -623,6 +623,16 @@ def _damage_dealt_filter(
         # derives the seat for both.
         if event.payload.get("damager_seat") != observer:
             return False
+    elif payload.get("damager_controller") == "an opponent":
+        # "Whenever a source **an opponent controls** deals damage to you"
+        # (Farsight Mask.) The same seat question about the other side: a seat
+        # the seam derived (a permanent's controller, the last controller of
+        # one that left, a spell's caster) that is not this permanent's
+        # controller and is still in the game (CR 800.4a). A source with no
+        # controller at all is nobody's, so it is no opponent's either.
+        seat = event.payload.get("damager_seat")
+        if seat is None or observer is None or seat not in game.opponents_of(observer):
+            return False
     elif "damager_any" in payload:
         # "Whenever **a source** deals damage to this creature" (Crag Saurian);
         # "Whenever **you're dealt damage**" (Blood Hound), which is the same

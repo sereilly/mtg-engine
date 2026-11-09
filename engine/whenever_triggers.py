@@ -317,7 +317,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever (?:"
      r"(?P<damager_self>this (?:creature|artifact|enchantment|land|aura|permanent))"
      r"|(?P<damager_attached>enchanted (?:creature|artifact|enchantment|land|permanent))"
-     r"|a source (?P<damager_controller>you) control"
+     # "Whenever **a source an opponent controls** deals damage to you"
+     # (Farsight Mask) beside "a source you control": CR 109.5's other seat
+     # word, the same seat question (``event_filters``), so it is one group
+     # with two values rather than a subject the noun parser would read as a
+     # description of permanents and so silently exclude every spell. Each
+     # word keeps its own verb agreement, so neither spelling admits the
+     # other's.
+     r"|a source (?P<damager_controller>you(?= control )|an opponent(?= controls ))"
+     r" controls?"
      # "Whenever **a source** deals damage to this creature" (Crag Saurian).
      # The damager narrowed by nothing at all — CR 120.7's word covers a spell,
      # an ability and a permanent alike, and no `ObjectFilter` can name the
