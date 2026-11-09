@@ -595,6 +595,18 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
         if not (isinstance(count, ast.Fixed) and count.value == 1):
             raise stream.error("only one mana of that color can be added")
         return ast.AddMana((), color_chosen_this_way=True, source_text=_clause())
+    # "Add one mana of **any of the exiled card's colors**." (Chrome Mox.) The
+    # colour is the activating player's to name (CR 106.1a), out of the
+    # colours of the card this permanent's imprint exiled (CR 607.2a) — a set
+    # the record decides, read at resolution, and empty for a colourless card
+    # or none (the 2025-02-07 rulings: it "can't add mana", and never {C}).
+    # Only "one", for the noted-type branch's reason above.
+    if stream.accept_phrase("any", "of", "the", "exiled", "card", "'s", "colors"):
+        if not (isinstance(count, ast.Fixed) and count.value == 1):
+            raise stream.error("only one mana of the exiled card's colors can be added")
+        return ast.AddMana(
+            (), any_color=count, colors_of_exiled_card=True, source_text=_clause(),
+        )
     stream.accept_word("any")
     stream.accept_word("one")
     # "Add one mana of any **type that land could produce**." (Benthic

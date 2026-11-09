@@ -1017,7 +1017,23 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             )
         narrowed_to = instruction.payload.get("any_color_from")
         offered: "frozenset[str] | None" = None
-        if narrowed_to is not None:
+        if instruction.payload.get("colors_of_exiled_card"):
+            # "…of any of the exiled card's colors" (Chrome Mox). The record of
+            # this permanent's imprint (CR 607.2a), asked through the reader the
+            # colour fan and the planner ask; nothing exiled, or a colourless
+            # card, adds nothing (the 2025-02-07 rulings), and a colour named
+            # outside the set is re-checked here (idiom 9).
+            from ..mana_could_produce import exiled_card_colors
+
+            offered = exiled_card_colors(game, context.source_permanent)
+            if not offered:
+                game.log.append(
+                    f"{card.name}: no colored card is exiled with it, so it adds no mana"
+                )
+                return True, "resolved"
+            if symbol not in offered:
+                symbol = sorted(offered)[0]
+        elif narrowed_to is not None:
             offered = _could_produce_offer(
                 game, context, instruction, str(narrowed_to), colors_only=True
             )

@@ -472,6 +472,14 @@ def _lower_add_mana(
     # producer ignored the key; carrying it is the honest answer now.
     if node.spend_only is not None:
         payload["spend_only"] = node.spend_only
+    if node.colors_of_exiled_card:
+        # "…of any of the exiled card's colors" (Chrome Mox). The set is the
+        # record's (``linked_exile.cards_still_exiled_with``), read by the
+        # handler and by every reader of what this ability could add
+        # (``mana_could_produce.ability_colors_on_offer``) — the planner, the
+        # colour fan and the AI's valuation ask that one function.
+        payload["colors_of_exiled_card"] = True
+        return (OracleInstruction("add_mana_from_text", "", payload),)
     if node.any_type_from is not None:
         record, phrase, verb = ANY_TYPE_FROM_RECORDS[node.any_type_from]
         if record not in produced:

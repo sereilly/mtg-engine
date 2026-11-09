@@ -219,6 +219,44 @@ def linked_entries(source: "Permanent | None") -> tuple[dict[str, Any], ...]:
     return tuple(source.metadata.get(RECORD_KEY) or ())
 
 
+def cards_still_exiled_with(
+    game, source: "Permanent | None"
+) -> list[tuple["CardDefinition", int]]:
+    """**"The exiled card"** (CR 607.2a): every card *source*'s linked ability
+    exiled that is **still in its owner's exile**, as ``(card, owner_index)``
+    in the order it was exiled.
+
+    The noun imprint's second ability prints ("any of the exiled card's
+    colors", Chrome Mox; "protection from each of the exiled card's card
+    types", Mirror Golem; "a copy of the exiled card", Soul Foundry and
+    Isochron Scepter). One reader for all of them, because the two facts that
+    make the answer are the same for every printing:
+
+    * **The record is the permanent's**, so a permanent that left and came back
+      is a new object with no record at all (CR 400.7) — and a source that has
+      left still answers for an ability already on the stack (Isochron
+      Scepter's 2020-08-07 ruling: the ability "can still make a copy").
+    * **A card that left exile is gone from the answer**, by identity
+      (Isochron Scepter's ruling: "if the imprinted card leaves the exile zone
+      while the activated ability is on the stack, the copy can't be made").
+      Two copies of one card are the same ``CardDefinition`` object, and
+      ``Game.put_card_into_exile`` makes a distinct one on a collision, so the
+      object in the entry is in an exile exactly while that exiling stands.
+
+    Several entries is CR 607.3's case (the exile was copied): each reader
+    gets every card and decides what "the" card means for it.
+    """
+    found: list[tuple["CardDefinition", int]] = []
+    for entry in linked_entries(source):
+        card = entry.get("card")
+        owner = int(entry.get("owner_index", -1))
+        if card is None or not 0 <= owner < len(game.players):
+            continue
+        if any(held is card for held in game.players[owner].exile):
+            found.append((card, owner))
+    return found
+
+
 def take_linked_entry_at(
     source: "Permanent | None", position: int
 ) -> dict[str, Any] | None:

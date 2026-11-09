@@ -417,12 +417,39 @@ def ability_colors_on_offer(game, permanent, instruction) -> "tuple[str, ...] | 
             found = frozenset(
                 _colors_chosen_among(game, seat, permanent, (step.payload["among"],))
             )
+        elif (step.payload or {}).get("colors_of_exiled_card"):
+            # "…any of the exiled card's colors" (Chrome Mox): a record, not a
+            # board, and so outside the fixpoint above.
+            found = exiled_card_colors(game, permanent)
         else:
             continue
         offered = set(found) if offered is None else offered | set(found)
     if offered is None:
         return None
     return tuple(symbol for symbol in _OFFER_ORDER if symbol in offered)
+
+
+def exiled_card_colors(game, permanent) -> frozenset[str]:
+    """The colours of the cards *permanent*'s linked ability exiled that are
+    still exiled ("Add one mana of any of the exiled card's colors", Chrome
+    Mox) — one reader for the handler that adds the mana and every reader of
+    what the ability could add (:func:`ability_colors_on_offer`).
+
+    Each card's colours as its owner holds it (``object_colors.card_colors``,
+    the off-battlefield reader). Several cards is CR 607.3: the ability "gets
+    multiple answers", and any colour among them is a colour of "the exiled
+    card". Empty — nothing exiled, or a colourless card — is the 2025-02-07
+    ruling's "it can't add mana", and never {C}.
+    """
+    from .linked_exile import cards_still_exiled_with
+    from .object_colors import card_colors
+
+    found: set[str] = set()
+    for card, owner in cards_still_exiled_with(game, permanent):
+        found |= {
+            str(color).upper() for color in card_colors(game, card, seat=owner)
+        }
+    return frozenset(found & COLORS)
 
 
 def types_that_land_could_produce(land) -> tuple[str, ...]:
@@ -476,6 +503,7 @@ __all__ = [
     "derived_production",
     "derived_productions",
     "derived_producer_board",
+    "exiled_card_colors",
     "lands_could_produce",
     "mana_lands_could_produce",
     "named_mana_type",

@@ -146,6 +146,12 @@ class AddMana:
     #: same sentence about *your* lands or about a chosen player's is the same
     #: production with a different word.
     any_color_from: str | None = None
+    #: "Add one mana of any of **the exiled card's colors**." (Chrome Mox.) The
+    #: colours on offer are those of the card this permanent's linked ability
+    #: exiled (CR 607.2a), a record rather than a board — so its own flag
+    #: beside ``any_color_from``, whose values each name a board CR 106.7's
+    #: fixpoint reads.
+    colors_of_exiled_card: bool = False
     #: "Add one mana of **the chosen color**." (Sol Grail, Sisay's Ring's
     #: cousins.) Not a choice made now: the colour was picked as the source
     #: entered (CR 614.1c) and lives on that permanent, which is the same record
