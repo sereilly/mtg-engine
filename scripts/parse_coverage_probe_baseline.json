@@ -184,13 +184,6 @@
   ]
  },
  {
-  "card": "Argivian Find",
-  "clause": "return target artifact or enchantment card from your graveyard to your hand",
-  "ignored": [
-   "or"
-  ]
- },
- {
   "card": "Armageddon",
   "clause": "destroy all lands",
   "ignored": [
@@ -1203,8 +1196,7 @@
   "card": "Experimental Overload",
   "clause": "create an x/x blue and red weird creature token, where x is the number of instant and sorcery cards in your graveyard. then you may return an instant or sorcery card from your graveyard to your hand. exile experimental overload",
   "ignored": [
-   "cards",
-   "or"
+   "cards"
   ]
  },
  {
@@ -1573,13 +1565,6 @@
   "clause": "destroy all artifacts with mana value x or less",
   "ignored": [
    "all"
-  ]
- },
- {
-  "card": "Hanna, Ship's Navigator",
-  "clause": "return target artifact or enchantment card from your graveyard to your hand",
-  "ignored": [
-   "or"
   ]
  },
  {
@@ -3127,13 +3112,6 @@
   ]
  },
  {
-  "card": "Relearn",
-  "clause": "return target instant or sorcery card from your graveyard to your hand",
-  "ignored": [
-   "or"
-  ]
- },
- {
   "card": "Relentless Assault",
   "clause": "untap all creatures that attacked this turn. after this main phase, there is an additional combat phase followed by an additional main phase",
   "ignored": [
@@ -3545,13 +3523,6 @@
   "ignored": [
    "all",
    "abilities"
-  ]
- },
- {
-  "card": "Shipwreck Dowser",
-  "clause": "return target instant or sorcery card from your graveyard to your hand",
-  "ignored": [
-   "or"
   ]
  },
  {
