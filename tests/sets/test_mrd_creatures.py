@@ -450,6 +450,28 @@ def test_w1g2_psychic_membrane_may_draw_when_it_blocks(set_pool):
     ok, _why = game.declare_attackers(1, [game.battlefield_index_of(membrane)], defending_player_index=0)
     assert not ok, "defender: it can't attack"
 
+
+def test_w1g2_the_ai_equips_for_the_price_steelshaper_leaves(set_pool):
+    """The AI's planner prices an activation through the engine's charger
+    (``Game.activation_mana_charge``), not the printed cost: with Auriok
+    Steelshaper out and no land to tap, Leonin Scimitar's equip costs {0} and
+    the AI proposes it; without the Steelshaper the same board offers no
+    equip at all, because {1} cannot be paid."""
+    from engine.ai_abilities import choose_activation_action
+
+    mrd = set_pool("MRD")
+    for with_steelshaper in (True, False):
+        game, _alice, _bob = _w1g2_table(set_pool, enforce=True)
+        if with_steelshaper:
+            _w1g2_put(game, 0, mrd["Auriok Steelshaper"])
+        _w1g2_put(game, 0, mrd["Leonin Den-Guard"])
+        _w1g2_put(game, 0, mrd["Leonin Scimitar"])
+        action = choose_activation_action(game, 0)
+        proposed = action is not None and action.permanent_name == "Leonin Scimitar"
+        assert proposed is with_steelshaper, (with_steelshaper, action)
+        if proposed:
+            assert action.land_tap_indices == ()
+
 # ==== end W1G2 ======================================================
 
 
