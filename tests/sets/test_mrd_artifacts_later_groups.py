@@ -227,6 +227,63 @@ def test_w1g11_proteus_staff_asks_the_revealing_player_to_order_the_rest(set_poo
     assert ("reorder_library", 1) in owed, owed
 
 
+def _w1g11_incubator_table(set_pool):
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    library = [lea["Sol Ring"], lea["Island"], lea["Jayemdae Tome"],
+               lea["Black Vise"], lea["Forest"]]
+    game, alice, bob = _w1g11_table(set_pool, library=library)
+    incubator = _w1g11_put(game, 0, mrd["Myr Incubator"])
+    return game, alice, incubator
+
+
+def _w1g11_myr_tokens(game, seat):
+    return [p for p in game.controlled_by(seat) if p.card.name == "Myr Token"]
+
+
+def test_w1g11_myr_incubator_exiles_the_artifacts_a_person_picks_and_makes_that_many(set_pool):
+    game, alice, incubator = _w1g11_incubator_table(set_pool)
+    game.interactive_seats = {0}
+    _w1g11_activate(game, 0, incubator)
+    assert not game.is_on_battlefield(incubator), "sacrificed as a cost"
+    assert not game.resolve_top_of_stack(), "held for the search"
+    (choice,) = [c for c in game.pending_choices if c.kind == "search_exile_cards"]
+    picks = [
+        {"zone": "library", "index": i} for i, card in enumerate(alice.library)
+        if card.name in ("Sol Ring", "Black Vise")
+    ][:2]
+    assert game.confirm_search_exile(0, picks)
+    _w1g11_resolve_stack(game)
+    assert len(alice.exile) == 2
+    assert all("Artifact" in c.type_line for c in alice.exile)
+    tokens = _w1g11_myr_tokens(game, 0)
+    assert len(tokens) == 2
+    assert all(t.effective_power == 1 and t.effective_toughness == 1 for t in tokens)
+    assert len(alice.library) == 3
+
+
+def test_w1g11_myr_incubator_refuses_a_nonartifact_pick(set_pool):
+    game, alice, incubator = _w1g11_incubator_table(set_pool)
+    game.interactive_seats = {0}
+    _w1g11_activate(game, 0, incubator)
+    game.resolve_top_of_stack()
+    island = next(i for i, c in enumerate(alice.library) if c.name == "Island")
+    assert not game.confirm_search_exile(0, [{"zone": "library", "index": island}])
+    assert alice.exile == []
+
+
+def test_w1g11_myr_incubator_left_to_itself_takes_every_artifact(set_pool):
+    """The pile is paid for one token a card, so a headless seat takes the
+    maximum (``exiled_search_pile_comes_back``)."""
+    game, alice, incubator = _w1g11_incubator_table(set_pool)
+    _w1g11_activate(game, 0, incubator)
+    _w1g11_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    artifacts = [c for c in alice.exile if "Artifact" in c.type_line]
+    assert len(artifacts) == len(alice.exile) >= 2
+    assert len(_w1g11_myr_tokens(game, 0)) == len(alice.exile)
+    assert all("Artifact" not in c.type_line for c in alice.library)
+
+
 # ==== end W1G11 ======================================================
 
 

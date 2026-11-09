@@ -1092,6 +1092,8 @@ class LibrarySearchChoicesMixin:
                 shuffle_linked_pile(source, random.shuffle)
         if ctx is not None:
             ctx.results["exiled_cards"] = exiled
+            # "…then create **that many** … tokens" (Myr Incubator).
+            ctx.results["exiled_count"] = len(exiled)
         self.discard_pending_choice(choice)
         # "…exile them **in a face-down pile**" (Mangara's Tome, Parallel
         # Thoughts): a face-down exiled card is hidden from every player

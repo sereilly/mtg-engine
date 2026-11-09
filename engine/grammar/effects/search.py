@@ -811,12 +811,42 @@ def _accept_counted_exile_search(
             filt, zones=zones, count=count,
             face_down_pile=True, shuffle_pile=shuffled,
         )
+    # "…exile them, **then create that many** 1/1 colorless Myr artifact
+    # creature tokens. **Then shuffle.**" (Myr Incubator.) The search's shuffle
+    # printed as a sentence of its own behind a step that reads the finds: the
+    # search ends here, the sentence loop reads the step behind it, and the
+    # trailing "Then shuffle." is consumed as this search's by
+    # ``riders._parse_deferred_search_shuffle``. Only where that sentence is
+    # printed — a search whose shuffle is never stated is a different card.
+    deferred = stream.mark()
+    if (
+        stream.accept_punct(",") and stream.accept_word("then")
+        and not stream.at_word("shuffle")
+        and _names_a_trailing_shuffle(stream)
+    ):
+        stream.reset(deferred)
+        return ast.SearchAndExile(
+            filt, zones=zones, count=count, shuffle_deferred=True,
+        )
+    stream.reset(deferred)
     stream.accept_punct(",")
     stream.accept_word("then")
     if not stream.accept_word("shuffle"):
         stream.reset(mark)
         return None
     return ast.SearchAndExile(filt, zones=zones, count=count)
+
+
+def _names_a_trailing_shuffle(stream: TokenStream) -> bool:
+    """Whether the line ends with the bare sentence "Then shuffle." — a token
+    scan with the cursor unmoved, for ``_reveal_until.
+    names_the_revealed_cards_placed``' reason: the sentence that states this
+    search's shuffle is not the next clause but the one after the step that
+    reads the finds."""
+    words = [str(token.text).lower() for token in stream.tokens[stream.pos:]]
+    return words[-3:] == [".", "then", "shuffle"] or words[-4:] == [
+        ".", "then", "shuffle", ".",
+    ]
 
 
 def _accept_each_searcher_shuffle(stream: TokenStream) -> bool:

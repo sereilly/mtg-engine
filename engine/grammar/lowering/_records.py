@@ -491,7 +491,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # back-references behind it care about: "that card" names what this step
     # exiled, whoever exiled it.
     "exile_random_card_from_hand": "exiled_cards",
-    "search_and_exile_matching": "exiled_cards",
+    # …and how many it exiled: "…exile them, then create **that many** 1/1
+    # colorless Myr artifact creature tokens" (Myr Incubator) — the quantity
+    # key a bare "that many" resolves against, beside the list for
+    # ``exile_hand_pile``'s reason (a list is not a quantity).
+    "search_and_exile_matching": ("exiled_cards", "exiled_count"),
     # "**Choose a card name**, then target opponent mills a card. If a card
     # with the chosen name was milled this way, …" (Foreshadow.) The name is the
     # whole of what the first sentence does, and the only place the third can

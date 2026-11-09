@@ -938,3 +938,44 @@ def _attach_flip_stakes_to_loop(
         return False
     steps[-1] = replace(last, effect=ast.Sequence((last.effect, stakes)))
     return True
+
+
+def _parse_deferred_search_shuffle(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """``Then shuffle.`` behind a search whose shuffle was left for it —
+    consumed, or False with the cursor unmoved.
+
+    "Search your library for any number of artifact cards, exile them, then
+    create that many 1/1 colorless Myr artifact creature tokens. **Then
+    shuffle.**" (Myr Incubator.) CR 701.23a: the shuffle ends the search, and
+    this engine performs it inside the search prompt's answer — the reason
+    every "…, then shuffle" a search production reads is read and dropped
+    rather than lowered. This is that clause printed as a sentence of its own,
+    so it is consumed only where an earlier step is a search that left it
+    (``ast.SearchAndExile.shuffle_deferred``); anywhere else the bare words
+    name no library and keep refusing.
+    """
+    # The search and the step behind it are one sentence joined by ", then",
+    # so the search may sit inside that sentence's ``Sequence``.
+    flat = [
+        part for step in steps
+        for part in (step.steps if isinstance(step, ast.Sequence) else (step,))
+    ]
+    if not any(
+        isinstance(part, ast.SearchAndExile) and part.shuffle_deferred
+        for part in flat
+    ):
+        return False
+    mark = stream.mark()
+    # The sentence loop has usually consumed the opening "Then" already (it
+    # reads a "Then …" sentence as the sequencing it provides).
+    stream.accept_word("then")
+    if not stream.accept_word("shuffle"):
+        stream.reset(mark)
+        return False
+    if not (stream.exhausted or stream.at_punct(".")):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(".")
+    return True
