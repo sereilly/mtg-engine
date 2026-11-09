@@ -94,7 +94,7 @@ def cease_to_exist(game, seat: int, copy) -> None:
 def arm_copy_cast(game, seat: int, card, source_name: str) -> None:
     """Offer *seat* a cast of a copy of *card*."""
     game.arm_pending_choice(
-        COPY_CAST_PROMPT, seat,
+        "copy_cast", seat,
         card_name=card.name,
         source_name=source_name,
         _card=card,
