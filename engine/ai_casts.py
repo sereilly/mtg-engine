@@ -41,8 +41,10 @@ from .ai_weighed_cast import (
 )
 from .ai_target_sides import activation_target_side, ability_target_side
 from .ai_rehearsal import deliberating
+from .ai_entwine import entwined_cast
 from .ai_valuation import (
     OFFER_ALTERS,
+    OFFER_ENTWINES,
     OFFER_KICKS,
     OFFER_RETURNS_SPELL,
     CastOffer,
@@ -323,7 +325,10 @@ def _times_worth_taking(
     """
     if offer.from_zone not in (None, from_zone):
         return 0
-    if offer.buys == OFFER_ALTERS:
+    if offer.buys in (OFFER_ALTERS, OFFER_ENTWINES):
+        # …and an entwine (CR 702.42a), which is no larger version of the mode
+        # being weighed: it chooses every mode, and is weighed as a cast of its
+        # own once each mode is built (`ai_entwine.entwined_cast`).
         return 0
     if offer.price is not None:
         # A price that is not mana: a buyback's ("Buyback—Sacrifice a land")
@@ -485,6 +490,15 @@ def _cast_candidate_in_each_mode(
             best = candidate
     if len(built) > 1 and compile_card_oracle(card).modes_at_least:
         return _every_mode_worth_casting(built, best) or best
+    if built:
+        # CR 702.42a: every mode for the entwine on top, cast only where its
+        # rehearsal beats the best single mode (`ai_entwine.entwined_cast`).
+        entwined = entwined_cast(
+            game, player_index, card, built, best,
+            from_zone=from_zone, extra_generic=extra_generic,
+        )
+        if entwined is not None and entwined.score > best.score:
+            return entwined
     return best
 
 

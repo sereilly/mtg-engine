@@ -54,6 +54,40 @@ def regeneration_target_legal(perm: Permanent, described: dict) -> bool:
     )
 
 
+@effect_handler("grant_regeneration_to_each_matching")
+def grant_regeneration_to_each_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Regenerate **each creature you control**." (Wail of the Nim.)
+
+    One shield per permanent the printed noun phrase names as the effect
+    resolves (CR 701.19a; CR 611.2c fixes the set then, so a creature that
+    arrives later has none). Untargeted, so nothing is chosen and nothing can
+    fizzle: the phrase is asked of every permanent through the control seam
+    and the one matcher, with the resolving controller as "you" (CR 109.5).
+    """
+    from ..subject_filters import subject_matches
+
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    shielded = [
+        perm for perm in game.all_permanents()
+        if subject_matches(
+            game, perm, instruction.payload,
+            observer=observer, source=context.source_permanent,
+        )
+    ]
+    for perm in shielded:
+        perm.regeneration_shield += 1
+    source_name = getattr(context.card, "name", "") or "An effect"
+    if shielded:
+        game.log.append(
+            f"{source_name} gave a regeneration shield to "
+            + ", ".join(perm.card.name for perm in shielded)
+        )
+    else:
+        game.log.append(f"{source_name}: nothing to regenerate")
+    return True, "resolved"
+
+
 @effect_handler("grant_regeneration_to_self")
 def grant_regeneration_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card

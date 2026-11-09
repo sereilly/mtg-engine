@@ -502,6 +502,14 @@ class ChosenMode(_TargetIdsGuard):
     # ``target_stack_item`` is: a stack index is a position in a list that
     # anything resolving in response renumbers.
     target_stack_item: "StackItem | None" = None
+    # The mode's target when it is a card in a **graveyard** (CR 601.2c) —
+    # the item's ``target_graveyard_card`` channel, per mode: None or a list of
+    # stamps. An entwined Betrayal of Flesh (CR 702.42a) destroys a creature
+    # with one mode and returns a creature card with the other, two targets on
+    # two channels of two announcements. Stamped from the mode's slot as the
+    # spell reaches the stack (``_stamp_stack_targets``), exactly as the item's
+    # own graveyard slot is.
+    target_graveyard_card: "list[GraveyardTarget | None] | None" = None
 
 
 @dataclass

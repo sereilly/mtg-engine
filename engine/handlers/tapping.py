@@ -1061,6 +1061,45 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
     return True, "resolved"
 
 
+@effect_handler("lock_next_untap_step")
+def lock_next_untap_step(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Creatures don't untap during **target player's** next untap step."
+    (Blinding Beam.)
+
+    A lock on the chosen player's step (``engine/untap_step_locks.py``), not
+    a marker: CR 611.2c lets this rules-modifying effect reach a creature that
+    arrives after it began, which the card's 2013-06-07 ruling spells out.
+    The seat is the spell's target (CR 601.2c); with none chosen it answers
+    False rather than locking the caster's own step — a strictly different
+    card.
+    """
+    from ..untap_step_locks import lock_untap_step
+
+    chosen = context.target
+    if chosen is None or chosen not in game.players:
+        return False, "no player was chosen for the untap-step lock"
+    seat = game.players.index(chosen)
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+    described = {
+        key: value for key, value in instruction.payload.items()
+        if key not in ("targets", "untap_steps")
+    }
+    steps = max(1, int(instruction.payload.get("untap_steps") or 1))
+    lock_untap_step(
+        game, seat, described, observer=observer, steps=steps,
+        source=getattr(context.card, "name", "") or "",
+    )
+    noun = described.get("type_filter")
+    noun = f"{noun}s" if isinstance(noun, str) and len(described) == 1 else "the permanents it names"
+    game.log.append(
+        f"{_source_name(context)}: {noun} don't untap during "
+        f"{chosen.name}'s next untap step"
+    )
+    return True, "resolved"
+
+
 def mark_skip_next_untap(game: Game, permanents, *, steps: int = 1, seat=None) -> int:
     """Hold *permanents* down for their next *steps* untap steps; how many were
     marked.

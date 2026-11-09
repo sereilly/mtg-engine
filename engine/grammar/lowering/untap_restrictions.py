@@ -134,6 +134,52 @@ def _lower_doesnt_untap_while_counter(
     )
 
 
+def _lower_untap_step_lock(node: ast.DoesntUntapNextStep) -> tuple[OracleInstruction, ...]:
+    """"Creatures don't untap during **target player's** next untap step."
+    (Blinding Beam.)
+
+    A restriction on the chosen player's *step*, not a marker on permanents:
+    CR 611.2c makes a rules-modifying effect reach objects that were not there
+    when it began, and the card's own ruling says it binds every creature
+    untapping in that step. So the instruction carries the noun phrase and the
+    player target, and the handler records a lock on that seat
+    (``engine/untap_step_locks.py``) the untap step reads.
+
+    The subject must be a **sweep** with nothing chosen: a target ("target
+    creature doesn't untap during target player's …") would be a second choice
+    this lock does not make, and a bound plural names a set this effect does
+    not keep. Every key of the phrase must be one ``subject_matches`` tests.
+    """
+    subject = node.subject
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("all", "each")
+        and not subject.targeted
+    ):
+        raise LoweringError(
+            "a lock on target player's untap step reads only a swept subject",
+            node=node,
+        )
+    if node.count < 1:
+        raise LoweringError("a skipped-untap count of none is no restriction", node=node)
+    described = testable_filter_payload(
+        subject.filter,
+        refusal="the untap-step lock cannot test this restriction",
+        node=node,
+        require_narrowing=False,
+    )
+    return (
+        OracleInstruction(
+            "lock_next_untap_step", "",
+            {
+                **described,
+                "untap_steps": node.count,
+                "targets": {"quantifier": "target", "kind": "player"},
+            },
+        ),
+    )
+
+
 def _lower_doesnt_untap_next_step(
     node: ast.DoesntUntapNextStep,
     produced: frozenset[str],
@@ -160,6 +206,8 @@ def _lower_doesnt_untap_next_step(
       ``_back_reference_payload`` applies to "that much".
     """
     subject = node.subject
+    if node.whose == "chosen_player":
+        return _lower_untap_step_lock(node)
     # "**It** doesn't untap during its controller's next two untap steps."
     # (Telekinesis.) The singular twin of "those creatures": the bare pronoun,
     # which after a sentence that tapped something names what was tapped. It is

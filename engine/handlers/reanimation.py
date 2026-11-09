@@ -134,6 +134,22 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # to the chosen player's graveyard; "under your control" is already how
     # _reanimate_creature_to_battlefield puts it into play for the caster.
     idx = chosen_graveyard_slot(game, context)
+    if idx is None and any(
+        stamp is not None
+        for stamp in (getattr(context, "target_graveyard_card", None) or ())
+    ):
+        # **A card was named and is no longer a legal target** — gone from
+        # the graveyard, or barred from being targeted (CR 608.2b). The spell
+        # resolved because some *other* target of it is still legal (an
+        # entwined Betrayal of Flesh's creature, CR 702.42a), and this part
+        # "doesn't do anything to" the illegal one: the fallbacks below exist
+        # for an announcement that named no card, and reaching them here
+        # returned a card nobody chose.
+        game.log.append(
+            f"{context.card.name}: the card it targeted is no longer in the graveyard"
+        )
+        context.results[REANIMATED_PERMANENTS] = ()
+        return True, "resolved"
     # "Return target **artifact** card from your graveyard to the battlefield."
     # (Argivian Restoration.) Which kind of card comes back is the sentence's
     # own word and rides the payload; "creature" is what every printing before

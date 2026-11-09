@@ -72,6 +72,16 @@ def _parse_doesnt_untap_next_step(
     if stream.accept_phrase("that", "player", "'s"):
         return _parse_next_untap_steps(stream, subject, whose="target_player")
     stream.reset(that_player)
+    # "Creatures don't untap during **target player's** next untap step."
+    # (Blinding Beam.) The fourth seat, and the first this sentence *chooses*:
+    # the possessive is itself the target (CR 601.2c), where "that player's"
+    # names one the subject already chose. A different effect, not a spelling
+    # of that one — the step is a player's, and the subject is every permanent
+    # its phrase names when that step comes (CR 611.2c), wherever it sits — so
+    # it travels as its own word and the lowering builds a step lock for it.
+    if stream.accept_phrase("target", "player", "'s"):
+        return _parse_next_untap_steps(stream, subject, whose="chosen_player")
+    stream.reset(that_player)
     stream.expect_word("their", "its")
     # "…don't untap during **their next** untap step." (Exhaustion.) The same
     # step with the possessive elided: an untap step belongs to a player

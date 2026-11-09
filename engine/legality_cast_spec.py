@@ -29,6 +29,7 @@ from .cast_costs import (
     kicker_costs,
 )
 from .divided_damage import divided_entry
+from .entwine import entwine_cost
 from .faces import is_multi_face
 from .cost_x_definitions import (
     caps_cast_x,
@@ -860,6 +861,9 @@ class CastTargetSpecMixin:
         # word beside its own symbols -- which is what tells the player the
         # two prices buy two different triggers.
         kickers = kicker_costs(card.oracle_text or "")
+        # …and its **entwine** (CR 702.42a): taking this offer is choosing
+        # every mode, so the prompt has to say so by name.
+        entwine = entwine_cost(card.oracle_text or "")
         charged = costs_charged_from(card, from_zone)
         # CR 601.2b's optional **non-mana** price (Constant Mists'
         # "Buyback—Sacrifice a land"). Emitted before the mana walk below and
@@ -904,6 +908,10 @@ class CastTargetSpecMixin:
                 "label": (
                     "buyback" if buyback == cost.optional_key
                     else "kicker" if cost.optional_key in kickers
+                    # "Entwine—Sacrifice three lands." (Betrayal of Flesh):
+                    # the price that chooses every mode (CR 702.42a), which
+                    # the client must know to walk each mode's targets.
+                    else "entwine" if cost.optional_key == entwine
                     else cost.describe()
                 ),
                 "repeatable": False,
@@ -973,6 +981,7 @@ class CastTargetSpecMixin:
                 "label": (
                     "buyback" if buyback and offer.symbols == buyback
                     else "kicker" if offer.symbols in kickers
+                    else "entwine" if offer.symbols == entwine
                     else offer.symbols
                 ),
                 "repeatable": offer.repeatable,

@@ -1463,8 +1463,16 @@ class StackResolutionMixin:
             # A cast that named no modes at all — the legacy `mode_index=`
             # spelling, and every non-modal spell — leaves the list empty and
             # takes the branch below exactly as it always has.
+            #
+            # **Resumable** (``engine/resumption.py``), because an entwined
+            # spell (CR 702.42b) is the first whose earlier mode stops to ask:
+            # Tooth and Nail searches for two creature cards and then puts up
+            # to two from the hand onto the battlefield, so the second mode
+            # must wait for the search's answer or it chooses from a hand the
+            # search has not yet filled. The loop is the last thing this
+            # function does, as the module requires.
             if chosen_modes:
-                for mode in chosen_modes:
+                def apply_mode(mode) -> None:
                     seat = (
                         mode.target_player_index
                         if mode.target_player_index is not None else target_idx
@@ -1487,7 +1495,12 @@ class StackResolutionMixin:
                         cast_from_zone=cast_from_zone,
                         choices=choices,
                         trigger_context=trigger_context,
+                        # …and the card in a graveyard the mode named, on the
+                        # mode's own channel (an entwined Betrayal of Flesh).
+                        target_graveyard_card=mode.target_graveyard_card,
                     )
+
+                run_resumable(self, chosen_modes, apply_mode)
                 return
             self._apply_spell_text(
                 caster,
