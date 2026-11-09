@@ -34,6 +34,7 @@ from .ai_target_sides import (
     host_effect_side,
     named_counter_marks_for_harm,
     instruction_target_side,
+    untaps_its_target,
 )
 from .ai_slot_sides import ability_role_target_sides
 from .ai_valuation import (
@@ -961,15 +962,12 @@ _OWN_REWRITE_KINDS = _OWN_TYPE_SET_KINDS | {
 #: The host steps that untap it: worth nothing on a host that is untapped.
 _HOST_UNTAP_KINDS = frozenset({"untap_enchanted_creature"})
 
-#: …and the targeted untaps, worth nothing on a target that is untapped.
-_TARGET_UNTAP_KINDS = frozenset({"untap_target_permanent", "untap_target_land"})
-
 
 def _untaps_only(instruction) -> bool:
-    """Whether every step of *instruction* untaps its target
-    (:data:`_TARGET_UNTAP_KINDS`)."""
-    steps = _effect_steps(instruction)
-    return bool(steps) and all(step.kind in _TARGET_UNTAP_KINDS for step in steps)
+    """Whether every step of *instruction* untaps its target — the reader a
+    trigger's target is aimed by too (``ai_target_sides.untaps_its_target``),
+    so an activation and a trigger printing the same untap read it alike."""
+    return untaps_its_target(instruction)
 
 
 def _host_refusal(game: Game, seat: int, permanent, instruction) -> bool:

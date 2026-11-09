@@ -513,6 +513,31 @@ def offered_alternative_changes_nothing(game, instruction, context) -> bool:
     return all(held)
 
 
+def offered_untap_changes_nothing(game, entry: dict) -> bool:
+    """Whether what an offer buys is an untap of the announced target, and
+    that target is untapped — a purchase that leaves the board as it is.
+
+    "Whenever a player casts a red spell, you may pay {3}. If you do, untap
+    target permanent." (the Mirage Talismans.) The target is announced as the
+    trigger goes on the stack (CR 603.3d) and the price is asked as it
+    resolves (CR 608.2d); a seat with nothing tapped on its side still had to
+    name something, and the gift rule then tapped three lands to untap a
+    permanent that was untapped. Read off the accept branch the offer was
+    armed with, so it answers for any offer whose whole purchase is that
+    untap (``ai_target_sides.UNTAP_TARGET_KINDS``) and for nothing else.
+    """
+    from .ai_target_sides import UNTAP_TARGET_KINDS
+    from .game_types import single_chosen_id
+
+    steps = [step for step in entry.get("_on_accept") or () if getattr(step, "kind", None)]
+    if not steps or not all(step.kind in UNTAP_TARGET_KINDS for step in steps):
+        return False
+    context = entry.get("_context")
+    announced = single_chosen_id(getattr(context, "target_permanent_id", None))
+    target = game.permanent_by_id(announced) if isinstance(announced, int) else None
+    return target is not None and game.is_on_battlefield(target) and not target.tapped
+
+
 def threatening_color(game, seat: int) -> str | None:
     """The colour of the opposing object a colour chosen *now* is answering,
     or None when nothing on the stack is one.

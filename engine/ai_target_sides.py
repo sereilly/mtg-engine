@@ -1146,7 +1146,46 @@ def toggle_target_order(game, chooser: int, permanents: list) -> list:
     return sorted(permanents, key=rank)
 
 
+#: The steps that untap their target and do nothing else to it. An untap is a
+#: second use of a permanent that has been used (``_OWN_KINDS``), so its worth
+#: is a **state** as well as a seat: an untapped target gains nothing.
+UNTAP_TARGET_KINDS = frozenset({"untap_target_permanent", "untap_target_land"})
+
+
+def untaps_its_target(instruction: OracleInstruction | None) -> bool:
+    """Whether every step of *instruction* — wrappers opened ("you may pay
+    {3}. If you do, untap target permanent", the Mirage Talismans) — untaps
+    its target (:data:`UNTAP_TARGET_KINDS`).
+
+    Every step, so an untap that is half of something else is not this:
+    provoke's "untap target creature … and it blocks this creature if able"
+    is aimed by the fight it compels (``ai_compelled_blocks``), and Soldevi
+    Golem's "If you do, untap this creature" by the source it frees."""
+    if instruction is None:
+        return False
+    steps = _effect_steps(instruction)
+    return bool(steps) and all(step.kind in UNTAP_TARGET_KINDS for step in steps)
+
+
+def untap_target_order(permanents: list) -> list:
+    """The **tapped** permanents of *permanents*, in the order an untap is
+    best aimed: creatures first, the largest first (an attacker or a blocker
+    given back to the turn), then every other permanent but a land, then the
+    lands — a land untapped is one mana back, and the untaps that print a
+    price ask more than that. Stable within a rank, so equal candidates keep
+    the order they were offered in. Empty when nothing offered is tapped:
+    there the untap is worth nothing wherever it is aimed."""
+
+    def rank(permanent) -> tuple:
+        if permanent.is_creature:
+            return (0, -permanent.effective_power)
+        return (2 if permanent.has_type("land") else 1, 0)
+
+    return sorted((permanent for permanent in permanents if permanent.tapped), key=rank)
+
+
 __all__ = [
+    "UNTAP_TARGET_KINDS",
     "ability_target_side",
     "cast_helps_the_player_it_names",
     "denies_its_target",
@@ -1156,6 +1195,8 @@ __all__ = [
     "spell_target_side",
     "toggle_target_order",
     "toggles_its_target",
+    "untap_target_order",
+    "untaps_its_target",
 ]
 
 

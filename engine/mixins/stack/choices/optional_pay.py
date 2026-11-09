@@ -848,6 +848,7 @@ class OptionalPayChoicesMixin:
         # One link of an "unless any player pays" chain asks the effect's own
         # controller too, and paying is only right for the seat the unpaid
         # branch hurts (`ai_prompts.chained_toll_declined`).
+        from ....ai_prompt_readers import offered_untap_changes_nothing
         from ....ai_prompts import (chained_toll_declined, copy_offer_answer,
                                     offer_buys_own_drawback,
                                     returned_aura_lands_on_wrong_side)
@@ -904,6 +905,22 @@ class OptionalPayChoicesMixin:
             self.log.append(
                 f"{player.name} declined {entry['card_name']} "
                 "(the block it compels is not worth having)"
+            )
+        # …and a price whose whole purchase is an untap of a target that is
+        # untapped (the Mirage Talismans' "you may pay {3}. If you do, untap
+        # target permanent", with nothing tapped on the seat's side to name):
+        # the gift rule tapped three lands for it
+        # (`ai_prompt_readers.offered_untap_changes_nothing`). Only a priced
+        # offer: refusing a free one is the same nothing.
+        elif (
+            floating is not None
+            and (entry.get("cost") or entry.get("life_cost"))
+            and offered_untap_changes_nothing(self, entry)
+        ):
+            floating = None
+            self.log.append(
+                f"{player.name} declined {entry['card_name']} "
+                "(the untap it buys changes nothing)"
             )
         # **A trade this policy can price on both sides is weighed, not
         # refused or taken by rule** (`ai_prompts.offer_trade_is_worth_taking`:
