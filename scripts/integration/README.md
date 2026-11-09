@@ -13,6 +13,9 @@ export ROUND=ons
 
 | Script | When | What |
 | --- | --- | --- |
+| `census.sh CODE [tree]` | Phase 1, after the ingest | every census instrument, serially, under the file names `gen_cards.py` / `card_table.py` / `furthest.py` read |
+| `bulk_rulings.py CODE <out>` | briefing | every ruling for the set's cards from Scryfall's bulk file (one download; the per-card fetch is rate-limited) |
+| `check_brief_crs.py <repo> <briefs>` | before sending a brief | each cited CR number with its rule's opening words; exit 1 on a number the CR lacks |
 | `census_new.py CODE` | Phase 1, after the ingest | new-to-pool cards, the origin trap, unsupported cards, layouts |
 | `card_table.py CODE <census-dir>` | grouping | one line per card: U / P / . with type, cost, text |
 | `furthest.py CODE <groups.json> <out>` | briefing, Phase 0 round 3 | per refused line, the furthest production that accepted |
@@ -29,6 +32,7 @@ export ROUND=ons
 | `dup_ideas.py <base>` | after a wave | a new name defined in two modules (one idea, two homes) |
 | `missing_names.py <files>` | each merge | a name loaded but never defined or imported |
 | `merge_blocks.py <branch>` | conflicts | append-append conflicts in per-set test files, by bytes |
+| `wordmerge_rows.py <file> <branch>` | conflicts | conflicted table rows (`engine/ARCHITECTURE.md`'s module table) merged word by word against the merge base; aborts on a word-level conflict |
 | `resolve_both.py <file> <n>` | conflicts | keep both sides of exactly *n* conflicts (refuses any other count) |
 | `promote.py CODE [--wrong]` | Phase 4 | the manifest move; `--wrong` is the wrong-end rehearsal |
 | `checked_sim.py <out.json> <sim args>` | after touching a fast path | the simulator under `fast_paths.CHECKING` |
