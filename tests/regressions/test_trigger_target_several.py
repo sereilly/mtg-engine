@@ -47,9 +47,15 @@ _BYSTANDERS = ("Grizzly Bears", "Savannah Lions", "Hill Giant", "Forest", "Islan
 #: Three Clerics since Legions' Celestial Gatekeeper ("return up to two target
 #: **Bird and/or Cleric** permanent cards from your graveyard"): a narrowed pick
 #: needs more than it prints to refuse "more than it prints".
+#:
+#: Three sorceries since Mirrodin's Spellweaver Helix ("you may exile **two**
+#: target **sorcery** cards from a single graveyard"): a pile with no sorcery
+#: offers it nothing, CR 603.3d takes it off the stack unasked, and refusing
+#: "more than it prints" needs one more than two.
 _GRAVEYARD_BYSTANDERS = (
     "Lightning Bolt", "Giant Growth", "Hill Giant",
     "Battlefield Medic", "Daru Healer", "Doubtless One",
+    "Stone Rain", "Wrath of God", "Stream of Life",
 )
 
 

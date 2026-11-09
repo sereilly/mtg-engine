@@ -346,9 +346,38 @@ def _one_target_shape(rows) -> set[str]:
             step.kind for step in steps
             if step.kind.startswith("exile_") and "graveyard" in step.kind
         }
-        if exiles and exiles <= GRAVEYARD_DENIAL_KINDS:
+        if exiles and exiles <= GRAVEYARD_DENIAL_KINDS and not _named_on_a_trigger(
+            BY_NAME[name]
+        ):
             shaped.add(name)
     return shaped
+
+
+def _named_on_a_trigger(card) -> bool:
+    """Whether every one-target graveyard exile *card* prints sits on a
+    **triggered** ability of a permanent — Mirrodin's imprints, "When this
+    creature enters, you may exile target card from a graveyard" (Mirror
+    Golem, Mourner's Shield).
+
+    Such a target is named as the ability is put on the stack (CR 603.3d), by
+    the ``trigger_target`` prompt's default (``_default_trigger_target``, the
+    side the effect wants) — neither of the two roads whose defaults the
+    backwards check restores. So it reaches the opponent's pile from both
+    chairs on the old defaults as on the new, and is not part of what the check
+    can demand. The forward sweep still plays it and holds it to the
+    opponent's pile."""
+    program = compile_card_oracle(card)
+    if not program.triggered_abilities:
+        return False
+    if any(word in (card.type_line or "") for word in ("Instant", "Sorcery")):
+        return False
+
+    def denies(instruction) -> bool:
+        return instruction is not None and exiles_a_graveyard_target([instruction])
+
+    on_triggers = any(denies(t.instruction) for t in program.triggered_abilities)
+    on_activations = any(denies(a.instruction) for a in program.activated_abilities)
+    return on_triggers and not on_activations
 
 
 def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
