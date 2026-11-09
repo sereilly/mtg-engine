@@ -35,6 +35,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Iterable
 
 from .exiled_records import live_records
+from .exiler_grants import EXILER_KEY, exiler_may_look
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .models import CardDefinition, Permanent
@@ -111,6 +112,7 @@ def link_exiled_card(
     ends_on: Iterable[str] = (),
     face_down: bool = False,
     looker_index: int | None = None,
+    exiler_index: int | None = None,
     tapped: bool = False,
     counters: dict[str, int] | None = None,
     attach_to_returned: bool = False,
@@ -140,6 +142,14 @@ def link_exiled_card(
     # the whole point of the ability.
     if looker_index is not None:
         entry["looker_index"] = int(looker_index)
+    # "Each player may look at cards **they exiled** with this enchantment,
+    # and they may play lands and cast spells from among those cards."
+    # (Shared Fate.) Who exiled the card, when that is not the permanent's
+    # controller — every player's draw exiles with the same enchantment. Not
+    # a look permission by itself: the permanent's static grants one
+    # (``engine/exiler_grants.py``), and only while it is there to.
+    if exiler_index is not None:
+        entry[EXILER_KEY] = int(exiler_index)
     if tapped:
         entry["tapped"] = True
     if counters:
@@ -315,6 +325,14 @@ def face_down_exiled_cards(
                 and entry.get("looker_index") == viewer_index
             ):
                 continue
+            # The seat that exiled it, while the permanent's static lets that
+            # seat look (Shared Fate, ``exiler_grants.exiler_may_look``).
+            if (
+                viewer_index is not None
+                and EXILER_KEY in entry
+                and exiler_may_look(permanent, entry, viewer_index)
+            ):
+                continue
             hidden.append(entry["card"])
     for record in live_records(game):
         if not record.face_down or record.owner_index != owner_index:
@@ -370,6 +388,40 @@ def keep_face_down_after_departure(game, permanent: "Permanent") -> None:
             looker_index=entry.get("looker_index"),
         )
         entry[HANDED_TO_REGISTER] = True
+
+
+def forget_exiler_entries(game, owner_index: int, card) -> None:
+    """*card* has just left seat *owner_index*'s exile: drop every entry
+    naming it that records who exiled it (``EXILER_KEY``).
+
+    Those entries are read by derivation — "cards they exiled with this
+    enchantment" is a scan of the record for a card still in exile — and CR
+    400.7 is the rule a derivation breaks: a card cast from exile that later
+    comes back to exile (the same object, when no exile holds it) is a new
+    object the permanent never exiled. Left behind, the entry would hand its
+    exiler the card again and hide it from everyone else. Called by the one
+    departure seam (``Game.take_card_from_exile``); a phased-out permanent's
+    record is cleaned too, since it is still the object it was (CR 702.26d).
+    """
+    holders = list(game.all_permanents()) + [
+        permanent for player in game.players for permanent in player.phased_out
+    ]
+    for permanent in holders:
+        held = list(permanent.metadata.get(RECORD_KEY) or ())
+        kept = [
+            entry for entry in held
+            if not (
+                EXILER_KEY in entry
+                and entry.get("card") is card
+                and int(entry.get("owner_index", -1)) == owner_index
+            )
+        ]
+        if len(kept) == len(held):
+            continue
+        if kept:
+            permanent.metadata[RECORD_KEY] = kept
+        else:
+            permanent.metadata.pop(RECORD_KEY, None)
 
 
 #: The zones only their owner may look into (CR 400.2: a library and a hand are

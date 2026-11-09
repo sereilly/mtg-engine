@@ -31,6 +31,7 @@ from engine.activation_restrictions import (  # noqa: E402
     global_activation_ban_line)
 from engine.cast_permissions import (board_free_cast_line,  # noqa: E402
                                      board_graveyard_play_line)
+from engine.exiler_grants import exiler_play_line  # noqa: E402
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
                                       cast_damage_source_line,
@@ -430,6 +431,14 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # Its own channel, asking the reader that answers it.
     ("cast_permissions.py (controller's graveyard opened)",
      board_graveyard_play_line),
+    # "Each player may look at cards they exiled with this enchantment, and
+    # they may play lands and cast spells from among those cards." (Shared
+    # Fate.) The look and the play over the permanent's linked record, each
+    # scoped to the seat that exiled the card: derived off the board by
+    # `linked_exile.face_down_exiled_cards` and `cast_permissions
+    # .permission_for`. Its own channel, asking the reader both ask.
+    ("exiler_grants.py (exilers look at and play their cards)",
+     exiler_play_line),
     # A CR 614 replacement effect, in full. `engine/replacements/lines.py`'s
     # REPLACEMENT_LINES *is* the set of constants its interceptors probe for, so
     # asking it is asking the code that carries the line out. Three of these

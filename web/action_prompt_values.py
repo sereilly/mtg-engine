@@ -416,6 +416,19 @@ def _action_graveyard_return_draw_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
 
+@action_handler("opponent_library_draw_confirm")
+def _action_opponent_library_draw_confirm(session, req, seat_type):
+    # Shared Fate: the drawer names which opponent's top card is exiled in
+    # place of the draw (option_index = position in the offered options).
+    # Through the generic replacement-choice resolver, as Forbidden Crypt's.
+    if req.option_index is None:
+        raise HTTPException(status_code=400, detail="option_index is required")
+    if not session.game.resolve_replacement_choice(
+        req.seat, int(req.option_index), kind="opponent_library_draw"
+    ):
+        raise HTTPException(status_code=400, detail="invalid opponent choice")
+
+
 @action_handler("enter_choice_confirm")
 def _action_enter_choice_confirm(session, req, seat_type):
     # Black Vise / Jihad: the controller confirms the "as this enters"

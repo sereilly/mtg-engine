@@ -515,6 +515,17 @@ def _permissions_for(
                 player_index=player_index, zone="graveyard", mode="play",
                 cards=[card], duration=None, source_name=source,
             )
+    # "Each player may look at cards they exiled with this enchantment, and
+    # they may play lands and cast spells from among those cards." (Shared
+    # Fate.) A board permission over one permanent's linked record, derived
+    # for the Agenda's reason above: it ends with the permanent (ruling
+    # 2008-08-01), so nothing stored has to be taken away.
+    if zone == "exile":
+        from .exiler_grants import exiler_play_permission
+
+        exiled_by_you = exiler_play_permission(game, player_index, card)
+        if exiled_by_you is not None:
+            yield exiled_by_you
     # The card's own static permission, asked last: a granted one may waive a
     # cost or open a wider zone, and answering with this first would hide it.
     # Only for a card actually in that zone and actually this player's, which is

@@ -146,5 +146,6 @@ register_choices(
     permanents.COUNTER_DISTRIBUTION_SPEC,
     pile_picks.EXILED_CARD_RETURN_SPEC,
     card_names.GUESS_NAMED_CARD_SPEC,
+    replacements.OPPONENT_LIBRARY_DRAW_SPEC,
     # Append a new kind here, at the bottom.
 )

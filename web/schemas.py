@@ -173,6 +173,11 @@ ActionKind = Literal[
     "outside_game_draw_confirm",
     "outside_game_pick_confirm",
     "graveyard_return_draw_confirm",
+    # "…that player exiles the top card of one of their opponents' libraries
+    # face down instead." (Shared Fate, with two or more opponents.)
+    # ``option_index``: a position in the prompt's ``options`` (one per
+    # opponent, in ``opponent_seats`` order).
+    "opponent_library_draw_confirm",
     "assign_defender_piles",
     "assign_attacker_piles",
     "assign_camouflage_piles",

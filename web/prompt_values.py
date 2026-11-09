@@ -163,6 +163,28 @@ def _skip_draw(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("opponent_library_draw")
+def _opponent_library_draw(ctx: PromptContext, choices: list) -> dict:
+    """Shared Fate, at a table with two or more opponents: whose library the
+    drawer exiles the top card of, instead of drawing.
+
+    One offer at a time (the replacement arms one per draw) with how many are
+    queued behind it, the labels off the choice. Each opponent's library
+    *size* rides along — public (CR 402.3), and the whole decision when one
+    is empty — and nothing about any card: the card is exiled face down.
+    """
+    choice = choices[0]
+    seats = [int(seat) for seat in choice.data.get("opponent_seats") or ()]
+    return {
+        "player_seat": choice.player_index,
+        "source_name": choice.data.get("source_name", ""),
+        "options": list(choice.options),
+        "opponent_seats": seats,
+        "library_sizes": [len(ctx.game.players[seat].library) for seat in seats],
+        "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
+    }
+
+
 @prompt_renderer("pile_top_draw")
 def _pile_top_draw(ctx: PromptContext, choices: list) -> dict:
     """Parallel Thoughts: draw the card, or take the top card of the exiled
