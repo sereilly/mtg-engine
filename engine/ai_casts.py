@@ -74,6 +74,7 @@ from .ai_actions import (
     hand_spells,
     _OFFERS_ANNOUNCED,
     _announced_mode,
+    _announced_steps,
     _cast_zone,
     _announces_any_offer,
 )
@@ -826,6 +827,76 @@ def _better_alternative(
     return best if best is not None else action
 
 
+def _cast_naming_its_sacrifice(
+    game: Game, player_index: int, card: CardDefinition, action: "CastAction",
+    offers: "dict[str, int] | None",
+) -> "CastAction":
+    """*action* naming the permanent its additional sacrifice is paid with,
+    where the spell's effect reads what the sacrifice ate — or *action* as it
+    is.
+
+    "…sacrifice an artifact. Put X +1/+1 counters on target creature, where X
+    is the sacrificed artifact's mana value." (Forge Armor.) Named nothing,
+    the cast pays with the engine's deterministic pick, the smallest power
+    first, and Forge Armor gave up a Great Furnace for no counter at all. So
+    each distinct reading the board offers (``ai_sacrifice_victims``: one
+    permanent per value, the cheapest to lose) is rehearsed as a cast of its
+    own, the turn's fight read through it as for every cast, and the best one
+    the engine takes is named — the cheapest on a tie. Not a permanent the
+    cast names as a target: a sacrifice paid with its own target is a spell
+    cast at nothing.
+
+    Only a cast whose chosen-permanent price is that one sacrifice
+    (``Game._chosen_cast_cost_demands``): a name is the whole announcement of
+    what pays (CR 601.2h), so a second price beside it is left to the
+    default rather than named for half.
+    """
+    from .ai_sacrifice_victims import (characteristic_read_off_the_sacrifice,
+                                       victims_to_weigh)
+
+    if card.primary_type not in SPELL_TYPES:
+        return action
+    characteristic = characteristic_read_off_the_sacrifice(
+        _announced_steps(card, compile_card_oracle(card))
+    )
+    if characteristic is None:
+        return action
+    costs = tuple(
+        cost for cost in additional_costs(card)
+        if cost.from_zone is None or cost.from_zone == action.from_zone
+    )
+    demands = game._chosen_cast_cost_demands(costs, x_value=action.x_value, taken=offers)
+    if len(demands) != 1 or demands[0][0] != "sacrifice" or demands[0][2] != 1:
+        return action
+    bound = _bind_action_slots(game, player_index, action)
+    named = [bound.get("target"), *bound.get("targets", ()), *bound.get("divided", ())]
+    named += [
+        game.permanent_by_id(permanent_id)
+        for permanent_id in (action.target_permanent_ids or ())
+        if isinstance(permanent_id, int)
+    ]
+    candidates = [
+        permanent
+        for permanent in game._additional_cost_candidates(player_index, demands[0][1])
+        if not any(permanent is other for other in named if other is not None)
+    ]
+    best, best_swing = action, None
+    for victim in victims_to_weigh(candidates, characteristic, game.sacrifice_preference_key):
+        variant = replace(action, cost_permanent_ids=[victim.permanent_id])
+        rehearsal = _rehearse_announcement(
+            game, player_index, card, cast_announcement(variant), planned=variant,
+        )
+        rehearsal = _weighed_through_the_fight(
+            game, player_index, card, cast_announcement(variant), rehearsal,
+            planned=variant,
+        )
+        if rehearsal is None or not _worth_proposing(rehearsal):
+            continue
+        if best_swing is None or rehearsal.swing > best_swing:
+            best, best_swing = variant, rehearsal.swing
+    return best
+
+
 def _cast_candidate_announcing(
     game: Game,
     player_index: int,
@@ -1249,6 +1320,9 @@ def _cast_candidate_announcing(
     )
     if len(alternatives) > 1:
         action = _better_alternative(game, player_index, card, action, alternatives)
+    # "…where X is the sacrificed artifact's mana value" (Forge Armor): the
+    # victim weighed, where the effect reads what the sacrifice ate.
+    action = _cast_naming_its_sacrifice(game, player_index, card, action, offers)
     # **What the cast would do, asked of the engine** — for a spell, whose
     # whole worth is its resolution. The finished announcement is carried out
     # on a scratch copy of the game (`_rehearse_announcement`) and three

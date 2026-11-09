@@ -435,3 +435,83 @@ def test_w1g12_regress_and_altars_light(set_pool):
     ).supported
 
 # ==== end W1G12 ======================================================
+
+
+# ==== W2G5 ==========================================================
+# W2G5's tests go between this line and the "end W2G5" line.
+#
+# The AI pile. Forge Armor: "As an additional cost to cast this spell,
+# sacrifice an artifact. Put X +1/+1 counters on target creature, where X is
+# the sacrificed artifact's mana value." A seat that named no victim paid with
+# the smallest (a Great Furnace, for no counter); the cast chooser now weighs
+# each reading the board offers (`ai_casts._cast_naming_its_sacrifice`).
+
+from engine import Game as _w2g5_Game
+from engine import PlayerState as _w2g5_PlayerState
+from engine.ai_actions import cast_announcement as _w2g5_cast_announcement
+from engine.ai_payment import tap_planned_lands as _w2g5_tap_planned_lands
+from engine.ai_policy import choose_cast_action as _w2g5_choose_cast_action
+from engine.models import Permanent as _w2g5_Permanent
+from tests.helpers import _nosick as _w2g5_nosick
+from tests.helpers import resolve_stack as _w2g5_resolve_stack
+
+
+def _w2g5_table(set_pool, mine, *, hand=(), theirs=()):
+    """Seat 0 (A) in its first main phase, mana enforced, its lands untapped."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    card = lambda name: mrd[name] if name in mrd else lea[name]  # noqa: E731
+    game = _w2g5_Game(players=[
+        _w2g5_PlayerState("A", hand=[card(n) for n in hand], library=[card("Plains")] * 10),
+        _w2g5_PlayerState("B", library=[card("Plains")] * 10),
+    ])
+    game.enforce_mana_costs = False
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _w2g5_nosick(_w2g5_Permanent(card=card(name)))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            placed[seat].append(permanent)
+    # Every entry offer answered (Solemn Simulacrum's search): a table with
+    # a prompt still owed is one no rehearsal can be run on.
+    _w2g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    game.start_turn(0)
+    game._settle()
+    game.enforce_mana_costs = True
+    return game, placed[0], placed[1]
+
+
+_W2G5_LANDS = ["Mountain", "Mountain", "Mountain", "Swamp"]
+
+
+def test_w2g5_forge_armor_is_paid_with_the_artifact_it_reads_largest(set_pool):
+    game, (furnace, gold_myr, solemn, *_lands), _ = _w2g5_table(
+        set_pool, ["Great Furnace", "Gold Myr", "Solemn Simulacrum", *_W2G5_LANDS],
+        hand=["Forge Armor"], theirs=["Hill Giant"],
+    )
+    action = _w2g5_choose_cast_action(game, 0)
+    assert action is not None and action.card_name == "Forge Armor"
+    assert action.cost_permanent_ids == [solemn.permanent_id]
+    _w2g5_tap_planned_lands(game, 0, action)
+    assert game.cast_from_hand(0, "Forge Armor", **_w2g5_cast_announcement(action)).supported
+    _w2g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert "A sacrificed Solemn Simulacrum to cast Forge Armor" in game.log
+    assert game.is_on_battlefield(furnace)
+    # Gold Myr is a 1/1; the Simulacrum's mana value is 4.
+    assert (gold_myr.effective_power, gold_myr.effective_toughness) == (5, 5)
+
+
+def test_w2g5_forge_armor_never_sacrifices_its_own_target(set_pool):
+    game, (_furnace, gold_myr, *_lands), _ = _w2g5_table(
+        set_pool, ["Great Furnace", "Gold Myr", *_W2G5_LANDS],
+        hand=["Forge Armor"], theirs=["Hill Giant"],
+    )
+    action = _w2g5_choose_cast_action(game, 0)
+    # The Myr is the one creature to put counters on, so it cannot also be
+    # what pays; the Furnace alone reads 0, and a cast for no counter is not
+    # proposed at all.
+    assert action is None or gold_myr.permanent_id not in (action.cost_permanent_ids or ())
+    assert action is None
+
+# ==== end W2G5 ======================================================
