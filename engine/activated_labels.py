@@ -484,6 +484,8 @@ ACTIVATED_LABELS: dict[str, str] = {
     # (The category default already said `activated_pump`; named so the
     # bucket is the table's answer rather than the grammar family's.)
     "grant_target_ability_text": "activated_pump",
+    # Quicksilver Elemental: the grant's abilities read off a target.
+    "gain_activated_abilities_of_target": "activated_pump",
     "return_self_from_graveyard": "activated_return",
     "return_source_card_to_owners_hand": "activated_return",
     # "{W}: Return enchanted creature to its owner's hand" (Sun Clasp). The

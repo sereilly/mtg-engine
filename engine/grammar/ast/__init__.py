@@ -43,6 +43,7 @@ family — which is what makes moving a node between families a non-event.
 """
 
 from .costs import (
+    AlternativeManaCost,
     ManaCost,
     TapSelf,
     SacrificeCost,
@@ -244,6 +245,7 @@ from .characteristics import (
     SetBasePT,
     ChangeBasePT,
     GainAbilityText,
+    GainActivatedAbilitiesOf,
     GainKeyword,
     LoseAbilityText,
     LoseKeyword,
@@ -591,6 +593,7 @@ __all__ = [
     "Duration",
     "Zone",
     "GraveyardPosition",
+    "AlternativeManaCost",
     "ManaCost",
     "TapSelf",
     "SacrificeCost",
@@ -739,6 +742,7 @@ __all__ = [
     "Pump",
     "SetBasePT",
     "GainAbilityText",
+    "GainActivatedAbilitiesOf",
     "GainKeyword",
     "LoseAbilityText",
     "LoseKeyword",

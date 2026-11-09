@@ -169,6 +169,26 @@ class GainKeyword:
 
 
 @dataclass(frozen=True)
+class GainActivatedAbilitiesOf:
+    """``<subject> gains all activated abilities of <target> [duration]``.
+
+    "{U}: This creature gains all activated abilities of target creature until
+    end of turn." (Quicksilver Elemental.) :class:`GainAbilityText`'s sibling
+    for a grant whose text is not printed on the granting card at all: the
+    abilities are the *target's* (CR 113.3, layer 6), read off it as the
+    ability resolves — the 2004-12-01 ruling: the gainer treats them "as if
+    they were printed on" it, using its own name for the target's (CR 201.5b,
+    the card's reminder text).
+
+    *source* is the creature whose abilities are copied; *subject* gains them.
+    """
+
+    subject: Recipient
+    source: "TargetSpec"
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class GainAbilityText:
     """``<subject> gains "<ability>"[ and "<ability>"] [duration].``
 

@@ -184,6 +184,18 @@ class _NonlandManaSource:
     #: artifact: Add three mana of any one color"). Mana a plan may count only
     #: under `ai_payment._may_sacrifice_for` — see `_nonland_mana_source`.
     sacrifices: bool = False
+    #: ``((symbol, ability_index), …)`` where the permanent has **several**
+    #: free mana abilities making different symbols — a Talisman's "{T}: Add
+    #: {C}." and "{T}: Add {R} or {G}. This artifact deals 1 damage to you."
+    #: (CR 605: each is its own ability, and asking for a symbol picks the one
+    #: that makes it, as ``board_payment.tap_alone_ability_for`` does for a
+    #: land). Empty for every source with one, whose ``ability_index`` is the
+    #: whole answer.
+    ability_for_symbol: "tuple[tuple[str, int], ...]" = ()
+
+    def ability_for(self, symbol: "str | None") -> int:
+        """The ability a tap asked for *symbol* runs."""
+        return dict(self.ability_for_symbol).get(symbol or "", self.ability_index)
 
 
 def _sacrifices_only_itself(cost) -> bool:
@@ -321,14 +333,70 @@ def _nonland_mana_source(
             or aura_restriction_active(permanent, "all_activated_abilities_shut_off")
         ):
             return None
-        return _NonlandManaSource(
+        found = _NonlandManaSource(
             ability_index=index,
             symbols=symbols,
             amount=produced.amount,
             run=dict(produced.run) if produced.run else None,
             sacrifices=not taps_alone,
         )
+        if taps_alone:
+            return _with_other_free_abilities(game, seat, permanent, usable, found)
+        return found
     return None
+
+
+def _with_other_free_abilities(game, seat, permanent, usable, first):
+    """*first* widened by the permanent's **other** free mana abilities, where
+    each makes one mana: "{T}: Add {C}." and "{T}: Add {R} or {G}. This
+    artifact deals 1 damage to you." (the five Talismans — the whole of the
+    pool's nonland permanents with two such abilities making different
+    symbols). The plan counted the first alone, so a Talisman paid nothing
+    but generic and the AI never cast a red spell off one.
+
+    The symbols are the union in printed order, the unasked one first, and
+    each remembers which ability makes it (``ability_for_symbol``) so the
+    executor activates that one and the prices are asked of it
+    (``mana_drawbacks.tap_prices`` — the damage is on the coloured ability).
+    Left as *first* wherever any of them is more than one mana or a run: one
+    option per source is what this shape can say.
+    """
+    from .activation_restrictions import prints_activation_restriction
+    from .mana_payment import carries_an_offer
+    from .mixins.land_mana_taps import is_tap_alone_mana_ability
+
+    if first.amount != 1 or first.run:
+        return first
+    symbols = list(first.symbols)
+    owner = {symbol: first.ability_index for symbol in first.symbols}
+    for index, ability in enumerate(usable):
+        if index == first.ability_index or not is_tap_alone_mana_ability(ability):
+            continue
+        produced = planned_mana_yield(ability.instruction)
+        if produced is None or produced.board_narrowed or produced.from_chosen_color:
+            continue
+        if produced.amount != 1 or produced.run:
+            return first
+        line = ability.source_line or ""
+        if (
+            prints_activation_restriction(line)
+            or carries_an_offer(ability.instruction)
+            or activation_denial(game, seat, permanent, line)
+            or activation_permission_denial(game, seat, permanent, line)
+        ):
+            continue
+        for symbol in produced.symbols:
+            if symbol not in owner:
+                owner[symbol] = index
+                symbols.append(symbol)
+    if len(owner) == len(first.symbols):
+        return first
+    return _NonlandManaSource(
+        ability_index=first.ability_index,
+        symbols=tuple(symbols),
+        amount=1,
+        ability_for_symbol=tuple(owner.items()),
+    )
 
 
 @dataclass(frozen=True)

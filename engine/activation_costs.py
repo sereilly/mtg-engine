@@ -285,6 +285,72 @@ def _split_mana_alternative(cost_part: str) -> tuple[str, dict[str, int] | None]
     return cost_part[: match.start(1)].rstrip()[: -len("or")].rstrip(), alternative
 
 
+#: One printed mana or tap symbol in a cost clause, for the alternation reader
+#: below — what it strips from each half before comparing the rest.
+_COST_SYMBOL_RE = re.compile(r"\{[^}]+\}")
+
+
+def _empty_mana() -> dict[str, int]:
+    return {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
+
+
+def _split_cost_alternatives(
+    cost_part: str,
+) -> tuple[str, tuple[dict[str, int], ...]]:
+    """*cost_part*'s first printed alternative, and the mana of the others.
+
+    "**{3}, {T} or {U}, {T}**: …" (the five Mirrodin Shards) is one ability
+    whose activator pays either cost and not both (the 2004-10-04 ruling).
+    Read whole, the mana scan below would charge {3} **and** {U} — the flat
+    reading Tidal Control's "Pay 2 life or {2}" had before
+    :func:`_split_mana_alternative` — so the clause is split here, before
+    anything reads it, and every reader below sees the first alternative only.
+
+    Admitted only where every half prints the **same non-mana costs** (here,
+    {T} each time): what differs is then the mana alone, which is all
+    ``ActivatedAbilityCost.mana_alternatives`` carries. Any other "or" — a
+    noun phrase's ("Sacrifice a creature or enchantment", Ertai), a life
+    payment's — leaves the clause unchanged for whichever reader owns it, and
+    a half carrying a symbol this cannot price ({X}, a hybrid) does too, so the
+    grammar's matching production refuses the line rather than an alternative
+    being charged as nothing.
+    """
+    halves = re.split(r"\s+or\s+", cost_part)
+    if len(halves) < 2:
+        return cost_part, ()
+
+    def rest(half: str) -> str:
+        stripped = _COST_SYMBOL_RE.sub(
+            lambda m: m.group(0) if m.group(0).upper() == "{T}" else "", half,
+        )
+        return " ".join(
+            part.strip() for part in stripped.lower().split(",") if part.strip()
+        )
+
+    def mana_of(half: str) -> dict[str, int] | None:
+        found = _empty_mana()
+        priced = False
+        for token in _MANA_TOKEN_RE.findall(half.upper()):
+            if token == "T":
+                continue
+            if token.isdigit():
+                found["generic"] += int(token)
+            elif token in {"W", "U", "B", "R", "G", "C"}:
+                found[token] += 1
+            else:
+                return None
+            priced = True
+        return found if priced else None
+
+    shared = rest(halves[0])
+    if any(rest(half) != shared for half in halves[1:]):
+        return cost_part, ()
+    priced = [mana_of(half) for half in halves]
+    if any(found is None for found in priced):
+        return cost_part, ()
+    return halves[0], tuple(found for found in priced[1:] if found is not None)
+
+
 #: "**Choose flying, first strike, trample, or shadow**" (Phyrexian Splicer),
 #: as the cost clause leaves it. Delimited here and read by the keyword
 #: vocabulary below, which is the split every other list in this file makes:
@@ -473,6 +539,10 @@ def parse_activated_ability_cost(
     # beside the life and charge both halves of an "or", which is exactly what
     # this reader did until the split existed.
     cost_part, alternative_mana = _split_mana_alternative(cost_part)
+    # "**{3}, {T} or {U}, {T}**" (the Mirrodin Shards): one ability, two
+    # printed costs. Split for the same reason as the line above, and after it
+    # so a life payment's own "or {2}" keeps its reader.
+    cost_part, mana_alternatives = _split_cost_alternatives(cost_part)
     # "**Pay {1} for each +1/+1 counter on this creature**" (Skeleton
     # Scavengers). Split off before the mana scan below for
     # ``_split_mana_alternative``'s reason: a scan that read the whole clause
@@ -1144,4 +1214,5 @@ def parse_activated_ability_cost(
         chosen_keyword_options=_chosen_keyword_options(cost_lower),
         mill_cards=_mill_cost(cost_lower),
         graveyard_to_library_bottom=_graveyard_to_library_bottom_cost(cost_lower),
+        mana_alternatives=mana_alternatives,
     )

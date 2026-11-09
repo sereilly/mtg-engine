@@ -62,7 +62,8 @@ from .targeting import (
 from .target_descriptions import SINGLE_GRAVEYARD
 from .target_roles import OPTIONAL_ROLE, role_is_seat
 from .cost_pickers import spec_is_a_cost
-from .ai_payment import _plan_land_taps, tap_planned_lands
+from .ai_payment import (_plan_land_taps, plan_printed_activation_cost,
+                         tap_planned_lands)
 from .ai_rehearsal import Rehearsal, deliberating, rehearse
 from .ai_weighed_cast import _effect_steps
 from .ai_actions import ActivationAction, activation_announcement
@@ -833,14 +834,25 @@ def _activation_candidate(
 
     land_taps: tuple[int, ...] = ()
     tap_colors: tuple[str, ...] = ()
+    # "{3}, {T} or {U}, {T}" (the Mirrodin Shards): which printed cost is
+    # announced — the cheapest the board pays (None for an ability printing
+    # one cost) — and then that cost priced as the activation will charge it.
+    alternative_cost_index = None
     required = dict(ability.cost.mana)
     if game.enforce_mana_costs and not x_symbols:
+        alternative_cost_index, _printed_plan = plan_printed_activation_cost(
+            game, player, ability.cost, paying_for=permanent,
+        )
         # The price the activation will charge, from the one charger every
         # reader asks (CR 601.2f via 602.2b: taxes, then reductions) — not
         # the printed cost. "Equip costs you pay cost {1} less" (Auriok
         # Steelshaper) makes Leonin Scimitar's {1} free, and a plan for the
-        # printed {1} refused the equip on a board with no untapped land.
-        charge = game.activation_mana_charge(player_index, permanent, ability)
+        # printed {1} refused the equip on a board with no untapped land. The
+        # announced alternative is priced the same way.
+        charge = game.activation_mana_charge(
+            player_index, permanent, ability,
+            alternative_cost_index=alternative_cost_index,
+        )
         if isinstance(charge, str):
             return None
         required = dict(charge[0])
@@ -865,6 +877,7 @@ def _activation_candidate(
         cost_hand_index=madness_discard,
         ability_index=ability_index,
         chosen_keyword=chosen_keyword,
+        alternative_cost_index=alternative_cost_index,
     )
     if x_symbols:
         return _sized_x_activation(

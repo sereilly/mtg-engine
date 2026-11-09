@@ -250,6 +250,48 @@ def bind_granter(
     return pattern.sub(granter_phrase(permanent_id), line)
 
 
+def copied_activated_ability_lines(
+    target_card, gainer_name: str,
+) -> tuple[str, ...]:
+    """The activated abilities *target_card* has, as lines a permanent named
+    *gainer_name* can be granted — "…gains all activated abilities of target
+    creature" (Quicksilver Elemental).
+
+    Read off the **effective** card the caller hands over, so an ability the
+    target has only because something granted it is one it has to give
+    (CR 613.1f: what it has in layer 6, as the copy is made), and through the
+    compiler, the engine's one reader of what an ability is — so a keyword
+    ability that is an activated ability comes with it and a static or
+    triggered one does not (2004-12-01: "gains only activated abilities").
+
+    The target's name becomes the gainer's (the reminder text's "use this
+    creature's name instead"; CR 201.5b: the first name is treated as the second),
+    whole-name and case-insensitive the way :func:`bind_granter` matches. A
+    line the gainer could not then compile is left out, which is the
+    probe's rule for every grant: an ability recorded and never read would be
+    a grant of nothing that reports itself made.
+    """
+    from .oracle import compile_card_oracle
+
+    target_name = (getattr(target_card, "name", "") or "").strip()
+    pattern = (
+        re.compile(rf"(?<![\w']){re.escape(target_name)}(?![\w])", re.IGNORECASE)
+        if target_name else None
+    )
+    lines: list[str] = []
+    for ability in compile_card_oracle(target_card).activated_abilities:
+        if not ability.supported or ability.instruction is None:
+            continue
+        line = " ".join((ability.source_line or "").split())
+        if not line:
+            continue
+        if pattern is not None and gainer_name:
+            line = pattern.sub(gainer_name, line)
+        if granted_ability_supported(line, gainer_name or None):
+            lines.append(line)
+    return tuple(lines)
+
+
 __all__ = [
     "DERIVABLE_STATIC_KINDS",
     "GRANTER_PHRASE_HEAD",
@@ -257,6 +299,7 @@ __all__ = [
     "GRANTER_PROBE_ID",
     "bind_chosen_player",
     "bind_granter",
+    "copied_activated_ability_lines",
     "derived_line_supported",
     "granted_ability_supported",
     "granter_phrase",

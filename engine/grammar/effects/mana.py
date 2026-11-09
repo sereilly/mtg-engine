@@ -34,6 +34,7 @@ from ..cost_records import accept_counters_removed_for_cost
 from ..records import _parse_for_each_this_way
 from ..references import parse_player_ref
 from ..stream import TokenStream
+from ..where_x import accept_source_characteristic
 
 
 def _names_announced_x(amount: "ast.Amount") -> bool:
@@ -487,6 +488,17 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
             # quantity that resolves against a cast's X instead.
             x_mark = stream.mark()
             if stream.accept_phrase("equal", "to"):
+                # "…equal to **this creature's power**." (Viridian Joiner.) A
+                # characteristic of the ability's own source, through the one
+                # reader the ", where X is …" trailer asks too, so the two
+                # spellings of one possessive cannot drift.
+                own = accept_source_characteristic(stream)
+                if own is not None:
+                    return ast.AddMana(
+                        ((symbol, 1),),
+                        source_text=_clause(),
+                        amount_of_source=own,
+                    )
                 try:
                     quantity = parse_amount(stream)
                 except GrammarError:

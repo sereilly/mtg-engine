@@ -164,6 +164,43 @@ def mana_spending_for(line: str) -> ManaSpending | None:
     )
 
 
+#: "You may spend blue mana as though it were mana of any color **to pay the
+#: activation costs of this creature's abilities**." (Quicksilver Elemental.)
+#: The permission one purpose narrower than every row above: not a seat's
+#: standing licence (CR 609.4b over every payment) but one over the activation
+#: costs of *this permanent's* abilities — its own and every one it gains. So
+#: it is never one of the seat's :class:`ManaSpending` entries (which every
+#: payment reads) and :func:`mana_spending_for` refuses the sentence; it is
+#: asked by the activation payment alone, of the permanent being activated
+#: (``Game._pay_mana_cost``'s activation fallback, ``board_payment``'s readings).
+_ACTIVATION_PERMISSION = re.compile(
+    r"^you may spend (?P<from>white|blue|black|red|green) mana as though it "
+    r"were mana of any color to pay the activation costs of this "
+    r"(?:creature|artifact|permanent)'s abilities$"
+)
+
+
+def activation_spending_color(line: str) -> str | None:
+    """The colour whose mana *line* lets pay this permanent's activation costs
+    as any colour, or None (see :data:`_ACTIVATION_PERMISSION`)."""
+    match = _ACTIVATION_PERMISSION.match(_normalize(line).rstrip("."))
+    return None if match is None else _WORD_TO_SYMBOL[match.group("from")]
+
+
+def activation_spending_colors(permanent) -> frozenset[str]:
+    """The colours *permanent* may spend as any colour on its own abilities'
+    activation costs, read off its **effective** text — a copy of the card has
+    the permission, and one whose text was changed has what it now says."""
+    card = getattr(permanent, "effective_card", None)
+    text = getattr(card, "oracle_text", "") or ""
+    if "activation costs" not in text.lower():
+        return frozenset()
+    return frozenset(
+        color for line in text.splitlines()
+        if (color := activation_spending_color(line)) is not None
+    )
+
+
 def spending_permission_line(oracle_text: str) -> str | None:
     """The first line of *oracle_text* this module implements, or None.
 
@@ -172,7 +209,10 @@ def spending_permission_line(oracle_text: str) -> str | None:
     ``_derived_static_claims`` exists to close.
     """
     for line in (oracle_text or "").splitlines():
-        if mana_spending_for(line) is not None:
+        if (
+            mana_spending_for(line) is not None
+            or activation_spending_color(line) is not None
+        ):
             return line.strip()
     return None
 
@@ -243,7 +283,8 @@ def _text_permissions(oracle_text: str) -> tuple[ManaSpending, ...]:
 
 
 __all__ = [
-    "COLOR_SYMBOLS", "ManaSpending", "clear_turn_permissions",
+    "COLOR_SYMBOLS", "ManaSpending", "activation_spending_color",
+    "activation_spending_colors", "clear_turn_permissions",
     "grant_turn_permission", "mana_spending_for",
     "permissions_for_seat", "spending_permission_line", "turn_permissions_on",
 ]

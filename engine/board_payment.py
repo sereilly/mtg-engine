@@ -778,7 +778,8 @@ def _expanded(
 
 
 def _pays(player, symbols: frozenset[str], *, as_any_type: bool = False,
-          as_any_color: bool = False) -> frozenset[str]:
+          as_any_color: bool = False,
+          fungible: "frozenset[str]" = frozenset()) -> frozenset[str]:
     """The pips one unit that may be any of *symbols* can pay for *player*,
     with the mark that counts it toward a generic cost.
 
@@ -787,9 +788,15 @@ def _pays(player, symbols: frozenset[str], *, as_any_type: bool = False,
     how an effect-priced cost and the castable highlight come to agree about a
     seat's CR 106.6 permissions.
     """
-    return pips_payable_by(
+    pays = pips_payable_by(
         player, symbols, as_any_type=as_any_type, as_any_color=as_any_color,
     ) | {_ANY}
+    # *fungible*: the colours one activated ability's source lets pay its
+    # costs as any colour (Quicksilver Elemental, CR 609.4b) — a unit that
+    # may be one of them pays every coloured pip.
+    if fungible and symbols & fungible:
+        pays = pays | frozenset(PIP_SYMBOLS)
+    return pays
 
 
 def board_can_pay(
@@ -811,7 +818,8 @@ def board_can_pay(
 
     Pure: nothing is tapped, spent, logged or prompted for.
     """
-    from .restricted_mana import CAST, spendable_restricted_mana
+    from .mana_spending import activation_spending_colors
+    from .restricted_mana import ACTIVATE, CAST, spendable_restricted_mana
 
     player = game.players[seat]
     floating: list[frozenset[str]] = []
@@ -875,6 +883,14 @@ def board_can_pay(
     # CR 609.4's one-spell grants (North Star), tried only where the ordinary
     # reading cannot pay — the order the payment itself spends them in.
     readings = [{}]
+    # "You may spend blue mana as though it were mana of any color to pay the
+    # activation costs of this creature's abilities." (Quicksilver Elemental.)
+    # The permission one activation's source carries, tried after the
+    # ordinary reading as the payment tries it (``Game._pay_mana_cost``).
+    if purpose is not None and purpose.kind == ACTIVATE:
+        fungible = activation_spending_colors(purpose.source)
+        if fungible:
+            readings.append({"fungible": fungible})
     if purpose is not None and purpose.kind == CAST:
         for grant in player.spend_mana_as_though_grants:
             if int(grant.get("spells", 0)) > 0:

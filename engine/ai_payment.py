@@ -203,7 +203,9 @@ def tap_planned_lands(
             game.activate_permanent_ability(
                 seat, land.card.name,
                 permanent_index=slot,
-                ability_index=source.ability_index,
+                # The ability that makes the asked symbol, where the source
+                # has several (a Talisman's {C} and its painful colours).
+                ability_index=source.ability_for(color),
                 # "Any color" is one of the five (CR 105.1): a source asked for
                 # the {C} a generic cost was planned at names no colour, and
                 # the ability's own default answers.
@@ -679,7 +681,10 @@ class _PaymentPlanner:
             entry = _ManaSource(
                 slot, options, 3 if source.sacrifices else 1,
                 source.symbols[0],
-                _source_prices(game, permanent, options, watched, source.ability_index),
+                _source_prices(
+                    game, permanent, options, watched, source.ability_index,
+                    ability_for_symbol=source.ability_for_symbol,
+                ),
             )
             if not source.sacrifices:
                 self.sources.append(entry)
@@ -894,15 +899,29 @@ class _PaymentPlanner:
         return profiles if any(profile != FREE_TAP for profile in profiles) else None
 
 
-def _source_prices(game, permanent, options, watched, ability_index=None) -> tuple:
+def _source_prices(
+    game, permanent, options, watched, ability_index=None, *,
+    ability_for_symbol=(),
+) -> tuple:
     """``((symbol, price), …)`` for every symbol *options* can make
-    (`mana_drawbacks.tap_prices`), or () where none costs anything."""
+    (`mana_drawbacks.tap_prices`), or () where none costs anything —
+    each asked of the ability that makes it, where a source has several
+    (*ability_for_symbol*: a Talisman's coloured tap is the one that hurts)."""
     from .mana_drawbacks import tap_prices
 
     symbols = sorted({
         symbol for option in options for unit in option.units for symbol in unit
         if symbol in _MANA_SYMBOLS
     })
+    if ability_for_symbol:
+        owner = dict(ability_for_symbol)
+        prices = {}
+        for symbol in symbols:
+            prices.update(tap_prices(
+                game, permanent, [symbol],
+                ability_index=owner.get(symbol, ability_index), watched=watched,
+            ))
+        return tuple(sorted(prices.items())) if any(prices.values()) else ()
     prices = tap_prices(game, permanent, symbols, ability_index=ability_index, watched=watched)
     return tuple(sorted(prices.items())) if any(prices.values()) else ()
 
@@ -951,6 +970,45 @@ def _asked_color(
             return source.default
         return next(symbol for symbol in _MANA_SYMBOLS if symbol in unit)
     return next(iter(option.units[0]))
+
+
+def plan_printed_activation_cost(
+    game: Game, player: PlayerState, cost, *,
+    paying_for: "Permanent | None" = None,
+) -> "tuple[int | None, tuple[tuple[int, ...], tuple[str, ...]] | None]":
+    """Which printed activation cost to announce and how to pay it:
+    ``(alternative_cost_index, plan)`` — the plan :func:`_plan_land_taps`
+    makes, or None when no printed cost can be paid from this board.
+
+    "{3}, {T} **or** {U}, {T}" (the Mirrodin Shards) is one ability with two
+    prices (CR 602.2b through 601.2b), and the policy pays the **cheapest** it
+    can plan — the one that taps the fewest sources, ties to the printed
+    order — so a Shard is not passed over for want of three mana when one {U}
+    pays it. The index is None for an ability printing one cost, which keeps
+    every such action's announcement exactly what it was.
+    """
+    from .activation_cost_alternatives import (has_alternative_costs,
+                                               printed_mana_costs)
+
+    costs = printed_mana_costs(cost)
+    if not has_alternative_costs(cost):
+        required = costs[0]
+        if not any(required.values()):
+            return None, ((), ())
+        return None, _plan_land_taps(game, player, required, paying_for=paying_for)
+    best: "tuple[int, tuple] | None" = None
+    for index, required in enumerate(costs):
+        plan = (
+            ((), ()) if not any(required.values())
+            else _plan_land_taps(game, player, required, paying_for=paying_for)
+        )
+        if plan is None:
+            continue
+        if best is None or len(plan[0]) < len(best[1][0]):
+            best = (index, plan)
+    if best is None:
+        return None, None
+    return best
 
 
 def _plan_land_taps(

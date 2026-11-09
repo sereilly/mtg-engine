@@ -389,6 +389,10 @@ def _graveyard_return_spec(payload: dict) -> dict:
         # "target instant or sorcery card" (Shipwreck Dowser) — the union the
         # round-19 graveyard picker already tests by primary type.
         spec["card_types"] = list(payload["card_types"])
+    elif payload.get("card_types_all"):
+        # "target **artifact creature** card" (Skeleton Shard): the
+        # conjunction, handed over in the key ``graveyard_card_matches`` reads.
+        spec["card_types_all"] = list(payload["card_types_all"])
     elif payload.get("any_card"):
         spec["any_card"] = True
     elif payload.get("card_type") not in (None, "creature"):
@@ -522,6 +526,12 @@ def _graveyard_exile_pile_spec(payload: dict) -> dict | None:
     would be a second answer to which cards may be named.
     """
     owner = payload.get("graveyard_owner")
+    if owner == "target_player":
+        # "**Target player** exiles a card from their graveyard." (Scrabbling
+        # Claws.) What is announced is the *player* (CR 601.2c via 602.2b);
+        # the card is that player's pick as the ability resolves, so the
+        # picker is the description's player picker and no card is asked for.
+        return _from_targets_payload(payload.get("targets"))
     if owner not in ("you", "chosen") or not payload.get("targets"):
         # No ``targets``: "exile a land card from your graveyard" (Forgotten
         # Harvest) names nothing at announcement and is picked at resolution.

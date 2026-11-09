@@ -487,6 +487,37 @@ def _lower_exile(
         if node.counters:
             payload["counters"] = _entering_counter_payload(node.counters)
         return (OracleInstruction("exile_target_spell", "", payload),)
+    # "**Target player** exiles a card from their graveyard." (Scrabbling
+    # Claws.) The chosen seat picks out of its own pile as the ability
+    # resolves, so the payload names that seat's pile (``"target_player"``) and
+    # carries the player target the announcement chooses (CR 601.2c via
+    # 602.2b) — the picker's description, which ``payload_target_specs`` reads
+    # back for this pile. Read before the guard below, which is written about
+    # the sweeps; every part of the clause is checked here rather than dropped.
+    if (
+        node.actor is not None
+        and node.actor.kind in ("target_player", "target_opponent")
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier in ("a", "an")
+        and not node.subject.targeted
+        and node.subject.filter.zone == "graveyard"
+        and node.subject.filter.is_card
+        and getattr(node.subject.filter.zone_owner, "kind", None) == "owner"
+    ):
+        subject = node.subject
+        if (
+            node.duration.kind is not None or node.face_down or node.same_zone
+            or node.counters or subject.count_from_x
+            or subject.count_amount is not None or subject.count < 1
+        ):
+            raise LoweringError(
+                "a seat's own graveyard pick carries a printed count and no "
+                "rider", node=node,
+            )
+        picked = one_card_pile_pick(subject.filter, "target_player", node)
+        picked["count"] = int(subject.count)
+        _describe_targets(picked, node.actor)
+        return (OracleInstruction("exile_cards_from_graveyard", "", picked),)
     if node.actor is not None and not (
         _is_graveyard_pile_exile(node.subject) or _is_hand_pile_exile(node.subject)
     ):

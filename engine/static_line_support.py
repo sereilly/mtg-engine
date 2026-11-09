@@ -282,6 +282,15 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # that reader, so a card admitted here is one the counter path really
     # honours; a parsed-and-dropped "can't be countered" is worse than none,
     # because it looks like protection nobody has.
+    # "You may spend blue mana as though it were mana of any color to pay the
+    # activation costs of this creature's abilities." (Quicksilver Elemental.)
+    # A permission over one permanent's activation costs (CR 609.4b), read
+    # by the activation payment off the permanent being activated — no
+    # instruction, and the gate asks the reader that payment asks.
+    from .mana_spending import activation_spending_color
+
+    if activation_spending_color(line) is not None:
+        return True
     from .counter_conditions import uncounterable_class_line, uncounterable_line
 
     if uncounterable_line(normalized):

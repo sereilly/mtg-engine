@@ -941,6 +941,42 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
         break
     if pips:
         costs.insert(0, ast.ManaCost(tuple(sorted(pips.items()))))
+    # "{3}, {T} **or** {U}, {T}: …" (the Mirrodin Shards). One ability whose
+    # activator pays either printed cost and not both (2004-10-04), so the
+    # rest of the clause is a second whole cost read by this same production,
+    # and the pair is admitted only where everything but the mana agrees: the
+    # charger (``activation_costs._split_cost_alternatives``) reads the first
+    # half's costs and the other halves' mana, so a difference anywhere else
+    # would be a cost admitted here and charged by nobody.
+    if costs and stream.accept_word("or"):
+        rest = _parse_costs(stream)
+        first_mana = next(
+            (cost for cost in costs if isinstance(cost, ast.ManaCost)), None
+        )
+        other_mana = [cost for cost in rest if isinstance(cost, ast.ManaCost)]
+        alternatives = [
+            cost for cost in rest if isinstance(cost, ast.AlternativeManaCost)
+        ]
+        if (
+            first_mana is None or len(other_mana) != 1 or "X" in dict(first_mana.pips)
+            or "X" in dict(other_mana[0].pips)
+            or any("X" in dict(alt.pips) for alt in alternatives)
+        ):
+            raise stream.error("an 'or' between costs prices each half in mana")
+        shared = [cost for cost in costs if not isinstance(cost, ast.ManaCost)]
+        theirs = [
+            cost for cost in rest
+            if not isinstance(cost, (ast.ManaCost, ast.AlternativeManaCost))
+        ]
+        if shared != theirs:
+            raise stream.error(
+                "an 'or' between costs differs in more than its mana"
+            )
+        return (
+            *costs,
+            ast.AlternativeManaCost(other_mana[0].pips),
+            *alternatives,
+        )
     if not stream.exhausted:
         raise stream.error("unrecognized activation cost")
     return tuple(costs)

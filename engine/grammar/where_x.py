@@ -252,6 +252,41 @@ def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
     return defined
 
 
+def accept_source_characteristic(
+    stream: TokenStream,
+) -> "ast.CharacteristicOfSubject | None":
+    """``this creature's power`` / ``~'s toughness`` — a characteristic of the
+    ability's **own source** — or None with the cursor unmoved.
+
+    "{T}: Target creature gets +X/+X until end of turn, where X is **this
+    creature's power**." (Auriok Bladewarden.) "{T}: Add an amount of {G}
+    equal to **this creature's power**." (Viridian Joiner.) The possessive
+    whose possessor is the source rather than an object the sentence named, so
+    it rides :class:`ast.CharacteristicOfSubject` with a referent flagged
+    ``is_source`` — the one referent no target role can match, which is what
+    keeps every lowering written before this reader from reading it as "its"
+    (each refuses a referent it cannot name).
+
+    Public because two front ends print it: the ", where X is …" trailer here
+    and the mana production's "an amount of {G} equal to …". A bare "it" is
+    not a possessor ("its" is its own word, read by the "its" branch below), so
+    only the spelled-out self-reference and the card's own name are read.
+    """
+    if stream.at_word("it"):
+        return None
+    mark = stream.mark()
+    if not accept_source_reference(stream) or not stream.accept_word("'s"):
+        stream.reset(mark)
+        return None
+    for phrase, name in _SUBJECT_CHARACTERISTICS:
+        if stream.accept_phrase(*phrase):
+            return ast.CharacteristicOfSubject(
+                name, _accept_offset(stream), ast.ObjectFilter(is_source=True)
+            )
+    stream.reset(mark)
+    return None
+
+
 def _parse_where_x_alternatives(stream: TokenStream) -> "ast.Amount":
     """Everything a "where X is" clause may say, once the words are consumed.
 
@@ -262,6 +297,12 @@ def _parse_where_x_alternatives(stream: TokenStream) -> "ast.Amount":
     payment channels -- so a fraction of anything the branches above that read
     was a sentence with no reader at all.
     """
+    # "…where X is **this creature's power**" (Auriok Bladewarden). The
+    # source's own characteristic, read first because it opens on neither "its"
+    # nor an article — see :func:`accept_source_characteristic`.
+    own = accept_source_characteristic(stream)
+    if own is not None:
+        return own
     # "…where X is **its** mana value" / "…where X is **its toughness minus
     # 1**". A characteristic of the object the sentence already named rather
     # than an aggregate over a set, so it carries no filter — read first

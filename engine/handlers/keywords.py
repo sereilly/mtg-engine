@@ -691,6 +691,54 @@ def grant_self_ability_text(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+@effect_handler("gain_activated_abilities_of_target")
+def gain_activated_abilities_of_target(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
+) -> tuple[bool, str]:
+    """"{U}: This creature gains all activated abilities of target creature
+    until end of turn." (Quicksilver Elemental.)
+
+    Read off the target **as the ability resolves** (2004-12-01: the abilities
+    are gained then, and it can be any creature it can target, whoever
+    controls it), renamed to the gainer (CR 201.5b), and recorded on the one
+    quoted-grant channel (``_grant_ability_texts``) with the printed duration —
+    so each copy is an ability of the gainer from then on: its own costs, its
+    own "activate only once each turn" budget (2004-10-04: two copies are
+    activated once each), and gone at cleanup. A target that is no longer
+    legal gives nothing (CR 608.2b); a gainer that has left gains nothing.
+    """
+    from ..granted_abilities import copied_activated_ability_lines
+    from ..oracle_types import OracleInstruction as _Instruction
+
+    gainer = context.source_permanent
+    if gainer is None or not game.is_on_battlefield(gainer):
+        game.log.append(f"{context.card.name}: nothing is left to gain the abilities")
+        return True, "resolved"
+    copied_from = resolve_target_permanent(
+        game, context,
+        predicate=_target_grant_predicate(game, instruction, context),
+        fallback_on_invalid_choice=False,
+    )
+    if copied_from is None:
+        game.log.append(f"{context.card.name}: no valid creature target")
+        return True, "resolved"
+    lines = copied_activated_ability_lines(
+        copied_from.effective_card, gainer.effective_card.name,
+    )
+    if not lines:
+        game.log.append(
+            f"{gainer.card.name} gains no activated abilities from "
+            f"{copied_from.card.name}"
+        )
+        return True, "resolved"
+    granted = _Instruction(
+        instruction.kind, "",
+        {"abilities": lines, "duration": instruction.payload.get("duration")},
+    )
+    _grant_ability_texts(game, gainer, granted, context)
+    return True, "resolved"
+
+
 @effect_handler("grant_target_ability_text")
 def grant_target_ability_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…that creature gains "<ability>"." (Life Matrix.)

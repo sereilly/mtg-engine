@@ -95,6 +95,10 @@ PUMP_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # whole printed ability instead of a word.
     "grant_target_ability_text": "pump",
     "grant_self_ability_text": "pump",
+    # "This creature gains all activated abilities of target creature until
+    # end of turn." (Quicksilver Elemental.) The same layer-6 grant of whole
+    # printed abilities, read off the target rather than off a quote.
+    "gain_activated_abilities_of_target": "pump",
     # Its negative twin ("…this creature loses "Prevent all damage …"",
     # Glittering Lion): the same layer-6 family, one printed ability removed.
     "remove_self_ability_text": "pump",

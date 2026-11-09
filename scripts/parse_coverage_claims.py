@@ -70,7 +70,8 @@ from engine.draw_step_modifiers import (  # noqa: E402
 )
 from engine.global_statics import global_static_for  # noqa: E402
 from engine.stack_statics import stack_static_claims_line  # noqa: E402
-from engine.mana_spending import mana_spending_for  # noqa: E402
+from engine.mana_spending import (activation_spending_color,  # noqa: E402
+                                  mana_spending_for)
 from engine.enchant_targets import enchant_graveyard_line, enchant_line_subject  # noqa: E402
 from engine.lord_buffs import sacrifice_state_trigger  # noqa: E402
 from engine.auras import aura_effect_claim  # noqa: E402
@@ -648,7 +649,10 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # refuses it, and it would otherwise show as unclaimed on a card whose
     # permission is fully implemented.
     ("mana_spending.py", lambda s: mana_spending_for(s) is not None
-     or s.rstrip(".") == "you may spend other mana only as though it were colorless mana"),
+     or s.rstrip(".") == "you may spend other mana only as though it were colorless mana"
+     # …and the permission scoped to one permanent's activation costs
+     # (Quicksilver Elemental), read by the activation payment alone.
+     or activation_spending_color(s) is not None),
     # The rider of a global static that outlives its source. It is part of the
     # same ability, matched on the two-sentence form, but arrives here as its
     # own line.

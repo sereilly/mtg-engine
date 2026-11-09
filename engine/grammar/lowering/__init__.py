@@ -143,7 +143,8 @@ from .types import (
     _lower_gain_type,
 )
 from .keyword_removal import _lower_lose_ability_text, _lower_lose_keyword
-from .granted_abilities import _lower_gain_ability_text
+from .granted_abilities import (_lower_gain_ability_text,
+                                _lower_gain_activated_abilities_of)
 from .keywords import (
     _KEYWORD_GRANTS,
     _lower_gain_keyword,
@@ -542,6 +543,7 @@ __all__ = [
     "_lower_set_base_pt",
     "_KEYWORD_GRANTS",
     "_lower_gain_ability_text",
+    "_lower_gain_activated_abilities_of",
     "_lower_gain_keyword",
     "_lower_lose_ability_text",
     "_lower_lose_keyword",

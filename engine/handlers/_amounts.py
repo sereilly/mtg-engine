@@ -665,6 +665,23 @@ def _characteristic_of_object(
         if cast_card is None:
             return 0
         return max(0, int(getattr(cast_card, "cmc", 0) or 0) + offset)
+    if spec.get("object") == "source":
+        # "…where X is **this creature's power**" (Auriok Bladewarden), "Add an
+        # amount of {G} equal to **this creature's power**" (Viridian Joiner).
+        # The ability's own source, read through the CR 613 accessors as the
+        # effect is applied. CR 608.2h: current information while the source
+        # is on the battlefield, and its last known information once it has
+        # left — the permanent object the resolution holds keeps the layers it
+        # had (the ``amount_from_source_power`` read in ``handlers/damage.py``
+        # relies on the same thing). No source is no number.
+        perm = context.source_permanent
+        if perm is None or not hasattr(perm, "effective_power"):
+            return 0
+        if name == "power":
+            return max(0, int(perm.effective_power) + offset)
+        if name == "toughness":
+            return max(0, int(perm.effective_toughness) + offset)
+        return max(0, int(getattr(perm.card, "cmc", 0) or 0) + offset)
     if spec.get("object") == "attached":
         # "…deals damage equal to **that creature's power**…" (Unnatural
         # Hunger). The permanent the ability's source is attached to, through
@@ -996,6 +1013,18 @@ def evaluate_count(
     # the lowering maps a name onto the one thing that computes exactly it, and a
     # name with no computation never reaches here.
     board_count = spec.get("board_count")
+    if board_count == "unspent_mana":
+        # "…the amount of unspent mana you have" (Glissa Sunseeker). Every unit
+        # in the seat's pool, its restricted buckets included: mana that may
+        # pay only for some things is still mana in the pool and still unspent
+        # (CR 106.4, 106.6) — the two stores ``lose_all_unspent_mana`` empties.
+        pooled = sum(int(amount or 0) for amount in owner.mana_pool.values())
+        held = sum(
+            int(amount or 0)
+            for bucket in owner.restricted_mana.values()
+            for amount in bucket.values()
+        )
+        return _scaled(max(0, pooled + held), spec)
     if board_count is not None:
         return _scaled(int(owner.life) if board_count == "their_life" else 0, spec)
     # "…the number of **age counters on it**" (Malignant Growth's draw,

@@ -23,6 +23,10 @@ than of a permanent).
 from __future__ import annotations
 
 
+from ...activation_cost_alternatives import (alternative_cost_refusal,
+                                            default_alternative_index,
+                                            has_alternative_costs,
+                                            mana_cost_text, printed_mana_costs)
 from ...restricted_mana import ACTIVATE, PaymentPurpose
 from ...bare_announcements import (announced_fields, default_activation_target,
                                    names_an_object, seat_of_unseated_slot)
@@ -140,6 +144,11 @@ class AbilityActivationMixin:
         source_stack_index: int | None = None,
         source_controller_index: int | None = None,
         seat_announced: bool | None = None,
+        # "{3}, {T} **or** {U}, {T}" (the Mirrodin Shards): which printed
+        # cost is paid, 0 for the first (CR 602.2b through 601.2b) — the name
+        # the cast path gives CR 118.9a's choice. None is
+        # ``activation_cost_alternatives.default_alternative_index``.
+        alternative_cost_index: int | None = None,
     ) -> SimulationResult:
         queued = self.queue_permanent_ability(
             controller_index,
@@ -168,6 +177,7 @@ class AbilityActivationMixin:
             source_stack_index=source_stack_index,
             source_controller_index=source_controller_index,
             seat_announced=seat_announced,
+            alternative_cost_index=alternative_cost_index,
         )
         if not queued.supported:
             return queued
@@ -361,6 +371,9 @@ class AbilityActivationMixin:
         # only the route knows — it fills in an opposing seat for every
         # activation, and the engine cannot tell that default from a choice.
         seat_announced: bool | None = None,
+        # Which printed activation cost is paid ("{3}, {T} or {U}, {T}") —
+        # see ``activate_permanent_ability``.
+        alternative_cost_index: int | None = None,
         # Where CR 601.2b's announced choice records how to take itself back.
         # Supplied by ``queue_permanent_ability``, this function's only caller
         # and the one place a refused activation is reversed (CR 733.1).
@@ -454,6 +467,25 @@ class AbilityActivationMixin:
         if isinstance(which, SimulationResult):
             return which
         ability = which
+
+        # "{3}, {T} **or** {U}, {T}" (the Mirrodin Shards): CR 601.2b's
+        # announcement of which printed cost will be paid, made before targets
+        # (CR 601.2c) and before any cost. A seat that names none is given the
+        # cost its floating mana covers (``default_alternative_index``); an
+        # index naming no printed cost is an announcement that cannot be
+        # carried out, refused with nothing paid.
+        cost_choice_refusal = alternative_cost_refusal(
+            ability.cost, alternative_cost_index
+        )
+        if cost_choice_refusal is not None:
+            return refuse(
+                permanent.card.name, "unsupported",
+                f"{permanent.card.name}: {cost_choice_refusal}",
+            )
+        if alternative_cost_index is None:
+            alternative_cost_index = default_alternative_index(
+                self, controller_index, ability.cost, source=permanent,
+            )
 
         # "**Choose flying, first strike, trample, or shadow**" (Phyrexian
         # Splicer). CR 601.2b's choices, announced now — **before** the target
@@ -649,6 +681,7 @@ class AbilityActivationMixin:
         charge = self.activation_mana_charge(
             controller_index, permanent, ability, x_value=x_value,
             alternative_mana=alternative_mana, target_stack_item=target_stack_item,
+            alternative_cost_index=alternative_cost_index,
         )
         if isinstance(charge, str):
             return refuse(permanent.card.name, "unsupported", charge)
@@ -664,8 +697,11 @@ class AbilityActivationMixin:
         # "Activated abilities of nontoken Rebels cost an additional
         # "Sacrifice a land"" (Brutal Suppression) asks what the *source* is,
         # so it is handed over.
+        # …asked of the printed cost the activator announced: a Shard paid
+        # with {B} prints a black symbol its {3} does not.
+        announced_mana = printed_mana_costs(ability.cost)[alternative_cost_index]
         sacrifice_demands = sacrifice_taxes(
-            self, controller_index, ability.cost.mana, "activate",
+            self, controller_index, announced_mana, "activate",
             source=permanent,
         )
         sacrifice_tax_victims = self._sacrifice_tax_victims(
@@ -697,6 +733,11 @@ class AbilityActivationMixin:
                     price_notes,
                 )
                 return refuse(permanent.card.name, "unsupported", details)
+        if has_alternative_costs(ability.cost):
+            self.log.append(
+                f"{permanent.card.name}: activated for "
+                f"{mana_cost_text(announced_mana)}"
+            )
         mana_spent_for_cost = {
             symbol: spent
             for symbol in ("W", "U", "B", "R", "G", "C")

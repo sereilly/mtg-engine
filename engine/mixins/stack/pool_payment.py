@@ -471,10 +471,31 @@ class PoolPaymentMixin:
         clause says "that **spell's** mana cost", and *purpose* not naming a
         cast is that rule rather than a missing argument.
         """
-        from ...restricted_mana import CAST
+        from ...restricted_mana import ACTIVATE, CAST
 
         if self._pay_mana_cost_directly(player, required, purpose=purpose):
             return True
+        if purpose is not None and purpose.kind == ACTIVATE:
+            # "You may spend blue mana as though it were mana of any color to
+            # pay the activation costs of this creature's abilities."
+            # (Quicksilver Elemental.) CR 609.4b's permission, scoped to the
+            # abilities of the one permanent whose ability this is — its own
+            # and every one it gained — and read off that permanent now, so a
+            # copy of the card carries it and a changed text does not.
+            from ...mana_spending import activation_spending_colors
+
+            fungible = activation_spending_colors(purpose.source)
+            if fungible and self._pay_with_fungible_symbols(
+                player, required, fungible
+            ):
+                self.log.append(
+                    f"{player.name} spent "
+                    + "/".join(f"{{{symbol}}}" for symbol in sorted(fungible))
+                    + " mana as though it were mana of any color to activate "
+                    + f"{getattr(getattr(purpose.source, 'card', None), 'name', 'an ability')}"
+                )
+                return True
+            return False
         if purpose is None or purpose.kind != CAST:
             return False
         spell = purpose.card
@@ -725,6 +746,46 @@ class PoolPaymentMixin:
             return False
         for symbol, remaining in after.items():
             player.mana_pool[symbol] = max(0, int(remaining))
+        return True
+
+    def _pay_with_fungible_symbols(
+        self, player: PlayerState, required: dict[str, int],
+        fungible: "frozenset[str]",
+    ) -> bool:
+        """Pay *required* from the pool where a unit of a *fungible* colour
+        may pay any coloured pip (Quicksilver Elemental's blue, CR 609.4b) and
+        every other unit pays only its own — or leave the pool untouched.
+
+        Exact for that shape by a greedy order: each coloured pip is paid by
+        its own colour first (a unit no other pip can use), the shortfall by
+        fungible units, then {C} by colourless, then generic from what is
+        left. Restricted buckets are not spent here: the ordinary payment in
+        front of this already tried them.
+        """
+        symbols = ("W", "U", "B", "R", "G", "C")
+        temp = {sym: int(player.mana_pool.get(sym, 0)) for sym in symbols}
+        need = {sym: int(required.get(sym, 0) or 0) for sym in symbols}
+        short = 0
+        for sym in ("W", "U", "B", "R", "G"):
+            paid = min(temp[sym], need[sym])
+            temp[sym] -= paid
+            short += need[sym] - paid
+        for sym in sorted(fungible):
+            paid = min(temp.get(sym, 0), short)
+            temp[sym] -= paid
+            short -= paid
+        if short > 0 or temp["C"] < need["C"]:
+            return False
+        temp["C"] -= need["C"]
+        generic = int(required.get("generic", 0) or 0)
+        if sum(temp.values()) < generic:
+            return False
+        for sym in ("C", *(s for s in ("W", "U", "B", "R", "G") if s not in fungible),
+                    *sorted(fungible)):
+            paid = min(temp[sym], generic)
+            temp[sym] -= paid
+            generic -= paid
+        player.mana_pool = {**player.mana_pool, **temp}
         return True
 
     def _pay_with_fungible_colors(
