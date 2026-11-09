@@ -460,46 +460,51 @@ def test_w2g4_misstep_holds_down_the_named_players_creatures_only(set_pool):
     untap step." (Misstep.)
 
     Two narrowings, each asserted against what it excludes: only *creatures*
-    (the target's land is untouched) and only the *target's* (the caster's own
-    creature unmarked). A sweep handed no seat matches nothing, and one handed
-    the wrong seat holds down the caster's own board — so both directions have
-    a permanent in this board to catch them.
+    (the target's land untaps) and only the *target's* (the caster's own
+    creature untaps in its own step). A sweep handed no seat matches nothing,
+    and one handed the wrong seat holds down the caster's own board — so both
+    directions have a permanent in this board to catch them. A lock on the
+    target's step since MRD W2G4 (CR 611.2c, the card's 2008-08-01 ruling), so
+    what is asserted is the untap step, not a marker.
     """
     game, _caster, _other = _w2g4_table(
         set_pool, ["Misstep"],
         mine=[_s4_creature_card("Mine", 2, 2)],
         theirs=[_s4_creature_card("Theirs", 2, 2), "Plains"],
     )
+    for permanent in game.all_permanents():
+        permanent.tapped = True
 
     result = game.cast_from_hand(0, "Misstep", target_player_index=1)
     _s4_resolve(game)
-
     assert result.supported, result.details
-    assert {
-        p.card.name: int(p.metadata.get("skip_next_untap") or 0)
-        for p in game.all_permanents()
-    } == {"Mine": 0, "Theirs": 1, "Plains": 0}
+
+    game.resolve_untap_step(1)
+    game.resolve_untap_step(0)
+    assert {p.card.name: p.tapped for p in game.all_permanents()} == {
+        "Mine": False, "Theirs": True, "Plains": False,
+    }
 
 
 def test_w2g4_misstep_waits_for_the_named_players_untap_step(set_pool):
-    """"…during **that player's** next untap step" — the seat the spell chose,
-    frozen as the marker is made (CR 115.4).
-
-    Not "their controller's", which is the elision one word away and the same
-    answer until the creature changes hands. The seat is the whole of what this
-    asserts, because the marker itself is identical either way — and an unseated
-    marker is spent by whichever untap step reaches the permanent first.
+    """"…during **that player's** next untap step" — the seat the spell chose
+    (CR 115.4), recorded on the lock and spent by that seat's step alone: the
+    caster's own untap step leaves it standing.
     """
-    from engine.handlers.tapping import SKIP_NEXT_UNTAP_SEAT
-
     game, _caster, _other = _w2g4_table(
         set_pool, ["Misstep"], theirs=[_s4_creature_card("Theirs", 2, 2)],
     )
     game.cast_from_hand(0, "Misstep", target_player_index=1)
     _s4_resolve(game)
+    assert [lock.seat for lock in game.untap_step_locks] == [1]
 
-    marked = next(p for p in game.all_permanents() if p.card.name == "Theirs")
-    assert marked.metadata[SKIP_NEXT_UNTAP_SEAT] == 1
+    game.resolve_untap_step(0)
+    assert [lock.seat for lock in game.untap_step_locks] == [1]
+
+    theirs = next(p for p in game.all_permanents() if p.card.name == "Theirs")
+    theirs.tapped = True
+    game.resolve_untap_step(1)
+    assert theirs.tapped and not game.untap_step_locks
 
 
 # --- W3G3: a round-robin over a shared pile of exiled cards ---

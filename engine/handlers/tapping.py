@@ -1072,6 +1072,16 @@ def lock_next_untap_step(game: Game, instruction: OracleInstruction, context: Or
     The seat is the spell's target (CR 601.2c); with none chosen it answers
     False rather than locking the caster's own step — a strictly different
     card.
+
+    "Creatures **target player controls** don't untap during that player's
+    next untap step." (Misstep; Exhaustion, Mana Vapors.) The noun phrase
+    names the target as the controller, a word the untap step has no target
+    to read against. Relative to the targeted seat itself it is "you"
+    (CR 109.5), so the lock records it that way, observed from that seat:
+    a Seedborn Muse's controller untapping in the target's step is not held
+    down by a lock on "creatures target player controls" (Misstep's ruling,
+    2004-10-04, is the other half: the target's creatures still untap in
+    other players' untap steps — the lock names one step).
     """
     from ..untap_step_locks import lock_untap_step
 
@@ -1086,13 +1096,21 @@ def lock_next_untap_step(game: Game, instruction: OracleInstruction, context: Or
         key: value for key, value in instruction.payload.items()
         if key not in ("targets", "untap_steps")
     }
+    if described.get("controller") in ("target_player", "target_opponent"):
+        described["controller"] = "you"
+        observer = seat
     steps = max(1, int(instruction.payload.get("untap_steps") or 1))
     lock_untap_step(
         game, seat, described, observer=observer, steps=steps,
         source=getattr(context.card, "name", "") or "",
     )
     noun = described.get("type_filter")
-    noun = f"{noun}s" if isinstance(noun, str) and len(described) == 1 else "the permanents it names"
+    if isinstance(noun, (list, tuple)):
+        noun = " and ".join(f"{word}s" for word in noun)
+    elif isinstance(noun, str):
+        noun = f"{noun}s"
+    named = {key for key in described if key != "controller"}
+    noun = noun if noun and named == {"type_filter"} else "the permanents it names"
     game.log.append(
         f"{_source_name(context)}: {noun} don't untap during "
         f"{chosen.name}'s next untap step"

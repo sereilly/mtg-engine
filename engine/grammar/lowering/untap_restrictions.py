@@ -180,6 +180,56 @@ def _lower_untap_step_lock(node: ast.DoesntUntapNextStep) -> tuple[OracleInstruc
     )
 
 
+#: The controller words that name the spell's own **player target** inside a
+#: swept noun phrase ("Creatures **target player** controls", "…**target
+#: opponent** controls") — a seat chosen as the spell is cast (CR 601.2c).
+_TARGETED_SEAT_CONTROLLERS = frozenset({"target_player", "target_opponent"})
+
+
+def _targeted_seat_step_lock(
+    node: ast.DoesntUntapNextStep, described: dict
+) -> tuple[OracleInstruction, ...] | None:
+    """"Creatures **target player controls** don't untap during **that
+    player's** next untap step." (Misstep.) "Creatures and lands target
+    opponent controls don't untap during **their** next untap step."
+    (Exhaustion; Mana Vapors names lands.) A lock on the targeted player's
+    step, or None for any other sweep.
+
+    The same lock Blinding Beam's "target player's next untap step" makes
+    (:func:`_lower_untap_step_lock`), for the same rule: an effect from a
+    resolving spell that modifies no characteristic "modifies the rules of the
+    game, so it can affect objects that weren't affected when that continuous
+    effect began" (CR 611.2c). Each card's own ruling says it of that card —
+    Misstep (2008-08-01): "No creature controlled by the player will untap
+    during their next untap step. This includes creatures which entered the
+    battlefield after Misstep resolved."; Mana Vapors (2008-08-01) the same of
+    lands; Exhaustion (2009-10-01) of both. Read as a marker on the
+    permanents present at resolution, a creature cast afterwards untapped on
+    schedule.
+
+    Only where the step is the **targeted player's**: "that player's" names
+    it, and the elided "their" can name no one else, since every permanent
+    the phrase admits is controlled by that player. The controller word stays
+    in the payload — it is the target spec's seat
+    (``payload_target_specs``' row for this kind) — and the handler reads it
+    at the untap step relative to that seat. Spore Cloud's and Tangle's "each
+    attacking creature" names no player and keeps its marker: what it holds
+    down is a set fixed by the combat it was cast in.
+    """
+    if described.get("controller") not in _TARGETED_SEAT_CONTROLLERS:
+        return None
+    if node.whose not in ("target_player", "controller"):
+        return None
+    if node.count < 1:
+        raise LoweringError("a skipped-untap count of none is no restriction", node=node)
+    return (
+        OracleInstruction(
+            "lock_next_untap_step", "",
+            {**described, "untap_steps": node.count},
+        ),
+    )
+
+
 def _lower_doesnt_untap_next_step(
     node: ast.DoesntUntapNextStep,
     produced: frozenset[str],
@@ -341,6 +391,9 @@ def _lower_doesnt_untap_next_step(
             node=node,
             require_narrowing=False,
         )
+        locked = _targeted_seat_step_lock(node, described)
+        if locked is not None:
+            return locked
         # The seat rides a sweep too. It did not before, because the only seated
         # spelling was "your" and nothing printed it over a swept subject —
         # so a sweep that named a player's step would have dropped the word and
