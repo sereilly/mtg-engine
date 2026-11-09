@@ -175,11 +175,12 @@ def _lower_reveal_top(node: ast.RevealTopToHandOrBottom) -> tuple[OracleInstruct
     payload the handler tests with primary_type."""
     if not node.filter.is_card or len(node.filter.card_types) != 1:
         raise LoweringError("the reveal-top handler tests one card type", node=node)
-    return (
-        OracleInstruction(
-            "reveal_top_to_hand_or_bottom", "", {"card_type": node.filter.card_types[0]}
-        ),
-    )
+    payload = {"card_type": node.filter.card_types[0]}
+    # Written only when it is not the bottom of the library, so the template's
+    # first card (Garruk) keeps the program it had.
+    if node.otherwise_zone != "library_bottom":
+        payload["otherwise_zone"] = node.otherwise_zone
+    return (OracleInstruction("reveal_top_to_hand_or_bottom", "", payload),)
 
 
 def _lower_reveal_top_sorting_by_chosen_name(

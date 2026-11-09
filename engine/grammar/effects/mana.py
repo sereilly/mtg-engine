@@ -828,12 +828,16 @@ def _parse_player_adds_mana(
 
     pips = _parse_pip_run(stream)
     if pips:
+        # "…that player adds {C} **for each artifact they control**." (Blinkmoth
+        # Urn.) The multiplier reader the bare "Add {G} for each …" asks, read
+        # here so the count stays part of the one production.
+        per_each = _parse_mana_multiplier(stream)
         alternative = _parse_supertype_alternative(stream, recipient)
         alt_supertype, alt_pips = alternative or (None, ())
         return ast.AddManaForTappedLand(
             recipient, pips=tuple(sorted(pips.items())), additional=additional,
             optional=optional, alt_supertype=alt_supertype, alt_pips=alt_pips,
-            spend_only=_parse_spend_restriction(stream),
+            spend_only=_parse_spend_restriction(stream), per_each=per_each,
         )
 
     # "one mana of any type that land produced". Every word is read: "any type

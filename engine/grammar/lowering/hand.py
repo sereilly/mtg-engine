@@ -373,15 +373,24 @@ def _lower_discard(
     # told, and live in ``_discards`` — see that module's docstring.
     if isinstance(node.count, ast.AllOf) and not node.whole_hand:
         return discard_all_matching(node, event, produced)
-    # Only the controller's own discard and the at-random one below carry a
-    # narrowing; every other handler arms a prompt that takes the whole hand, so
-    # a filter reaching them would be silently dropped.
+    # Only the controller's own discard, the at-random one below and the
+    # chosen discard of a targeted (or "that") player carry a narrowing; every
+    # other handler arms a prompt that takes the whole hand, so a filter
+    # reaching them would be silently dropped. The chosen one joined for
+    # "Target player discards two cards **unless they discard an artifact
+    # card**" (Wrench Mind): ``discard_target_cards`` hands the filter to the
+    # same ``discard`` prompt the controller's discard does, and the offer's
+    # takeability counts the cards it names (``handlers/offers``).
     if (
         node.filter is not None
         and node.player.kind != "you"
         and not (
             node.at_random
             and node.player.kind in ("target_player", "target_opponent")
+        )
+        and not (
+            not node.at_random and not node.whole_hand
+            and node.player.kind in ("target_player", "target_opponent", "that_player")
         )
     ):
         raise LoweringError(
@@ -633,6 +642,16 @@ def _lower_discard(
     else:
         kind = "discard_target_cards"
         payload["amount"] = amount
+        # "…unless they discard **an artifact card**." (Wrench Mind.) Read by
+        # the card reader every other discard narrowing uses, so a phrase it
+        # cannot test refuses instead of offering the whole hand.
+        if node.filter is not None:
+            described = chargeable_card_filter(node.filter)
+            if not described:
+                raise LoweringError(
+                    "no chosen discard can test this narrowing", node=node
+                )
+            payload["filter"] = described
         if node.up_to:
             # "Target player discards **up to** two cards." The ceiling rides
             # to the prompt, which is what lets the player stop early; it

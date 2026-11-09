@@ -1198,6 +1198,19 @@ COPY_ARTIFACT_ON_ENTER = (
     "you may have this enchantment enter as a copy of any artifact on the battlefield"
 )
 
+#: The copy-on-enter sentence read **by shape** (CR 707.5): "you may have this
+#: <noun the card calls itself> enter as a copy of any <card type> on the
+#: battlefield". The two literals above are its first two printings; Sculpting
+#: Steel prints the third ("this artifact … any artifact") and was refused for
+#: a noun neither literal spelled. ``copied`` is the type the choice ranges over
+#: — the one question every reader below asks — so a fourth printing needs no
+#: code.
+_COPY_ON_ENTER = re.compile(
+    r"you may have this (?:creature|artifact|enchantment|land|permanent) "
+    r"enter as a copy of any (?P<copied>creature|artifact|enchantment|land) "
+    r"on the battlefield"
+)
+
 # Standing permissions stamped on the controller as the permanent enters.
 NO_MAXIMUM_HAND_SIZE = "you have no maximum hand size"
 SPEND_WHITE_AS_RED = "you may spend white mana as though it were red mana"
@@ -1263,11 +1276,8 @@ def copy_on_enter_type(normalized_text: str) -> str | None:
     copies as it enters, so it still needs the picker; asking the narrower
     question here would silently drop its prompt.
     """
-    if COPY_CREATURE_ON_ENTER in normalized_text:
-        return "creature"
-    if COPY_ARTIFACT_ON_ENTER in normalized_text:
-        return "artifact"
-    return None
+    found = _COPY_ON_ENTER.search(normalized_text)
+    return found.group("copied") if found is not None else None
 
 
 def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
@@ -1282,6 +1292,14 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         for subject in _SELF_SUBJECTS:
             if normalized == subject + phrase + tail:
                 return phrase
+    # "You may have this artifact enter as a copy of any artifact on the
+    # battlefield." (Sculpting Steel.) The copy sentence with no exception
+    # clause, by shape — performed by ``_enter_as_a_copy``, which asks
+    # :func:`copy_on_enter_type` the same question. A tail (Copy Artifact's
+    # added type, Vesuvan Doppelganger's colour and granted ability) is a whole
+    # line only where the table above spells it.
+    if _COPY_ON_ENTER.fullmatch(normalized) is not None:
+        return "enter as a copy"
     # "This Equipment enters with a soul counter on it." (Malefic Scythe.) The
     # one entry line matched by shape rather than by a fixed phrase, asked of
     # the same reader the mixin places the counter with — so the claim and the

@@ -412,9 +412,16 @@ def frozen_seat_adds_mana(game: Game, instruction: OracleInstruction, context: O
     if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
         return False, "no player was named by this trigger"
     player = game.players[seat]
+    # "…{C} **for each artifact they control**" (Blinkmoth Urn): counted at
+    # resolution (CR 608.2h) on the frozen seat's board, the spec's own scope.
+    per_each = instruction.payload.get("per_each")
+    multiplier = (
+        count_from_payload(game, context, per_each, instruction)
+        if per_each is not None else 1
+    )
     added = 0
     for symbol, amount in instruction.payload.get("pips") or ():
-        count = max(0, int(amount))
+        count = max(0, int(amount)) * multiplier
         if count:
             player.mana_pool[str(symbol)] = (
                 player.mana_pool.get(str(symbol), 0) + count

@@ -26,7 +26,8 @@ from ._common import (
 )
 from ._events import (_DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_PLAYERS,
                       _RECORDED_PERMANENTS)
-from ._amounts import recorded_count_spec, x_offset_amount
+from ._amounts import (count_filter_on_frozen_seat, count_spec,
+                       recorded_count_spec, x_offset_amount)
 from ._cost_records import (SACRIFICED_FOR_COST, UNTAPPED_FOR_COST,
                             shared_creature_type_referent)
 
@@ -615,15 +616,28 @@ def _lower_add_mana_for_tapped_land(
             and not node.alt_supertype
             and not node.spend_only
         ):
+            frozen_payload: dict[str, object] = {"pips": node.pips}
+            if node.per_each is not None:
+                # "…for each artifact **they control**" (Blinkmoth Urn): the
+                # frozen seat's own board, through the rewrite every count of a
+                # "that player controls" phrase under such an event takes
+                # (Psychic Allergy, Mana Cache) — so the count and the mana land
+                # on one player.
+                frozen_payload["per_each"] = count_spec(
+                    count_filter_on_frozen_seat(node.per_each, event, node),
+                    node, event=event,
+                )
             return (
-                OracleInstruction(
-                    "frozen_seat_adds_mana", "", {"pips": node.pips}
-                ),
+                OracleInstruction("frozen_seat_adds_mana", "", frozen_payload),
             )
         raise LoweringError(
             "'that land'/'that player' are bound by a land_tapped_for_mana "
             f"trigger; {event!r} binds neither",
             node=node,
+        )
+    if node.per_each is not None:
+        raise LoweringError(
+            "the tapped-land mana instruction counts no multiplier", node=node
         )
     recipient = _TAPPED_LAND_MANA_RECIPIENTS.get(node.recipient.kind)
     if recipient is None:

@@ -419,6 +419,30 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         ),
     ),
     (
+        # March of the Machines. Titania's Song's sentence with the ability
+        # removal and the lingering clause absent: the same layer-4 addition
+        # (CR 613.1d) and layer-7b setting from a mana value (CR 613.4b) over
+        # the same scope, so what this row adds is a sentence. The artifacts
+        # keep their abilities, which is the whole difference — a Bonesplitter
+        # under it is a 1/1 creature *and* still an Equipment, and CR 301.5c
+        # takes it off whatever it equipped (the reminder text, stripped by
+        # ``_line``, says so; the state-based check performs it).
+        #
+        # "is an artifact creature" rather than the Song's "becomes": a static
+        # ability states a fact, the Song a change. Both mean one continuous
+        # effect for as long as the source is on the battlefield.
+        re.compile(
+            r"^each noncreature artifact is an artifact creature with power "
+            r"and toughness each equal to its mana value$"
+        ),
+        GlobalStatic(
+            name="march_of_the_machines",
+            applies_to="noncreature_artifact",
+            adds_creature_type=True,
+            pt_from_mana_value=True,
+        ),
+    ),
+    (
         # Opalescence. Titania's Song's sentence one card type over: the same
         # layer-4 addition (CR 613.1d) and the same layer-7b setting from a
         # mana value (CR 613.4b), with the ability removal absent and the noun

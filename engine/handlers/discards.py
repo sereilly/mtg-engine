@@ -144,8 +144,20 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
             )
             return True, "resolved"
         target = game.players[seat]
+    # "…unless they discard **an artifact card**" (Wrench Mind): the cards the
+    # phrase names bound the count and ride the prompt, the arrangement
+    # ``discard_controller_cards`` makes for the controller's own narrowed
+    # discard — so what is offered, what an answer is checked against and what
+    # a non-interactive seat takes are one rule (``live_discard_candidates``).
+    # Absent for every unnarrowed discard, whose prompt is unchanged.
+    described = dict(instruction.payload.get("filter") or {})
+    eligible = (
+        [card for card in target.hand
+         if _card_matches_filter(card, described, game=game, owner=target)]
+        if described else target.hand
+    )
     actual = min(
-        resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(target.hand)
+        resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(eligible)
     )
     # "…then draws as many cards as they discarded this way" (Forget) reads the
     # count back out of the scratchpad, so a discard that never happened has to
@@ -174,6 +186,7 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
         "discard", player_index,
         count=actual,
         **({"up_to": True} if ceiling else {}),
+        **({"filter": described} if described else {}),
         allow_top_of_library=game._controls_top_of_library_discard(target),
         # The scratchpad rides the prompt: how many cards actually went is not
         # known until the seat answers, and `_after_discard_answered` is the one

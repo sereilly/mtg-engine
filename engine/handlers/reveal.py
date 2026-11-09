@@ -31,7 +31,7 @@ from ..oracle_types import REVEALED_HAND_CARDS, REVEALED_TOP_CARDS_BY_SEAT
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..revealed_hands import reveal_hand_while_present
 from ..resumption import run_resumable
-from ..search_filters import search_matches
+from ..search_filters import card_has_type, search_matches
 from ._amounts import resolve_amount
 from ._chosen import _resolve_chosen_subtype
 from ._filters import _card_matches_filter
@@ -1259,7 +1259,16 @@ def reveal_top_to_hand_or_bottom(game: Game, instruction: OracleInstruction, con
     """"Reveal the top card of your library. If it's a creature card, put it
     into your hand. Otherwise, put it on the bottom of your library." (Garruk,
     Savage Herald's +1.) Revealing is public: the log names the card either
-    way, which is what a reveal means to this engine."""
+    way, which is what a reveal means to this engine.
+
+    "Otherwise, put it **into your graveyard**" (Neurok Familiar) is the
+    ``otherwise_zone`` the parser closed the list on.
+
+    The type is asked with ``card_has_type`` (CR 205.2: a card has every type
+    its line names), not ``primary_type``, which picks one by a list order:
+    Neurok Familiar's "if it's an **artifact** card" read that way sent every
+    artifact creature — "Artifact Creature" answers "creature" — to the
+    graveyard."""
     caster = context.caster
     if not caster.library:
         game.log.append(f"{caster.name} has no library to reveal from")
@@ -1267,9 +1276,14 @@ def reveal_top_to_hand_or_bottom(game: Game, instruction: OracleInstruction, con
     card_type = instruction.payload.get("card_type")
     top = caster.library.pop(0)
     game.record_reveal(game.players.index(caster), [top.name])
-    if card_type is None or top.primary_type == card_type:
+    if card_type is None or card_has_type(top, card_type):
         game.put_card_into_hand(caster, top)
         game.log.append(f"{caster.name} revealed {top.name} and put it into their hand")
+    elif instruction.payload.get("otherwise_zone") == "graveyard":
+        game.log.append(
+            f"{caster.name} revealed {top.name} and put it into their graveyard"
+        )
+        game.put_card_into_graveyard(caster, top, from_zone="library")
     else:
         game.put_card_into_library(caster, top)
         game.log.append(

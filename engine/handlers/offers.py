@@ -478,6 +478,15 @@ def _action_is_takeable(
         amount = instruction.payload.get("amount", 1)
         if instruction.payload.get("who") is not None or not isinstance(amount, int):
             return True
+        # "…unless they discard **an artifact card**" (Wrench Mind): a hand
+        # with no card the phrase names cannot pay, however many cards it
+        # holds — counted the way ``discard_controller_cards`` above is.
+        described = dict(instruction.payload.get("filter") or {})
+        if described:
+            return sum(
+                1 for card in player.hand
+                if _card_matches_filter(card, described, game=game, owner=player)
+            ) >= amount
         return len(player.hand) >= amount
     if instruction.kind == "discard_x_target_cards":
         amount = instruction.payload.get("amount", 1)

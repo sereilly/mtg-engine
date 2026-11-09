@@ -322,7 +322,16 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     # The noun has to name a *card* with a printed type — a bare "a card" is
     # the clause above with a different subject, and reading it here would
     # demand the cards record of a discard that only counts.
-    if stream.accept_phrase("you", "discard") and stream.accept_word("a", "an"):
+    #
+    # "**If that player discards an artifact card this way,** untap this
+    # creature." (Lumengrid Augur.) The same narrowed question with the
+    # targeted discarder as its subject — the subject the bare clause above
+    # already reads, so the two spellings of "who discarded" are the two the
+    # unnarrowed clause and this one share.
+    if (
+        stream.accept_phrase("you", "discard")
+        or stream.accept_phrase("that", "player", "discards")
+    ) and stream.accept_word("a", "an"):
         try:
             discarded = parse_object_filter(stream)
         except GrammarError:
