@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..equipment import attach_equipment, attachment_refusal
+from ..equipment import attach_equipment, attachment_target_refusal
 from ..game_types import first_slot, first_target_id
 from ..oracle_types import OracleInstruction
 from .registry import effect_handler
@@ -74,7 +74,12 @@ def attach_source_to_target(
             # ``equipment.attachment_refusal``; asking the Equipment half of it
             # for an Aura refused every host, so the ability resolved and moved
             # nothing.
-            and attachment_refusal(game, equipment, candidate) is None
+            #
+            # The *target's* legality (CR 608.2b), the question the picker
+            # asked: an Equipment that is a creature still has a legal target
+            # and simply doesn't move (CR 301.5c, 701.3b), which
+            # ``attach_equipment`` says, with the reason, when it refuses.
+            and attachment_target_refusal(game, equipment, candidate) is None
         )
 
     target_id = first_target_id(context.target_permanent_id)

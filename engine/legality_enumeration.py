@@ -691,12 +691,16 @@ class TargetEnumerationMixin:
             # from its colour (702.16d), the Equipment itself (301.5c). Asked of
             # the same predicate the resolution asks, so a creature offered here
             # is one the attach then lands on.
-            # ``attachment_refusal``, not ``equip_refusal``: CR 701.3's action
-            # is asked of whichever kind of Attachment printed the ability, and
-            # an Aura's legality is its enchant clause (CR 702.5), not
-            # CR 301.5's. Asking the Equipment predicate of an Aura refused
-            # every host and emptied the picker.
-            from .equipment import attachment_refusal
+            # ``attachment_target_refusal``, not ``equip_refusal``: CR 701.3's
+            # action is asked of whichever kind of Attachment printed the
+            # ability, and an Aura's legality is its enchant clause (CR 702.5),
+            # not CR 301.5's. Asking the Equipment predicate of an Aura refused
+            # every host and emptied the picker. And it is the *target's*
+            # legality: an Equipment that is a creature can't equip (CR
+            # 301.5c), but its ability may still be activated at a creature
+            # you control and does nothing (March of the Machines, ruling
+            # 2004-12-01) — asking the resolution's predicate here refused it.
+            from .equipment import attachment_target_refusal
 
             if not permanent_matches_filter(perm, instruction.payload):
                 return False
@@ -716,7 +720,7 @@ class TargetEnumerationMixin:
                 return False
             return (
                 source_permanent is None
-                or attachment_refusal(self, source_permanent, perm) is None
+                or attachment_target_refusal(self, source_permanent, perm) is None
             )
         if instruction.kind == "add_counter_to_target":
             # Tempered Veteran's "target creature with a +1/+1 counter on it" —
