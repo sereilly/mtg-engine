@@ -6,7 +6,9 @@ costs {N} less to activate for each …" (Sanctum of Tranquil Light), and "This
 spell costs {1} more to cast for each target beyond the first" (Fireball). It
 is a property of the card being cast, read off its own text and gated on a
 condition about the cast, so no permanent is involved and no battlefield scan
-would find it.
+would find it. Affinity (CR 702.41a) is this table's sentence by rewrite
+(``engine/affinity.py``), and every line a card prints is applied, not the
+first (CR 601.2f; CR 702.41b for two affinities).
 
 Split out of ``engine/cost_modifiers.py`` at the 2,000-line cap.
 ``cost_modifiers.cost_reduction_for_cast`` folds these in with the board's
