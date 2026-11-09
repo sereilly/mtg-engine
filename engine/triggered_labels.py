@@ -703,6 +703,28 @@ TRIGGERED_LABELS: dict[str, str] = {
     # `triggered_damage` (`target_loses_life`) nor a gain's bucket, for Mirror
     # Universe's reason on the activated side; its category's own word.
     "set_life_total": "triggered_life",
+    # --- Mirrodin, at its promotion rehearsal ----------------------------
+    # Four leaves the grammar reads that had no row, so each reached the
+    # client as the `spell_pattern` marker; each takes the bucket its nearest
+    # shipped neighbour already has.
+    # Chimney Imp: "When this creature dies, target opponent puts a card from
+    # their hand on top of their library." Beside `put_target_on_library_top`
+    # and `shuffle_hand_into_library`.
+    "put_hand_cards_on_library": "triggered_library",
+    # Duskworker: "Whenever this creature becomes blocked, regenerate it."
+    # `grant_regeneration_to_target_creature`'s bucket, as the activated
+    # table files the two together (`activated_regenerate`).
+    "grant_regeneration_to_self": "triggered_regenerate",
+    # Neurok Familiar: "When this creature enters, reveal the top card of
+    # your library. If it's an artifact card, put it into your hand.
+    # Otherwise, put it on the bottom of your library." Beside
+    # `reveal_top_sorting_by_filter` and `look_top_pick_to_hand`.
+    "reveal_top_to_hand_or_bottom": "triggered_look",
+    # Vulshok Battlemaster: "When this creature enters, attach all Equipment
+    # on the battlefield to it." No triggered bucket names an attachment;
+    # its grammar category's own word (`attachments`), the way
+    # `change_event_object_targets` reads `triggered_retargeting`.
+    "attach_all_to_source": "triggered_attachments",
 }
 
 # The wrapper kinds whose label depends on what triggered them: `may` wraps
@@ -740,6 +762,12 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # sibling shape), which is `creature_blocks_or_blocked_by` one narrowing
     # over and takes its bucket.
     ("creature_becomes_blocked", "may"): "triggered_combat",
+    # Psychic Membrane (MRD, at its promotion rehearsal): "Whenever this
+    # creature blocks, you may draw a card." The other side of the row above
+    # and the narrower half of `creature_blocks_or_blocked_by`, so the same
+    # moment's bucket; without a row the `may` read the `spell_pattern`
+    # marker, a leaf's bucket.
+    ("creature_blocks", "may"): "triggered_combat",
     # Gustcloak Savior (ONS): "Whenever **a creature you control** becomes
     # blocked, you may untap that creature and remove it from combat." The
     # board-wide reading of the row above, and the same moment.

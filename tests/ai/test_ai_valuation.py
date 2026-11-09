@@ -544,6 +544,16 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # concentrates where no share kills; the Scourge creature tests'
         # W2G5 section holds the boards.
         "Skirk Volcanist",
+        # Reviewed at Mirrodin's promotion rehearsal, by running it, and it
+        # adds nothing. Wurmskin Forger: "When this creature enters,
+        # distribute three +1/+1 counters among one, two, or three target
+        # creatures" - Shambling Swarm's road (a trigger, announced by
+        # `Game._default_trigger_division` for a seat nobody asks) with
+        # Elven Rite's sign: "you" off the counters (CR 122.1a), as Bounty of
+        # the Hunt and Elven Rite. Driven headless beside its controller's
+        # Grizzly Bears and an opponent's Hill Giant, it put two on the Bears
+        # and one on itself and none on the Giant.
+        "Wurmskin Forger",
     }
     assert set(described) <= reviewed, sorted(set(described) - reviewed)
 

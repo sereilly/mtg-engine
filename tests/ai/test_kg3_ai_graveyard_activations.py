@@ -132,6 +132,24 @@ _BOARDS = {
         dict(graveyard=["Eternal Dragon"], lands=["Plains"] * 5, step="upkeep"),
         (["Eternal Dragon"], ["Plains"] * 5, []),
     ),
+    # Mirrodin, at its promotion rehearsal. Grim Reminder is Shard Phoenix's
+    # shape at {B}{B} ("Return this card from your graveyard to your hand.
+    # Activate only during your upkeep."): two Swamps pay it.
+    "Grim Reminder": (
+        dict(graveyard=["Grim Reminder"], lands=["Swamp"] * 2, step="upkeep"),
+        (["Grim Reminder"], ["Swamp"] * 2, []),
+    ),
+    # Nim Devourer: "{B}{B}: Return this card from your graveyard to the
+    # battlefield, then sacrifice a creature. Activate only during your
+    # upkeep." Necrosavant's trade the other way round — the creature is
+    # given up after the return — so the Llanowar Elves goes and the 4/1
+    # stays; with no other creature the sacrifice would be the Devourer
+    # itself.
+    "Nim Devourer": (
+        dict(graveyard=["Nim Devourer"], lands=["Swamp"] * 2, mine=["Llanowar Elves"],
+             step="upkeep"),
+        ([], ["Nim Devourer", *["Swamp"] * 2], []),
+    ),
 }
 
 #: Glory's is a shield: worth activating only where something is coming,
@@ -185,6 +203,16 @@ def test_an_ability_the_board_cannot_pay_for_is_never_proposed():
 
     assert choose_graveyard_activation_action(game, 0) is None
     assert [card.name for card in game.players[0].graveyard] == ["Coffin Puppets"]
+
+
+def test_nim_devourer_with_no_other_creature_is_not_returned():
+    """"…then sacrifice a creature": with the Devourer the only creature it
+    would be sacrificing what it just returned, two mana for nothing — the
+    rehearsal reads that and nothing is proposed."""
+    game = _board(graveyard=["Nim Devourer"], lands=["Swamp"] * 2, step="upkeep")
+
+    assert choose_graveyard_activation_action(game, 0) is None
+    assert [card.name for card in game.players[0].graveyard] == ["Nim Devourer"]
 
 
 def test_an_upkeep_ability_is_not_proposed_in_the_main_phase():
