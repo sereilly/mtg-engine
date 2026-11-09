@@ -55,7 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | SCG | 143 | 262 | 82.4% | 82.1% | 55.0% | 120 |
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| MRD *(measured)* | 291 | 456 | 83.6% | 83.3% | 61.2% | 230 |
+| MRD *(measured)* | 291 | 456 | 85.7% | 85.5% | 63.4% | 231 |
 | **All (shipped)** | **8992** | **13323** | **90.0%** | **89.5%** | **62.1%** | **7036** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -68,9 +68,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 879 | 461 | expected a subject |  |
+| 873 | 455 | expected a subject |  |
 | 196 | 101 | unrecognized effect verb |  |
-| 138 | 72 | unconsumed text |  |
+| 136 | 70 | unconsumed text |  |
 | 71 | 52 | granted ability in quotes | phase 3 (quoted abilities) |
 | 41 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -1972,6 +1972,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}, Sacrifice this artifact: Add one mana of any color. Draw a card. (Activate only as an instant.)`
 - **Chrome Mox**
   - `Imprint — When this artifact enters, you may exile a nonartifact, nonland card from your hand.`
+  - `{T}: Add one mana of any of the exiled card's colors.`
 - **Chrome Replicator**
   - `When this creature enters, if you control two or more nonland, nontoken permanents with the same name as one another, create a 4/4 colorless Construct artifact creature token.`
 - **Chromeshell Crab**
@@ -3396,6 +3397,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: This creature gets +1/+1 until end of turn.`
 - **Duplicant**
   - `Imprint — When this creature enters, you may exile target nontoken creature.`
+  - `As long as a card exiled with this creature is a creature card, this creature has the power, toughness, and creature types of the last creature card exiled with it. It's still a Shapeshifter.`
 - **Duplicity**
   - `When this enchantment enters, exile the top five cards of your library face down.`
   - `At the beginning of your upkeep, you may exile all cards from your hand face down. If you do, put all other cards you own exiled with this enchantment into your hand.`
@@ -3941,6 +3943,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Search target player's library for a card and exile it. Then that player shuffles.`
 - **Extraplanar Lens**
   - `Imprint — When this artifact enters, you may exile target land you control.`
+  - `Whenever a land with the same name as the exiled card is tapped for mana, its controller adds one mana of any type that land produced.`
 - **Extravagant Spirit**
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {1} for each card in your hand.`
 - **Extruder**
@@ -6015,6 +6018,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Target creature with flying has base power 0 until end of turn.`
 - **Isochron Scepter**
   - `Imprint — When this artifact enters, you may exile an instant card with mana value 2 or less from your hand.`
+  - `{2}, {T}: You may copy the exiled card. If you do, you may cast the copy without paying its mana cost.`
 - **Ivory Charm**
   - `• All creatures get -2/-0 until end of turn.`
   - `• Tap target creature.`
@@ -7542,6 +7546,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, you may look at the top three cards of your library, then put them back in any order.`
 - **Mirror Golem**
   - `Imprint — When this creature enters, you may exile target card from a graveyard.`
+  - `This creature has protection from each of the exiled card's card types. (Artifact, battle, creature, enchantment, instant, kindred, land, planeswalker, and sorcery are card types.)`
 - **Mirror Strike**
   - `All combat damage that would be dealt to you this turn by target unblocked creature is dealt to its controller instead.`
 - **Mirror Universe**
@@ -7760,6 +7765,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}: This creature can block an additional creature this turn.`
 - **Mourner's Shield**
   - `Imprint — When this artifact enters, you may exile target card from a graveyard.`
+  - `{2}, {T}: Prevent all damage that would be dealt this turn by a source of your choice that shares a color with the exiled card.`
 - **Mournful Zombie**
   - `{W}, {T}: Target player gains 1 life.`
 - **Mourning**
@@ -11165,6 +11171,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target player loses 4 life and you gain 4 life.`
 - **Soul Foundry**
   - `Imprint — When this artifact enters, you may exile a creature card from your hand.`
+  - `{X}, {T}: Create a token that's a copy of the exiled card. X is the mana value of that card.`
 - **Soul Kiss**
   - `{B}, Pay 1 life: Enchanted creature gets +2/+2 until end of turn. Activate no more than three times each turn.`
 - **Soul Link**
@@ -11265,6 +11272,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player casts a spell, this enchantment deals 2 damage to that player.`
 - **Spellweaver Helix**
   - `Imprint — When this artifact enters, you may exile two target sorcery cards from a single graveyard.`
+  - `Whenever a player casts a card, if it has the same name as one of the cards exiled with this artifact, you may copy the other. If you do, you may cast the copy without paying its mana cost.`
 - **Spidersilk Armor**
   - `Creatures you control get +0/+1 and have reach. (They can block creatures with flying.)`
 - **Spike Breeder**
@@ -12252,6 +12260,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Thought Lash**
   - `When a player doesn't pay this enchantment's cumulative upkeep, that player exiles all cards from their library.`
   - `Exile the top card of your library: Prevent the next 1 damage that would be dealt to you this turn.`
+- **Thought Prison**
+  - `Imprint — When this artifact enters, you may have target player reveal their hand. If you do, choose a nonland card from it and exile that card.`
+  - `Whenever a player casts a spell that shares a color or mana value with the exiled card, this artifact deals 2 damage to that player.`
 - **Thoughtbound Primoc**
   - `At the beginning of your upkeep, if a player controls more Wizards than each other player, the player who controls the most Wizards gains control of this creature.`
 - **Thoughtcast**

@@ -12,35 +12,6 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **639**
 
-## Measured sets — reported, not gated
-
-Cards in a `measured` set (see `cards/manifest.json`) that the
-compiler calls **supported** while carrying a printed line nothing
-implements. They are the debt behind that set's progress number, and
-`--hollow-lines` sees only the ones that produced an *ability part* —
-a line yielding nothing at all leaves that probe nothing to find.
-
-Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
-`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
-set nobody has implemented fires on its composition rather than on
-anything anyone did, and every ingest would arrive red.
-
-**7 unclaimed sentence(s) across 6 supported card(s).**
-
-- **Chrome Mox**
-  - `{t}: add one mana of any of the exiled card's colors`
-- **Extraplanar Lens**
-  - `whenever a land with the same name as the exiled card is tapped for mana, its controller adds one mana of any type that land produced`
-- **Isochron Scepter**
-  - `{2}, {t}: you may copy the exiled card. if you do, you may cast the copy without paying its mana cost`
-- **Mourner's Shield**
-  - `{2}, {t}: prevent all damage that would be dealt this turn by a source of your choice that shares a color with the exiled card`
-- **Soul Foundry**
-  - `{x}, {t}: create a token that's a copy of the exiled card. x is the mana value of that card`
-- **Spellweaver Helix**
-  - `whenever a player casts a card, if it has the same name as one of the cards exiled with this artifact, you may copy the other`
-  - `if you do, you may cast the copy without paying its mana cost`
-
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
