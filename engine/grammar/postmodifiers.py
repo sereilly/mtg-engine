@@ -626,6 +626,17 @@ def _parse_postmodifiers(
             ) or stream.accept_phrase("shares", "a", "color", "with", "it"):
                 d.shares_color_with_it = True
                 continue
+            # "…target permanent another player controls **that shares a
+            # card type with it**" (Confusion in the Ranks). CR 205.2a's
+            # relation to the object the pronoun names, the colour arm above
+            # one characteristic over and recorded the same way: as the
+            # printed pronoun, for the lowering that knows which object "it"
+            # is to resolve or refuse.
+            elif stream.accept_phrase(
+                "share", "a", "card", "type", "with", "it"
+            ) or stream.accept_phrase("shares", "a", "card", "type", "with", "it"):
+                d.shares_card_type_with_it = True
+                continue
             # "…creatures **that share a creature type with it**" (Mana
             # Echoes, the Crowns), "…**with the sacrificed creature**" (Endemic
             # Plague), "…a creature card **that shares a creature type with

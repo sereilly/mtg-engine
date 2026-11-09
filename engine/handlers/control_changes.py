@@ -345,6 +345,56 @@ def gain_control_of_bound_permanent(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+@effect_handler("give_control_of_attached_to_player")
+def give_control_of_attached_to_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever enchanted creature becomes the target of a spell or ability,
+    **that spell or ability's controller gains control of that creature**."
+    (Fractured Loyalty.)
+
+    "That creature" is the one the firing event was about — the Aura's host
+    as it became a target — read by the id the targeting seam froze
+    (``event_subject_permanent_id``, CR 603.10) rather than off the Aura's
+    attachment now, so a host the Aura has since fallen off is still the
+    creature the trigger named. The seat is the targeting object's
+    controller, frozen beside it (``event_subject_player``): by resolution
+    that spell may have left the stack, and nothing else remembers whose it
+    was.
+
+    Untimed (CR 611.2a; the reminder text: "This effect lasts
+    indefinitely"). The contribution's source is the Aura's *card*, not the
+    Aura permanent, because an Aura leaving ends every contribution its
+    permanent recorded (``control_seam.end_control_changes_from``, Control
+    Magic's rule) — which this one must survive. A creature that has left, or
+    no seat recorded, hands nothing to anybody.
+    """
+    from ..control import change_control
+
+    card_name = getattr(context.card, "name", "Effect")
+    frozen = context.trigger_context or {}
+    host = game.permanent_by_id(frozen.get("event_subject_permanent_id"))
+    if host is None or not game.is_on_battlefield(host):
+        game.log.append(f"{card_name}: the creature it named is gone")
+        return True, "resolved"
+    seat = frozen.get(str(instruction.payload.get("who") or ""))
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        game.log.append(f"{card_name}: no seat was recorded")
+        return True, "resolved"
+    if seat == game.controller_index_of(host):
+        game.log.append(
+            f"{host.card.name} is already controlled by {game.players[seat].name}"
+        )
+        return True, "resolved"
+    if game.cant_gain_control(host, game.players[seat]):
+        game.log.append(f"{card_name}: {host.card.name} can't change controllers")
+        return True, "resolved"
+    change_control(host, seat, source=context.card, until_eot=False)
+    game._sync_control()
+    game.log.append(
+        f"{game.players[seat].name} gains control of {host.card.name}"
+    )
+    return True, "resolved"
+
+
 @effect_handler("give_control_of_source_to_player")
 def give_control_of_source_to_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target opponent gains control of this creature." (Chaos Lord.)
@@ -1011,7 +1061,18 @@ def exchange_control_of_bound(game: Game, instruction: OracleInstruction, contex
     from ..control import change_control
 
     card = context.card
-    first = game.permanent_by_id(context.results.get(instruction.payload["first_from"]))
+    if instruction.payload.get("first") == "event_subject":
+        # "…Exchange control of **those permanents**." (Confusion in the
+        # Ranks.) One side is the object the firing event was about, frozen
+        # by id at the fire site (CR 603.10), and the other the pick the step
+        # in front of this one recorded.
+        first = game.permanent_by_id(
+            (context.trigger_context or {}).get("event_subject_permanent_id")
+        )
+    else:
+        first = game.permanent_by_id(
+            context.results.get(instruction.payload["first_from"])
+        )
     second = game.permanent_by_id(context.results.get(instruction.payload["second_from"]))
     if first is None or second is None or first is second:
         game.log.append(

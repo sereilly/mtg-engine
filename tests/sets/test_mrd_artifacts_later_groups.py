@@ -139,6 +139,176 @@ def test_w1g2_duskworker_regenerates_when_blocked_and_pumps_for_three(set_pool):
 # ==== W1G9 ==========================================================
 # W1G9's tests go between this line and the "end W1G9" line.
 
+from engine import Game as _w1g9_Game, PlayerState as _w1g9_PlayerState
+from engine.models import Permanent as _w1g9_Permanent
+from tests.helpers import resolve_stack as _w1g9_resolve_stack
+
+
+def _w1g9_scales_board(set_pool, *, theirs=(), interactive=()):
+    """Culling Scales (mana value 3) and a Forest on seat 0; *theirs* (LEA
+    names) on seat 1."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    scales = _w1g9_Permanent(card=mrd["Culling Scales"])
+    game = _w1g9_Game(players=[
+        _w1g9_PlayerState(
+            name="P0", battlefield=[scales, _w1g9_Permanent(card=lea["Forest"])]
+        ),
+        _w1g9_PlayerState(
+            name="P1", battlefield=[_w1g9_Permanent(card=lea[n]) for n in theirs]
+        ),
+    ])
+    game.interactive_seats = set(interactive)
+    return game, scales
+
+
+def test_w1g9_culling_scales_destroys_the_lowest_nonland_permanent(set_pool):
+    """"…destroy target nonland permanent with the lowest mana value." The
+    Forest (mana value 0) is a land and out of the set; the Elves (1) are the
+    lowest of what is left, the Bears (2) and the Scales (3) survive."""
+    game, scales = _w1g9_scales_board(
+        set_pool, theirs=["Llanowar Elves", "Grizzly Bears"]
+    )
+    game.resolve_upkeep(0)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert [c.name for c in game.players[1].graveyard] == ["Llanowar Elves"]
+    assert {p.card.name for p in game.all_permanents()} == {
+        "Culling Scales", "Forest", "Grizzly Bears",
+    }
+    assert "Culling Scales destroyed Llanowar Elves" in game.log
+
+
+def test_w1g9_culling_scales_offers_only_the_tied_lowest(set_pool):
+    """The picker (CR 601.2c) offers the permanents tied for lowest and
+    nothing else — "If two or more permanents are tied for lowest, target any
+    one of them." An interactive controller picks; the Giant (4) is never on
+    offer."""
+    game, _ = _w1g9_scales_board(
+        set_pool, theirs=["Llanowar Elves", "Birds of Paradise", "Hill Giant"],
+        interactive=(0,),
+    )
+    game.resolve_upkeep(0)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("trigger_target", 0)
+    ]
+    offered = game.pending_choices[0].data["targets"]
+    assert sorted(t["name"] for t in offered) == ["Birds of Paradise", "Llanowar Elves"]
+    birds = next(p for p in game.all_permanents() if p.card.name == "Birds of Paradise")
+    assert game.confirm_trigger_target(0, permanent_id=birds.permanent_id) is True
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert [c.name for c in game.players[1].graveyard] == ["Birds of Paradise"]
+
+
+def test_w1g9_culling_scales_target_no_longer_lowest_is_not_destroyed(set_pool):
+    """The ruling (2004-12-01): "If the targeted permanent doesn't have the
+    lowest mana value when the ability resolves, the ability doesn't resolve
+    and the permanent isn't destroyed." A Black Lotus (0) entering in response
+    makes the targeted Elves illegal at CR 608.2b."""
+    game, _ = _w1g9_scales_board(set_pool, theirs=["Llanowar Elves"], interactive=(0,))
+    game.resolve_upkeep(0)
+    elves = next(p for p in game.all_permanents() if p.card.name == "Llanowar Elves")
+    assert game.confirm_trigger_target(0, permanent_id=elves.permanent_id) is True
+    assert game.stack, "the trigger waits on the stack for its resolution"
+    lotus = _w1g9_Permanent(card=set_pool("LEA")["Black Lotus"])
+    game._put_permanent_onto_battlefield(1, lotus, None)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert game.is_on_battlefield(elves)
+    assert game.is_on_battlefield(lotus)
+    assert not game.players[1].graveyard
+
+
+def test_w1g9_culling_scales_can_destroy_itself(set_pool):
+    """The ruling (2004-12-01): "If the lowest mana value is 3, Culling Scales
+    can destroy itself." With only a Hill Giant (4) beside it, the Scales are
+    the one legal target."""
+    game, scales = _w1g9_scales_board(set_pool, theirs=["Hill Giant"])
+    game.resolve_upkeep(0)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert not game.is_on_battlefield(scales)
+    assert [c.name for c in game.players[0].graveyard] == ["Culling Scales"]
+
+
+def _w1g9_choker_game(set_pool):
+    from engine.named_counters import counters_on
+
+    choker = _w1g9_Permanent(card=set_pool("MRD")["Jinxed Choker"])
+    game = _w1g9_Game(players=[
+        _w1g9_PlayerState(name="P0", battlefield=[choker]),
+        _w1g9_PlayerState(name="P1"),
+    ])
+    game.enforce_mana_costs = False
+    return game, choker, (lambda: counters_on(choker, "charge"))
+
+
+def test_w1g9_jinxed_choker_end_step_hands_itself_over_with_a_counter(set_pool):
+    """"At the beginning of your end step, target opponent gains control of
+    this artifact and puts a charge counter on it." Then the new controller's
+    upkeep deals them damage equal to the counters — the ruling (2004-12-01):
+    "'You' is always Jinxed Choker's current controller." """
+    game, choker, charge = _w1g9_choker_game(set_pool)
+    game.resolve_end_step(0)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert game.controller_index_of(choker) == 1
+    assert charge() == 1
+    assert "P1 gains control of Jinxed Choker" in game.log
+
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert [p.life for p in game.players] == [20, 19]
+
+    # And back again at P1's end step, with a second counter.
+    game.resolve_end_step(1)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert game.controller_index_of(choker) == 0
+    assert charge() == 2
+
+
+def test_w1g9_jinxed_choker_activation_chooses_put_or_remove_on_resolution(set_pool):
+    """"{3}: Put a charge counter on this artifact or remove one from it." The
+    ruling (2004-12-01): "you choose to either add or remove a counter when the
+    ability resolves." An interactive controller is asked as it resolves and
+    removes one; a seat nobody asks takes the first printed option."""
+    game, choker, charge = _w1g9_choker_game(set_pool)
+    game.resolve_end_step(0)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert charge() == 1
+
+    game.interactive_seats = {1}
+    logged = len(game.log)
+    game.activate_permanent_ability(1, "Jinxed Choker")
+    # Announced with nothing chosen, and asked as it resolves (CR 608.2d):
+    # the object is held on the stack while the answer is owed.
+    assert game.log[logged:] == [
+        "Jinxed Choker ability added to stack",
+        "Jinxed Choker ability is resolving, awaiting a choice",
+    ]
+    assert [item.resolution_held for item in game.stack] == [True]
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("mode_choice", 1)
+    ]
+    assert game.pending_choices[0].data["labels"] == [
+        "put a charge counter", "remove a charge counter",
+    ]
+    assert game.resolve_pending_choice("mode_choice", 1, mode_index=1)
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert charge() == 0
+
+    game.interactive_seats = set()
+    game.activate_permanent_ability(1, "Jinxed Choker")
+    _w1g9_resolve_stack(game)
+    game._settle()
+    assert charge() == 1
+
+
 # ==== end W1G9 ======================================================
 
 

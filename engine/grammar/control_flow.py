@@ -237,6 +237,71 @@ def _attach_tied_life_draw(stream: TokenStream, steps: list[ast.Statement]) -> b
     return True
 
 
+def _attach_tied_lowest_life_choice(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """``…the player with the lowest life total gains control of this
+    creature. If two or more players are tied for lowest life total, you
+    choose one of them, and that player gains control of this creature.``
+    (Loxodon Peacekeeper.)
+
+    The second sentence is the *other arm* of the first, for
+    :func:`_attach_tied_life_draw`'s reason: "the player with the lowest life
+    total" is strict and names nobody on a tie, and this sentence says who the
+    tie goes to — one of the tied players, chosen by the ability's controller
+    (CR 608.2d). Both arms hand the same permanent over, so the pair is one
+    hand-over to a seat described as "the lowest, or the one you choose among
+    the lowest": the first sentence is rewritten in place to name that seat
+    and no step is added — two would move the creature twice.
+
+    **Guarded on both halves.** The sentence in front must be a control change
+    to the least-life seat, and the tie arm's hand-over must be that sentence
+    word for word with "that player" for its seat: an arm handing over
+    something else is a different card. Refuses without consuming.
+    """
+    last = steps[-1] if steps else None
+    if not (
+        isinstance(last, ast.GainControl)
+        and last.gained_by is not None
+        and last.gained_by.kind == "least_life"
+    ):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "if", "two", "or", "more", "players", "are", "tied", "for", "lowest",
+        "life", "total",
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_phrase("you", "choose", "one", "of", "them"):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return False
+    try:
+        again = parse_statement(stream, top_level=False)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    if not (
+        isinstance(again, ast.GainControl)
+        and again.gained_by is not None
+        and again.gained_by.kind == "that_player"
+        and replace(again, gained_by=last.gained_by) == last
+        and (stream.exhausted or stream.at_punct(".", ";"))
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(".")
+    steps[-1] = replace(
+        last, gained_by=replace(last.gained_by, kind="least_life_chosen_on_tie")
+    )
+    return True
+
+
 def _attach_tied_for_fewest(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     """``The player who revealed the fewest items then loses half their life,
     rounded up. If two or more players are tied for fewest, each loses half

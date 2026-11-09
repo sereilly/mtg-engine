@@ -439,6 +439,33 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     placement = ast.PutCounter(
         subject, counter, count, up_to, then_double=then_double, chooser=chooser,
     )
+    # "Put a charge counter on this artifact **or remove one from it**."
+    # (Jinxed Choker.) The other arm of a choice made as the ability resolves —
+    # the card's ruling (2004-12-01): "you choose to either add or remove a
+    # counter when the ability resolves" — so it is the same ``ast.OneOf`` the
+    # choice of kinds below builds, and the same resolution-time prompt.
+    # "One" is the elided "<kind> counter" of the arm in front of it and "it"
+    # the object that arm named, so both are read off the placement rather
+    # than parsed: a removal naming another kind or another object would be a
+    # different sentence, and only these words are claimed. A placement with
+    # a rider (a count, "up to", a doubling, a chooser) refuses, because the
+    # elided noun would have to carry it too.
+    remove_mark = stream.mark()
+    if (
+        len(alternatives) == 1
+        and not then_double
+        and not up_to
+        and chooser is None
+        and count == ast.Fixed(1)
+        and stream.accept_phrase("or", "remove", "one", "from", "it")
+    ):
+        if not (stream.exhausted or stream.at_punct(".", ";")):
+            stream.reset(remove_mark)
+        else:
+            return ast.OneOf(
+                (placement, ast.RemoveCounter(subject, counter, ast.Fixed(1))),
+                (f"put a {counter} counter", f"remove a {counter} counter"),
+            )
     if len(alternatives) > 1:
         # A choice between kinds is the modal handler's question, so it lowers
         # onto `ast.OneOf` — the same node "sacrifice a creature **or** discard

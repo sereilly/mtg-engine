@@ -211,6 +211,9 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         # set, so a lowering that does not lift it out and resolve the pronoun
         # refuses the phrase rather than sweeping without the narrowing.
         payload["shares_color_with_it"] = True
+    if self.shares_card_type_with_it:
+        # Emitted for the reason directly above: outside every testable set.
+        payload["shares_card_type_with_it"] = True
     if self.colors_of_sacrificed_for_cost:
         # Emitted for the reason directly above: outside every testable set,
         # so the phrase refuses unless a lowering lifts it out and names the

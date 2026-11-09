@@ -239,6 +239,14 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         # tie names nobody here exactly as it does above.
         if stream.accept_phrase("with", "the", "highest", "life", "total"):
             return ast.PlayerRef("most_life")
+        # "…**the player with the lowest life total** gains control of this
+        # creature." (Loxodon Peacekeeper.) The same described seat at the
+        # other extreme, and strict like it: a tie names nobody here. What a
+        # tie does is the card's next sentence, which is read as this seat's
+        # other arm (``control_flow._attach_tied_lowest_life_choice``); with
+        # no such sentence nothing lowers the bare kind, so the line refuses.
+        if stream.accept_phrase("with", "the", "lowest", "life", "total"):
+            return ast.PlayerRef("least_life")
         # "…**the player who controls the most creatures** gains control of
         # this creature." (Wild Mammoth.) The same description over a board
         # count instead of a life total, and the same reading: answered by the

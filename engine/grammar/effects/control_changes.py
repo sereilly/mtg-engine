@@ -236,6 +236,20 @@ def _parse_exchange_control(stream: TokenStream) -> ast.Statement:
     first = parse_recipient(stream)
     if first is None:
         raise stream.error("expected what to exchange control of")
+    # "…chooses target permanent another player controls that shares a card
+    # type with it. **Exchange control of those permanents.**" (Confusion in
+    # the Ranks.) One plural back-reference naming both sides at once — the
+    # object the sentence before it was about and the one it chose — so it
+    # fills both slots, and only a lowering that knows both referents admits
+    # it. Claimed only as the whole sentence.
+    if (
+        isinstance(first, ast.TargetSpec)
+        and first.quantifier == "those"
+        # "permanents" narrows nothing (CR 110.1), so the bare filter.
+        and first.filter == ast.ObjectFilter()
+        and (stream.exhausted or stream.at_punct(".", ";"))
+    ):
+        return ast.ExchangeControl(first, first)
     if not stream.accept_word("and"):
         raise stream.error("expected 'and' between the two permanents exchanged")
     second = parse_recipient(stream)

@@ -129,6 +129,11 @@ TRIGGERED_LABELS: dict[str, str] = {
     # `activated_give_control`, so the trigger takes the same word its
     # neighbours above do.
     "give_control_of_source_to_player": "triggered_control",
+    # "Whenever enchanted creature becomes the target of a spell or ability,
+    # that spell or ability's controller gains control of that creature."
+    # (Fractured Loyalty.) The host handed over rather than the source — the
+    # same family's word.
+    "give_control_of_attached_to_player": "triggered_control",
     # --- Homelands ------------------------------------------------------
     # Two untap denials whose trigger is a combat moment rather than an
     # upkeep (Labyrinth Minotaur blocks, Spectral Bears attacks), the

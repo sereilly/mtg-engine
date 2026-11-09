@@ -758,6 +758,22 @@ def result_is_damage_dealt(card, result_key: str) -> bool:
     )
 
 
+def result_receives_source(card, result_key: str) -> bool:
+    """Whether a later step of *card* hands its own source to the seat its
+    program records under *result_key* ("…you choose one of them, and **that
+    player** gains control of this creature", Loxodon Peacekeeper)."""
+    from .ai_weighed_cast import _walk_program
+    from .grammar.lowering._record_keys import CHOSEN_PLAYER
+
+    if card is None or result_key != CHOSEN_PLAYER:
+        return False
+    return any(
+        step.kind == "give_control_of_source_to_player"
+        and (step.payload or {}).get("who") == "chosen"
+        for step in _walk_program(compile_card_oracle(card))
+    )
+
+
 def cast_choice_pick(game, chooser: int, options: list[int]) -> int | None:
     """Which of this turn's casts (ledger positions) a chooser names when the
     damage that cast dealt becomes damage to its caster (Backdraft: "…deals
@@ -789,6 +805,8 @@ def player_choice_pick(game, choice, live: list[int]) -> int | None:
       player equal to half the damage dealt by one of those sorcery
       spells"): an opponent before the chooser itself, and among them the
       one whose casts would hand it the most damage.
+    * **A seat the card then hands its own source to** (Loxodon Peacekeeper's
+      tie for lowest life total): the chooser, where it is one of them.
     * **"Which opponent"** — an unnamed "an opponent" at a table of three or
       more (CR 601.7a / 608.2d, ``handlers/player_choices.ask_which_opponent``):
       what that opponent then gets or decides is done for the chooser's
@@ -819,6 +837,11 @@ def player_choice_pick(game, choice, live: list[int]) -> int | None:
             return (seat != chooser, most)
 
         return _first_best(live, harm)
+    # **A seat the card then hands itself to**, the chooser among them (Loxodon
+    # Peacekeeper's tie for lowest life total): naming itself keeps the
+    # permanent where it is, and naming anybody else gives it away.
+    if chooser in live and result_receives_source(card, result_key):
+        return chooser
     return _first_best(live, lambda seat: -seat_standing(game, seat))
 
 

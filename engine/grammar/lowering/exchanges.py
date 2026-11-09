@@ -35,9 +35,14 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (_optional_slot_key, _describe_targets, _filter_payload,
                       _is_source, _is_target)
+from ._events import CHOSEN_PERMANENT, _EVENT_SUBJECT_OBJECTS
 
 
-def _lower_exchange_control(node: ast.ExchangeControl) -> tuple[OracleInstruction, ...]:
+def _lower_exchange_control(
+    node: ast.ExchangeControl,
+    event: str | None = None,
+    produced: frozenset[str] = frozenset(),
+) -> tuple[OracleInstruction, ...]:
     """"Exchange control of target artifact, creature, or land you control and
     target permanent an opponent controls…" (Gauntlets of Chaos, CR 701.12b.)
 
@@ -46,10 +51,43 @@ def _lower_exchange_control(node: ast.ExchangeControl) -> tuple[OracleInstructio
     halves and the handler can re-check each at resolution (CR 608.2b), while
     ``filter`` stays the shape every one-slot reader already expects.
 
-    ``shares_type`` and the printed type list travel as payload rather than as
+    shares_type`` and the printed type list travel as payload rather than as
     part of the kind, because a card exchanging (say) two enchantments would be
     this same effect with a different noun phrase.
     """
+    # "Whenever an artifact, creature, or enchantment enters, its controller
+    # chooses target permanent another player controls that shares a card
+    # type with it. **Exchange control of those permanents.**" (Confusion in
+    # the Ranks.) One plural back-reference filling both slots
+    # (``effects/control_changes._parse_exchange_control``): the object the
+    # firing event was about, frozen by id, and the permanent the step in
+    # front of this one chose. Both producers are required — under any other
+    # event, or with no pick recorded, "those permanents" names nobody — and
+    # the exchange is ``exchange_control_of_bound``'s, CR 701.12a's atomicity
+    # and all: a side that has left means no part of it happens (the card's
+    # ruling, 2004-12-01: "The permanents are exchanged only if they're both
+    # on the battlefield when the ability resolves").
+    if (
+        isinstance(node.first, ast.TargetSpec)
+        and node.first.quantifier == "those"
+        and node.second is node.first
+    ):
+        if event not in _EVENT_SUBJECT_OBJECTS or CHOSEN_PERMANENT not in produced:
+            raise LoweringError(
+                "\"those permanents\" needs the event's object and a chosen "
+                "permanent", node=node,
+            )
+        if node.shares_a_type or node.destroy_attached_auras:
+            raise LoweringError(
+                "an exchange of the event's object and a pick carries no rider",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "exchange_control_of_bound", "",
+                {"first": "event_subject", "second_from": CHOSEN_PERMANENT},
+            ),
+        )
     # "Exchange control of **this creature** and up to one target creature an
     # opponent controls." (Gilded Drake.) The first side is not chosen at all:
     # it is the ability's own source, which the resolution already holds. So

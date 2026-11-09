@@ -609,6 +609,24 @@ def parse_player_subject_verb(
             return None
         if isinstance(moved, ast.PutOntoBattlefield):
             return dataclasses.replace(moved, actor=source_spec)
+        # "…target opponent gains control of this artifact **and puts a
+        # charge counter on it**." (Jinxed Choker.) A counter has no
+        # controller and no owner (CR 122.1), so who places it changes nothing
+        # the placement does — the sentence is the imperative's, with the seat
+        # printed. Claimed only where the counter goes on an object the line
+        # already named ("it", "this artifact"): a recipient a seat word
+        # narrows ("a creature they control") would be read against the
+        # ability's controller where the printed pronoun names the subject,
+        # so that shape keeps refusing here.
+        if (
+            isinstance(moved, ast.PutCounter)
+            and isinstance(moved.subject, ast.TargetSpec)
+            and moved.subject.quantifier in ("it", "this")
+            and moved.subject.filter.controller is None
+            and moved.subject.filter.owner is None
+            and moved.chooser is None
+        ):
+            return moved
         stream.reset(put_mark)
         return None
     if token.text in ("sacrifices", "sacrifice") and isinstance(source_spec, ast.PlayerRef):

@@ -53,6 +53,13 @@ def superlative_pick(
     if not isinstance(spec, ast.TargetSpec) or spec.filter.superlative is None:
         return None
     superlative = spec.filter.superlative
+    if superlative.among is not None and spec.targeted:
+        # "Destroy **target** nonland permanent with the lowest mana value."
+        # (Culling Scales.) A target restriction rather than a pick: the
+        # picker offers the tied extremes and the CR 608.2b re-check refuses
+        # one that stopped being lowest, both through ``superlative_among``,
+        # so the caller's ordinary target branch is the one that carries it.
+        return None
     if superlative.among is not None:
         # "…with the greatest power **among creatures on the battlefield**"
         # (Topple) names its own comparison set, which makes it a restriction

@@ -430,7 +430,7 @@ def lower_statement(
         # event, for the reason the two readers above give: the sentence is
         # printed inside an offer's branch, so it is not the ability's whole
         # effect and `dispatch_event` is already None there.
-        return _lower_gain_control(statement, produced, event)
+        return _lower_gain_control(statement, produced, event, event_subject)
 
 
     if isinstance(statement, ast.ModalNode):
@@ -752,7 +752,7 @@ def lower_statement(
         announced = _lower_announced_choice(statement)
         if announced is not None:
             return announced
-        return _lower_choose_permanent(statement, produced)
+        return _lower_choose_permanent(statement, produced, event)
 
     if isinstance(statement, ast.Exile):
         # `produced` is the gate on "exile **that token**": the phrase names

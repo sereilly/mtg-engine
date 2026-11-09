@@ -184,6 +184,70 @@ def choose_opponent(
     return True, "resolved"
 
 
+#: How each printed characteristic of a *seat* is read for
+#: ``choose_player_by_superlative``. Life is the one a card prints today.
+_SEAT_SUPERLATIVE_READS = {
+    "life": lambda game, seat: int(game.players[seat].life),
+}
+
+
+@effect_handler("choose_player_by_superlative")
+def choose_player_by_superlative(
+    game: "Game", instruction: "OracleInstruction", context: "OracleExecutionContext"
+) -> tuple[bool, str]:
+    """"…**the player with the lowest life total** gains control of this
+    creature. If two or more players are tied for lowest life total, **you
+    choose one of them**, and that player gains control of this creature."
+    (Loxodon Peacekeeper.)
+
+    The seat a superlative describes, asked of the board as the ability
+    resolves (the card prints no "target", so nothing was chosen earlier).
+    The living players tied at the printed extreme are the candidates — the
+    players who have lost are not in the comparison (CR 800.4a), the reading
+    ``_conditions._strict_leader`` takes — and one candidate is recorded
+    without asking, for ``choose_player_who_cast``'s reason. A tie is CR
+    608.2d's choice by the ability's controller ("you"), through the
+    ``player_choice`` prompt every resolution-time pick of a player uses; the
+    tied players may include the controller.
+
+    The key is written first, so a table with nobody left reads ``None`` and
+    the hand-over behind this step names nobody.
+    """
+    payload = instruction.payload
+    key = str(payload["result_key"])
+    context.results[key] = None
+    card_name = getattr(context.card, "name", "")
+    superlative = dict(payload.get("superlative") or {})
+    read = _SEAT_SUPERLATIVE_READS.get(str(superlative.get("characteristic")))
+    if read is None:
+        return False, f"no seat superlative over {superlative.get('characteristic')!r}"
+    living = [
+        seat for seat, player in enumerate(game.players) if not player.lost
+    ]
+    if not living:
+        game.log.append(f"{card_name}: no player to choose")
+        return True, "resolved"
+    scores = {seat: read(game, seat) for seat in living}
+    pick = min if superlative.get("extreme") == "least" else max
+    best = pick(scores.values())
+    seats = [seat for seat in living if scores[seat] == best]
+    if len(seats) == 1:
+        context.results[key] = seats[0]
+        return True, "resolved"
+    game.log.append(
+        f"{card_name}: {', '.join(game.players[s].name for s in seats)} are tied"
+    )
+    game.arm_player_choice(
+        game.players.index(context.caster),
+        card_name=card_name,
+        prompt=str(payload.get("prompt") or "Choose one of the tied players."),
+        result_key=key,
+        seats=seats,
+        context=context,
+    )
+    return True, "resolved"
+
+
 #: The scratchpad key the seat a controller named as "an opponent" is written
 #: under when the step that spends it is a pick *another* seat makes (CR
 #: 601.7a / 602.3a / 608.2d) — read by ``permanent_choices._chooser_seat``'s
