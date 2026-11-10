@@ -613,11 +613,31 @@ class Permanent:
 
     @property
     def effective_produced_mana(self) -> tuple[str, ...]:
-        """Mana this permanent produces, honoring a land-type override.
+        """Mana this permanent produces, honoring a land-type override and the
+        per-permanent record (:meth:`_swapped_mana`) — the summary a reader
+        with no game asks (the wire's badge, a planner handed no hook).
+
+        What a **tap** makes is the tap seam's: there the record is one CR
+        616.1 substitution among the others, ordered against them over
+        :attr:`unswapped_produced_mana` (``land_mana_swaps.swapped_productions``).
+        """
+        return self._swapped_mana(self.unswapped_produced_mana)
+
+    @property
+    def unswapped_produced_mana(self) -> tuple[str, ...]:
+        """Mana this permanent produces before any CR 106.12b replacement —
+        a land-type override honoured, the per-permanent record not applied.
 
         "Enchanted land is a Swamp" (Evil Presence) / Phantasmal Terrain replace
         the land's types, so it produces only the override type's mana and loses
         its printed mana ability (CR 305.7).
+
+        The base every substitution order is applied to. Quarum Trench Gnomes'
+        record is a replacement over the production event (CR 106.12b, 614.1a)
+        like Hall of Gemstone's, so the order of the two is the land
+        controller's (CR 616.1e) — which it cannot be when one of them has
+        already been applied to the summary the other reads: a Gnomed Plains
+        beside Hall of Gemstone's {R} made only {C}.
         """
         # Only when layer 4 has actually changed the land's types: a land whose
         # types were replaced produces that type's mana instead of its printed
@@ -641,18 +661,22 @@ class Permanent:
                 # nothing else.
                 kept = self.effective_card.produced_mana
                 typed += tuple(symbol for symbol in kept if symbol not in typed)
-            return self._swapped_mana(typed)
+            return typed
         # A copy (Copy Artifact of a Mox / Sol Ring) produces the copied
         # card's mana, so read the effective card rather than the copier's own.
-        return self._swapped_mana(self.effective_card.produced_mana)
+        return self.effective_card.produced_mana
 
     def _swapped_mana(self, symbols: tuple[str, ...]) -> tuple[str, ...]:
-        """*symbols* after every "produces X instead of Y" effect on this land.
+        """*symbols* after every "produces X instead of Y" record on this land,
+        applied first — the summary :attr:`effective_produced_mana` gives a
+        reader with no game.
 
         "If target Plains is tapped for mana, it produces colorless mana instead
         of white mana." (Quarum Trench Gnomes.) A CR 611.2 continuous effect with
-        no duration, recorded on the permanent by the handler and applied here
-        because this property is the one place the engine asks what a land makes.
+        no duration, recorded on the permanent by the handler. The tap seam does
+        not read it here: it applies the record as a substitution of its own
+        (``land_mana_swaps.swapped_productions``), in whatever order the tapper's
+        request picks among the others.
 
         Applied in the order the effects were created (CR 613.7), so a second
         swap reads the first one's answer — and a symbol the land never produced
@@ -666,31 +690,6 @@ class Permanent:
         for replaced, produced in swaps:
             current = [produced if sym == replaced else sym for sym in current]
         return tuple(current)
-
-    def produced_symbol_for(self, requested: str | None) -> str | None:
-        """The symbol this land actually makes when a seat asks for *requested*.
-
-        A colour can be asked for and no longer produced. A seat names the
-        symbol the land **prints** — that is what its picker offers and what a
-        payment plan was built against — and the swaps decide what comes out,
-        so the request is mapped through the same swaps ``_swapped_mana``
-        applied rather than discarded.
-
-        The alternative, falling back to the first entry of
-        ``effective_produced_mana``, is right only on a land that makes one
-        symbol. Quarum Trench Gnomes on a Tundra swaps {W} for {C} and leaves
-        ``("U", "C")``; asking for white then paid **{U}** — the other colour,
-        not the colourless the Gnomes grant — because the printed order happens
-        to put the island first. Returns None when the request maps to nothing
-        this land makes, which is the caller's cue to pick a default.
-        """
-        if not requested:
-            return None
-        produced = self.effective_produced_mana
-        if requested in produced:
-            return requested
-        swapped = self._swapped_mana((requested,))[0]
-        return swapped if swapped in produced else None
 
     @property
     def copied_from(self) -> str | None:

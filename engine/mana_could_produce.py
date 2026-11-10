@@ -316,8 +316,11 @@ def lands_could_produce(game, *, also=()) -> dict[int, frozenset[str]]:
                 | _gained_type_symbols(game, perm)
             )
         else:
+            # Before **every** substitution, the land's own records (Quarum
+            # Trench Gnomes) included: those are substitutions too, and in
+            # any possible order (``land_mana_swaps.permanent_substitutions_on``).
             made[perm.permanent_id] = {
-                str(symbol).upper() for symbol in perm.effective_produced_mana
+                str(symbol).upper() for symbol in perm.unswapped_produced_mana
             }
 
     def substituted(seat: int, perm) -> frozenset[str]:
