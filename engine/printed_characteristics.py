@@ -241,11 +241,13 @@ def _printed_abilities_cached(
 ) -> frozenset[str]:
     """Printed keywords, including any the compiler only finds in oracle text.
 
-    Cached per distinct card: this scans every compiled instruction for every
-    known keyword, and it runs on each characteristic read.
+    Cached per distinct card: this reads every keyword line for every known
+    keyword, and it runs on each characteristic read.
     """
+    from .keyword_lines import _is_supported_keyword_line, keyword_part_ability
+    from .line_normalization import normalize_creature_line
+    from .line_rewrites import expand_ability_lines
     from .models import CardDefinition
-    from .oracle import compile_card_oracle
 
     card = CardDefinition(
         name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text=oracle_text,
@@ -253,11 +255,28 @@ def _printed_abilities_cached(
     )
     abilities = {kw.lower() for kw in keywords}
     hexproof_from_printed = bare_hexproof_printed = False
-    for instruction in compile_card_oracle(card).instructions:
+    # Every keyword line the card states, normalized, in printed order: the
+    # lines the compiler's keyword-line classifier admits, off the rewritten
+    # lines every reader of a card's lines starts from (CLAUDE.md). Read off
+    # the *lines* rather than the compiled program's ``keyword_line``
+    # instructions because only the creature front end emits those — the
+    # non-creature one claims a keyword line and emits nothing
+    # (``line_classification``), so an enchantment's or an artifact's keywords
+    # were known only from the ingested field, and a line granted to one
+    # (Balduvian Shaman's enchantment) from nowhere at all. Both front ends ask
+    # this classifier, so what is read here is exactly what either admitted.
+    stated_lines = [
+        normalize_creature_line(line)
+        for line in expand_ability_lines(
+            oracle_text, card_name=name, legendary=card.is_legendary
+        ).splitlines()
+        if line.strip() and _is_supported_keyword_line(line)
+    ]
+    for value in stated_lines:
         # **A keyword line, and nothing else.** "Does this line give *this
         # permanent* this keyword?" is a question about the line's subject, and
         # the compiler's line classifier has already answered it: a line that
-        # states the object's own keyword abilities is a ``keyword_line``
+        # states the object's own keyword abilities is a keyword line
         # (CR 702), one that gives them to it on a condition is a
         # ``conditional_static`` and one that gives them to a class of
         # permanents is a ``lord_buff`` -- the last two contributed in layer 6
@@ -277,9 +296,6 @@ def _printed_abilities_cached(
         # of them mention a keyword, and not one of the 18 gives it to the
         # permanent printing it
         # (``tests/engine/test_printed_keyword_seed.py``).
-        if instruction.kind != "keyword_line":
-            continue
-        value = instruction.value or ""
         abilities.update(_text_keywords_in(value))
         # A printed "bands with other [quality]" line (CR 702.22b) — the Wolves
         # of the Hunt token Master of the Hunt makes carries one. It cannot ride
@@ -288,6 +304,21 @@ def _printed_abilities_cached(
         # separately, exactly as the keyword-line gate admits them.
         for part in value.split(","):
             part = part.strip()
+            # **Every keyword the part names by a word**, through the reader
+            # that admitted it (``keyword_lines.keyword_part_ability``): the
+            # implemented word itself, or the keyword without the number or
+            # cost it carries. The substring scan above holds a list of the
+            # words somebody had needed back, and a keyword outside it was
+            # had only by a card whose *ingested field* named it — so a line
+            # an effect granted (CR 613.1f) gave the behaviour and not the
+            # keyword: Balduvian Shaman's "Cumulative upkeep {1}" charged the
+            # enchantment every upkeep and left it a legal target for "that
+            # doesn't have cumulative upkeep". Over both manifest roles the
+            # field already names every word this adds for a printed card
+            # (``tests/engine/test_kg5_layers_granted_keywords.py``).
+            named = keyword_part_ability(part)
+            if named is not None:
+                abilities.add(named)
             if band_quality(part) is not None:
                 abilities.add(part)
             # "Legendary landwalk" (Livonya Silone) — the same shape, and it
