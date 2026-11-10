@@ -270,16 +270,14 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
 #: superlative is that it is asked *now*: a creature under an anthem is not the
 #: one with the least toughness any more.
 #:
-#: Mana value is read off ``card`` rather than ``effective_card``, which is what
-#: this comparison has always done and is left unchanged here deliberately —
-#: CR 707.2 says a copy has the copied cost, so a Clone of a Force of Nature
-#: should answer 8 and answers 0. That is a defect in its own right and not this
-#: one's to fix inside a rename; it is reported rather than corrected, so the
-#: only behaviour this table changes is the one the new cards need.
+#: Mana value is the mana cost the permanent *has*, through layer 1
+#: (``effective_card``): CR 707.2 gives a copy the copied cost, so a Clone that
+#: is a Craw Wurm answers 6, and CR 708.2a gives a face-down creature none. It
+#: was read off ``card``, the card as printed (round kg5).
 _SUPERLATIVE_READS = {
     "power": lambda perm: int(perm.effective_power or 0),
     "toughness": lambda perm: int(perm.effective_toughness or 0),
-    "mana_value": lambda perm: int(getattr(perm.card, "cmc", 0) or 0),
+    "mana_value": lambda perm: int(getattr(perm.effective_card, "cmc", 0) or 0),
 }
 
 

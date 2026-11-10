@@ -543,16 +543,20 @@ def _source_name(context: OracleExecutionContext) -> str:
     return getattr(context.card, "name", "") or "An effect"
 
 
-def _mana_value_of(card) -> int:
-    """A card's mana value (CR 202.3), for the step that reads what a bounce
-    returned.
+def _mana_value_of(permanent) -> int:
+    """The mana value a returned permanent had (CR 202.3), for the step that
+    reads what a bounce returned.
 
-    Off the printed cost, which is the only reading available: the object being
-    asked about has left the battlefield, so there is no permanent to put through
-    the layer system and no continuous effect that could have changed the number
-    anyway (CR 202.3 — mana value is computed from the mana cost as printed).
+    Its **last known information** (CR 608.2h: the effect moved it from a
+    public zone to a hidden one), which is the permanent as it last existed on
+    the battlefield — the object the handler still holds, through layer 1. A
+    Clone that was a Craw Wurm returned as a 6 (CR 707.2), and a face-down
+    creature as a 0 (CR 708.2a; ``copies.FACE_DOWN_AS_IT_LEFT``). This read the
+    printed card — "the object has left, so there is no permanent to put
+    through the layer system" — and Aether Mutation made four Saprolings for
+    that Clone, and as many as the hidden card's cost for a face-down one.
     """
-    return int(card.cmc or 0)
+    return int(permanent.effective_card.cmc or 0)
 
 
 @effect_handler("bounce_target_creature")
@@ -708,7 +712,7 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
         # the hand a new object, and the battlefield no longer holds the old one.
         # ``_PRODUCES`` names this kind as the producer, so every path of this
         # handler that returns one creature records it.
-        context.results["returned_mana_value"] = _mana_value_of(perm.card)
+        context.results["returned_mana_value"] = _mana_value_of(perm)
         game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
         return True, "resolved"
     target = context.target
@@ -722,7 +726,7 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
     returned = resolve_target_permanent(game, context, player=target)
     bounced = game._bounce_target_creature(returned)
     if bounced and returned is not None:
-        context.results["returned_mana_value"] = _mana_value_of(returned.card)
+        context.results["returned_mana_value"] = _mana_value_of(returned)
     game.log.append(
         f"{returned.card.name} returned to its owner's hand ({_source_name(context)})"
         if bounced and returned is not None
