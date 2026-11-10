@@ -122,13 +122,11 @@ class CombatDamageStepMixin:
         # gives the combat a first-strike step, in which it deals nothing
         # (CR 510.1d). The loop above reaches blockers through attackers only.
         for defending_index, blocker_map in self.combat_blockers.items():
-            if not (0 <= defending_index < len(self.players)):
-                continue
-            defender = self.players[defending_index]
             for blocker_idx, attacker_idxs in blocker_map.items():
-                if attacker_idxs or not (0 <= blocker_idx < len(defender.battlefield)):
+                if attacker_idxs:
                     continue
-                if self._participates_in_first_strike(defender.battlefield[blocker_idx]):
+                blocker = self.permanent_at(defending_index, blocker_idx)
+                if blocker is not None and self._participates_in_first_strike(blocker):
                     return True
         return False
 
