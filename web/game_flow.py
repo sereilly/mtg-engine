@@ -38,7 +38,6 @@ from .session_store import Session
 from .seats import (
     _ai_should_hold,
     _declaration_owed,
-    _hold_priority_for_human,
     _seat_type,
     _self_should_hold,
     _winner,
@@ -285,6 +284,19 @@ def _ai_step(session: Session) -> bool:
             )
             if result.supported:
                 game.note_priority_action_taken(seat)
+                # **A land played puts nothing on the stack** (CR 305.1,
+                # 116.2a: a special action), and the seat receives priority
+                # again (CR 116.3) to go on with its main phase: the next
+                # `ai_step` asks the cast door again. The exchange below
+                # passed that priority on over an empty stack, so the
+                # person's pass — the client's default on an opponent's main
+                # phase — ended the phase (CR 117.4) before the AI cast
+                # anything after its land, and every web AI cast its spells
+                # in its second main phase. A land whose entering set a
+                # trigger off goes round like any other object.
+                if not game.stack:
+                    _auto_resolve_ai_pending(session)
+                    return False
                 # NOTE (frontend FFA pass): route through the priority-exchange
                 # cascade rather than a bare engine pass. In a 3+ player (FFA)
                 # game, the seat right after `seat` in turn order may be a
@@ -519,9 +531,32 @@ def _hold_at_flagged_step(session: Session) -> bool:
     The active player receives priority first (CR 117.3a), so in the declare
     attackers step the AI declares and answers its own priority before the
     person is handed anything (``_ai_declares_attackers``); everywhere else
-    the AI has already answered by the time this is asked (``_ai_step``).
-    The hand-off itself is ``seats._hold_priority_for_human``, which refuses
-    while the step's declaration is owed.
+    the AI has already answered over an empty stack by the time this is
+    asked (``_ai_step``; the upkeep's and the draw step's holds stop with its
+    priority open for that answer, ``turn_steps._resolve_upkeep_step`` and
+    ``_finish_beginning_phase``). Over an object on the stack it is asked
+    here, as the exchange asks the active seat whenever the stack holds one.
+
+    **Not while the step's declaration is owed** (``seats._declaration_owed``):
+    a person flagging declare blockers was handed priority before declaring a
+    single blocker (CR 509.1 is the step's turn-based action, made before
+    priority), and once they passed, the AI held priority with the blocks
+    still to come. False, and the step waits for the declaration as it would
+    unflagged; the hold is made once the blocks are in.
+
+    **Priority then goes round in turn order until a person holds it**
+    (CR 117.3d), and **each AI seat it reaches on the way is asked**, as the
+    exchange asks every AI seat it hands priority to (``_priority_round``,
+    ``_ai_respond_to_priority``): at a table of three or more the seat after
+    the active AI may be another AI. The hold passed that seat's priority on
+    unasked (``seats._hold_priority_for_human``), so an AI holding a
+    removal spell or a draw for the opponent's end step (``engine.ai_priority.
+    instant_speed_window``'s ``"end_step"``) let the moment go whenever a
+    person had flagged the step. What it puts on the stack is answered by the
+    person, who is next. And **if every player still in the game has then
+    passed in succession** with nothing on the stack (CR 117.4: the step
+    ends; a person who has left the game is skipped, CR 800.4), nothing was
+    handed to anybody: False, and the caller leaves the step.
     """
     game = session.game
     step = game.current_step
@@ -529,7 +564,21 @@ def _hold_at_flagged_step(session: Session) -> bool:
         return False
     if step == "declare_attackers" and _ai_declares_attackers(session):
         return True
-    return _hold_priority_for_human(session)
+    active = game.active_player_index
+    if not any(
+        s != active and _seat_type(session, s) == "human" and not game.players[s].lost
+        for s in range(len(game.players))
+    ):
+        return False
+    if not game._receives_priority(step) or _declaration_owed(game):
+        return False
+    if game.priority_player_index != active:
+        game.start_priority_window(active)
+    if game.stack and _seat_type(session, active) == "ai":
+        result = _ai_respond_to_priority(session, active)
+    else:
+        result = game.pass_priority(active)
+    return _priority_round(session, result, leave_step=False) != "all_passed_empty"
 
 
 def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
@@ -628,11 +677,26 @@ def _auto_advance_after_all_passed(session: Session, pass_result: str | None) ->
 
 
 def _run_priority_exchange(session: Session, acting_seat: int) -> None:
-    result = session.game.pass_priority(acting_seat)
+    """*acting_seat* passes, and priority goes round the table
+    (:func:`_priority_round`) until a person holds it or the step is left."""
+    _priority_round(session, session.game.pass_priority(acting_seat))
 
+
+def _priority_round(session: Session, result: str | None, *, leave_step: bool = True) -> str | None:
+    """Carry a priority round on from a pass whose engine answer is *result*:
+    each AI seat handed priority answers it (``_ai_respond_to_priority``),
+    the active AI only over an object on the stack; an AI seat's question a
+    resolution asked is answered and priority goes on; it stops with a
+    person holding priority or owing an answer. Returns the last pass's
+    answer.
+
+    With every player passed over an empty stack (CR 117.4) the step is left
+    here (``_auto_advance_after_all_passed``) — unless *leave_step* is False,
+    for a caller that leaves it itself (``_hold_at_flagged_step``'s)."""
     while True:
         _auto_resolve_ai_pending(session)
-        _auto_advance_after_all_passed(session, result)
+        if leave_step:
+            _auto_advance_after_all_passed(session, result)
 
         if result == "awaiting_choice":
             # The resolution stopped to ask somebody something, so nobody has
@@ -661,6 +725,7 @@ def _run_priority_exchange(session: Session, acting_seat: int) -> None:
             continue
 
         break
+    return result
 
 
 def _advance_ai_turn(session: Session) -> None:
@@ -946,10 +1011,10 @@ def _advance_phase(session: Session) -> None:
             session,
             lambda: game.advance_combat_phase(allow_damage_skip=not hold_damage),
         )
-        # On the AI's turn the engine leaves priority with the active AI; hand it to
-        # the human so they can act at the step they flagged (mirrors the upkeep/draw
-        # and declare-blockers holds). On the human's own turn the active player is
-        # already the human, so this is a no-op.
+        # On the AI's turn the engine leaves priority with the active AI; hand it
+        # round to the human so they can act at the step they flagged
+        # (`_hold_at_flagged_step`, the other steps' hold). On the human's own
+        # turn the active player is already the human, so this is a no-op.
         if (
             hold_damage
             and game.current_turn_phase == "combat"
@@ -957,7 +1022,7 @@ def _advance_phase(session: Session) -> None:
             and game.combat_damage_resolved
             and _seat_type(session, game.active_player_index) != "human"
         ):
-            _hold_priority_for_human(session)
+            _hold_at_flagged_step(session)
         return
     if phase == "postcombat_main":
         if not _leave_step(session, game._close_current_priority_step):

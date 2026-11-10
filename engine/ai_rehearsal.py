@@ -93,6 +93,15 @@ _GAME_BOOKKEEPING = frozenset({
     # (`same_position`). Read as a field it counted that trip a second time,
     # so every cast was a lasting change.
     "hand_sizes_at_turn_start",
+    # What each step left owed as the next began (``ai_simulator.
+    # _SimulatedGame._steps_left_owing``): the simulator's honesty
+    # instrument, kept in the instance's ``__dict__`` and so only a simulated
+    # game's. Read as a field it was a difference between the simulator's
+    # positions and the web's, and two scratch copies whose run-out left a
+    # step around something differently "changed" by the count alone (the
+    # census over sim_fingerprint's runs: read in every digest, different in
+    # four rehearsals, no answer moved).
+    "_w2g6_steps_left_owing",
 })
 
 #: Rehearsals that **raised**, by what was being rehearsed and what the

@@ -18,7 +18,6 @@ from .game_flow import _advance_ai_turn, _advance_phase, _ai_step, _hold_at_flag
 from .seats import _seat_type
 from .turn_steps import (
     _advance_after_upkeep_choices,
-    _begin_turn,
     _can_pay_upkeep_choice,
     _cleanup_discard_requirement,
     _clear_untap_selection,
@@ -28,6 +27,7 @@ from .turn_steps import (
     _pause_beginning_phase,
     _resolve_upkeep_step,
     _start_next_turn,
+    _turn_after_its_bookkeeping,
     _untap_land_selection_requirement,
     _upkeep_decisions_pending,
     _upkeep_mana_prevention_pending,
@@ -201,12 +201,18 @@ def _action_time_vault_skip(session, req, seat_type):
 
 @action_handler("time_vault_decline")
 def _action_time_vault_decline(session, req, seat_type):
-    # Decline the skip and take the turn normally.
+    # Decline the skip and take the turn normally — from the decision the
+    # turn stopped on, not from its beginning: the turn's bookkeeping has
+    # already run (`turn_steps._turn_after_its_bookkeeping`). Only while the
+    # skip is being asked, as the skip itself is: sent at any other moment of
+    # the seat's turn it began the turn again, untap step and all.
     if req.seat != session.current_turn:
         raise HTTPException(status_code=400, detail="not your turn")
+    if not session.time_vault_pending:
+        raise HTTPException(status_code=400, detail="no Time Vault skip is pending for you")
     session.time_vault_resolved_turn = session.game.turn
     session.time_vault_pending = []
-    _begin_turn(session, req.seat, defer_untap_selection=True)
+    _turn_after_its_bookkeeping(session, req.seat, defer_untap_selection=True)
 
 @action_handler("untap_select", human_only=HUMAN_ONLY)
 def _action_untap_select(session, req, seat_type):

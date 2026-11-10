@@ -28,8 +28,9 @@ The record is two ``Game`` fields:
   been spent (``_compute_next_active_player``), so the effect waits for the
   next turn the player actually takes (CR 723.1b). Dropped as the next turn
   begins (CR 723.1: "the effect doesn't end until the beginning of the next
-  turn"). Stamped with the turn number, because the web's Time Vault decline
-  begins a turn twice and the second beginning is not the next turn.
+  turn"). Stamped with the turn number, so a turn skipped once it has begun
+  (Time Vault) hands the control on to the next turn actually taken
+  (:func:`return_skipped_control`).
 
 Neither field is bookkeeping for ``ai_rehearsal.position_digest``: the pending
 record is the whole of what resolving the effect does, and the control in
@@ -50,11 +51,7 @@ def begin_controlled_turn(game, seat: int) -> None:
     """*seat*'s turn is beginning (``begin_turn_bookkeeping``): the control in
     force from an earlier turn ends (CR 723.1), and a control waiting for this
     seat's next turn starts (CR 723.1, 723.1b)."""
-    for controlled, (controller, turn) in list(game.player_controls.items()):
-        if turn == game.turn and controlled == seat:
-            # The same turn beginning again (the web's Time Vault decline
-            # runs the beginning twice): not the next turn.
-            continue
+    for controlled, (controller, _turn) in list(game.player_controls.items()):
         del game.player_controls[controlled]
         game.log.append(
             f"{game.players[controller].name} no longer controls "
