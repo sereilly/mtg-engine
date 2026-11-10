@@ -20,7 +20,7 @@ from engine.ai_actions import cast_announcement
 from engine.ai_payment import tap_planned_lands
 from engine.ai_policy import choose_cast_action
 from engine.ai_target_sides import host_trigger_side
-from engine.ai_targets import _HOST_GIFT, _aura_harms_its_host
+from engine.ai_targets import _HOST_GIFT, _aura_harms_its_host, _host_shrink
 from engine.aura_attachment import auras_attached_to
 from engine.card_loader import load_catalog
 from engine.game import Game
@@ -120,3 +120,54 @@ def test_kudzu_is_cast_on_an_opponents_land_and_destroys_it_when_tapped():
     assert all(
         permanent.card.name != land for permanent in game.controlled_by(game.players[1])
     )
+
+
+def test_an_aura_whose_ability_shrinks_its_host_reads_its_reach():
+    """The census of the gifts whose own repeatable host ability takes
+    toughness (``_host_shrink``, off the compiled program): Pemmin's Aura's
+    "+1/-1 or -1/+1" for {1}, Flowstone Blade's "+1/-1" for {R}."""
+    shrinking = {
+        unit.name: _host_shrink(unit)
+        for unit in faces.compilation_units(sorted(_catalog().values(), key=lambda c: c.name))
+        if "Aura" in (unit.type_line or "") and _host_shrink(unit) is not None
+    }
+    assert shrinking.get("Pemmin's Aura") == (1, {"generic": 1})
+    assert shrinking.get("Flowstone Blade") == (1, {"R": 1})
+
+
+def test_pemmins_aura_goes_on_an_opponents_x1_and_its_ability_kills_it():
+    """The board the Known-gaps entry names, driven through the real
+    choosers: four Islands and a Grizzly Bears against a Llanowar Elves and a
+    Hill Giant. The cast chooser puts Pemmin's Aura on the Elves — one {1}
+    of "+1/-1" kills it — and the activation chooser spends that {1} and the
+    Elves die. Against the Hill Giant alone, which one activation cannot
+    kill, the Aura stays on the caster's own Bears. Validated backwards: on
+    59f133e63 it went on the Bears both times."""
+    from engine.ai_abilities import choose_activation_action
+    from engine.ai_policy import activate_chosen_ability
+
+    game = _table(
+        ["Pemmin's Aura"], ["Island", "Island", "Island", "Island", "Grizzly Bears"],
+        ["Llanowar Elves", "Hill Giant"],
+    )
+    game.enforce_mana_costs = True
+    action = choose_cast_action(game, 0)
+    assert action is not None and action.card_name == "Pemmin's Aura"
+    elves = next(p for p in game.controlled_by(game.players[1]) if p.card.name == "Llanowar Elves")
+    assert (action.target_player_index, action.target_permanent_index) == (
+        1, game.battlefield_index_of(elves),
+    )
+    action = tap_planned_lands(game, 0, action)
+    assert game.queue_from_hand(0, "Pemmin's Aura", **cast_announcement(action)).supported
+    settle(game)
+    activation = choose_activation_action(game, 0)
+    assert activation is not None and activation.permanent_name == "Pemmin's Aura"
+    activate_chosen_ability(game, 0, activation)
+    settle(game)
+    assert not game.is_on_battlefield(elves)
+    assert "Llanowar Elves died (704.5f: toughness 0)" in game.log
+
+    game = _table(["Pemmin's Aura"], ["Island"] * 4 + ["Grizzly Bears"], ["Hill Giant"])
+    game.enforce_mana_costs = True
+    action = choose_cast_action(game, 0)
+    assert action is not None and action.target_player_index == 0
