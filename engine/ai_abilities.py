@@ -1128,7 +1128,9 @@ def _madness_discard_index(
     costs least; whether the cast is then *worth* making is the offer's own
     rehearsed question (`ai_policy.choose_madness_cast`), asked when it is made. Only a
     chosen single discard: a discard at random is nobody's choice, and a cost
-    of several cards is the engine's to fill in hand order.
+    of several cards is the engine's to fill in hand order. Of several such
+    cards, the one the seat least wants to lose (``ai_prompt_picks.
+    discard_order``'s ``discard_worth``), not the first in hand.
     """
     from .madness import printed_madness_cost
     from .mana_payment import mana_cost_from_symbols
@@ -1141,6 +1143,7 @@ def _madness_discard_index(
     ):
         return None
     player = game.players[seat]
+    payable: list[int] = []
     for index, card in enumerate(player.hand):
         madness = printed_madness_cost(card)
         if madness is None or not card_matches_any(
@@ -1155,8 +1158,10 @@ def _madness_discard_index(
                 game, player, combined, paying_for=paying_for,
             ) is None:
                 continue
-        return index
-    return None
+        payable.append(index)
+    from .ai_prompt_picks import discard_order
+
+    return discard_order(game, seat, payable, None)[0] if payable else None
 
 
 #: Life a seat keeps back when it pays life for an ability of its own

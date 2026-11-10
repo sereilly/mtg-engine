@@ -921,6 +921,50 @@ def _better_alternative(
     return best if best is not None else action
 
 
+def _cast_naming_its_discards(
+    game: Game, player_index: int, card: CardDefinition, action: "CastAction",
+    offers: "dict[str, int] | None",
+) -> "CastAction":
+    """*action* naming the hand cards its printed additional discard is paid
+    with (CR 601.2b: "As an additional cost to cast this spell, discard X
+    cards", the Dreams; "discard a red or green card", Surge of Strength; a
+    buyback taken, Forbid's) — or *action* as it is, for a cast charging no
+    discard the payer chooses.
+
+    The cards the seat least wants to lose, by the reading every discard it
+    chooses takes (``ai_prompt_picks.discard_order``: a card whose madness
+    cost the board can pay first, then the least ``discard_worth``), out of
+    the engine's own payers (``Game._discard_cost_payers``, the spell's own
+    slot left out) and as many as the announced X owes. Named nothing, the
+    cast paid with the first cards the phrase names in hand order. A discard
+    at random or of the whole hand is nobody's choice; only the first charged
+    discard is named, which is every card in the pool."""
+    from .ai_prompt_picks import discard_order
+
+    taken = set(offers or ())
+    charged = [
+        cost for cost in additional_costs(card)
+        if (cost.from_zone is None or cost.from_zone == action.from_zone)
+        and (cost.optional_key is None or cost.optional_key in taken)
+        and cost.discard_cards
+    ]
+    if not charged or charged[0].discard_at_random or charged[0].discard_whole_hand:
+        return action
+    cost = charged[0]
+    spell_slot = action.hand_index if action.from_zone == "hand" else None
+    payers = game._discard_cost_payers(player_index, cost, spell_hand_index=spell_slot)
+    hand = game.players[player_index].hand
+    slots = [
+        position for position, held in enumerate(hand)
+        if position != spell_slot and any(held is payer for payer in payers)
+    ]
+    owed = cost.discarded_count(action.x_value)
+    if owed <= 0 or len(slots) < owed:
+        return action
+    chosen = discard_order(game, player_index, slots, None)[:owed]
+    return replace(action, cost_hand_indices=tuple(chosen))
+
+
 def _cast_naming_its_sacrifice(
     game: Game, player_index: int, card: CardDefinition, action: "CastAction",
     offers: "dict[str, int] | None",
@@ -1532,6 +1576,8 @@ def _announced_candidate(
     # "…where X is the sacrificed artifact's mana value" (Forge Armor): the
     # victim weighed, where the effect reads what the sacrifice ate.
     action = _cast_naming_its_sacrifice(game, player_index, card, action, offers)
+    # …and the hand cards a printed discard is paid with.
+    action = _cast_naming_its_discards(game, player_index, card, action, offers)
     # **What the cast would do, asked of the engine** — for a spell, whose
     # whole worth is its resolution. The finished announcement is carried out
     # on a scratch copy of the game (`_rehearse_announcement`) and three
