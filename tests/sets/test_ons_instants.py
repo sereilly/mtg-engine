@@ -1376,7 +1376,13 @@ def test_w1g10_read_the_runes_a_sacrifice_buys_off_one_discard(set_pool):
             continue
         choice = game.pending_choices[0]
         if choice.kind == "optional_pay":
-            assert game._resolve_optional_pay(choice, answered == 0, None)
+            # Through the queue's own answer path, which resumes the loop: the
+            # bare resolver left the rest of the loop unrun once a declined
+            # toll stopped arming its discard at once (kg5: the discards wait
+            # for the sacrifices, the ruling's order).
+            assert game.resolve_pending_choice(
+                "optional_pay", choice.player_index, accept=answered == 0,
+            )
             answered += 1
         else:
             game.auto_resolve_pending_choices(kinds=(choice.kind,))
