@@ -8,7 +8,7 @@ Cane was cracked over an empty graveyard and Tormod's Crypt aimed at one,
 each the seat's one activation of the turn.
 
 It is now asked what every other ability is asked (``ai_activation_rehearsal.
-_moves_something(one_shot=True)``) with the source **given up on both
+_spends_a_one_shot_on_something``) with the source **given up on both
 copies** (``_rehearse_activation(cost_neutral=True)``), so what is weighed is
 the effect; and a rehearsal whose only change is a library's order
 (``Rehearsal.reordered_only``: CR 701.24a, 701.24c — the Cane shuffles even

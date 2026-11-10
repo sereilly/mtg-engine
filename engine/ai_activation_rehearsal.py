@@ -307,6 +307,13 @@ def _moves_something(
     return _worth_proposing(rehearsal)
 
 
+def _spends_a_one_shot_on_something(game: Game, seat: int, action: ActivationAction) -> bool:
+    """:func:`_moves_something` asked of a one-shot's ability
+    (``ai_abilities._exists_to_be_given_up``): read with the source given up
+    on both copies, and a library's order alone is nothing (*one_shot*)."""
+    return _moves_something(game, seat, action, one_shot=True)
+
+
 def _becomes_an_aura(game: Game, seat: int, action: ActivationAction) -> bool:
     """Whether the ability *action* names turns its own source into an Aura
     (``ai_valuation.source_becomes_an_aura``)."""

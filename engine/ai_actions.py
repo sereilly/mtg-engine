@@ -205,10 +205,10 @@ class ActivationAction:
     # The word a "Choose flying, first strike, trample, or shadow" cost
     # announces (Phyrexian Splicer, CR 601.2b). None is the engine's default
     # (`Game.announced_chosen_keyword`); the policy names one when the default's
-    # walk has no chain on the boards it wants (`ai_abilities._keyword_walk_order`).
+    # walk has no chain on the boards it wants (`ai_activation_targets._keyword_walk_order`).
     chosen_keyword: str | None = None
     # The X an "{X}{G}{G}: …" cost announces (CR 107.3a via CR 602.2b), sized
-    # by rehearsal (`ai_abilities._sized_x_activation`). None for an ability
+    # by rehearsal (`ai_activation_rehearsal._sized_x_activation`). None for an ability
     # whose cost prints no {X} — every action this policy made before it
     # announced one, since an ability with {X} in its cost was not proposed.
     x_value: int | None = None
@@ -355,7 +355,7 @@ def activation_announcement(action: ActivationAction) -> dict:
     **The one place an `ActivationAction` becomes an activation**, for
     `cast_announcement`'s reason. There were five executors — the simulator's
     main phase and its foreign activation, the web AI step's two, and the
-    rehearsal's queue (`ai_abilities._queue_activation`, which the
+    rehearsal's queue (`ai_activation_rehearsal._queue_activation`, which the
     instant-speed executor shares) — each spelling the forwarding out for
     itself, and they had drifted: the web's foreign executor forwarded no
     role answer, no keyword and no X, and none of them a text change's two

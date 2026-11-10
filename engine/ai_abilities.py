@@ -36,6 +36,7 @@ from .ai_activation_rehearsal import (
     _rehearse_activation,
     _sacrifice_priced_activation,
     _sized_x_activation,
+    _spends_a_one_shot_on_something,
     _text_change_activation,
 )
 from .ai_activation_targets import (
@@ -993,8 +994,9 @@ def _activation_candidate(
     # flat, a Cane was cracked over an empty graveyard and a Crypt aimed at
     # one, each the seat's activation of the turn.
     one_shot = _gives_up_its_source(ability.cost) and _exists_to_be_given_up(permanent)
-    if not _AT_INSTANT_SPEED.get() and not _moves_something(
-        game, player_index, candidate, one_shot=one_shot,
+    if not _AT_INSTANT_SPEED.get() and not (
+        _spends_a_one_shot_on_something(game, player_index, candidate) if one_shot
+        else _moves_something(game, player_index, candidate)
     ):
         return None
     return candidate
@@ -1079,7 +1081,7 @@ def _exists_to_be_given_up(permanent) -> bool:
     the Egg's {R}{G} and card were worth less than the Egg, and it was never
     cracked (sim_fingerprint ODY, ICE). Its ability keeps its flat score, and
     is rehearsed with the source given up on both copies
-    (``ai_activation_rehearsal._moves_something(one_shot=True)``)."""
+    (``ai_activation_rehearsal._spends_a_one_shot_on_something``)."""
     if permanent.is_creature or not permanent.has_type("artifact"):
         return False
     program = compile_card_oracle(permanent.effective_card)

@@ -194,7 +194,7 @@ class Rehearsal:
         blocker). Where they are the same, what the cast does to the fight is
         what it does to a combat whose declarations it did not touch, and an
         ability can wait for the blocks to be known
-        (``ai_abilities._read_through_the_fight``);
+        (``ai_activation_rehearsal._read_through_the_fight``);
     ``reordered_only``
         everything it changed is **the order of a library**: a shuffle (CR
         701.24a, "so that no player knows their order") of the same cards —

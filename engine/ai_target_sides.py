@@ -825,7 +825,7 @@ def ability_seat_side(instruction: OracleInstruction | None) -> str | None:
 
     :func:`ability_target_side` is the question for an object; this is the one
     for a face. The policy answered it with a list of three instruction kinds
-    (``ai_abilities._choose_target_for_instruction``), two of which no handler has —
+    (``ai_activation_targets._choose_target_for_instruction``), two of which no handler has —
     ``gain_life`` and ``prevent_damage`` are what those effects were called
     before the grammar lowered them to ``target_gains_life`` and
     ``grant_prevention_shield``. A kind name nothing compiles is a claim about
