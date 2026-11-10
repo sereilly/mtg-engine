@@ -142,8 +142,13 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     if isinstance(controller, int) and controller != choice.player_index:
         payload["controller_seat"] = controller
         payload["controller_name"] = ctx.game.players[controller].name
-        if getattr(trigger, "ability_text", None):
-            payload["ability_text"] = trigger.ability_text
+    # What the trigger says, for every chooser: "Confusion in the Ranks: its
+    # triggered ability needs a target" told the player nothing about which
+    # permanent it wanted ("target permanent another player controls that
+    # shares a card type with it"). The printed line is public (CR 113.2),
+    # and the client reads it for the sentence above the candidates.
+    if getattr(trigger, "ability_text", None):
+        payload["ability_text"] = trigger.ability_text
     # "Up to two target creatures" (Basri's Acolyte, Cho-Arrim Bruiser): how
     # many the answer may name. Sent for ``modal_mode_targets``' reason — the
     # client cannot derive a ceiling smaller than the candidate list — and
@@ -591,11 +596,29 @@ def _mode_choice(ctx: PromptContext, choices: list) -> dict:
                 for candidate in option.get("valid_targets") or []
             ]
         modes.append(entry)
-    return {
+    payload = {
         "player_seat": choice.player_index,
         "card_name": data["card_name"],
         "modes": modes,
     }
+    # What the choice is *for*, where the alternatives say it and their labels
+    # alone do not: Fatespinner's "draw step / main phase / combat phase" are
+    # the step or phase the chooser skips this turn (``skip_next_step`` /
+    # ``skip_next_phase`` alternatives), and "pick a mode" said none of that.
+    kinds = {getattr(mode, "kind", None) for mode in data.get("_modes") or ()}
+    if kinds and kinds <= {"skip_next_step", "skip_next_phase"}:
+        payload["question"] = "Choose the step or phase you skip this turn."
+    # …and whose ability makes them choose, when it is not theirs (CR 700.2e's
+    # shape on a trigger: "that player chooses", Fatespinner in its opponent's
+    # upkeep).
+    context = data.get("_context")
+    caster = getattr(context, "caster", None)
+    controller = next(
+        (seat for seat, player in enumerate(ctx.game.players) if player is caster), None,
+    )
+    if controller is not None and controller != choice.player_index:
+        payload["controller_name"] = caster.name
+    return payload
 
 
 @prompt_renderer("opponent_mode_choice")

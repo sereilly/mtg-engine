@@ -87,7 +87,12 @@ def test_an_entwined_cast_performs_every_mode_over_http():
     assert [lock.seat for lock in game.untap_step_locks] == [1]
 
 
-def test_a_modes_permanents_on_two_boards_are_refused():
+def test_a_modes_permanents_may_sit_on_two_boards():
+    """"Tap two target creatures" names any two creatures (CR 115.1), on two
+    battlefields as readily as on one: the mode's ids say which board each is
+    on (``ModeChoice.permanent_ids`` → ``ChosenMode.target_permanent_id``),
+    as the cast's own ``target_permanent_ids`` do. This was a 422 until
+    MRD W2G6b; a name the mode cannot take is still refused."""
     sid, game, mine, theirs = _make_session()
     resp = client.post(
         f"/api/sessions/{sid}/action",
@@ -103,5 +108,31 @@ def test_a_modes_permanents_on_two_boards_are_refused():
             ],
         },
     )
-    assert resp.status_code == 422, resp.text
-    assert not any(p.tapped for p in (mine, *theirs))
+    assert resp.status_code == 200, resp.text
+    game._settle()
+    resolve_stack(game)
+    assert theirs[0].tapped and mine.tapped and not theirs[1].tapped, game.log
+    assert [lock.seat for lock in game.untap_step_locks] == [1]
+
+
+def test_a_mode_naming_a_noncreature_across_boards_is_refused():
+    sid, game, mine, theirs = _make_session()
+    land = Permanent(card=_LEA["Forest"])
+    game.players[0].battlefield.append(land)
+    game._sync_control()
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "cast",
+            "card_name": "Blinding Beam",
+            "optional_cost_payments": {"{1}": 1},
+            "mode_choices": [
+                {"index": 0, "target_seat": 1,
+                 "permanent_ids": [theirs[0].permanent_id, land.permanent_id]},
+                {"index": 1, "target_seat": 1},
+            ],
+        },
+    )
+    assert resp.status_code == 400, resp.text
+    assert not game.stack and not any(p.tapped for p in (mine, land, *theirs))

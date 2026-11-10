@@ -111,8 +111,9 @@ def _hand_card(state, name):
 def test_entwine_is_asked_before_the_modes_and_walks_every_one():
     """Blinding Beam entwined: "Entwine?" before any mode; taken, the {1}
     is announced, mode 0's "Tap two target creatures" is answered by the
-    several-target picker's ids and mode 1's by a seat, and one cast posts
-    both — which taps both creatures and locks their controller's untap."""
+    several-target picker's ids — one creature on each battlefield — and
+    mode 1's by a seat, and one cast posts both: it taps both creatures and
+    locks the named player's untap."""
     # Four Plains: the {1} entwine is offered only where the pool and the
     # board can pay it on top of the spell ({2}{W}).
     sid, game = _session(
@@ -131,16 +132,14 @@ def test_entwine_is_asked_before_the_modes_and_walks_every_one():
         takeEntwine();
         const announced = JSON.parse(JSON.stringify(pendingCastCost));
         const firstPrompt = prompted.slice();
-        // Mode 0 picked across two battlefields: refused, the same mode asked again.
+        // Mode 0 picked across two battlefields: the AI's Giant and my Bears
+        // (W2G6b — a mode's several targets travel by id).
         const mine = INPUT.state.players[0].battlefield[0].id;
-        const crossed = captureModeCollectionTarget({ seat: 0, action: "cast",
+        captureModeCollectionTarget({ seat: 0, action: "cast",
           card_name: "Blinding Beam", target_seat: 1, target_permanent_ids: [INPUT.giant, mine] });
-        const afterCross = pendingModeCollection.collected.length;
-        captureModeCollectionTarget({ seat: 0, action: "cast", card_name: "Blinding Beam",
-          target_seat: 1, target_permanent_ids: [INPUT.giant, INPUT.wurm] });
         captureModeCollectionTarget({ seat: 0, action: "cast", card_name: "Blinding Beam",
           target_seat: 1 });
-        return { asked, announced, firstPrompt, crossed, afterCross, prompted,
+        return { asked, announced, firstPrompt, prompted, mine,
           hints, sent, collecting: pendingModeCollection };
         """,
         {"state": state, "giant": giant.permanent_id, "wurm": wurm.permanent_id},
@@ -149,14 +148,12 @@ def test_entwine_is_asked_before_the_modes_and_walks_every_one():
     assert out["asked"] == {"entwine": "{1}", "refusal": ""}
     assert out["announced"] == {"optional_cost_payments": {"{1}": 1}}
     assert out["firstPrompt"] == [0]
-    assert out["crossed"] is True and out["afterCross"] == 0
-    assert any("one battlefield" in text and error for text, error in out["hints"])
-    assert out["prompted"] == [0, 0, 1], "mode 0 asked again, then mode 1"
+    assert out["prompted"] == [0, 1]
     assert out["collecting"] is None
     (body,) = out["sent"]
     assert body["optional_cost_payments"] == {"{1}": 1}
     assert body["mode_choices"] == [
-        {"index": 0, "target_seat": 1, "permanent_ids": [giant.permanent_id, wurm.permanent_id]},
+        {"index": 0, "target_seat": 1, "permanent_ids": [giant.permanent_id, out["mine"]]},
         {"index": 1, "target_seat": 1},
     ]
 
@@ -164,7 +161,8 @@ def test_entwine_is_asked_before_the_modes_and_walks_every_one():
     assert response.status_code == 200, response.text
     game._settle()
     resolve_stack(game)
-    assert giant.tapped and wurm.tapped, game.log
+    bears = game.players[0].battlefield[0]
+    assert giant.tapped and bears.tapped and not wurm.tapped, game.log
     assert [lock.seat for lock in game.untap_step_locks] == [1]
 
 

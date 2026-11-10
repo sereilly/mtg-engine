@@ -305,6 +305,40 @@ def _decided_ability_mana(game: Game, perm: Permanent, instruction) -> dict | No
     return None
 
 
+def _counted_mana_amount(game: Game, perm: Permanent, instruction) -> int | None:
+    """How many mana one activation adds where a board count multiplies a
+    single pip — "Add an amount of {G} equal to this creature's power"
+    (Viridian Joiner), "Add {G} for each …" — or None for every other shape.
+
+    The handler's own reading (``handlers/mana.add_mana_from_text``: the pips
+    times ``count_from_payload`` over ``per_each``), asked of a context
+    holding only the source and its controller, which is everything a
+    board count of this kind reads; without it ``symbols`` said one {G} for a
+    Joiner that adds as many as its power."""
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers._amounts import count_from_payload
+
+    adders = [step for step in _effect_steps(instruction) if step.kind == "add_mana_from_text"]
+    if len(adders) != 1:
+        return None
+    payload = adders[0].payload or {}
+    pips = payload.get("pips")
+    per_each = payload.get("per_each")
+    if not pips or per_each is None or len(pips) != 1:
+        return None
+    if set(payload) - {"pips", "per_each", "oracle_text", "spend_only"}:
+        return None
+    controller = game.players[game.controller_index_of(perm)]
+    context = OracleExecutionContext(
+        caster=controller, target=controller, card=perm.card, source_permanent=perm,
+    )
+    try:
+        count = int(count_from_payload(game, context, per_each))
+    except Exception:  # noqa: BLE001 — a count this context cannot read says nothing
+        return None
+    return max(0, count) * int(pips[0][1])
+
+
 def _ability_mana_entry(game: Game, perm: Permanent, ability) -> dict | None:
     """One ``ability_mana`` entry: the payload's answer (:func:`_ability_mana`),
     else the board's (:func:`_decided_ability_mana`), else — for an add-mana
@@ -313,6 +347,9 @@ def _ability_mana_entry(game: Game, perm: Permanent, ability) -> dict | None:
     instruction = getattr(ability, "instruction", None)
     stated = _ability_mana(instruction)
     if stated is not None:
+        amount = _counted_mana_amount(game, perm, instruction)
+        if amount is not None:
+            stated = {**stated, "amount": amount}
         return stated
     decided = _decided_ability_mana(game, perm, instruction)
     if decided is not None:

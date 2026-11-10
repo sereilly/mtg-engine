@@ -1448,7 +1448,7 @@ function hasBlockingPromptForAutoPass(state = currentState) {
   // auto-pass sent a pass the server refused (and, crossing the answer on the
   // wire, one it then accepted on the empty stack that followed).
   if (state?.waiting_on_prompt) return true;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getExiledCardReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getGuessNamedCardInfo(state) || getOpponentLibraryDrawInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getExiledCardReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingAbilityCostChoice || pendingCounterKindChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2396,6 +2396,43 @@ function cardOffersCopyCreatureChoice(card) {
 function cardOffersCopyArtifactChoice(card) {
   const s = targetSpecOf(card);
   return s.kind === "artifact" && !!s.optional && (s.valid_targets || []).length > 0;
+}
+
+// Whether the open target prompt is a cast's copy-as-it-enters picker, which
+// may be declined (`declineCopyCast`). A cast and the two debug free casts
+// only: an activation's picker is never a copy choice.
+function castOffersCopyDecline(pending) {
+  if (!pending || !_CAST_ACTIONS.has(pending.castAction || "cast")) return false;
+  if (pending.__costOnly || pending.__costStage || pending.__castCostStage) return false;
+  return cardOffersCopyCreatureChoice(pending.card) || cardOffersCopyArtifactChoice(pending.card);
+}
+
+// "Don't copy": the cast announced with no copy target and `decline_copy:
+// true` (GameActionRequest.decline_copy; the engine refuses it beside a named
+// copy target). Clone then enters as itself — a 0/0 that dies; Sculpting
+// Steel as an artifact copying nothing. The pool short of mana opens the
+// auto-tap dialog with the body kept, as every other cast does.
+function declineCopyCast() {
+  const pending = pendingCastTarget;
+  if (!castOffersCopyDecline(pending)) return;
+  const { card, cardName, castAction } = pending;
+  clearPendingCastTargeting();
+  const body = { seat, action: castAction || "cast", card_name: cardName, decline_copy: true };
+  updateActionHint(`Casting ${cardName}, copying nothing...`);
+  sendAction(body)
+    .then(() => {
+      updateActionHint(`Cast ${cardName} — it will copy nothing.`);
+      clearPendingHandCast();
+    })
+    .catch((e) => {
+      if (isManaRefusal(e.message)) {
+        pendingAutoTap = { card, cardName, actionBody: body };
+        renderActivationPrompt();
+        return;
+      }
+      updateActionHint(e.message, true);
+      clearPendingHandCast();
+    });
 }
 function cardRequiresTargetPermanent(card) {
   const k = specKind(card);
@@ -4246,6 +4283,27 @@ function getChooseCardsInHandInfo(state = currentState) {
   return info;
 }
 
+// Liar's Pendulum: "Target opponent guesses whether a card with that name is
+// in your hand." Asked of the guessing seat alone (web/prompt_values
+// `_guess_named_card`): the name and whose hand, never the hand.
+function getGuessNamedCardInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.guess_named_card;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
+// Shared Fate at a table of three or more: whose library the drawer exiles
+// the top card of, face down, instead of drawing (web/prompt_values
+// `_opponent_library_draw`). One offer per replaced draw.
+function getOpponentLibraryDrawInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.opponent_library_draw;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
 // Game of Chaos: whether the player the last flip favoured runs it again, at
 // double the stake.
 function getFlipAgainInfo(state = currentState) {
@@ -5141,7 +5199,7 @@ function isAnyPromptActive(state = currentState) {
   if (getBandBlockerInfo(state)) return true;
   if (getMultiblockInfo(state)) return true;
   if (getFaceDownCastInfo(state)) return true;
-  if (getFlipAgainInfo(state)) return true;
+  if (getFlipAgainInfo(state) || getGuessNamedCardInfo(state) || getOpponentLibraryDrawInfo(state)) return true;
   if (getRepeatProcessInfo(state)) return true;
   if (getExileFromHandInfo(state)) return true;
   if (getExileHandPileInfo(state)) return true;
@@ -5173,7 +5231,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getCopyCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getExiledCardReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state) || getTargetGroupOrderInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getCopyCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getGuessNamedCardInfo(state) || getOpponentLibraryDrawInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getExiledCardReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state) || getTargetGroupOrderInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -9120,9 +9178,15 @@ function applyTriggerTargetPrompt(info) {
   if (kinds.has("permanent")) where.push("a highlighted permanent on the battlefield");
   if (kinds.has("player")) where.push("a highlighted player's life pill");
   q("promptTitle").textContent = "Choose a target";
+  // The trigger's own words where the server sends them (Confusion in the
+  // Ranks: "…chooses target permanent another player controls that shares a
+  // card type with it"), so the player is told what the target is for.
   q("promptBody").textContent = triggerTargetForAnotherText(info) ||
-    `${info.card_name || "The ability"}: its triggered ability ` +
-    (info.up_to ? "may name a target." : "needs a target.");
+    (info.ability_text
+      ? `${info.card_name || "The ability"} — “${info.ability_text}” `
+        + (info.up_to ? "Choose its target, or none." : "Choose its target.")
+      : `${info.card_name || "The ability"}: its triggered ability ` +
+        (info.up_to ? "may name a target." : "needs a target."));
   const rows = [];
   if (where.length) {
     rows.push(`<div>Action: click ${escapeHtml(where.join(", or "))}.</div>`);
@@ -9426,9 +9490,17 @@ function applyModeChoicePrompt(info) {
 
   title.textContent = "Choose one";
   const targeted = (info.modes || []).some((mode) => Array.isArray(mode.targets));
-  body.textContent = targeted
-    ? `${info.card_name || "Triggered ability"}: pick a mode and its target.`
-    : `${info.card_name || "Triggered ability"}: pick a mode.`;
+  // What the choice is for, when the server can say (`question`: Fatespinner's
+  // step or phase to skip) and whose ability asks it of this seat
+  // (`controller_name`).
+  const whose = info.controller_name
+    ? `${info.controller_name}'s ${info.card_name || "ability"}`
+    : (info.card_name || "Triggered ability");
+  body.textContent = info.question
+    ? `${whose}: ${info.question}`
+    : targeted
+    ? `${whose}: pick a mode and its target.`
+    : `${whose}: pick a mode.`;
   // A mode that targets is offered once per candidate: CR 700.2b chooses the
   // mode and CR 601.2c its target as one announcement, so there is no state
   // between the two clicks to hold - and a mode with no legal target is not in
@@ -10454,6 +10526,104 @@ function applyEntryRevealPrompt(info) {
     entryRevealFor = null;
     // An explicit list either way: an empty one is the answer "reveal nothing".
     await sendAction({ seat, action: "entry_reveal_confirm", hand_indices: picks });
+  });
+}
+
+// Liar's Pendulum's guess: yes, a card with that name is in the holder's
+// hand, or no — `accept` true or false on `guess_named_card_confirm`. The
+// guesser is told the name and whose hand, nothing else (CR 400.2: the hand
+// is hidden from them), so the panel says exactly that.
+function applyGuessNamedCardPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  if (!panel || !title || !body || !steps) return;
+  panel.classList.remove("hidden");
+  okBtn?.classList.add("hidden");
+  customRow?.classList.add("hidden");
+  cancelBtn?.classList.add("hidden");
+  if (cancelBtn) cancelBtn.disabled = true;
+  if (customOkBtn) customOkBtn.disabled = true;
+
+  const named = info.named || "the named card";
+  const holder = info.holder_name || "that player";
+  title.textContent = `${info.card_name || "Liar's Pendulum"} — guess`;
+  body.textContent = `Is a card named ${named} in ${holder}'s hand?`;
+  steps.innerHTML =
+    '<div class="prompt-choice-row">' +
+    `<button type="button" class="prompt-choice-btn" data-guess-named="yes">Yes — it's in ${escapeHtml(holder)}'s hand</button>` +
+    '<button type="button" class="prompt-choice-btn" data-guess-named="no">No</button>' +
+    "</div>";
+  steps.querySelectorAll("[data-guess-named]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const accept = btn.dataset.guessNamed === "yes";
+      try {
+        await sendAction({ seat, action: "guess_named_card_confirm", accept });
+        updateActionHint(accept ? `You guessed ${named} is in the hand.` : `You guessed ${named} is not in the hand.`);
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
+  });
+}
+
+// Shared Fate's choice: a button per opponent, in the engine's order and with
+// its labels, and each opponent's library size beside the name — public
+// (CR 402.3), and the whole decision when a library is empty. Nothing about
+// any card: it is exiled face down.
+function applyOpponentLibraryDrawPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  if (!panel || !title || !body || !steps) return;
+  panel.classList.remove("hidden");
+  okBtn?.classList.add("hidden");
+  customRow?.classList.add("hidden");
+  cancelBtn?.classList.add("hidden");
+  if (cancelBtn) cancelBtn.disabled = true;
+  if (customOkBtn) customOkBtn.disabled = true;
+
+  const source = info.source_name || "Shared Fate";
+  const options = Array.isArray(info.options) ? info.options : [];
+  const sizes = Array.isArray(info.library_sizes) ? info.library_sizes : [];
+  const remaining = Number(info.remaining || 1);
+  title.textContent = `${source} — exile instead of drawing`;
+  body.textContent =
+    `You would draw a card. Instead, exile the top card of an opponent's library face down. Choose whose.` +
+    (remaining > 1 ? ` (${remaining} draws to answer)` : "");
+  steps.innerHTML =
+    '<div class="prompt-choice-column">' +
+    options
+      .map((label, index) => {
+        const size = Number(sizes[index]);
+        const note = Number.isFinite(size)
+          ? ` (${size} card${size === 1 ? "" : "s"} in library${size === 0 ? " — nothing to exile" : ""})`
+          : "";
+        return `<button type="button" class="prompt-choice-btn" data-opponent-library="${index}">`
+          + `${escapeHtml(String(label))}${escapeHtml(note)}</button>`;
+      })
+      .join("") +
+    "</div>";
+  steps.querySelectorAll("[data-opponent-library]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const index = Number(btn.dataset.opponentLibrary);
+      try {
+        await sendAction({ seat, action: "opponent_library_draw_confirm", option_index: index });
+        updateActionHint(`${source}: exiled the top card of ${String(options[index] ?? "that")} library.`);
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
   });
 }
 
@@ -14453,6 +14623,18 @@ function renderActivationPrompt() {
     return;
   }
 
+  const guessNamedCardInfo = getGuessNamedCardInfo();
+  if (guessNamedCardInfo) {
+    applyGuessNamedCardPrompt(guessNamedCardInfo);
+    return;
+  }
+
+  const opponentLibraryDrawInfo = getOpponentLibraryDrawInfo();
+  if (opponentLibraryDrawInfo) {
+    applyOpponentLibraryDrawPrompt(opponentLibraryDrawInfo);
+    return;
+  }
+
   const flipAgainInfo = getFlipAgainInfo();
   if (flipAgainInfo) {
     applyFlipAgainPrompt(flipAgainInfo);
@@ -15482,6 +15664,22 @@ function renderActivationPrompt() {
           body.textContent = "Click a glowing permanent on the battlefield to choose the target.";
         }
       }
+    }
+    // "You may have this creature enter as a copy of any creature on the
+    // battlefield" (Clone, Vesuvan Doppelganger; Copy Artifact's and Sculpting
+    // Steel's artifact spelling). The "may" is a choice the rulings let a
+    // player decline ("You can choose not to copy anything"), so the copy
+    // picker offers declining beside the permanents: the cast goes out naming
+    // no copy target and `decline_copy: true` (W2G4's engine half).
+    if (castOffersCopyDecline(pendingCastTarget)) {
+      const noun = cardOffersCopyArtifactChoice(pendingCastTarget.card) ? "artifact" : "creature";
+      body.textContent = `Click a glowing ${noun} for ${pendingCastTarget.cardName} to enter as a copy of — or don't copy, and it enters as itself.`;
+      steps.insertAdjacentHTML(
+        "beforeend",
+        '<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="declineCopyBtn">'
+          + `Don't copy — ${escapeHtml(pendingCastTarget.cardName)} enters as itself</button></div>`,
+      );
+      document.getElementById("declineCopyBtn")?.addEventListener("click", declineCopyCast);
     }
     // An activation whose charge moved off its printed cost (Auriok
     // Steelshaper's {0} equip, `ability_prices`): the card in front of the
@@ -16519,6 +16717,21 @@ function chooseAbilityCostAlternative(index) {
   startActivationPrompt(pending.card, pending.targetSeat, pending.permanentIndex);
 }
 
+// What the hint says once a permanent's ability has gone out: for a mana
+// ability with a fixed output, the mana it made — `ability_mana`'s symbols,
+// and its `amount` where the board decides how many ("Add an amount of {G}
+// equal to this creature's power", Viridian Joiner) — rather than a bare
+// "Activated". A choice of colour or anything unknown keeps the plain words.
+function activatedHint(cardName, ownMana) {
+  const symbols = ownMana && !ownMana.choice && Array.isArray(ownMana.symbols) ? ownMana.symbols : null;
+  if (!symbols || !symbols.length) return `Activated ${cardName}.`;
+  const amount = Number.isInteger(ownMana.amount) && symbols.length === 1 ? ownMana.amount : null;
+  const made = amount !== null
+    ? (amount > 0 ? `{${symbols[0]}}`.repeat(amount) : "no mana")
+    : symbols.map((symbol) => `{${symbol}}`).join("");
+  return `Tapped ${cardName} for ${made}.`;
+}
+
 function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
@@ -17140,7 +17353,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     );
     if (Number.isInteger(abilityIndex)) directBody.ability_index = abilityIndex;
     sendAction(directBody)
-      .then(() => updateActionHint(`Activated ${cardName}.`))
+      .then(() => updateActionHint(activatedHint(cardName, ownMana)))
       .catch((e) => {
         if (!isManaRefusal(e.message)) {
           updateActionHint(e.message, true);
@@ -17173,7 +17386,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     );
     if (Number.isInteger(abilityIndex)) directBody.ability_index = abilityIndex;
     sendAction(directBody)
-      .then(() => updateActionHint(`Activated ${cardName}.`))
+      .then(() => updateActionHint(activatedHint(cardName, ownMana)))
       .catch((e) => updateActionHint(e.message, true));
     return;
   }
@@ -28737,14 +28950,15 @@ function captureModeCollectionTarget(body) {
   if (Number.isInteger(body.target_permanent_index)) entry.permanent_index = body.target_permanent_index;
   // A mode naming **several** permanents (Blinding Beam's "Tap two target
   // creatures", entwined): the several-target picker's ids, on the mode's
-  // `permanent_ids`. The wire reads a mode's slots on one board
-  // (`ModeChoice.permanent_ids`, a cross-board list is a 422), so a pick
-  // spread over two battlefields is refused here and the mode asked again.
+  // `permanent_ids` — which may sit on two battlefields: the ids are what the
+  // server reads a mode's targets by (`ModeChoice.permanent_ids`), as it
+  // reads the cast's own `target_permanent_ids`. A pick whose permanent has
+  // left since is refused here and the mode asked again.
   if (Array.isArray(body.target_permanent_ids) && body.target_permanent_ids.length) {
     const seats = body.target_permanent_ids.map((pid) => findPermanentInState(currentState, pid)?.seat);
-    if (seats.some((s) => !Number.isInteger(s)) || new Set(seats).size > 1) {
+    if (seats.some((s) => !Number.isInteger(s))) {
       updateActionHint(
-        `${run.cardName}: "${mode?.label || "this mode"}" can only name permanents on one battlefield here — choose again.`,
+        `${run.cardName}: a permanent chosen for "${mode?.label || "this mode"}" has left the battlefield — choose again.`,
         true,
       );
       promptNextModeTarget();
