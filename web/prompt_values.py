@@ -742,11 +742,14 @@ def _ignore_coin(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]
     data = choice.data
     wins = bool(data.get("wins", True))
-    held = data.get("_stack_item")
+    # The object on the stack the flip is part of — a spell or an ability, not
+    # a permanent (CR 111, 113), so its card is the text there is.
+    stack_item = data.get("_stack_item")
     effect_text = None
-    if held is not None:
+    if stack_item is not None:
         effect_text = (
-            held.ability_text if held.is_ability else held.card.oracle_text
+            stack_item.ability_text if stack_item.is_ability
+            else stack_item.card.oracle_text
         ) or None
     up, down = ("won", "lost") if wins else ("heads", "tails")
     return {
