@@ -55,6 +55,17 @@ the pool at import share one copy (each held its own, 5 GB a process, until
 not a red tree — re-run with fewer workers. Never pipe pytest through
 `tail`/`head`: the pipe replaces its exit code.
 
+**Every run records its tests' times** (`tests/passes.py`): setup + call +
+teardown by node id, merged into `.test_timings.json` at the tree's root
+(gitignored), so the last full pass's numbers stand until a run re-times those
+tests. `scripts/tests_for_diff.py` reads them (this tree's over the main
+checkout's) to say what a list of files costs, quick and full apart, before
+it starts; `--run` passes `--quick`, which keeps the quick pass in the files
+named. **`MTG_PROMOTE=<CODE>`** runs any test with a measured set read as
+shipped (`engine/card_loader.py`) — the way to run a census over
+`load_catalog()` against the set you are implementing; the run's header says
+so, and the shipped-pool guards are expected red under it.
+
 Tests are organized by subject — put new tests in the matching subfolder:
 `tests/ai/` (AI policy/simulator), `tests/ui/` (web API + frontend/end-to-end),
 `tests/engine/` (loader, oracle compiler, parsing, dispatch internals, the

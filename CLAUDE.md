@@ -44,6 +44,15 @@ does not, and no player can deck one of its cards. It moves to `sets` when every
 card is supported, and `measured` is empty between sets. Guarded by
 `tests/engine/test_manifest_roles.py`.
 
+**`MTG_PROMOTE=<CODE>` is the promotion in memory**: `card_loader`'s one read
+of the manifest moves that measured set into `sets` at its printing-ordered
+place for the process, the file untouched, so the censuses over
+`load_catalog()` can be run with the set shipped while it is being
+implemented. A rehearsal, never a gate — the shipped-pool guards fail on its
+unsupported cards; the test header names it, and `check_all` and the
+integration gates refuse to run under it (`census_rehearsal.sh` is the one that
+does).
+
 A measured set is nameable by the reporting scripts (`--set <CODE>`, labelled
 "measured, not shipped"); `--all` means the shipped pool alone. The four
 whole-pool instruments (grammar_coverage, hook_reliance, parse_coverage,
@@ -100,7 +109,13 @@ quick pass's ~175) — and the full pass runs every
 sampled census whole (`MTG_FULL_CENSUS`, read by `tests.helpers.stable_sample`;
 the trigger-order census, whose rows are pairs, takes sixteen times its share,
 `FULL_FACTOR`).
-A file or test named on the command line runs whole. The quick pass ends by
+A file or test named on the command line runs whole, unless `--quick` keeps
+the quick pass in it too; `-m full` turns the full pass on (it used to collect
+nothing). `python scripts/tests_for_diff.py` lists the test files a diff owes
+— edited tests, importers of an edited module, every census enumerating a
+registry the diff moved — with their quick and full seconds from the last run
+that timed them (every run merges its times into `.test_timings.json`), and
+`--run` runs their quick tests. The quick pass ends by
 naming any unmarked test that took 20 s or more: make it faster or mark it
 `full`. A large run compiles the pool before its first test, so every test's
 time is its own; a test that clears the compile caches calls
@@ -146,9 +161,10 @@ python scripts/picker_sweep.py --set <CODE>   # supported cards whose cast/activ
 python scripts/oracle_diff.py snapshot   # record every card's full compiled program (both manifest roles) before a change
 python scripts/oracle_diff.py compare    # every card whose program moved since the snapshot; exit 1 if any did
 python scripts/sim_fingerprint.py snapshot   # twelve seeded AI games' logs, before a change
-python scripts/sim_fingerprint.py compare    # which of those games played differently; exit 1 if any did
+python scripts/sim_fingerprint.py compare    # which of those games played differently; exit 1 if any did (whole diffs in .sim_fingerprint/compare/)
+python scripts/tests_for_diff.py --why   # the tests this diff owes and their recorded times; --run runs their quick tests
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md; --refresh re-fetches Scryfall data
-python scripts/check_all.py           # every CI guard check, in ci.yml's order (--freshness adds the tracker regenerations + a clean-tree check; --caps the size-guard headroom)
+python scripts/check_all.py           # every CI guard check, in ci.yml's order (--freshness adds the tracker regenerations + a clean-tree check; --caps the size-guard headroom; --workers N for parse_coverage)
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md; --check fails on unannotated tests
 python scripts/rules_gaps.py          # rank untested CR rules; flags stale CR citations (advisory)
 python scripts/cr_edition_diff.py old.txt   # a CR bump: every citation of a rule that moved, changed or went; --install <download> writes the new file

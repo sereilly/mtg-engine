@@ -71,11 +71,15 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   formatting a collection error, a `sim_fingerprint` "moves" a run whose log
   is truncated, and agents stop mid-edit.
 - **An agent never runs the full suite.** It runs the files it wrote, every
-  test file it edited, and the files that cover the modules it touched (grep
-  `tests/` for the module names — a guard sits far from its code), serially or
-  at `-n 2`, and lists them in its report — grepping for the names of the
-  functions it adds a caller to as well as for its modules, because a caller
-  census lists callers by name (Onslaught's
+  test file it edited, and the files that cover the modules it touched,
+  serially or at `-n 2`, and lists them in its report. `scripts/tests_for_diff.py`
+  lists them — the edited tests, the importers of an edited module or helper,
+  and every census that enumerates a registry the diff added a member to —
+  with each file's recorded quick and full seconds, before anything runs;
+  `--run` runs their quick tests only (`pytest --quick`: a named file
+  otherwise runs its `full` tests, and some hold hour-long AI censuses). It
+  still greps for the names of the functions it adds a caller to, because a
+  caller census lists callers by name (Onslaught's
   `test_aura_host_protection` was red for four links after a branch added one).
   The full suite is the integrator's,
   one at a time: `-n 8` when the machine is yours, `-n 4` while agents run.
@@ -98,7 +102,15 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
 - **Start long jobs as tracked background tasks with absolute paths, and read
   the exit file before trusting the notification.** A shell `&` inside a
   foreground command finishes unnoticed; a `cd` followed by a relative redirect
-  runs nothing and reports a blank exit code.
+  runs nothing and reports a blank exit code. **An agent's long run goes
+  through `scripts/integration/run_and_wait.sh <log> <command…>`**: a
+  foreground call is cut off near three minutes, and every Mirrodin report
+  hand-wrote a background job and a poll loop for it (a loop grepping for
+  "passed" never ends here; an agent that ends its turn waiting never wakes).
+  It detaches the command, writes its exit code as the log's last line and to
+  `<log>.exit`, and waits a bounded 170 s: done, it exits with the command's
+  code and the `FAILED` lines; not done, it exits 75 with the `--wait` command
+  to resume. Every brief names it.
 - **A stopped background task is not a stopped process**: the stop kills the
   tool's shell, not the Python under it. Look for survivors after a stop, write
   a long loop inline rather than in a script, and never edit a script something
@@ -157,6 +169,13 @@ And when writing one:
   a fork of the shared reader.
 - **Verify an inherited diagnosis as part of the round**, not as a preamble to
   it; measuring one has caught defects the briefed fix would have introduced.
+- **A census red's brief says "trace first"**, never "look in module M".
+  Mirrodin's W2G9 brief guessed two of four promotion reds were one defect and
+  named the nearest code for each; they were three causes (a P/T sign stored
+  in the amount, a zone bonus one candidate builder skipped, a test executor
+  dropping the mode list) and none was in the code named. A census red names
+  a card and a symptom; the brief hands over those and the tools to trace
+  them, and lets the trace find the module.
 - **Require a census to disbelieve its own author.** A suspicion that survives
   its census is worth writing down; one that does not is worth the census.
 - **A ruling** (how a card is played, as against what a rule says) **carries its
@@ -164,7 +183,10 @@ And when writing one:
   not in `MagicCompRules.txt`, and two briefs have stated a wrong one from
   memory. Check every rule a brief states against the CR as well:
   `scripts/integration/check_brief_crs.py <repo> <briefs>` prints each cited
-  number with its rule's opening words — **read the words**: Mirrodin's
+  number with its rule's opening words, and a `SUBJECT?` line for a citation
+  whose rule shares no word with the sentence citing it — a wrong section
+  (722, Preparation Cards, for controlling a player) is caught; a neighbour
+  that shares the vocabulary is not, so **read the words**: Mirrodin's
   brief cited 205.2a (the list of card types) where 205.2b (an object with
   two types) was meant, and the printed subject said so. Rulings come from
   `bulk_rulings.py CODE <out>` (Scryfall's bulk file, one download; the
@@ -258,9 +280,17 @@ And when writing one:
   not accumulate while `main` is held at the round's base (Mirrodin's list
   read from `main` grew from 47 files to 87, 230 s to 504 s). Never a hand-picked
   list; the script refuses a path that does not exist, because xdist reports a
-  typo as "no tests ran". Add by hand the censuses of any seam two merged
-  branches both touched and every ratchet either side lowered — an instrument is
-  code that meets other code at a merge. **The list is "changed since `main`",
+  typo as "no tests ran". **It adds every census over a registry the merged
+  branches moved** (`tests_for_diff.py --censuses` against the same base,
+  listed in `gate/meeting_censuses_<tag>.txt`): it imports the base's engine
+  and the link's and compares their registries, and names each test file that
+  enumerates one whose members changed. Mirrodin's wave-close gate found eight
+  reds no meeting named, each such a census in a file no branch edited;
+  replayed over the wave's twelve merges it names five of the seven files at
+  the merge that caused them (the other two read the AI policy's source and
+  the compiled pool, which no registry diff can see). Add by hand the
+  censuses of any seam two merged branches both touched and every ratchet
+  either side lowered — an instrument is code that meets other code at a merge. **The list is "changed since `main`",
   which has two blind spots** (kg3): once `main` moves past a link, that link's
   files leave the list, so a branch whose base is older than `main` — it never
   met the links merged since — also runs the test files those links added or
@@ -580,7 +610,11 @@ instruments current, and no module the set will reach inside the band.
 1. Run the full suite, then `python scripts/check_all.py --freshness` — every
    `--check` gate plus the tracker regenerations, in ci.yml's order. All must be
    a no-op on a clean tree; a set started on a red or stale HEAD mixes old drift
-   into its own diffs.
+   into its own diffs. Every run merges its tests' times into the tree's
+   `.test_timings.json`, and the main checkout's is what `tests_for_diff.py`
+   shows every agent of the round before it runs a file: run this suite as the
+   full pass (`--full`) there, or copy in the file from the tree where the
+   latest full pass ran (Phase 1's).
 2. If the set postdates `data/vocabulary/manifest.json`'s `fetched_at`, run
    `scripts/fetch_vocabulary.py` and commit the diff on its own: an unknown
    creature type or keyword refuses to parse exactly like a grammar gap and gets
@@ -884,9 +918,19 @@ green, the trackers agreeing the set ships.
    construction; rehearsing early hands them to somebody still in the code.
    **Most of a rehearsal's new reds are censuses over `load_catalog()`**
    (Mirrodin's first: 11 of 14) — a table the set's own groups widened that
-   only sees a shipped set. A group can run them in round with the set
-   promoted in its worktree and the manifest restored before it commits;
-   a census whose rows check themselves against the shipped catalog gets
+   only sees a shipped set. **So the promotion runs in memory too**:
+   `MTG_PROMOTE=<CODE>` (`engine/card_loader.py`) reads the measured set as
+   shipped, at `promote.py`'s position, with the manifest untouched, so a
+   group runs its family's censuses in round (`MTG_PROMOTE=DST pytest
+   <files>`) and has nothing to restore before it commits. The integrator runs
+   `census_rehearsal.sh <tree> <tag> <CODE>` at each wave's close beside the
+   gate — the quick pass whole and every sampled census whole
+   (`MTG_FULL_CENSUS=1`, minutes) under the overlay, the shipped-pool guards'
+   reds listed apart — **and again before the promotion's full pass**:
+   Mirrodin's four promotion reds were all sampled-census shares, found by a
+   32-minute full pass and fixed in a 76-minute round before `main` could
+   move. The gates (`gate.sh`, `meeting.sh`, `regen.sh`) and `check_all`
+   refuse to run under the overlay. A census whose rows check themselves against the shipped catalog gets
    a promotion-row script the promotion commit runs (W2G0b's
    `promotion_rows.py`, idempotent, `--check` until applied). When every
    group has reported and the promotion is the next commit, its full pass
