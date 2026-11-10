@@ -398,6 +398,13 @@ class Game(
     # three reach, so the firing hangs off that and this flag is what keeps a
     # second `advance_combat_phase` at the same step from firing again.
     combat_unblocked_triggers_fired: bool = False
+    # CR 511.2: "at end of combat" abilities trigger **as the end of combat
+    # step begins**, before the active player's priority (CR 117.3a). Two
+    # roads begin the step — ``_enter_combat_step`` and ``end_combat`` called
+    # from outside it (the End Turn jump, a test placing the game in the step)
+    # — and this flag is what makes the firing once per step whichever ran
+    # first. Cleared with the rest of the combat record (``_reset_combat_state``).
+    end_of_combat_triggers_fired: bool = False
     # CR 508.8: "If no creatures are declared as attackers or put onto the
     # battlefield attacking, skip the declare blockers and combat damage
     # steps." Whether either happened this combat — the record, not the live

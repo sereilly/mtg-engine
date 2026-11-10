@@ -5,8 +5,10 @@ from ..game_over_guard import goes_no_further
 """End of combat step (CR 511).
 
 Fires "at end of combat" triggered abilities (Clockwork Beast counter removal,
-Cockatrice/Thicket Basilisk delayed destruction) while "attacked or blocked this
-combat" is still known, then clears until-end-of-combat effects and combat state.
+Cockatrice/Thicket Basilisk delayed destruction) **as the step begins**
+(CR 511.2), before the active player receives priority (CR 117.3a); then, as
+the step ends, clears until-end-of-combat effects (CR 511.2's second sentence)
+and the combat state (CR 511.3).
 """
 
 from ..combat_assignment import (BLOCKED_WITHOUT_BLOCKERS,
@@ -34,15 +36,21 @@ class EndOfCombatStepMixin:
     def end_combat(
         self, step_already_started: bool = False, resuming: bool = False
     ) -> bool:
-        """Leave the end of combat step (CR 511): its triggers, the
-        until-end-of-combat sweeps, its priority window, then combat state
+        """Leave the end of combat step (CR 511): its priority window, then
+        every until-end-of-combat effect ended (CR 511.2) and combat state
         cleared (CR 511.3). True when the step ended.
+
+        The step's "at end of combat" triggers fired as it **began**
+        (``_begin_end_of_combat_step``, called by ``_enter_combat_step``), so
+        the window here is where they resolve. A step this begins itself —
+        *step_already_started* False, the End Turn jump from another combat
+        step — fires them here first; so does a step something placed the game
+        in without beginning it. Either way once per step.
 
         False when the window left something owed (CR 608.2,
         ``window_left_unfinished``): the step is held open, creatures stay in
         combat, and the caller must not enter the next phase. *resuming* is
-        the next call, after the answer: the triggers have fired and the
-        sweeps have run once, so it starts at the window.
+        the next call, after the answer: it starts at the window.
         """
         phase = "combat"
         step = "end_of_combat"
@@ -58,15 +66,21 @@ class EndOfCombatStepMixin:
                 self._set_phase_and_step(phase, step)
                 self._on_step_or_phase_begin(phase, step)
         if not resuming:
-            self._sweep_end_of_combat()
+            self._begin_end_of_combat_step()
         if self._receives_priority(step):
             self._resolve_priority_window()
             if self.window_left_unfinished():
                 self.hold_step_open()
                 return False
+        # CR 511.2: "Effects that last 'until end of combat' expire at the end
+        # of the combat phase" — after the step's window, not before it. The
+        # sweep ran before the window while the triggers still fired as the
+        # step was left, so a trigger resolving there saw Glyph of
+        # Destruction's +10/+0 already gone.
+        self._sweep_end_of_combat()
         # CR 511.3: creatures are removed from combat **as the end of combat
         # step ends** — after CR 511.2's priority window, which is where the
-        # triggers CR 511.1 put on the stack actually resolve.
+        # triggers that went on the stack as the step began actually resolve.
         #
         # This used to run before that window, and the comment at the top of
         # this method says why it looked right: the triggers *fire* before the
@@ -82,18 +96,40 @@ class EndOfCombatStepMixin:
         self._on_step_or_phase_end(phase, step)
         return True
 
+    def _begin_end_of_combat_step(self) -> None:
+        """CR 511.2: what triggers "at end of combat" triggers **as the step
+        begins**, and goes on the stack before anybody has priority in it
+        (CR 117.3a, 603.3) — so it can be answered there, and a source removed
+        there has already triggered.
+
+        Once per step (``Game.end_of_combat_triggers_fired``): the step is
+        begun by ``_enter_combat_step`` on the ordinary road, and by
+        ``end_combat`` when it is entered some other way, and whichever runs
+        second finds the triggers fired.
+
+        One CR 603.3b window for all of it, so the printed triggers, the
+        delayed ones and the marks' destructions are ordered together, active
+        player first — they all triggered since anyone last had priority.
+        """
+        if self.end_of_combat_triggers_fired:
+            return
+        self.end_of_combat_triggers_fired = True
+        with self.putting_triggers_on_stack():
+            # Printed "at end of combat" abilities fire while "attacked or
+            # blocked this combat" and the blocking relations are still
+            # known — they are frozen into each trigger's context
+            # (``_fire_end_of_combat_triggers``).
+            self._fire_end_of_combat_triggers()
+            # "At this turn's next end of combat, …" (Glyph of Doom) — a delayed
+            # ability (CR 603.7), which belongs to no permanent and so is
+            # invisible to the battlefield scan above.
+            fire_delayed_triggers(self, "next_end_of_combat")
+
     def _sweep_end_of_combat(self) -> None:
-        """What leaving the end of combat step does before its window: fire
-        the end-of-combat triggers (CR 511.1) and end every until-end-of-combat
-        effect. Once per step — a step held open on its window resumes after
-        this (``end_combat``'s *resuming*)."""
-        # End-of-combat triggered abilities fire before combat state is cleared,
-        # while "attacked or blocked this combat" is still known.
-        self._fire_end_of_combat_triggers()
-        # "At this turn's next end of combat, …" (Glyph of Doom) — a delayed
-        # ability (CR 603.7), which belongs to no permanent and so is invisible
-        # to the battlefield scan above.
-        fire_delayed_triggers(self, "next_end_of_combat")
+        """End every until-end-of-combat effect (CR 511.2: they "expire at the
+        end of the combat phase"), as the end of combat step ends — after its
+        window, once per step (a step held open on its window resumes before
+        this, ``end_combat``'s *resuming*)."""
         for permanent in self.all_permanents():
             # "…gets +10/+0 until end of combat." (Glyph of Destruction.) The
             # layer-7c twin of the cleanup step's end-of-turn sweep, reading the
@@ -175,10 +211,10 @@ class EndOfCombatStepMixin:
         Two dispatches. Compiled ``end_of_combat`` triggers (The Wretched) go
         onto the stack through the standard batch, with what the trigger's
         effect needs captured now — the blockers of the firing attacker, by
-        id — because ``end_combat`` clears the combat record before the
-        priority window that resolves them. Clockwork Beast's line compiles
-        as a static line instead (its intervening-if has no production), so
-        it keeps the direct text probe below.
+        id — as the step begins (``_begin_end_of_combat_step``), so the board
+        they describe is the one the step began with. Then the destructions
+        Cockatrice's kin marked for this step
+        (``_resolve_end_of_combat_destruction``).
         """
         events = []
         for controller_index, permanent, trig in iter_triggered_abilities(
@@ -188,10 +224,11 @@ class EndOfCombatStepMixin:
             # Frostbeast's destruction, Dread Wight's counters). CR 509's
             # relation, captured **for every end-of-combat trigger whether or
             # not it asks** — the same discipline the dies transition takes with
-            # ``dead_power``, and for a sharper reason here: this batch goes on
-            # the stack now and resolves in the priority window at the *end* of
-            # ``end_combat``, by which time ``_reset_combat_state`` has emptied
-            # the maps the relation reads. It used to be captured for one named
+            # ``dead_power``: this batch goes on the stack as the step begins
+            # and resolves in its window, and the relation is frozen as it
+            # stood when the ability triggered (CR 603.10) rather than read off
+            # maps a removal in that window, or a held step's resumption, could
+            # have changed. It used to be captured for one named
             # instruction kind, which cannot see a kind nested inside a
             # ``sequence`` — Dread Wight's counters, tap, untap restriction and
             # grant are four steps under one — and a fire site that enumerates
@@ -203,11 +240,10 @@ class EndOfCombatStepMixin:
                 "combat_opponents": self.creatures_in_combat_with(permanent),
                 # "…**if this creature attacked or blocked this combat**" (the
                 # four Clockwork creatures, Kjeldoran Home Guard). Frozen for
-                # the reason the relation above it is, and one step sharper:
-                # ``end_combat`` pops ``blocked_this_combat`` before the
-                # priority window that resolves this batch, so CR 603.4's
-                # second check would find the block gone and the ability would
-                # do nothing on every blocker.
+                # the reason the relation above it is: CR 603.4's second check,
+                # as the ability resolves, asks the same question about the
+                # same combat, and the step's own sweep pops
+                # ``blocked_this_combat`` once its window is over.
                 #
                 # "This combat" rather than "this turn": the attack half is
                 # read off the live ``combat_attackers`` map, so a creature

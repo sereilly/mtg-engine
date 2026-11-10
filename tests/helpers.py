@@ -625,18 +625,18 @@ def drive_combat(
     *through* has ended, settling each step before it is left. Typically called
     after :func:`declare_attack`; from a main phase it begins the combat phase.
 
-    **The default carries through the end of combat step**, so the "at end of
+    **The default carries through the end of combat step**, so combat is over
+    (CR 511.3) when it returns: creatures are no longer attacking or blocking
+    and every until-end-of-combat effect has ended (CR 511.2). The "at end of
     combat" triggers — Time Elemental's delayed sacrifice, Wall of Nets, a
-    Basilisk's destruction — fire and resolve, and combat is over (CR 511.3)
-    when it returns. That is the trap it removes: the engine fires those
-    triggers as the end of combat step is *left* (``end_combat``), not as it
-    begins (CR 511.2), so a drive that advances until the step reads
-    ``end_of_combat`` (at a headless table, one ``advance_combat_phase()`` from
-    declare blockers) never fires them, and the creature the trigger
-    sacrifices is still on the battlefield.
+    Basilisk's destruction — fire as that step *begins* (CR 511.2), so they
+    are on the stack the moment a drive arrives there, and every stop at or
+    after the arrival resolves them.
 
     ``through="combat_damage"`` stops on arriving in the end of combat step,
-    with the damage dealt and every trigger it set off resolved. The engine
+    with the damage dealt, every trigger it set off resolved, and the end of
+    combat triggers resolved too — but with the creatures still in combat,
+    because the step has not ended. The engine
     deals combat damage as the combat damage step begins (CR 510.1 and 510.2
     are turn-based actions), so ``through="declare_blockers"`` stands *in* the
     combat damage step with the damage already dealt.

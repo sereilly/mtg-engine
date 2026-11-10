@@ -227,7 +227,12 @@ def test_w1g3_defiant_vanguard_still_destroys_what_it_blocked_after_dying(set_po
     _w1g3_to_blocks(game, [0, 1])
     assert game.declare_blockers(1, {0: 0})[0]
     resolve_stack(game)
-    _w1g3_finish_combat(game, until="end_of_combat")
+    # Stood in the combat damage step, its damage dealt: the end of combat
+    # step's trigger fires as that step begins (CR 511.2), so the fight is
+    # read here, before it.
+    game.advance_combat_phase(allow_damage_skip=False)
+    resolve_stack(game)
+    assert game.current_step == "combat_damage"
     assert not game.is_on_battlefield(vanguard)
     assert game.is_on_battlefield(brute)
     _w1g3_finish_combat(game)

@@ -620,21 +620,33 @@ def test_w1g3_keldon_battlewagon_cannot_block(set_pool):
 
 def test_w1g3_keldon_battlewagon_is_sacrificed_at_end_of_combat(set_pool):
     """"When this creature attacks, sacrifice it at end of combat." — a
-    delayed trigger the attack arms, which fires at the end of combat step."""
+    delayed trigger the attack arms, which fires as the end of combat step
+    begins (CR 511.2): the wagon arrives in that step and its trigger is on
+    the stack there."""
     game, (wagon,), _ = _w1g3_game([set_pool("PCY")["Keldon Battlewagon"]])
     game.advance_combat_phase()
     game.advance_combat_phase()
     assert game.declare_attackers(0, [0])[0]
     resolve_stack(game)
     present_through: list[str] = []
+    triggered_in: list[str] = []
     for _ in range(6):
         if game.current_step == "postcombat_main":
             break
         if game.is_on_battlefield(wagon):
             present_through.append(game.current_step)
+        if any(item.card.name == "Keldon Battlewagon" for item in game.stack):
+            triggered_in.append(game.current_step)
         game.advance_combat_phase()
+        if game.current_step == "end_of_combat" and game.is_on_battlefield(wagon):
+            present_through.append(game.current_step)
+            triggered_in.extend(
+                game.current_step for item in game.stack
+                if item.card.name == "Keldon Battlewagon"
+            )
         resolve_stack(game)
     assert "end_of_combat" in present_through, present_through
+    assert triggered_in == ["end_of_combat"], triggered_in
     assert game.players[1].life == 20, "a 0-power attacker deals nothing"
     assert not game.is_on_battlefield(wagon)
     assert [c.name for c in game.players[0].graveyard] == ["Keldon Battlewagon"]

@@ -733,6 +733,14 @@ class CombatPhaseMixin:
             # `test_trigger_dispatchers.py` exists to catch — a condition both
             # front ends read and nothing announces.
             emit(self, "combat")
+        if step == "end_of_combat":
+            # CR 511.2: "Abilities that trigger 'at end of combat' trigger as
+            # the end of combat step begins" — and CR 117.3a gives the active
+            # player priority only once they are on the stack. They used to
+            # fire as the step was *left* (``end_combat``), so an Unsummon cast
+            # in this window resolved before Time Elemental's trigger existed,
+            # and a Wall of Nets removed here never triggered at all.
+            self._begin_end_of_combat_step()
         # CR 508.1 / 509.1: declaring attackers and declaring blockers are
         # turn-based actions that happen *before* any player receives priority,
         # so no spell or ability can be cast/activated during that assignment.
@@ -858,6 +866,7 @@ class CombatPhaseMixin:
         self.combat_attackers_locked = False
         self.combat_blockers_locked = False
         self.combat_unblocked_triggers_fired = False
+        self.end_of_combat_triggers_fired = False
         self.combat_creatures_attacked = False
         for permanent in self.all_permanents():
             permanent.attacking = False

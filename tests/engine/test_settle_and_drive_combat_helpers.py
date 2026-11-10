@@ -13,9 +13,10 @@ which reads the board the rules give.
    machinery walks on past it (Hystrodon).
 2. **``resolve_stack`` performs no state-based actions** — not after the stack
    is empty and not between two resolutions (Lightning Bolt over Giant Growth).
-3. **A combat drive that stops on arriving in the end of combat step never
-   fires the "at end of combat" triggers**, which the engine fires as that step
-   is left (Time Elemental).
+3. **A combat drive that stops on arriving in the end of combat step has not
+   ended combat.** The "at end of combat" triggers fire as that step begins
+   (CR 511.2) and the arrival's settle resolves them (Time Elemental), but the
+   creatures are still in combat until the step ends (CR 511.3).
 
 ``resolve_stack``'s own contract — it answers only what blocks the stack — is
 ``test_stack_drain_helper.py``; nothing here changes it.
@@ -174,35 +175,48 @@ def test_settle_puts_a_creature_dealt_lethal_damage_in_the_graveyard(set_pool):
 def test_drive_combat_carries_through_the_end_of_combat_step(set_pool):
     """Trap 3. "When this creature attacks or blocks, at end of combat,
     sacrifice it and it deals 5 damage to you." (Time Elemental.) The delayed
-    trigger fires as the end of combat step is left, so a drive that advances
-    until the step reads ``end_of_combat`` — one advance from declare blockers,
-    at a headless table, which deals the damage and leaves that step too — and
-    ``through="combat_damage"``, which stops in the same place, leave it on the
-    battlefield and its controller at 20. The default drive fires it, resolves
-    it, and ends combat."""
+    trigger fires **as the end of combat step begins** (CR 511.2), so a drive
+    that advances until the step reads ``end_of_combat`` — one advance from
+    declare blockers, at a headless table, which deals the damage and leaves
+    that step too — finds it on the stack, and the settle resolves it there:
+    the Elemental is gone and its controller at 15. So does
+    ``through="combat_damage"``, which stops in the same place.
+
+    What neither has done is end combat: the Grizzly Bears beside it are still
+    attacking, because creatures leave combat only as the step *ends*
+    (CR 511.3). The default drive leaves the step, and combat is over."""
     elemental = set_pool("LEG")["Time Elemental"]
+    bears = set_pool("LEA")["Grizzly Bears"]
 
     game = _table(set_pool)
     attacker = _put(game, 0, elemental)
+    partner = _put(game, 0, bears)
     declare_attack(game, 0)
     game.advance_combat_phase()
+    assert game.current_step == "end_of_combat"
+    assert [item.card.name for item in game.stack] == ["Time Elemental"], (
+        "CR 511.2: the trigger is on the stack as the step begins"
+    )
     settle(game)
     assert game.current_step == "end_of_combat"
-    assert game.is_on_battlefield(attacker) and game.players[0].life == 20, (
-        "the rig must reproduce the trap: a drive stopped in end of combat"
+    assert not game.is_on_battlefield(attacker) and game.players[0].life == 15
+    assert partner.attacking and game.combat_attackers, (
+        "the rig must reproduce the trap: a drive stopped in end of combat "
+        "is still in combat"
     )
 
     game = _table(set_pool)
     attacker = _put(game, 0, elemental)
+    partner = _put(game, 0, bears)
     declare_attack(game, 0)
     drive_combat(game, through="combat_damage")
     assert game.current_step == "end_of_combat"
-    assert game.is_on_battlefield(attacker) and game.players[0].life == 20
+    assert not game.is_on_battlefield(attacker) and game.players[0].life == 15
+    assert partner.attacking and game.combat_attackers
 
     drive_combat(game)
     assert game.current_turn_phase == "postcombat_main"
-    assert not game.is_on_battlefield(attacker)
-    assert game.players[0].life == 15
+    assert not partner.attacking
     assert game.combat_attackers == {}, "CR 511.3: combat is over"
     with pytest.raises(ValueError, match="no combat phase next"):
         drive_combat(game)   # the turn's one combat is spent; this would begin another
