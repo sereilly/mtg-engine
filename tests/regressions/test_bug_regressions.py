@@ -10,7 +10,7 @@ import pytest
 from engine import Game, PlayerState, load_cards
 from engine.models import CardDefinition, Permanent
 from engine.text_changes import changed_words
-from tests.helpers import LEA_PATH
+from tests.helpers import LEA_PATH, settle
 
 
 # ---------------------------------------------------------------------------
@@ -569,7 +569,10 @@ def test_bug9_end_step_destruction_fires_dies_triggers(all_cards):
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
+    # The mark is a delayed triggered ability on the stack as the step begins
+    # (CR 603.7), destroyed as it resolves.
     game.resolve_end_step(0)
+    settle(game)
 
     assert perm not in p1.battlefield
     assert any(card.name == "Scryb Sprites" for card in p1.graveyard)

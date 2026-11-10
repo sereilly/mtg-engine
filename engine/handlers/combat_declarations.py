@@ -600,19 +600,22 @@ def force_subject_to_attack_until_eot(game: Game, instruction: OracleInstruction
             )
         ]
     marked: list[str] = []
+    # "…destroy **each of those creatures** that didn't attack": one delayed
+    # ability over the set (``destruction_events.DELAYED_TOGETHER_SUFFIX``).
+    together = tuple(perm.permanent_id for perm in subjects)
     for perm in subjects:
         if stamp is not None:
             add_seat_turn_stamp(perm, MUST_ATTACK_ON_SEAT_TURN_KEY, stamp)
             if destroy:
                 mark_delayed_destruction(
                     game, perm, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
-                    dict(stamp),
+                    dict(stamp), together=together,
                 )
         else:
             add_turn_requirement(perm, MUST_ATTACK_UNTIL_EOT)
             if destroy:
                 mark_delayed_destruction(
-                    game, perm, "destroy_if_did_not_attack_eot"
+                    game, perm, "destroy_if_did_not_attack_eot", together=together,
                 )
         marked.append(perm.card.name)
     if marked:
@@ -714,14 +717,18 @@ def destroy_subject_at_end_step_if_it_didnt_attack(game: Game, instruction: Orac
             )
         ]
     marked: list[str] = []
+    # One delayed ability over the set (``DELAYED_TOGETHER_SUFFIX``).
+    together = tuple(perm.permanent_id for perm in subjects)
     for perm in subjects:
         if stamp is not None:
             mark_delayed_destruction(
                 game, perm, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
-                dict(stamp),
+                dict(stamp), together=together,
             )
         else:
-            mark_delayed_destruction(game, perm, "destroy_if_did_not_attack_eot")
+            mark_delayed_destruction(
+                game, perm, "destroy_if_did_not_attack_eot", together=together,
+            )
         marked.append(perm.card.name)
     if marked:
         game.log.append(

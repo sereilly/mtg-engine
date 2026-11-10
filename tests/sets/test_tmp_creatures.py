@@ -1234,7 +1234,7 @@ def test_w3g1_maddening_imp_destroys_the_creature_that_stayed_home(set_pool):
     game.advance_combat_phase()
     assert game.declare_attackers(0, [], 1)[0]
     game.resolve_end_step(0)
-    game.check_state_based_actions()
+    game._settle()
     assert [p.card.name for p in p0.battlefield] == []
 
 
@@ -1958,12 +1958,15 @@ def test_w4g1_a_chosen_creature_that_stayed_home_dies_at_that_turns_end_step(set
     game._settle()
 
     game.resolve_end_step(1)
+    game._settle()   # its delayed marks resolve (CR 603.7)
     assert [perm.card.name for perm in game.players[1].battlefield] == [
         "Horned Turtle", "Trained Armodon",
     ]
     assert [card.name for card in game.players[1].graveyard] == ["Bayou Dragonfly"]
-    assert turtle.metadata[_W4G1_DESTROY_KEY] == {"seat": 1, "seat_turn": 1}
-    assert armodon.metadata[_W4G1_DESTROY_KEY] == {"seat": 1, "seat_turn": 1}
+    # One delayed ability over the set triggered at that end step (CR 603.7b:
+    # once), so the stamp is spent on the attackers too.
+    assert _W4G1_DESTROY_KEY not in turtle.metadata
+    assert _W4G1_DESTROY_KEY not in armodon.metadata
 
 
 def test_w4g1_the_window_is_one_turn_and_then_it_is_over(set_pool):

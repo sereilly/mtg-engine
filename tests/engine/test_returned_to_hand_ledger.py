@@ -107,8 +107,11 @@ def test_every_way_back_to_a_hand_goes_through_the_counting_seam():
                     continue
                 ways.append(f"{path.relative_to(ENGINE).as_posix()}::{name}")
 
-    # Nine on the tree this was written against.
-    assert len(ways) >= 9, ways
+    # Nine on the tree this was written against; eight since kg5, when the end
+    # step's own return (Rakalite's mark) became a stack object resolved
+    # through ``return_permanent_to_owners_hand`` above rather than a call of
+    # its own.
+    assert len(ways) >= 8, ways
     for sighting in (
         "handlers/_common.py::return_permanent_to_owners_hand",
         "handlers/returns.py::return_all_owned_artifacts_to_hand",

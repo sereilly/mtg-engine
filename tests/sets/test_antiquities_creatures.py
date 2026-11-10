@@ -791,7 +791,10 @@ def _ram_blocked_by(set_pool, blocker_name):
     accepted, why = game.declare_blockers(1, {0: 0})
     assert accepted, why
     game._settle()
-    game._resolve_end_of_combat_destruction()
+    # The end of combat step begins: the Ram's delayed destruction goes on
+    # the stack (CR 511.2, 603.7) and resolves.
+    game._begin_end_of_combat_step()
+    game._settle()
     return game, p2
 
 

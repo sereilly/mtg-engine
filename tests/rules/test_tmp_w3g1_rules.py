@@ -24,7 +24,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.models import Permanent
-from tests.helpers import _mk_creature_card, _nosick
+from tests.helpers import _mk_creature_card, _nosick, settle
 
 
 def _board(cards):
@@ -41,8 +41,11 @@ def _board(cards):
 
 
 def _sweep(game):
+    """The end step begins and settles: each mark is a delayed triggered
+    ability (CR 603.7) that goes on the stack as it begins and resolves in its
+    window."""
     game.resolve_end_step(0)
-    game.check_state_based_actions()
+    settle(game)
 
 
 @pytest.mark.cr("701.8a", "702.12b")

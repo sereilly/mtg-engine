@@ -393,7 +393,10 @@ def _play_out(game) -> None:
         for permanent in game.all_permanents()
         for key in permanent.metadata
     ):
-        game._resolve_end_of_combat_destruction()
+        # Each mark is a delayed triggered ability that goes on the stack as
+        # its step begins (CR 511.2, 603.7) and is drained like any other.
+        game.end_of_combat_triggers_fired = False
+        game._begin_end_of_combat_step()
         drain()
         game.resolve_end_step(game.active_player_index)
         drain()
@@ -406,6 +409,7 @@ _DELAYED_KEYS = frozenset({
     "destroy_at_end_of_combat", "destroy_at_next_end_step",
     "destroy_if_did_not_attack_eot", "destroy_if_attacked_eot",
     "destroy_if_did_not_attack_on_seat_turn", "sacrifice_at_next_end_step",
+    "bounce_at_next_end_step",
 })
 
 
@@ -1179,12 +1183,16 @@ def test_a_replaced_destruction_is_not_a_destruction_on_any_road(by_name, road, 
                 destruction_events.mark_delayed_destruction(
                     game, victim, "destroy_at_end_of_combat"
                 )
-                game._resolve_end_of_combat_destruction()
+                # The mark is a delayed triggered ability on the stack as the
+                # step begins (CR 511.2, 603.7): resolved inside the recorder.
+                game._begin_end_of_combat_step()
+                settle(game)
             elif road == "the end step":
                 destruction_events.mark_delayed_destruction(
                     game, victim, "destroy_at_next_end_step"
                 )
                 game.resolve_end_step(0)
+                settle(game)
             else:
                 orb = _put(game, by_name, 1, "Chaos Orb")
                 import engine.handlers.destruction as destruction_handlers
@@ -1386,6 +1394,10 @@ def test_a_seam_call_outside_an_effect_handler_says_who_caused_it():
 _DELAYED_MARKS = frozenset({
     "destroy_at_end_of_combat", "destroy_at_next_end_step",
     "destroy_if_did_not_attack_eot", "destroy_if_attacked_eot",
+    # The end step's sacrifice and return, whose writer is the same one since
+    # kg5: the mark records the seat and the card its delayed ability is
+    # announced under (CR 603.7d-e).
+    "sacrifice_at_next_end_step", "bounce_at_next_end_step",
 })
 _DELAYED_MARK_NAMES = frozenset({"DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY"})
 

@@ -130,6 +130,7 @@ def test_rocket_launcher_destroys_itself_at_the_next_end_step():
     assert launcher.metadata["destroy_at_next_end_step"] is True
 
     game.resolve_end_step(0)
+    game._settle()   # its delayed marks resolve (CR 603.7)
 
     assert not any(p.card.name == "Rocket Launcher" for p in p1.battlefield)
 

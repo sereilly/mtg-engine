@@ -94,6 +94,30 @@ PERMANENT_DESTROYED = "permanent_destroyed"
 #: Basilisk's block), and the step that destroys it asks about the one firing.
 DELAYED_CAUSE_SUFFIX = "_cause_seat"
 
+#: …and the card whose spell or ability created the delayed ability — CR
+#: 603.7d–e's *source* — recorded beside the seat, because the step that
+#: announces the mark as a delayed triggered ability puts it on the stack under
+#: that card's name ("Cockatrice: destroy that creature at end of combat"), and
+#: by then nothing is resolving to ask.
+DELAYED_SOURCE_SUFFIX = "_source_card"
+
+#: "**Sacrifice** it at the beginning of the next end step" (Krovikan
+#: Elementalist) against "**Its controller** sacrifices it …" (Celestial
+#: Sword). The first is the delayed ability's controller doing it, and CR
+#: 701.21a: "A player can't sacrifice … a permanent they don't control" — so a
+#: creature that changed hands before the step stays. The second is whoever
+#: controls it then. Recorded beside the mark as ``"you"`` for the first and
+#: left absent for the second, the spelling ``sacrifice_bound_permanent``'s
+#: ``sacrificed_by`` payload already uses.
+DELAYED_SACRIFICER_SUFFIX = "_sacrificed_by"
+
+#: "At the beginning of the next end step, destroy **each of those creatures**
+#: that didn't attack this turn" (Maddening Imp) is **one** delayed ability
+#: over a set, where two Krovikan Elementalist activations are two. The set one
+#: effect marked, by id, recorded on each member (absent for a mark made alone),
+#: so the step announces one stack object for it.
+DELAYED_TOGETHER_SUFFIX = "_marked_with"
+
 
 class _Cause:
     """One of the three things a caller may say instead of naming a seat."""
@@ -151,21 +175,26 @@ def cause_seat(game: "Game", cause=RESOLVING) -> int | None:
 
 
 def mark_delayed_destruction(
-    game: "Game", permanent: "Permanent", mark: str, value=True
+    game: "Game", permanent: "Permanent", mark: str, value=True,
+    *, sacrificed_by: str | None = None, together=None,
 ) -> None:
-    """Set *permanent*'s delayed-destruction *mark*, and record who set it.
+    """Set *permanent*'s delayed-action *mark*, and record who set it.
 
     **The one writer of those marks** ("destroy_at_end_of_combat" and its
-    siblings), so that a mark cannot exist without its cause: the handler
-    calls this while the spell or ability creating the delayed ability is
-    still resolving — CR 603.7d–e make its controller the delayed ability's —
-    and by the step that carries the destruction out nothing is resolving at
-    all. A mark written directly would be destroyed by nobody, or by whoever
-    set the previous one; ``tests/regressions/test_ody_w2g4_destroy_seam.py``
+    siblings, the end step's sacrifice and return included), so that a mark
+    cannot exist without its cause: the handler calls this while the spell or
+    ability creating the delayed ability is still resolving — CR 603.7d–e make
+    its controller the delayed ability's, and its source the delayed
+    ability's — and by the step that announces the mark nothing is resolving
+    at all. A mark written directly would be controlled by nobody, or by
+    whoever set the previous one; ``tests/regressions/test_ody_w2g4_destroy_seam.py``
     fails a second writer.
 
     *value* is what the mark holds where it is more than a flag (the
     seat-turn stamp of "…at the beginning of **that turn's** end step").
+    *sacrificed_by* is ``"you"`` for a sacrifice the delayed ability's
+    controller makes (:data:`DELAYED_SACRIFICER_SUFFIX`); *together* the
+    permanents one effect marked as a set (:data:`DELAYED_TOGETHER_SUFFIX`).
     """
     permanent.metadata[mark] = value
     seat = cause_seat(game)
@@ -173,6 +202,21 @@ def mark_delayed_destruction(
         permanent.metadata.pop(mark + DELAYED_CAUSE_SUFFIX, None)
     else:
         permanent.metadata[mark + DELAYED_CAUSE_SUFFIX] = seat
+    resolving = getattr(game, "resolving_items", None)
+    source = resolving[-1].card if resolving else None
+    if source is None:
+        permanent.metadata.pop(mark + DELAYED_SOURCE_SUFFIX, None)
+    else:
+        permanent.metadata[mark + DELAYED_SOURCE_SUFFIX] = source
+    if sacrificed_by is None:
+        permanent.metadata.pop(mark + DELAYED_SACRIFICER_SUFFIX, None)
+    else:
+        permanent.metadata[mark + DELAYED_SACRIFICER_SUFFIX] = sacrificed_by
+    members = tuple(together or ())
+    if len(members) > 1:
+        permanent.metadata[mark + DELAYED_TOGETHER_SUFFIX] = members
+    else:
+        permanent.metadata.pop(mark + DELAYED_TOGETHER_SUFFIX, None)
 
 
 def delayed_destruction_cause(permanent: "Permanent", mark: str):
@@ -324,6 +368,9 @@ def instruction_finished(game: "Game") -> None:
 
 __all__ = [
     "DELAYED_CAUSE_SUFFIX",
+    "DELAYED_SACRIFICER_SUFFIX",
+    "DELAYED_SOURCE_SUFFIX",
+    "DELAYED_TOGETHER_SUFFIX",
     "DestructionLedger",
     "NOT_A_DESTRUCTION",
     "NO_SPELL_OR_ABILITY",

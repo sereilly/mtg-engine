@@ -506,8 +506,11 @@ def test_w1g1_stone_tongue_basilisk_destroys_what_it_damaged_at_end_of_combat(
     assert game.declare_attackers(0, [slot])[0]
     game.advance_combat_phase()
     assert game.declare_blockers(1, {_w1g1_slot(game, 1, wall): slot})[0]
-    game.advance_combat_phase()
+    # Stood in the combat damage step: the delayed trigger fires as the end
+    # of combat step begins (CR 511.2).
+    game.advance_combat_phase(allow_damage_skip=False)
     _w1g1_resolve_stack(game)
+    assert game.current_step == "combat_damage"
     assert game.is_on_battlefield(wall), "8 toughness: the damage alone does not kill it"
 
     _w1g1_finish_combat(game)

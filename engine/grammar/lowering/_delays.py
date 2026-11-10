@@ -214,7 +214,9 @@ _MADE_PERMANENT_END_STEP_ACTIONS = {
 }
 
 
-def end_step_action_on_made_permanent(action: str, record: str) -> OracleInstruction:
+def end_step_action_on_made_permanent(
+    action: str, record: str, *, by_controller: bool = False,
+) -> OracleInstruction:
     """The delayed ability "<action> **it** at the beginning of the next end
     step" creates when "it" is a permanent this effect made.
 
@@ -244,6 +246,12 @@ def end_step_action_on_made_permanent(action: str, record: str) -> OracleInstruc
         "binds_recorded": record,
         "binds_target": False,
         "instruction": OracleInstruction(
-            _MADE_PERMANENT_END_STEP_ACTIONS[action], "", {}
+            _MADE_PERMANENT_END_STEP_ACTIONS[action], "",
+            # "**Sacrifice** it" (Balduvian Dead, Tidal Wave) is this ability's
+            # controller, who cannot once the token has changed hands (CR
+            # 701.21a); "**Its controller** sacrifices it" (Cauldron Dance) is
+            # whoever has it then (*by_controller*).
+            {"sacrificed_by": "you"}
+            if action == "sacrifice" and not by_controller else {},
         ),
     })

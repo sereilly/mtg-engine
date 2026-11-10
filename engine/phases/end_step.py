@@ -15,9 +15,7 @@ created them and fire at the next end step there is, so the announcement takes
 no seat.
 """
 
-from ..delayed_triggers import fire_delayed_triggers
-from ..destruction_events import delayed_destruction_cause
-from ..models import Permanent
+from ..delayed_triggers import delayed_mark_events, fire_delayed_triggers
 from ..turn_state import (DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
                           marked_for_this_turn)
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
@@ -144,133 +142,23 @@ class EndStepMixin:
                 self, "granted_extra_turns_end_step", seat=player_index
             )
 
-        def _delayed_eot_destruction(permanent: Permanent) -> bool:
-            # Nettling Imp / Siren's Call / Maddening Imp: destroy creatures
-            # that were required to attack this turn but didn't.
-            # "At the beginning of **that turn's** end step, destroy each of
-            # the chosen creatures that didn't attack this turn." (Oracle
-            # en-Vec.) The same sentence Maddening Imp prints, aimed at a turn
-            # that had not started when the ability resolved — so the mark is
-            # the seat-turn stamp beside the cleanup-swept one, read at the
-            # only end step it names and inert at every other.
-            did_not_attack = (
-                permanent.metadata.get("destroy_if_did_not_attack_eot")
-                or marked_for_this_turn(
-                    self, permanent, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY
-                )
-            ) and not permanent.metadata.get("attacked_this_turn")
-            # Berserk: "destroy that creature if it attacked this turn."
-            berserk_attacked = permanent.metadata.get(
-                "destroy_if_attacked_eot"
-            ) and permanent.metadata.get("attacked_this_turn")
-            # Dragon Whelp sets a plain delayed end-of-turn destruction.
-            return bool(
-                permanent.metadata.get("destroy_at_next_end_step")
-                or did_not_attack
-                or berserk_attacked
-            )
-
-        def _delayed_eot_sacrifice(permanent: Permanent) -> bool:
-            return bool(permanent.metadata.get("sacrifice_at_next_end_step"))
-
-        def _delayed_eot_cause(permanent: Permanent):
-            # Whose delayed ability this destruction is (CR 603.7d–e): the
-            # seat recorded with whichever mark is firing, in the order
-            # `_delayed_eot_destruction` reads them. A creature can carry two
-            # — a Berserk and a Nettling Imp's — set by two players, and the
-            # one that destroys it is the one whose condition holds.
-            marks = []
-            if permanent.metadata.get("destroy_at_next_end_step"):
-                marks.append("destroy_at_next_end_step")
-            if not permanent.metadata.get("attacked_this_turn"):
-                if permanent.metadata.get("destroy_if_did_not_attack_eot"):
-                    marks.append("destroy_if_did_not_attack_eot")
-                if marked_for_this_turn(
-                    self, permanent, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY
-                ):
-                    marks.append(DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY)
-            elif permanent.metadata.get("destroy_if_attacked_eot"):
-                marks.append("destroy_if_attacked_eot")
-            for mark in marks:
-                cause = delayed_destruction_cause(permanent, mark)
-                if isinstance(cause, int):
-                    return cause
-            return delayed_destruction_cause(permanent, marks[0] if marks else "")
-
-        # **A sacrifice is not a destruction**, so the delayed sacrifices below
-        # are not this sweep's. This was one
-        # sweep with regeneration and indestructibility both switched off, and
-        # its own comment named the reason and the fix: the flags conflated
-        # CR 701.21a's sacrifice — which no replacement effect and no
-        # indestructibility can stop — with the three that say *destroy*, and
-        # "separating them is a rules feature".
-        #
-        # Separated, the destruction half is an ordinary destruction:
-        # CR 702.12b spares an indestructible permanent and CR 701.8c lets a
-        # regeneration shield replace it. Every card on that half printed the
-        # word "destroy" and none of them was getting it — an indestructible
-        # creature that stayed home was destroyed by Nettling Imp, and a
-        # regenerating one by Berserk.
-        destroyed_names: list[str] = []
-        for controller in self.players:
-            for permanent in self._destroy_swept_permanents(
-                controller, _delayed_eot_destruction,
-                cause=_delayed_eot_cause,
-            ):
-                destroyed_names.append(permanent.card.name)
-
-        for name in destroyed_names:
-            self.log.append(f"{name} was destroyed at end step")
-
-        # "Sacrifice it at the beginning of the next end step." (Krovikan
-        # Elementalist, Celestial Sword, Goblin Ski Patrol.) **A sacrifice**,
-        # through CR 701.21a's one transition: it was the destruction sweep
-        # above with its protections switched off (and ``NOT_A_DESTRUCTION``,
-        # so nothing called it destroyed), which also meant nothing called it
-        # sacrificed — no "whenever you sacrifice a permanent" heard it (Havoc
-        # Jester), and Urza's Miter's "if it wasn't sacrificed" offered its
-        # draw for an artifact that was. Each mark is its own delayed
-        # triggered ability (CR 603.7), so each sacrifice is its own event,
-        # as the cleanup step's flash-Aura sacrifices are.
-        marked = [
-            permanent for permanent in self.all_permanents()
-            if _delayed_eot_sacrifice(permanent)
-        ]
-        for permanent in marked:
-            seat = self.controller_index_of(permanent)
-            if seat is None or self.sacrifice_permanent(permanent) is None:
-                continue
-            self.log.append(
-                f"{self.players[seat].name} sacrificed {permanent.card.name} "
-                "at end step"
-            )
-
-        # "Return this artifact to its owner's hand at the beginning of the
-        # next end step." (Rakalite.) The bounce twin of the destruction sweep
-        # above, and beside it rather than folded in: a delayed *removal* and a
-        # delayed *return* end in different zones, and the sweep above is
-        # explicitly the one that does not offer regeneration because its flags
-        # conflate sacrifice with destruction. Nothing about that reasoning
-        # extends to a bounce.
-        for controller in list(self.players):
-            for permanent in list(self.controlled_by(controller)):
-                if not permanent.metadata.pop("bounce_at_next_end_step", False):
-                    continue
-                owner_index = self.owner_index_of(permanent)
-                owner = (
-                    self.players[owner_index] if owner_index is not None else controller
-                )
-                self.remove_from_battlefield(permanent)
-                self.put_card_into_hand(
-                    owner, permanent.card, from_battlefield=permanent
-                )
-                self.log.append(
-                    f"{permanent.card.name} returned to {owner.name}'s hand at end step"
-                )
-
         # "At the beginning of the end step" triggered abilities go on the stack
         # (CR 603.3) and resolve through the end-step priority window opened below.
-        events: list[dict] = []
+        #
+        # **The delayed abilities recorded as marks first** — Dragon Whelp's
+        # sacrifice, Berserk's, Nettling Imp's and Rocket Launcher's
+        # destructions, Rakalite's return (``_end_step_mark_firings``). Each is
+        # a delayed triggered ability (CR 603.7) that triggers as the step
+        # begins and goes on the stack with the rest, controlled by whoever
+        # created it (CR 603.7d–e). They were carried out here inline, as three
+        # sweeps, before anybody had priority: nothing could answer them (a
+        # regeneration shield made in response, the creature bounced first),
+        # every one ran before the step's other triggers whatever the seats'
+        # order, and "sacrifice it" was performed by whoever controlled the
+        # permanent then.
+        events: list[dict] = delayed_mark_events(
+            self, self._end_step_mark_firings()
+        )
 
         # Scavenging Ghoul: "...put a corpse counter on this creature for each
         # creature that died this turn." Khabál Ghoul: same trigger shape but
@@ -442,15 +330,62 @@ class EndStepMixin:
 
         self._enqueue_triggered_batch(events)
 
-        # The sweeps above carry out "at the beginning of the next end step"
-        # removals inline (Krovikan Elementalist's sacrifice, Berserk's
-        # destruction, Rakalite's bounce), so a lord can be gone before anyone
-        # has priority — and CR 704.3 checks first. This step opened its
-        # window straight after them; the upkeep, whose inline effects are the
-        # same shape, has always checked here.
+        # CR 704.3 checks before anyone has priority. The step's delayed
+        # removals used to be carried out inline above, so a lord could be
+        # gone before the window opened; they are stack objects now, and the
+        # check stays because the upkeep, whose inline effects are the same
+        # shape, has always made it here, and the step's state triggers want
+        # it (CR 117.5).
         self._check_after_turn_based_actions()
         if self._receives_priority(step):
             self.start_priority_window(self.active_player_index)
+
+    def _end_step_mark_firings(self) -> list:
+        """Every delayed ability recorded as a mark that triggers as this end
+        step begins, as ``(permanent, mark, rider)`` for
+        ``delayed_triggers.delayed_mark_events``.
+
+        * "…at the beginning of the next end step" — destroy (Dragon Whelp's
+          kin through ``destroy_at_next_end_step``, Glyph of Destruction),
+          sacrifice (Krovikan Elementalist, Celestial Sword), return
+          (Rakalite) — fires at the next end step there is.
+        * "Destroy it at the beginning of the next end step **if it didn't
+          attack this turn**" (Nettling Imp, Maddening Imp) and "…**if it
+          attacked this turn**" (Berserk): the condition is the ability's
+          effect, asked as it resolves (``if_attacked``), not whether it
+          triggers. These marks are this turn's (cleanup sweeps them).
+        * "At the beginning of **that turn's** end step, …" (Oracle en-Vec):
+          the seat-turn stamp fires only at the end step of the turn it names
+          and stays inert at every other.
+
+        Over each seat's permanents through the control seam, so a phased-out
+        permanent's mark waits (CR 702.26d), as the sweeps it replaces did.
+        """
+        firings: list = []
+        for controller in self.players:
+            for permanent in self.controlled_by(controller):
+                metadata = permanent.metadata
+                if metadata.get("destroy_at_next_end_step"):
+                    firings.append((permanent, "destroy_at_next_end_step",
+                                    {"action": "destroy"}))
+                if metadata.get("destroy_if_did_not_attack_eot"):
+                    firings.append((permanent, "destroy_if_did_not_attack_eot",
+                                    {"action": "destroy", "if_attacked": False}))
+                if marked_for_this_turn(
+                    self, permanent, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY
+                ):
+                    firings.append((permanent, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
+                                    {"action": "destroy", "if_attacked": False}))
+                if metadata.get("destroy_if_attacked_eot"):
+                    firings.append((permanent, "destroy_if_attacked_eot",
+                                    {"action": "destroy", "if_attacked": True}))
+                if metadata.get("sacrifice_at_next_end_step"):
+                    firings.append((permanent, "sacrifice_at_next_end_step",
+                                    {"action": "sacrifice"}))
+                if metadata.get("bounce_at_next_end_step"):
+                    firings.append((permanent, "bounce_at_next_end_step",
+                                    {"action": "bounce"}))
+        return firings
 
     @goes_no_further(True)
     def close_end_step(self) -> bool:

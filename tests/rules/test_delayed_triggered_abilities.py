@@ -22,6 +22,7 @@ from engine.delayed_triggers import (WHILE_SOURCE_TAPPED, DelayedTrigger,
                                      fire_delayed_triggers)
 from engine.models import CardDefinition, Permanent
 from engine.oracle_types import OracleInstruction
+from tests.helpers import settle
 
 
 def _leg():
@@ -439,13 +440,19 @@ def test_603_7_the_source_spelling_still_names_the_source():
 
 
 @pytest.mark.cr("701.21a")
-def test_701_21a_naming_the_controller_of_a_sacrifice_narrows_nothing():
+def test_701_21a_naming_the_controller_of_a_sacrifice_names_who_sacrifices():
     """"**Its controller** sacrifices it at the beginning of the next end step."
-    (Celestial Sword.)
+    (Celestial Sword.) against "**Sacrifice** it …" (Krovikan Elementalist).
 
-    A sacrifice is its controller moving their own permanent to the graveyard
-    and nobody else can perform it, so writing the actor out says what the rule
-    already says. It was refused as "another player sacrificing", which is the
+    One kind, and one difference in its payload: the bare imperative is the
+    delayed ability's controller doing it, and CR 701.21a lets a player
+    sacrifice only what they control — so it carries ``sacrificed_by: "you"``
+    and a creature that changed hands before the end step stays. The spelled
+    actor is whoever controls it then (Goblin Ski Patrol's ruling, 2008-10-01:
+    "its new controller will still have to sacrifice it"). This test said the
+    actor "narrows nothing", which is true only while nobody steals the
+    creature; ``tests/rules/test_kg5_delayed_end_step_marks.py`` plays both.
+    It was refused as "another player sacrificing" before that, which is the
     one reading the sentence cannot have.
     """
     from engine.grammar import compile_line
@@ -458,7 +465,8 @@ def test_701_21a_naming_the_controller_of_a_sacrifice_narrows_nothing():
     ).instructions
 
     assert [i.kind for i in spelled_out] == [i.kind for i in bare]
-    assert spelled_out[0].payload == bare[0].payload
+    assert "sacrificed_by" not in spelled_out[0].payload
+    assert bare[0].payload == {**spelled_out[0].payload, "sacrificed_by": "you"}
 
 
 @pytest.mark.cr("701.21a")
@@ -487,6 +495,7 @@ def test_701_21a_the_delayed_sacrifice_is_recorded_as_one_not_as_a_destruction()
     assert "destroy_at_next_end_step" not in bear.metadata
 
     game.resolve_end_step(0)
+    settle(game)
 
     assert bear not in game.players[0].battlefield
     assert [c.name for c in game.players[0].graveyard] == ["Bear"]

@@ -366,11 +366,15 @@ def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
     """
     mark = stream.mark()
     # "**Its controller** sacrifices it at the beginning of the next end step."
-    # (Celestial Sword.) The same sentence with its actor written out: a
-    # sacrifice is performed by the permanent's controller and by nobody else
-    # (CR 701.21a), so naming them narrows nothing and the verb below reads the
-    # rest unchanged. Consumed here rather than admitted as "another player
-    # sacrificing", which is what the general sacrifice lowering refused it as.
+    # (Celestial Sword.) The same sentence with its actor written out, and the
+    # actor is not the bare imperative's: "Sacrifice it" is the delayed
+    # ability's controller, who can sacrifice only what they still control
+    # (CR 701.21a), and "its controller" is whoever controls it when the step
+    # comes — Goblin Ski Patrol's ruling (2008-10-01): "its new controller will
+    # still have to sacrifice it". So the words ride the node
+    # (``by_controller``) rather than being read and dropped. Consumed here
+    # rather than admitted as "another player sacrificing", which is what the
+    # general sacrifice lowering refused it as.
     named_controller = stream.accept_phrase("its", "controller")
     if stream.accept_word("destroy") and not named_controller:
         action = "destroy"
@@ -431,7 +435,9 @@ def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
     ):
         stream.reset(mark)
         return None
-    return ast.DelayedSelfAction(action, subject=subject)
+    return ast.DelayedSelfAction(
+        action, subject=subject, by_controller=bool(named_controller)
+    )
 
 
 def parse_simultaneous_phasing(

@@ -109,14 +109,22 @@ def test_each_delayed_sacrifice_is_its_own_event():
     _activate(game, "Krovikan Elementalist", jester, ability_index=1)
     _activate(game, "Krovikan Elementalist", bears, ability_index=1)
 
+    start = len(game.log)
     game.resolve_end_step(0)
     settle(game)
+    tail = game.log[start:]
 
     assert not game.is_on_battlefield(jester)
     assert not game.is_on_battlefield(bears)
-    assert sum(
-        1 for line in game.log if line.endswith("at end step") and "sacrificed" in line
-    ) == 2
-    # The Jester went first (seat order), in an event of its own: it heard
-    # itself go and not the Bears, which left after it in another.
-    assert _resolved(game, "Havoc Jester") == 1, game.log[-10:]
+    sacrificed = [
+        line for line in tail if line.endswith("at end step") and "sacrificed" in line
+    ]
+    assert len(sacrificed) == 2
+    # Two delayed abilities on the stack (CR 603.7), two resolutions: each
+    # sacrifice is an event of its own, in the order their controller put them
+    # there (CR 603.3b).
+    assert tail.count("Krovikan Elementalist ability resolved") == 2, tail
+    # The Jester hears itself go, and the Bears only if it was still there when
+    # their ability resolved.
+    jester_first = sacrificed[0].endswith("Havoc Jester at end step")
+    assert tail.count("Havoc Jester ability resolved") == (1 if jester_first else 2), tail

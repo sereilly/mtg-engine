@@ -1098,6 +1098,7 @@ def test_krovikan_elementalist_sacrifices_the_creature_it_gave_flying(set_pool):
     assert elementalist.metadata.get("sacrifice_at_next_end_step") is None
 
     game.resolve_end_step(0)
+    game._settle()   # its delayed marks resolve (CR 603.7)
 
     assert [p.card.name for p in p1.battlefield] == ["Krovikan Elementalist"]
     assert [c.name for c in p1.graveyard] == ["Balduvian Bears"]

@@ -221,6 +221,7 @@ def test_celestial_sword_sacrifices_the_creature_it_pumped(set_pool):
     assert (bear.effective_power, bear.effective_toughness) == (5, 5)
 
     game.resolve_end_step(0)
+    game._settle()   # its delayed marks resolve (CR 603.7)
 
     assert [p.card.name for p in p1.battlefield] == ["Celestial Sword"]
     assert [c.name for c in p1.graveyard] == ["Balduvian Bears"]
@@ -1436,6 +1437,7 @@ def test_w3g2_refusing_the_whistles_price_forces_the_attack(set_pool):
 
     assert victim.metadata.get("must_attack_until_eot") == 1
     game.resolve_end_step(1)
+    game._settle()   # its delayed marks resolve (CR 603.7)
     assert not any(
         perm is victim for perm in game.controlled_by(game.players[1])
     ), game.log

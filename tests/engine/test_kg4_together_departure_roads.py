@@ -61,27 +61,6 @@ _NOT_DEPARTURES = {
 
 #: ``(module, function, called) -> why that loop is not one departure event``.
 _REVIEWED = {
-    ("phases/end_step.py", "_begin_end_step", "_destroy_swept_permanents"): (
-        "each \"destroy it at the beginning of the next end step\" mark is its "
-        "own delayed triggered ability (CR 603.7), so each destruction is its "
-        "own event; the engine performs them in one sweep rather than one "
-        "stack object each, which is a shortcut of its own."
-    ),
-    ("phases/end_step.py", "_begin_end_step", "sacrifice_permanent"): (
-        "each \"sacrifice it at the beginning of the next end step\" mark is "
-        "its own delayed triggered ability (CR 603.7), so each sacrifice is "
-        "its own event, as the cleanup step's flash-Aura sacrifices are."
-    ),
-    ("phases/end_step.py", "_begin_end_step", "remove_from_battlefield"): (
-        "Rakalite's \"return this artifact to its owner's hand at the beginning "
-        "of the next end step\": each is its own delayed triggered ability "
-        "(CR 603.7), as the destructions above."
-    ),
-    ("phases/end_of_combat_step.py", "_resolve_end_of_combat_destruction",
-     "_destroy_swept_permanents"): (
-        "the same, at end of combat: each \"destroy that creature at end of "
-        "combat\" (Infinite Authority) is its own delayed triggered ability."
-    ),
     ("phases/cleanup_step.py", "_sacrifice_permanents_cast_at_instant_speed",
      "sacrifice_permanent"): (
         "each \"sacrifice it at the beginning of the next cleanup step\" mark is "

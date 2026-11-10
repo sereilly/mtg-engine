@@ -345,41 +345,6 @@ def _cleanup_ends_a_control_change(pool):
     return game, done, "cleanup", run
 
 
-def _end_step_sacrifices_a_lord(pool):
-    """Not a CR 703.4 action, and the same shape: the end step carries out "at
-    the beginning of the next end step" removals inline (CR 603.7), as the
-    upkeep does its effects, before its window opens. Krovikan Elementalist:
-    "Target creature you control gains flying until end of turn. Sacrifice it
-    at the beginning of the next end step." On a Lord of Atlantis, whose
-    Merfolk of the Pearl Trident took a ping this turn → 704.5g."""
-    game = _game()
-    _library(game, pool, 0)
-    _library(game, pool, 1)
-    game._set_phase_and_step("precombat_main", "precombat_main")
-    lord = _put(game, 0, pool["LEA"]["Lord of Atlantis"])
-    merfolk = _put(game, 0, pool["LEA"]["Merfolk of the Pearl Trident"])
-    elementalist = _put(game, 0, pool["ICE"]["Krovikan Elementalist"])
-    pinger = _put(game, 1, pool["LEA"]["Prodigal Sorcerer"])
-    assert game._mark_damage_on_permanent(merfolk, 1, source=pinger) == 1
-    result = game.queue_permanent_ability(
-        0, "Krovikan Elementalist",
-        permanent_index=game.battlefield_index_of(elementalist), ability_index=1,
-        target_permanent_ids=[lord.permanent_id],
-    )
-    assert result.supported, result.details
-    resolve_stack(game)
-    game.check_state_based_actions()
-    assert game.is_on_battlefield(merfolk), "a 2/2 with 1 damage stands"
-    done = lambda g: _in_graveyard(g, merfolk)
-
-    def run(g, how):
-        g.resolve_end_step(0)
-        if how == "driver":
-            g._resolve_priority_window()
-
-    return game, done, "end", run
-
-
 CASES = {
     "703.4d draw from an empty library": _draw_from_an_empty_library,
     "the draw step's life loss before a skipped draw": _a_skipped_draw_after_nafs_asp,
@@ -396,7 +361,12 @@ CASES = {
     "703.4m combat damage kills a blocker": _combat_damage_kills_a_blocker,
     "703.4p cleanup ends a pump": _cleanup_ends_a_pump,
     "703.4p cleanup ends a control change": _cleanup_ends_a_control_change,
-    "603.7 the end step sacrifices a lord": _end_step_sacrifices_a_lord,
+    # "603.7 the end step sacrifices a lord" (Krovikan Elementalist's delayed
+    # sacrifice of a Lord of Atlantis) was a case here while the end step
+    # carried its delayed removals out inline before its window. Since kg5
+    # each is a delayed triggered ability on the stack (CR 603.7), so it is
+    # performed in the window like any resolution, and the check after it is
+    # ``_check_between_resolutions``' (tests/rules/test_kg5_delayed_end_step_marks.py).
 }
 
 
@@ -451,10 +421,11 @@ def _verdicts(pool, offers: list | None = None) -> dict:
 def test_each_turn_based_action_is_followed_by_the_state_check(pool):
     offers: list = []
     verdicts = _verdicts(pool, offers)
-    assert len(verdicts) == 2 * len(CASES) >= 24
+    assert len(verdicts) == 2 * len(CASES) >= 22
     # …and the driver was asked: the steps that do not end the game offer
     # priority, so a census whose driver saw nothing would be measuring nothing.
-    assert sum(1 for seen in offers if seen) >= 6, offers
+    # Six with the end step's sacrifice among the cases; five since kg5.
+    assert sum(1 for seen in offers if seen) >= 5, offers
     failing = {key: why for key, why in verdicts.items() if why}
     assert failing == {}
 
@@ -470,10 +441,10 @@ def test_the_census_names_every_case_with_the_check_switched_off(pool, monkeypat
     the driver's first offer too (the defender at 0 life *survived* there: its
     block trigger resolved first and gained the life back), and both cleanup
     cases at both — and passed the draw, untap, phasing and combat damage,
-    whose checks this name now covers. The skipped draw and the end step's
-    sacrifice were written after the fix; on that tree both steps opened their
-    windows with no check (``_close_or_defer_step``'s skip exits,
-    ``_begin_end_step``), which is the switch below."""
+    whose checks this name now covers. The skipped draw (and the end step's
+    sacrifice, a case until kg5 made it a stack object) were written after the
+    fix; on that tree the step opened its window with no check
+    (``_close_or_defer_step``'s skip exits), which is the switch below."""
     monkeypatch.setattr(Game, "_check_after_turn_based_actions", lambda self: False)
     verdicts = _verdicts(pool)
     named = {name for (name, _how), why in verdicts.items() if why}

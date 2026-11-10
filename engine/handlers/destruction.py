@@ -596,12 +596,18 @@ def arm_self_action_at_next_end_step(game: Game, instruction: OracleInstruction,
         "bounce": "bounce_at_next_end_step",
         "sacrifice": "sacrifice_at_next_end_step",
     }.get(action, "destroy_at_next_end_step")
-    if key == "destroy_at_next_end_step":
-        # A destruction, so the mark carries who set it up (CR 603.7d–e) —
-        # the end step that carries it out has no spell or ability resolving.
-        mark_delayed_destruction(game, source, key)
-    else:
-        source.metadata[key] = True
+    # Every mark carries who set it up and from what (CR 603.7d–e): the end
+    # step announces it as a delayed triggered ability under that controller
+    # and that card, and nothing is resolving by then to ask. The sacrifice and
+    # the return were written bare, so the sacrifice was made by whoever
+    # controlled the permanent at the end step — which "Sacrifice it" (the
+    # ability's controller, CR 701.21a) is not, once it has changed hands.
+    mark_delayed_destruction(
+        game, source, key,
+        sacrificed_by=(
+            instruction.payload.get("sacrificed_by") if action == "sacrifice" else None
+        ),
+    )
     return True, "resolved"
 
 

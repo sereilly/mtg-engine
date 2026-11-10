@@ -529,7 +529,9 @@ def _lower_delayed_self_action(
                 "several earlier steps made permanents; which one \"it\" "
                 "names is ambiguous", node=node,
             )
-        return (end_step_action_on_made_permanent(node.action, next(iter(made))),)
+        return (end_step_action_on_made_permanent(
+            node.action, next(iter(made)), by_controller=node.by_controller,
+        ),)
     return (
         OracleInstruction(
             # Keyed `self_action`, not `action`: a payload key called
@@ -543,7 +545,15 @@ def _lower_delayed_self_action(
             # Absent for "this artifact", so every payload written before Glyph
             # of Destruction is byte-identical.
             {"self_action": node.action}
-            | ({"subject": node.subject} if node.subject != "source" else {}),
+            | ({"subject": node.subject} if node.subject != "source" else {})
+            # "Sacrifice it" — the delayed ability's controller, who can
+            # sacrifice only what they control (CR 701.21a); "its controller
+            # sacrifices it" leaves the key out. The spelling
+            # ``sacrifice_bound_permanent`` already reads.
+            | (
+                {"sacrificed_by": "you"}
+                if node.action == "sacrifice" and not node.by_controller else {}
+            ),
         ),
     )
 
