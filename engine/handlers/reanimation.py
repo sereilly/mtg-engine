@@ -667,9 +667,7 @@ def reanimate_aura_onto_source(game: Game, instruction: OracleInstruction, conte
     # Once it is there (the entry's ``then``: at the answer, when an "as it
     # enters" choice keeps it on its way, CR 614.12a).
     def arrived() -> None:
-        # A replacement that took the entry away wrote its own line, and
-        # nothing of this is owed for an entry that never happened
-        # (``entry_awaiting.entry_happened``).
+        # Only for an entry that happened (a replacement wrote its own line).
         if not entry_happened(arrival):
             return
         attach_aura(arrival, host)
@@ -778,9 +776,7 @@ def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: Or
                 # The entry's ``then`` (CR 614.12a: at the answer, when an "as it
                 # enters" choice keeps it on its way).
                 def arrived(permanent=permanent, seat=seat, card=card) -> None:
-                    # A replacement that took the entry away wrote its own line, and
-                    # nothing of this is owed for an entry that never happened
-                    # (``entry_awaiting.entry_happened``).
+                    # Only for an entry that happened (a replacement wrote its own line).
                     if not entry_happened(permanent):
                         return
                     context.results["reanimated_bound_card"] = True
@@ -971,9 +967,7 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
     # Once it is there — the entry's ``then``, run at the answer when an "as
     # it enters" choice keeps it on its way (CR 614.12a).
     def arrived() -> None:
-        # A replacement that took the entry away wrote its own line, and
-        # nothing of this is owed for an entry that never happened
-        # (``entry_awaiting.entry_happened``).
+        # Only for an entry that happened (a replacement wrote its own line).
         if not entry_happened(permanent):
             return
         # "…return it to the battlefield under your control **and put a death
@@ -1097,9 +1091,7 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
     # Once it is there — the entry's ``then``, run at the answer when an "as
     # it enters" choice keeps it on its way (CR 614.12a).
     def returned() -> None:
-        # A replacement that took the entry away wrote its own line, and
-        # nothing of this is owed for an entry that never happened
-        # (``entry_awaiting.entry_happened``).
+        # Only for an entry that happened (a replacement wrote its own line).
         if not entry_happened(arrived):
             return
         game.log.append(
@@ -1251,9 +1243,7 @@ def move_random_graveyard_card(game: Game, instruction: OracleInstruction, conte
         moved = Permanent(card=card)
 
         def arrived() -> None:
-            # A replacement that took the entry away wrote its own line, and
-            # nothing of this is owed for an entry that never happened
-            # (``entry_awaiting.entry_happened``).
+            # Only for an entry that happened (a replacement wrote its own line).
             if not entry_happened(moved):
                 return
             game.log.append(f"{context.card.name} put {card.name} onto the battlefield")
@@ -1343,9 +1333,7 @@ def reanimate_announced_cards(game: Game, instruction: OracleInstruction, contex
                 permanent.tapped = True
 
             def arrived(permanent=permanent, card=card) -> None:
-                # A replacement that took the entry away wrote its own line, and
-                # nothing of this is owed for an entry that never happened
-                # (``entry_awaiting.entry_happened``).
+                # Only for an entry that happened (a replacement wrote its own line).
                 if not entry_happened(permanent):
                     return
                 game.log.append(
@@ -1628,9 +1616,7 @@ def _return_planned_cards(
                 # Once it is there — the entry's ``then``, run at the answer when
                 # an "as it enters" choice keeps it on its way (CR 614.12a).
                 def arrived(permanent=permanent, host=host, player=player, card=card) -> None:
-                    # A replacement that took the entry away wrote its own line, and
-                    # nothing of this is owed for an entry that never happened
-                    # (``entry_awaiting.entry_happened``).
+                    # Only for an entry that happened (a replacement wrote its own line).
                     if not entry_happened(permanent):
                         return
                     if host is not None:

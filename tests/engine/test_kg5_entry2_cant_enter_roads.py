@@ -38,6 +38,7 @@ from pathlib import Path
 import pytest
 
 from engine.card_loader import load_catalog
+from engine.faces import compilation_units
 from engine.replacements.zone_changes import discard_to_battlefield
 from engine.search_filters import card_has_any_type
 
@@ -152,7 +153,7 @@ def test_the_never_a_land_reasons_hold_on_the_pool():
     red, which is when those roads have to ask."""
     examined = {"aura": 0, "creature": 0, "dodecapod": 0}
     wrong = []
-    for card in load_catalog():
+    for card in compilation_units(load_catalog()):
         is_land = card_has_any_type(card, ("land",))
         if "Aura" in (card.type_line or ""):
             examined["aura"] += 1
