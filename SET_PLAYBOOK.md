@@ -162,11 +162,24 @@ Assemble a brief from the instruments (Phase 1's census, `card_table.py`,
 And when writing one:
 
 - **A refusal site is a work-list entry, not a diagnosis.** It names where the
-  parser stopped, not what is absent, and it usually over-states: probe the
+  line was refused, not what is absent, and it usually over-states: probe the
   sentence before believing it, and treat "this is only a probe artifact" as the
-  claim most likely to cost a card. When a brief would say "widen the
+  claim most likely to cost a card. **Probe it with `scripts/probe_line.py
+  --card NAME`** (or a raw line), not a hand-written probe — Mirrodin's groups
+  wrote seven: it runs the compiler's own compile with every reader it
+  consults traced, and names the layer that refused each line (a grammar
+  production with its furthest accepted frame, a trigger-condition row, a card
+  gate, the Aura/Equipment gate, a missing handler). The census's sites
+  (`support_report --refusals`, `furthest.py`) are its verdicts since the
+  speed round; before it a grammar-only watch put a fifth of Mirrodin's
+  refused lines in the wrong layer. When a brief would say "widen the
   whitelist", check first whether the whitelist is consulted at all — it may be
   a fork of the shared reader.
+- **An AI cast question starts with `print(explain_cast(game, seat, card))`**
+  (`engine/ai_cast_explain.py`), before any tracing probe: every candidate the
+  real chooser built, its score's terms, and each dropped one's gate reason. A
+  new candidate builder finishes through `ai_cast_score.finished_cast_candidate`,
+  and a new gate returns `cast_trace.dropped("reason")`.
 - **Verify an inherited diagnosis as part of the round**, not as a preamble to
   it; measuring one has caught defects the briefed fix would have introduced.
 - **A census red's brief says "trace first"**, never "look in module M".
@@ -1189,6 +1202,27 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   on entering it, before priority; `drive_combat`'s default still leaves the
   step (its docstring says why), and `tests/engine/test_settle_and_drive_combat_helpers.py`'s
   Time Elemental test pins today's order — re-read it with the fix.
+- **The AI's instant-speed cast builder is a thinner copy of the main one**
+  (`ai_policy._combat_instant_candidate` beside `ai_casts._announced_candidate`;
+  inventoried by the speed round's `explain_cast` work, which moved both onto
+  one scoring finisher). At instant speed it plans without `_paying_for`
+  (restricted mana and sacrifice-for-mana sources never count, and
+  `_plan_spends_what_it_names` does not apply — `_PaymentContext`'s docstring
+  calls that intended "in combat"); never builds entwine, kicker or another
+  optional cost, an alternative cost (Force of Will is planned on its mana
+  cost), X paid in life, several targets, an Aura's host, X implied by the
+  target, sacrifice victims or a command-zone cast; and lacks the printed-timing,
+  additional-cost, last-life-point, entry give-back and arrival gates (the
+  legality ones mostly surface as a refused rehearsal). *Clears:* an AI round.
+  *Parts:* `_announced_candidate`'s gates and variant loops as one function both
+  choosers call, the instant-speed readings a post-step; a census of the
+  payment context at instant speed first. `explain_cast` and
+  `test_ai_cast_explain.py`'s guard make the refactor measurable.
+- **The trigger table retries a "when" line as "whenever", not the reverse**,
+  so "Whenever this creature dies, …" parses in the grammar and is refused at
+  the trigger-condition table (`scripts/probe_line.py` names it). No shipped
+  card prints it; a future set's will. *Clears:* the set that prints one.
+  *Parts:* the reverse retry, or a row.
 
 - **Four "next time" readings left beside CR 615.8's ruling.** kg4 settled
   CR 615.8 by the owner's ruling (2026-11-07): a source-keyed "next time" is

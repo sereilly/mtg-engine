@@ -61,6 +61,26 @@ first combat.
   seat's end step, in response when its entry trigger names a spell, or in
   the declare-attackers step of an attack on its seat, to block with; before
   the blocks a seat that is not defending casts nothing).
+- **Why a cast was or wasn't made**: `ai_cast_explain.explain_cast(game,
+  seat, card)` asks the real chooser (`choose_cast_action` in the seat's own
+  main phase on an empty stack, `choose_combat_instant_cast_action` otherwise;
+  `speed=` names one) with the decision's trace listening
+  (`ai_cast_trace.listening`), and returns every candidate built for the card
+  — each zone, mode, offer answer, life-X size, the entwined and every-mode
+  casts — with its score's named terms, the rehearsal behind it, the decision,
+  and each dropped candidate's gate reason; `print()` it. Start there before
+  writing a tracing probe (W2G9 spent most of a 76-minute round finding a
+  missing zone bonus by hand). The builders write the trace themselves (a gate
+  returns `cast_trace.dropped("why")`, never a bare `None`); with nobody
+  listening each hook is one ContextVar read, so a seeded run is
+  byte-identical and the explanation cannot drift from the decision. **Every
+  cast candidate is scored in one place**,
+  `ai_cast_score.finished_cast_candidate`: `ai_scoring.cast_score_terms` plus
+  the zone's bonus (`zone_cast_bonus`) and the stack's
+  (`stack_response_bonus`), which no builder adds for itself — each was once
+  inline at one builder and missing at its sibling. `tests/ai/test_ai_cast_explain.py`
+  fails a builder that calls a scorer or an adjustment directly, or builds a
+  `CastAction` with a score of its own.
 - **Mana**: one exact matching (`ai_payment._PaymentPlanner`, also asked by the
   web's auto-tap) over lands, then tap-only non-land sources
   (`ai_valuation.planned_mana_yield`), then a mana ability whose cost taps

@@ -18,7 +18,7 @@ export ROUND=ons
 | `check_brief_crs.py [--strict] <repo> <briefs>` | before sending a brief | each cited CR number with its rule's opening words, and `SUBJECT?` for a citation whose rule shares no word with its sentence; exit 1 on a number the CR lacks (`--strict`: on a `SUBJECT?` too) |
 | `census_new.py CODE` | Phase 1, after the ingest | new-to-pool cards, the origin trap, unsupported cards, layouts |
 | `card_table.py CODE <census-dir>` | grouping | one line per card: U / P / . with type, cost, text |
-| `furthest.py CODE <groups.json> <out>` | briefing, Phase 0 round 3 | per refused line, the furthest production that accepted |
+| `furthest.py CODE <groups.json> <out>` | briefing, Phase 0 round 3 | per refused line, the layer that refused it (`scripts/probe_line.py`'s verdict) and, where the grammar refused, the furthest production that accepted |
 | `gen_cards.py CODE <logs> <groups.json> <out>` | briefing | each group's `CARDS.md` from the instruments' output |
 | `open_test_files.py CODE <group>...` | before the fan-out | per-set test files with one marked section per group |
 | `headroom.py` | briefing, every stage | modules inside the size band (`check_all --caps` without the checks) |

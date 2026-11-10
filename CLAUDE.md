@@ -157,6 +157,7 @@ python scripts/support_report.py --set ATQ --hollow-lines   # supported cards ca
 python scripts/support_report.py --set LEG --refusals   # every refused line of every unsupported card with its refusal site — the work list rounds are planned from
 python scripts/support_report.py --set HML --fragments   # n-gram census over the refused lines, ranked by how many cards share each fragment (--json emits every census as one object)
 python scripts/retrieve_oracle.py "Black Lotus"   # oracle text by name (whole pool)
+python scripts/probe_line.py --card "<NAME>"   # why a line is refused: every layer the compiler consults, in order, one verdict a line (--json; raw lines: probe_line.py "<line>" [--type ...])
 python scripts/picker_sweep.py --set <CODE>   # supported cards whose cast/activation picker disagrees with the printed line — run over a measured set in Phase 3
 python scripts/oracle_diff.py snapshot   # record every card's full compiled program (both manifest roles) before a change
 python scripts/oracle_diff.py compare    # every card whose program moved since the snapshot; exit 1 if any did
