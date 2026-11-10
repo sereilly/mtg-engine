@@ -23,7 +23,7 @@ import dataclasses
 
 from .. import ast
 from ..errors import LoweringError
-from ..vocabulary import CREATURE_TYPES
+from ..vocabulary import CREATURE_TYPES, PERMANENT_CARD_TYPES, SPELL_TYPES
 
 def _filter_payload(
     filt: ast.ObjectFilter, *, carried_separately: frozenset[str] = frozenset()
@@ -628,31 +628,33 @@ def search_subtype_restriction(filt: ast.ObjectFilter) -> dict:
     return {"subtypes": list(filt.subtypes)}
 
 
-#: The refusal every road that would put a :func:`creature_type_card` onto the
-#: battlefield raises (CR 400.4a).
-CREATURE_TYPE_CARD_ONTO_BATTLEFIELD = (
-    "a creature-type card put onto the battlefield may be a Kindred instant or "
-    "sorcery, which CR 400.4a leaves where it is"
-)
+def admits_a_nonpermanent_card(filt: ast.ObjectFilter) -> bool:
+    """Whether the printed **card** phrase *filt* can describe a card CR 400.4a
+    keeps off the battlefield — an instant or a sorcery, Kindred ones included.
 
+    "A **Goblin** card" can: any card with the subtype (CR 109.2a), a
+    creature's or a kindred's (CR 205.3m, 308.2), and a Kindred Instant —
+    Goblin is one. So can a bare "card", a "nonland card" and any union naming
+    a non-permanent type. A printed permanent type cannot ("a Goblin
+    **permanent** card", CR 110.4a's union), and neither can a subtype only a
+    permanent carries ("a **Forest** card", "an **Aura** card": CR 205.3d keeps
+    those off every other card type).
 
-def creature_type_card(filt: ast.ObjectFilter) -> bool:
-    """Whether *filt* is a **card** phrase naming a creature type and no card
-    type — "a **Goblin** card", "all **Zombie** cards".
-
-    Any card with the subtype (CR 109.2a), a creature's or a kindred's
-    (CR 205.3m, 308.2), which is what every hand, library and graveyard reader
-    takes it as. Asked by the roads that would put such a card **onto the
-    battlefield**: there CR 400.4a — "If an instant or sorcery card would enter
-    the battlefield, it remains in its previous zone" — says what happens to a
-    Kindred instant of the type, and no handler they lower to says it, so they
-    refuse (:data:`CREATURE_TYPE_CARD_ONTO_BATTLEFIELD`). No card in the pool
-    prints the shape; "a Goblin **permanent** card" (CR 110.4a's union) is the
-    sentence real cards print, and is read.
+    Every road that puts such a card onto the battlefield asks
+    ``permanent_cards.is_permanent_card`` before it takes the card out of its
+    zone, so a phrase that admits one is no refusal there. The one reader of
+    this is the counted search that splits its finds between the battlefield
+    and another zone, where the slot a find fills is chosen after it has left
+    its zone (``lowering/search``).
     """
-    return bool(
-        filt.is_card and not filt.card_types and filt.subtypes
-        and all(word in CREATURE_TYPES for word in filt.subtypes)
+    if not filt.is_card:
+        return False
+    if filt.card_types:
+        if filt.type_match == "all":
+            return not any(t in PERMANENT_CARD_TYPES for t in filt.card_types)
+        return any(t not in PERMANENT_CARD_TYPES for t in filt.card_types)
+    return not filt.subtypes or any(
+        word in CREATURE_TYPES or word in SPELL_TYPES for word in filt.subtypes
     )
 
 

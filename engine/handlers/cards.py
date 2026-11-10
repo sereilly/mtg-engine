@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
+from ..permanent_cards import stays_out_of_battlefield
 from ..oracle_types import (DREW_BY_SEAT, DREW_COUNT, MILLED_THIS_WAY,
                             OTHER_THAN_EVENT_SUBJECT_PLAYER,
                             X_FROM_COUNT_PER_RECIPIENT)
@@ -703,6 +704,11 @@ def put_milled_card_onto_battlefield(game: Game, instruction: OracleInstruction,
         # much as possible" - and a card put onto the battlefield from nowhere
         # is a card this effect created.
         game.log.append(f"{card.name} is no longer in a graveyard")
+        return True, "resolved"
+    # "…until a **Goblin** card … is put into their graveyard this way … put
+    # one of them onto the battlefield": CR 400.4a, asked before the card
+    # leaves the pile (``permanent_cards``).
+    if stays_out_of_battlefield(game, card, owner, "graveyard"):
         return True, "resolved"
     for index, held in enumerate(owner.graveyard):
         if held is card:

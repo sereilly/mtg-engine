@@ -48,10 +48,8 @@ from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_OWNER,
                       _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_OWNERS, _EVENT_SUBJECT_PLAYERS)
 from ._common import (
-    CREATURE_TYPE_CARD_ONTO_BATTLEFIELD,
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     chargeable_card_filter,
-    creature_type_card,
     _filter_payload,
     _is_enchanted,
     _restrictions_beyond,
@@ -700,10 +698,8 @@ def lower_described_return(
         # "…return all **Zombie** cards from your graveyard to the
         # battlefield": a creature type with no card type is any card with the
         # subtype (CR 205.3m), a Kindred instant among them, which CR 400.4a
-        # leaves in the graveyard and this sweep would put onto the
-        # battlefield. No card in the pool prints it; it refuses.
-        if creature_type_card(scoped):
-            raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
+        # leaves in the graveyard — and the sweep says so, asking
+        # ``permanent_cards`` of every card before any of them moves.
         # "…to the battlefield **tapped**." (Planar Birth.) CR 110.5b — the
         # ability saying otherwise — carried only when the word was printed, so
         # every payload written before this stays byte-identical.

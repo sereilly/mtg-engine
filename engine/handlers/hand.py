@@ -26,7 +26,8 @@ from ..models import Permanent
 from ..resumption import ask_in_turn_order, run_resumable
 from ..oracle_types import (HAND_CARDS_TO_LIBRARY, REVEALED_HAND_CARDS,
                             REVEALED_THIS_WAY)
-from ..search_filters import card_has_type
+from ..permanent_cards import is_permanent_card, stays_out_of_battlefield
+from ..search_filters import card_has_any_type
 from ._amounts import resolve_amount
 from ._chosen import (SHARES_CREATURE_TYPE_WITH, _resolve_chosen_subtype,
                       resolve_shared_creature_type)
@@ -38,11 +39,6 @@ if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
     from ..oracle import OracleInstruction
-
-
-# CR 110.4: the card types that are permanents — what "permanent card" means
-# when Ugin's −10 reads your hand.
-_PERMANENT_TYPES = ("artifact", "creature", "enchantment", "land", "planeswalker")
 
 
 @effect_handler("put_cards_from_hand_onto_battlefield")
@@ -64,14 +60,17 @@ def put_cards_from_hand_onto_battlefield(game: Game, instruction: OracleInstruct
     caster = context.caster
     count = int(instruction.payload.get("count", 0))
     wanted_types = tuple(instruction.payload.get("card_types") or ())
-    permanents_only = bool(instruction.payload.get("permanents_only"))
 
+    # Every type the line names (``card_has_any_type``; ``primary_type`` keeps
+    # one of them), and never a card CR 400.4a would leave in the hand: "put
+    # all ... cards from your hand" puts the ones that can enter, and the rest
+    # were never going anywhere (``permanent_cards``). An empty type list with
+    # the payload's ``permanents_only`` is "permanent cards", which is the same
+    # question, so the flag needs no reading of its own.
     def eligible(card) -> bool:
-        if wanted_types:
-            return card.primary_type in wanted_types
-        if permanents_only:
-            return card.primary_type in _PERMANENT_TYPES
-        return True
+        if wanted_types and not card_has_any_type(card, wanted_types):
+            return False
+        return is_permanent_card(card)
 
     eligible_cards = [card for card in caster.hand if eligible(card)]
     chosen = (
@@ -237,7 +236,13 @@ def put_from_hand_candidates(game, payload: dict, player) -> list[int]:
     offered wider than it is checked.
     """
     described = payload.get("card_filter") or {}
-    permanents_only = bool(payload.get("permanents_only"))
+    # Only a card that could enter is ever offered (CR 110.4a's "permanent
+    # card", ``permanent_cards``): the payload's ``permanents_only`` — "a
+    # card", "a Goblin card" with no card type printed — is that question, and
+    # a printed card type is one of the six already. A Kindred instant a
+    # "Goblin card" names would stay in the hand (CR 400.4a), so offering it
+    # is an answer that does nothing: for a "may", declining.
+    #
     # "…put an Aura card from your hand onto the battlefield **attached to this
     # creature**." (Academy Researchers.) CR 303.4a: an Aura may be put onto the
     # battlefield only attached to an object its own enchant ability can
@@ -261,7 +266,7 @@ def put_from_hand_candidates(game, payload: dict, player) -> list[int]:
         index
         for index, card in enumerate(player.hand)
         if _card_matches_filter(card, described, game=game, owner=player)
-        and (not permanents_only or card.primary_type in _PERMANENT_TYPES)
+        and is_permanent_card(card)
         and (
             host is None
             or enchant_card_refusal(game, card, seat, host) is None
@@ -552,13 +557,6 @@ def reveal_chosen_hand_cards(game: Game, instruction: OracleInstruction, context
     return True, "resolved"
 
 
-#: CR 110.4a: "an artifact, battle, creature, enchantment, land, or
-#: planeswalker card" — a card that could be put onto the battlefield.
-_PERMANENT_CARD_TYPES = (
-    "artifact", "battle", "creature", "enchantment", "land", "planeswalker",
-)
-
-
 @effect_handler("put_chosen_hand_cards_onto_battlefield")
 def put_chosen_hand_cards_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"The owner of each creature card revealed this way with the lowest mana
@@ -697,12 +695,12 @@ def _put_entrants(game, context, entrants, hosts) -> None:
     movers = []
     for position, (seat, card) in enumerate(entrants):
         owner = game.players[seat]
-        if not any(card_has_type(card, kind) for kind in _PERMANENT_CARD_TYPES):
+        if stays_out_of_battlefield(game, card, owner, "hand"):
             # CR 400.4a: "If an instant or sorcery card would enter the
             # battlefield, it remains in its previous zone." A revealed instant
             # whose name a permanent shares (a token or a copy can carry one)
-            # stays in its owner's hand.
-            stays(card, owner, "can't enter the battlefield", "400.4a")
+            # stays in its owner's hand, and so does a Kindred instant a pick of
+            # "Goblin cards" named.
             continue
         host = hosts.get(position)
         if position in hosts and (

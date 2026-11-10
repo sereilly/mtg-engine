@@ -33,6 +33,7 @@ from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, REVEALED_BY_SEAT,
 from ...subject_filters import card_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
+from ..vocabulary import PERMANENT_CARD_TYPES
 from ._common import _filter_payload, _restrictions_beyond
 from ._filters import _PAYLOAD_HONOURED_FILTER_FIELDS
 
@@ -665,9 +666,16 @@ def _each_seat_optional_put_from_hand(
         )
     described = _their_hand_card_filter(filt, node, "each-seat put from hand")
     if not filt.card_types:
-        raise LoweringError(
-            "the each-seat put from hand reads printed card types", node=node
-        )
+        # "…may put any number of **Goblin** cards from their hand onto the
+        # battlefield": a creature type with no card type is any card with the
+        # subtype (CR 205.3m), a Kindred instant among them, which CR 400.4a
+        # keeps in the hand. The pick offers only what could enter — CR
+        # 110.4a's "permanent card", the reading the chosen put one branch
+        # over (``zones``' "up to N", ``type_filter`` of the six) and the
+        # single pick (``permanents_only``) take — which for "any number" is
+        # the same outcome: a card picked that cannot enter would stay where
+        # it is. The put behind it asks ``permanent_cards`` again regardless.
+        described = {**described, "type_filter": list(PERMANENT_CARD_TYPES)}
     return (
         OracleInstruction("sequence", "", {"steps": (
             OracleInstruction(

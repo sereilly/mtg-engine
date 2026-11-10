@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from ....linked_exile import link_exiled_card
 from ....models import Permanent
+from ....permanent_cards import is_permanent_card, stays_out_of_battlefield
 from ....oracle_types import (CLAIMABLE_EXILED_CARDS, EXILED_THIS_WAY,
                               EXILED_THIS_WAY_OBJECTS, OracleInstruction)
 from .... import piles
@@ -74,6 +75,18 @@ class PileChoicesMixin:
                 elif other_fate:
                     target_zone = str(other_fate)
                 else:
+                    continue
+                if (
+                    target_zone == "battlefield" and from_zone != "held"
+                    and not is_permanent_card(shown)
+                    and any(held is shown for held in getattr(revealer, from_zone, ()))
+                ):
+                    # "An opponent chooses a **Goblin** card from among them.
+                    # Put that card onto the battlefield": a Kindred instant of
+                    # the type is the opponent's to pick, and CR 400.4a leaves
+                    # it where it was revealed — the rest still go (CR 609.3).
+                    self.log.append(f"{chooser} chose {card.name}")
+                    stays_out_of_battlefield(self, shown, revealer, from_zone)
                     continue
                 if not self._move_picked_pile_card(
                     revealer, shown, from_zone, target_zone
@@ -182,7 +195,16 @@ class PileChoicesMixin:
         if not slots:
             self.discard_pending_choice(choice)
             return
-        if str(choice.data.get("fate", "graveyard")) in ("hand", "battlefield"):
+        fate = str(choice.data.get("fate", "graveyard"))
+        if fate == "battlefield":
+            # A card CR 400.4a keeps off the battlefield (a Kindred instant an
+            # "a Goblin card" pick admits) is the least of all to the revealer:
+            # it stays in the library and nothing enters. Named first, then the
+            # cheapest.
+            best = min(
+                slots, key=lambda i: (is_permanent_card(cards[i]), cards[i].cmc, i)
+            )
+        elif fate == "hand":
             best = min(slots, key=lambda i: (cards[i].cmc, i))
         else:
             best = max(slots, key=lambda i: (cards[i].cmc, -i))
@@ -230,6 +252,11 @@ class PileChoicesMixin:
             return False
         owner_index, card = pile.pop(pile_index)
         owner = self.players[owner_index]
+        # CR 400.4a, asked before the card leaves exile (``permanent_cards``):
+        # chosen, and staying where it is.
+        if stays_out_of_battlefield(self, card, owner, "exile"):
+            self.discard_pending_choice(choice)
+            return True
         # Through the one transition that takes a card out of exile, which is
         # what retires the exile register with it (CR 400.7, CR 406.7): the card
         # is about to become a new object on a battlefield, and a record left

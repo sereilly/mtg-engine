@@ -1395,19 +1395,31 @@ class EffectsMixin:
         # creature the caster chose (Rule 601.2c) instead of always grabbing the
         # first one. target is the graveyard's owner; for Resurrection that is the
         # caster, but a chosen index is respected for any reanimation source.
+        from ..permanent_cards import is_permanent_card, stays_out_of_battlefield
+
         source = target if target is not None else caster
         if (
             isinstance(target_permanent_index, int)
             and 0 <= target_permanent_index < len(source.graveyard)
             and eligible(source.graveyard[target_permanent_index], source)
         ):
+            # "Return target **Zombie** card …": a Kindred instant of the type
+            # is a legal target, and CR 400.4a leaves it in the graveyard —
+            # asked before it leaves the pile, so it never did.
+            if stays_out_of_battlefield(
+                self, source.graveyard[target_permanent_index], source,
+                "graveyard",
+            ):
+                return None
             return arrive(
                 source.graveyard.pop(target_permanent_index),
                 self.players.index(source),
             )
-        # Fallback (AI / legacy callers with no explicit choice): first creature.
+        # Fallback (AI / legacy callers with no explicit choice): the first
+        # eligible card that could enter — a choice made for the player, and a
+        # card CR 400.4a would leave where it is is not one worth making.
         for idx, card in enumerate(caster.graveyard):
-            if eligible(card, caster):
+            if eligible(card, caster) and is_permanent_card(card):
                 return arrive(caster.graveyard.pop(idx), controller_index)
         return None
 

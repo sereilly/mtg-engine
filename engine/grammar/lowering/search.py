@@ -34,11 +34,10 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
 from ._common import (
-    CREATURE_TYPE_CARD_ONTO_BATTLEFIELD,
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
-    creature_type_card,
+    admits_a_nonpermanent_card,
     search_slot,
     search_subtype_restriction,
 )
@@ -168,12 +167,11 @@ def _lower_search_library(
     # "Search your library for a **Goblin** card, put it onto the
     # battlefield": a creature type with no card type is any card with the
     # subtype (``nouns.parse_object_filter``), a Kindred instant among them,
-    # which CR 400.4a would leave in the library and the flow would put onto
-    # the battlefield. No card in the pool prints the sentence ("a Goblin
-    # **permanent** card", Moggcatcher, is what the pool prints, and is read);
-    # it refuses rather than playing the instant.
-    if to_battlefield and creature_type_card(filt):
-        raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
+    # which CR 400.4a leaves in the library — and the flow says so: a find the
+    # battlefield cannot take stays where it was found, asked of
+    # ``permanent_cards`` before it is taken out (``choices/search``). The one
+    # shape still refused is the counted search that sends some finds to the
+    # battlefield and others elsewhere, below.
     restrictions: dict[str, object] = {}
     if filt.named is not None:
         restrictions["named"] = filt.named
@@ -323,14 +321,6 @@ def _lower_search_library(
                 "a search for one card per description names a place for each",
                 node=node,
             )
-        # A description naming a creature type and no card type, where a find
-        # may land on the battlefield, refuses for the single find's reason
-        # above (CR 400.4a).
-        if (
-            to_battlefield
-            or any(zone.name == "battlefield" for zone in node.extra_destinations)
-        ) and any(creature_type_card(described) for described in node.one_of_each):
-            raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
         restrictions[ONE_OF_EACH] = [
             search_slot(described, node) for described in node.one_of_each
         ]
@@ -359,6 +349,25 @@ def _lower_search_library(
         restrictions.pop("named", None)
         restrictions["named_among"] = list(node.named_alternatives)
         destinations = destinations * len(node.named_alternatives)
+    # "…for up to two **Goblin** cards, put one onto the battlefield and the
+    # other into your hand": which find fills which slot is asked only after
+    # the finds have left their zones (``_place_or_ask_destinations``), so a
+    # Kindred instant the finder sends to the battlefield slot has no zone to
+    # stay in (CR 400.4a). Every slot on the battlefield is asked before
+    # anything is taken, and every slot elsewhere never asks; the mix of the
+    # two over a description that admits a non-permanent card refuses. No card
+    # prints it (Cultivate's finds are basic lands).
+    if (
+        "battlefield" in destinations and len(set(destinations)) > 1
+        and (
+            admits_a_nonpermanent_card(filt)
+            or any(
+                admits_a_nonpermanent_card(described)
+                for described in node.one_of_each
+            )
+        )
+    ):
+        raise LoweringError(MIXED_SLOTS_ADMIT_A_NONPERMANENT, node=node)
     if to_library_from_top and (
         len(destinations) != 1 or node.count_amount is not None
         or node.unbounded or node.one_of_each or node.graveyard or node.hand
@@ -536,6 +545,14 @@ def _lower_search_library(
     return (found, discard)
 
 
+#: The refusal for a counted search whose finds split between the battlefield
+#: and another zone over a card phrase CR 400.4a can leave behind.
+MIXED_SLOTS_ADMIT_A_NONPERMANENT = (
+    "a counted search placing finds both onto the battlefield and elsewhere "
+    "cannot leave a Kindred instant or sorcery where it was found (CR 400.4a)"
+)
+
+
 #: The zone names the search flow can put a found card into. A name outside this
 #: refuses rather than landing the card somewhere the flow does not implement.
 #: The third is "on top of your library" (the three Mirage tutors), and it is
@@ -638,14 +655,16 @@ def _lower_search_player_library(
     with_flashback = filt.with_keywords == (FLASHBACK,)
     if with_flashback:
         filt = dataclasses.replace(filt, with_keywords=())
-    leftover = _restrictions_beyond(filt, _SEARCH_HONOURED_FILTER_FIELDS)
-    if leftover:
-        raise LoweringError(
-            "the search picker cannot test this restriction: " + ", ".join(leftover),
-            node=node,
-        )
     if len(filt.card_types) > 1:
         raise LoweringError("the search picker tests one card type", node=node)
+    # Every other word of the phrase, in ``search_matches``' vocabulary through
+    # the one builder a one-of-each description uses (``search_slot``), which
+    # refuses by name what it cannot carry. This held the phrase to the own-
+    # library search's honoured fields and then emitted only the card type, so
+    # "search target opponent's library for a **Goblin** card" (or a basic
+    # land, or a blue card) searched for any card at all; no card in the pool
+    # printed a narrowing here, so no program moves.
+    described = search_slot(filt, node)
     payload: dict[str, object] = {
         "card_type": node.filter.card_types[0] if node.filter.card_types else "any",
         "destination": node.to.name,
@@ -676,8 +695,15 @@ def _lower_search_player_library(
         payload["count"] = amount
     if node.up_to:
         payload["up_to"] = True
+    # Among the ``restrictions``, where the own-library search carries a
+    # "nonland" too and where the handler hands them to the prompt.
+    restrictions = dict(described.get("restrictions") or {})
+    if described.get("exclude_types"):
+        restrictions["exclude_types"] = list(described["exclude_types"])
     if with_flashback:
-        payload["restrictions"] = {"with_keyword": FLASHBACK}
+        restrictions["with_keyword"] = FLASHBACK
+    if restrictions:
+        payload["restrictions"] = restrictions
     if node.player.kind != "that_player":
         # "target player's library" is a cast-time choice the picker must offer;
         # "that player's" names one an earlier sentence of the same effect

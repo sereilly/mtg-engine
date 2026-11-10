@@ -32,6 +32,7 @@ from ..aura_attachment import attach_aura, is_aura_card, returning_aura_hosts
 from ..exiled_records import (EXILED_THIS_WAY_RECORDS, record_exiled_card,
                               still_exiled)
 from ..models import Permanent
+from ..permanent_cards import stays_out_of_battlefield
 from ..oracle_types import EXILED_CARDS_WITH_OWNERS
 from ..resumption import run_resumable
 from ._targets import frozen_that_player_seat
@@ -232,6 +233,9 @@ def _return_record_to_battlefield(
     owner = game.players[record.owner_index]
     if not still_exiled(game, record):
         game.log.append(f"{card_name}: {card.name} is no longer exiled")
+        return
+    # CR 400.4a, asked before the card leaves exile (``permanent_cards``).
+    if stays_out_of_battlefield(game, card, owner, "exile"):
         return
     host = None
     if is_aura_card(card):

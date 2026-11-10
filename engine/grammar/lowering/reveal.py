@@ -63,13 +63,11 @@ from ...subject_filters import SOURCE_RESOLVED_CARD_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
-    CREATURE_TYPE_CARD_ONTO_BATTLEFIELD,
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
     _targets_only,
-    creature_type_card,
     dropped_narrowings,
     search_slot,
 )
@@ -128,9 +126,8 @@ def _lower_reveal_until(
         )
     # "…until you reveal a **Goblin** card. Put that card onto the
     # battlefield": the run stops on a Kindred instant of the type too, which
-    # CR 400.4a would leave where it is. No card in the pool prints it.
-    if node.destination == "battlefield" and creature_type_card(filt):
-        raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
+    # CR 400.4a leaves where it is — on top of the library, the rest gone
+    # where the card sends them — and the handler says so (``permanent_cards``).
     return (
         OracleInstruction(
             "reveal_until_match", "",
@@ -253,10 +250,8 @@ def _lower_reveal_top_sorting_by_filter(
     # "…puts all **Goblin** cards revealed this way onto the battlefield" (Clear
     # the Land's sentence with a creature type): any card with the subtype
     # (CR 205.3m) — and a Kindred instant among them is a match CR 400.4a
-    # leaves where it is, in the library, which is neither of the two places
-    # this sort puts a card. No card in the pool prints the shape; it refuses.
-    if node.match_zone == "battlefield" and creature_type_card(node.filter):
-        raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
+    # leaves where it is, on top of the library: neither the match zone nor
+    # "the rest". The sort asks ``permanent_cards`` of every match.
     count = _amount_payload(node.count)
     if not isinstance(count, int) or count <= 0:
         raise LoweringError(
@@ -460,10 +455,9 @@ def _lower_reveal_top_opponent_chooses(
             )
         payload["pick_filter"] = picked
         # "…chooses a **Goblin** card from among them. Put that card onto the
-        # battlefield": a Kindred instant of the type is a legal pick CR 400.4a
-        # would leave in the library. No card in the pool prints it.
-        if node.fate == "battlefield" and creature_type_card(node.pick):
-            raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
+        # battlefield": a Kindred instant of the type is a legal pick — the
+        # opponent's to make — which CR 400.4a leaves in the library; the
+        # pick's resolver asks ``permanent_cards`` before the card moves.
     if node.rest_fate is not None:
         if node.rest_fate != "graveyard":
             raise LoweringError(

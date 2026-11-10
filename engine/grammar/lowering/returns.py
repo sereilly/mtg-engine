@@ -21,7 +21,7 @@ from ...announced_creature_type import GRAVEYARD_ANNOUNCED_CREATURE_TYPE
 from ...oracle_types import DISCARDED_INTO_GRAVEYARD, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ..vocabulary import PERMANENT_CARD_TYPES
+from ..vocabulary import CREATURE_TYPES, PERMANENT_CARD_TYPES
 from ._events import OTHER_CHOSEN_PERMANENT, _back_reference_payload
 from ._bound_returns import lower_untargeted_return
 from ._described_returns import (_graveyard_to_hand_payload,
@@ -981,12 +981,25 @@ def _lower_return_to_zone(
             # one is a card this engine has not got. Regrowth's untyped "target
             # card" still has no lowering here — claiming it would silently
             # narrow the player's choice to whatever the handler happened to
-            # scan for. Nor has "target **Zombie** card": it names no card type
-            # (``nouns.parse_object_filter``; a Kindred card of the type is one,
-            # CR 205.3m), and a Kindred instant of the type is a legal target
-            # CR 400.4a would leave in the graveyard — no reading of the
-            # handler's says that, and no card in the pool prints the shape.
-            if filt.card_types not in _REANIMABLE_CARD_TYPES:
+            # scan for.
+            #
+            # "Return target **Zombie** card from your graveyard to the
+            # battlefield" names no card type (``nouns.parse_object_filter``;
+            # a Kindred card of the type is one, CR 205.3m), and a Kindred
+            # instant of the type is a legal target CR 400.4a leaves in the
+            # graveyard — which the move says, asking ``permanent_cards``
+            # before the card leaves its pile. One creature type, which is the
+            # word the handler searches by (the graveyard branch of
+            # ``zones._lower_put_onto_battlefield`` reads "from a graveyard"
+            # the same way).
+            creature_type_phrase = (
+                not filt.card_types and len(filt.subtypes) == 1
+                and filt.subtypes[0] in CREATURE_TYPES
+            )
+            if (
+                filt.card_types not in _REANIMABLE_CARD_TYPES
+                and not creature_type_phrase
+            ):
                 raise LoweringError(
                     "the reanimation handler only moves permanent cards",
                     node=node,
@@ -1029,6 +1042,12 @@ def _lower_return_to_zone(
                 # "a Dragon **permanent** card" is any of the six, not
                 # whichever of them a list happens to put first.
                 payload["card_types"] = list(filt.card_types)
+            elif creature_type_phrase:
+                # The creature type is the type word the handler and the
+                # picker search by (``card_has_type`` reads the subtype off the
+                # printed line, or off Conspiracy for its owner's cards), and
+                # ``graveyard_subtypes`` below narrows by it too.
+                payload["card_type"] = filt.subtypes[0]
             elif filt.card_types[0] != "creature":
                 payload["card_type"] = filt.card_types[0]
             # "target **Dragon** permanent card" (Bladewing the Risen), lifted

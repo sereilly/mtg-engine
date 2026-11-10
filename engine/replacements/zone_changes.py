@@ -414,9 +414,13 @@ def _discard_battlefield_entry(game, player, card, cause_seat) -> dict | None:
     )
     if seat is None or cause_seat == seat:
         return None
-    if getattr(card, "primary_type", None) in ("instant", "sorcery"):
-        # CR 304.4 / 307.4: an instant or sorcery can't enter the battlefield,
-        # so the event is not replaced and the card goes where a discard goes.
+    from ..permanent_cards import is_permanent_card
+
+    if not is_permanent_card(card):
+        # CR 304.4 / 307.4 (CR 400.4a): an instant or sorcery can't enter the
+        # battlefield, so the event is not replaced and the card goes where a
+        # discard goes — the one predicate every road onto the battlefield
+        # asks (``permanent_cards``), a Kindred instant included.
         return None
     for line in (getattr(card, "oracle_text", "") or "").splitlines():
         spec = discard_to_battlefield(line)
