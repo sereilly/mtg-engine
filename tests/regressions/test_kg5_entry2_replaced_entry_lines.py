@@ -123,3 +123,16 @@ def test_the_legend_rule_still_says_a_graveyard_when_it_is_one(name):
     settle(game)
     assert f"{name} put into graveyard (704.5j: legend rule)" in game.log
     assert [c.name for c in game.players[0].graveyard] == [name]
+
+
+def test_mox_diamond_whose_toll_a_seat_nobody_asks_paid_is_said_to_enter():
+    """Mox Diamond's toll paid inline re-enters the same permanent inside its
+    own replacement (``_resolve_entry_discard_toll``): the outer entry is
+    consumed, and the outcome the inner one wrote stands — so the cast's
+    ``then`` still says it was put onto the battlefield."""
+    game = _game(hand=["Mox Diamond", "Forest"])
+    assert game.queue_from_hand(0, "Mox Diamond").supported
+    settle(game)
+    assert any(p.card.name == "Mox Diamond" for p in game.controlled_by(0))
+    assert "P0 discarded Forest to put Mox Diamond onto the battlefield" in game.log
+    assert "P0 put Mox Diamond onto battlefield" in game.log

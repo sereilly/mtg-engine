@@ -1377,8 +1377,13 @@ class ZoneFunnelsMixin:
             if suspended:
                 return ENTRY_SUSPENDED
             # Taken away (``entry_awaiting.entry_replaced``): what a caller's
-            # line about the entry asks before it claims one.
-            permanent.metadata[ENTRY_OUTCOME] = REPLACED
+            # line about the entry asks before it claims one — unless the
+            # replacement itself put this very permanent onto the battlefield
+            # (Mox Diamond's toll paid by a seat nobody asks re-enters it
+            # inside the event, ``_resolve_entry_discard_toll``), which wrote
+            # its own outcome.
+            if permanent.metadata.get(ENTRY_OUTCOME) != ENTERED:
+                permanent.metadata[ENTRY_OUTCOME] = REPLACED
             # A rider an effect applied before another took the entry away
             # (Land Equilibrium chosen ahead of an Alliances land's unpaid
             # toll): the modified event still holds its "then sacrifices a
