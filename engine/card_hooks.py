@@ -320,12 +320,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "that creature's power remains less than or equal to this creature's power":
             _line("steal_creature_while_tapped_and_weaker", "activated_steal"),
     },
-    'Oubliette': {
-        'when this enchantment enters, target creature phases out until this '
-        'enchantment leaves the battlefield. tap that creature as it phases in '
-        'this way':
-            _line('phase_out_target_creature_until_source_leaves', 'spell_pattern'),
-    },
     'Personal Incarnation': {
         "{0}: the next 1 damage that would be dealt to this creature this turn is "
         "dealt to its owner instead. only this creatures owner may activate this "

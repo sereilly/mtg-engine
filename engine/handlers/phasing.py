@@ -43,7 +43,20 @@ def phase_out_target_creature_until_source_leaves(game: Game, instruction: Oracl
             "so nothing phases out"
         )
         return True, "resolved"
-    target_perm = resolve_target_permanent(game, context, predicate=lambda p: p.is_creature)
+    # The printed noun phrase, re-asked here as ``phase_out_target`` asks its
+    # own (CR 608.2b), with the creature noun the lowering requires; a bare
+    # "target creature" describes nothing further and reads as the predicate
+    # always did.
+    from ..subject_filters import subject_matches
+
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(context.caster)
+    target_perm = resolve_target_permanent(
+        game, context,
+        predicate=lambda p: p.is_creature and subject_matches(
+            game, p, described, observer=observer, source=source_permanent,
+        ),
+    )
     if target_perm is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
@@ -66,7 +79,12 @@ def phase_out_target_creature_until_source_leaves(game: Game, instruction: Oracl
     ]
     if not game.phase_out_permanent(target_perm):
         return True, "resolved"
-    bind_phase_in_to_source(target_perm, source_permanent, tapped=True)
+    # "Tap that creature as it phases in this way." is the payload's
+    # ``tapped`` — the printed rider, read by the production beside the window.
+    bind_phase_in_to_source(
+        target_perm, source_permanent,
+        tapped=bool(instruction.payload.get("tapped")),
+    )
     for perm in riding:
         bind_phase_in_to_source(perm, source_permanent, tapped=False)
     game.log.append(f"{card.name} phases {target_perm.card.name} out")
