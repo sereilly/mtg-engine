@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 from ..faces import has_name
 from ..linked_exile import until_leaves_has_ended
+from ..entry_awaiting import entry_happened
 from ..models import Permanent
 from ..permanent_cards import stays_out_of_battlefield
 from ..oracle_types import REVEALED_HAND_CARDS, REVEALED_TOP_CARDS_BY_SEAT
@@ -522,10 +523,19 @@ def put_revealed_card_onto_battlefield(game: Game, instruction: OracleInstructio
                 if stays_out_of_battlefield(game, card, player, "library"):
                     return True, "resolved"
                 player.library.pop(index)
-                game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
-                game.log.append(
-                    f"{context.card.name}: {card.name} enters the battlefield"
-                )
+                arrival = Permanent(card=card)
+
+                def arrived() -> None:
+                    # A replacement that took the entry away wrote its own line, and
+                    # nothing of this is owed for an entry that never happened
+                    # (``entry_awaiting.entry_happened``).
+                    if not entry_happened(arrival):
+                        return
+                    game.log.append(
+                        f"{context.card.name}: {card.name} enters the battlefield"
+                    )
+
+                game._put_permanent_onto_battlefield(seat, arrival, None, then=arrived)
                 return True, "resolved"
     game.log.append(f"{context.card.name}: {card.name} has already moved")
     return True, "resolved"
@@ -1299,10 +1309,19 @@ def put_revealed_top_cards_onto_battlefield(game: Game, instruction: OracleInstr
                 # put rather than the wrong card.
                 game.log.append(f"{card.name} was no longer on top of {owner.name}'s library")
                 continue
-            game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
-            game.log.append(
-                f"{owner.name} put {card.name} onto the battlefield ({context.card.name})"
-            )
+            arrival = Permanent(card=card)
+
+            def arrived(arrival=arrival, owner=owner, card=card) -> None:
+                # A replacement that took the entry away wrote its own line, and
+                # nothing of this is owed for an entry that never happened
+                # (``entry_awaiting.entry_happened``).
+                if not entry_happened(arrival):
+                    return
+                game.log.append(
+                    f"{owner.name} put {card.name} onto the battlefield ({context.card.name})"
+                )
+
+            game._put_permanent_onto_battlefield(seat, arrival, None, then=arrived)
     return True, "resolved"
 
 

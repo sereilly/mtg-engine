@@ -59,6 +59,11 @@ _REVIEWED = {
         "names), written to the object, which keeps them on its way; the log "
         "line is the effect's."
     ),
+    ("handlers/linked_exile.py", "put_exiled_cards_into_zone"): (
+        "the newcomers kept for the one summary line written once the "
+        "event has closed, which names only those no replacement took away "
+        "(``entry_awaiting.entry_replaced``) — nothing is done to them."
+    ),
     ("piles.py", "_graveyard_fates"): (
         "``arrived is not None`` â€” whether a card came back, for the log."
     ),

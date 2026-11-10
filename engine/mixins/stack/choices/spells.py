@@ -15,6 +15,7 @@ from .... import madness as _madness
 from ....face_down import MASK_FACE_DOWN, face_down_card
 from ....faces import castable_faces, is_multi_face, spell_named
 from ....grammar.lowering._events import EVENT_SUBJECT_PLAYER
+from ....entry_awaiting import entry_happened
 from ....models import Permanent
 from ....pending_choices import ChoiceSpec, PendingChoice
 
@@ -469,11 +470,19 @@ class SpellChoicesMixin:
         # up" (``EffectsMixin._turn_face_up``). A morph creature put face down
         # some other way is not turned up by that.
         perm.metadata[MASK_FACE_DOWN] = True
-        self._put_permanent_onto_battlefield(player_index, perm, None)
-        self.log.append(
-            f"{choice.data.get('card_name') or 'An effect'} put a creature card "
-            "onto the battlefield face down as a 2/2"
-        )
+        named = choice.data.get("card_name") or "An effect"
+
+        def arrived() -> None:
+            # A replacement that took the entry away wrote its own line, and
+            # nothing of this is owed for an entry that never happened
+            # (``entry_awaiting.entry_happened``).
+            if not entry_happened(perm):
+                return
+            self.log.append(
+                f"{named} put a creature card onto the battlefield face down as a 2/2"
+            )
+
+        self._put_permanent_onto_battlefield(player_index, perm, None, then=arrived)
         self.discard_pending_choice(choice)
         return True
 

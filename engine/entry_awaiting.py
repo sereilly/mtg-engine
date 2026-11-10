@@ -195,15 +195,54 @@ def entry_is_awaited(game, permanent) -> bool:
     return record is not None and record.finish is not None
 
 
+#: What became of a permanent's last entry, written by the funnel and cleared
+#: as an entry of it begins: :data:`ENTERED` as the battlefield takes it
+#: (``ZoneFunnelsMixin._complete_entries``), :data:`REPLACED` when a "would
+#: enter" replacement or a "can't" took the entry away
+#: (``ZoneFunnelsMixin._begin_entry``); absent while it is still on its way
+#: (an "as it enters" choice owed, CR 614.12a; CR 616.1e's question owed).
+ENTRY_OUTCOME = "_entry_outcome"
+ENTERED = "entered"
+REPLACED = "replaced"
+
+
+def entry_happened(permanent) -> bool:
+    """Whether *permanent*'s last entry happened — the question a caller's
+    ``then`` asks, which runs for an entry a replacement took away too
+    (CR 614.6: the event never happens, and the replacement says where the
+    card went instead).
+
+    Not "is it on the battlefield": a land Land Equilibrium's "then
+    sacrifices a land" took straight back out (CR 614.6's modified event,
+    which a seat nobody asks performs before the caller's ``then`` runs)
+    entered, and its play, its log line and its enter trigger are owed;
+    a Lake of the Dead whose toll nobody could pay never entered, and none
+    of them is."""
+    return getattr(permanent, "metadata", {}).get(ENTRY_OUTCOME) == ENTERED
+
+
+def entry_replaced(permanent) -> bool:
+    """Whether *permanent*'s last entry was taken away (CR 614.6, 614.17) —
+    the question a line written once an event has closed asks of each of its
+    newcomers, some of which may still be on their way (and are said to be
+    put there, as they will be)."""
+    return getattr(permanent, "metadata", {}).get(ENTRY_OUTCOME) == REPLACED
+
+
 __all__ = [
     "DeferredEntry",
+    "ENTERED",
     "ENTRY_EVENT",
+    "ENTRY_OUTCOME",
     "ENTRY_SUSPENDED",
     "EntryEvent",
     "EntryInProgress",
+    "REPLACED",
     "apnap_order",
     "awaited_entries",
     "entered_together",
+    "entry_happened",
     "entry_in_progress",
     "entry_is_awaited",
+    "entry_replaced",
 ]

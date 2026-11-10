@@ -28,6 +28,7 @@ from ..linked_exile import (LEAVES, UNTAPPED, link_exiled_card,
 from ..linked_exile import face_down_exiled_cards
 # How the public log names a card leaving a face-down pile (CR 406.3).
 from ..linked_exile import entry_name_for_the_log, is_exiled_face_down
+from ..entry_awaiting import entry_happened, entry_replaced
 from ..models import Permanent
 from ..permanent_cards import stays_out_of_battlefield
 from ..oracle_types import EXILED_BY_SEAT, PUT_INTO_HAND_THIS_WAY
@@ -207,10 +208,19 @@ def put_exiled_this_way(game: Game, instruction: OracleInstruction, context: Ora
                     )
                     returned += 1
                     continue
-                game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
-                game.log.append(
-                    f"{player.name} put {card.name} onto the battlefield from exile"
-                )
+                arrival = Permanent(card=card)
+
+                def arrived(arrival=arrival, player=player, card=card) -> None:
+                    # A replacement that took the entry away wrote its own line, and
+                    # nothing of this is owed for an entry that never happened
+                    # (``entry_awaiting.entry_happened``).
+                    if not entry_happened(arrival):
+                        return
+                    game.log.append(
+                        f"{player.name} put {card.name} onto the battlefield from exile"
+                    )
+
+                game._put_permanent_onto_battlefield(seat, arrival, None, then=arrived)
                 returned += 1
     if not returned:
         game.log.append(f"{context.card.name}: no exiled cards to put back")
@@ -674,7 +684,7 @@ def _put_linked_pile_onto_battlefield(
     the offer and the re-check are one predicate. An Aura without one stays in
     exile (CR 303.4g).
     """
-    moved: list[str] = []
+    moved: list = []
     # One event, every Aura with its host (CR 603.6a).
     with game.entering_together():
         for position, entry in enumerate(entries):
@@ -710,13 +720,17 @@ def _put_linked_pile_onto_battlefield(
             if arrival is None:
                 continue
             if host is not None:
-                moved.append(f"{card.name} (enchanting {host.card.name})")
+                moved.append((f"{card.name} (enchanting {host.card.name})", arrival))
             else:
-                moved.append(card.name)
-    if moved:
+                moved.append((card.name, arrival))
+    # A newcomer a replacement took away (``entry_awaiting.entry_replaced``,
+    # asked once the event has closed) wrote its own line and is not named.
+    named = [name for name, arrival in moved if not entry_replaced(arrival)]
+    if named:
         game.log.append(
-            f"{', '.join(moved)} return to the battlefield ({card_name})"
+            f"{', '.join(named)} return to the battlefield ({card_name})"
         )
+    if moved:
         game._recompute_continuous_effects()
     else:
         game.log.append(f"{card_name}: no exiled cards to put back")
@@ -934,7 +948,7 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
     # returned: "those cards … under their owners' control" (Planar Guide) can
     # be several seats' cards, and one name for all of them told the table the
     # wrong player controlled most of them.
-    returned_to: dict[str, list[str]] = {}
+    returned_to: dict[str, list] = {}
     # The caster's own pile first, then everybody else's. Identity alone is not
     # enough to pick the pile: a deck repeats one immutable ``CardDefinition``
     # per copy and the catalog is shared between seats, so *the same object* can
@@ -1021,7 +1035,9 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
                         permanent.metadata["owner_player_index"] = owner_seat
                     game._put_permanent_onto_battlefield(seat, permanent, None)
                     moved.append(card)
-                    returned_to.setdefault(game.players[seat].name, []).append(card.name)
+                    returned_to.setdefault(game.players[seat].name, []).append(
+                        (card.name, permanent)
+                    )
                     break
                 if destination == "graveyard":
                     # CR 400.3: its **owner's** graveyard, and the owner is the
@@ -1040,17 +1056,25 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
                 ):
                     moved.append(card)
                 break
+    # A newcomer a replacement took away (``entry_awaiting.entry_replaced``,
+    # asked once the event has closed) wrote its own line and is not named.
+    returned_to = {
+        seat_name: [name for name, permanent in entries if not entry_replaced(permanent)]
+        for seat_name, entries in returned_to.items()
+    }
+    returned_to = {seat_name: names for seat_name, names in returned_to.items() if names}
     if moved and destination == "battlefield":
         # One sentence per seat, so a card is never said to be under a player
         # who does not control it; with one seat the line is what it was.
-        game.log.append(
-            "; ".join(
-                f"{', '.join(names)} returned to the battlefield under "
-                f"{seat_name}'s control"
-                for seat_name, names in returned_to.items()
+        if returned_to:
+            game.log.append(
+                "; ".join(
+                    f"{', '.join(names)} returned to the battlefield under "
+                    f"{seat_name}'s control"
+                    for seat_name, names in returned_to.items()
+                )
+                + f" ({context.card.name})"
             )
-            + f" ({context.card.name})"
-        )
     elif moved:
         if destination == "hand":
             # "…until **you put a card into your hand**" (Tainted Pact). What

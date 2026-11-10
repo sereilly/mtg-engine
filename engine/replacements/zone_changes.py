@@ -23,6 +23,7 @@ import re
 
 from ..effect_ordering import source_names
 from ..hand_locks import lock_card_in_hand
+from ..entry_awaiting import entry_happened
 from ..models import Permanent
 from ..replacement_choices import (
     ReplacementChoice,
@@ -455,6 +456,12 @@ def discarded_onto_battlefield(game, player, card, cause_seat) -> bool:
     # Once it is there — the entry's ``then``, run at the answer when an "as
     # it enters" choice keeps it on its way (CR 614.12a).
     def arrived() -> None:
+        # Said as it happened (``entry_awaiting.entry_happened``): an entry a
+        # replacement took away (Containment Priest's exile: Dodecapod is not
+        # cast) wrote its own line, and the discard is still a discard.
+        if not entry_happened(arrival):
+            game.log.append(f"{player.name} discarded {card.name}")
+            return
         game.log.append(
             f"{player.name} discarded {card.name}, which was put onto the "
             "battlefield instead of into their graveyard"

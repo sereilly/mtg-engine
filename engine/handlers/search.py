@@ -17,8 +17,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..entry_awaiting import entry_happened
 from ..faces import has_name
 from ..models import Permanent
+from ..permanent_cards import stays_out_of_battlefield
 # The runtime class. The bare name is a TYPE_CHECKING-only import below, and
 # the handlers here *build* instructions for an optional payment's branches.
 from ..oracle_types import OracleInstruction as _OracleInstruction
@@ -342,8 +344,25 @@ def place_held_card(game: Game, instruction: OracleInstruction, context: OracleE
     seat = game.players.index(context.caster)
     destination = str(instruction.payload.get("destination", "battlefield"))
     if destination == "battlefield":
-        game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
-        game.log.append(f"{card.name} enters the battlefield")
+        owner = game.players[seat]
+        if stays_out_of_battlefield(game, card, owner, "library", seat=seat):
+            # The held find never left the library in the rules' terms (the
+            # search hands it over for this step alone): an artifact land
+            # under Worms of the Earth "will stay where it is" (its ruling,
+            # 2004-10-04) — back into the library, which the sentence's
+            # "Then shuffle" shuffles.
+            game.put_card_into_library(owner, card)
+            game.shuffle_library_of(owner)
+            return True, "resolved"
+        permanent = Permanent(card=card)
+
+        def arrived() -> None:
+            # Only for an entry that happened (``entry_happened``): a
+            # replacement that took it away wrote its own line.
+            if entry_happened(permanent):
+                game.log.append(f"{card.name} enters the battlefield")
+
+        game._put_permanent_onto_battlefield(seat, permanent, None, then=arrived)
         return True, "resolved"
     # CR 400.3: a card put into a graveyard goes to its **owner's**, and the
     # only owner a library card can have is the player whose library it was.

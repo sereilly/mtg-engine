@@ -49,9 +49,6 @@ ASKS = frozenset({"stays_out_of_battlefield", "is_permanent_card"})
 ASKED_UPSTREAM = {
     "handlers/reanimation.py:_return_planned_cards":
         "handlers/reanimation.py:return_all_cards_from_graveyard",
-    "mixins/stack/choices/hand.py:_resolve_put_from_hand_choice":
-        # The answer is checked against the candidate list.
-        "handlers/hand.py:put_from_hand_candidates",
     "mixins/stack/choices/pile_picks.py:_move_picked_pile_card":
         # The pick's own fate; the other caller moves only "the rest", which
         # the lowering sends to a graveyard (``_lower_reveal_top_opponent_chooses``).
@@ -77,25 +74,13 @@ PERMANENT_BY_CONSTRUCTION = {
         "a face-down spell, a 2/2 creature (CR 702.37c, 708.2)",
     "replacements/permanents.py:_resolve_entry_discard_toll":
         "the permanent already on its way in (Mox Diamond's toll is its own entry)",
-    "handlers/reanimation.py:reanimate_bound_card":
-        "the card of the creature whose death fired the trigger (CR 603.10a)",
-    "handlers/reanimation.py:return_source_card_to_battlefield":
-        "the ability's own source card (census: a permanent card)",
-    "handlers/reanimation.py:return_self_from_graveyard":
-        "this card returning itself (census: a permanent card)",
     "handlers/reanimation.py:reanimate_aura_onto_source":
         "an Aura card (census: its payload names the enchantment type)",
-    "handlers/search.py:place_held_card":
-        "Transmute Artifact's held find (census: its search names a permanent type)",
     "handlers/stack.py:_redirect_countered_card":
         "a countered spell, sent there only behind a printed spell class "
         "(census: Desertion's artifact)",
     "mixins/oracle_instructions.py:_apply_aura_effect":
         "the reanimation Aura's creature card (asked of the card's type line)",
-    "phases/cleanup_step.py:resolve_cleanup_step":
-        "a permanent exiled until end of turn returning (CR 610.3)",
-    "phases/upkeep_step.py:_resolve_upkeep_actions":
-        "Nether Shadow's own creature card returning itself",
 }
 
 

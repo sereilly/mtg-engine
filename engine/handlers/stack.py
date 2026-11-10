@@ -1213,12 +1213,23 @@ def _redirect_countered_card(
         # creature would die into the wrong graveyard (CR 400.3). The same
         # channel reanimation uses for the same reason.
         stolen.metadata["owner_player_index"] = game.players.index(owner)
-        game._put_permanent_onto_battlefield(seat, stolen, None)
-        game.log.append(
-            f"{countered.card.name} was countered by {card.name} and put onto "
-            f"the battlefield under {game.players[seat].name}'s control "
-            "instead of into their graveyard"
-        )
+
+        def arrived() -> None:
+            from ..entry_awaiting import entry_happened
+
+            # Said as it happened: an entry a replacement took away (an
+            # artifact creature nobody cast, under Containment Priest) wrote
+            # its own line, and the counter is all that is left to say.
+            if not entry_happened(stolen):
+                game.log.append(f"{countered.card.name} was countered by {card.name}")
+                return
+            game.log.append(
+                f"{countered.card.name} was countered by {card.name} and put onto "
+                f"the battlefield under {game.players[seat].name}'s control "
+                "instead of into their graveyard"
+            )
+
+        game._put_permanent_onto_battlefield(seat, stolen, None, then=arrived)
         return
     if destination == "exile":
         # "…exile it instead of putting it into its owner's graveyard."

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..entry_awaiting import entry_happened
 from ..models import Permanent
 from ..permanent_cards import stays_out_of_battlefield
 from ..oracle_types import (DREW_BY_SEAT, DREW_COUNT, MILLED_THIS_WAY,
@@ -724,10 +725,18 @@ def put_milled_card_onto_battlefield(game: Game, instruction: OracleInstruction,
     # is recorded because the controller is somebody else — without it the card
     # would go to the thief's graveyard when it dies.
     arrival.metadata["owner_player_index"] = game.players.index(owner)
-    game._put_permanent_onto_battlefield(seat, arrival, None)
-    game.log.append(
-        f"{game.players[seat].name} put {card.name} onto the battlefield"
-    )
+
+    def arrived() -> None:
+        # A replacement that took the entry away wrote its own line, and
+        # nothing of this is owed for an entry that never happened
+        # (``entry_awaiting.entry_happened``).
+        if not entry_happened(arrival):
+            return
+        game.log.append(
+            f"{game.players[seat].name} put {card.name} onto the battlefield"
+        )
+
+    game._put_permanent_onto_battlefield(seat, arrival, None, then=arrived)
     game._recompute_continuous_effects()
     return True, "resolved"
 

@@ -20,6 +20,7 @@ import random
 from ....linked_exile import link_exiled_card, shuffle_linked_pile
 from ....pending_choices import ChoiceSpec, PendingChoice
 from ....oracle_types import SEARCHED_PERMANENTS
+from ....entry_awaiting import entry_replaced
 from ....permanent_cards import stays_out_of_battlefield
 from ....search_filters import (landing_seat, search_matches,
                                 search_names_a_quality, search_slots,
@@ -190,6 +191,7 @@ class LibrarySearchChoicesMixin:
         # promote a tutor-to-hand into a tutor-to-battlefield.
         destination = choice.data.get("destination", "hand")
         enters_tapped = bool(choice.data.get("enters_tapped"))
+        taken_away = False
         if destination == "held":
             # "Search your library for an artifact card. **If** that card's mana
             # value… put it onto the battlefield… **If you don't**, put it into
@@ -255,6 +257,11 @@ class LibrarySearchChoicesMixin:
                 landing_seat(choice.data, choice.player_index), found, None,
                 then=arrived,
             )
+            # A find a replacement kept off the battlefield (an uncast
+            # creature under Containment Priest, an Alliances land nobody can
+            # pay for) is not said to be put there: the replacement said where
+            # it went (``entry_awaiting.entry_replaced``).
+            taken_away = entry_replaced(found)
             # "…put that card onto the battlefield, then shuffle. **That
             # Dragon** gains haste until end of turn. Exile **it** at the
             # beginning of the next end step." (Zirilan of the Claw.) The
@@ -359,7 +366,8 @@ class LibrarySearchChoicesMixin:
             else "a card"
         )
         self.log.append(
-            f"{searcher.name} searched {whose}{zone} and put {shown} "
+            f"{searcher.name} searched {whose}{zone}" if taken_away
+            else f"{searcher.name} searched {whose}{zone} and put {shown} "
             + (
                 "onto the battlefield" if destination == "battlefield"
                 else "into exile" if destination == "exile"
