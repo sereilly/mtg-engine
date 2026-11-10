@@ -162,7 +162,20 @@ And when writing one:
 - **A ruling** (how a card is played, as against what a rule says) **carries its
   source** — Scryfall's per-card `rulings_uri` — or is not stated. Rulings are
   not in `MagicCompRules.txt`, and two briefs have stated a wrong one from
-  memory. Check every rule a brief states against the CR as well.
+  memory. Check every rule a brief states against the CR as well:
+  `scripts/integration/check_brief_crs.py <repo> <briefs>` prints each cited
+  number with its rule's opening words — **read the words**: Mirrodin's
+  brief cited 205.2a (the list of card types) where 205.2b (an object with
+  two types) was meant, and the printed subject said so. Rulings come from
+  `bulk_rulings.py CODE <out>` (Scryfall's bulk file, one download; the
+  per-card fetch is rate-limited).
+- **Put the test pitfalls in the common brief**, not in a mid-wave
+  broadcast: a step-popped trigger leaves its offer queued with an empty
+  stack (`resolve_stack` does not answer it —
+  `auto_resolve_pending_choices` does); `resolve_stack` auto-answers an
+  interactive seat's prompt and runs no state-based actions; a combat drive
+  that stops at end of combat never fires the delayed triggers leaving it
+  fires. Three Mirrodin groups lost a round to them.
 - **Grep ROADMAP for the mechanism before briefing the group that changes it**,
   and paste what it says: a recorded precondition belongs to whoever removes
   the thing it waits on.
@@ -235,10 +248,15 @@ And when writing one:
   anything newer than its last commit** (`chain_stage.sh` refuses a dirty
   tree). Uncommitted work is a decision for the integrator that `git merge`
   never shows.
-- **The gate between merges is the meeting-point run** (`meeting.sh <tree>
-  <tag>`): every test file any merged branch added or edited, the set's own
+- **The gate between merges is the meeting-point run** (`MEETING_BASE=$(git
+  merge-base <link> <branch>) meeting.sh <tree> <tag>`): every test file any merged branch added or edited, the set's own
   files, the ingest's yield (`yield.txt`), every file a full gate has surprised
-  you with (`surprises.txt`) and the structural guards. Never a hand-picked
+  you with (`surprises.txt`) and the structural guards. **Read the list from
+  the branch's merge-base** (`MEETING_BASE`; the default is `main`): that is
+  the branch's own files plus every link merged since its base — which is
+  exactly the first blind spot below, closed by construction — and it does
+  not accumulate while `main` is held at the round's base (Mirrodin's list
+  read from `main` grew from 47 files to 87, 230 s to 504 s). Never a hand-picked
   list; the script refuses a path that does not exist, because xdist reports a
   typo as "no tests ran". Add by hand the censuses of any seam two merged
   branches both touched and every ratchet either side lowered — an instrument is
@@ -251,7 +269,14 @@ And when writing one:
   by construction — `main` need not move at a wave's close); and a per-set file no branch
   edited is in no list, so a link whose branch changes behaviour broadly (a
   default, an entry road, combat assignment, log wording) also runs `tests/sets`
-  whole (three per-set reds surfaced late in kg3).
+  whole (three per-set reds surfaced late in kg3). It takes about a minute
+  at `-n 4`; Mirrodin skipped it for the graveyard's arrival seam and a full
+  gate found the Tempest Efreet red two links later.
+- **Two branches may share one meeting**: stage and commit the first link
+  with its scans (oracle_diff, dups, missing and import names), stage the
+  second on it, and run the meeting at the top. A red is bisected onto the
+  lower link in seconds. Mirrodin batched four pairs; none needed the
+  bisect.
 - **Name the `full`-marked structural guards in every group brief**
   (`tests/engine/test_face_blind_guards.py`, `test_grammar_layering.py`,
   `test_cast_prohibition_readers.py`): an agent's quick-pass `tests/engine` never
@@ -344,6 +369,14 @@ on at least one resolution.
   entry at one spot (git shows each side "keeping" the other's deletion) or both
   rewrote one function, each with a fix the other lacks. Read both sides for
   what each *adds*, and union unless they contradict.
+- **A resolver anchors its markers and refuses to stage on a failed check.**
+  A per-set section marker ends in a run of `=`, and an unanchored
+  `=======` split one region inside such a line (Mirrodin's W2G1 merge; the
+  resolver's own assertion refused it, and a `git add` after it staged the
+  markers anyway). Match `^=======$`. `engine/ARCHITECTURE.md`'s module table
+  conflicts at most merges, each time two branches inserting phrases into
+  the same rows: `wordmerge_rows.py` merges them word by word against the
+  base and aborts on a word-level conflict.
 - **Resolve the conflict, never the file.** A whole-file `--theirs`/`--ours`
   drops hunks that were never in dispute, including a third branch's clean
   merge into the same file. `git checkout -m <file>` and go hunk by hunk.
@@ -608,11 +641,16 @@ carry its row, and the census is in hand.
    first. Then **confirm the suite loaded the set** — check the collected count
    moved; a green run over a pool without it looks the same as one that found
    nothing. **Run it in the ingest's own worktree**, never in the checkout the
-   card work starts in: the work starts while this pass runs (8ED's integrator
-   edited the main checkout under it and had to put two files back).
+   card work starts in, and **not in the tree the wave's base is cut from**:
+   the work starts while this pass runs (8ED's integrator edited the main
+   checkout under it and had to put two files back; Mirrodin's opened the
+   per-set test files in the ingest tree while its pass read it). Launch the
+   wave while it runs, and send each red to its owner when it lands.
 3. Regenerate the trackers. The set appears as a *(measured)* row; the floors
    and ceilings do not move.
-4. The census, all of it, before believing any number:
+4. The census, all of it, before believing any number —
+   `scripts/integration/census.sh CODE <tree>` runs every instrument below
+   under the names `gen_cards.py`, `card_table.py` and `furthest.py` read:
    - `support_report.py --set <CODE>`: total, supported, and the
      unsupported-reason histogram. Each reason quotes only the **first** refused
      line of its card, so the histogram sizes buckets; it does not promise that
@@ -843,7 +881,16 @@ green, the trackers agreeing the set ships.
    window after the blocks). Promotion
    widens every `load_catalog()` guard and shows the set
    to `parse_coverage` for the first time, so findings surface here by
-   construction; rehearsing early hands them to somebody still in the code. A
+   construction; rehearsing early hands them to somebody still in the code.
+   **Most of a rehearsal's new reds are censuses over `load_catalog()`**
+   (Mirrodin's first: 11 of 14) — a table the set's own groups widened that
+   only sees a shipped set. A group can run them in round with the set
+   promoted in its worktree and the manifest restored before it commits;
+   a census whose rows check themselves against the shipped catalog gets
+   a promotion-row script the promotion commit runs (W2G0b's
+   `promotion_rows.py`, idempotent, `--check` until applied). When every
+   group has reported and the promotion is the next commit, its full pass
+   is the last wave-close rehearsal too (Mirrodin). A
    wave-2 group can take the rehearsal's inventories — driving each card,
    committing what holds either way, and writing the rows that name a set card
    as a replay script the promotion commit runs. **A replay's data is a reading
@@ -1280,6 +1327,67 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   reads the other way; the 2004-10-04 rulings say only that the Swamps must
   be sacrificed if you can). *Clears:* a ruling check, then the card's
   handler.
+
+- **CR 509.1g: a blocker stays a blocking creature until it is itself
+  removed from combat.** `_prune_combat_state` drops a blocker once all its
+  attackers have left combat by any road (death, bounce, and since Mirrodin's
+  W2G3 regeneration), so "blocking creature" filters stop seeing it; about 110
+  cards read blocking status. Reproduced in `scratch/mrd/w2g3/probe_regen3.py`
+  (Black Knight leaves `combat_blockers`). Parts: a blocking record that
+  outlives its attackers, read by the blocking filters; the damage passes
+  unchanged (CR 509.1h). *Clears:* a combat round.
+
+- **Tithe shuffles twice when both its searches run** (CR 701.23h: one search,
+  one shuffle; Mirrodin W2G4's census). Parts:
+  `grammar/imperative_verbs._parse_conditional_additional_search` flags both
+  `SearchLibrary` nodes "no own shuffle" and appends one `ShuffleLibrary`; the
+  flag reaches the payload (`no_shuffle`); the shuffle sites in
+  `mixins/stack/choices/search.py` and `handlers/search.py` go through one
+  helper that honours it; a test — both finds under Psychogenic Probe deal 2.
+  *Clears:* any round in the search handlers.
+
+- **The web's Time Vault decline runs `begin_turn_bookkeeping` a second time**
+  (`web/action_turn._action_time_vault_decline` calls `_begin_turn`):
+  `seat_turn_counts` rises by two (Giant Turtle, Wall of Dust read it) and
+  `last_own_turn_activity` re-folds the reset records (Arboria). Web games
+  only, when a person declines the skip. *Clears:* a web-turn round.
+
+- **`queue_from_hand(target_role_refs=…)` is overridden by the default target
+  for a lone graveyard role** (`mixins/stack/casting.py`, `names_an_object`
+  is handed None for role refs), so a cast naming its graveyard card by role
+  gets the default. The client sends the index channel, which is right.
+  *Clears:* any casting round.
+
+- **Mirrodin's AI leftovers** (W2G5 measured each): Power Conduit is never
+  activated (no worth for removing charge, fate or age counters;
+  `ActivationAction` lacks `cost_permanent_ids` / `cost_counter_kind`);
+  Quicksilver Elemental's {U} is never proposed (it needs a two-step
+  rehearsal — gain, then the chooser over the gained abilities — and
+  `_plan_land_taps` honouring the activation-scoped blue permission); the
+  activated sacrifice twins (Bosh and 13 more) are never activated; the combat
+  forecasts (`ai_declarations._kills_back` / `_gang_kills`,
+  `ai_compelled_blocks.fight_outcome`) price a regeneration shield as
+  indestructible, where a shielded creature killed by first strike now deals
+  no regular damage. *Clears:* the next AI round.
+
+- **Mirrodin's client and wire leftovers.** A copy's wire `name` is its
+  printed card's (`web/serialization`, `perm.card.name`) where CR 707.2 says
+  the copied object's (`copied_from` carries it; Sculpting Steel copying Iron
+  Myr reads "Sculpting Steel") — serialize the effective name and keep a
+  printed name for art, after a census of the client's name-keyed reads.
+  After a play from a zone the zone panel stays open; in a free-for-all it
+  does not say whose exile. Fatespinner's panel title still reads "Choose
+  one". Krark's Thumb's "ignore one" is never asked (the win is always kept;
+  no pool card rewards the other face). *Clears:* a client round.
+
+- **Seen in Mirrodin, not measured.** `ai_scratch_copy.conceal_from` may not
+  hide a face-down exiled card from a rehearsal copy (Shared Fate); other
+  face-down linked entries (Necropotence, Parallel Thoughts) may keep a stale
+  entry after their card leaves exile (W2G2 added
+  `linked_exile.forget_exiler_entries` for entries that record their exiler);
+  `handlers/_amounts` reads a sacrificed permanent's mana value off its
+  printed card, where a sacrificed copy should read the copied value (CR
+  707.2). *Clears:* a measure first.
 
 - **Seen, not measured.** `_SimulatedGame._steps_left_owing` lives in the
   instance `__dict__`, so `position_digest` reads it in simulator games

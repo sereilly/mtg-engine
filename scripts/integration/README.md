@@ -24,7 +24,7 @@ export ROUND=ons
 | `headroom.py` | briefing, every stage | modules inside the size band (`check_all --caps` without the checks) |
 | `status.sh [--wait N] <base> <group>...` | while agents run | commits, dirty files, exit files per group |
 | `chain_stage.sh <group> <base-ref>` | each merge | stage the merge in its own link worktree; union per-set test blocks |
-| `meeting.sh <tree> <tag>` | **each merge** | the meeting-point run — the gate between merges |
+| `MEETING_BASE=$(git merge-base <link> <branch>) meeting.sh <tree> <tag>` | **each merge** | the meeting-point run — the gate between merges; its changed-files list read from the branch's merge-base |
 | `chain_commit.sh <group> <msg-file>` | each merge | commit the link, regenerate trackers |
 | `gate.sh <tree> <tag> [workers] [quick\|full]` + `gate_report.sh <tag>` | **wave close, promotion** | the full gate: oracle_diff, scans, whole suite (the quick pass; `full` on the promotion commit), check_all, support |
 | `regen.sh <label>` | after any merge | regenerate every tracker (never `--accept`) and commit |

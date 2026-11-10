@@ -336,6 +336,17 @@ one card prints this") reads as a work item long after it stopped being true.
   creature"). Both model the opponent's pick as a value chosen while the ability
   *resolves*.
 
+  Mirrodin moved one shape off this entry and narrowed the rest. Confusion in
+  the Ranks ("its controller chooses target permanent another player
+  controls") is announced as its trigger goes on the stack, by the entering
+  object's controller (W2G4: `exchange_control_of_targets` with `first:
+  "event_subject"`, the relation filter in `trigger_targets`, CR 608.2b's
+  re-check). And every pick still made at resolution for a printed "target …
+  of their choice" (Echo Chamber, The Abyss, Ley Line, Erithizon, Quicksilver
+  Fountain) is held to `Game._can_be_targeted` — shroud, hexproof against the
+  ability's controller, protection from the source (W2G0b; The Abyss had
+  destroyed a White Knight).
+
   **Fixed:** the legality half. A printed "target" carries CR 601.2c with it
   however answers it, so an ability whose announced target has no legal object
   cannot be activated — Echo Chamber used to pay {4} and {T} into a choice with
@@ -655,14 +666,6 @@ one card prints this") reads as a work item long after it stopped being true.
   controller" already reads `event_subject_controller`. (FEM; re-verified
   2026-09-07.)
 
-- **`engine/static_bonuses.py` line 340 holds literal backspace characters
-  (U+0008)** where a regex word boundary was meant, so its "and" and "and from"
-  alternatives have never fired and only the comma splits. A repo-wide scan for
-  control characters in `.py` files finds exactly it and one harmless docstring
-  twin. **Not fixed on purpose** — it wants its own round with a differential,
-  because making those alternatives fire changes what the table reads. (STH;
-  still there 2026-09-07.)
-
 - **`web/` layer reads are unguarded.** `tests/engine/test_layer_reads.py`
   walks `engine/` only, and the last two layer-read bugs were both in `web/`
   and both found by a promotion smoke test rather than a guard — most recently
@@ -680,11 +683,10 @@ one card prints this") reads as a work item long after it stopped being true.
   combat, so this is a gap with no card behind it — recorded rather than
   fixed, because a fix with no card to verify it is a guess.
 
-- **Four smaller ones, each with no card behind it today** (re-probed
-  2026-09-07). `_perform_entry_state`'s "enters with N +0/+1 counters" branch
-  writes `metadata["plus_0_1_counters"]`, a key nothing reads (`_PT_COUNTER_KEYS`
-  has no `+0/+1` row, so `pt.pt_counter_key` spells it differently), and it
-  assigns rather than accumulates. `prevention.registry.source_has_type` falls back to
+- **Three smaller ones, each with no card behind it today** (re-probed
+  2026-09-07; the fourth, "enters with +0/+1 counters" in a second store,
+  went through `place_pt_counters` at Mirrodin's W2G3).
+  `prevention.registry.source_has_type` falls back to
   the printed type line for a source that is not a `Permanent`, so a shield
   reading "by creatures" would answer for a creature *spell* on the stack.
   `@upkeep_effect("upkeep_self", "deal_damage")` ignores its recipient payload
@@ -981,6 +983,10 @@ one card prints this") reads as a work item long after it stopped being true.
     loser's life total. The parts: those fixtures need a state that is
     reachable, a "can't lose the game" effect (Platinum Angel) for the 0-life
     payers, or a library for the draw-step boards, and then the one line.
+    **Platinum Angel ships** (Mirrodin W1G10: `engine/game_result_bans.py`,
+    and `Game.lose_the_game` is the one place a loss is performed, guarded by
+    `test_mrd_w1g10_loss_funnel`), so the 0-life fixtures can now be made
+    reachable with an Angel; the conversion and the one line are still owed.
     The simulator's honesty count of steps ending with something owed must
     also skip a finished game (`ai_simulator._owed_when_leaving`), or USG
     and M21 exit 1.
@@ -1481,20 +1487,6 @@ one card prints this") reads as a work item long after it stopped being true.
     its pile is fixed by combat inside a "may", a different shape from
     Gravegouger's, which wave 2 announced as the trigger goes on the stack.
 
-- **A graveyard has no arrival seam** (measured 2026-11-06 by Scourge's
-  engine closer, which gave exile one). Every copy of a card in a zone is
-  the same `CardDefinition` object, so two copies in one graveyard are one
-  object to anything that asks by identity: a `GraveyardTarget`'s ordinal
-  can shift when an earlier copy leaves, CR 613.7d's arrival timestamps
-  (`engine/graveyard_order.py`) are stamped by position, and Recoup's
-  flashback grant, keyed by identity, covers both copies. Exile's shape is
-  the lead: `Game.put_card_into_exile` (`mixins/zone_funnels.py`) makes a
-  distinct object only on a collision, at the one arrival, and
-  `tests/engine/test_exile_arrival_seam.py` fails a write outside it. Parts:
-  that funnel for the graveyard, its roads converted (a census of them
-  first: exile's was 79, with 132 of 365 drives red), and the three readers
-  above re-measured. Its own round.
-
 - **Ten flat spellings of the testable-keys check remain in `lowering/`**
   (down from 39 at VIS), each a set difference over the outer payload's keys
   that answers "testable" for a nested phrase whatever the inner phrase says,
@@ -1939,6 +1931,16 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
+Run on 2026-11-09, with Mirrodin shipped, it answers **Darksteel** (DST,
+2004-02-06, 165 cards — re-measure against this pool), the block's second
+set: equipment, affinity, imprint, charge counters and entwine-free modal
+spells ship, and Darksteel's own words are modular (CR 702.43) and
+indestructible. **Mirrodin arrived at 72.5%** — 211 of 291 read supported,
+but 27 of those dropped a line the support gate could not see (entwine on
+eleven modal spells, affinity on four, imprint's linked abilities on six),
+so the real work list was 107; it shipped with no name-keyed hook, the
+graveyard's arrival seam built on the way and Mindslaver's seat routing
+(CR 723) in 28 reads behind one function.
 Run on 2026-11-06, with Scourge shipped, it answers **Eighth Edition** (8ED,
 2003-07-28, 342 cards and no new one — a pure-reprint core set, so its
 promotion moves origins and membership, not support) and then Mirrodin (MRD,
@@ -2156,6 +2158,7 @@ a wave is five parallel worktree groups integrated serially.
 | LGN | 145 | 67.6% | 2 waves (seven groups landed all 47 with no hook; then four: the client, the rehearsal's engine reds, the engine pile, the AI pile) + 1 follow-up the promotion's full pass found + 2 closers after Phase 5 |
 | SCG | 143 | 56.6% (81 read supported; 18 of them hollow) | 2 waves (nine groups landed 79 of the 80 with no hook; then five: the last card, the client, the AI pile, the engine pile, the rehearsal's inventories) + 3 follow-ups (the client's last prompt and an exile search's floor; the full-pass rehearsal's four census reds) + 4 closers after Phase 5 (the engine, the web, the AI, the client) + 1 follow-up their full gate found |
 | 8ED | 342 | 99.7% (11 new to the pool) | no group: one production by the integrator (Balance of Power), the eleven driven headless, promoted the day of the ingest + 1 AI fix the set's pinned AI games found |
+| MRD | 291 | 72.5% (211 read supported; 27 of them hollow: entwine, affinity, imprint) | 2 waves (twelve groups landed 103 of 107 with no hook; then nine: Mindslaver, Liar's Pendulum and Shared Fate, Second Sunrise and the graveyard's arrival seam, the wave-close census reds, the client, two engine piles, the AI pile, the rehearsal's inventories) + 4 follow-ups (the seam's Tempest Efreet red a full gate found, the client's second round, the rehearsal's second batch, the promotion's full-pass census reds) |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135

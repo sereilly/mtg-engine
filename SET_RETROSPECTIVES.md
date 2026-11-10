@@ -1834,3 +1834,51 @@ pins the set's new cards; a per-set premise asks the sets released before;
 a probe on an unreachable state can hide a defect (a chooser asked at a step
 the engine does not have). Known gaps gains the stacked-permanent
 multi-select.
+
+### MRD — 2026-11-09
+
+*The Mirrodin block's first set: 291 cards, 268 new, 72.5% on arrival and 27
+of those hollow (entwine dropped on eleven modal spells, affinity on four,
+imprint's linked abilities on six), so 107 to do.* The ingest's census crashed
+compiling Grab the Reins (a leading duration over a control change), fixed
+before the fan-out; its full pass read 13 reds, each handed to its card's
+owner. Wave 1's twelve groups landed 103 with no hook — affinity (a rewrite
+whose price reader had to sum), entwine (kicker's reader plus the
+choose-one-or-more cast), imprint (one "exiled card" reader), equipment as
+the attached referent, the Shards' two printed costs, Platinum Angel's loss
+funnel — and declined four with their parts. Wave 2's nine took them:
+Mindslaver (CR 723, 28 seat reads behind one function, W1G10's estimate of
+100+ three times too high), Liar's Pendulum and Shared Fate, Second Sunrise
+with the graveyard's arrival seam (ROADMAP's "its own round" fit one group),
+the client in a browser twice, two engine piles, the AI pile and the
+rehearsals' census reds. Shipped cards fixed beside them: about forty, among
+them every regenerator (removed from combat), Cloudpost, The Abyss, No Rest
+for the Wicked, Tempest Efreet, Jeskai Elder, Garruk, Savage Herald. The
+promotion's full pass read four census reds, each a share no quick pass had
+shown a Mirrodin card: a P/T delta whose sign rides in its amount ("-1/-1 for
+each", "-X/-X") read as a pump, so Irradiate and Judgment's Chill Haunting were
+aimed at their caster's own side; an entwined cast scored without the zone's
+bonus lost to its own best mode out of an opened graveyard (Wail of the Nim);
+a test's executor forwarded the announcement by hand and dropped the mode
+list; and Awe Strike's walled-attacker use became a reviewed held row (W2G9).
+
+*What the integration learned.* `main` held at the round's base made the
+meeting list grow until a meeting cost more than a quick pass; the merge-base
+fixed it. Pairs of branches shared a meeting with no lost bisect. A broad
+seam merged without `tests/sets` whole cost a follow-up two links later. An
+unanchored conflict pattern split a region inside a section marker. Most
+rehearsal reds were catalog censuses a group could have run in round. A
+session break orphaned one gate's wrapper; its log was still readable.
+Toolkit: `census.sh`, `bulk_rulings.py`, `check_brief_crs.py`,
+`wordmerge_rows.py`, `MEETING_BASE`.
+
+*Edits in place:* Phase 1's pass outside the base tree and the census
+script; briefs read each CR number's subject and carry the test pitfalls; the
+meeting from the merge-base, batched pairs, `tests/sets` whole for a seam;
+anchored resolvers; the rehearsal's catalog censuses in round and a
+promotion-row script. *Known gaps:* **drained** none of the standing entries
+(none was Mirrodin's subject); **added** CR 509.1g's blockers, Tithe's two
+shuffles, the web's Time Vault decline, the role-refs cast default,
+Mirrodin's AI and client leftovers, three seen-not-measured. ROADMAP:
+**drained** the graveyard's arrival seam, the protection backspaces and the
++0/+1 store.
