@@ -725,6 +725,13 @@ TRIGGERED_LABELS: dict[str, str] = {
     # its grammar category's own word (`attachments`), the way
     # `change_event_object_targets` reads `triggered_retargeting`.
     "attach_all_to_source": "triggered_attachments",
+    # Confusion in the Ranks: "Whenever an artifact, creature, or enchantment
+    # enters, its controller chooses target permanent another player controls
+    # that shares a card type with it. Exchange control of those permanents."
+    # The fused targeted exchange W2G4 lowered it to, on a trigger for the
+    # first time; Gauntlets of Chaos files the same kind `activated_steal`,
+    # so the triggered twin of that bucket.
+    "exchange_control_of_targets": "triggered_steal",
 }
 
 # The wrapper kinds whose label depends on what triggered them: `may` wraps
