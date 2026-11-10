@@ -592,6 +592,15 @@ class HandChoicesMixin:
         discarded = 0
         took: list = []
         weighed: dict = {}
+        # Whose sentence this is, for the default — the card the arming site
+        # named, else the object stamped as resolving when it was armed — and
+        # the seat that caused it (CR 109.5, ``discard_cause_seat``): "You
+        # gain 3 life for each land card discarded this way" (Gerrard's
+        # Verdict) is a payoff the discarder's choice decides.
+        source_card = choice.data.get("_source_card")
+        if source_card is None:
+            source_card = getattr(choice.data.get("_stack_item"), "card", None)
+        cause_seat = self.discard_cause_seat(choice.data.get("_cause_seat"))
         # One event: a discard an opponent causes can put the card onto the
         # battlefield instead (Dodecapod), and every such card enters together
         # (CR 603.6a).
@@ -599,7 +608,7 @@ class HandChoicesMixin:
             for _ in range(int(choice.data["count"])):
                 eligible = discard_order(
                     self, choice.player_index, self.live_discard_candidates(choice),
-                    choice.data.get("_source_card"), weighed,
+                    source_card, weighed, cause_seat=cause_seat,
                 )
                 if not eligible:
                     break

@@ -193,6 +193,11 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
         # place both answer paths (a seat's own picks and the non-interactive
         # default) reach.
         _results=context.results,
+        # …and the card whose sentence it is, for the default: what follows
+        # may test which card went (Gerrard's Verdict's life per land,
+        # ``ai_prompts.order_discard``), as the each-seat discard's prompt
+        # carries it.
+        _source_card=context.card,
     )
     game.log.append(
         f"{target.name} may discard up to {actual} card(s)" if ceiling
@@ -293,6 +298,7 @@ def _ask_seat_to_discard(
                 card = player.hand[
                     discard_order(
                         game, seat, range(len(player.hand)), source_card, weighed,
+                        cause_seat=cause_seat,
                     )[0]
                 ]
                 game.take_card_from_hand(player, card)
