@@ -28,7 +28,7 @@ from engine.cast_permissions import permission_for, playable_from_zones
 from engine.exiled_records import live_records
 from engine.linked_exile import linked_entries
 from engine.models import Permanent
-from tests.helpers import resolve_stack
+from tests.helpers import settle
 from web.serialization import _exile_payload
 
 
@@ -47,12 +47,6 @@ def _game(library, *, interactive=()):
     game.enforce_mana_costs = False
     game.interactive_seats = set(interactive)
     return game
-
-
-def _settle(game):
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
 
 
 def _positions(pile, card):
@@ -87,13 +81,13 @@ def _breach_then_parallel_thoughts(pool, *, interactive=()):
     breach = pool["Dimensional Breach"]
     game.players[0].hand.append(breach)
     assert game.cast_from_hand(0, "Dimensional Breach").supported
-    _settle(game)
+    settle(game)
     (breach_mountain,) = [card for card in game.players[0].exile if card.name == "Mountain"]
     assert breach_mountain is mountain
     game._put_permanent_onto_battlefield(
         0, Permanent(card=pool["Parallel Thoughts"]), None,
     )
-    _settle(game)
+    settle(game)
     return game, breach_mountain
 
 
@@ -150,11 +144,11 @@ def _three_wishes_then_mangaras_tome(pool):
     game._close_current_priority_step()
     game.players[0].hand.append(pool["Three Wishes"])
     assert game.cast_from_hand(0, "Three Wishes").supported
-    _settle(game)
+    settle(game)
     wishes = list(game.players[0].exile)
     assert [card.name for card in wishes] == ["Mountain", "Island", "Swamp"]
     game._put_permanent_onto_battlefield(0, Permanent(card=pool["Mangara's Tome"]), None)
-    _settle(game)
+    settle(game)
     return game, wishes
 
 

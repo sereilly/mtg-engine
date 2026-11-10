@@ -53,7 +53,7 @@ from engine.handlers import EFFECT_HANDLERS
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import announced_mode_instructions
-from tests.helpers import _mk_card, _nosick, resolve_stack
+from tests.helpers import _mk_card, _nosick, settle
 
 POOL = load_cards(manifest_set_paths(include_measured=True))
 BY_NAME: dict = {}
@@ -106,12 +106,6 @@ def rig(held, seat: int, *, yards=None):
     return game
 
 
-def _settle(game) -> None:
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-
-
 def play(held, spell, seat: int, *, yards=None):
     """Cast *spell* as the AI in chair *seat* through its own choosers, and —
     for a permanent — activate it once. Returns the game, or None when the
@@ -125,7 +119,7 @@ def play(held, spell, seat: int, *, yards=None):
     result = game.cast_from_hand(
         seat, spell_being_cast(zone, action).name, **cast_announcement(action),
     )
-    _settle(game)
+    settle(game)
     if not result.supported:
         return None
     if spell.primary_type in ("instant", "sorcery"):
@@ -145,7 +139,7 @@ def play(held, spell, seat: int, *, yards=None):
         target_permanent_index=activation.target_permanent_index,
         target_role_refs=activation.target_role_refs,
     )
-    _settle(game)
+    settle(game)
     return game
 
 

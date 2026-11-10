@@ -22,7 +22,7 @@ from engine.ai_prompt_readers import pick_is_taken_from_its_controller
 from engine.ai_target_sides import toggle_target_order, toggles_its_target
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick, resolve_stack
+from tests.helpers import _nosick, resolve_stack, settle
 
 
 def _put(game, seat, card, *, tapped=False):
@@ -31,13 +31,6 @@ def _put(game, seat, card, *, tapped=False):
     resolve_stack(game)
     permanent.tapped = tapped
     return permanent
-
-
-def _settle(game) -> None:
-    for _ in range(6):
-        resolve_stack(game)
-        game.auto_resolve_pending_choices()
-    resolve_stack(game)
 
 
 def test_an_opponents_take_away_pick_is_the_dearest_permanent(set_pool):
@@ -56,7 +49,7 @@ def test_an_opponents_take_away_pick_is_the_dearest_permanent(set_pool):
     for card in (lea["Island"], lea["Island"], lea["Craw Wurm"], lea["Grizzly Bears"]):
         _put(game, 0, card)
     assert game.cast_from_hand(0, "Wormfang Crab").supported
-    _settle(game)
+    settle(game)
     assert [card.name for card in game.players[0].exile] == ["Craw Wurm"]
     assert sorted(p.card.name for p in game.controlled_by(0)) == [
         "Grizzly Bears", "Island", "Island", "Wormfang Crab",
@@ -102,7 +95,7 @@ def test_telekinetic_bonds_taps_the_opponents_creature_not_itself(set_pool):
     assert toggles_its_target(program.triggered_abilities[0].instruction)
     result = game.cast_from_hand(0, "Mind Twist", target_player_index=1, x_value=1)
     assert result.supported, result.details
-    _settle(game)
+    settle(game)
     assert bears.tapped
     assert not bonds.tapped and not forest.tapped
 

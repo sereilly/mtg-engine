@@ -20,7 +20,7 @@ import pytest
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
-from tests.helpers import _mk_creature_card, _nosick, resolve_stack
+from tests.helpers import _mk_creature_card, _nosick, drive_combat, resolve_stack
 
 
 # --- Round 10: sweeps and grants over a set the sentence names ---
@@ -1550,13 +1550,6 @@ def _cast_chill(game, targets, x_value):
     return result
 
 
-def _finish_combat(game):
-    game.advance_combat_phase()  # declare_blockers
-    game.advance_combat_phase()  # combat_damage
-    game.advance_combat_phase()  # end_of_combat
-    game._settle()
-
-
 def test_winters_chill_refuses_an_x_above_the_snow_lands_you_control(set_pool):
     """"X can't be greater than the number of snow lands you control."
 
@@ -1589,7 +1582,7 @@ def test_winters_chill_destroys_the_creature_nobody_paid_for(set_pool):
 
     game.confirm_optional_pay(0, accept=False)
     game._settle()
-    _finish_combat(game)
+    drive_combat(game)
 
     assert p1.life == 18, "the damage was dealt; only the creature was bought"
     assert not any(perm is attacking[0] for perm in game.all_permanents())
@@ -1644,7 +1637,7 @@ def test_winters_chill_paying_two_buys_off_both_consequences(set_pool):
     )
     assert paid == 2
 
-    _finish_combat(game)
+    drive_combat(game)
     assert p1.life == 18, "the damage was dealt"
     assert any(perm is attacking[0] for perm in game.all_permanents())
 
@@ -1671,7 +1664,7 @@ def test_winters_chill_binds_each_outcome_to_its_own_creature(set_pool):
     assert len(game.pending_choices_of("optional_pay", 0)) == 1
     game.confirm_optional_pay(0, accept=True, option=0)  # the Barbarians'
     game._settle()
-    _finish_combat(game)
+    drive_combat(game)
 
     assert p1.life == 18, "the Bears' 2 damage; the shielded Barbarians dealt none"
     alive = {
@@ -1690,7 +1683,7 @@ def test_winters_chill_offers_nothing_a_controller_cannot_afford(set_pool):
     assert _cast_chill(game, [0], 1).supported
 
     assert not game.pending_choices_of("optional_pay", 0)
-    _finish_combat(game)
+    drive_combat(game)
     assert [card.name for card in p0.graveyard] == ["Balduvian Bears"]
 
 
@@ -1705,7 +1698,7 @@ def test_winters_chill_shield_ends_with_the_combat_it_names(set_pool):
     game._settle()
     assert attacking[0].metadata.get("prevent_combat_damage_direction_until_eot")
 
-    _finish_combat(game)
+    drive_combat(game)
     assert not attacking[0].metadata.get(
         "prevent_combat_damage_direction_until_eot"
     ), "the shield expired with the combat phase, not with the turn"

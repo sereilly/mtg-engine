@@ -30,7 +30,7 @@ from engine.handlers import EFFECT_HANDLERS
 from engine.modal_triggers import modal_trigger_modes
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _mk_card, resolve_stack
+from tests.helpers import _mk_card, settle
 
 ME, OPP = 0, 1
 
@@ -62,12 +62,6 @@ def _put(game, seat, card, *, tapped=False) -> Permanent:
     return permanent
 
 
-def _settle(game) -> None:
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    game.check_state_based_actions()
-
-
 # --- the mode of a modal triggered ability -----------------------------------
 
 
@@ -92,14 +86,14 @@ def test_trufflesnout_takes_the_life_when_life_is_what_it_is_short_of(pool):
     boar = pool["Trufflesnout"]
     healthy = _table(pool, hand=[boar])
     assert healthy.cast_from_hand(ME, "Trufflesnout").supported
-    _settle(healthy)
+    settle(healthy)
     entered = next(iter(healthy.controlled_by(ME)))
     assert (entered.effective_power, entered.effective_toughness) == (3, 3)
     assert healthy.players[ME].life == 20
 
     dying = _table(pool, hand=[boar], life=(3, 20))
     assert dying.cast_from_hand(ME, "Trufflesnout").supported
-    _settle(dying)
+    settle(dying)
     entered = next(iter(dying.controlled_by(ME)))
     assert (entered.effective_power, entered.effective_toughness) == (2, 2)
     assert dying.players[ME].life == 7
@@ -120,17 +114,17 @@ def test_relic_bind_pings_or_heals_by_which_is_worth_more(pool):
     controller's last four — and is worth the game when it is their last."""
     game, host = _relic_bind(pool, (20, 20))
     game.become_tapped(host)
-    _settle(game)
+    settle(game)
     assert (game.players[ME].life, game.players[OPP].life) == (20, 19)
 
     game, host = _relic_bind(pool, (4, 20))
     game.become_tapped(host)
-    _settle(game)
+    settle(game)
     assert (game.players[ME].life, game.players[OPP].life) == (5, 20)
 
     game, host = _relic_bind(pool, (4, 1))
     game.become_tapped(host)
-    _settle(game)
+    settle(game)
     assert game.players[OPP].life == 0
 
 
@@ -149,7 +143,7 @@ def test_elder_gargaroth_makes_the_beast(pool):
     slot = game.battlefield_index_of(elder)
     declared, why = game.declare_attackers(ME, [slot], defending_player_index=OPP)
     assert declared, why
-    _settle(game)
+    settle(game)
     names = sorted(permanent.card.name for permanent in game.controlled_by(ME))
     assert len(names) == 2 and "Elder Gargaroth" in names
     assert game.players[ME].life == 20 and not game.players[ME].hand
@@ -176,11 +170,11 @@ def test_putrid_warrior_takes_the_side_of_the_swing_its_seat_is_short_of(
     )
     assert declared, why
     for _ in range(8):
-        _settle(game)
+        settle(game)
         if game.players[OPP].life < life[1] or game.current_turn_phase != "combat":
             break
         game.advance_combat_phase()
-    _settle(game)
+    settle(game)
     swing = 1 if gains else -1
     assert game.players[ME].life == life[0] + swing, game.log[-6:]
     assert game.players[OPP].life == max(0, life[1] - 2 + swing), game.log[-6:]
@@ -236,7 +230,7 @@ def test_root_greevil_names_the_colour_its_sweep_is_worth_most_in(pool):
     assert color_most_worth_sweeping(game, ME, pool["Root Greevil"]) == "W"
     game.players[ME].mana_pool["G"] = 3
     assert game.queue_permanent_ability(ME, "Root Greevil", ability_index=0).supported
-    _settle(game)
+    settle(game)
     assert not game.is_on_battlefield(theirs), "the white enchantment was the one to take"
     assert game.is_on_battlefield(mine)
     assert sum(1 for p in game.controlled_by(OPP) if p.is_creature) == 4

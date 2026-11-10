@@ -41,7 +41,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import Permanent
 from engine.oracle import compiled_units
-from tests.helpers import resolve_stack
+from tests.helpers import settle
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -63,18 +63,6 @@ def _set_down(game: Game, seat: int, name: str) -> Permanent:
     game.players[seat].battlefield.append(permanent)
     game._sync_control()
     return permanent
-
-
-def _settle(game: Game) -> None:
-    for _ in range(100):
-        if game.stack:
-            resolve_stack(game)
-            continue
-        if game.pending_choices:
-            game.auto_resolve_pending_choices()
-            continue
-        return
-    raise AssertionError(game.log[-8:])
 
 
 def _cast(game: Game, seat: int, name: str, **kwargs) -> None:
@@ -132,7 +120,7 @@ def test_fade_away_headless_an_observer_given_up_first_sees_the_rest_die():
     _set_down(game, 1, "Grizzly Bears")
     _cast(game, 0, "Fade Away")
     game.enforce_mana_costs = True
-    _settle(game)
+    settle(game)
     assert _names(game, 0) == ["Hill Giant"] and _names(game, 1) == []
     assert game.players[0].life == 22, game.log[-10:]
 
@@ -240,7 +228,7 @@ def test_oath_of_lim_dul_sacrifices_for_each_life_lost_together():
     _set_down(game, 0, "Hill Giant")
     game.check_state_based_actions()
     _cast(game, 1, "Lightning Bolt", target_player_index=0)
-    _settle(game)
+    settle(game)
     assert _names(game, 0) == ["Oath of Lim-Dûl"]
     assert game.players[0].life == 17 + 2, game.log[-10:]
 
@@ -259,7 +247,7 @@ def test_tariff_the_seats_sacrifices_are_one_event(interactive):
     if interactive:
         game.resolve_top_of_stack(pause_for_choices=True)
         _answer(game, [], take_offers=False)
-    _settle(game)
+    settle(game)
     assert _names(game, 0) == [] and _names(game, 1) == []
     assert game.players[1].life == 18, game.log[-10:]
 
@@ -282,7 +270,7 @@ def test_each_opponents_sacrifice_unless_they_pay_is_one_event():
     _set_down(game, 2, "Grizzly Bears")
     _cast(game, 0, "Rishadan Cutpurse")
     game.enforce_mana_costs = True
-    _settle(game)
+    settle(game)
     assert _names(game, 1) == [] and _names(game, 2) == []
     assert game.players[1].life == 21, game.log[-10:]
 

@@ -33,7 +33,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent
-from tests.helpers import resolve_stack
+from tests.helpers import settle
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -94,17 +94,10 @@ def _game(mine, theirs=(), *, interactive=()) -> Game:
     return game
 
 
-def _settle(game: Game) -> None:
-    for _ in range(6):
-        resolve_stack(game)
-        game.auto_resolve_pending_choices()
-    resolve_stack(game)
-
-
 def _damage(game: Game, amount: int) -> None:
     source = _CARDS["Lightning Bolt"]
     game._deal_damage_to_player(game.players[0], amount, source=source)
-    _settle(game)
+    settle(game)
 
 
 def test_lich_that_cannot_sacrifice_enough_loses_the_game():
@@ -124,7 +117,7 @@ def test_lich_that_can_sacrifice_enough_does_and_stays():
 def test_lord_of_the_pit_with_nothing_to_sacrifice_deals_seven(interactive):
     game = _game(["Lord of the Pit", "Swamp"], interactive=interactive)
     game.resolve_upkeep(0)
-    _settle(game)
+    settle(game)
     assert game.players[0].life == 13, game.log
     assert game.is_on_battlefield(game.players[0].battlefield[0])
 
@@ -134,7 +127,7 @@ def test_infernal_denizen_that_cannot_sacrifice_two_swamps_is_tapped(interactive
     game = _game(["Infernal Denizen", "Swamp", "Grizzly Bears"], interactive=interactive)
     denizen = game.players[0].battlefield[0]
     game.resolve_upkeep(0)
-    _settle(game)
+    settle(game)
     # One Swamp cannot pay "two Swamps", so neither goes (the count is
     # indivisible) and the "If you can't" branch happens instead.
     assert any(p.card.name == "Swamp" for p in game.controlled_by(0)), game.log
@@ -152,7 +145,7 @@ def test_rust_elemental_sacrifices_another_artifact_when_it_can(interactive):
     game = _game(["Rust Elemental", "Sol Ring", "Swamp"], interactive=interactive)
     elemental = game.players[0].battlefield[0]
     game.resolve_upkeep(0)
-    _settle(game)
+    settle(game)
     assert [card.name for card in game.players[0].graveyard] == ["Sol Ring"], game.log
     assert game.is_on_battlefield(elemental) and not elemental.tapped, game.log
     assert game.players[0].life == 20, game.log
@@ -166,7 +159,7 @@ def test_rust_elemental_with_no_other_artifact_is_tapped_and_costs_four(interact
     game = _game(["Rust Elemental", "Swamp"], interactive=interactive)
     elemental = game.players[0].battlefield[0]
     game.resolve_upkeep(0)
-    _settle(game)
+    settle(game)
     assert game.is_on_battlefield(elemental), game.log
     assert elemental.tapped, game.log
     assert game.players[0].life == 16, game.log

@@ -33,7 +33,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import Permanent
-from tests.helpers import resolve_stack
+from tests.helpers import resolve_stack, settle
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -66,23 +66,6 @@ def _set_down(game: Game, seat: int, name: str) -> Permanent:
     return permanent
 
 
-def _settle(game: Game) -> None:
-    for _ in range(300):
-        owed = game.waiting_prompt()
-        if owed is not None:
-            game.take_choice_default(owed)
-            continue
-        if game.stack:
-            game.resolve_top_of_stack(pause_for_choices=game.holds_for_answers())
-            continue
-        if game.pending_choices or game.pending_replacement_choices:
-            game.auto_resolve_pending_choices()
-            game.auto_resolve_pending_replacement_choices()
-            continue
-        return
-    raise AssertionError(f"the table did not settle: {game.log[-8:]}")
-
-
 def _entry_prompts(game: Game) -> list[int]:
     """The seats owing an "as it enters" choice, in the order they were armed."""
     return [
@@ -100,7 +83,7 @@ def _planar_guided(game: Game, active: int, names: dict[int, str]) -> None:
     asked = game.interactive_seats
     game.interactive_seats = set()
     assert game.activate_permanent_ability(active, "Planar Guide")
-    _settle(game)
+    settle(game)
     game.interactive_seats = asked
     assert not any(p.is_creature for p in game.all_permanents())
     game.resolve_end_step(active)
@@ -113,7 +96,7 @@ def test_cards_returned_together_are_stamped_active_player_first(active):
     player's carries the earlier timestamp whichever seat that is."""
     game = _table(active=active)
     _planar_guided(game, active, {0: "Grizzly Bears", 1: "Llanowar Elves"})
-    _settle(game)
+    settle(game)
     stamps = {
         seat: [p.timestamp for p in game.controlled_by(seat) if p.is_creature]
         for seat in (0, 1)
@@ -139,7 +122,7 @@ def test_cards_returned_together_choose_active_player_first(active):
         [(c.kind, c.player_index) for c in game.pending_choices], game.log[-8:]
     )
     assert not any(p.is_creature for p in game.all_permanents())
-    _settle(game)
+    settle(game)
     assert all(
         [p.card.name for p in game.controlled_by(seat) if p.is_creature] == [CHOOSER]
         for seat in (0, 1)
@@ -187,7 +170,7 @@ def test_show_and_tells_entry_choice_waits_for_every_seats_pick(active):
     )
     assert not any(c.kind == "optional_pay" for c in game.pending_choices)
     assert not any(p.is_creature for p in game.all_permanents())
-    _settle(game)
+    settle(game)
     assert [p.card.name for p in game.controlled_by(active)] == [CHOOSER]
     assert [p.card.name for p in game.controlled_by(other)] == ["Grizzly Bears"]
 
@@ -203,7 +186,7 @@ def test_show_and_tells_entry_choices_go_active_player_first(active):
     assert _entry_prompts(game) == [active, 1 - active], (
         [(c.kind, c.player_index) for c in game.pending_choices], game.log[-8:]
     )
-    _settle(game)
+    settle(game)
     assert all(
         [p.card.name for p in game.controlled_by(seat)] == [CHOOSER]
         for seat in (0, 1)

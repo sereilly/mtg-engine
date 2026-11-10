@@ -24,6 +24,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import Permanent
+from tests.helpers import settle
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -60,11 +61,6 @@ def _tapped(game: Game) -> list[str]:
     return sorted(p.card.name for p in game.controlled_by(1) if p.tapped)
 
 
-def _settle(game: Game) -> None:
-    game.auto_resolve_pending_choices()
-    game.resolve_stack()
-
-
 @contextmanager
 def _one_mana_per_land():
     from engine import board_payment
@@ -75,7 +71,7 @@ def _one_mana_per_land():
 
 def _paid_by_a_seat_nobody_asks() -> Game:
     game = _leaked(interactive=False)
-    _settle(game)
+    settle(game)
     return game
 
 
@@ -83,7 +79,7 @@ def _paid_by_an_asked_seat() -> Game:
     game = _leaked(interactive=True)
     assert game.pending_choice_of("mana_payment", 1) is not None, game.log
     assert game.confirm_mana_payment(1, True)
-    _settle(game)
+    settle(game)
     return game
 
 

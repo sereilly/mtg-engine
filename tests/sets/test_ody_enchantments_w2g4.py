@@ -32,7 +32,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _mk_card, resolve_stack
+from tests.helpers import _mk_card, settle
 
 _HOMES = {
     "Karmic Justice": "ODY", "Tremble": "ODY",
@@ -90,12 +90,6 @@ def _justice_triggers(game) -> list:
 
 def _names(cards) -> list[str]:
     return [getattr(entry, "card", entry).name for entry in cards]
-
-
-def _settle(game) -> None:
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
 
 
 # --- what it compiles to ---------------------------------------------------------
@@ -157,7 +151,7 @@ def test_an_opponents_disenchant_on_your_artifact_triggers_it(set_pool):
     assert (offer.kind, offer.player_index) == ("optional_pay", 0)
     assert game.is_on_battlefield(mox)            # "may": nothing until it is taken
     assert game.confirm_optional_pay(0, accept=True)
-    _settle(game)
+    settle(game)
 
     assert not game.is_on_battlefield(mox)
     assert _names(game.players[1].graveyard) == ["Disenchant", "Mox Pearl"]
@@ -175,7 +169,7 @@ def test_you_may_means_you_may_not(set_pool):
     assert game.confirm_trigger_target(0, permanent_id=mox.permanent_id)
     assert game.resolve_top_of_stack(pause_for_choices=True)
     assert game.confirm_optional_pay(0, accept=False)
-    _settle(game)
+    settle(game)
 
     assert game.is_on_battlefield(mox)
     assert game.stack == []
@@ -347,7 +341,7 @@ def test_a_sacrifice_does_not_trigger_it(set_pool):
     _put(game, set_pool, 1, "Mox Pearl")
 
     _cast(game, set_pool, 1, "Tremble")
-    _settle(game)
+    settle(game)
 
     assert _names(game.players[0].graveyard) == ["Island"]
     assert not any("Karmic Justice" in line for line in game.log), game.log
@@ -455,7 +449,7 @@ def test_lethal_damage_is_a_destruction_no_spell_or_ability_performs(set_pool):
     _cast(game, set_pool, 1, "Lightning Bolt", target_permanent_ids=[forest.permanent_id])
     game.resolve_top_of_stack()
     game.check_state_based_actions()
-    _settle(game)
+    settle(game)
 
     assert not game.is_on_battlefield(forest)
     assert any("704.5g" in line for line in game.log), game.log
@@ -478,7 +472,7 @@ def test_karmic_justice_destroyed_by_an_opponents_spell_triggers(set_pool):
     assert _names(game.players[0].graveyard) == ["Karmic Justice"]
     (trigger,) = _justice_triggers(game)
     assert trigger.target_permanent_id == [mox.permanent_id]
-    _settle(game)
+    settle(game)
     assert not game.is_on_battlefield(mox)
 
 
@@ -547,7 +541,7 @@ def test_a_later_sentence_is_a_later_event_and_a_departed_justice_does_not_see_i
     _cast(game, set_pool, 1, "Disenchant", target_permanent_ids=[justice.permanent_id])
     game.resolve_top_of_stack()
     assert len(_justice_triggers(game)) == 1
-    _settle(game)
+    settle(game)
 
     _cast(game, set_pool, 1, "Disenchant", target_permanent_ids=[ring.permanent_id])
     game.resolve_top_of_stack()
@@ -625,7 +619,7 @@ def test_a_permanent_you_took_is_one_you_control_and_one_they_took_is_not(set_po
     game.resolve_top_of_stack()
     assert _names(game.players[1].graveyard) == ["Mox Pearl", "Disenchant"]
     assert len(_justice_triggers(game)) == 1
-    _settle(game)
+    settle(game)
 
     ring = _put(game, set_pool, 0, "Sol Ring")
     game.take_control(ring, 1, source=ring)
@@ -694,7 +688,7 @@ def test_an_invented_card_with_the_sentence_about_creatures_works_with_no_code(
     _put(game, set_pool, 1, "Grizzly Bears")
 
     _cast(game, set_pool, 1, "Wrath of God")
-    _settle(game)
+    settle(game)
 
     assert _names(game.players[0].graveyard) == ["Grizzly Bears"]
     assert check(game), game.log
@@ -703,7 +697,7 @@ def test_an_invented_card_with_the_sentence_about_creatures_works_with_no_code(
     ring = next(p for p in game.controlled_by(0) if p.card.name == "Sol Ring")
     hand, lives = len(game.players[0].hand), [p.life for p in game.players]
     _cast(game, set_pool, 1, "Disenchant", target_permanent_ids=[ring.permanent_id])
-    _settle(game)
+    settle(game)
     assert not game.is_on_battlefield(ring)
     assert (len(game.players[0].hand), [p.life for p in game.players]) == (hand, lives)
 
@@ -724,7 +718,7 @@ def test_another_keeps_the_watcher_out_of_what_it_watches(set_pool):
     _put(game, set_pool, 1, "Island")
 
     _cast(game, set_pool, 1, "Tranquility")
-    _settle(game)
+    settle(game)
 
     assert not game.is_on_battlefield(watcher)
     assert game.players[0].life == 21             # the Crusade, and not itself

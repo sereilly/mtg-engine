@@ -34,7 +34,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import Permanent
 from engine.replacements.zone_changes import EXILE_ON_LEAVING_BATTLEFIELD
-from tests.helpers import resolve_stack
+from tests.helpers import resolve_stack, settle
 
 _POOL = {card.name: card for card in load_catalog()}
 
@@ -223,24 +223,13 @@ def _answer(game: Game, option: int) -> None:
     )
 
 
-def _settle(game: Game) -> None:
-    """Every later decision at its default — a madness cast, the Library's
-    own "you may" — and whatever is left on the stack."""
-    for _ in range(10):
-        resolve_stack(game)
-        game.auto_resolve_pending_choices()
-        game.auto_resolve_pending_replacement_choices()
-        if not (game.pending_choices or game.pending_replacement_choices or game.stack):
-            return
-
-
 @pytest.mark.parametrize("label,driver,active", _CASES, ids=[c[0] for c in _CASES])
 def test_a_contended_move_is_asked_and_the_answer_finishes_it(label, driver, active):
     reference, name, kind, alternative = _run(driver, active, interactive=False)
     assert not [c for c in reference.pending_choices if c.kind == "effect_order"], (
         f"{label}: a seat nobody asks was asked"
     )
-    _settle(reference)
+    settle(reference)
     expected = _where(reference, name)
     assert expected, f"{label}: the reference run lost the card"
 
@@ -256,14 +245,14 @@ def test_a_contended_move_is_asked_and_the_answer_finishes_it(label, driver, act
     assert _where(game, name) == [], (label, _where(game, name))
 
     _answer(game, 0)
-    _settle(game)
+    settle(game)
     assert _where(game, name) == expected, (label, _where(game, name), expected)
     assert not game.resume_stack and not game.pending_choices and not game.stack, label
     assert not game.effect_order_answers, (label, game.effect_order_answers)
 
     other, *_ = _run(driver, active, interactive=True)
     _answer(other, 1)
-    _settle(other)
+    settle(other)
     assert _where(other, name) == alternative, (label, _where(other, name))
     assert not other.effect_order_answers, (label, other.effect_order_answers)
 
@@ -280,7 +269,7 @@ def test_a_declined_library_of_leng_re_asks_dodecapod():
     _cast(game, 1, "Hymn to Tourach", target_player_index=0)
     _answer(game, 1)  # Library of Leng first
     assert game.confirm_leng_discard(0, to_library=False)
-    _settle(game)
+    settle(game)
     assert _where(game, "Dodecapod") == ["battlefield"], game.log[-6:]
     pod = next(p for p in game.all_permanents() if p.card.name == "Dodecapod")
     assert int(pod.metadata.get("plus_counters", 0) or 0) == 2
@@ -299,6 +288,6 @@ def test_two_deaths_in_one_sweep_are_each_asked_about_their_own_card():
     assert len(asked) == 2, [c.kind for c in game.pending_choices]
     _answer(game, 1)
     _answer(game, 0)
-    _settle(game)
+    settle(game)
     assert _where(game, "Gravebane Zombie") == ["P0.exile", "P0.library"]
     assert not game.effect_order_answers

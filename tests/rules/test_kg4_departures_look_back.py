@@ -50,7 +50,7 @@ from engine import Game, PlayerState
 from engine.aura_attachment import attach_aura
 from engine.card_loader import load_catalog
 from engine.models import Permanent
-from tests.helpers import resolve_stack
+from tests.helpers import settle
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -82,18 +82,6 @@ def _cast(game: Game, seat: int, name: str, **kwargs) -> None:
     assert game.cast_from_hand(seat, name, **kwargs).supported
 
 
-def _settle(game: Game) -> None:
-    for _ in range(100):
-        if game.stack:
-            resolve_stack(game)
-            continue
-        if game.pending_choices:
-            game.auto_resolve_pending_choices()
-            continue
-        return
-    raise AssertionError(game.log[-8:])
-
-
 def _resolved(game: Game, name: str) -> int:
     return sum(1 for line in game.log if line == f"{name} ability resolved")
 
@@ -111,7 +99,7 @@ def test_warped_devotion_returned_with_the_others_triggers_for_each(order):
     if order == LAST:
         _set_down(game, 1, "Warped Devotion")
     _cast(game, 0, "Upheaval")
-    _settle(game)
+    settle(game)
     assert not list(game.all_permanents())
     assert _resolved(game, "Warped Devotion") == 3, game.log[-12:]
 
@@ -128,7 +116,7 @@ def test_dual_nature_returned_with_a_creature_sees_it_leave(order):
     if order == LAST:
         _set_down(game, 1, "Dual Nature")
     _cast(game, 0, "Upheaval")
-    _settle(game)
+    settle(game)
     assert _resolved(game, "Dual Nature") == 2, game.log[-10:]
 
 
@@ -145,7 +133,7 @@ def test_funeral_march_leaving_with_its_creature_triggers(order, spell):
     aura = _set_down(game, aura_seat, "Funeral March")
     attach_aura(aura, host)
     _cast(game, 0, spell)
-    _settle(game)
+    settle(game)
     assert _resolved(game, "Funeral March") == 1, game.log[-10:]
 
 
@@ -157,7 +145,7 @@ def test_havoc_jester_sees_its_own_sacrifice():
     _set_down(game, 0, "Havoc Jester")
     _set_down(game, 1, "Hill Giant")
     _cast(game, 0, "Innocent Blood")
-    _settle(game)
+    settle(game)
     assert _resolved(game, "Havoc Jester") == 1, game.log[-10:]
     assert game.players[1].life == 19
 
@@ -175,7 +163,7 @@ def test_havoc_jester_sacrificed_with_others_triggers_for_each(order):
     if order == LAST:
         _set_down(game, 0, "Havoc Jester")
     _cast(game, 0, "Death Pit Offering")
-    _settle(game)
+    settle(game)
     assert _resolved(game, "Havoc Jester") == 3, game.log[-12:]
     assert game.players[1].life == 17
 
@@ -193,7 +181,7 @@ def test_a_cost_of_several_sacrifices_is_one_event(order):
     _set_down(game, 0, first)
     _set_down(game, 0, second)
     _cast(game, 0, "Kaervek's Spite", target_player_index=1)
-    _settle(game)
+    settle(game)
     assert game.players[1].life == 20 - 2 - 5, game.log[-10:]
 
 
@@ -205,7 +193,7 @@ def test_no_departure_event_is_left_open():
     _set_down(game, 0, "Warped Devotion")
     _set_down(game, 1, "Hill Giant")
     _cast(game, 0, "Upheaval")
-    _settle(game)
+    settle(game)
     assert game.departure_batch is None
     assert game.departure_aftermath is None
 
@@ -229,7 +217,7 @@ def test_an_aura_destroyed_with_its_creature_sees_it_go(order, aura):
     attach_aura(enchantment, host)
     _set_down(game, 0, "Nevinyrral's Disk")
     assert game.activate_permanent_ability(0, "Nevinyrral's Disk").supported
-    _settle(game)
+    settle(game)
     assert not list(game.all_permanents())
     assert _resolved(game, aura) == 1, game.log[-10:]
     if aura == "Creature Bond":
@@ -249,7 +237,7 @@ def test_a_sylex_sweep_is_a_sacrifice_of_each():
     for name in ("Golgothian Sylex", "Havoc Jester", "Urza's Miter", "Ornithopter"):
         _set_down(game, 0, name)
     assert game.activate_permanent_ability(0, "Golgothian Sylex").supported
-    _settle(game)
+    settle(game)
     assert [p.card.name for p in game.all_permanents()] == ["Havoc Jester"]
     assert _resolved(game, "Havoc Jester") == 3, game.log[-12:]
     assert game.players[1].life == 17

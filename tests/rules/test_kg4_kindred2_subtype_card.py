@@ -74,7 +74,7 @@ from engine.models import CardDefinition, Permanent
 from engine.named_counters import counters_on
 from engine.special_actions import (available_permanent_special_actions,
                                     take_permanent_special_action)
-from tests.helpers import _nosick, resolve_stack
+from tests.helpers import _nosick, resolve_stack, settle
 
 _POOL = {card.name: card for card in load_catalog()}
 
@@ -133,12 +133,6 @@ def _duel(*, mine=(), theirs=(), hand=(), library=(), graveyard=(),
         _nosick(permanent)
     game._recompute_continuous_effects()
     return game
-
-
-def _settle(game: Game) -> None:
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
 
 
 def _names(cards) -> list[str]:
@@ -202,7 +196,7 @@ def test_corpse_harvester_finds_a_kindred_zombie_and_a_swamp():
         0, "Corpse Harvester", cost_permanent_ids=[bears.permanent_id],
     )
     assert result.supported, result.details
-    _settle(game)
+    settle(game)
     assert sorted(_names(game.players[0].hand)) == ["Swamp", "Test Zombie Trick"], game.log[-6:]
 
 
@@ -220,7 +214,7 @@ def test_goblin_ringleader_keeps_every_goblin_card_it_reveals():
                  _POOL["Jayemdae Tome"]],
     )
     assert game.cast_from_hand(0, "Goblin Ringleader").supported
-    _settle(game)
+    settle(game)
     assert sorted(_names(game.players[0].hand)) == ["Raging Goblin", "Test Goblin Rite"], game.log[-6:]
     assert sorted(_names(game.players[0].library[-2:])) == ["Grizzly Bears", "Jayemdae Tome"]
 
@@ -264,7 +258,7 @@ def test_strongarm_thug_returns_a_mercenary_card_with_nothing_announced(graveyar
     own scan chooses — through the picker's predicate, past the Bears."""
     game = _duel(hand=[_POOL["Strongarm Thug"]], graveyard=list(graveyard))
     assert game.cast_from_hand(0, "Strongarm Thug").supported
-    _settle(game)
+    settle(game)
     assert _names(game.players[0].hand) == ([returned] if returned else []), game.log[-6:]
 
 
@@ -337,7 +331,7 @@ def test_infernal_caretaker_returns_every_zombie_card_from_every_graveyard():
     _nosick(caretaker)
     resolve_stack(game)
     assert take_permanent_special_action(game, 0, caretaker, "turn_face_up") is None
-    _settle(game)
+    settle(game)
     assert caretaker.card.name == "Infernal Caretaker"
     assert _names(game.players[0].hand) == ["Test Zombie Trick"], game.log[-6:]
     assert _names(game.players[1].hand) == ["Scathe Zombies"]
@@ -488,7 +482,7 @@ def test_root_sliver_makes_a_kindred_sliver_spell_uncounterable():
     game.players[1].hand.append(_POOL["Counterspell"])
     assert game.queue_from_hand(0, "Test Sliver Trick").supported
     assert game.queue_from_hand(1, "Counterspell", target_stack_index=0).supported
-    _settle(game)
+    settle(game)
     assert "Counterspell: Test Sliver Trick can't be countered (Root Sliver)" in game.log
     assert game.players[0].life == 21
 
@@ -520,6 +514,6 @@ def test_amplify_reveals_a_kindred_card_that_shares_a_creature_type(hand, counte
     "cards … that share a creature type with it": the Kindred Zombie does."""
     game = _duel(hand=[_POOL["Embalmed Brawler"], *hand])
     assert game.cast_from_hand(0, "Embalmed Brawler").supported
-    _settle(game)
+    settle(game)
     brawler = _permanent(game, "Embalmed Brawler")
     assert counters_on(brawler, "+1/+1") == counters, game.log[-6:]

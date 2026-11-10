@@ -59,7 +59,7 @@ from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
 
-from tests.helpers import resolve_stack
+from tests.helpers import resolve_stack, settle
 from tests.source_index import python_files, source_tree
 
 
@@ -726,13 +726,6 @@ def _put(game, by_name, seat: int, card) -> Permanent:
     return perm
 
 
-def _settle(game) -> None:
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    game.auto_resolve_pending_replacement_choices()
-    resolve_stack(game)
-
-
 def _announcements(rec: _Recorder, permanent: Permanent) -> list:
     return [cause for subject_id, cause in rec.announced if subject_id == permanent.permanent_id]
 
@@ -779,7 +772,7 @@ def _scenario_end_step_berserk(by_name) -> tuple[_Recorder, dict]:
     victim.metadata["attacked_this_turn"] = True
     with _Recorder() as rec:
         game.resolve_end_step(0)
-        _settle(game)
+        settle(game)
     return rec, {"game": game, "victim": victim, "cause": 1, "watcher_seat": 0}
 
 
@@ -797,7 +790,7 @@ def _scenario_end_step_own_ability(by_name) -> tuple[_Recorder, dict]:
     resolve_stack(game)
     with _Recorder() as rec:
         game.resolve_end_step(0)
-        _settle(game)
+        settle(game)
     return rec, {"game": game, "victim": launcher, "cause": 0, "watcher_seat": None}
 
 
@@ -828,7 +821,7 @@ def _scenario_aura_leaves(by_name) -> tuple[_Recorder, dict]:
     with _Recorder() as rec:
         game.remove_from_battlefield(aura)
         game._permanent_to_graveyard(game.players[1], aura)
-        _settle(game)
+        settle(game)
     return rec, {"game": game, "victim": host, "cause": 1, "watcher_seat": 0}
 
 
@@ -854,7 +847,7 @@ def _scenario_cleansing(by_name, *, interactive: bool) -> tuple[_Recorder, dict]
             assert game.resolve_pending_choice(
                 "pay_life_to_save", offer.player_index, accept=False
             )
-        _settle(game)
+        settle(game)
     return rec, {"game": game, "victim": land, "cause": 1, "watcher_seat": 0}
 
 
@@ -876,7 +869,7 @@ def _scenario_piles(by_name, *, interactive: bool) -> tuple[_Recorder, dict]:
             if not game.pending_choices:
                 break
             game.auto_resolve_pending_choices()
-        _settle(game)
+        settle(game)
     (victim,) = [perm for perm in creatures if not game.is_on_battlefield(perm)]
     return rec, {"game": game, "victim": victim, "cause": 1, "watcher_seat": 0}
 
@@ -955,7 +948,7 @@ def _scenario_bound_permanent(by_name) -> tuple[_Recorder, dict]:
     with _Recorder() as rec:
         game.remove_from_battlefield(barge)
         game._permanent_to_graveyard(game.players[1], barge)
-        _settle(game)
+        settle(game)
     return rec, {"game": game, "victim": victim, "cause": 1, "watcher_seat": 0}
 
 
@@ -1073,9 +1066,9 @@ def test_a_state_based_destruction_is_announced_with_no_cause(by_name):
         assert game.queue_from_hand(
             1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id]
         ).supported
-        _settle(game)
+        settle(game)
         game.check_state_based_actions()
-        _settle(game)
+        settle(game)
 
     assert not game.is_on_battlefield(bears)
     assert _announcements(rec, bears) == [None]
@@ -1130,7 +1123,7 @@ def test_a_move_to_the_graveyard_that_is_not_a_destruction_is_not_announced(by_n
                 assert game.sacrifice_permanent(bears) is bears
             finally:
                 game.resolving_seats.pop()
-        _settle(game)
+        settle(game)
 
     assert not game.is_on_battlefield(victim), game.log
     assert victim.card.name in [c.name for c in game.players[0].graveyard]
@@ -1147,7 +1140,7 @@ def test_a_delayed_sacrifice_beside_the_destroy_sweep_is_not_one(by_name):
     bears.metadata["sacrifice_at_next_end_step"] = True
     with _Recorder() as rec:
         game.resolve_end_step(0)
-        _settle(game)
+        settle(game)
 
     assert not game.is_on_battlefield(bears)
     assert rec.announced == []
@@ -1210,7 +1203,7 @@ def test_a_replaced_destruction_is_not_a_destruction_on_any_road(by_name, road, 
     finally:
         game.resolving_seats.pop()
     destruction_events.destruction_finished(game)
-    _settle(game)
+    settle(game)
 
     assert game.is_on_battlefield(victim), game.log
     assert _announcements(rec, victim) == []
@@ -1284,7 +1277,7 @@ def test_a_destroy_trigger_is_not_on_the_stack_until_the_sweep_has_finished(by_n
     assert seen == [False], "the trigger went on the stack mid-sweep"
     (trigger,) = [item for item in game.stack if item.is_ability]
     assert trigger.target_permanent_id == [survivor.permanent_id]
-    _settle(game)
+    settle(game)
     assert not game.is_on_battlefield(survivor)
 
 

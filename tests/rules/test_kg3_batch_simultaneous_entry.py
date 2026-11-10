@@ -18,7 +18,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import Permanent
-from tests.helpers import resolve_stack
+from tests.helpers import resolve_stack, settle
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -45,22 +45,6 @@ def _place(game: Game, seat: int, name: str) -> Permanent:
     return permanent
 
 
-def _settle(game: Game) -> None:
-    for _ in range(200):
-        owed = game.waiting_prompt()
-        if owed is not None:
-            game.take_choice_default(owed)
-            continue
-        if game.stack:
-            game.resolve_top_of_stack(pause_for_choices=game.holds_for_answers())
-            continue
-        if game.pending_choices:
-            game.auto_resolve_pending_choices()
-            continue
-        return
-    raise AssertionError(f"the table did not settle: {game.log[-5:]}")
-
-
 @pytest.mark.cr("603.6a")
 @pytest.mark.parametrize("interactive", [False, True], ids=["nobody_asked", "a_person"])
 @pytest.mark.parametrize(
@@ -83,10 +67,10 @@ def test_goblin_assassin_returned_beside_another_goblin_triggers_twice(order, in
         game.players[0].battlefield.append(permanent)
     game._sync_control()
     assert game.activate_permanent_ability(0, "Planar Guide")
-    _settle(game)
+    settle(game)
     mark = len(game.log)
     game.resolve_end_step(0)
-    _settle(game)
+    settle(game)
     rounds = sum(
         1 for line in game.log[mark:]
         if line.startswith("Goblin Assassin: P0 flipped")
@@ -110,7 +94,7 @@ def test_a_clone_cannot_copy_a_creature_entering_beside_it(clone_first):
     game.players[0].graveyard = [_CARDS[name] for name in pile]
     game.players[0].hand = [_CARDS["Twilight's Call"]]
     assert game.cast_from_hand(0, "Twilight's Call").supported
-    _settle(game)
+    settle(game)
     mine = sorted(p.effective_card.name for p in game.controlled_by(0))
     assert mine == ["Grizzly Bears", "Shivan Dragon"], (mine, game.log[-10:])
 
@@ -147,7 +131,7 @@ def test_an_event_whose_newcomers_ask_waits_as_one():
     game.take_choice_default(owed[1])
     assert mine() == ["Primal Clay", "Primal Clay", "Soul Warden"]
     assert not game.entries_in_progress
-    _settle(game)
+    settle(game)
     assert game.players[0].life == life + 2
 
 
@@ -171,12 +155,12 @@ def test_two_exiles_ended_by_one_sweep_return_together():
             0, "Tawnos's Coffin", permanent_index=slot,
             target_permanent_ids=[victim.permanent_id],
         ).supported
-        _settle(game)
+        settle(game)
     life = game.players[0].life
     game.players[1].hand = [_CARDS["Shatterstorm"]]
     game.active_player_index = 1
     assert game.cast_from_hand(1, "Shatterstorm").supported
-    _settle(game)
+    settle(game)
     assert sorted(p.card.name for p in game.controlled_by(0)) == [
         "Grizzly Bears", "Soul Warden",
     ]

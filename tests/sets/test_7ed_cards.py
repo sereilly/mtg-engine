@@ -36,7 +36,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle, simple_card_keywords
 from engine.targeting import derive_cast_spec
 
-from tests.helpers import _mk_card, resolve_stack
+from tests.helpers import _mk_card, drive_combat, resolve_stack
 
 # The seventeen cards 7ED brings to this pool. Named rather than derived: a
 # derived list agrees with whatever the card file happens to say, and the point
@@ -132,14 +132,6 @@ def _to_declare_attackers(game: Game, active: int = 0) -> None:
         if game.current_step == "declare_attackers":
             return
     raise AssertionError(f"combat never reached declare attackers: {game.current_step}")
-
-
-def _finish_combat(game: Game) -> None:
-    for _ in range(8):
-        if game.current_turn_phase != "combat":
-            return
-        game.advance_combat_phase()
-    raise AssertionError(f"combat never ended: {game.current_step}")
 
 
 # --- the set's relationship to the pool ---
@@ -783,7 +775,7 @@ def test_pride_of_lions_sends_its_damage_past_a_blocker(set_pool):
     assert game.resolve_combat_damage(
         0, attacker_damage={}, as_though_unblocked=[pride.permanent_id]
     )[0]
-    _finish_combat(game)
+    drive_combat(game)
 
     assert game.players[1].life == 16
     assert bears.damage_marked == 0, "the blocker was assigned nothing"
@@ -872,7 +864,7 @@ def test_goblin_glider_flies_over_and_never_blocks(set_pool):
     game.advance_combat_phase()
     assert not game.declare_blockers(1, {0: 0})[0], "the Bears cannot reach it"
     assert game.declare_blockers(1, {})[0]
-    _finish_combat(game)
+    drive_combat(game)
     assert game.players[1].life == 19
 
 
@@ -891,7 +883,7 @@ def test_goblin_glider_cannot_be_declared_as_a_blocker(set_pool):
     refused, why = game.declare_blockers(0, {0: 0})
     assert not refused and "Goblin Glider cannot block" in why
     assert game.declare_blockers(0, {})[0]
-    _finish_combat(game)
+    drive_combat(game)
 
     assert game.players[0].life == 18
     assert _names(game.controlled_by(0)) == ["Goblin Glider"]
@@ -924,7 +916,7 @@ def test_goblin_chariot_attacks_the_turn_it_is_cast(set_pool):
     assert game.declare_attackers(
         0, [game.battlefield_index_of(chariot)], defending_player_index=1
     )[0]
-    _finish_combat(game)
+    drive_combat(game)
 
     assert game.players[1].life == 18
     assert chariot.tapped and not orgg.tapped

@@ -44,7 +44,7 @@ from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.line_rewrites import expand_card_lines
 from engine.targeting import CAST_FROM_GRAVEYARD, derive_cast_spec
-from tests.helpers import _damage_dealt, _nosick, declare_attack, resolve_stack
+from tests.helpers import _damage_dealt, _nosick, declare_attack, settle
 
 
 # ---------------------------------------------------------------------------
@@ -529,15 +529,6 @@ def _announce_targets(game, card, zone: str) -> dict:
     raise AssertionError(f"the board offers {card.name} nothing to announce: {spec}")
 
 
-def _settle(game) -> None:
-    """Resolve the stack and answer what the resolution asked (a discard, a
-    library search) with the registry's own defaults."""
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    game.auto_resolve_pending_replacement_choices()
-    resolve_stack(game)
-
-
 def _where(game, card) -> list[str]:
     """Every zone holding *card* — by identity, so a second copy would show."""
     found = []
@@ -646,7 +637,7 @@ def _cast_and_settle(card, zone: str):
     cost = card.mana_cost if zone == "hand" else printed_flashback_cost(card).mana
     _pay(game.players[0], cost)
     result = game.cast_from_hand(0, card.name, from_zone=zone, **keywords)
-    _settle(game)
+    settle(game)
     return game, result, before, supplied
 
 
@@ -874,7 +865,7 @@ def test_702_34a_a_flashed_back_spell_that_is_countered_is_exiled(name):
     game.players[1].hand.append(_pool()["Counterspell"])
     game.players[1].mana_pool["U"] = 2
     assert game.cast_from_hand(1, "Counterspell", target_stack_index=item).supported
-    _settle(game)
+    settle(game)
     assert _where(game, card) == ["P1.exile"]
 
 
@@ -949,7 +940,7 @@ def test_702_34a_cast_through_another_permission_it_is_not_a_flashback_cast():
     cast = game.queue_from_hand(0, "Firebolt", target_player_index=1, from_zone="graveyard")
     assert cast.supported, cast.details
     assert not game.stack[-1].flashback
-    _settle(game)
+    settle(game)
     assert _where(game, firebolt) == ["P1.graveyard"]
 
     _pay(game.players[0], "{4}{R}")
@@ -959,7 +950,7 @@ def test_702_34a_cast_through_another_permission_it_is_not_a_flashback_cast():
     )
     assert cast.supported, cast.details
     assert game.stack[-1].flashback
-    _settle(game)
+    settle(game)
     assert _where(game, firebolt) == ["P1.exile"]
     assert not any(game.players[0].mana_pool.values())
 
@@ -1074,7 +1065,7 @@ def _flash_back_and_respond(responder):
     assert game.queue_from_hand(0, "Firebolt", target_player_index=1, from_zone="graveyard").supported
     game.players[1].hand.append(whole_card(responder))
     answered = game.queue_from_hand(1, responder.name, target_stack_index=0, x_value=1)
-    _settle(game)
+    settle(game)
     return game, firebolt, answered.supported
 
 
@@ -1141,7 +1132,7 @@ def test_702_34a_a_flashed_back_spell_removed_for_an_illegal_target_is_exiled():
     assert game.cast_from_hand(
         1, "Terror", target_permanent_ids=[bears.permanent_id], target_player_index=0,
     ).supported
-    _settle(game)
+    settle(game)
     assert any("608.2b" in line for line in game.log)
     assert _where(game, seize) == ["P1.exile"]
     assert game.extra_phases_remaining() == []
@@ -1182,7 +1173,7 @@ def test_707_10_a_copy_of_a_flashed_back_spell_is_just_a_copy():
     # asks would aim it where it measures best, CR 707.10c).
     game.interactive_seats = {0}
     assert game.cast_from_hand(0, "Fork", target_stack_index=0).supported
-    _settle(game)
+    settle(game)
     assert game.players[1].life == 16          # the spell and its copy
     assert _where(game, firebolt) == ["P1.exile"]
 
@@ -1212,7 +1203,7 @@ def test_702_34a_a_granted_flashback_costs_the_card_s_mana_cost_and_ends_at_clea
     # Cast for that cost, it is a flashback cast like any other.
     _pay(game.players[0], "{2}{B}")
     assert game.cast_from_hand(0, "Mind Rot", target_player_index=1, from_zone="graveyard").supported
-    _settle(game)
+    settle(game)
     assert _where(game, mind_rot).count("P1.exile") == 1
     assert "P1.graveyard" not in _where(game, mind_rot)
 

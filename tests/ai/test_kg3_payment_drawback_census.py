@@ -61,7 +61,7 @@ from engine.mana_payment import mana_cost_from_symbols, plan_payment
 from engine.models import Permanent
 from engine.named_counters import add_counters, counters_on
 from engine.oracle import compile_card_oracle
-from tests.helpers import resolve_stack, stable_sample
+from tests.helpers import stable_sample, settle
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -125,14 +125,6 @@ def _tap(game, permanent, symbol, ability_index):
     return result.supported
 
 
-def _settle(game) -> None:
-    """Drain the stack and answer whatever it left owed with the defaults an
-    AI or headless seat takes (an "unless that player pays" offer)."""
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
-
-
 def _turn_cost(game, permanent, symbol, ability_index, *, tap: bool) -> "int | None":
     """What seat 0 lost over the rest of the turn and its next beginning
     phase — with *permanent* tapped for *symbol* first, or not: through the
@@ -146,9 +138,9 @@ def _turn_cost(game, permanent, symbol, ability_index, *, tap: bool) -> "int | N
     life = game.players[0].life
     if tap and not _tap(game, permanent, symbol, ability_index):
         return None
-    _settle(game)
+    settle(game)
     game.resolve_end_step(game.active_player_index)
-    _settle(game)
+    settle(game)
     harm = life - game.players[0].life
     if not game.is_on_battlefield(permanent) or game.controller_index_of(permanent) != 0:
         # Back in its owner's hand is a land drop to play it again; anywhere
@@ -162,13 +154,13 @@ def _turn_cost(game, permanent, symbol, ability_index, *, tap: bool) -> "int | N
     )
     life = game.players[0].life
     game.resolve_untap_step(0)
-    _settle(game)
+    settle(game)
     if not game.is_on_battlefield(permanent) or permanent.tapped:
         harm += 1  # it stayed tapped, or went back to the hand instead
     game.resolve_upkeep(0)
-    _settle(game)
+    settle(game)
     game.resolve_draw_step(0)
-    _settle(game)
+    settle(game)
     return harm + life - game.players[0].life
 
 

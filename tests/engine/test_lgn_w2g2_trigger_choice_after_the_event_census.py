@@ -50,7 +50,7 @@ from engine.modal_triggers import modal_trigger_modes
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.stack_targets import names_a_target
-from tests.helpers import declare_attack, resolve_stack
+from tests.helpers import declare_attack, settle
 
 #: Floors, because a census that reaches nothing passes. On the day, over the
 #: shipped pool before Legions: 18 sweep rows, each driven twice (source first
@@ -116,13 +116,6 @@ def _put(game, seat, card) -> Permanent:
     permanent = Permanent(card=card)
     game._put_permanent_onto_battlefield(seat, permanent, None)
     return permanent
-
-
-def _settle_entries(game) -> None:
-    """Resolve whatever the board's own entries put on the stack, unasked."""
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
 
 
 def _object(game, trigger):
@@ -207,7 +200,7 @@ def test_a_trigger_set_off_by_a_sweep_chooses_from_what_the_sweep_left(_pool):
             _put(game, 1, _pool["Hill Giant"])
             if order == "last":
                 _put(game, 0, card)
-            _settle_entries(game)
+            settle(game)
             game.interactive_seats = {0}
             game.players[0].hand = [_pool["Wrath of God"]]
             assert game.queue_from_hand(0, "Wrath of God").supported, label
@@ -234,7 +227,7 @@ def test_a_combat_damage_trigger_chooses_after_the_state_based_check(_pool):
         bears = _put(game, 1, _pool["Grizzly Bears"])
         for name in ("Ornithopter", "Crusade", "Plains"):
             _put(game, 1, _pool[name])
-        _settle_entries(game)
+        settle(game)
         game.interactive_seats = {0}
         declare_attack(game, 0, blocks={
             game.battlefield_index_of(bears): game.battlefield_index_of(giant),

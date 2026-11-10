@@ -40,7 +40,7 @@ from engine.faces import compilation_units
 from engine.handlers.returns import _GRAVEYARD_NARROWING_KEYS
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import resolve_stack
+from tests.helpers import settle
 
 
 def _graveyard_game(catalog_by_name, *, hand=(), board=(), graveyard=()):
@@ -63,12 +63,6 @@ def _graveyard_game(catalog_by_name, *, hand=(), board=(), graveyard=()):
     return game, game.players[0]
 
 
-def _settle(game) -> None:
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
-
-
 def test_crypt_angel_returns_a_blue_or_red_creature_card_not_the_green_one(catalog_by_name):
     """"When this creature enters, return target **blue or red** creature card
     from your graveyard to your hand." Cast with nothing announced, the green
@@ -79,7 +73,7 @@ def test_crypt_angel_returns_a_blue_or_red_creature_card_not_the_green_one(catal
     )
 
     assert game.cast_from_hand(0, "Crypt Angel").supported
-    _settle(game)
+    settle(game)
 
     assert [card.name for card in player.hand] == ["Prodigal Sorcerer"]
     assert [card.name for card in player.graveyard] == ["Grizzly Bears"]
@@ -94,7 +88,7 @@ def test_strongarm_thug_returns_a_mercenary_card_not_the_bear(catalog_by_name):
     )
 
     assert game.cast_from_hand(0, "Strongarm Thug").supported
-    _settle(game)
+    settle(game)
 
     assert [card.name for card in player.hand] == ["Mercenaries"]
     assert [card.name for card in player.graveyard] == ["Grizzly Bears"]
@@ -108,7 +102,7 @@ def test_strongarm_thug_returns_nothing_when_no_mercenary_is_there(catalog_by_na
     )
 
     assert game.cast_from_hand(0, "Strongarm Thug").supported
-    _settle(game)
+    settle(game)
 
     assert not player.hand
     assert [card.name for card in player.graveyard] == ["Grizzly Bears"]
@@ -126,7 +120,7 @@ def test_mtenda_griffin_returns_a_griffin_card_not_the_bear(catalog_by_name):
     game.current_turn_phase, game.current_step = "beginning", "upkeep"
 
     result = game.activate_permanent_ability(0, "Mtenda Griffin")
-    _settle(game)
+    settle(game)
 
     assert result.supported, result.details
     assert [card.name for card in player.hand] == ["Mtenda Griffin", "Mtenda Griffin"]
@@ -261,7 +255,7 @@ def test_moriok_scavenger_cast_returns_the_artifact_creature_card(set_pool):
         game, player = _graveyard_game(cards, hand=["Moriok Scavenger"], graveyard=pile)
 
         assert game.cast_from_hand(0, "Moriok Scavenger").supported
-        _settle(game)
+        settle(game)
 
         assert [card.name for card in player.hand] == back, pile
         assert [card.name for card in player.graveyard] == [

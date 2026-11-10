@@ -25,7 +25,7 @@ from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick, resolve_stack
+from tests.helpers import _nosick, resolve_stack, settle
 from engine.color_changes import change_color
 
 # --- W2G2: mana-production replacements and land-type changes ---
@@ -757,14 +757,6 @@ def _oath_board(set_pool, hand: list[str]):
     return game, p0, oath
 
 
-def _settle_prompts(game) -> None:
-    for _ in range(3):
-        game._settle()
-        game.auto_resolve_pending_optional_pays()
-        game.auto_resolve_pending_choices()
-        game._settle()
-
-
 def test_oath_of_lim_dul_sacrifices_once_per_life_lost(set_pool):
     """"Whenever you lose life, for each 1 life you lost, sacrifice a permanent
     other than this enchantment unless you discard a card."
@@ -775,7 +767,7 @@ def test_oath_of_lim_dul_sacrifices_once_per_life_lost(set_pool):
     game, p0, oath = _oath_board(set_pool, hand=[])
 
     game._deal_damage_to_player(p0, 2, source=None)
-    _settle_prompts(game)
+    settle(game)
 
     assert [c.name for c in p0.graveyard] == ["Balduvian Bears"] * 2
     assert game.is_on_battlefield(oath), "'other than this enchantment'"
@@ -787,7 +779,7 @@ def test_oath_of_lim_dul_takes_a_discard_instead(set_pool):
     game, p0, _oath = _oath_board(set_pool, hand=["Icy Prison"])
 
     game._deal_damage_to_player(p0, 1, source=None)
-    _settle_prompts(game)
+    settle(game)
 
     assert [c.name for c in p0.graveyard] == ["Icy Prison"]
     assert len(p0.battlefield) == 4, "nothing was sacrificed"
@@ -802,7 +794,7 @@ def test_oath_of_lim_dul_is_announced_by_a_life_total_that_dropped(set_pool):
     game, p0, _oath = _oath_board(set_pool, hand=[])
 
     p0.life -= 1
-    _settle_prompts(game)
+    settle(game)
 
     assert [c.name for c in p0.graveyard] == ["Balduvian Bears"]
 
@@ -814,7 +806,7 @@ def test_oath_of_lim_dul_stays_silent_on_an_opponents_loss(set_pool):
     opponent = game.players[1]
 
     game._deal_damage_to_player(opponent, 3, source=None)
-    _settle_prompts(game)
+    settle(game)
 
     assert p0.graveyard == []
     assert len(p0.battlefield) == 4

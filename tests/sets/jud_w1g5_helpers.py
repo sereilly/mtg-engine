@@ -13,7 +13,9 @@ from __future__ import annotations
 
 from engine import Game, PlayerState
 from engine.models import Permanent
-from tests.helpers import resolve_stack
+# ``settle`` — the end of a headless step: every default still owed taken,
+# the stack resolved, state-based actions performed — is the shared one.
+from tests.helpers import settle  # noqa: F401
 
 #: Where a card named by a W1G5 test is looked up, in order. Judgment first, so
 #: a name the set prints is always the set's own card.
@@ -56,15 +58,6 @@ def put(game, set_pool, seat, name, sick=False):
     if not sick:
         permanent.metadata["summoning_sickness_turn"] = -99
     return permanent
-
-
-def settle(game):
-    """Drain the stack, take every default still owed, run state-based
-    actions — the end of a headless step."""
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
-    game.check_state_based_actions()
 
 
 def owed(game, kind="optional_pay"):
