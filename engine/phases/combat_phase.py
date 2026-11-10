@@ -483,11 +483,24 @@ class CombatPhaseMixin:
             defender_index = self.combat_defending_player_index
             if defender_index is None:
                 defender_index = next(iter(self.combat_defending_players()), None)
-            if isinstance(defender_index, int):
-                if any(p.is_creature and not p.tapped for p in self.controlled_by(defender_index)):
-                    return  # awaiting the defender's pile assignment
-                self.resolve_camouflage_blocking(defender_index)
-            return
+            if not isinstance(defender_index, int):
+                return
+            if any(p.is_creature and not p.tapped for p in self.controlled_by(defender_index)):
+                return  # awaiting the defender's pile assignment
+            self.resolve_camouflage_blocking(defender_index)
+            if self.interactive_seats:
+                # The empty piles are the declaration (CR 509.1), and
+                # ``declare_blockers`` has given the active player priority
+                # (CR 509.2): at a table with a person that exchange is the
+                # table's, so the step stays and the next advance leaves it —
+                # as it does after any declaration.
+                return
+            # Nobody to ask: fall through and leave the step, as the lock below
+            # does once every defender is passed over. This returned at every
+            # table, and the simulator's combat walker
+            # (``ai_combat.run_ai_combat_phase``), seeing nothing move and
+            # nothing owed, left the turn in declare blockers with the attack's
+            # damage never dealt — a rehearsal of the combat the same.
         if self.current_step == "declare_blockers" and not self.combat_blockers_locked:
             # CR 802.4: each defending player declares blocks in APNAP order,
             # starting with the player after the active player. Auto-skip any
@@ -940,12 +953,15 @@ class CombatPhaseMixin:
                 if not blocker.is_creature:
                     continue
                 # Keep only attackers still valid AND still aimed at this defender.
-                kept = [
+                # The blocker is kept with none: CR 509.1g, "it remains a
+                # blocking creature until it's removed from combat or the
+                # combat phase ends" — its attackers leaving is neither, so
+                # "target blocking creature" still names it. Blocking nothing,
+                # it assigns no combat damage (CR 510.1d; ``blocker_chunks``).
+                kept_for_defender[blocker_idx] = [
                     a for a in attacker_idxs
                     if self.combat_attackers.get(a) == defending_idx
                 ]
-                if kept:
-                    kept_for_defender[blocker_idx] = kept
             if kept_for_defender:
                 pruned_blockers[defending_idx] = kept_for_defender
         self.combat_blockers = pruned_blockers
@@ -1092,14 +1108,10 @@ class CombatPhaseMixin:
     def creature_blocking_alone(self, permanent: Permanent) -> bool:
         """CR 506.5: a creature is *blocking alone* if it's blocking but no
         other creatures are. Returns False if the permanent isn't itself
-        blocking."""
-        if permanent.blocking_attacker_index is None:
+        blocking — the state ``Permanent.is_blocking`` reads (CR 509.1g)."""
+        if not permanent.is_blocking:
             return False
-        blocking = sum(
-            1
-            for perm in self.all_permanents()
-            if perm.blocking_attacker_index is not None
-        )
+        blocking = sum(1 for perm in self.all_permanents() if perm.is_blocking)
         return blocking == 1
 
     def creatures_blocking(self, permanent: Permanent) -> list[Permanent]:

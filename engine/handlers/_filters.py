@@ -582,7 +582,9 @@ _STATE_TESTS = {
     "tapped": lambda perm: bool(perm.tapped),
     "untapped": lambda perm: not perm.tapped,
     "attacking": lambda perm: bool(perm.attacking),
-    "blocking": lambda perm: perm.blocking_attacker_index is not None,
+    # CR 509.1g, through the one reader of the state (``Permanent.is_blocking``):
+    # a blocker whose attackers have all left combat is still blocking.
+    "blocking": lambda perm: perm.is_blocking,
     "blocked": lambda perm: bool(perm.blocked),
     "unblocked": lambda perm: not perm.blocked,
     # "…as long as it's **enchanted**" (Fledgling Osprey, Metathran Elite,

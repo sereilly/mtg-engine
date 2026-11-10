@@ -297,10 +297,14 @@ def swap_block_assignments(game: Game, instruction: OracleInstruction, context: 
     if defender_seat is None or first_index is None or second_index is None:
         return True, "no targets"
 
+    # Either may be blocking nothing: every attacker it blocked has left
+    # combat, and CR 509.1g keeps it a blocking creature — so it was a legal
+    # target. Its partner then "could block all creatures" it is blocking
+    # (there are none), and the sentence goes on as printed (the 2009-10-01
+    # ruling: "the second creature will be removed from combat but not
+    # returned to combat; it doesn't block anything").
     first_blocks = _blocked_attacker_indices(game, defender_seat, first_index)
     second_blocks = _blocked_attacker_indices(game, defender_seat, second_index)
-    if not first_blocks or not second_blocks:
-        return True, "not blocking"
 
     if not (
         _could_block_all(game, first, second_blocks)
@@ -314,9 +318,16 @@ def swap_block_assignments(game: Game, instruction: OracleInstruction, context: 
 
     game._remove_blocker_from_combat(defender_seat, first_index)
     game._remove_blocker_from_combat(defender_seat, second_index)
-    swapped = {first_index: second_blocks, second_index: first_blocks}
-    blocks = game.combat_blockers.setdefault(defender_seat, {})
-    blocks.update(swapped)
+    # "Each one then blocks all creatures the other was blocking": one whose
+    # partner was blocking nothing blocks nothing, and is not put back in
+    # combat — an empty entry would make it a blocking creature again.
+    swapped = {
+        index: blocking
+        for index, blocking in ((first_index, second_blocks), (second_index, first_blocks))
+        if blocking
+    }
+    if swapped:
+        game.combat_blockers.setdefault(defender_seat, {}).update(swapped)
     # The per-permanent combat flags and the band propagation are the
     # projection of these maps, exactly as they are after a declaration — the
     # attackers whose only blocker was removed a line ago become blocked again

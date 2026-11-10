@@ -112,8 +112,9 @@ _QUALIFIER_HOLDS = {
         and observer is not None
         and perm.defending_player_index == observer
     ),
-    # CR 509.1a: a creature is blocking once it has been declared as a blocker.
-    "blocking": lambda perm, observer: perm.blocking_attacker_index is not None,
+    # CR 509.1a: a creature is blocking once it has been declared as a blocker,
+    # and stays so until it is itself removed from combat (CR 509.1g).
+    "blocking": lambda perm, observer: perm.is_blocking,
     "tapped": lambda perm, observer: bool(perm.tapped),
     "untapped": lambda perm, observer: not perm.tapped,
     # CR 110.5 / 708.2: "Face-down creatures get +1/+1" (Ixidor) — asked as P/T

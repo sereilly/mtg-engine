@@ -375,7 +375,12 @@ class Game(
     # defenders declare blocks in the same combat, and blocker battlefield indices
     # are only unambiguous within one defender's own battlefield. A blocker almost
     # always blocks one attacker; a creature that "can block an additional creature"
-    # (Two-Headed Giant of Foriys) may block more (CR 509.1b).
+    # (Two-Headed Giant of Foriys) may block more (CR 509.1b). A blocker stays
+    # here with an **empty** list once every attacker it blocked has left combat:
+    # CR 509.1g keeps it a blocking creature until it is itself removed from
+    # combat or the combat phase ends, and a blocker blocking none assigns no
+    # combat damage (CR 510.1d). The state is read through
+    # ``Permanent.is_blocking``; *whom* it blocks through ``creatures_blocked_by``.
     combat_blockers: dict[int, dict[int, list[int]]] = field(default_factory=dict)
     # Populated only when exactly one distinct defending player exists this combat
     # (2-player games, or a 3+ player combat where a single opponent was attacked).

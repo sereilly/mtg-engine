@@ -114,8 +114,11 @@ def test_a_blocking_relation_survives_an_earlier_blocker_dying():
     assert game.battlefield_index_of(attacker) == 0
 
 
-def test_a_blocker_stops_blocking_when_its_attacker_dies():
-    game, (doomed_attacker, other_attacker, _blocker) = _combat_game(
+def test_a_blocker_whose_attacker_dies_blocks_nothing_and_is_still_blocking():
+    """The dead attacker's slot is taken by the other attacker; the Wall must
+    not be blocking *that*. It blocks nothing, and is still a blocking
+    creature (CR 509.1g: until it is itself removed from combat)."""
+    game, (doomed_attacker, other_attacker, blocker) = _combat_game(
         [(0, "Grizzly Bears"), (0, "Hill Giant"), (1, "Wall of Stone")]
     )
     assert game.declare_attackers(0, [0, 1], 1)[0]
@@ -126,10 +129,12 @@ def test_a_blocker_stops_blocking_when_its_attacker_dies():
     _kill(game, doomed_attacker)
 
     assert game.battlefield_index_of(other_attacker) == 0
-    assert game.combat_blockers.get(1, {}) == {}, (
-        "the blocker is still recorded as blocking, and the attacker index it "
-        "holds now names the creature that took the dead one's slot"
+    assert game.combat_blockers.get(1, {}) == {0: []}, (
+        "the attacker index the blocker holds names the creature that took the "
+        "dead one's slot"
     )
+    assert game.creatures_blocked_by(blocker) == []
+    assert blocker.is_blocking
     assert game.combat_attackers == {0: 1}
 
 
