@@ -454,11 +454,30 @@ def _untap_land_selection_requirement(session: Session) -> int:
 def _begin_turn(
     session: Session, player_index: int, defer_untap_selection: bool | None = None,
 ) -> bool:
-    game = session.game
     # Reset the per-turn counters (creatures died, damage taken, lands played)
     # exactly as the headless start_turn flow does — without this, Scavenging
     # Ghoul's end-step trigger fires on deaths from previous turns.
-    game.begin_turn_bookkeeping(player_index)
+    session.game.begin_turn_bookkeeping(player_index)
+    return _turn_after_its_bookkeeping(session, player_index, defer_untap_selection)
+
+
+def _turn_after_its_bookkeeping(
+    session: Session, player_index: int, defer_untap_selection: bool | None = None,
+) -> bool:
+    """The turn from its first decision on — Time Vault's skip, then the
+    untap step, the upkeep and the draw step — once ``begin_turn_bookkeeping``
+    has run for it.
+
+    Split out of :func:`_begin_turn` so Time Vault's decline resumes the turn
+    here (``action_turn._action_time_vault_decline``). It called
+    ``_begin_turn``, so a person declining the skip ran the turn's bookkeeping
+    a second time: ``seat_turn_counts`` rose by two, and "your last turn" and
+    "its controller's next turn" — ordinals against that counter (Giant
+    Turtle, Wall of Dust, ``engine/turn_state.py``) — named the wrong turns,
+    so a Turtle that attacked last turn attacked again and a creature Wall of
+    Dust blocked was free. Each turn's bookkeeping runs once, on every road.
+    """
+    game = session.game
     # Whether a person is asked this turn's untap decisions is read *after*
     # the bookkeeping, because a control over this seat's turn starts there
     # (CR 723.1, Mindslaver): the person controlling an AI seat's turn is
