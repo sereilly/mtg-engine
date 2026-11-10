@@ -246,25 +246,173 @@ def _copy_target_by_side(game: Game, choice, kept: dict, answers: list) -> dict:
     return players[0] if players else kept
 
 
-def choose_copy_retarget(game: Game, seat: int, copy, slots, options):
-    """Which of *options* a seat nobody asks re-aims a spell copy at when its
-    one target is **a card in a graveyard or a spell** (``stack_targets``'
-    CR 115.7 change, *slots* its one slot), or None to keep the original's.
+def choose_copy_new_targets(game: Game, seat: int, copy, slots) -> list:
+    """Where a seat nobody asks re-aims each slot of a spell copy it "may
+    choose new targets" for (CR 707.10c) when the copy is not one permanent
+    or player (``copy_spell_target``'s, :func:`choose_copy_target`): one
+    entry per slot of *slots* (``stack_targets.change_slots``), the new
+    target or None to keep that slot's.
 
-    :func:`choose_copy_target`'s question one zone over: Reaping the Graves'
-    storm copies each kept its original's card, so the first copy to resolve
-    returned it and every other one, the original included, was countered by
-    the rules (W1G1)."""
-    from .stack_targets import apply_target_change
+    **Slot by slot** (CR 115.7d: "The player may leave any number of the
+    targets unchanged"): each slot's options (``new_target_options``, given
+    the slots already answered) are rehearsed with the earlier answers
+    applied, beside keeping this one, and the best taken where it beats
+    keeping by more than nothing. One target at a time is what the rule
+    lets a player decide, and it keeps the rehearsals to one per option
+    rather than one per combination. A card in a graveyard or a spell is
+    one slot of this shape: Reaping the Graves' storm copies each kept its
+    original's card, so the first copy to resolve returned it and every other
+    one was countered by the rules (W1G1). A copy of a spell with several
+    targets or a mode kept all of them, on every road, until kg5.
 
-    picked = _best_rehearsed_answer(
-        game, seat, (copy, slots, tuple(options)), list(range(len(options))),
-        lambda table, held, index: apply_target_change(
-            table, held[0], held[1], [held[2][index]],
-        ),
-        label=f"{copy.card.name} (the copy's new target)",
-    )
-    return None if picked is None else options[picked]
+    **Inside a rehearsal** nothing can be measured (``rehearsing``), and the
+    answer is the side's (:func:`_copy_new_targets_by_side`) — the floor
+    :func:`_copy_target_by_side` is for a one-slot copy, so a Fork of an
+    opponent's Reckless Spite aimed at the forker's creatures reads as the
+    removal it becomes, not as a second one on its own board.
+    """
+    from .stack_targets import apply_target_change, may_keep_target, new_target_options
+
+    picks: list = [None] * len(slots)
+    if rehearsing():
+        return _copy_new_targets_by_side(game, seat, copy, slots)
+    label = f"{copy.card.name} (the copy's new target)"
+
+    def answer(table, held, choice) -> bool:
+        held_copy, held_slots, held_options, held_earlier, position = held
+        trial = list(held_earlier)
+        if choice is not None:
+            trial[position] = held_options[choice]
+        changed = [(slot, pick) for slot, pick in zip(held_slots, trial) if pick is not None]
+        if not changed:
+            return True
+        return apply_target_change(
+            table, held_copy, [slot for slot, _ in changed], [pick for _, pick in changed],
+        )
+
+    with deliberating():
+        for position in range(len(slots)):
+            options = new_target_options(slots, picks, position)
+            if not options:
+                continue
+            carried = (copy, slots, tuple(options), tuple(picks), position)
+            answers = list(range(len(options)))
+            # Keeping this slot is worth what the answers so far are: nothing
+            # at all with none given, and otherwise their own rehearsal — and
+            # it is no answer where an earlier slot took what this one names.
+            keeps = may_keep_target(slots, picks, position)
+            best, best_swing = None, 0.0
+            if not keeps:
+                best_swing = None
+            elif any(pick is not None for pick in picks):
+                answers.insert(0, None)
+                best_swing = None
+            for choice in answers:
+                rehearsal = rehearse(
+                    game, seat,
+                    lambda table, held, choice=choice: _Answered(bool(answer(table, held, choice))),
+                    leaves_hand=False, carried=carried, detach="abstract", label=label,
+                )
+                if rehearsal is None:
+                    return picks
+                if not rehearsal.accepted:
+                    continue
+                if best_swing is None or rehearsal.swing > best_swing + _COPY_GAIN:
+                    best, best_swing = choice, rehearsal.swing
+            if best is not None:
+                picks[position] = options[best]
+            elif not keeps:
+                picks[position] = options[0]
+    return picks
+
+
+def _copy_slot_side(game: Game, copy, slot) -> "str | None":
+    """Whose side the effect spending *slot* of *copy* wants its target on —
+    the division's (``ai_slot_sides.divided_shape``), the chosen mode's own
+    instruction for a slot one of ``chosen_modes`` holds, else the object's
+    (:func:`_target_change_side`, which reads a lone chosen mode itself)."""
+    from .ai_target_sides import activation_target_side
+    from .oracle import compile_card_oracle
+    from .text_changes import spell_text_card
+
+    if slot.current.channel == "divided":
+        from .ai_slot_sides import divided_shape
+
+        shape = divided_shape(compile_card_oracle(spell_text_card(copy)))
+        return None if shape is None else shape.side
+    if slot.current.mode is not None:
+        modes = tuple(getattr(copy, "chosen_modes", ()) or ())
+        printed = compile_card_oracle(spell_text_card(copy)).modes
+        if not 0 <= slot.current.mode < len(modes):
+            return None
+        index = modes[slot.current.mode].index
+        if not 0 <= index < len(printed) or printed[index].instruction is None:
+            return None
+        instruction = printed[index].instruction
+        return ability_target_side(instruction) or activation_target_side(instruction)
+    return _target_change_side(game, copy)
+
+
+def _chosen_target_seat(game: Game, target) -> "int | None":
+    """The seat a slot's target is on: the player it names, or the
+    controller of the permanent it names (None for anything else, or a
+    permanent that has gone)."""
+    if target.kind == "player":
+        return target.seat
+    if target.kind != "permanent":
+        return None
+    permanent = game.permanent_by_id(target.permanent_id)
+    return None if permanent is None else game.controller_index_of(permanent)
+
+
+def _copy_new_targets_by_side(game: Game, seat: int, copy, slots) -> list:
+    """:func:`choose_copy_new_targets` **inside a rehearsal**: each slot kept,
+    unless what it names is gone or on the wrong side of the table for the
+    effect spending it (:func:`_copy_slot_side`) — then the first answer on
+    the right side, as :func:`_copy_target_by_side` orders a one-slot copy's:
+    the opponent the seat attacks where a player is offered for harm, else
+    the dearest permanent there, else a player. A floor, never a choice: the
+    copy's real targets are measured when it is made."""
+    from .stack_targets import may_keep_target, new_target_options
+
+    picks: list = [None] * len(slots)
+    for position, slot in enumerate(slots):
+        if not may_keep_target(slots, picks, position):
+            # An earlier slot took what this one names: it must move.
+            options = new_target_options(slots, picks, position)
+            picks[position] = options[0] if options else None
+            continue
+        if slot.current.kind not in ("permanent", "player"):
+            continue
+        wanted = _copy_slot_side(game, copy, slot)
+        if wanted is None:
+            continue
+        now = _chosen_target_seat(game, slot.current)
+        if now is not None and (now == seat) == (wanted == "you"):
+            continue
+        hostile = wanted == "opponent"
+        right = [
+            candidate for candidate in new_target_options(slots, picks, position)
+            if (where := _chosen_target_seat(game, candidate)) is not None
+            and (where != seat) == hostile
+        ]
+        if not right:
+            continue
+        players = [candidate for candidate in right if candidate.kind == "player"]
+        permanents = sorted(
+            (candidate for candidate in right if candidate.kind == "permanent"),
+            key=lambda candidate: -permanent_worth(game.permanent_by_id(candidate.permanent_id)),
+        )
+        if hostile and players:
+            attacked = choose_attack_target(game, seat)
+            picks[position] = next(
+                (candidate for candidate in players if candidate.seat == attacked), players[0],
+            )
+        elif permanents:
+            picks[position] = permanents[0]
+        else:
+            picks[position] = players[0]
+    return picks
 
 
 def choose_search_card(
