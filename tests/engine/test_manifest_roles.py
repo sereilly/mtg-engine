@@ -249,7 +249,8 @@ def test_a_promoted_set_is_read_as_shipped_at_its_printing_place(manifest_copy, 
     released after it), so `original_printing` is decided as it will be."""
     from engine.card_loader import register_measured_set
 
-    register_measured_set(_entry("ZZZ", "1996-01-01"), manifest_path=manifest_copy)
+    entry = _entry("ZZZ", "1996-01-01")
+    register_measured_set(entry, manifest_path=manifest_copy)
     before = [e["code"] for e in manifest_sets(manifest_copy)]
     promoting("zzz")
     after = [e["code"] for e in manifest_sets(manifest_copy)]
@@ -257,7 +258,7 @@ def test_a_promoted_set_is_read_as_shipped_at_its_printing_place(manifest_copy, 
     assert after.index("ZZZ") == after.index(later) - 1
     assert [c for c in after if c != "ZZZ"] == before
     assert "ZZZ" not in manifest_measured_codes(manifest_copy)
-    assert manifest_copy.parent / "ZZZ_cards.json" in manifest_set_paths(manifest_copy)
+    assert manifest_copy.parent / entry["file"] in manifest_set_paths(manifest_copy)
 
 
 def test_a_promotion_of_an_unknown_set_names_what_could_be_promoted(promoting):
