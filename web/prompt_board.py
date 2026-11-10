@@ -605,9 +605,13 @@ def _mode_choice(ctx: PromptContext, choices: list) -> dict:
     # alone do not: Fatespinner's "draw step / main phase / combat phase" are
     # the step or phase the chooser skips this turn (``skip_next_step`` /
     # ``skip_next_phase`` alternatives), and "pick a mode" said none of that.
+    # ``title`` is the same answer for the panel's heading, which said
+    # "Choose one" over it — a heading that names the choice's form (one of
+    # several) rather than what is being chosen.
     kinds = {getattr(mode, "kind", None) for mode in data.get("_modes") or ()}
     if kinds and kinds <= {"skip_next_step", "skip_next_phase"}:
         payload["question"] = "Choose the step or phase you skip this turn."
+        payload["title"] = "skip a step or phase"
     # …and whose ability makes them choose, when it is not theirs (CR 700.2e's
     # shape on a trigger: "that player chooses", Fatespinner in its opponent's
     # upkeep).

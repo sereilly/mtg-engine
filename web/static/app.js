@@ -9493,7 +9493,12 @@ function applyModeChoicePrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  title.textContent = "Choose one";
+  // What is being chosen, when the server can say (`title`: Fatespinner's
+  // "skip a step or phase"), in the shape the other choice prompts' headings
+  // take ("Shared Fate — exile instead of drawing"); else the form of it.
+  title.textContent = info.title
+    ? `${info.card_name || "Triggered ability"} — ${info.title}`
+    : "Choose one";
   const targeted = (info.modes || []).some((mode) => Array.isArray(mode.targets));
   // What the choice is for, when the server can say (`question`: Fatespinner's
   // step or phase to skip) and whose ability asks it of this seat
