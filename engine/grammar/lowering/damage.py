@@ -22,7 +22,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import untestable_filter_keys
-from ...oracle_types import X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT
+from ...oracle_types import SEPARATE_DEALINGS, X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT
 from ._amounts import (maximum_amount_spec, tapped_this_way_record,
                        x_offset_amount)
 from ._counted_damage import (
@@ -872,11 +872,15 @@ def kicked_second_damage_target(
     there, and ``cast_targets._as_kicked`` already collapses the pair to the arm a
     given cast will run.
 
-    Nothing observable is lost by the two damages sharing one step: no player
+    The two damages share one step but not one **dealing**: two printed
+    sentences are two events (CR 608.2c), so CR 615.8's "next instance of
+    damage from that source" is the first sentence's alone — a Pilgrim of
+    Justice naming the spell stops its first 3, not both. The dispatcher marks
+    the kicked arm ``oracle_types.SEPARATE_DEALINGS``
+    (:func:`deal_kicked_targets_apart`) and the handler deals each target its
+    own event, in the order announced. Nothing else is observable: no player
     receives priority inside a resolution (CR 117.3b) and state-based actions
-    wait for it to end (CR 704.3), so the only order a spell's own steps can
-    expose is one reading what an earlier one did — and neither damage reads
-    the other.
+    wait for it to end (CR 704.3).
 
     Narrow, for the cards this must not claim:
 
@@ -939,6 +943,31 @@ def kicked_second_damage_target(
         first, recipients=(dataclasses.replace(target, count=2),)
     )
     return ast.Conditional(condition, then=both, otherwise=first)
+
+
+def deal_kicked_targets_apart(
+    lowered: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """*lowered* — :func:`kicked_second_damage_target`'s two-armed sentence —
+    with its kicked arm's damage marked ``oracle_types.SEPARATE_DEALINGS``:
+    the two targets are two printed sentences, each dealt its own event."""
+
+    def apart(instruction: OracleInstruction) -> OracleInstruction:
+        if instruction.kind == "deal_damage":
+            return dataclasses.replace(
+                instruction,
+                payload={**dict(instruction.payload or {}), SEPARATE_DEALINGS: True},
+            )
+        return instruction
+
+    out = []
+    for instruction in lowered:
+        payload = dict(instruction.payload or {})
+        if instruction.kind == "if_then" and payload.get("then"):
+            payload["then"] = tuple(apart(step) for step in payload["then"])
+            instruction = dataclasses.replace(instruction, payload=payload)
+        out.append(instruction)
+    return tuple(out)
 
 
 

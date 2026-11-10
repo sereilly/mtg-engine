@@ -105,6 +105,7 @@ from .lowering import (
     _lower_damage,
     _lower_damage_conjunction,
     _lower_damage_unless_pay,
+    deal_kicked_targets_apart,
     kicked_second_damage_target,
     _fused_conditional_counter,
     _fused_tap_enchanted_then_counters,
@@ -844,10 +845,10 @@ def lower_statement(
         # lowered by this dispatcher like any other `Conditional`.
         kicked_pair = kicked_second_damage_target(statement.steps)
         if kicked_pair is not None:
-            return lower_statement(
+            return deal_kicked_targets_apart(lower_statement(
                 kicked_pair, produced, event=event,
                 event_subject=event_subject, whole_effect=whole_effect,
-            )
+            ))
         # "…Then return **another** target creature…" (Withdraw): the word is
         # the proof of two announcements, so the pair is lowered as two roles
         # (`_roles.plan_another_target_roles`) instead of refused below.

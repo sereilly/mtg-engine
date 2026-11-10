@@ -34,7 +34,7 @@ from ..resumption import run_resumable
 from ..simultaneous_damage import begin_sentence, deal_at_once, deal_sentence
 from ..game_types import (single_chosen_id, single_slot, target_ids,
                           target_slots)
-from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
+from ..oracle_types import (SEPARATE_DEALINGS, ATTACHED_PERMANENT_CONTROLLER,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_DAMAGER_CONTROLLER,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..mana_payment import generic_cost
@@ -104,6 +104,16 @@ def _damage_reporter(game: Game, card, permanent, source):
             game._fire_dealt_damage_triggers(permanent, dealt, source=source)
 
     return report
+
+
+def _deal_each_its_own_event(game, targets, hit) -> None:
+    """Two printed sentences read as one divided instruction (Magma Burst
+    kicked, ``oracle_types.SEPARATE_DEALINGS``): each target is dealt its own
+    event, in the order announced (CR 608.2c) — two instances of damage from
+    the spell, never one dealing (CR 615.8). One resumable loop, so a target
+    whose event stops to ask takes the one behind it with it; and the last
+    thing its caller does."""
+    run_resumable(game, targets, hit)
 
 
 @effect_handler("deal_damage")
@@ -905,6 +915,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 then=_damage_reporter(game, card, target_perm, source_permanent or card),
             )
 
+        if instruction.payload.get(SEPARATE_DEALINGS):
+            _deal_each_its_own_event(game, paired, hit)
+            return True, "resolved"
         # In APNAP order of the seats the shares' questions go to (CR 616.1's
         # last sentence) — one event, dealt to every target at once: one
         # dealing (CR 608.2f), so "whenever <source> deals damage" (Justice)
