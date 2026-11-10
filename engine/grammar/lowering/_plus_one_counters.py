@@ -312,7 +312,8 @@ def lower_plus_one_placement(
         # chosen as it goes on the stack, but this engine announces an upkeep
         # trigger's targets from one seat — so the affected player's pick is
         # made at resolution instead. What that costs is the CR 608.2b re-check
-        # and shroud on the picked creature.
+        # (a pick made as the effect happens has nothing to re-check); shroud
+        # and the rest of what stops a targeting are asked of the candidates.
         #
         # Refused under an event that froze no seat: with nobody named there is
         # nobody to ask, and a prompt armed on nobody is an effect that silently
@@ -352,6 +353,10 @@ def lower_plus_one_placement(
                     "chooser": EVENT_SUBJECT_PLAYER,
                     "filter": described,
                     "prompt": "Choose a creature to put a +1/+1 counter on.",
+                    # The shroud half of the cost above, paid: the
+                    # candidates are held to what the ability could target
+                    # (``permanent_choice_candidates``).
+                    "announced_target": True,
                 },
             ),
             OracleInstruction(

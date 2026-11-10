@@ -440,6 +440,11 @@ def _their_choice_placement(
     owned = " you control" if controller else ""
     chosen["filter"] = described
     chosen["prompt"] = f"Choose a {noun}{owned} to put a {node.counter} counter on."
+    # The printed word is "target" (refused above otherwise): the pick is
+    # made at resolution, by the seat the event froze, and the candidates are
+    # held to what the *ability* could target (``announced_target``, read by
+    # ``permanent_choice_candidates``) — a land with shroud is no answer.
+    chosen["announced_target"] = True
     return (
         OracleInstruction("choose_permanent", "", chosen),
         OracleInstruction("add_named_counter_to_target", "", {

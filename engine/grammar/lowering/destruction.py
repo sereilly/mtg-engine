@@ -642,6 +642,11 @@ def _lower_destroy_of_their_choice(
                     "controlled_by": "chooser",
                     "filter": described,
                     "prompt": "Choose a creature you control to be destroyed.",
+                    # "destroy **target** …": the ability targets whoever
+                    # picks (CR 115.1d), so the candidates are held to what it
+                    # could target — shroud, hexproof against its controller,
+                    # protection from it (``permanent_choice_candidates``).
+                    "announced_target": True,
                 },
             ),
             OracleInstruction("destroy_target_permanent", "", destroy_payload),

@@ -27,6 +27,7 @@ from engine.ai_abilities import choose_activation_action
 from engine.ai_payment import tap_planned_lands
 from engine.ai_prompt_readers import chosen_name_own_zone
 from engine.ai_target_sides import entry_trigger_target_side
+from engine.card_loader import manifest_measured_codes
 from engine.faces import castable_faces
 from engine.mixins.stack import aura_enchant_noun
 from engine.models import Permanent
@@ -87,10 +88,17 @@ def _w2g6_cast(game: Game, action):
 
 @pytest.fixture(scope="module")
 def _w2g6_pool(catalog, catalog_by_name, set_cards):
-    """The shipped pool and Invasion (measured today, shipped later), by name."""
+    """The shipped pool and Invasion (measured today, shipped later), by name
+    — and every set still under the manifest's ``measured`` role, so a
+    reviewed inventory below meets a set's cards while the set is being
+    implemented rather than at its promotion (Mirrodin's Liar's Pendulum).
+    A name the shipped pool holds resolves as it always did."""
     cards = dict(catalog_by_name)
     for card in set_cards("INV"):
         cards.setdefault(card.name, card)
+    for code in manifest_measured_codes():
+        for card in set_cards(code):
+            cards.setdefault(card.name, card)
     return cards
 
 
@@ -271,14 +279,14 @@ def test_w2g6_a_kicker_is_not_paid_to_destroy_the_casters_own_enchantment(_w2g6_
 
 
 def test_w2g6_where_a_chosen_name_is_looked_for_is_read_off_the_next_sentence(_w2g6_pool):
-    """Six cards choose a card name as a step of their own (the three naming
-    paragraphs with whole-effect handlers are not this). Three then look among
+    """Seven cards choose a card name as a step of their own (the three naming
+    paragraphs with whole-effect handlers are not this). Four then look among
     the chooser's own cards; Foreshadow and Predict mill a *target* player and
     look among what was milled, and Cabal Therapy looks in a *target*
     player's hand - nobody's own zone to read a name off -
     ``tests/ai/test_ai_chosen_name_mill.py`` is where that default is held.
 
-    A reviewed inventory of the shipped pool. Predict joined at Odyssey's
+    A reviewed inventory of the pool (the measured sets with it). Predict joined at Odyssey's
     promotion, and the review was that its answer is Foreshadow's. Cabal
     Therapy joined at Judgment's, and its answer is Foreshadow's one zone
     over: ``chosen_name_is_read_off_the_targets_hand`` reads it, and the mill
@@ -303,6 +311,11 @@ def test_w2g6_where_a_chosen_name_is_looked_for_is_read_off_the_next_sentence(_w
         # reveals their hand and discards all cards with that name." The
         # target's hand, which is no zone of the chooser's own.
         "Cabal Therapy": None,
+        # Mirrodin, at its promotion rehearsal: "{2}, {T}: Choose a card name.
+        # Target opponent guesses whether a card with that name is in **your
+        # hand**." The chooser's own hand, Cursed Scroll's zone — so the name
+        # a seat nobody asks takes is read off the cards it holds.
+        "Liar's Pendulum": "hand",
     }
 
     invented = _mk_card(

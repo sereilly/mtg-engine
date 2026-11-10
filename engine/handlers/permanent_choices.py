@@ -153,6 +153,23 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
             continue
         if not subject_matches(game, perm, described, observer=seat, source=source):
             continue
+        if payload.get("announced_target") and not game._can_be_targeted(
+            perm, context.card, caster_index=seat, ability_source=source,
+        ):
+            # A printed **target** this engine picks as the effect resolves
+            # rather than in the announcement: "…that player puts a flood
+            # counter on target non-Island land they control of their choice"
+            # (Quicksilver Fountain), "destroy target nonartifact creature
+            # that player controls of their choice" (The Abyss), "An opponent
+            # chooses target creature they control" (Echo Chamber). Whoever
+            # picks, the ability is what targets (CR 115.1), so a permanent it
+            # could not target is no answer: shroud (CR 702.18), hexproof
+            # against the *ability's controller* (CR 702.11b — the caster
+            # here, not the seat picking) and protection from the source
+            # (CR 702.16b) are asked through the one predicate the cast gate,
+            # the picker and the AI ask. Unasked, the upkeep player flooded a
+            # land with shroud.
+            continue
         if payload.get("exclude_relative_host"):
             # "**another** permanent" — anything but the one it is on now.
             if host is None or perm is host:

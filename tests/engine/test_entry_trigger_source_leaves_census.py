@@ -67,6 +67,34 @@ def _rules_text(card) -> str:
     return _REMINDER_TEXT.sub("", card.oracle_text or "")
 
 
+#: The verb that puts a card in exile — not "exiled", which names a card
+#: already there.
+_EXILE_VERB = re.compile(r"\bexiles?\b", re.I)
+
+
+def _exiles_for_a_duration(card) -> bool:
+    """Whether one sentence of *card*'s rules text both exiles and prints a
+    duration that is not a turn ("exile that card **until** this creature
+    leaves the battlefield", Kitesail Freebooter).
+
+    Asked of the sentence, because a duration elsewhere on the card is about
+    something else: Duplicant's "**As long as** a card exiled with this
+    creature is a creature card, this creature has the power, toughness, …"
+    is the condition of a static, and its exile is for good — so, destroyed in
+    response, it exiled its target and the census read "exiled with nothing
+    left to end it" for the card behaving as printed (Mirrodin's promotion
+    rehearsal; W2G5 found it). Measured over every entry trigger in both
+    manifest roles: the whole-text reading also matched Crazed Firecat,
+    Limited Resources, Oubliette (a phasing, held by the check before this
+    one) and Thicket Elemental, none of which exiles for a duration; Idol of
+    Endurance and Kitesail Freebooter match either way.
+    """
+    for sentence in re.split(r"(?<=[.!?])\s+|\n", _rules_text(card)):
+        if _EXILE_VERB.search(sentence) and _NON_TURN_DURATION.search(sentence):
+            return True
+    return False
+
+
 def _cards_in_game(game) -> int:
     """Every card in a zone. A trigger on the stack is not a card and tokens
     are not counted, so nothing a resolution does may change this number."""
@@ -125,7 +153,7 @@ def test_no_entry_trigger_strands_anything_when_its_source_is_destroyed_in_respo
             if phased:
                 findings.append(f"{where}: {phased} left phased out")
             exiled = [c.name for player in game.players for c in player.exile]
-            if exiled and _NON_TURN_DURATION.search(_rules_text(card)):
+            if exiled and _exiles_for_a_duration(card):
                 findings.append(f"{where}: {exiled} exiled with nothing left to end it")
 
     assert examined >= _MIN_PAIRS, f"the census reached only {examined} entries"

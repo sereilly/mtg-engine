@@ -30,24 +30,33 @@ import re
 import pytest
 
 from engine import Game, PlayerState
-from engine.card_loader import load_catalog
+from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent
 from tests.helpers import resolve_stack
 
 _CARDS = {card.name: card for card in load_catalog()}
 
+#: Both manifest roles: the census holds a card printing the shape to a board
+#: *before* it ships ("a new card printing it is driven before it ships"), so
+#: it reads a set under ``measured`` too, and a board may name that set's cards
+#: (Rust Elemental, Mirrodin, at its promotion rehearsal). A name the shipped
+#: pool holds resolves as it always did.
+_POOL = load_cards(manifest_set_paths(include_measured=True))
+_MEASURED = {card.name: card for card in _POOL if card.name not in _CARDS}
+
+
 #: "Sacrifice <something>. If you can't, <consequence>." — the sacrifice owed
 #: first, its failure after.
 _SHAPE = re.compile(r"\bsacrifices? [^.]*\.\s*if (?:you|they|that player) can't,")
 
-DRIVEN = {"Lich", "Lord of the Pit", "Infernal Denizen"}
+DRIVEN = {"Lich", "Lord of the Pit", "Infernal Denizen", "Rust Elemental"}
 
 
 def test_every_printed_sacrifice_shortfall_is_driven_here():
     printed = {
         card.name
-        for card in compilation_units(load_catalog())
+        for card in compilation_units(_POOL)
         if _SHAPE.search((card.oracle_text or "").lower())
     }
     assert len(printed) >= 3, printed
@@ -66,7 +75,7 @@ def test_the_forced_sacrifice_carries_no_consequence_of_its_own():
 
 
 def _perm(name: str) -> Permanent:
-    permanent = Permanent(card=_CARDS[name])
+    permanent = Permanent(card=_CARDS.get(name) or _MEASURED[name])
     permanent.metadata["summoning_sickness_turn"] = -99
     return permanent
 
@@ -130,3 +139,35 @@ def test_infernal_denizen_that_cannot_sacrifice_two_swamps_is_tapped(interactive
     # indivisible) and the "If you can't" branch happens instead.
     assert any(p.card.name == "Swamp" for p in game.controlled_by(0)), game.log
     assert denizen.tapped, game.log
+
+
+@pytest.mark.parametrize("interactive", [(), (0, 1)])
+def test_rust_elemental_sacrifices_another_artifact_when_it_can(interactive):
+    """"At the beginning of your upkeep, sacrifice another artifact. If you
+    can't, tap this creature and you lose 4 life." (Rust Elemental.) The
+    2004-12-01 ruling: "Sacrificing an artifact isn't optional. If you control
+    an artifact other than Rust Elemental, you must sacrifice it." — so the
+    Sol Ring goes, the Elemental (itself an artifact) stays untapped and no
+    life is lost."""
+    game = _game(["Rust Elemental", "Sol Ring", "Swamp"], interactive=interactive)
+    elemental = game.players[0].battlefield[0]
+    game.resolve_upkeep(0)
+    _settle(game)
+    assert [card.name for card in game.players[0].graveyard] == ["Sol Ring"], game.log
+    assert game.is_on_battlefield(elemental) and not elemental.tapped, game.log
+    assert game.players[0].life == 20, game.log
+
+
+@pytest.mark.parametrize("interactive", [(), (0, 1)])
+def test_rust_elemental_with_no_other_artifact_is_tapped_and_costs_four(interactive):
+    """"Otherwise, you must tap Rust Elemental and lose 4 life" (the same
+    ruling): the Elemental is the only artifact, so nothing is sacrificed —
+    not the Elemental itself, which "another" excludes."""
+    game = _game(["Rust Elemental", "Swamp"], interactive=interactive)
+    elemental = game.players[0].battlefield[0]
+    game.resolve_upkeep(0)
+    _settle(game)
+    assert game.is_on_battlefield(elemental), game.log
+    assert elemental.tapped, game.log
+    assert game.players[0].life == 16, game.log
+    assert game.players[0].graveyard == [], game.log

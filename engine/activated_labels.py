@@ -850,4 +850,11 @@ ACTIVATED_LABELS: dict[str, str] = {
     # which is also what the `pump` category default already said, so the
     # row moves no label: it pins one.
     "remove_team_keyword_until_eot": "activated_pump",
+    # --- Mirrodin, at its promotion rehearsal ----------------------------
+    # Soul Foundry: "{X}, {T}: Create a token that's a copy of the exiled
+    # card. X is the mana value of the exiled card." A token made, so
+    # `create_token`'s bucket — the one the triggered table already files
+    # `create_copy_token` under (`triggered_token`) — rather than the
+    # `tokens` category's default.
+    "create_copy_token": "activated_token",
 }

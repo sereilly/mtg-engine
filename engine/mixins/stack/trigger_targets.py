@@ -441,6 +441,19 @@ class TriggerTargetsMixin:
             ceiling = spec.get("max_targets")
             if isinstance(ceiling, int) and len(set(slots)) > ceiling:
                 return "illegal"
+            # "…exile **two** target sorcery cards from a single graveyard"
+            # (Spellweaver Helix) named with one: the permanent half's rule
+            # below (Petradon) for a pile — a count printed without "up to"
+            # is owed whole (CR 601.2c), so the trigger chooses again, and is
+            # removed there if no pile can meet it (CR 603.3d). Held short,
+            # the cast's one card rode the trigger and the Helix imprinted
+            # one sorcery of two.
+            if (
+                isinstance(ceiling, int) and spec.get("exact_targets")
+                and len(set(slots)) != ceiling
+                and not _target_is_up_to(getattr(item.ability_instruction, "payload", None))
+            ):
+                return "illegal"
             return None if all((pile, each) in legal for each in slots) else "illegal"
         if spec.get("kind") in self._CHOOSABLE_TRIGGER_STACK_KINDS:
             # A spell, named by identity. Still one the trigger could choose —
