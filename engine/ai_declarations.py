@@ -34,7 +34,7 @@ from .combat_permissions import MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT
 from .models import Permanent
 from .ai_combat_triggers import (attack_is_worth_its_trigger, block_is_worth_its_trigger,
                                  expected_attack_damage)
-from .ai_compelled_blocks import compelled_blocks, fight_outcome
+from .ai_compelled_blocks import STAYS, compelled_blocks, fight_outcome, survives_destruction
 from .ai_standing import life_worth, permanent_worth
 from .ai_scoring import choose_attack_target, _permanent_value
 from .combat_assignment import combat_damage_assigned_by
@@ -862,8 +862,9 @@ def _kills_back(game: Game, attacker: Permanent, members: list[Permanent]) -> li
     chosen the way that costs the defender most (CR 510.1c: the attacking
     player divides the damage, lethal damage to each in turn): the most
     valuable set whose lethal damage its power covers. Deathtouch makes one
-    point lethal (CR 702.2c); an indestructible or shielded blocker is not
-    destroyed, nor one the attacker's damage would be prevented on —
+    point lethal (CR 702.2c); a blocker that survives destruction
+    (indestructible, or regenerated: ``ai_compelled_blocks.survives_destruction``)
+    is not destroyed, nor one the attacker's damage would be prevented on —
     protection from its colour (CR 702.16e), a Circle — as
     `ai_compelled_blocks.fight_outcome` reads the same fight one on one."""
     from itertools import combinations
@@ -875,7 +876,7 @@ def _kills_back(game: Game, attacker: Permanent, members: list[Permanent]) -> li
         return []
     costs: list[tuple[Permanent, int]] = []
     for member in members:
-        if game._has_keyword(member, "indestructible") or member.regeneration_shield:
+        if survives_destruction(game, member, dealt_by=(attacker,)) is not None:
             continue
         if _would_be_prevented(game, attacker, member, power):
             continue
@@ -894,40 +895,83 @@ def _kills_back(game: Game, attacker: Permanent, members: list[Permanent]) -> li
 
 
 def _gang_kills(game: Game, attacker: Permanent, members: list[Permanent]) -> bool:
-    """Whether *members* blocking *attacker* together destroy it: their
-    combat damage (less what a shield would stop) reaches lethal, and those
-    the attacker's first-strike damage kills first deal none (CR 510.4)."""
+    """Whether *members* blocking *attacker* together destroy it **however
+    its controller divides its damage** (CR 510.1c): their combat damage
+    (less what a shield would stop) reaches lethal, in the combat damage
+    step's two steps (CR 510.4).
+
+    A first-striking attacker deals its damage first, and a member that
+    damage would destroy deals none in the regular step — nor does one it
+    would **regenerate**, which is removed from combat (CR 701.19a, CR 506.4;
+    ``ai_compelled_blocks.survives_destruction``). Which members it takes out
+    is its controller's choice, and the one that keeps it alive is the one
+    it makes: so every division its power covers is tried, and the gang
+    kills only if none survives it. Read as indestructible, a shielded
+    blocker beside a 1/1 "killed" a first-striking 2/2 that knocked the
+    shielded one out of combat and took the 1/1 with it."""
     # The attacker's own damage chooser's question (`ai_combat`, which
     # imports this module): a Circle's shield, protection, a Fog.
+    from itertools import combinations
+
     from .ai_combat import _would_be_prevented
 
     if not members:
         return False
-    if game._has_keyword(attacker, "indestructible") or attacker.regeneration_shield:
+    if survives_destruction(game, attacker, dealt_by=members) is not None:
         return False
-    first_struck: list[Permanent] = []
-    if game._has_keyword(attacker, "first strike") or game._has_keyword(
-        attacker, "double strike"
-    ):
-        first_struck = [
-            member for member in _kills_back(game, attacker, members)
-            if not (
-                game._has_keyword(member, "first strike")
-                or game._has_keyword(member, "double strike")
-            )
-        ]
-    remaining = attacker.effective_toughness - attacker.damage_marked
-    dealt = 0
+
+    def strikes(permanent) -> tuple[bool, bool]:
+        double = game._has_keyword(permanent, "double strike")
+        first = double or game._has_keyword(permanent, "first strike")
+        return first, (not first) or double
+
+    remaining = max(1, attacker.effective_toughness - attacker.damage_marked)
+    # (member, its damage to the attacker, deathtouch, first step, regular step)
+    hits = []
     for member in members:
-        if any(member is struck for struck in first_struck):
-            continue
         amount = combat_damage_assigned_by(member)
         if amount <= 0 or _would_be_prevented(game, member, attacker, amount):
             continue
-        if game._has_keyword(member, "deathtouch"):
-            return True
-        dealt += amount
-    return dealt >= max(1, remaining)
+        hits.append((member, amount, game._has_keyword(member, "deathtouch"), *strikes(member)))
+
+    def destroyed_by(struck: tuple) -> bool:
+        """Whether the attacker dies with the members in *struck* taken out
+        of the fight by its first-strike damage."""
+        dealt = 0
+        for member, amount, deathtouch, first, regular in hits:
+            steps = int(first) + int(regular and not any(member is out for out in struck))
+            if not steps:
+                continue
+            if deathtouch:
+                return True
+            dealt += amount * steps
+        return dealt >= remaining
+
+    attacker_first, _attacker_regular = strikes(attacker)
+    if not attacker_first:
+        return destroyed_by(())
+    power = combat_damage_assigned_by(attacker)
+    # What each member costs the attacker to take out of the fight: lethal
+    # damage (one point with deathtouch, CR 702.2c), for a member it would
+    # destroy or regenerate — never one indestructible, or one its damage
+    # would be prevented on.
+    takeable = []
+    for member, _amount, _deathtouch, _first, regular in hits:
+        if not regular or power <= 0:
+            continue
+        if survives_destruction(game, member, dealt_by=(attacker,)) == STAYS:
+            continue
+        if _would_be_prevented(game, attacker, member, power):
+            continue
+        lethal = max(1, member.effective_toughness - member.damage_marked)
+        takeable.append((member, 1 if game._has_keyword(attacker, "deathtouch") else lethal))
+    for size in range(len(takeable) + 1):
+        for chosen in combinations(takeable, size):
+            if sum(cost for _member, cost in chosen) > power:
+                continue
+            if not destroyed_by(tuple(member for member, _cost in chosen)):
+                return False
+    return True
 
 
 def _gang_is_worth_it(game: Game, attacker: Permanent, members: list[Permanent]) -> bool:
