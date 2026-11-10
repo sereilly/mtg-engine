@@ -300,6 +300,14 @@ def conceal_from(game, seat: int) -> None:
       damage a rehearsed Lightning Bolt would deal it, and what survives is
       the card it hid (``tests/ai/test_ons_w1g1_face_down_concealment.py``).
       The seat's own face-down objects are its own to look at and stay.
+    * **and every exiled card face down to the seat** (CR 406.3,
+      ``linked_exile.face_down_exiled_cards``) is pooled with its owner's
+      hidden cards and dealt back into its place, the records that speak for
+      it following the card dealt (:func:`_deal_into_exile`) — the seat's own
+      cards included: what an opponent's Shared Fate exiled off its library
+      it may not look at, and a copy that kept them knew which of its cards
+      that opponent could cast. A card the seat may look at (Shared Fate's
+      exiler, Gustha's Scepter's controller) stays.
 
     What this does not know is what the seat has *been shown and remembers*:
     a card it looked at with a Duress of its own two turns ago, one it
@@ -344,6 +352,11 @@ def conceal_from(game, seat: int) -> None:
         # cards are hidden and of nothing about where.
         face_down = [] if index == seat else _face_down_objects(game, index)
         hidden = [*hidden, *(hidden_card_of(obj) for obj in face_down)]
+        # CR 406.3: the cards in this player's exile that are face down to the
+        # seat — its own included, exiled off its library by an opponent's
+        # Shared Fate, which it may not look at — pooled the same way.
+        exiled = _face_down_exile_slots(game, index, seat)
+        hidden = [*hidden, *(card for _slot, card in exiled)]
         hidden.sort(key=_card_order)
         random.shuffle(hidden)
         if deals_hand:
@@ -352,7 +365,44 @@ def conceal_from(game, seat: int) -> None:
             hidden = hidden[held:]
         for obj in face_down:
             obj.card = face_down_card(hidden.pop(_could_be_hidden_by(hidden, obj)))
+        for slot, card in exiled:
+            _deal_into_exile(game, index, slot, card, hidden.pop())
         library[:] = [*seen_on_top, *hidden]
+
+
+def _face_down_exile_slots(game, index: int, seat: int) -> "list[tuple[int, object]]":
+    """``(position, card)`` for each card in *index*'s exile that is face down
+    to *seat* (``linked_exile.face_down_exiled_cards``, which knows who may
+    look: Shared Fate's exiler, Gustha's Scepter's controller), in exile
+    order — a function of where the cards are in a zone everyone can count,
+    never of what they are."""
+    from .linked_exile import face_down_exiled_cards
+
+    hidden = face_down_exiled_cards(game, index, viewer_index=seat)
+    return [
+        (slot, card) for slot, card in enumerate(game.players[index].exile)
+        if any(card is each for each in hidden)
+    ]
+
+
+def _deal_into_exile(game, index: int, slot: int, old, dealt) -> None:
+    """Put *dealt* in *old*'s place in *index*'s exile, as a new object
+    (``exiled_records.distinct_exile_object``: every record of an exiled card
+    is keyed by the object), and point every record of *old* at it — the
+    exiling permanents' linked entries and the game's register — so what the
+    records grant (Shared Fate's play, a look) follows the card dealt."""
+    from .exiled_records import RECORDS_ATTR, distinct_exile_object
+    from .linked_exile import linked_entries
+
+    new = distinct_exile_object(dealt)
+    game.players[index].exile[slot] = new
+    for permanent in game.all_permanents():
+        for entry in linked_entries(permanent):
+            if entry.get("card") is old:
+                entry["card"] = new
+    for record in getattr(game, RECORDS_ATTR, ()) or ():
+        if record.card is old:
+            record.card = new
 
 
 def _could_be_hidden_by(pool: list, obj) -> int:
