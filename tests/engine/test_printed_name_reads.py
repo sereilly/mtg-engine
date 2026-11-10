@@ -60,7 +60,10 @@ no card to verify it is a guess. They fall into two families:
   * **Wire/test addressing** (``mixins/control_seam.py``'s
     ``_find_controlled_permanent``, ``phases/beginning_phase.py``,
     ``web/action_helpers.py``): a client or a test names a permanent by the
-    printed name serialization gave it. Same protocol both ways.
+    printed name serialization gave it. Same protocol both ways. The web's
+    half is one read now: serialization sends a copy's *effective* name as
+    ``name`` (CR 707.2) and the printed one as ``printed_name``, and
+    ``web/action_helpers._answers_to_name`` takes either.
   * **Uncopyable name-keyed statics** (``phases/draw_step.py`` on Island
     Sanctuary): an enchantment, and the pool has no way to copy an enchantment
     or change any permanent's name — so the effective-name spelling would be a
@@ -157,7 +160,7 @@ PRINTED_NAME_DISPATCH_BASELINE: dict[str, int] = {
     # Wire/test addressing by the printed name serialization handed out.
     "engine/mixins/control_seam.py": 2,
     "engine/phases/beginning_phase.py": 2,
-    "web/action_helpers.py": 2,
+    "web/action_helpers.py": 1,
     # Island Sanctuary (an enchantment nothing in the pool can copy/rename).
     # ``web/turn_steps.py`` held a second copy of this read and reached zero at
     # R3 J8: it asks ``Game.may_skip_draw_for_protection``, which is this one.

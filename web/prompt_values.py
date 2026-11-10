@@ -97,7 +97,7 @@ def _entry_discard_toll(ctx: PromptContext, choices: list) -> dict:
     indices = [i for i in (choice.data.get("hand_indices") or []) if 0 <= i < len(player.hand)]
     return {
         "player_seat": choice.player_index,
-        "card_name": choice.data["permanent"].card.name,
+        "card_name": choice.data["permanent"].effective_card.name,
         "hand_indices": indices,
         "cards": [ctx.owned_card(player.hand[i], player) for i in indices],
     }
@@ -115,7 +115,7 @@ def _draw_becomes_counter(ctx: PromptContext, choices: list) -> dict:
     return {
         "player_seat": choice.player_index,
         "counter": choice.data["counter"],
-        "source_name": source.card.name if source is not None else "",
+        "source_name": source.effective_card.name if source is not None else "",
         "options": list(choice.options),
         "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
     }
@@ -134,7 +134,7 @@ def _reveal_until_kind_draw(ctx: PromptContext, choices: list) -> dict:
     source = ctx.game.permanent_by_id(int(choice.data["source_id"]))
     return {
         "player_seat": choice.player_index,
-        "source_name": source.card.name if source is not None else "",
+        "source_name": source.effective_card.name if source is not None else "",
         "options": list(choice.options),
         "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
     }
@@ -156,7 +156,7 @@ def _skip_draw(ctx: PromptContext, choices: list) -> dict:
     source = ctx.game.permanent_by_id(int(choice.data["source_id"]))
     return {
         "player_seat": choice.player_index,
-        "source_name": source.card.name if source is not None else "",
+        "source_name": source.effective_card.name if source is not None else "",
         "options": list(choice.options),
         "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
         "library_size": len(ctx.game.players[choice.player_index].library),
@@ -201,7 +201,7 @@ def _pile_top_draw(ctx: PromptContext, choices: list) -> dict:
     source = ctx.game.permanent_by_id(int(choice.data["source_id"]))
     held = choice.data.get("_source")
     name = (
-        source.card.name if source is not None
+        source.effective_card.name if source is not None
         else getattr(getattr(held, "card", None), "name", "")
     )
     return {
@@ -462,7 +462,7 @@ def _color_set_choice(ctx: PromptContext, choices: list) -> dict:
     return {
         "player_index": choices[0].player_index,
         "card_name": data.get("card_name", ""),
-        "permanent_name": getattr(getattr(permanent, "card", None), "name", ""),
+        "permanent_name": getattr(getattr(permanent, "effective_card", None), "name", ""),
         "colors": list(data.get("colors") or []),
         "several": bool(data.get("several")),
     }

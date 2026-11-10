@@ -343,7 +343,7 @@ def _tap_any_number(ctx: PromptContext, choices: list) -> dict:
             "seat": choice.player_index,
             "index": ctx.game.battlefield_index_of(perm),
             "id": ctx.game.permanent_id_of(perm),
-            "name": perm.card.name,
+            "name": perm.effective_card.name,
         }
         for perm in ctx.game.live_tap_any_number(choice)
     ]
@@ -371,7 +371,7 @@ def _untap_up_to(ctx: PromptContext, choices: list) -> dict:
             "seat": seat,
             "index": index,
             "id": ctx.game.permanent_id_of(perm),
-            "name": perm.card.name,
+            "name": perm.effective_card.name,
             "tapped": perm.tapped,
         }
         for seat, player in enumerate(ctx.game.players)
@@ -504,7 +504,7 @@ def _aggregate_sacrifice(ctx: PromptContext, choices: list) -> dict:
         "choices": [
             {
                 "permanent_id": perm.permanent_id,
-                "name": perm.card.name,
+                "name": perm.effective_card.name,
                 "amount": ctx.game.aggregate_sacrifice_total(
                     [perm], characteristic
                 ),
@@ -556,7 +556,7 @@ def _opponent_damage(ctx: PromptContext, choices: list) -> dict:
                 targets.append(
                     {"kind": "permanent", "seat": seat, "index": idx,
                      "id": perm.permanent_id,
-                     "key": f"{seat}-{idx}", "name": perm.card.name}
+                     "key": f"{seat}-{idx}", "name": perm.effective_card.name}
                 )
     return {
         "card_name": data["card_name"],
@@ -605,9 +605,13 @@ def _mode_choice(ctx: PromptContext, choices: list) -> dict:
     # alone do not: Fatespinner's "draw step / main phase / combat phase" are
     # the step or phase the chooser skips this turn (``skip_next_step`` /
     # ``skip_next_phase`` alternatives), and "pick a mode" said none of that.
+    # ``title`` is the same answer for the panel's heading, which said
+    # "Choose one" over it — a heading that names the choice's form (one of
+    # several) rather than what is being chosen.
     kinds = {getattr(mode, "kind", None) for mode in data.get("_modes") or ()}
     if kinds and kinds <= {"skip_next_step", "skip_next_phase"}:
         payload["question"] = "Choose the step or phase you skip this turn."
+        payload["title"] = "skip a step or phase"
     # …and whose ability makes them choose, when it is not theirs (CR 700.2e's
     # shape on a trigger: "that player chooses", Fatespinner in its opponent's
     # upkeep).
@@ -718,7 +722,7 @@ def _loyalty_recipient(ctx: PromptContext, choices: list) -> dict:
                 "seat": seat,
                 "index": index,
                 "id": ctx.game.permanent_id_of(perm),
-                "name": perm.card.name,
+                "name": perm.effective_card.name,
                 "loyalty": int(perm.metadata.get("loyalty_counters", 0)),
             }
             for seat, player in enumerate(ctx.game.players)
@@ -749,7 +753,7 @@ def _counter_distribution(ctx: PromptContext, choices: list) -> dict:
             "seat": ctx.game.controller_index_of(perm),
             "index": ctx.game.battlefield_index_of(perm),
             "id": ctx.game.permanent_id_of(perm),
-            "name": perm.card.name,
+            "name": perm.effective_card.name,
         })
     return {
         "player_seat": choice.player_index,
@@ -787,7 +791,7 @@ def _permanent_choice(ctx: PromptContext, choices: list) -> dict:
                 "seat": seat,
                 "index": index,
                 "id": ctx.game.permanent_id_of(perm),
-                "name": perm.card.name,
+                "name": perm.effective_card.name,
             }
             for seat, player in enumerate(ctx.game.players)
             for index, perm in enumerate(player.battlefield)
@@ -827,7 +831,7 @@ def _permanent_set_choice(ctx: PromptContext, choices: list) -> dict:
                 "seat": seat,
                 "index": index,
                 "id": ctx.game.permanent_id_of(perm),
-                "name": perm.card.name,
+                "name": perm.effective_card.name,
             }
             for seat, player in enumerate(ctx.game.players)
             for index, perm in enumerate(player.battlefield)
@@ -920,7 +924,7 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
                 "seat": choice.player_index,
                 "index": index,
                 "id": ctx.game.permanent_id_of(perm),
-                "name": perm.card.name,
+                "name": perm.effective_card.name,
                 "fills": ctx.game.keep_slots_answered_by(perm, printed),
             }
             for index, perm in enumerate(ctx.game.players[choice.player_index].battlefield)

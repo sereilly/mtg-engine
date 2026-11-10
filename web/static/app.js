@@ -921,9 +921,12 @@ function buildCombatDamageStrikes(prev, firstStrikePass, regularPass, sentPastBl
     const deathtouch = cardHasKeyword(attackerCard, "deathtouch");
     const trample = cardHasKeyword(attackerCard, "trample");
 
-    const pastCount = past.get(attackerCard.name) || 0;
+    // The log line may name a copy by either of its names (the copied
+    // object's, CR 707.2, or the card it is printed on).
+    const pastName = past.get(attackerCard.name) ? attackerCard.name : physicalCardName(attackerCard);
+    const pastCount = past.get(pastName) || 0;
     const goesPast = attackerStrikes && (blockerIndices.length > 0 || attackerCard.blocked) && pastCount > 0;
-    if (goesPast) past.set(attackerCard.name, pastCount - 1);
+    if (goesPast) past.set(pastName, pastCount - 1);
 
     let powerLeft = attackerStrikes && !goesPast ? power : 0;
     const blockers = [];
@@ -4605,6 +4608,9 @@ function getFaceDownLookInfo(state = currentState) {
 //   playerSeats    seats whose name/life pill may be clicked
 //   selectedKeys   permanents already picked (multi-pick prompts), for the
 //                  canvas' "selected" highlight
+//   isFull         (idx) => true once a multi-pick takes no more picks of the
+//                  kind the permanent at idx is (forced sacrifice's count,
+//                  Balance's lands or creatures); absent, never full
 //   onPermanent / onPlayer  what a legal click submits
 //   stackIndices   top-first stack positions that may be clicked (a trigger
 //                  whose target is a spell — Mystic Snake); onStack submits one
@@ -4617,12 +4623,42 @@ function promptTargeting(spec) {
     playerSeats: new Set(spec.playerSeats || []),
     stackIndices: new Set(spec.stackIndices || []),
     selectedKeys: spec.selectedKeys || [],
+    // A prompt that picks several (it keeps `selectedKeys`) — the one kind a
+    // click on a grouped stack walks through (`nextUnpickedPileMember`) —
+    // and whether it can take another pick for the permanent at a slot.
+    multiPick: Array.isArray(spec.selectedKeys),
+    isFull: spec.isFull || (() => false),
     onPermanent: spec.onPermanent || (() => {}),
     onPlayer: spec.onPlayer || (() => {}),
     onStack: spec.onStack || (() => {}),
     fallThroughOnInvalid: !!spec.fallThroughOnInvalid,
     invalidHint: spec.invalidHint || "That isn't a legal choice for this prompt.",
   };
+}
+
+// The slot a click on a grouped stack picks during a multi-pick.
+//
+// "Sacrifice three Forests" (8ED's Primeval Force) over the canvas's ×3
+// Forest stack: the stack is ONE card on screen, its other members thin
+// strips behind the front, so a click on it toggled the front card and the
+// person had to find the strips for the rest — "Selected 2/3" said it worked,
+// and nothing said where the next card was. A click on a stack member that is
+// already picked now picks the stack's next unpicked member the prompt
+// offers, front to back, while the prompt can take another
+// (`isFull(idx)`); a click on an unpicked member picks it, as always, and once
+// nothing in the stack is left to pick (or the prompt is full) the click
+// toggles what it hit — which is how a pick is taken back. Only an identity
+// pile walks (`getPileMembers`): an Aura fan's members are different cards.
+function nextUnpickedPileMember(cardSeat, permanentIndex, { offered, picked, isFull }) {
+  const key = `${cardSeat}-${permanentIndex}`;
+  if (!picked.has(key) || !battlefieldCanvas?.getPileMembers || isFull(permanentIndex)) {
+    return permanentIndex;
+  }
+  for (const member of battlefieldCanvas.getPileMembers(cardSeat, permanentIndex)) {
+    const memberKey = `${member.seat}-${member.idx}`;
+    if (member.seat === cardSeat && offered(memberKey) && !picked.has(memberKey)) return member.idx;
+  }
+  return permanentIndex;
 }
 
 // Submit a prompt answer, surfacing a rejection as an action hint rather than an
@@ -4792,6 +4828,7 @@ function getPromptBoardTargeting(state = currentState) {
         else if (sacrificeSelection.length < need) sacrificeSelection.push(id);
         refreshPromptSelection(state);
       },
+      isFull: () => sacrificeSelection.length >= need,
       invalidHint: "That permanent can't be sacrificed.",
     });
   }
@@ -6472,6 +6509,10 @@ function balanceBoardTargeting(state, info) {
       if (at >= 0) picks.splice(at, 1);
       else if (picks.length < need[kind]) picks.push(id);
       refreshPromptSelection(state);
+    },
+    isFull: (idx) => {
+      const kind = kindByIndex.get(Number(idx));
+      return !kind || balanceSelection[kind].length >= need[kind];
     },
     invalidHint: "Balance only takes the highlighted lands and creatures.",
   });
@@ -9490,7 +9531,12 @@ function applyModeChoicePrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  title.textContent = "Choose one";
+  // What is being chosen, when the server can say (`title`: Fatespinner's
+  // "skip a step or phase"), in the shape the other choice prompts' headings
+  // take ("Shared Fate — exile instead of drawing"); else the form of it.
+  title.textContent = info.title
+    ? `${info.card_name || "Triggered ability"} — ${info.title}`
+    : "Choose one";
   const targeted = (info.modes || []).some((mode) => Array.isArray(mode.targets));
   // What the choice is for, when the server can say (`question`: Fatespinner's
   // step or phase to skip) and whose ability asks it of this seat
@@ -21588,6 +21634,18 @@ function normalizeCardName(card) {
   return card.name || "";
 }
 
+// The card a permanent is printed on, where its `name` is the copied object's
+// (CR 707.2: Sculpting Steel copying Iron Myr is named Iron Myr, and
+// `printed_name` says Sculpting Steel). A card that moves between zones is the
+// physical card — the copy effect ends as it leaves (CR 400.7) — so a match
+// ACROSS zones (a bounce flying to hand, the multiset diffs below) reads this.
+// Everything a person reads keeps `name`. A hand or graveyard card, and a
+// permanent that copies nothing, have one name.
+function physicalCardName(card) {
+  if (!card || typeof card === "string") return normalizeCardName(card);
+  return card.printed_name || card.name || "";
+}
+
 function normalizeImageUri(card) {
   if (!card || typeof card === "string") return null;
   return card.image_uri || null;
@@ -23291,6 +23349,11 @@ function renderZoneCards(
           updateActionHint("Finish the current cast before starting another.", true);
           return;
         }
+        // The play leaves the panel: what it asks next (a target, a mode, the
+        // payment) is on the board the panel covers, and once the card is
+        // played the panel stood over the piles listing what was left
+        // ("Opponent Exile (0)"). A graveyard target re-opens it on its own.
+        closeZoneReveal();
         // The card a madness offer is about: its cast answers the offer, so it
         // goes out as `madness_cast_confirm` rather than as a `cast` the
         // server would refuse mid-resolution.
@@ -23525,32 +23588,104 @@ async function beginZoneCast(card, zone, entry = null, way = null, { madnessSlot
 // closing again once the target is picked or the cast is cancelled.
 let zoneRevealAutoOpened = false;
 
+// Which section of the panel shows *zoneSeat*'s zone: the viewer's own
+// ("self-"), the classic opponent's ("opp-", the static sections in
+// index.html), or — in a Free-For-All — a corner seat's own ("seat<N>-",
+// built per seat by `renderFfaZoneSections`). Every opponent used to share
+// "opp-", which renders the classic opponent's cards: a click on a corner
+// seat's exile pile opened "Opponent Exile" listing somebody else's exile,
+// and a graveyard target in a corner seat's pile was never shown at all.
 function zoneRevealSectionFor(zoneSeat, kind) {
-  const side = zoneSeat === seat ? "self" : "opp";
-  return `${side}-${kind}`;
+  if (zoneSeat === seat) return `self-${kind}`;
+  if (zoneSeat === classicOppSeat(currentState, seat ?? 0)) return `opp-${kind}`;
+  return `seat${zoneSeat}-${kind}`;
+}
+
+const ZONE_REVEAL_KIND_LABELS = {
+  graveyard: "Graveyard",
+  exile: "Exile",
+  ante: "Ante",
+  command: "Command Zone",
+  sideboard: "Cards Outside the Game",
+};
+
+// Whose zone a section is, as a player reads it: "Your", or — where more
+// than one opponent could be meant (a Free-For-All) — the seat's name, else
+// "Opponent".
+function zoneRevealOwnerLabel(section, state = currentState) {
+  const side = String(section).split("-")[0];
+  if (side === "self") return "Your";
+  const ownerSeat = side === "opp"
+    ? classicOppSeat(state, seat ?? 0)
+    : Number(side.slice("seat".length));
+  const players = Array.isArray(state?.players) ? state.players : [];
+  if (side === "opp" && players.length <= 2) return "Opponent";
+  return `${players[ownerSeat]?.name || `Seat ${ownerSeat + 1}`}'s`;
+}
+
+function zoneRevealTitleFor(section, state = currentState) {
+  const kind = String(section).split("-").slice(1).join("-");
+  return `${zoneRevealOwnerLabel(section, state)} ${ZONE_REVEAL_KIND_LABELS[kind] || "Zone"}`;
+}
+
+// The panel's sections for every seat that is neither the viewer nor the
+// classic opponent: a Free-For-All's corner seats, one section per zone the
+// canvas draws a pile for. Built here rather than in index.html because how
+// many there are is the table's; dropped again when the seat is no longer
+// one (a two-seat game has none). Their graveyard and exile are clickable
+// exactly as the classic opponent's are (a cast permission over another
+// player's exile, a graveyard target).
+const FFA_ZONE_REVEAL_KINDS = ["graveyard", "exile", "command", "ante"];
+
+function renderFfaZoneSections(state, viewerSeat, oppSeat) {
+  const host = q("zoneRevealSections");
+  if (!host) return;
+  const players = Array.isArray(state.players) ? state.players : [];
+  const extra = players.map((_, idx) => idx).filter((idx) => idx !== viewerSeat && idx !== oppSeat);
+  const wanted = new Set(extra.flatMap((idx) => FFA_ZONE_REVEAL_KINDS.map((kind) => `seat${idx}-${kind}`)));
+  host.querySelectorAll(".zone-reveal-section[data-ffa-seat]").forEach((el) => {
+    if (!wanted.has(el.dataset.zone)) el.remove();
+  });
+  for (const idx of extra) {
+    const player = players[idx] || {};
+    for (const kind of FFA_ZONE_REVEAL_KINDS) {
+      const zone = `seat${idx}-${kind}`;
+      let section = host.querySelector(`.zone-reveal-section[data-zone="${zone}"]`);
+      if (!section) {
+        section = document.createElement("div");
+        section.className = "zone-reveal-section hidden";
+        section.dataset.zone = zone;
+        section.dataset.ffaSeat = String(idx);
+        section.innerHTML =
+          `<p class="side-label"><span class="zone-reveal-owner"></span> ${ZONE_REVEAL_KIND_LABELS[kind]}` +
+          ` (<span class="zone-reveal-count">0</span>)</p>` +
+          `<div id="ffaZoneCards_${idx}_${kind}" class="zone-cards"></div>`;
+        host.appendChild(section);
+      }
+      const cards = (kind === "command" ? player.command_zone : player[kind]) || [];
+      section.querySelector(".zone-reveal-owner").textContent = zoneRevealOwnerLabel(zone, state);
+      section.querySelector(".zone-reveal-count").textContent = String(cards.length);
+      const opened = kind === "graveyard" || kind === "exile";
+      renderZoneCards(`ffaZoneCards_${idx}_${kind}`, cards, opened ? { zoneSeat: idx, zoneKind: kind } : {});
+    }
+  }
+  // The classic opponent's static sections say whose they are too, once
+  // "Opponent" could mean more than one seat.
+  document.querySelectorAll('[data-zone-owner="opp"]').forEach((el) => {
+    el.textContent = zoneRevealOwnerLabel("opp-graveyard", state);
+  });
 }
 
 function openZoneReveal(sections, { auto = false } = {}) {
   const overlay = q("zoneRevealOverlay");
   if (!overlay || !sections || !sections.length) return;
-  const titles = {
-    "self-graveyard": "Your Graveyard",
-    "self-exile": "Your Exile",
-    "self-ante": "Your Ante",
-    "self-command": "Your Command Zone",
-    "self-sideboard": "Your Cards Outside the Game",
-    "opp-graveyard": "Opponent Graveyard",
-    "opp-exile": "Opponent Exile",
-    "opp-ante": "Opponent Ante",
-    "opp-command": "Opponent Command Zone",
-  };
   overlay.querySelectorAll(".zone-reveal-section").forEach((el) => {
     el.classList.toggle("hidden", !sections.includes(el.dataset.zone));
   });
   q("zoneRevealTitle").textContent =
-    sections.length === 1 ? (titles[sections[0]] || "Zone") : "Graveyards";
+    sections.length === 1 ? zoneRevealTitleFor(sections[0]) : "Graveyards";
   // Anchor near the matching pile column: opponent zones top-left, own bottom-left.
-  const anchorTop = sections[0].startsWith("opp-");
+  const anchorTop = !sections[0].startsWith("self-");
   overlay.classList.toggle("zone-reveal--top", anchorTop);
   overlay.classList.toggle("zone-reveal--bottom", !anchorTop);
   overlay.classList.remove("hidden");
@@ -26187,6 +26322,7 @@ function renderBoard(state) {
   renderZoneCards("oppExileCards", opp.exile || [], { zoneSeat: oppSeat, zoneKind: "exile" });
   renderZoneCards("oppAnteCards", opp.ante || []);
   renderZoneCards("oppCommandCards", opp.command_zone || []);
+  renderFfaZoneSections(state, viewerSeat, oppSeat);
 
   renderMana("selfMana", me.mana_pool, seat, me.restricted_mana);
   renderMana("oppMana", opp.mana_pool, oppSeat, opp.restricted_mana);
@@ -26374,12 +26510,12 @@ function addedHandIndices(prevHand, nextHand) {
 function removedZoneEntries(before, after) {
   const afterCounts = new Map();
   for (const c of after || []) {
-    const k = normalizeCardName(c);
+    const k = physicalCardName(c);
     afterCounts.set(k, (afterCounts.get(k) || 0) + 1);
   }
   const out = [];
   (before || []).forEach((card, index) => {
-    const k = normalizeCardName(card);
+    const k = physicalCardName(card);
     const n = afterCounts.get(k) || 0;
     if (n > 0) afterCounts.set(k, n - 1);
     else out.push({ index, card });
@@ -26454,8 +26590,8 @@ function collectHandArrivalFlights(prev, next, viewerSeat) {
         // Prefer this seat's own zones, then anyone else's: a card returns to
         // its OWNER's hand, so an opponent's board can be where it comes from.
         source =
-          takeRemoval((r) => r.seat === s && normalizeCardName(r.card) === name) ||
-          takeRemoval((r) => normalizeCardName(r.card) === name);
+          takeRemoval((r) => r.seat === s && physicalCardName(r.card) === name) ||
+          takeRemoval((r) => physicalCardName(r.card) === name);
         if (!source && draws > 0) {
           draws -= 1;
           source = { seat: s, zone: "library", index: null, card: null };
@@ -27328,7 +27464,14 @@ function initBattlefieldCanvas() {
         const boardTargeting = activePromptBoardTargeting(currentState);
         if (boardTargeting && boardTargeting.permanentKeys.size) {
           if (boardTargeting.permanentKeys.has(`${cardSeat}-${permanentIndex}`)) {
-            boardTargeting.onPermanent(cardSeat, permanentIndex);
+            const pick = boardTargeting.multiPick
+              ? nextUnpickedPileMember(cardSeat, permanentIndex, {
+                offered: (key) => boardTargeting.permanentKeys.has(key),
+                picked: new Set(boardTargeting.selectedKeys),
+                isFull: boardTargeting.isFull,
+              })
+              : permanentIndex;
+            boardTargeting.onPermanent(cardSeat, pick);
             return;
           }
           if (!boardTargeting.fallThroughOnInvalid) {
@@ -27365,12 +27508,28 @@ function initBattlefieldCanvas() {
             permanentIndex,
           });
           if (!valid) { updateActionHint("That is not a valid target.", true); return; }
+          // Several targets out of one grouped stack ("destroy two target
+          // lands" over a ×3 Forest stack) walk it as a multi-pick prompt does.
+          const castPicks = (picks, full) => nextUnpickedPileMember(cardSeat, permanentIndex, {
+            offered: (key) => !pendingCastTarget.validKeys || pendingCastTarget.validKeys.has(key),
+            picked: new Set((picks || []).map((t) => `${t.seat}-${t.idx}`)),
+            isFull: () => full,
+          });
           if (pendingCastTarget.targetKind === "divided") {
-            toggleDividedCreatureTarget(cardSeat, permanentIndex);
+            toggleDividedCreatureTarget(
+              cardSeat,
+              castPicks(pendingCastTarget.dividedTargets, dividedPicksAreFull(pendingCastTarget)),
+            );
             return;
           }
           if (pendingCastTarget.targetKind === "several") {
-            toggleSeveralTarget(cardSeat, permanentIndex);
+            toggleSeveralTarget(
+              cardSeat,
+              castPicks(
+                pendingCastTarget.severalTargets,
+                pendingCastTarget.severalTargets.length >= pendingCastTarget.maxTargets,
+              ),
+            );
             return;
           }
           if (pendingCastTarget.targetKind === "roles") {
