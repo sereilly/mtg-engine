@@ -26,9 +26,9 @@ the static ability beside it.
 **The static half is a CR 614 replacement**, registered in
 ``engine/replacements/zone_changes.py`` beside the two that already replace where a
 discarded card goes (Dodecapod's battlefield, Library of Leng's library top),
-and asked by the chosen-discard seam ``handlers/discards._resolve_one_discard``
-for the reason that seam already asks Dodecapod's. :func:`exile_madness_card`
-is the whole effect, so both seams run one body. **The discard still happens**
+and asked by both discard seams through the one destination process
+(``Game.discarded_card_destination``) — a forced discard and a chosen one
+alike. :func:`exile_madness_card` is the whole effect. **The discard still happens**
 (it is a discard for every "whenever a player discards" watcher); only the
 destination changes, and the trigger is announced from that destination.
 
@@ -236,8 +236,8 @@ def exile_madness_card(game, player, card) -> bool:
     put its "When this card is exiled this way" ability on the stack.
     Returns whether it applied; False leaves the caller's default move.
 
-    One body for both discard seams (the ``discard`` event and the chosen
-    discard), for ``replacements.zone_changes.discarded_onto_battlefield``'s reason.
+    The ``discard`` event's body, which both discard seams raise
+    (``Game.discarded_card_destination``).
 
     The trigger's controller is the card's **owner** ("its owner may cast
     it"), which is the discarding player: a hand holds only its owner's cards

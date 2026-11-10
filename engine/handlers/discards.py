@@ -363,8 +363,11 @@ def _resolve_one_discard(
     game: Game, player_index: int, hand_index: int, to_library: bool,
     *, took: list | None = None, cause_seat: int | None = None,
 ) -> bool:
-    """Move one chosen card from a player's hand to their graveyard (or, with
-    Library of Leng, the top of their library). Returns False on a bad index.
+    """Discard one chosen card from a player's hand: onto the top of their
+    library when the prompt offered Library of Leng's and the seat took it,
+    and otherwise wherever the discard's one CR 616.1 process sends it
+    (``Game.discarded_card_destination`` — the graveyard, or what a
+    replacement says instead). Returns False on a bad index.
 
     *took* collects **which** card went, for the sentence behind the discard
     that asks ("You gain 3 life for each land card discarded this way",
@@ -402,29 +405,46 @@ def _resolve_one_discard(
             + (f" ({by})" if by else "")
         )
     else:
-        # CR 614: "If a spell or ability an opponent controls causes you to
-        # discard this card, put it onto the battlefield … instead of putting
-        # it into your graveyard." (Dodecapod.) Asked here because this seam
-        # performs Library of Leng's replacement itself, by offering the
-        # destination, and so never runs the ``discard`` event `_discard_card`
-        # does — one predicate and one body, read by both. A seat that chose
-        # the library top above applied the Library's replacement first
-        # (CR 616.1), after which there is no graveyard move left to replace.
-        from ..madness import exile_madness_card
-        from ..replacements.zone_changes import discarded_onto_battlefield
-
-        # …and madness's (CR 702.35a: "…exiles it instead of putting it into
-        # their graveyard"), for the same reason and through the same body the
-        # ``discard`` event runs (`engine/madness.py`). In the event's own
-        # order: Dodecapod's battlefield first, then the exile.
-        if not discarded_onto_battlefield(
-            game, player, card, game.discard_cause_seat(cause_seat)
-        ) and not exile_madness_card(game, player, card):
+        # **Where the card goes is one CR 616.1 process** — the forced
+        # discard's own (``Game.discarded_card_destination``): Dodecapod's
+        # battlefield, madness's exile, Library of Leng's library top (the
+        # ``discard`` event) and Forbidden Crypt's or Yawgmoth's Will's exile,
+        # Legacy Weapon's shuffle (the graveyard move it joins), the discarding
+        # player choosing which applies first (616.1e) — asked of a person,
+        # every other seat taking the event's own effects first. This branch
+        # ran Dodecapod, then madness, then the graveyard seam, so neither of
+        # the first two was ever asked against a graveyard effect on a discard
+        # the player chose.
+        #
+        # *leng_declined* when this prompt offered the library top and the
+        # seat did not take it: the Library's "you may" had its one
+        # opportunity (CR 614.5). A discard no prompt offered it on — the
+        # caster's pick out of a revealed hand (Duress, Coercion), Chains of
+        # Mephistopheles' — is still an effect's discard, and the Library
+        # applies to it whoever controls the effect (its 2004-10-04 ruling),
+        # so the process offers it there.
+        cause = game.discard_cause_seat(cause_seat)
+        deck = len(player.library)
+        announced_by_effect = game.discard_effect_applies(
+            player, card, cause, leng_declined=allow_top,
+        )
+        landed = game.discarded_card_destination(
+            player, card, cause, leng_declined=allow_top,
+        )
+        if landed:
             # The object the graveyard now holds is what "that card" names
             # from here on (CR 400.7, ``put_card_into_graveyard``).
-            card = game.put_card_into_graveyard(player, card) or card
+            card = landed
+        if not announced_by_effect:
+            # The discard's own effects each say what they did with the card
+            # ("discarded X into exile (madness)"); a card none of them could
+            # take is named here, whether it reached the graveyard or a
+            # graveyard effect sent it elsewhere.
             game.log.append(f"{player.name} discarded {card.name}")
-        if took is not None:
+        # Counted, not listed, when the Library put it on top unrevealed
+        # (CR 701.9c) — the random discard's rule beside it.
+        hidden = len(player.library) > deck and player.library[0] is card
+        if took is not None and not hidden:
             took.append(card)
     # The discarded card's own trigger (CR 113.6, Psychic Purge — a sorcery
     # whose ability would otherwise function only on the stack, and whose
