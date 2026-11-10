@@ -15,6 +15,7 @@ a limited deck seldom holds two instants it can afford at once.
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import replace
 from unittest import mock
 
 import pytest
@@ -165,7 +166,7 @@ def test_one_announcement_paid_for_two_ways_is_two_rehearsals(pool):
     )
     action = choose_cast_action(game, ME)
     assert action is not None and action.land_tap_indices == (0,)
-    other = ai_policy.replace(action, land_tap_indices=(1,))
+    other = replace(action, land_tap_indices=(1,))
     with _Counted() as tally, ai_rehearsal.deliberating():
         for planned in (action, action, other, other):
             rehearsal = ai_scoring._rehearse_announcement(

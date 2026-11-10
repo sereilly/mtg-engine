@@ -30,6 +30,8 @@ from contextvars import ContextVar
 from itertools import combinations, product
 from dataclasses import replace
 
+from . import ai_cast_trace as cast_trace
+from .ai_cast_score import finished_cast_candidate
 from .ai_weighed_cast import (
     SPELL_TYPES,
     PermittedCast,
@@ -89,8 +91,8 @@ from .ai_scoring import (
     _weighed_through_the_fight,
     _pays_x_in_life,
     _choose_target_for_spell,
-    _score_cast,
     _pick_x_value,
+    not_worth_proposing,
 )
 from .ai_cast_gates import (
     _cast_life_price,
@@ -118,47 +120,6 @@ from .ai_divisions import choose_divided_targets
 from .ai_text_changes import choose_object_or_spell
 
 
-#: What casting from the command zone is worth over casting the same card from
-#: hand: a net card. A command-zone cast spends nothing from hand — the
-#: commander is CR 903.8's standing extra card — and `_score_cast` already
-#: prices a net card at 4.0 (its draw weight), so the same number is used
-#: rather than a second opinion about what a card is worth. The tax needs no
-#: weight of its own: it is generic mana in the cost, so an unaffordable recast
-#: is skipped by the tap planner exactly as any other unaffordable spell is.
-COMMAND_ZONE_CAST_BONUS = 4.0
-
-#: What a cast under a permission that **ends** is worth over the same cast
-#: from hand ("until end of turn, you may play that card": an Elkin Bottle's
-#: card, a graveyard under Yawgmoth's Will). The same net card, for the mirror
-#: reason: a hand card not cast this turn is still in hand next turn, and this
-#: one is not castable at all — so it goes first. **Not** given to a permission
-#: that lasts as long as the card stays put (flashback, CR 702.34a; Yawgmoth's
-#: Agenda): that cast will be there next turn, and it competes with the hand
-#: on what the spell does — a seat with five lands should not flash a Firebolt
-#: back for {4}{R} while it holds a five-drop. A tie between the two goes to
-#: the hand (`ai_policy._is_better_cast`).
-EXPIRING_PERMISSION_BONUS = COMMAND_ZONE_CAST_BONUS
-
-
-def zone_cast_bonus(from_zone: str, under: "PermittedCast | None") -> float:
-    """What a cast out of *from_zone* under *under* is worth over the same
-    cast from hand: `COMMAND_ZONE_CAST_BONUS` from the command zone,
-    `EXPIRING_PERMISSION_BONUS` under a permission that ends, else nothing.
-
-    A fact about **where the cast is made from**, not about what the spell
-    does, so every candidate of one card in one zone carries it alike — a
-    single mode and the entwined cast of every mode (``ai_entwine``) are
-    compared on what each does, and an entwined cast scored without it lost
-    to its own best bullet out of an opened graveyard while it won from the
-    hand (Wail of the Nim, the zone-cast census at Mirrodin's promotion).
-    """
-    if from_zone == "command":
-        return COMMAND_ZONE_CAST_BONUS
-    if under is not None and under.zone != "hand" and under.expires:
-        return EXPIRING_PERMISSION_BONUS
-    return 0.0
-
-
 def _priced_candidate(
     game: Game, seat: int, spell: CardDefinition, zone_index: int, *,
     from_zone: str = "hand", extra_generic: int = 0,
@@ -171,7 +132,12 @@ def _priced_candidate(
             game, seat, spell, zone_index, from_zone=from_zone,
             extra_generic=extra_generic, under=under,
         )
-    if candidate is None or _plan_spends_what_it_names(game, seat, candidate):
+    if candidate is None:
+        return None
+    if _plan_spends_what_it_names(game, seat, candidate):
+        cast_trace.withdrawn(
+            game, candidate, "its payment sacrifices a permanent the cast names",
+        )
         return None
     return candidate
 
@@ -493,9 +459,28 @@ def _cast_candidate_in_each_mode(
         hand = game.players[player_index].hand
         if 0 <= hand_index < len(hand):
             under = hand_waiver(game, player_index, hand[hand_index], card, hand_index)
+    with cast_trace.entry(
+        game, player_index, card, from_zone=from_zone, zone_index=hand_index,
+        permission=under, extra_generic=extra_generic,
+    ) as traced:
+        return traced.returns(_best_of_the_modes(
+            game, player_index, card, hand_index,
+            from_zone=from_zone, extra_generic=extra_generic, under=under,
+        ))
+
+
+def _best_of_the_modes(
+    game: Game, player_index: int, card: CardDefinition, hand_index: int, *,
+    from_zone: str, extra_generic: int, under: "PermittedCast | None",
+) -> CastAction | None:
+    """`_cast_candidate_in_each_mode`'s choice, under the permission it
+    settled on: the best single mode, every mode at once for "choose one or
+    more", or the entwined cast where it beats the best mode."""
     best: CastAction | None = None
     built: list[CastAction] = []
-    for mode_index in _modes_weighed(game, player_index, card):
+    modes = _modes_weighed(game, player_index, card)
+    _note_modes_not_weighed(card, modes)
+    for mode_index in modes:
         with considering_mode(card, mode_index), casting_under(under):
             candidate = _cast_candidate_sized(
                 game, player_index, card, hand_index,
@@ -509,14 +494,14 @@ def _cast_candidate_in_each_mode(
         if best is None or candidate.score > best.score:
             best = candidate
     if len(built) > 1 and compile_card_oracle(card).modes_at_least:
-        return _every_mode_worth_casting(built, best) or best
+        return _every_mode_worth_casting(built, best, game=game, seat=player_index) or best
     if built:
         # CR 702.42a: every mode for the entwine on top, cast only where its
         # rehearsal beats the best single mode (`ai_entwine.entwined_cast`).
         # Weighed under the permission the single modes were (CR 601.3): the
         # price (`ai_payment._cost_for`: nothing under a waiver, so only the
         # entwine is planned), the rehearsal's trip out of the pile and whose
-        # pile it is, and the zone's bonus (`zone_cast_bonus`) all read it.
+        # pile it is, and the zone's bonus (`ai_cast_score`) all read it.
         with casting_under(under):
             entwined = entwined_cast(
                 game, player_index, card, built, best,
@@ -534,6 +519,25 @@ EXTRA_MODE_SCORE = 1.0
 
 
 def _every_mode_worth_casting(
+    built: "list[CastAction]", best: CastAction, *,
+    game: "Game | None" = None, seat: int = 0,
+) -> CastAction | None:
+    """`_one_cast_of_every_mode`, recorded (``ai_cast_trace``) as the
+    candidate it is when *game* is the table being listened to."""
+    with cast_trace.attempt(game, seat, None, variant="every mode"):
+        combined = _one_cast_of_every_mode(built, best)
+        if combined is None:
+            return cast_trace.dropped(
+                "the modes do not share one announcement (several targets, a"
+                " division, an offer, or a different price or X)"
+            )
+        cast_trace.scored_from(game, combined, best, [
+            ("extra modes", EXTRA_MODE_SCORE * (len(built) - 1)),
+        ], combined.score)
+        return combined
+
+
+def _one_cast_of_every_mode(
     built: "list[CastAction]", best: CastAction
 ) -> CastAction | None:
     """One cast naming **every** mode in *built* — "Choose one **or more** —"
@@ -605,6 +609,22 @@ def _modes_weighed(
     if not caster_chooses_a_mode(card):
         return (None,)
     return tuple(game.announceable_modes(player_index, card))
+
+
+def _note_modes_not_weighed(card: CardDefinition, modes: "tuple[int | None, ...]") -> None:
+    """Tell whoever is listening (``ai_cast_trace``) which of *card*'s modes
+    `_modes_weighed` left out: those with no legal announcement now."""
+    if cast_trace.silent() or not caster_chooses_a_mode(card):
+        return
+    left = [
+        index for index in range(len(compile_card_oracle(card).modes))
+        if index not in modes
+    ]
+    if left:
+        cast_trace.note(
+            f"mode{'s' if len(left) > 1 else ''} {', '.join(map(str, left))} not"
+            " weighed: no legal announcement now (Game.announceable_modes)"
+        )
 
 
 def _life_x_sizes(bound: int) -> list[int]:
@@ -702,6 +722,10 @@ def _cast_candidate_offering(
             # Prevent the next 2 damage … if this spell was kicked, prevent
             # the next 4 damage instead" (Orim's Touch) was read twice, every
             # decision of every turn it sat in a hand.
+            cast_trace.note(
+                f"offers {offers} left nothing by the end of the turn: the"
+                " smaller answers were not tried"
+            )
             return None
     return None
 
@@ -845,7 +869,9 @@ def _better_alternative(
             planned=variant,
         )
         if rehearsal is None or not rehearsal.accepted:
+            cast_trace.note(f"alternative cost {index}: not rehearsed or refused")
             continue
+        cast_trace.note(f"alternative cost {index}: swing {rehearsal.swing:+.2f}")
         if best_swing is None or rehearsal.swing > best_swing:
             best, best_swing = variant, rehearsal.swing
     return best if best is not None else action
@@ -915,13 +941,46 @@ def _cast_naming_its_sacrifice(
             planned=variant,
         )
         if rehearsal is None or not _worth_proposing(rehearsal):
+            cast_trace.note(f"sacrifice {victim.card.name}: not worth proposing")
             continue
+        cast_trace.note(f"sacrifice {victim.card.name}: swing {rehearsal.swing:+.2f}")
         if best_swing is None or rehearsal.swing > best_swing:
             best, best_swing = variant, rehearsal.swing
     return best
 
 
 def _cast_candidate_announcing(
+    game: Game,
+    player_index: int,
+    card: CardDefinition,
+    hand_index: int,
+    *,
+    from_zone: str = "hand",
+    extra_generic: int = 0,
+    offers: "dict[str, int] | None" = None,
+) -> CastAction | None:
+    """`_announced_candidate`, as one attempt of the decision's trace
+    (``ai_cast_trace.attempt``): the mode, the offers and the size of an X
+    paid in life it is built at are the ones being weighed."""
+    if cast_trace.silent():
+        return _announced_candidate(
+            game, player_index, card, hand_index,
+            from_zone=from_zone, extra_generic=extra_generic, offers=offers,
+        )
+    asked = _LIFE_X_ASKED.get()
+    with cast_trace.attempt(
+        game, player_index, card, mode_index=_announced_mode(card),
+        offers=offers if _announces_any_offer(card, offers) else None,
+        life_x=asked[1] if asked is not None and asked[0] is card else None,
+        from_zone=from_zone, zone_index=hand_index,
+    ):
+        return _announced_candidate(
+            game, player_index, card, hand_index,
+            from_zone=from_zone, extra_generic=extra_generic, offers=offers,
+        )
+
+
+def _announced_candidate(
     game: Game,
     player_index: int,
     card: CardDefinition,
@@ -961,9 +1020,14 @@ def _cast_candidate_announcing(
         and game.enforce_mana_costs
         and not game._may_play_another_land(player_index)
     ):
-        return None
+        return cast_trace.dropped(
+            "a land, and the seat has no land play left (CR 305.2)"
+        )
     if not _can_cast_with_targets(game, player_index, card):
-        return None
+        return cast_trace.dropped(
+            "no legal announcement: the engine's cast gates refuse it "
+            "(_can_cast_with_targets)"
+        )
     # CR 601.2's printed timing gates ("Cast this spell only during an
     # opponent's turn…"), through the table the cast path itself reads.
     # Asked here for the same reason every other gate in this function is:
@@ -972,7 +1036,10 @@ def _cast_candidate_announcing(
     # did exactly that for ten consecutive turns once the simulator started
     # dealing whole sets.
     if check_cast_timing(game, player_index, (card.oracle_text or "").lower()):
-        return None
+        return cast_trace.dropped(
+            "its printed timing forbids casting it now "
+            "(cast_restrictions.check_cast_timing)"
+        )
 
     # X first: an X-draw spell's target choice depends on how many cards it
     # would draw (a spell that empties your own library is aimed elsewhere),
@@ -981,7 +1048,7 @@ def _cast_candidate_announcing(
         game, player, card, extra_generic, hand_index=spell_hand_index,
     )
     if x_value == 0:
-        return None
+        return cast_trace.dropped("its X would be 0: a price paid for nothing")
 
     # CR 601.2h's printed **additional** costs, asked of the engine's own gate
     # for the reason every gate above is asked here: the cast path refuses a
@@ -1001,7 +1068,9 @@ def _cast_candidate_announcing(
     if not _printed_costs_are_payable(
         game, player_index, card, hand_index, from_zone, x_value, taken=offers
     ):
-        return None
+        return cast_trace.dropped(
+            "its printed additional cost cannot be paid (CR 601.2h)"
+        )
     # ...and what a required alternative cost asks beside its mana (CR 118.9b:
     # "Flashback—{1}{G}, Pay 3 life"), through the gate the cast path refuses
     # with. A cost that is only mana passes it, and its mana is the plan's
@@ -1013,7 +1082,10 @@ def _cast_candidate_announcing(
             player_index, card, under.cost, spell_hand_index=spell_hand_index,
         ) is not None
     ):
-        return None
+        return cast_trace.dropped(
+            "the permission's alternative cost cannot be paid beside its mana"
+            " (CR 118.9b)"
+        )
     # **A cost paid in life is not paid with the seat's last point.** CR 119.4
     # lets a player pay life equal to their total, the gates above accept it,
     # and the cast then ends its caster's game (CR 704.5a): "You may cast this
@@ -1024,7 +1096,9 @@ def _cast_candidate_announcing(
     # a mandatory price is the spell's own, and a seat at four may still judge
     # it worth one. Just never the last.
     if _cast_life_price(card, from_zone, x_value, offers, under) >= player.life > 0:
-        return None
+        return cast_trace.dropped(
+            "a cost paid in life would spend the seat's last point (CR 119.4, 704.5a)"
+        )
     # Whether the mana is there at all, asked **before** any target is
     # weighed. The plan below asks it again with the offers' mana on top and
     # is what the cast is built from; this is the same question about the
@@ -1043,7 +1117,10 @@ def _cast_candidate_announcing(
             or not _alternative_cost_is_payable(game, player_index, card, hand_index)
         )
     ):
-        return None
+        return cast_trace.dropped(
+            "unaffordable: the lands cannot pay the printed cost (with offers "
+            "announced, or with no alternative cost payable)"
+        )
     target = _choose_target_for_spell(card, player_index, game, x_value)
     target_permanent_index: int | list[int] | None = None
     target_permanent_ids: list[int] | None = None
@@ -1059,7 +1136,8 @@ def _cast_candidate_announcing(
     if aura_enchant_noun(card) is not None:
         aura_choice = _choose_aura_target(game, player_index, card)
         if aura_choice is None:
-            return None  # Aura spells require a legal target (Rule 115.1b)
+            # Aura spells require a legal target (Rule 115.1b)
+            return cast_trace.dropped("an Aura with no legal object to enchant (CR 303.4a)")
         target, target_permanent_index = aura_choice
     elif (divided := choose_divided_targets(game, player_index, card, x_value)) is not None:
         # CR 601.2d, and it is the *whole* target choice for a divided spell —
@@ -1072,7 +1150,9 @@ def _cast_candidate_announcing(
             # more). Skipped rather than cast: the cast gate refuses it, and a
             # seat that re-proposes a refused card every turn is what
             # `simulate_ai_games.py`'s `refused_casts` counts.
-            return None
+            return cast_trace.dropped(
+                "a divided spell with no lawful division (CR 601.2d)"
+            )
         divided_targets = list(divided)
     else:
         roles = _choose_role_targets(game, player_index, card)
@@ -1082,7 +1162,9 @@ def _cast_candidate_announcing(
                 # rather than cast: CR 601.2c needs every role filled, and
                 # the cast gate would refuse it — an AI turn spent on an
                 # action the game then rejects.
-                return None
+                return cast_trace.dropped(
+                    "a spell naming roles with no legal chain of targets (CR 601.2c)"
+                )
             (
                 target, target_permanent_index, target_permanent_ids,
                 role_stack_index, role_refs,
@@ -1094,7 +1176,10 @@ def _cast_candidate_announcing(
             if several == ():
                 # The announced count has no legal set of targets on the side
                 # the effect wants (CR 601.2c). Not proposed.
-                return None
+                return cast_trace.dropped(
+                    "no legal set of targets on the side the effect wants for the "
+                    "announced count (CR 601.2c)"
+                )
             if several is not None:
                 target, target_permanent_index, target_permanent_ids = several
                 # --- W2G2: "X target creatures" names exactly X (CR 601.2c) ---
@@ -1114,7 +1199,10 @@ def _cast_candidate_announcing(
                 # text change's words: the object and the words weighed
                 # together (`ai_text_changes`), or nothing worth the card.
                 if chosen == ():
-                    return None
+                    return cast_trace.dropped(
+                        "no spell or permanent worth naming, or no words worth changing"
+                        " (ai_text_changes)"
+                    )
                 target = chosen.seat
                 target_permanent_index = chosen.permanent_index
                 target_permanent_ids = chosen.permanent_ids
@@ -1128,7 +1216,9 @@ def _cast_candidate_announcing(
                     # The side the effect wants holds no legal target, so the
                     # cast would resolve doing nothing — or doing it to the
                     # caster's own permanent. Skipped rather than proposed.
-                    return None
+                    return cast_trace.dropped(
+                        "no legal target on the side the effect wants"
+                    )
                 if single is not None:
                     target, target_permanent_index, target_permanent_ids = single
     # "Exile target card from a graveyard" (Coffin Purge): whose graveyard,
@@ -1148,7 +1238,10 @@ def _cast_candidate_announcing(
         target, target_permanent_index, target_permanent_ids, divided_targets,
     )
     if aimed is None:
-        return None
+        return cast_trace.dropped(
+            "it cannot obey what an opponent's permanent demands of its targets "
+            "(Standard Bearer)"
+        )
     target, target_permanent_index, target_permanent_ids, divided_targets = aimed
     # "Destroy target artifact **with mana value X**" (Detonate): the target
     # fixes X, and the cast gate refuses an X that does not match it. X was
@@ -1165,13 +1258,17 @@ def _cast_candidate_announcing(
     if not _caster_can_make_its_sacrifices(game, player_index, card):
         # "Sacrifice a creature. Rupture deals damage equal to that creature's
         # power…": with nothing to sacrifice the whole resolution is nothing.
-        return None
+        return cast_trace.dropped(
+            "it cannot make the sacrifice its own resolution asks for"
+        )
     if _entry_gate_gives_back_more_than_it_brings(game, player_index, card):
         # "When this creature enters, return a red or green creature you
         # control to its owner's hand" with no other such creature — the cast
         # ends with the card back in hand and the mana spent — or with only a
         # dearer one to give back.
-        return None
+        return cast_trace.dropped(
+            "its entry gives back more than it brings (a creature returned to hand)"
+        )
     if not _caster_holds_a_hand_pick_entrant(
         game, player_index, card, spell_hand_index
     ):
@@ -1179,11 +1276,15 @@ def _cast_candidate_announcing(
         # creature card revealed this way with the lowest mana value puts it
         # onto the battlefield." With no creature card of its own to pick, the
         # caster's Stronghold Gambit can only hand the opponent a free one.
-        return None
+        return cast_trace.dropped(
+            "the caster holds no creature card to pick for the hand-pick entry"
+        )
     if _exchange_shrinks_the_library(game, player_index, card):
         # "Exchange your graveyard and library." With fewer cards in the
         # graveyard than in the library the cast is turns given away.
-        return None
+        return cast_trace.dropped(
+            "exchanging graveyard and library would shrink the library"
+        )
     tap_indices: tuple[int, ...] = ()
     tap_colors: tuple[str, ...] = ()
     # CR 118.9a, where several alternatives apply: each payable one as
@@ -1204,19 +1305,25 @@ def _cast_candidate_announcing(
         # (a kicked Tolarian Emissary with no enchantment anywhere). Paying is
         # legal and buys nothing, so this candidate is declined and the caller
         # falls back to the plain cast.
-        return None
+        return cast_trace.dropped(
+            "the half the offers buy names nothing the board has (CR 702.33g)"
+        )
     if announces_offer and _paid_for_trigger_has_nothing_to_hit(
         game, player_index, card, offers
     ):
         # ...and the same for a trigger the picker does not describe: the
         # second of a Battlemage's two, whose target is chosen on the stack and
         # would have to be the caster's own permanent.
-        return None
+        return cast_trace.dropped(
+            "a trigger the offers buy would have to hit the caster's own permanent"
+        )
     sized_offer = next((offer for offer, _times in taken_offers if offer.x_count), None)
     if sized_offer is not None and not game.enforce_mana_costs:
         # A free X has no ceiling to size it by, and "the most the lands can
         # pay" is the only rule this policy has for one. Declined.
-        return None
+        return cast_trace.dropped(
+            "an offer's X has no ceiling with mana costs unenforced"
+        )
     if game.enforce_mana_costs and card.primary_type != "land":
         required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
         # "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's Pet.) The
@@ -1267,7 +1374,9 @@ def _cast_candidate_announcing(
                     sized = (offer_x, total)
                     break
             if sized is None:
-                return None
+                return cast_trace.dropped(
+                    "unaffordable with the offers' mana on top (no X the lands can pay)"
+                )
             if sized_offer is not None:
                 x_value = sized[0]
             required = sized[1]
@@ -1279,7 +1388,11 @@ def _cast_candidate_announcing(
                 # — and CR 118.9a allows no second alternative cost beside
                 # one. (A printed alternative cost taken from an opened
                 # graveyard is a cast this policy does not make.)
-                return None
+                return cast_trace.dropped(
+                    "unaffordable: the planned price was already the offers' or the"
+                    " permission's, and no second alternative cost is allowed"
+                    " (CR 118.9a)"
+                )
             # CR 118.9: the mana cost is not the only price. A spell whose
             # printed alternative cost this board *can* pay is castable right
             # now, and a seat that only ever asked the mana question sat on
@@ -1314,7 +1427,10 @@ def _cast_candidate_announcing(
                 if plan is not None:
                     alternatives.append((*plan, index if several else None))
             if not alternatives:
-                return None
+                return cast_trace.dropped(
+                    "unaffordable: neither the mana cost nor any alternative cost can "
+                    "be paid (CR 118.9)"
+                )
             tap_indices, tap_colors, _named = alternatives[0]
             alternative_cost = True
         else:
@@ -1368,12 +1484,15 @@ def _cast_candidate_announcing(
             game, player_index, card, cast_announcement(action), rehearsal,
             planned=action,
         )
-        if not _worth_proposing(rehearsal):
+        if (refused := not_worth_proposing(rehearsal)) is not None:
             if rehearsal is not None and rehearsal.accepted and rehearsal.fleeting:
                 _HELD_AS_FLEETING.set(True)
-            return None
+            return cast_trace.dropped(refused)
         if rehearsal is None and _names_an_unweighed_seat(game, player_index, card):
-            return None
+            return cast_trace.dropped(
+                "no rehearsal could be run, and the cast would name one seat of several"
+                " unweighed"
+            )
     elif (
         (body_needs_the_board(card) or entry_may_remove_itself(card))
         and not cast_announces_morph(game, player_index, card, action)
@@ -1395,7 +1514,7 @@ def _cast_candidate_announcing(
         if not _arrives_to_stay(_rehearse_announcement(
             game, player_index, card, cast_announcement(action), planned=action,
         )):
-            return None
-    score = _score_cast(game, player_index, card, target, x_value, rehearsal)
-    score += zone_cast_bonus(from_zone, under)
-    return replace(action, score=score)
+            return cast_trace.dropped(
+                "the rehearsed permanent is refused, or does not survive its arrival"
+            )
+    return finished_cast_candidate(game, player_index, card, action, rehearsal)

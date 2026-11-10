@@ -10,7 +10,7 @@ with its cards shipped, and what each found (MRD W2G9).
 * **Wail of the Nim** entwined from the hand and cast one bullet from an
   opened graveyard (the zone-cast census): every single mode carries the
   bonus a cast under a permission that ends is worth
-  (``ai_casts.zone_cast_bonus``) and the entwined cast did not, and the
+  (``ai_cast_score.zone_cast_bonus``) and the entwined cast did not, and the
   entwined cast was priced outside the permission (a waived mana cost was
   planned as owed).
 * **Solar Tide** and **Promise of Power** were refused in the optional-cost
