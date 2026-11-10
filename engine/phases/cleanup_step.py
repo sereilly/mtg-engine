@@ -51,8 +51,13 @@ from ..turn_state import stamped_turn_has_passed
 #: rule: a step that keeps setting something off would otherwise never end.
 _MAX_CLEANUP_ROUNDS = 8
 
+#: The key a countdown entry (and a phase-in block) carries once a cleanup step
+#: has counted the turn against it: the ``Game.turn`` it was counted on. See
+#: :func:`_turn_expired`.
+COUNTED_ON_TURN = "counted_on_turn"
 
-def _turn_expired(entries: list, game=None, counted=frozenset()) -> list:
+
+def _turn_expired(entries: list, game=None) -> list:
     """*entries* with this cleanup counted against each one's window.
 
     An entry lasts one turn unless it says otherwise (``remaining_turns``), so
@@ -73,11 +78,13 @@ def _turn_expired(entries: list, game=None, counted=frozenset()) -> list:
     **One count per turn, however many cleanup steps it has.** CR 514.3a
     begins another cleanup step after one in which a player got priority, and
     a countdown is a count of *turns*: Peace Talks' "this turn and next turn"
-    counted twice in one turn would end a turn early. *counted* holds (by
-    ``id``) the entries the cleanup step before this one in the same turn
-    already counted and kept; they are kept as they are. An entry made since —
-    a "this turn" restriction cast while a player had priority in cleanup — is
-    counted now, and ends.
+    counted twice in one turn would end a turn early. So an entry kept is
+    stamped with the turn it was counted on (:data:`COUNTED_ON_TURN`), and a
+    stamped entry is not counted again on that turn — while one made since (a
+    "this turn" restriction cast while a player had priority in cleanup) is
+    counted, and ends. The web's cleanup with a person's discard runs the step
+    twice too (once to find the discard owed, once with it chosen), and it
+    counted Peace Talks twice there whatever CR 514.3a did.
     """
     kept = []
     for entry in entries:
@@ -86,12 +93,13 @@ def _turn_expired(entries: list, game=None, counted=frozenset()) -> list:
             if game is None or not stamped_turn_has_passed(game, window):
                 kept.append(entry)
             continue
-        if id(entry) in counted:
+        if game is not None and entry.get(COUNTED_ON_TURN) == game.turn:
             kept.append(entry)
             continue
         remaining = int(entry.get("remaining_turns", 1)) - 1
         if remaining > 0:
-            kept.append({**entry, "remaining_turns": remaining})
+            stamp = {} if game is None else {COUNTED_ON_TURN: game.turn}
+            kept.append({**entry, "remaining_turns": remaining, **stamp})
     return kept
 
 
@@ -104,18 +112,15 @@ class CleanupStepMixin:
         discard_hand_indices: list[int] | None = None,
         defer_discard_selection: bool = False,
         *,
-        _counted: frozenset = frozenset(),
         _passes: int = 0,
     ) -> bool:
         """The cleanup step (CR 514); True when it ended.
 
         False while a decision is owed: the hand-size discard a person makes
         (*defer_discard_selection*), or an answer a resolution in the step
-        stopped for. *_counted* and *_passes* are this method's own, for the
-        cleanup step CR 514.3a begins after one in which a player got
-        priority: the countdowns the earlier step counted against the turn
-        (:func:`_turn_expired`), and how many steps this turn's cleanup has
-        been.
+        stopped for. *_passes* is this method's own: how many cleanup steps
+        this turn's cleanup has run, for the one CR 514.3a begins after a step
+        in which a player got priority.
         """
         phase = "ending"
         step = "cleanup"
@@ -209,7 +214,7 @@ class CleanupStepMixin:
         expire_end_of_turn_flash(self)
         # "…can't block this turn" blanket restrictions end with the turn too.
         self.blocking_restrictions_until_eot = _turn_expired(
-            self.blocking_restrictions_until_eot, self, _counted
+            self.blocking_restrictions_until_eot, self
         )
         # "Creatures can't attack this turn." (Festival.) CR 514.2 ends it with
         # the same cleanup, beside its blocking twin rather than anywhere else,
@@ -222,37 +227,26 @@ class CleanupStepMixin:
         # list for the two-turn case would be a second place to ask when a
         # restriction ends.
         self.attack_restrictions_until_eot = _turn_expired(
-            self.attack_restrictions_until_eot, self, _counted
+            self.attack_restrictions_until_eot, self
         )
         # The same countdown for the targeting ban Peace Talks' other clause
         # arms, read by `legality_enumeration._enumerate_targets`.
-        self.targeting_bans = _turn_expired(self.targeting_bans, self, _counted)
+        self.targeting_bans = _turn_expired(self.targeting_bans, self)
         # "Until the end of your next turn, they can't phase in." (Teferi,
         # Timeless Voyager.) The block counts the *caster's* turn ends; this
         # cleanup ends the active player's turn, so their countdowns tick —
-        # once per turn, as the lists above count (``_counted``).
-        counted_blocks = []
+        # once per turn, stamped as the lists above are (``COUNTED_ON_TURN``).
         for player in self.players:
             for perm in player.phased_out:
                 block = perm.metadata.get("phase_in_blocked")
                 if (
                     isinstance(block, dict)
-                    and id(block) not in _counted
+                    and block.get(COUNTED_ON_TURN) != self.turn
                     and block.get("seat") == self.active_player_index
                     and int(block.get("turn_ends_remaining", 0)) > 0
                 ):
                     block["turn_ends_remaining"] = int(block["turn_ends_remaining"]) - 1
-                    counted_blocks.append(block)
-        # What this step counted against the turn, for the cleanup step CR
-        # 514.3a may begin after it (the entries the lists kept, by id: each
-        # list still holds them, so the ids stay theirs).
-        counted = frozenset(
-            {id(entry) for entry in self.blocking_restrictions_until_eot}
-            | {id(entry) for entry in self.attack_restrictions_until_eot}
-            | {id(entry) for entry in self.targeting_bans}
-            | {id(block) for block in counted_blocks}
-            | set(_counted)
-        )
+                    block[COUNTED_ON_TURN] = self.turn
         for player in self.players:
             # CR 615.3: every prevention shield lasts until it is used up or its
             # duration expires, and "until end of turn" expires here. One sweep
@@ -521,8 +515,9 @@ class CleanupStepMixin:
             # size is cast and draws a card), damage dealt and "until end of
             # turn" effects created in the window, a flash Aura cast there
             # (its "next cleanup step" is that one). The countdowns this step
-            # counted are not counted again (*counted*). Bounded, as a step
-            # that keeps setting something off would otherwise never end.
+            # counted are not counted again (``COUNTED_ON_TURN``). Bounded, as
+            # a step that keeps setting something off would otherwise never
+            # end.
             self._on_step_or_phase_end(phase, step)
             if self.is_game_over():
                 return cleanup_completed
@@ -533,7 +528,7 @@ class CleanupStepMixin:
                 return cleanup_completed
             return self.resolve_cleanup_step(
                 player_index, defer_discard_selection=defer_discard_selection,
-                _counted=counted, _passes=_passes + 1,
+                _passes=_passes + 1,
             )
         self._on_step_or_phase_end(phase, step)
         return cleanup_completed

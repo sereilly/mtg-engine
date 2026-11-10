@@ -193,3 +193,23 @@ def test_a_second_cleanup_step_counts_no_turn_twice(pool):
 
     game.resolve_cleanup_step(1)
     assert not game.attack_restrictions_until_eot and not game.targeting_bans
+
+
+@pytest.mark.cr("514.1", "611.2a")
+def test_a_discard_chosen_later_counts_the_turn_once(pool):
+    """The web's cleanup with a person's discard runs the step twice: once to
+    find the discard owed (``defer_discard_selection``), once with it chosen.
+    Peace Talks' "this turn and next turn" was counted by both, so it ended at
+    the end of the turn it was cast in — the reproduction, on e245e624c:
+    ``remaining_turns`` 2, then 1, then the entry gone."""
+    game = _game(pool)
+    game.players[0].hand.extend([pool["LEA"]["Forest"]] * 9)
+    _cast(game, 0, pool["VIS"]["Peace Talks"])
+    assert len(game.players[0].hand) == 9
+
+    assert game.resolve_cleanup_step(0, defer_discard_selection=True) is False
+    assert game.resolve_cleanup_step(0, discard_hand_indices=[0, 1]) is True
+
+    assert len(game.players[0].hand) == 7
+    assert [entry["remaining_turns"] for entry in game.attack_restrictions_until_eot] == [1]
+    assert [entry["remaining_turns"] for entry in game.targeting_bans] == [1]
