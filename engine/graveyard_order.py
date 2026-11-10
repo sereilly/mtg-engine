@@ -299,6 +299,38 @@ def distinct_graveyard_object(card: Any) -> Any:
     return distinct_exile_object(card)
 
 
+#: ``Permanent.metadata`` key: the object a graveyard holds for a permanent
+#: that died, where that is not the permanent's own card — a new object, made
+#: because a graveyard already held the card's (:func:`distinct_graveyard_object`),
+#: or the whole card a face became (CR 709.4). Written once, by the death
+#: (``DeathsMixin._move_permanent_to_graveyard``), on a permanent that will
+#: never be on the battlefield again (CR 400.7).
+CARD_IN_GRAVEYARD = "card_in_graveyard"
+
+
+def graveyard_object_of(permanent: Any, card: Any = None) -> Any:
+    """What "this card" names once *permanent* has died: the object its
+    graveyard holds for it (:data:`CARD_IN_GRAVEYARD`), or *card* (the
+    permanent's own card when omitted) when the death recorded none — the
+    permanent is still on the battlefield, it was a token, or the card it
+    carried is the object the pile holds.
+
+    The reader a **holder made before its card arrived** asks. An activated
+    ability whose cost sacrificed its own source (Tempest Efreet's
+    "Sacrifice Tempest Efreet: … Tempest Efreet from anywhere"), and a trigger
+    whose source went to a graveyard before it resolved (an Aura binned by
+    CR 704.5m), were each made about the permanent's card; with an older copy
+    already in a graveyard the card arrived as a new object, and an identity
+    search for the permanent's card found the older copy.
+    """
+    if card is None:
+        card = getattr(permanent, "card", None)
+    metadata = getattr(permanent, "metadata", None) or {}
+    if card is not getattr(permanent, "card", None):
+        return card
+    return metadata.get(CARD_IN_GRAVEYARD, card)
+
+
 def keep_graveyards_apart(players: list) -> None:
     """Make every position of every graveyard a distinct object, in place —
     for a pile written whole rather than arrived at (the Debug Menu's state
