@@ -91,6 +91,13 @@ TAPPED_SHARE = 1.0
 TEMPORARY_SHARE = 0.25
 #: A seat that has lost, or will at its next draw.
 LOST = 1000.0
+#: A turn of the seat's own it will skip (``Game.skip_turn_counts``; CR
+#: 614.10: "Skip [something]" is the same as "Instead of doing [something],
+#: do nothing"): its draw, its land drop, its untap and its attack — about two
+#: cards. A tuning weight. "You skip your next turn" was priced at nothing, so
+#: Chronatog's +3/+3 cost a turn no standing read and Meditate drew four for
+#: free (kg5).
+SKIPPED_TURN_WORTH = 2 * CARD_WORTH
 
 _EVASION_KEYWORDS = frozenset({
     "flying", "fear", "shadow", "horsemanship", "menace", "landwalk",
@@ -204,7 +211,8 @@ def seat_standing(game, seat: int, *, now: bool = True) -> float:
     A seat that has lost is ``-LOST``, and so — less by half, so that a real
     loss still ranks below it — is one with no library left to draw from
     (CR 704.5b on its next draw). ``now=False`` also counts what has phased
-    out: CR 702.26 brings it back.
+    out: CR 702.26 brings it back. Each turn the seat is to skip
+    (``Game.skip_turn_counts``) is ``SKIPPED_TURN_WORTH`` less.
     """
     player = game.players[seat]
     if player.lost:
@@ -221,6 +229,10 @@ def seat_standing(game, seat: int, *, now: bool = True) -> float:
         worth = life_worth(player.life) + CARD_WORTH * len(player.hand)
     if not player.library:
         worth -= LOST / 2
+    # The turns the seat will skip (``Game.skip_turn_counts``, spent by the
+    # turn rotation as each would begin).
+    skipped = (getattr(game, "skip_turn_counts", None) or {}).get(seat, 0)
+    worth -= SKIPPED_TURN_WORTH * max(0, int(skipped or 0))
     lands = 0
     for permanent in game.controlled_by(seat):
         worth += permanent_worth(permanent, now=now)
@@ -332,6 +344,7 @@ __all__ = [
     "LAND_WORTH",
     "LOST",
     "PERMANENT_WORTH",
+    "SKIPPED_TURN_WORTH",
     "SPARE_LAND_WORTH",
     "TEMPORARY_SHARE",
     "TOKEN_WORTH",
