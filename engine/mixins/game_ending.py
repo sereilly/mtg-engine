@@ -70,7 +70,7 @@ class GameEndingMixin:
         if banners:
             if not quiet_ban:
                 self.log.append(
-                    f"{player.name} can't lose the game ({banners[0].card.name})"
+                    f"{player.name} can't lose the game ({banners[0].effective_card.name})"
                 )
             return False
         player.lost = True
@@ -115,7 +115,7 @@ class GameEndingMixin:
         player = self.players[player_index]
         for permanent in self.controlled_by(player_index):
             self.log.append(
-                f"{permanent.card.name} leaves the game ({player.name} left the game, CR 800.4a)"
+                f"{permanent.effective_card.name} leaves the game ({player.name} left the game, CR 800.4a)"
             )
         self.remove_all_from_battlefield(list(self.controlled_by(player_index)))
         # CR 800.4a: stack objects this player **owns** leave with them, and so
@@ -405,7 +405,7 @@ class GameEndingMixin:
                         if board_is_empty_of
                         else "controls none of what its state trigger names"
                     )
-                    self.log.append(f"{perm.card.name} sacrificed ({reason})")
+                    self.log.append(f"{perm.effective_card.name} sacrificed ({reason})")
                     changed = True
 
         # The positive state trigger: "When you control a Dwarf, sacrifice
@@ -440,7 +440,7 @@ class GameEndingMixin:
                     # watching for a sacrifice never saw one of these.
                     self.sacrifice_permanent(perm)
                     self.log.append(
-                        f"{perm.card.name} sacrificed (its controller controls "
+                        f"{perm.effective_card.name} sacrificed (its controller controls "
                         "what its state trigger names)"
                     )
                     changed = True
@@ -476,7 +476,7 @@ class GameEndingMixin:
                         continue
                     self.sacrifice_permanent(perm)
                     self.log.append(
-                        f"{perm.card.name} sacrificed (its power reached "
+                        f"{perm.effective_card.name} sacrificed (its power reached "
                         f"{threshold})"
                     )
                     changed = True
@@ -506,7 +506,7 @@ class GameEndingMixin:
                         continue
                     self.sacrifice_permanent(perm)
                     self.log.append(
-                        f"{perm.card.name} sacrificed (it has {keyword})"
+                        f"{perm.effective_card.name} sacrificed (it has {keyword})"
                     )
                     changed = True
                     break
@@ -524,7 +524,7 @@ class GameEndingMixin:
             permanent.metadata.pop(LINKED_SACRIFICE, None)
             self.sacrifice_permanent(permanent)
             self.log.append(
-                f"{permanent.card.name} sacrificed (its keeper lost control "
+                f"{permanent.effective_card.name} sacrificed (its keeper lost control "
                 "of the creature that returned it)"
             )
             changed = True
@@ -555,7 +555,7 @@ class GameEndingMixin:
                         continue
                     self.sacrifice_permanent(perm)
                     self.log.append(
-                        f"{perm.card.name} sacrificed (what its state trigger "
+                        f"{perm.effective_card.name} sacrificed (what its state trigger "
                         "names about the chosen color no longer holds)"
                     )
                     changed = True
@@ -584,7 +584,7 @@ class GameEndingMixin:
                     ):
                         self.sacrifice_permanent(perm)
                         self.log.append(
-                            f"{perm.card.name} sacrificed "
+                            f"{perm.effective_card.name} sacrificed "
                             f"({', '.join(dict.fromkeys(banner_names))})"
                         )
                         changed = True
@@ -661,9 +661,9 @@ class GameEndingMixin:
                 now = self.controller_index_of(held)
                 if now is not None:
                     self.log.append(
-                        f"{held.card.name} returns to "
+                        f"{held.effective_card.name} returns to "
                         f"{self.players[now].name}'s control "
-                        f"({source.card.name}'s linked control "
+                        f"({source.effective_card.name}'s linked control "
                         "effect ended)"
                     )
                 changed = True
@@ -710,8 +710,8 @@ class GameEndingMixin:
                 change_control(held, seat, source=attachment)
                 self._sync_control()
                 self.log.append(
-                    f"{attachment.card.name} gives control of "
-                    f"{held.card.name} to {self.players[seat].name}"
+                    f"{attachment.effective_card.name} gives control of "
+                    f"{held.effective_card.name} to {self.players[seat].name}"
                 )
                 changed = True
             for entry in list(control_changes(held)):
@@ -791,7 +791,7 @@ class GameEndingMixin:
         for player in self.players:
             def _on_destroy_5f(perm: Permanent, died: bool, player=player) -> None:
                 self.log.append(
-                    f"{perm.card.name} "
+                    f"{perm.effective_card.name} "
                     + ("died" if died else "left the battlefield")
                     + f" (704.5f: toughness {perm.effective_toughness})"
                 )
@@ -852,7 +852,7 @@ class GameEndingMixin:
 
         for player in self.players:
             def _on_destroy_5g(perm: Permanent, died: bool, player=player) -> None:
-                name = perm.card.name
+                name = perm.effective_card.name
                 why = " (704.5g: lethal damage)"
                 if not died and self.log and str(self.log[-1]).startswith(
                     f"{name} "
@@ -909,7 +909,7 @@ class GameEndingMixin:
                 player, _zero_loyalty,
                 allow_regeneration=False, respect_indestructible=False,
                 on_destroy=lambda perm, died: self.log.append(
-                    f"{perm.card.name} "
+                    f"{perm.effective_card.name} "
                     + ("went to graveyard" if died else "left the battlefield")
                     + " (704.5i: 0 loyalty)"
                 ),
@@ -963,7 +963,7 @@ class GameEndingMixin:
                 if self.controls(player, perm):
                     self.remove_from_battlefield(perm)
                     self._permanent_to_graveyard(player, perm)
-                    self.log.append(f"{perm.card.name} put into graveyard (704.5k: world rule)")
+                    self.log.append(f"{perm.effective_card.name} put into graveyard (704.5k: world rule)")
             changed = True
 
         # 704.5m: Aura/Role not attached to a legal object → graveyard
@@ -992,7 +992,7 @@ class GameEndingMixin:
                 else "enchanted object left battlefield"
             )
             self.log.append(
-                f"{perm.card.name} "
+                f"{perm.effective_card.name} "
                 + ("put into graveyard" if died else "left the battlefield")
                 + f" (704.5m: {reason})"
             )
@@ -1028,8 +1028,8 @@ class GameEndingMixin:
                     continue
                 self._permanent_to_graveyard(player, perm)
                 self.log.append(
-                    f"{perm.card.name} put into graveyard (704.5m: "
-                    f"{host.card.name} can't be enchanted by other Auras)"
+                    f"{perm.effective_card.name} put into graveyard (704.5m: "
+                    f"{host.effective_card.name} can't be enchanted by other Auras)"
                 )
                 changed = True
                 departing_immune.append(perm)
@@ -1060,7 +1060,7 @@ class GameEndingMixin:
                     continue
                 self._permanent_to_graveyard(player, perm)
                 self.log.append(
-                    f"{perm.card.name} put into graveyard (704.5m: enchanted "
+                    f"{perm.effective_card.name} put into graveyard (704.5m: enchanted "
                     f"permanent no longer satisfies the enchant {noun} clause)"
                 )
                 changed = True
@@ -1082,7 +1082,7 @@ class GameEndingMixin:
                     and "can't be enchanted by other auras" not in perm.effective_card.oracle_text.lower()
                 ):
                     self._permanent_to_graveyard(player, perm)
-                    self.log.append(f"{perm.card.name} put into graveyard (enchanted land can't be enchanted by other Auras)")
+                    self.log.append(f"{perm.effective_card.name} put into graveyard (enchanted land can't be enchanted by other Auras)")
                     changed = True
                     departing.append(perm)
             self.remove_all_from_battlefield(departing)
@@ -1140,7 +1140,7 @@ class GameEndingMixin:
                     continue
                 self._permanent_to_graveyard(player, perm)
                 self.log.append(
-                    f"{perm.card.name} put into graveyard (702.16c: enchanted permanent has protection)"
+                    f"{perm.effective_card.name} put into graveyard (702.16c: enchanted permanent has protection)"
                 )
                 changed = True
                 departing.append(perm)
@@ -1181,7 +1181,7 @@ class GameEndingMixin:
                 continue
             if perm.metadata.get("attached_to") is not None:
                 perm.metadata["attached_to"] = None
-                self.log.append(f"{perm.card.name} became unattached (704.5p: illegal attached state)")
+                self.log.append(f"{perm.effective_card.name} became unattached (704.5p: illegal attached state)")
                 changed = True
 
         # 704.5q: +1/+1 and -1/-1 counter cancellation
@@ -1192,7 +1192,7 @@ class GameEndingMixin:
                 cancel = min(plus, minus)
                 perm.metadata["plus_counters"] = plus - cancel
                 perm.metadata["minus_counters"] = minus - cancel
-                self.log.append(f"{perm.card.name}: cancelled {cancel} +1/+1 and -1/-1 counters (704.5q)")
+                self.log.append(f"{perm.effective_card.name}: cancelled {cancel} +1/+1 and -1/-1 counters (704.5q)")
                 changed = True
 
         # 704.5r: counter cap enforcement
@@ -1205,7 +1205,7 @@ class GameEndingMixin:
             current = perm.metadata.get(counter_key, 0)
             if current > cap:
                 perm.metadata[counter_key] = cap
-                self.log.append(f"{perm.card.name}: trimmed {counter_type} counters to {cap} (704.5r)")
+                self.log.append(f"{perm.effective_card.name}: trimmed {counter_type} counters to {cap} (704.5r)")
                 changed = True
 
         # 704.5s: Saga at or past final chapter → sacrifice
@@ -1222,7 +1222,7 @@ class GameEndingMixin:
                 player, _saga_done,
                 allow_regeneration=False, respect_indestructible=False,
                 on_destroy=lambda perm, _died: self.log.append(
-                    f"{perm.card.name} sacrificed (704.5s: Saga reached final chapter)"
+                    f"{perm.effective_card.name} sacrificed (704.5s: Saga reached final chapter)"
                 ),
                 # A sacrifice (CR 701.21a: "doesn't destroy it").
                 cause=NOT_A_DESTRUCTION,
@@ -1255,7 +1255,7 @@ class GameEndingMixin:
                     if self.controls(ctrl_player, role_perm):
                         self.remove_from_battlefield(role_perm)
                         self._permanent_to_graveyard(ctrl_player, role_perm)
-                        self.log.append(f"{role_perm.card.name} put into graveyard (704.5z: role rule)")
+                        self.log.append(f"{role_perm.effective_card.name} put into graveyard (704.5z: role rule)")
                 changed = True
 
         return changed
@@ -1280,7 +1280,7 @@ class GameEndingMixin:
                         if code is not None:
                             banned_set_codes.add(code)
                         banner_perm_ids.add(id(_perm))
-                        banner_names.append(_perm.card.name)
+                        banner_names.append(_perm.effective_card.name)
         while changed:
             # **One check is one event** (CR 704.3: "performs all applicable
             # state-based actions simultaneously as a single event"). What

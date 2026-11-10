@@ -255,7 +255,7 @@ class ActivationPaymentMixin:
             symbols = None if host is None else mana_cost_from_symbols(printed)
             if host is None or (symbols is None and printed.strip()):
                 return (
-                    f"{permanent.card.name}: the mana cost it charges is the "
+                    f"{permanent.effective_card.name}: the mana cost it charges is the "
                     "attached permanent's, and there is none to read"
                 )
             for symbol, count in (symbols or {}).items():
@@ -290,7 +290,7 @@ class ActivationPaymentMixin:
             # ``engine/cost_x_definitions.py`` exists to prevent, so the
             # activation is refused with nothing paid (CR 601.2b via 602.2b).
             return (
-                f"{permanent.card.name}: the value of X is defined by the card "
+                f"{permanent.effective_card.name}: the value of X is defined by the card "
                 "and nothing here determines it"
             )
         if x_value and x_symbols:
@@ -325,7 +325,7 @@ class ActivationPaymentMixin:
         # lines are taken back with a refused attempt, CR 733.1).
         if extra_ability_tax:
             required_cost["generic"] = required_cost.get("generic", 0) + extra_ability_tax
-            log_lines.append(f"{permanent.card.name}'s ability is taxed by {', '.join(taxing_names)}")
+            log_lines.append(f"{permanent.effective_card.name}'s ability is taxed by {', '.join(taxing_names)}")
             price_notes.append(
                 f"costs {{{extra_ability_tax}}} more: {', '.join(taxing_names)}"
             )
@@ -338,7 +338,7 @@ class ActivationPaymentMixin:
             before = required_cost.get("generic", 0)
             required_cost["generic"] = max(0, before - discount)
             log_lines.append(
-                f"{permanent.card.name}'s ability costs "
+                f"{permanent.effective_card.name}'s ability costs "
                 f"{{{before - required_cost['generic']}}} less to activate"
             )
             price_notes.append(f"costs {{{before - required_cost['generic']}}} less")
@@ -371,7 +371,7 @@ class ActivationPaymentMixin:
         floor = max(aura_floor, board_floor)
         if reducing_names:
             log_lines.append(
-                f"{permanent.card.name}'s ability is cheapened by "
+                f"{permanent.effective_card.name}'s ability is cheapened by "
                 f"{', '.join(reducing_names)}"
             )
         if aura_discount:
@@ -384,7 +384,7 @@ class ActivationPaymentMixin:
             required_cost["generic"] = reduced_generic
             if before_total != reduced_generic + coloured:
                 log_lines.append(
-                    f"{permanent.card.name}'s ability costs "
+                    f"{permanent.effective_card.name}'s ability costs "
                     f"{{{before_total - reduced_generic - coloured}}} less to activate"
                 )
                 price_notes.append(
@@ -432,7 +432,7 @@ class ActivationPaymentMixin:
 
         cost = ability.cost
         controller = self.players[controller_index]
-        name = permanent.card.name
+        name = permanent.effective_card.name
 
         # "Remove a <kind> counter from this creature" (Scavenging Ghoul), "…X
         # charge counters" (Kyren Toy). "Any number of" and "all" are payable
@@ -1066,7 +1066,7 @@ class ActivationPaymentMixin:
             return None
         # A permanent on every path but one: an ability activated from a
         # graveyard (Ashen Ghoul) has a card for its source.
-        source_name = getattr(getattr(permanent, "card", permanent), "name", "")
+        source_name = getattr(getattr(permanent, "effective_card", permanent), "name", "")
         named: list = [
             self.permanent_by_id(permanent_id)
             for permanent_id in (cost_permanent_ids or [])
@@ -1083,5 +1083,5 @@ class ActivationPaymentMixin:
                     "cost is not on the battlefield"
                 )
             if not any(found is option for option in candidates):
-                return f"{source_name}: {found.card.name} cannot pay its cost"
+                return f"{source_name}: {found.effective_card.name} cannot pay its cost"
         return None

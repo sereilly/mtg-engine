@@ -31,6 +31,7 @@ from ..continuous import next_timestamp
 from ..game_types import as_graveyard_stamps, as_target_ids, target_ids
 from ..events import emit
 from ..oracle import compile_card_oracle
+from ..stack_targets import source_name
 from ..targeting import graveyard_target_spec
 from ..trigger_order import is_triggered_object
 
@@ -118,7 +119,7 @@ class TargetAnnouncementsMixin:
             # removed if nothing is legal (CR 603.3c).
             if fault == "illegal":
                 self.log.append(
-                    f"{item.card.name}'s triggered ability can't target what "
+                    f"{source_name(item)}'s triggered ability can't target what "
                     "was named as it was cast; it chooses again (603.3d)"
                 )
             item.target_player_index = None

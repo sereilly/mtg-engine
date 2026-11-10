@@ -516,9 +516,13 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         """
         if not answers:
             return answers
+        # Under either name a copy answers to: the one its prompt labels it
+        # by (``card_name``, its name — CR 707.2) and the card it is printed
+        # on, which is what this shorthand has always matched.
         by_name: dict[str, list] = {}
         for permanent in self.all_permanents():
-            by_name.setdefault(permanent.card.name, []).append(permanent)
+            for name in dict.fromkeys((permanent.effective_card.name, permanent.card.name)):
+                by_name.setdefault(name, []).append(permanent)
         keyed = dict(answers)
         for key, value in answers.items():
             if not isinstance(key, str):
@@ -587,7 +591,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 continue
             cost = upcoming_cost(permanent, tolled)
             choices.append({
-                "card_name": permanent.card.name,
+                "card_name": permanent.effective_card.name,
                 # Which permanent this price is being quoted for (CR 400.7's
                 # identity). ``card_name`` stays for the label; it is no longer
                 # the address, because two copies print two of these entries
@@ -617,7 +621,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             ), None)
             if trig is not None:
                 choices.append({
-                    "card_name": permanent.card.name,
+                    "card_name": permanent.effective_card.name,
                     "permanent_id": permanent.permanent_id,
                     **cost_prompt_fields(cost_from_payload(trig.instruction.payload)),
                     "kind": trig.instruction.kind,
@@ -645,7 +649,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 for sym in re.findall(r"\{([wubrg])\}", pay_match.group(1)):
                     mana[sym.upper()] = mana.get(sym.upper(), 0) + 1
             choices.append({
-                "card_name": permanent.card.name,
+                "card_name": permanent.effective_card.name,
                 "permanent_id": permanent.permanent_id,
                 **cost_prompt_fields(UpkeepCost(mana=mana)),
                 "kind": "upkeep_pay_to_gain_life",
@@ -673,7 +677,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             ), None)
             if trig is not None:
                 triggers.append({
-                    "card_name": permanent.card.name,
+                    "card_name": permanent.effective_card.name,
                     "permanent_id": permanent.permanent_id,
                     "kind": "upkeep_pay_to_prevent_damage",
                     "damage": int(trig.instruction.payload.get("amount", 1)),
@@ -807,7 +811,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             valid_targets = [
                 {
                     "kind": "permanent", "seat": s, "index": i,
-                    "id": p.permanent_id, "name": p.card.name,
+                    "id": p.permanent_id, "name": p.effective_card.name,
                 }
                 for s, player in enumerate(self.players)
                 for i, p in enumerate(player.battlefield)
@@ -816,14 +820,14 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             if not valid_targets:
                 continue
             triggers.append({
-                "card_name": perm.card.name,
+                "card_name": perm.effective_card.name,
                 # CR 603.3d, and the reason the name dedupe that used to stand
                 # here is gone: two Vesuvan Doppelgangers are two triggers, each
                 # choosing its own creature to copy, and one prompt for both
                 # made the second one's choice for it.
                 "permanent_id": perm.permanent_id,
                 "kind": "upkeep_recopy",
-                "prompt": f"Have {perm.card.name} become a copy of a different creature?",
+                "prompt": f"Have {perm.effective_card.name} become a copy of a different creature?",
                 "needs_target": "creature",
                 "valid_targets": valid_targets,
                 "permanent_index": perm_index,
@@ -1046,18 +1050,18 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 if not candidates:
                     continue
                 triggers.append({
-                    "card_name": perm.card.name,
+                    "card_name": perm.effective_card.name,
                     "permanent_id": perm.permanent_id,
                     "kind": choice_kind,
                     "mandatory": True,
-                    "prompt": build_prompt(perm.card.name),
+                    "prompt": build_prompt(perm.effective_card.name),
                     "needs_target": target_noun,
                     # ``id`` is the answer (``_upkeep_target_pick``); the seat
                     # and slot are where the client draws the highlight.
                     "valid_targets": [
                         {
                             "kind": "permanent", "seat": s, "index": i,
-                            "id": p.permanent_id, "name": p.card.name,
+                            "id": p.permanent_id, "name": p.effective_card.name,
                         }
                         for s, player in enumerate(self.players)
                         for i, p in enumerate(player.battlefield)

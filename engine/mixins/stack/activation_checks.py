@@ -118,7 +118,7 @@ class ActivationChecksMixin:
         if source_owner is not controller and not card_widens_activation(
             permanent.effective_card
         ):
-            details = f"{permanent.card.name}'s abilities can only be activated by its controller"
+            details = f"{permanent.effective_card.name}'s abilities can only be activated by its controller"
             return refuse(permanent.card.name, "unsupported", details)
 
         # "Loses all abilities" (Titania's Song) means the activated ones too.
@@ -166,7 +166,7 @@ class ActivationChecksMixin:
                 continue
             if not self._controlled_since_turn_start(permanent):
                 details = (
-                    f"{permanent.card.name} has not been controlled continuously "
+                    f"{permanent.effective_card.name} has not been controlled continuously "
                     "since the beginning of your most recent turn"
                 )
                 return refuse(permanent.card.name, "unsupported", details)
@@ -251,7 +251,7 @@ class ActivationChecksMixin:
             if elsewhere is not None:
                 zone = ability_functions_from(elsewhere)
                 details = (
-                    f"{permanent.card.name}'s ability functions only "
+                    f"{permanent.effective_card.name}'s ability functions only "
                     f"from a {zone} (CR 113.6)"
                 )
                 return refuse(
@@ -305,7 +305,7 @@ class ActivationChecksMixin:
         word = self.announced_chosen_keyword(ability, chosen_keyword)
         if word is None:
             return (
-                f"{permanent.card.name} offers "
+                f"{permanent.effective_card.name} offers "
                 + ", ".join(options)
                 + f", not {str(chosen_keyword).strip().lower()!r}"
             )
@@ -316,7 +316,7 @@ class ActivationChecksMixin:
                 permanent.metadata.get(CHOSEN_ABILITY),
             ))
         permanent.metadata[CHOSEN_ABILITY] = word
-        self.log.append(f"{permanent.card.name}: chose {word}")
+        self.log.append(f"{permanent.effective_card.name}: chose {word}")
         return None
 
     def announced_chosen_keyword(self, ability, chosen_keyword=None) -> "str | None":
@@ -494,18 +494,18 @@ class ActivationChecksMixin:
             and not self.stack
         ):
             return (
-                f"{permanent.card.name}'s loyalty abilities can only be activated "
+                f"{permanent.effective_card.name}'s loyalty abilities can only be activated "
                 "during a main phase of your turn with the stack empty (CR 606.3)"
             )
         if permanent.metadata.get("loyalty_ability_used_turn") == self.turn:
             return (
-                f"a loyalty ability of {permanent.card.name} has already been "
+                f"a loyalty ability of {permanent.effective_card.name} has already been "
                 "activated this turn (CR 606.3)"
             )
         delta = self._loyalty_delta(ability, x_value)
         if delta < 0 and int(permanent.metadata.get("loyalty_counters", 0)) < -delta:
             return (
-                f"{permanent.card.name} does not have enough loyalty counters "
+                f"{permanent.effective_card.name} does not have enough loyalty counters "
                 "to pay that cost (CR 606.6)"
             )
         return None
@@ -544,7 +544,7 @@ class ActivationChecksMixin:
             return None
         source_name = self.targeting_bans[-1].get("source_name", "an effect")
         return (
-            f"{permanent.card.name} has no legal target: nothing can be "
+            f"{permanent.effective_card.name} has no legal target: nothing can be "
             f"targeted ({source_name})"
         )
 
@@ -560,7 +560,7 @@ class ActivationChecksMixin:
             in self._ability_line_lower(permanent, ability)
             and self.owner_index_of(permanent) != controller_index
         ):
-            return f"only {permanent.card.name}'s owner may activate this ability"
+            return f"only {permanent.effective_card.name}'s owner may activate this ability"
         return None
 
     def activation_limit_refusal(
@@ -575,7 +575,7 @@ class ActivationChecksMixin:
         if not at_activation_limit(self, controller_index, permanent, ability_lower):
             return None
         return (
-            f"{permanent.card.name}'s ability can only be activated "
+            f"{permanent.effective_card.name}'s ability can only be activated "
             f"{activations_allowed_each_turn(ability_lower, self, controller_index, permanent)}"
             f" time(s) each turn"
         )
@@ -599,9 +599,9 @@ class ActivationChecksMixin:
         if not ability.cost.requires_tap:
             return None
         if self._is_summoning_sick(permanent):
-            return f"{permanent.card.name} has summoning sickness"
+            return f"{permanent.effective_card.name} has summoning sickness"
         if permanent.tapped:
-            return f"{permanent.card.name} is already tapped"
+            return f"{permanent.effective_card.name} is already tapped"
         return None
 
     def _activation_window(
@@ -783,7 +783,7 @@ class ActivationChecksMixin:
             x_zero_restriction_line(sentence)
             for sentence in ability_lower.split(".")
         ) and not x_value:
-            details = f"{permanent.card.name}: X can't be 0"
+            details = f"{permanent.effective_card.name}: X can't be 0"
             return refuse(permanent.card.name, "unsupported", details)
 
         # The timing half of "Activate only during your turn and only once each

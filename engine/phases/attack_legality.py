@@ -640,12 +640,12 @@ class AttackLegalityMixin:
         if len(declared_attackers) > 1:
             for lone in declared_attackers:
                 if self._can_only_attack_alone(lone):
-                    return lone, f"{lone.card.name} can only attack alone"
+                    return lone, f"{lone.effective_card.name} can only attack alone"
         for attacker in declared_attackers:
             needed = declaration_company_required(attacker, "attack")
             if needed is not None and len(declared_attackers) - 1 < needed:
                 return attacker, (
-                    f"{attacker.card.name} needs at least {needed} other "
+                    f"{attacker.effective_card.name} needs at least {needed} other "
                     "attacking creature(s)"
                 )
         # "…unless a creature with **greater power** also attacks." (Okk.) The
@@ -666,7 +666,7 @@ class AttackLegalityMixin:
                 for other in declared_attackers
             ):
                 return attacker, (
-                    f"{attacker.card.name} needs an attacking creature with "
+                    f"{attacker.effective_card.name} needs an attacking creature with "
                     "greater power beside it"
                 )
         # "…unless **a black or green creature** also attacks." (Scarred Puma.)
@@ -685,7 +685,7 @@ class AttackLegalityMixin:
                     for other in declared_attackers
                 ):
                     return attacker, (
-                        f"{attacker.card.name} can't attack unless a creature "
+                        f"{attacker.effective_card.name} can't attack unless a creature "
                         "its text names also attacks"
                     )
         # "…unless you tap an untapped creature you control not declared as an
@@ -700,7 +700,7 @@ class AttackLegalityMixin:
                 seat, declared_attackers, "attack"
             ) is None:
                 return owing[-1], (
-                    f"{owing[-1].card.name} has no untapped creature left to tap "
+                    f"{owing[-1].effective_card.name} has no untapped creature left to tap "
                     "for its attack"
                 )
         return None

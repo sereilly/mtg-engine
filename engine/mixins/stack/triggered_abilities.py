@@ -23,6 +23,7 @@ from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
 from ...modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
+from ...stack_targets import source_name
 from ...trigger_order import offer_trigger_order, restore_apnap
 from ...trigger_utils import battlefield_triggers
 
@@ -228,7 +229,7 @@ class TriggeredAbilitiesMixin:
         if evaluate_condition(self, self._ability_execution_context(item), gate):
             return True
         self.log.append(
-            f"{item.card.name} didn't trigger: its condition wasn't met (CR 603.4)"
+            f"{source_name(item)} didn't trigger: its condition wasn't met (CR 603.4)"
         )
         return False
 

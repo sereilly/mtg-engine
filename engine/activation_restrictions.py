@@ -1265,7 +1265,7 @@ def global_activation_ban(game, permanent, ability=None) -> str | None:
 
                 if is_mana_ability(ability):
                     continue
-            return source.card.name
+            return source.effective_card.name
     return None
 
 

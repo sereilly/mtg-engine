@@ -900,7 +900,7 @@ class CastTargetSpecMixin:
                 entry["permanent_verb"] = verb
                 entry["permanent_count"] = count
                 entry["permanent_choices"] = [
-                    {"id": perm.permanent_id, "name": perm.card.name}
+                    {"id": perm.permanent_id, "name": perm.effective_card.name}
                     for perm in self._additional_cost_candidates(
                         caster_index, cost, giving_up=verb
                     )

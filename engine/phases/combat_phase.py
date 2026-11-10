@@ -275,7 +275,7 @@ class CombatPhaseMixin:
         names = []
         for pid in unused:
             perm = self.permanent_by_id(pid)
-            names.append(perm.card.name if perm is not None else f"permanent {pid}")
+            names.append(perm.effective_card.name if perm is not None else f"permanent {pid}")
         return f"{', '.join(names)} cannot pay this declaration's costs"
 
     def declaration_cost_choices(self, permanent: Permanent, kind: str) -> list[dict]:
@@ -332,7 +332,7 @@ class CombatPhaseMixin:
                 self.become_tapped(perm)
         self.log.append(
             f"{self.players[seat].name} tapped "
-            f"{', '.join(perm.card.name for perm in plan)} to {kind}"
+            f"{', '.join(perm.effective_card.name for perm in plan)} to {kind}"
         )
 
     def _has_any_legal_attacker(self, attacker_index: int, defender_index: int) -> bool:
@@ -847,13 +847,13 @@ class CombatPhaseMixin:
             permanent.attacking = False
             permanent.defending_player_index = None
             permanent.blocked = False
-            self.log.append(f"{permanent.card.name} was removed from combat")
+            self.log.append(f"{permanent.effective_card.name} was removed from combat")
             return True
         if idx in self.combat_blockers.get(seat, {}):
             self._remove_blocker_from_combat(
                 seat, idx, frees_blocked_attackers=frees_blocked_attackers
             )
-            self.log.append(f"{permanent.card.name} was removed from combat")
+            self.log.append(f"{permanent.effective_card.name} was removed from combat")
             return True
         return False
 

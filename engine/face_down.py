@@ -607,7 +607,7 @@ def _announce_turned_face_up(
                 ability_text=trig.source_line,
                 x_value=x_value,
             )
-            game.log.append(f"{permanent.card.name} triggered (turned face up)")
+            game.log.append(f"{permanent.effective_card.name} triggered (turned face up)")
         # The permanent turned up is the object the event is about, frozen by
         # id (CR 400.7) for an effect that acts on it, and its controller for
         # one that names them (CR 603.10).

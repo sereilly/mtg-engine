@@ -534,7 +534,7 @@ class TargetEnumerationMixin:
                     "seat": seat,
                     "index": idx,
                     "key": f"{seat}-{idx}",
-                    "name": perm.card.name,
+                    "name": perm.effective_card.name,
                 })
         # Circle of Protection: the chosen source may also be a spell of the named
         # color on the stack — fold those into the same target list.

@@ -163,7 +163,7 @@ class ActivationChargesMixin:
                 or hand[cost_hand_index] not in payable
             ):
                 details = (
-                    f"{permanent.card.name}: no card at hand position "
+                    f"{permanent.effective_card.name}: no card at hand position "
                     f"{cost_hand_index} to discard for its cost"
                 )
                 return refuse(permanent.card.name, "unsupported", details)
@@ -186,7 +186,7 @@ class ActivationChargesMixin:
                     game=self, owner=controller,
                 )
                 if denial is not None:
-                    details = f"{permanent.card.name}: {denial}"
+                    details = f"{permanent.effective_card.name}: {denial}"
                     return refuse(
                         permanent.card.name, "unsupported", details,
                     )
@@ -548,7 +548,7 @@ class ActivationChargesMixin:
                 ability, counter_removal_permanent, cost_counter_kind,
             ) is None:
                 details = (
-                    f"{permanent.card.name}: "
+                    f"{permanent.effective_card.name}: "
                     f"{counter_removal_permanent.card.name} has no "
                     f"{cost_counter_kind} counter to remove for its cost"
                 )
@@ -575,7 +575,7 @@ class ActivationChargesMixin:
             )
             if not candidates:
                 details = (
-                    f"{permanent.card.name}: no "
+                    f"{permanent.effective_card.name}: no "
                     f"{filter_head_noun(described)} available to sacrifice"
                 )
                 return refuse(permanent.card.name, "unsupported", details)
@@ -681,7 +681,7 @@ class ActivationChargesMixin:
                 named_slots=cost_graveyard_indices,
             )
             if named_slot_refusal is not None:
-                details = f"{permanent.card.name}: {named_slot_refusal}"
+                details = f"{permanent.effective_card.name}: {named_slot_refusal}"
                 return refuse(
                     permanent.card.name, "unsupported", details,
                 )
@@ -717,7 +717,7 @@ class ActivationChargesMixin:
             )
             if exile_cost_choice is None:
                 details = (
-                    f"{permanent.card.name}: nothing available to exile as a cost"
+                    f"{permanent.effective_card.name}: nothing available to exile as a cost"
                 )
                 return refuse(
                     permanent.card.name, "unsupported", details,
@@ -734,7 +734,7 @@ class ActivationChargesMixin:
                 else cost_graveyard_indices,
             )
             if isinstance(chosen, str):
-                details = f"{permanent.card.name}: {chosen}"
+                details = f"{permanent.effective_card.name}: {chosen}"
                 return refuse(
                     permanent.card.name, "unsupported", details,
                 )

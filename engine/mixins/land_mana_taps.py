@@ -616,7 +616,7 @@ class LandManaTapsMixin:
             # ask before it asked the table is said in the table's own
             # sentence.
             if refusal in _LOGGED_TAP_REFUSALS:
-                return f"{land.card.name}{_LOGGED_TAP_REFUSALS[refusal]}"
+                return f"{land.effective_card.name}{_LOGGED_TAP_REFUSALS[refusal]}"
             # CR 107.5, in the sentence the activation path and the wire's
             # ``ability_denials`` give it (``Game.tap_symbol_refusal``): a
             # tapped land asked for its mana is "already tapped", where this
@@ -625,7 +625,7 @@ class LandManaTapsMixin:
                 refusal == "not_an_untapped_land" and land is not None
                 and land.has_type("land") and land.tapped
             ):
-                return f"{land.card.name} is already tapped"
+                return f"{land.effective_card.name} is already tapped"
             from ..activation_prohibitions import ACTIVATION_PROHIBITIONS
 
             # …and a printed "Activate only …" clause too (the
@@ -778,8 +778,7 @@ class LandManaTapsMixin:
         # CR 106.12: what follows is the event — the record, the replacement
         # over the production, the production itself and everything that
         # watches a land tapped for mana. One method, because this is one of
-        # three roads to it (:meth:`_land_tapped_for_mana`).
-        self._land_tapped_for_mana(
-            player_index, land, chosen_color, produce, land_name=land_name,
-        )
+        # three roads to it (:meth:`_land_tapped_for_mana`). The log names
+        # the land, not the name it was asked for by.
+        self._land_tapped_for_mana(player_index, land, chosen_color, produce)
         return None

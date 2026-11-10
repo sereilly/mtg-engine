@@ -721,7 +721,7 @@ class SpellChoicesMixin:
                 "seat": candidate.get("seat"),
                 "index": candidate.get("index"),
                 "permanent_id": self.permanent_id_of(perm),
-                "name": perm.card.name,
+                "name": perm.effective_card.name,
             })
         # **One answer only when the one candidate is what the copy already
         # holds.** "Destroy target noncreature permanent. Then that

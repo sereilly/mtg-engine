@@ -243,7 +243,7 @@ class DeathsMixin:
                 loss = max(0, (player.life + 1) // 2)
                 player.life -= loss
                 self.log.append(
-                    f"{permanent.card.name} died: {player.name} loses {loss} life (half, rounded up)"
+                    f"{permanent.effective_card.name} died: {player.name} loses {loss} life (half, rounded up)"
                 )
             # Abu Ja'far: "When this creature dies, destroy all creatures
             # blocking or blocked by it." The combat relationship is gone once
@@ -265,7 +265,7 @@ class DeathsMixin:
                     ability_text=combat_trig.source_line,
                     trigger_context={"combat_opponents": opponents},
                 )
-                self.log.append(f"{permanent.card.name} triggered (died in combat)")
+                self.log.append(f"{permanent.effective_card.name} triggered (died in combat)")
         # CR 700.4's death of **any** permanent, not only a creature's. The
         # loop sat inside the `is_creature` branch above, so an Aura, an
         # artifact or an enchantment printing its own death trigger compiled
@@ -367,7 +367,7 @@ class DeathsMixin:
                     },
                 },
             )
-            self.log.append(f"{permanent.card.name} triggered (died)")
+            self.log.append(f"{permanent.effective_card.name} triggered (died)")
         # Lich's "you lose the game" was here, as a **substring test on the
         # printed sentence**, applied inline and off the stack. It existed
         # because the general dies-enqueue above could not reach a non-creature
