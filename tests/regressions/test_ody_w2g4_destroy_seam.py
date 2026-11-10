@@ -52,7 +52,8 @@ from engine import events as events_module
 from engine import faces
 from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
-from engine.destruction_events import (DELAYED_CAUSE_SUFFIX,
+from engine.destruction_events import (CREATION_SEAT,
+                                       DELAYED_CREATIONS_SUFFIX,
                                        NO_SPELL_OR_ABILITY,
                                        PERMANENT_DESTROYED)
 from engine.models import CardDefinition, Permanent
@@ -1432,7 +1433,10 @@ def test_a_delayed_mark_records_the_seat_that_set_it(by_name):
     finally:
         game.resolving_seats.pop()
     assert bears.metadata["destroy_at_next_end_step"] is True
-    assert bears.metadata["destroy_at_next_end_step" + DELAYED_CAUSE_SUFFIX] == 1
+    assert [
+        creation[CREATION_SEAT]
+        for creation in bears.metadata["destroy_at_next_end_step" + DELAYED_CREATIONS_SUFFIX]
+    ] == [1]
     assert destruction_events.delayed_destruction_cause(bears, "destroy_at_next_end_step") == 1
     # …and one nothing was resolving for is nobody's, not a stale seat.
     destruction_events.mark_delayed_destruction(game, bears, "destroy_at_next_end_step")

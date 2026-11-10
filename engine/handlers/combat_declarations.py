@@ -601,7 +601,7 @@ def force_subject_to_attack_until_eot(game: Game, instruction: OracleInstruction
         ]
     marked: list[str] = []
     # "…destroy **each of those creatures** that didn't attack": one delayed
-    # ability over the set (``destruction_events.DELAYED_TOGETHER_SUFFIX``).
+    # ability over the set (``destruction_events.CREATION_TOGETHER``).
     together = tuple(perm.permanent_id for perm in subjects)
     for perm in subjects:
         if stamp is not None:
@@ -717,7 +717,7 @@ def destroy_subject_at_end_step_if_it_didnt_attack(game: Game, instruction: Orac
             )
         ]
     marked: list[str] = []
-    # One delayed ability over the set (``DELAYED_TOGETHER_SUFFIX``).
+    # One delayed ability over the set (``CREATION_TOGETHER``).
     together = tuple(perm.permanent_id for perm in subjects)
     for perm in subjects:
         if stamp is not None:

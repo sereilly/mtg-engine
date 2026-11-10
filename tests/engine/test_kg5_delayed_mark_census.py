@@ -20,6 +20,17 @@ and for who makes a delayed sacrifice (CR 701.21a).
    kg5/delayed changed (Balduvian Dead, Tidal Wave, Dragon Whelp, Farrelite
    Priest, Initiates of the Ebon Hand, Krovikan Elementalist, Pyric
    Salamander, Soulshriek, Varchild's Crusader).
+
+3. **Each creation is its own delayed ability** (kg5/cleanup). A mark is a
+   kind of delayed ability, and a permanent can be named by several: "if you
+   activate Dragon Whelp's ability five times, for example, two different
+   delayed triggered abilities will trigger at the beginning of the next end
+   step" (its ruling, 2022-09-09). Every mark is written twice on one
+   permanent by two resolutions and its step begins; the census asks for two
+   objects. Backwards: on e245e624c every row is one object — the mark was a
+   flag with one cause beside it, and the second creation overwrote the
+   first. The Whelp and two Thicket Basilisks against one regeneration shield
+   are the boards.
 """
 
 import re
@@ -35,6 +46,8 @@ from engine.legality import _iter_instruction_tree
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.turn_state import DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY, seats_next_turn_window
+
+from tests.helpers import declare_attack, drive_combat, settle
 
 #: Read off the module rather than imported, so the census runs - and fails
 #: row by row - on a tree from before the kind existed.
@@ -73,9 +86,17 @@ def pool():
     return {card.name: card for card in load_catalog()}
 
 
-@pytest.mark.parametrize("mark,step", _MARKS, ids=[mark for mark, _ in _MARKS])
-def test_every_mark_is_announced_as_a_stack_object(pool, mark, step):
-    game, bears = _game(pool)
+def _announced(game) -> list:
+    return [
+        item for item in game.stack
+        if item.ability_instruction is not None
+        and item.ability_instruction.kind == CARRY_OUT_DELAYED_MARK
+    ]
+
+
+def _mark_and_begin_its_step(game, bears, mark, step, creations=1):
+    """*mark* written on *bears* by *creations* resolutions of seat 1's, then
+    the step it names begun; the delayed-mark objects it announced."""
     if mark == DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY:
         # "…at the beginning of **that turn's** end step" names the turn
         # being taken.
@@ -84,11 +105,12 @@ def test_every_mark_is_announced_as_a_stack_object(pool, mark, step):
         assert seats_next_turn_window(game, 0)["seat_turn"] == 2
     else:
         value = True
-    game.resolving_seats.append(1)
-    try:
-        mark_delayed_destruction(game, bears, mark, value)
-    finally:
-        game.resolving_seats.pop()
+    for _ in range(creations):
+        game.resolving_seats.append(1)
+        try:
+            mark_delayed_destruction(game, bears, mark, value)
+        finally:
+            game.resolving_seats.pop()
 
     if step == "end of combat":
         game._set_phase_and_step("combat", "end_of_combat")
@@ -96,16 +118,138 @@ def test_every_mark_is_announced_as_a_stack_object(pool, mark, step):
             game._fire_end_of_combat_triggers()
     else:
         game.resolve_end_step(0)
+    return _announced(game)
+
+
+@pytest.mark.parametrize("mark,step", _MARKS, ids=[mark for mark, _ in _MARKS])
+def test_every_mark_is_announced_as_a_stack_object(pool, mark, step):
+    game, bears = _game(pool)
+    announced = _mark_and_begin_its_step(game, bears, mark, step)
 
     assert game.is_on_battlefield(bears), f"{mark}: carried out before anyone had priority"
-    announced = [
-        item for item in game.stack
-        if item.ability_instruction is not None
-        and item.ability_instruction.kind == CARRY_OUT_DELAYED_MARK
-    ]
     assert [(item.caster_index, item.ability_instruction.payload["mark"])
             for item in announced] == [(1, mark)], game.log[-6:]
     assert mark not in bears.metadata, "CR 603.7b: the mark is spent as it triggers"
+
+
+@pytest.mark.parametrize("mark,step", _MARKS, ids=[mark for mark, _ in _MARKS])
+def test_two_creations_of_one_mark_are_two_delayed_abilities(pool, mark, step):
+    """CR 603.7: each resolution that creates a delayed ability creates one —
+    two writes of one mark are two objects on the stack, each naming the
+    permanent, and the announcement spends the mark and its record."""
+    game, bears = _game(pool)
+    announced = _mark_and_begin_its_step(game, bears, mark, step, creations=2)
+
+    assert [
+        (item.caster_index, item.ability_instruction.payload["mark"],
+         tuple(item.trigger_context[delayed_triggers.DELAYED_MARK_PERMANENT_IDS]))
+        for item in announced
+    ] == [(1, mark, (bears.permanent_id,))] * 2, game.log[-6:]
+    assert not any(key.startswith(mark) for key in bears.metadata), bears.metadata
+
+
+def test_a_creation_never_rides_on_a_swept_mark(pool):
+    """The cleanup step sweeps "this turn"'s marks with the turn
+    (``_EOT_METADATA_KEYS``) without announcing them when the end step never
+    came; a later creation is then the only one."""
+    game, bears = _game(pool)
+    game.resolving_seats.append(1)
+    try:
+        mark_delayed_destruction(game, bears, "destroy_if_attacked_eot")
+        bears.metadata.pop("destroy_if_attacked_eot")   # the cleanup's sweep
+        mark_delayed_destruction(game, bears, "destroy_if_attacked_eot")
+    finally:
+        game.resolving_seats.pop()
+    game.resolve_end_step(0)
+    assert len(_announced(game)) == 1, game.log[-6:]
+
+
+def _whelp_table(pool, activations):
+    island = pool["Island"]
+    game = Game(players=[
+        PlayerState("P1", library=[island] * 10),
+        PlayerState("P2", library=[island] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    whelp = Permanent(card=pool["Dragon Whelp"])
+    game._put_permanent_onto_battlefield(0, whelp, None)
+    for _ in range(activations):
+        result = game.activate_permanent_ability(
+            0, "Dragon Whelp",
+            source_permanent_index=game.players[0].battlefield.index(whelp),
+        )
+        assert result.supported, result.details
+        settle(game)
+    return game, whelp
+
+
+@pytest.mark.parametrize("activations,abilities", [(3, 0), (4, 1), (5, 2), (6, 3)])
+def test_dragon_whelp_makes_one_delayed_sacrifice_per_activation_after_the_third(
+    pool, activations, abilities,
+):
+    """"If this ability has been activated four or more times this turn,
+    sacrifice this creature at the beginning of the next end step." The fourth
+    activation and each one after it create a delayed triggered ability (the
+    card's rulings, 2022-09-09 and 2022-12-08), so the end step announces one
+    object per activation past the third — and the second finds nothing."""
+    game, whelp = _whelp_table(pool, activations)
+    assert whelp.effective_power == 2 + activations
+
+    game.resolve_end_step(0)
+    assert [(item.caster_index, item.card.name) for item in _announced(game)] == (
+        [(0, "Dragon Whelp")] * abilities
+    ), game.log[-8:]
+    settle(game)
+
+    assert game.is_on_battlefield(whelp) is (abilities == 0)
+    assert sum("sacrificed Dragon Whelp at end step" in line for line in game.log) == (
+        1 if abilities else 0
+    )
+    assert sum(
+        "Dragon Whelp: nothing to sacrifice at end step" in line for line in game.log
+    ) == max(0, abilities - 1)
+
+
+def test_two_basilisks_destroy_twice_and_one_regeneration_answers_one(pool):
+    """Two Thicket Basilisks block Drudge Skeletons: each block trigger creates
+    its own "destroy that creature at end of combat" (CR 603.7), so the
+    Skeletons are destroyed twice at end of combat. Fog keeps the combat damage
+    off, and one regeneration shield (CR 701.19) answers only the first
+    destruction. On e245e624c the second creation overwrote the first, one
+    destruction was announced and the shield saved the creature."""
+    island = pool["Island"]
+    skeletons = Permanent(card=pool["Drudge Skeletons"])
+    basilisks = [Permanent(card=pool["Thicket Basilisk"]) for _ in range(2)]
+    game = Game(players=[
+        PlayerState("P1", battlefield=[skeletons], hand=[pool["Fog"]],
+                    library=[island] * 10),
+        PlayerState("P2", battlefield=basilisks, library=[island] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    declare_attack(game, 0, blocks={0: 0, 1: 0})
+    settle(game)
+    assert game.cast_from_hand(0, "Fog").supported
+    settle(game)
+    assert game.activate_permanent_ability(
+        0, "Drudge Skeletons",
+        source_permanent_index=game.players[0].battlefield.index(skeletons),
+    ).supported
+    settle(game)
+    assert skeletons.regeneration_shield == 1
+    drive_combat(game, through="declare_blockers")
+    assert game.resolve_combat_damage(0)[0]
+    drive_combat(game)
+
+    assert not game.is_on_battlefield(skeletons)
+    assert "Drudge Skeletons regenerated" in game.log
+    assert "Drudge Skeletons was destroyed at end of combat" in game.log
+    assert game.log.index("Drudge Skeletons regenerated") < game.log.index(
+        "Drudge Skeletons was destroyed at end of combat"
+    )
 
 
 _ACTOR = re.compile(r"\b(its|that creature's|their) controllers? sacrifices?\b", re.I)
