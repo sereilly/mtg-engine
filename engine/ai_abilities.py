@@ -1135,7 +1135,7 @@ def _rehearse_activation(
             if source is not None:
                 source.tapped = True
 
-    taps = bool(action.land_tap_indices) or source_taps
+    taps = (bool(action.land_tap_indices) and not through_combat) or source_taps
     rehearsal = rehearse(
         game, seat, perform, spell_name=None, leaves_hand=False,
         label=f"{action.permanent_name}'s ability",

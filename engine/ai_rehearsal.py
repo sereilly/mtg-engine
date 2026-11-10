@@ -361,7 +361,77 @@ def run_out_the_turn(game, *, through_combat: bool = False) -> frozenset:
     return _run_out_the_turn(game, through_combat=through_combat)
 
 
-def _fight_the_combat(game, attacks: "set | None" = None) -> frozenset:
+def _in_a_block(game, seat: int) -> bool:
+    """Whether a creature *seat* controls is in a block this combat: one of
+    its attackers blocked, where it is the active seat, or one of its
+    creatures blocking, where it defends (``ai_combat.declared_block_pairs``)."""
+    from .ai_combat import declared_block_pairs
+
+    active = game.active_player_index
+    return any(
+        (seat == active or defender == seat) and declared_block_pairs(game, defender)
+        for defender in range(len(game.players))
+        if defender != active
+    )
+
+
+def _fight_priority_driver(table, seat: int):
+    """The priority driver a scratch copy fights its combat with
+    (:func:`_fight_the_combat`): *seat* — the seat the rehearsal is for —
+    answers its priority in the declare-blockers step, once the blocks are
+    in and the stack is empty, as it would in the game
+    (``ai_priority.act_at_priority``'s ``"combat"`` window: the pump on a
+    blocked attacker, the redirect that wins a block, the regeneration in
+    front of a lethal one), **once per combat**.
+
+    A copy's priority was passed by everybody (the simulator's driver
+    answers only for its own table), so a rehearsal through a fight read the
+    combat as if nothing could be done in it — and a trick that is worth most
+    after the blocks was worth buying only before them: Zealous Inquisitor's
+    redirect was bought in the first main phase because, on the copy with
+    nothing bought, the Bears blocked and traded and the redirect was never
+    raised there (the Known-gaps "AI leftovers" entry, kg4).
+
+    Its choosers rehearse what they propose, and this table is itself a
+    rehearsal's: they are asked **one level down**
+    (``ai_prompt_picks._one_level_deeper``) and never a second — a fight
+    read inside that level is answered by nobody, as every copy's was. Only
+    *seat* acts: every other hand on the copy was dealt again out of what
+    *seat* cannot see (``ai_scratch_copy.conceal_from``), and a trick drawn
+    from a guessed hand is a guess. And only where a creature of *seat*'s is
+    in a block (:func:`_in_a_block`): an unblocked attacker's pump is a
+    reading a fight with no block in it already takes in the real
+    declare-blockers step, and the deeper level is the dearest thing a
+    rehearsal does."""
+    answered: set = set()
+
+    def drive(game, asked: int) -> bool:
+        if game is not table or asked != seat or game.stack:
+            return False
+        if not (
+            game.current_turn_phase == "combat"
+            and game.current_step == "declare_blockers"
+            and game.combat_attackers
+            and game.combat_blockers_locked
+        ):
+            return False
+        combat = tuple(game.combat_attackers)
+        if combat in answered or not _in_a_block(game, seat):
+            return False
+        answered.add(combat)
+        from .ai_priority import act_at_priority
+        from .ai_prompt_picks import _one_level_deeper
+
+        with _one_level_deeper():
+            if rehearsing():
+                return False
+            act = act_at_priority(game, seat)
+        return act is not None and act.supported
+
+    return drive
+
+
+def _fight_the_combat(game, attacks: "set | None" = None, *, seat: "int | None" = None) -> frozenset:
     """Play a scratch copy's combat phases from the main phase it is in: the
     active seat's attack, the blocks, the damage — each declared by the
     policy that would declare it in a game nobody is asked about
@@ -386,9 +456,22 @@ def _fight_the_combat(game, attacks: "set | None" = None) -> frozenset:
 
     *attacks*, where given, is filled with the ``permanent_id`` of every
     attacker declared on the way (``CombatOutcome.attackers_declared``).
+
+    *seat*, where given, is the seat the rehearsal is for, and it answers
+    its priority in each declare-blockers step on the way
+    (:func:`_fight_priority_driver`) — so what it holds for after the blocks
+    is part of the fight it is weighed through. Without it (a census's
+    :func:`run_out_the_turn`) the copy's priority is passed, as before.
     """
     from .ai_combat import CombatOutcome, run_ai_combat_phase
 
+    if seat is not None:
+        previous = game.priority_driver
+        game.priority_driver = _fight_priority_driver(game, seat)
+        try:
+            return _fight_the_combat(game, attacks)
+        finally:
+            game.priority_driver = previous
     outcome = CombatOutcome()
     if game.current_turn_phase == "combat" and not game.is_game_over():
         run_ai_combat_phase(game, game.active_player_index, outcome=outcome)
@@ -413,6 +496,7 @@ def _fight_the_combat(game, attacks: "set | None" = None) -> frozenset:
 
 def _run_out_the_turn(
     game, *, through_combat: bool = False, attacks: "set | None" = None,
+    seat: "int | None" = None,
 ) -> frozenset:
     """Take a scratch copy to the end of its turn: a combat whose blocks are
     already declared deals its damage, the end step's triggers fire
@@ -425,9 +509,10 @@ def _run_out_the_turn(
     so what is read afterwards is what the cast left, and not what a policy
     then did with it. *through_combat* is the exception, asked for by name:
     the turn's combat is fought first (:func:`_fight_the_combat`), and the
-    blocks it declared are returned (none, without it).
+    blocks it declared are returned (none, without it). *seat* answers its priority
+    in that fight (:func:`_fight_the_combat`).
     """
-    blocks = _fight_the_combat(game, attacks) if through_combat else frozenset()
+    blocks = _fight_the_combat(game, attacks, seat=seat) if through_combat else frozenset()
     for _ in range(_REHEARSAL_PASSES):
         if game.current_turn_phase != "combat" or game.is_game_over():
             break
@@ -664,18 +749,19 @@ def _same_fields(was: dict, now: dict) -> bool:
     return True
 
 
-def _measured(game, *, through_combat: bool = False) -> dict:
+def _measured(game, *, through_combat: bool = False, seat: "int | None" = None) -> dict:
     """A scratch copy read twice: as it stands, then run out to the end of
-    its turn (with its combat fought, if *through_combat*). The copy itself
-    is kept beside the readings, for the one more that is taken only when it
-    is needed (:func:`_lasting_digest`)."""
+    its turn (with its combat fought, if *through_combat*, *seat* answering
+    its priority after the blocks). The copy itself is kept beside the
+    readings, for the one more that is taken only when it is needed
+    (:func:`_lasting_digest`)."""
     reading = {
         "digest": position_digest(game),
         "now": standings(game, now=True),
     }
     reading["attacks"] = set()
     reading["blocks"] = _run_out_the_turn(
-        game, through_combat=through_combat, attacks=reading["attacks"],
+        game, through_combat=through_combat, attacks=reading["attacks"], seat=seat,
     )
     reading["lasting"] = standings(game, now=False)
     reading["table"] = game
@@ -790,7 +876,7 @@ def _untouched(
         without(clone, carried)
     _settle_scratch(clone)
     could_cast = _casts_open(clone, seat)
-    reading = _measured(clone, through_combat=through_combat)
+    reading = _measured(clone, through_combat=through_combat, seat=seat)
     reading["could_cast"] = could_cast
     if cache is not None:
         cache[slot] = reading
@@ -1049,7 +1135,7 @@ def _rehearse(
         opened_a_cast = _opened_a_cast(
             clone, seat, untouched["could_cast"], spell_name,
         )
-        reading = _measured(clone, through_combat=through_combat)
+        reading = _measured(clone, through_combat=through_combat, seat=seat)
         # Weighed for the seat that makes *seat*'s decisions (CR 723.5): itself,
         # unless another player controls it this turn (Mindslaver), whose
         # standing a choice made for it is then measured by.
