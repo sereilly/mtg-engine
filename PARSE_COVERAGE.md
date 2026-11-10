@@ -730,6 +730,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | combat_assignment.py (defender assigns) | 2 |
 | handler ← choose_permanent | 2 |
 | x spend one of each color (cast_costs.py) | 2 |
+| handler ← search_and_exile_matching | 2 |
 | cast_bans.py (board-wide ban) | 1 |
 | cast_permissions.py (board-wide free cast) | 1 |
 | special_actions.py | 1 |
