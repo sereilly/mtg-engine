@@ -491,6 +491,13 @@ class OptionalPayChoicesMixin:
         riders (the color rods) have none; "unless you pay" entries (Hasran
         Ogress) carry a ``damage`` amount dealt to the player instead."""
         player = self.players[player_index]
+        # "…discard a card unless you sacrifice a permanent", declined inside
+        # a loop that makes its penalties after its sacrifices (Read the
+        # Runes' ruling; ``SacrificeChoicesMixin.run_penalty``).
+        if entry.get("_chain_context") is None and self.defer_penalty(
+            tuple(entry.get("_on_decline") or ()), entry.get("_context"),
+        ):
+            return
         if self._run_optional_branch(entry, "_on_decline"):
             return
         damage = int(entry.get("damage", 0) or 0)

@@ -1138,7 +1138,57 @@ class SacrificeChoicesMixin:
             id(perm) for _seat, chosen, _data in batch["answers"] for perm in chosen
         }
 
-    def sacrificing_together_through(self, context, run) -> None:
+    def run_penalty(self, steps, context) -> None:
+        """Run an offer's **penalty** — the "unless" clause's consequence
+        (CR 118.12a: "[A player may do something else]. If [that player
+        doesn't], [do something]") — now, or after the loop's sacrifices.
+
+        "Draw X cards. For each card drawn this way, discard a card unless you
+        sacrifice a permanent." (Read the Runes.) Its ruling (2004-10-04): "You
+        draw the cards, then sacrifice any permanents you want to sacrifice,
+        then discard the required number of card from your hand." Each
+        repetition's sacrifice is held for the loop's end
+        (:meth:`sacrificing_together_through`), and each discard happened at its
+        own answer — so the discards came *before* the sacrifices, and a Library
+        of Leng given up to the same Read the Runes still sent a discarded card
+        to the top of the library. Inside a loop that opted in
+        (``penalties_after``), a penalty with no held sacrifice in it waits on
+        the batch and runs after the sacrifices, in the order it was owed; a
+        sacrificing penalty (Fade Away's, Oath of Lim-Dûl's) is held as a
+        sacrifice already and runs where it always did.
+        """
+        from ....handlers.control_flow import _run
+
+        if not self.defer_penalty(steps, context):
+            _run(self, tuple(steps), context)
+
+    def defer_penalty(self, steps, context) -> bool:
+        """Hold *steps* — a penalty :meth:`run_penalty` describes — for the
+        loop's end, and say whether it was held: the decline answer of an
+        offer the prompt asked (``_apply_optional_pay_decline``) asks this as
+        well as the offers that never reached a prompt."""
+        from ....handlers.control_flow import _body_sacrifices
+
+        batch = getattr(context, "sacrifice_batch", None)
+        if (
+            not steps
+            or batch is None
+            or batch.get("applied")
+            or "after" not in batch
+            or _body_sacrifices(tuple(steps))
+        ):
+            return False
+        # A copy, so a loop over objects that rebinds its iteration on the one
+        # context still runs this penalty about the object it was owed for; the
+        # scratchpad (``results``) is shared, as it is anyway.
+        import dataclasses
+
+        batch["after"].append((tuple(steps), dataclasses.replace(context)))
+        return True
+
+    def sacrificing_together_through(
+        self, context, run, *, penalties_after: bool = False,
+    ) -> None:
         """One event for every sacrifice a **resumable loop** makes
         (``engine/resumption.py``): ``run(then)`` runs the loop, and *then* is
         its last step, which performs what the repetitions chose.
@@ -1167,17 +1217,32 @@ class SacrificeChoicesMixin:
         (:meth:`finish_sacrifice_batch`). Inside a loop already holding, the
         loop is part of that one, and *then* is None. The departure twin of
         ``entering_together_through``.
+
+        *penalties_after* is the loop's opt-in to :meth:`run_penalty`'s hold:
+        the penalties its repetitions owe that sacrifice nothing run after the
+        sacrifices, through ``run_resumable`` (a discard asks), as the rest of
+        the last step. Only a loop with nothing behind its last step opts in —
+        a penalty that stops to ask would otherwise have that work run before
+        its answer.
         """
         if context.sacrifice_batch is not None:
             run(None)
             return
         batch = self.new_sacrifice_batch()
+        if penalties_after:
+            batch["after"] = []
         context.sacrifice_batch = batch
 
         def last_step() -> None:
             if context.sacrifice_batch is batch:
                 context.sacrifice_batch = None
             self.finish_sacrifice_batch(batch)
+            owed = batch.pop("after", None)
+            if owed:
+                from ....handlers.control_flow import _run
+                from ....resumption import run_resumable
+
+                run_resumable(self, owed, lambda entry: _run(self, *entry))
 
         try:
             run(last_step)
