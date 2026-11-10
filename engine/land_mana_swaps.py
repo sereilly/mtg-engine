@@ -1,10 +1,13 @@
 """What a seat's lands produce instead, while an effect says so (CR 611.2).
 
 ``Permanent.metadata["produced_mana_swaps"]`` is the other half of this idea and
-it is deliberately not this one. That record names *one land* and one symbol
+it is stored deliberately elsewhere. That record names *one land* and one symbol
 ("If target Plains is tapped for mana, it produces colorless mana instead of
 white mana" — Quarum Trench Gnomes), so it lives on the permanent it changes and
-dies with it (CR 400.7). Deep Water's sentence — "Until end of turn, if you tap
+dies with it (CR 400.7) — but it is a replacement over the same production
+event (CR 106.12b), so it is *applied* here, as one substitution among the
+others (:func:`permanent_substitutions_on`), and ordered against them by the
+tapper (CR 616.1e). Deep Water's sentence — "Until end of turn, if you tap
 a land you control for mana, it produces {U} instead of any other type" — names
 a **class** and a **window**:
 
@@ -25,7 +28,10 @@ payment planner. It cannot be read by ``Permanent.effective_produced_mana``:
 that is a property with no game, so it cannot ask who controls the land — and
 the property is bypassed anyway on any land with a compiled mana ability, which
 runs and writes into the pool itself. The tap seam is the one place both
-branches meet, which is also the place the sentence describes.
+branches meet, which is also the place the sentence describes. (That is the
+Gnomes' record's reason too: read only through the property, it was applied
+ahead of every substitution here, and on no land whose compiled ability made
+the white mana. The property still applies it, for the readers with no game.)
 
 **The third half: a static ability that says it from the battlefield.** "If a
 land is tapped for mana, it produces {B} instead of any other type" (Infernal
@@ -222,6 +228,13 @@ class ManaSubstitution:
     #: printed static in the pool says "type", so this is only ever set from a
     #: :class:`LandManaSwap` that carries it.
     colors_only: bool = False
+    #: "…it produces colorless mana instead of **white mana**." (Quarum Trench
+    #: Gnomes' record, :func:`permanent_substitutions_on`.) The symbols this
+    #: effect replaces, where it names them: every other mana the land makes
+    #: passes through unchanged — "The ability only replaces white mana
+    #: produced by the Plains" (its ruling, 2008-08-01). None is "any other
+    #: type" (or, with ``colors_only``, "any other color").
+    replaces: "frozenset[str] | None" = None
     #: "If **a basic land you control** is tapped for mana…" (Pulse of
     #: Llanowar.) The printed noun phrase the static covers, as a filter
     #: payload, where every earlier printing says "a land" and names no
@@ -238,8 +251,9 @@ class ManaSubstitution:
     #: ``Permanent`` (which does not hash) never reaches the hash.
     source: object = field(default=None, compare=False)
     #: Which effect this is among those that apply to one land's production,
-    #: stable while the event runs: ``static:<permanent id>:<clause>`` or
-    #: ``record:<seat>:<position>`` (:func:`swapped_productions`). CR 616.1
+    #: stable while the event runs: ``static:<permanent id>:<clause>``,
+    #: ``record:<seat>:<position>`` or ``permanent:<land id>:<position>``
+    #: (:func:`swapped_productions`). CR 616.1
     #: counts *effects*, and the registration standing for all of them makes
     #: one candidate per key (``replacements/permanents.py``'s ``instances``).
     #: Like ``source``, no part of what the clause says.
@@ -453,6 +467,31 @@ def static_substitutions_for(game, land) -> "tuple[ManaSubstitution, ...]":
     return tuple(found)
 
 
+def permanent_substitutions_on(land) -> "tuple[ManaSubstitution, ...]":
+    """The substitutions recorded on *land* itself, oldest first: "If target
+    Plains is tapped for mana, it produces colorless mana instead of white
+    mana." (Quarum Trench Gnomes, ``handlers/mana.produce_mana_instead``.)
+
+    Each replaces **only the symbol it names** (``replaces``) — "The ability
+    only replaces white mana produced by the Plains. If a Plains somehow tries
+    to produce mana of a different color …, this effect will not cause it to
+    produce colorless mana." (its ruling, 2008-08-01.) A record outlives a
+    change to the land's types, as the targeted object does; on a land that no
+    longer makes the symbol it names, it replaces nothing.
+    """
+    records = (getattr(land, "metadata", None) or {}).get("produced_mana_swaps") or ()
+    found: list[ManaSubstitution] = []
+    for position, (replaced, produced) in enumerate(records):
+        replaced, produced = str(replaced).upper(), str(produced).upper()
+        if not replaced or not produced:
+            continue
+        found.append(ManaSubstitution(
+            produced=produced, land_type=None, replaces=frozenset({replaced}),
+            key=f"permanent:{getattr(land, 'permanent_id', '')}:{position}",
+        ))
+    return tuple(found)
+
+
 def static_substitution_for(game, land) -> "ManaSubstitution | None":
     """The first battlefield static that makes *land* produce something else
     (:func:`static_substitutions_for`), or None."""
@@ -492,9 +531,9 @@ def _color_of_choice(requested, land) -> str:
     wanted = str(requested or "").upper()
     if wanted in COLORS:
         return wanted
-    for symbol in getattr(land, "effective_produced_mana", ()) or ():
-        if str(symbol).upper() in COLORS:
-            return str(symbol).upper()
+    for symbol in _own_symbols_in_order(land):
+        if symbol in COLORS:
+            return symbol
     return COLORS[0]
 
 
@@ -510,7 +549,8 @@ def swapped_productions(
     game, land, *, tapper: "int | None" = None,
 ) -> "tuple[ManaSubstitution, ...]":
     """**Every** CR 106.12b substitution that applies to *land*'s production,
-    in the default order: the battlefield statics (:func:`static_substitutions_for`)
+    in the default order: the land's own records (:func:`permanent_substitutions_on`),
+    then the battlefield statics (:func:`static_substitutions_for`)
     last found first, then the controller's records oldest first — applied in
     that order, the first static found and the newest record win, which is
     what every seat was given before the order was a choice. Unresolved — a
@@ -529,16 +569,23 @@ def swapped_productions(
     """
     from .subject_filters import subject_matches
 
+    # The land's own records (Quarum Trench Gnomes) **first**: applied ahead
+    # of every other substitution is the answer every seat was given while the
+    # record was read inside ``Permanent.effective_produced_mana`` — kept as
+    # the default order, and now one order among the others (CR 616.1e), so a
+    # Gnomed Plains beside Hall of Gemstone's {R} is {R} when Hall's applies
+    # first. They need no seat: the record names the land.
+    found = list(permanent_substitutions_on(land))
     seat = _seat_of(game, land, tapper)
     if seat is None:
-        return ()
+        return tuple(found)
     # The statics **last found first**, so that applied in this order the
     # first one found is what the land makes over the statics after it — the
     # answer every seat was given before the choice existed ("the first in
     # printed order answers"), kept as the default a request no order makes
     # falls back on; the records follow, oldest first, so the newest record
     # wins over everything, as it did.
-    found = list(reversed(static_substitutions_for(game, land)))
+    found += list(reversed(static_substitutions_for(game, land)))
     for position, record in enumerate(swaps_on(game.players[seat])):
         if not subject_matches(game, land, record.lands, observer=seat):
             continue
@@ -566,24 +613,38 @@ def swapped_productions(
     return tuple(distinct)
 
 
+def replaces_symbol(substitution: ManaSubstitution, symbol: str) -> bool:
+    """Whether *substitution* replaces mana of *symbol*: the symbols it names
+    (``replaces``, Quarum Trench Gnomes' "instead of white mana"), else the
+    colours alone for "…instead of any other **color**" (``colors_only``, Hall
+    of Gemstone; CR 106.1a), else every type."""
+    symbol = str(symbol).upper()
+    if substitution.replaces is not None:
+        return symbol in substitution.replaces
+    if substitution.colors_only:
+        return symbol in COLORS
+    return True
+
+
 def _outcome_symbols(order, base, requested=None) -> frozenset[str]:
     """What mana of the symbols *base* comes out as when the substitutions
     *order* apply one after another (CR 616.1f: each applies to what the one
     before it left).
 
     "Instead of any other type" makes every mana its symbol; "…instead of any
-    other **color**" (Hall of Gemstone) leaves {C} alone (CR 106.1a); "a color
-    of your choice" is *requested* where that is a colour, and any of the five
-    where nothing is named yet. Read per symbol, because each of these acts on
-    each mana alone — the one rider that counts ("…and amount") changes how
-    many, never which.
+    other **color**" (Hall of Gemstone) leaves {C} alone (CR 106.1a); "…instead
+    of **white** mana" (Quarum Trench Gnomes' record) leaves every other symbol
+    alone; "a color of your choice" is *requested* where that is a colour, and
+    any of the five where nothing is named yet. Read per symbol, because each
+    of these acts on each mana alone — the one rider that counts ("…and
+    amount") changes how many, never which.
     """
     current = {str(symbol).upper() for symbol in base}
     asked = str(requested or "").upper()
     for substitution in order:
         after: set[str] = set()
         for symbol in current:
-            if substitution.colors_only and symbol not in COLORS:
+            if not replaces_symbol(substitution, symbol):
                 after.add(symbol)
             elif substitution.produced == MANA_COLOR_OF_CHOICE:
                 after |= {asked} if asked in COLORS else set(COLORS)
@@ -611,12 +672,40 @@ def _orders(substitutions):
         yield tuple(s for s in substitutions if s is not last) + (last,)
 
 
-def _own_symbols(land) -> frozenset[str]:
+def _own_symbols_in_order(land) -> tuple[str, ...]:
     """What *land* makes before anything substitutes it, as upper-case
-    symbols — its ``effective_produced_mana``."""
-    return frozenset(
-        str(symbol).upper() for symbol in (getattr(land, "effective_produced_mana", ()) or ())
-    )
+    symbols in its summary's order — ``Permanent.unswapped_produced_mana``,
+    which leaves its own records (Quarum Trench Gnomes) to
+    :func:`permanent_substitutions_on`, so they are ordered against the rest
+    rather than applied ahead of them."""
+    symbols = getattr(land, "unswapped_produced_mana", None)
+    if symbols is None:
+        symbols = getattr(land, "effective_produced_mana", ()) or ()
+    return tuple(str(symbol).upper() for symbol in symbols)
+
+
+def _own_symbols(land) -> frozenset[str]:
+    """:func:`_own_symbols_in_order` as a set."""
+    return frozenset(_own_symbols_in_order(land))
+
+
+def _base_symbols(game, land) -> frozenset[str]:
+    """What one tap of *land* makes before anything substitutes it: its own
+    summary (:func:`_own_symbols`) and — where the mana ability a bare tap
+    runs makes any colour — the five colours. "Lands you control have "{T}:
+    Add two mana of any one color."" (Overlaid Terrain) is a *granted*
+    ability the summary knows nothing about, the reading
+    ``Game._land_payment_colors`` makes of it with no substitution in force;
+    read off the summary alone, a Gnomed Plains carrying it offered only the
+    {C} its white became, never the blue it can make."""
+    own = _own_symbols(land)
+    abilities = getattr(game, "_land_mana_abilities", None)
+    if abilities is None or set(COLORS) <= own:
+        return own
+    free, _priced = abilities(land)
+    if free is not None and (free.payload or {}).get("any_color"):
+        return own | frozenset(COLORS)
+    return own
 
 
 def ordered_substitutions(
@@ -646,20 +735,47 @@ def ordered_substitutions(
     what the land *could* make passes False and keeps the offer of five.
     """
     substitutions = swapped_productions(game, land, tapper=tapper)
+    if not substitutions:
+        return substitutions
+    wanted = str(requested or "").strip().upper()
+    base = _base_symbols(game, land) or frozenset({"W"})
     if len(substitutions) > 1 and requested is not None:
-        wanted = str(requested).strip().upper()
-        base = _own_symbols(land) or frozenset({"W"})
         for order in _orders(substitutions):
             if wanted in _outcome_symbols(order, base, wanted):
                 substitutions = tuple(order)
                 break
     if not resolve:
         return substitutions
+    return _resolve_choices(substitutions, _choice_for(substitutions, base, wanted, land))
+
+
+def _resolve_choices(order, colour: str) -> "tuple[ManaSubstitution, ...]":
+    """*order* with every "a color of your choice" named *colour*."""
     return tuple(
-        replace(substitution, produced=_color_of_choice(requested, land))
+        replace(substitution, produced=colour)
         if substitution.produced == MANA_COLOR_OF_CHOICE else substitution
-        for substitution in substitutions
+        for substitution in order
     )
+
+
+def _choice_for(order, base, wanted: str, land) -> str:
+    """The colour a "color of your choice" in *order* is named for a tap that
+    asked for *wanted*: *wanted* itself where it is a colour; otherwise the
+    first colour — the land's own first (:func:`_color_of_choice`), then WUBRG
+    — after which the rest of *order* makes *wanted*. Pulse of Llanowar applied
+    first and then Quarum Trench Gnomes' record is {C} only when the colour
+    chosen was white, so a tap asking for {C} names white; with nothing after
+    it to make the request, the land's own colour, as before.
+    """
+    default = _color_of_choice(wanted, land)
+    if wanted in COLORS or not any(
+        substitution.produced == MANA_COLOR_OF_CHOICE for substitution in order
+    ):
+        return default
+    for colour in (default, *COLORS):
+        if wanted in _outcome_symbols(_resolve_choices(order, colour), base):
+            return colour
+    return default
 
 
 def swapped_production(
@@ -696,17 +812,69 @@ def swapped_production(
         return None
     produced = "W"
     for substitution in order:
-        if substitution.colors_only and produced not in COLORS and (
-            produced != MANA_COLOR_OF_CHOICE
-        ):
+        if produced != MANA_COLOR_OF_CHOICE and not replaces_symbol(substitution, produced):
             continue
         produced = substitution.produced
+    # "Only these symbols" where every effect names its symbols (Quarum Trench
+    # Gnomes' record alone): what the land makes of any other symbol is its own.
+    limited = all(s.replaces is not None for s in order)
     return ManaSubstitution(
         produced=produced, land_type=None,
         replaces_amount=any(s.replaces_amount for s in order),
         colors_only=all(s.colors_only for s in order),
+        replaces=frozenset().union(*(s.replaces for s in order)) if limited else None,
         source=order[-1].source, key=order[-1].key,
     )
+
+
+def summary_symbol_for(game, land, requested, *, tapper: "int | None" = None) -> "str | None":
+    """Which symbol of *land*'s own summary (``unswapped_produced_mana``) a tap
+    asking for *requested* produces, for the substitutions to act on — or None
+    where none makes it, the caller's cue to take the first.
+
+    The request itself where the land prints it: a seat names the symbol the
+    land **prints**, which is what its picker offers and what a plan was built
+    against, and the substitutions decide what comes out — a Gnomed Tundra
+    asked for {W} makes the {C} the Gnomes grant. Otherwise the first printed
+    symbol the order the request picks (:func:`ordered_substitutions`) turns
+    into it: a Gnomed Tundra asked for {C} makes its {W}, which the record
+    replaces, and not its {U}, which it leaves alone.
+    """
+    base = _own_symbols_in_order(land)
+    wanted = str(requested or "").strip().upper()
+    if not base or not wanted:
+        return None
+    if wanted in base:
+        return wanted
+    order = ordered_substitutions(game, land, requested, tapper=tapper, resolve=False)
+    for symbol in base:
+        if wanted in _outcome_symbols(order, (symbol,), wanted):
+            return symbol
+    return None
+
+
+def record_color_for(land, requested, offered) -> "str | None":
+    """The colour among *offered* (what a compiled mana ability's choice can
+    name) that *land*'s own records turn into *requested*, or None.
+
+    "…it produces colorless mana instead of **white** mana." (Quarum Trench
+    Gnomes.) A Plains granted "{T}: Add two mana of any one color" (Overlaid
+    Terrain) asked for {C} names white, which the record makes {C}{C}; asked
+    for {C} with nothing named, the choice was the ability's default colour,
+    which the record leaves alone. Only for a request that is no colour —
+    one that is, the ability is asked for itself.
+    """
+    wanted = str(requested or "").strip().upper()
+    if not wanted or wanted in COLORS:
+        return None
+    offered = {str(symbol).upper() for symbol in (offered or ())}
+    for substitution in permanent_substitutions_on(land):
+        if substitution.produced != wanted:
+            continue
+        for colour in COLORS:
+            if colour in substitution.replaces and colour in offered:
+                return colour
+    return None
 
 
 def production_snapshot(player) -> dict:
@@ -731,7 +899,7 @@ def production_snapshot(player) -> dict:
 
 def substitute_production(
     player, before: dict, produced: str, amount: "int | None" = None,
-    *, colors_only: bool = False,
+    *, colors_only: bool = False, replaces: "frozenset[str] | None" = None,
 ) -> int:
     """Turn everything produced since *before* into *produced*, and return how
     much that is.
@@ -752,6 +920,9 @@ def substitute_production(
     *colors_only* is "…instead of any other **color**" (Hall of Gemstone):
     colourless mana is a type but not a colour (CR 106.1a), so {C} the land made is
     left exactly where it is and only the coloured mana is replaced.
+
+    *replaces* is "…instead of **white** mana" (Quarum Trench Gnomes' record):
+    only mana of those symbols is replaced, and any other the land made stays.
     """
     buckets = [(None, player.mana_pool)]
     buckets.extend((getattr(player, "restricted_mana", None) or {}).items())
@@ -761,6 +932,8 @@ def substitute_production(
         gained = 0
         for symbol in list(bucket):
             if colors_only and symbol not in COLORS:
+                continue
+            if replaces is not None and str(symbol).upper() not in replaces:
                 continue
             delta = int(bucket.get(symbol, 0)) - int(prior.get(symbol, 0))
             if delta > 0:
@@ -795,13 +968,17 @@ def payment_colors(game, land) -> "tuple[str, ...] | None":
 
     A swap of colours only (Hall of Gemstone) leaves a land's {C} alone, so a
     land that makes only colourless is answered by no swap at all, and one
-    that makes both keeps its {C} beside the swapped colour.
+    that makes both keeps its {C} beside the swapped colour. So does a record
+    of one symbol (Quarum Trench Gnomes' "instead of white mana") over a land
+    that makes none of it.
     """
     substitutions = swapped_productions(game, land)
     if not substitutions:
         return None
-    own = _own_symbols(land)
-    if all(s.colors_only for s in substitutions) and not own & set(COLORS):
+    own = _base_symbols(game, land)
+    if all(s.colors_only or s.replaces is not None for s in substitutions) and not any(
+        replaces_symbol(s, symbol) for s in substitutions for symbol in own
+    ):
         return None
     reachable: set[str] = set()
     for order in _orders(substitutions):
@@ -854,9 +1031,9 @@ def swapped_symbol(game, land) -> str | None:
 __all__ = [
     "COLORS", "END_OF_TURN", "LandManaSwap", "ManaSubstitution", "add_swap",
     "clear_swaps", "could_produce_under_substitutions", "ordered_substitutions",
-    "payment_colors", "production_snapshot",
-    "static_substituted_symbol", "static_substitution_for",
-    "static_substitutions_for", "swapped_productions",
+    "payment_colors", "permanent_substitutions_on", "production_snapshot",
+    "replaces_symbol", "static_substituted_symbol", "static_substitution_for",
+    "static_substitutions_for", "summary_symbol_for", "swapped_productions",
     "source_wide_swap", "apply_source_wide_swap",
     "substitute_production", "substitution_line", "substitutions_on",
     "swapped_production", "swapped_symbol", "swaps_on",

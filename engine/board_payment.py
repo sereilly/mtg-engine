@@ -278,6 +278,14 @@ def _under_a_swap(game: "Game", land: "Permanent", found: TapYield) -> TapYield:
     offered = land_mana_swaps.payment_colors(game, land)
     if swap is None or offered is None or not found.units:
         return found
+    if swap.replaces is not None:
+        # Records of one symbol each (Quarum Trench Gnomes' "instead of white
+        # mana") and nothing else: each unit is what *its* symbols come out
+        # as, in any order — a Gnomed Tundra's {W}/{U} unit is {C}/{U}.
+        return TapYield(tuple(
+            land_mana_swaps.could_produce_under_substitutions(game, land, unit)
+            for unit in found.units
+        ), one_color=found.one_color)
     colours = frozenset(offered) - {"C"} if swap.colors_only else frozenset(offered)
 
     def swapped(unit: frozenset[str]) -> frozenset[str]:

@@ -1250,11 +1250,13 @@ def produce_mana_instead(game: Game, instruction: OracleInstruction, context: Or
     of white mana." (Quarum Trench Gnomes.)
 
     A CR 611.2 continuous effect with no duration — "this effect lasts
-    indefinitely" — so it is recorded on the land rather than applied here. The
-    record is read by ``Permanent.effective_produced_mana``, the one place the
-    engine asks what a land makes, which is why nothing else has to change: the
-    tap path, the payment planner, the AI's land read and the web payload all
-    go through that property already.
+    indefinitely" — so it is recorded on the land rather than applied here. It
+    is a replacement over the land's mana production (CR 106.12b), so the tap
+    event applies it as one substitution among the others, in the order the
+    tapper's request picks (CR 616.1e; ``land_mana_swaps.permanent_substitutions_on``),
+    and replacing only the white mana it names; the payment planner and the
+    client ask the same module. ``Permanent.effective_produced_mana`` applies
+    it too, for the readers that ask a land with no game.
 
     It dies with the permanent, which is right without any sweep: CR 400.7
     makes a land that leaves and returns a new object, and the effect named the

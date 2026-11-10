@@ -227,7 +227,7 @@ class LandManaTapsMixin:
         player and not for the other.
         """
         from ..ai_valuation import mana_ability_symbols
-        from ..land_mana_swaps import swapped_production
+        from ..land_mana_swaps import could_produce_under_substitutions, swapped_production
 
         free, priced = self._land_mana_abilities(land)
         if free is not None and color in mana_ability_symbols(free):
@@ -262,7 +262,16 @@ class LandManaTapsMixin:
         # **color**", Hall of Gemstone) over a default that makes only {C},
         # which the swap leaves alone.
         swap = swapped_production(self, land) if free is not None else None
-        if swap is not None and swap.produced is not None and not (
+        if swap is not None and swap.replaces is not None:
+            # …but a record of one symbol ("…instead of **white** mana",
+            # Quarum Trench Gnomes) makes its symbol only of the mana it
+            # names: the default answers when what it makes comes out as the
+            # colour asked for.
+            if color in could_produce_under_substitutions(
+                self, land, mana_ability_symbols(free),
+            ):
+                return None
+        elif swap is not None and swap.produced is not None and not (
             swap.colors_only and mana_ability_symbols(free) <= {"C"}
         ):
             return None
@@ -708,6 +717,9 @@ class LandManaTapsMixin:
             # honest one for a land that does not.
             mana_symbol = chosen_color
             if mana_ability is not None:
+                from ..ai_valuation import mana_ability_symbols
+                from ..land_mana_swaps import permanent_substitutions_on, record_color_for
+
                 instruction = mana_ability
                 # The colour arrives the way the activation path delivers it,
                 # so "tap Badlands for {R}" keeps meaning what it did; the
@@ -723,7 +735,17 @@ class LandManaTapsMixin:
                 # ValueError. Colourless is not a colour (CR 105.1), so a land
                 # asked for it has been told nothing about its choice and makes
                 # its first printed alternative — which the swap then replaces.
+                #
+                # …unless the land's own record makes {C} of a colour it names
+                # ("…colorless mana instead of white mana", Quarum Trench
+                # Gnomes): a choice the ability offers is then asked for that
+                # colour, which the record replaces — the compiled twin of
+                # the summary path's ``summary_symbol_for``.
                 asked_color = self._chosen_mana_color(chosen_color)
+                if asked_color is None and permanent_substitutions_on(land):
+                    asked_color = self._chosen_mana_color(record_color_for(
+                        land, chosen_color, mana_ability_symbols(mana_ability),
+                    ))
                 if asked_color:
                     instruction = dataclasses.replace(
                         instruction,
@@ -733,9 +755,7 @@ class LandManaTapsMixin:
                 # ("Choose a color. Add one mana of that color."), which the
                 # outer injection cannot reach — CR 605.3b, one helper for both
                 # inline sites (``mana_payment.answer_color_choices``).
-                instruction = answer_color_choices(
-                    instruction, self._chosen_mana_color(chosen_color)
-                )
+                instruction = answer_color_choices(instruction, asked_color)
                 self._execute_oracle_instruction(
                     instruction,
                     OracleExecutionContext(
@@ -752,22 +772,32 @@ class LandManaTapsMixin:
                         # And the type, {C} included: "any type" may be asked
                         # for it (``mana_could_produce.NAMED_MANA_TYPE``).
                         choices={
-                            "new_color": self._chosen_mana_color(chosen_color),
+                            "new_color": asked_color,
                             NAMED_MANA_TYPE: named_mana_type(chosen_color),
                         },
                     ),
                 )
             else:
-                produced = land.effective_produced_mana
+                # What the land makes **before** any substitution, its own
+                # records (Quarum Trench Gnomes) included: the tap event applies
+                # every one of them to this production, in the order the
+                # request picks (CR 616.1e), so producing the record's answer
+                # here would apply it ahead of the rest.
+                from ..land_mana_swaps import summary_symbol_for
+
+                produced = land.unswapped_produced_mana
                 if gained_symbol is not None:
                     mana_symbol = gained_symbol
                 elif produced:
                     # A colour swapped away is still a legitimate request: the seat
-                    # names the symbol the land prints and the swap decides what
-                    # comes out, so the request is mapped through the swaps rather
-                    # than dropped. `produced[0]` is the answer only when nothing
-                    # maps — a land asked for a colour it never made.
-                    mana_symbol = land.produced_symbol_for(chosen_color) or produced[0]
+                    # names the symbol the land prints and the substitutions decide
+                    # what comes out, so the request picks the printed symbol they
+                    # turn into it rather than being dropped. `produced[0]` is the
+                    # answer only when nothing maps — a land asked for a colour it
+                    # never made.
+                    mana_symbol = summary_symbol_for(
+                        self, land, chosen_color, tapper=player_index,
+                    ) or produced[0]
                 else:
                     symbols = land.basic_land_mana
                     if symbols:

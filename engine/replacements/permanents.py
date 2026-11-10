@@ -901,7 +901,8 @@ def _substitute_land_mana(
     """"If a land is tapped for mana, it produces {B} instead of any other
     type." (Infernal Darkness, Ritual of Subdual, Contamination, Naked
     Singularity, Reality Twist, Pulse of Llanowar; the records of Deep Water,
-    Pale Moon, Chaos Moon, Harvest Mage, Hall of Gemstone and False Dawn.)
+    Pale Moon, Chaos Moon, Harvest Mage, Hall of Gemstone and False Dawn;
+    Quarum Trench Gnomes' record on the land.)
 
     CR 106.12b: a replacement effect that applies if a permanent "is tapped for
     mana" modifies the mana production event **while the mana ability is
@@ -922,11 +923,11 @@ def _substitute_land_mana(
     last, which CR 616.1f says they do.
 
     One registration standing for every effect that prints this sentence
-    (``instances``): a battlefield static and a per-seat record are both
-    substitutions in ``engine/land_mana_swaps.py``, so the payment planner can
-    ask what a land will make without applying a replacement to find out.
-    (Quarum Trench Gnomes' per-permanent record is read inside
-    ``effective_produced_mana`` instead, ahead of every one of these.)
+    (``instances``): a battlefield static, a per-seat record and a
+    per-permanent one (Quarum Trench Gnomes' "…instead of white mana", which
+    replaces only the symbol it names) are all substitutions in
+    ``engine/land_mana_swaps.py``, so the payment planner can ask what a land
+    will make without applying a replacement to find out.
     *instance* is the one this round applies; None (asked with no event in
     hand) applies them all.
     """

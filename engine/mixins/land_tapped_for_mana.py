@@ -185,10 +185,12 @@ class LandTappedForManaMixin:
         # in the pool, because this is the one place the two production paths
         # meet: a land with a compiled mana ability runs it and writes into the
         # pool itself, where a basic falls through to the `produced_mana`
-        # summary — and the per-permanent swap `Permanent._swapped_mana`
-        # applies is only on the second of those. Snapshotting the pool is what
-        # makes "instead of any **other** type" mean what it says: whatever came
-        # out, this is what it is instead.
+        # summary. Quarum Trench Gnomes' per-permanent record is one of these
+        # substitutions too (``land_mana_swaps.permanent_substitutions_on``):
+        # read off the summary, it was applied ahead of every other one and on
+        # no land whose compiled ability made the white mana. Snapshotting the
+        # pool is what makes "instead of any **other** type" mean what it says:
+        # whatever came out, this is what it is instead.
         #
         # No `restart` thunk: a land is tapped for mana part-way through paying
         # a cost (CR 601.2g), before the spell it pays for is on the stack, so
@@ -237,6 +239,7 @@ class LandTappedForManaMixin:
                 player, pool_before, substitution.produced,
                 1 if substitution.replaces_amount else None,
                 colors_only=substitution.colors_only,
+                replaces=substitution.replaces,
             )
             if moved:
                 shown = substitution.produced
@@ -244,8 +247,10 @@ class LandTappedForManaMixin:
             # not what would have: a Mana Flare over a Ritual of Subdual board
             # matches the colourless the land really made. Except where a
             # colours-only swap moved nothing — Hall of Gemstone over a land
-            # that made {C} changed nothing, and the {C} is what it made.
-            if moved or not substitution.colors_only:
+            # that made {C} changed nothing, and the {C} is what it made — or
+            # a record of one symbol did (Quarum Trench Gnomes over a Tundra's
+            # {U}).
+            if moved or not (substitution.colors_only or substitution.replaces is not None):
                 mana_symbol = substitution.produced
         if shown is not None:
             self.log.append(f"{land_name} produced {{{shown}}} instead")
