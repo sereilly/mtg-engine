@@ -516,7 +516,9 @@ def test_tithe_offers_the_second_search_only_when_the_condition_holds(set_pool):
     }
 
     steps = program.instructions[0].payload["steps"]
-    assert [step.kind for step in steps] == ["search_library", "if_then"]
+    # The printed "then shuffle" is one step behind both searches (CR
+    # 701.23h, kg5): neither search shuffles as it is answered.
+    assert [step.kind for step in steps] == ["search_library", "if_then", "shuffle_library"]
     assert steps[1].payload["condition"]["op"] == "more_than_you"
     assert steps[1].payload["then"][0].kind == "may"
 

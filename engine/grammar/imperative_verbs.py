@@ -919,7 +919,7 @@ def _parse_conditional_additional_search(
         return ast.SearchLibrary(
             ast.PlayerRef("you"), wanted,
             ast.Zone("hand", ast.PlayerRef("you")),
-            tapped=(False,), reveal=True,
+            tapped=(False,), reveal=True, no_own_shuffle=True,
         )
 
     # Two search steps rather than one for two finds, which is what the flow
@@ -928,11 +928,18 @@ def _parse_conditional_additional_search(
     # controller wants it. CR 701.23h makes the two one search in the rules;
     # what a player sees is two prompts, and every card that could be found is
     # findable in exactly one of them.
+    #
+    # **One shuffle**, and that much of CR 701.23h the flow can express: each
+    # step ends with no shuffle of its own (``no_own_shuffle``) and the printed
+    # "then shuffle" is a statement of its own behind both. Each search used to
+    # shuffle as it was answered, so both finds shuffled twice — a second
+    # library-shuffled event, which Psychogenic Probe made a second 2 damage.
     return ast.Sequence((
         _one_search(),
         ast.Conditional(
             condition,
             ast.May(ast.PlayerRef("you"), action=_one_search()),
         ),
+        ast.ShuffleLibrary(ast.PlayerRef("you")),
     ))
 

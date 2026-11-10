@@ -242,11 +242,12 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # fail-to-find without the prompt: there is no card a seat could name.
         searched = game.players[seats.get("zone_seat", caster_index)]
         if "library" in zones:
-            game.shuffle_library_of(searched)
+            game.shuffle_after_search(instruction.payload, searched)
         whose = "their" if searched is caster else f"{searched.name}'s"
         ceiling = "up to " if instruction.payload.get("up_to") else ""
         game.log.append(
-            f"{caster.name} searched {whose} library for {ceiling}0 cards and shuffled"
+            f"{caster.name} searched {whose} library for {ceiling}0 cards"
+            + ("" if instruction.payload.get("no_shuffle") else " and shuffled")
         )
         return True, "resolved"
     if counted_from is not None and count <= 0:
@@ -309,6 +310,11 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
             {"from_top": int(instruction.payload["from_top"])}
             if instruction.payload.get("from_top") else {}
         ),
+        # "…, then shuffle." printed once behind several searches (Tithe,
+        # CR 701.23h): this one ends without a shuffle of its own, which the
+        # flow's one end-of-search shuffle (``shuffle_after_search``) reads.
+        # Absent for every other search.
+        **({"no_shuffle": True} if instruction.payload.get("no_shuffle") else {}),
     )
     # Whose zone, not the chooser's, because they are not always the same seat.
     searched = game.players[seats.get("zone_seat", caster_index)]

@@ -457,6 +457,21 @@ def _lower_search_library(
         # ``destinations``. Emitted only when the card prints it, so every
         # search written before this keeps a byte-identical payload.
         payload["exile_rest"] = True
+    if node.no_own_shuffle:
+        # "…search your library for an additional Plains card. Reveal those
+        # cards, put them into your hand, then shuffle." (Tithe.) The effect
+        # shuffles once, behind every search it makes (CR 701.23h), so this
+        # one ends without — read by the flow's one end-of-search shuffle
+        # (``shuffle_after_search``). A placement *after* the shuffle ("then
+        # shuffle and put that card on top") would be shuffled away by the
+        # later statement, and Gamble's discard sits inside its own search's
+        # sentence; neither is this shape, so both refuse.
+        if to_library_top or to_library_from_top or node.discard_after:
+            raise LoweringError(
+                "a find placed after its search's shuffle cannot defer it",
+                node=node,
+            )
+        payload["no_shuffle"] = True
     if to_library_top:
         payload["destination"] = "library_top"
     if to_library_from_top:
