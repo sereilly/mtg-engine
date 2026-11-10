@@ -113,8 +113,13 @@ def test_both_discard_seams_reach_the_one_destination():
 def test_no_cost_is_paid_through_the_chosen_seam():
     """The chosen seam offers Library of Leng whenever its prompt did not
     (the Library reaches an effect's discard, whoever controls the effect);
-    "costs aren't effects" (its 2004-10-04 ruling), so a cost may not pay a
-    discard through it."""
+    "costs aren't effects" (its 2004-10-04 ruling), so no cost step of a cast
+    or an activation (CR 601.2h, 602.2b) may pay a discard through it.
+
+    (A cost paid as a spell or ability **resolves** — CR 118.12's "you may
+    discard a card. If you don't, …", Masticore's upkeep — still reaches the
+    chosen seam through ``may``'s discard prompt, which offers the library
+    top: measured and left by round kg5 `asks`, not held here.)"""
     offenders = [
         f"{module}:{function.name}"
         for module, function in _functions("_resolve_one_discard")
