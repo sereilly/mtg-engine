@@ -952,8 +952,11 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         # untapped and a board scan would name whichever one matches now.
         #
         # **Types, not colours** (CR 106.1b): a land tapping for {C} answers
-        # this phrase, so the set comes off `effective_produced_mana` rather
-        # than `produced_mana_colors`, which is the colour half one branch down.
+        # this phrase. And **CR 106.7's types**, not the land's summary: what
+        # its abilities would make on this board after the substitutions over
+        # its production — an opponent's Reflecting Pool offers what that
+        # opponent's other lands could produce, not the five colours Scryfall
+        # lists (``mana_could_produce.types_that_land_could_produce``).
         # "…of any type **the sacrificed land** could produce" (Squandered
         # Resources) reads the same last-known-information channel one payment
         # over. That permanent is *gone* by the time this runs — a sacrifice
@@ -970,8 +973,12 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             cost_record, printed, _ = ANY_TYPE_FROM_RECORDS[any_type_from]
             land = (context.choices or {}).get(cost_record)
             # The wire asks the same reader which types to offer
-            # (``web/offers._decided_ability_mana``).
-            available = types_that_land_could_produce(land)
+            # (``web/offers._decided_ability_mana``): CR 106.7's fixpoint, the
+            # sacrificed land answered beside the board it left under the seat
+            # that sacrificed it (it could sacrifice only its own).
+            available = types_that_land_could_produce(
+                game, land, seat=game.seat_index(caster),
+            )
             if not available:
                 game.log.append(f"{card.name}: {printed} produces no mana")
                 return True, "resolved"

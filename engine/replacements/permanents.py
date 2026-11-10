@@ -842,41 +842,66 @@ def _land_mana_tapper(game, payload: dict) -> "int | None":
     )
 
 
-def _applies_land_mana_substitution(game, payload: dict) -> bool:
-    from ..land_mana_swaps import swapped_production
+def _land_mana_substitutions(game, payload: dict) -> tuple:
+    """The substitutions over this event's production, in the order the
+    tapper's request picks (``land_mana_swaps.ordered_substitutions``) and
+    resolved for it: what every reader below answers from. Pure."""
+    from ..land_mana_swaps import ordered_substitutions
 
-    found = swapped_production(
-        game, payload["land"], tapper=_land_mana_tapper(game, payload),
+    return ordered_substitutions(
+        game, payload["land"], payload.get("requested"),
+        tapper=_land_mana_tapper(game, payload),
     )
-    return found is not None and found.produced is not None
+
+
+def _applies_land_mana_substitution(game, payload: dict) -> bool:
+    return bool(_land_mana_substitutions(game, payload))
+
+
+def _land_mana_substitution_instances(game, payload: dict) -> list:
+    """Each substitution over this production as a CR 616.1 effect of its
+    own: ``(key, source)``, in the order they apply.
+
+    CR 616.1e puts the order to the land's controller, and the event cannot
+    wait for an answer — a land is tapped for mana part-way through paying a
+    cost (CR 601.2g) — so the choice arrives **with the tap**: the symbol the
+    tapper asked for picks the order (``ordered_substitutions``), and the
+    instances are listed in it. Nothing asks between them, so CR 616.1e's
+    default for an unasked round — the first of equal orders — applies them
+    in that order, the last applied deciding what the land makes."""
+    return [
+        (substitution.key, substitution.source)
+        for substitution in _land_mana_substitutions(game, payload)
+    ]
 
 
 def _land_mana_substitution_sources(game, payload: dict) -> list:
-    """What makes the land produce something else for this event: the
-    permanent whose static says so (Infernal Darkness, Pulse of Llanowar) or
-    the card that armed the seat's record (Deep Water, Harvest Mage), as
-    ``land_mana_swaps.swapped_production`` answers it — the one answer the
-    replacement applies, so the option names what will win. Pure."""
-    from ..land_mana_swaps import swapped_production
-
-    found = swapped_production(
-        game, payload["land"], tapper=_land_mana_tapper(game, payload),
-    )
-    if found is None or found.produced is None or found.source is None:
-        return []
-    return [found.source]
+    """What makes the land produce something else for this event: each
+    permanent whose static says so (Infernal Darkness, Pulse of Llanowar) and
+    each card that armed one of the seat's records (Deep Water, Harvest Mage),
+    in the order they apply — so the option names every effect it stands
+    for. Pure."""
+    return [
+        substitution.source
+        for substitution in _land_mana_substitutions(game, payload)
+        if substitution.source is not None
+    ]
 
 
 @replacement_effect(
     "land_mana_produced", LAND_MANA_SUBSTITUTION,
     applies=_applies_land_mana_substitution,
+    instances=_land_mana_substitution_instances,
     sources=_land_mana_substitution_sources,
     label="The land produces the named type of mana instead",
 )
-def _substitute_land_mana(game, payload: dict) -> ReplacementOutcome | None:
+def _substitute_land_mana(
+    game, payload: dict, instance: "str | None" = None,
+) -> ReplacementOutcome | None:
     """"If a land is tapped for mana, it produces {B} instead of any other
-    type." (Infernal Darkness, Ritual of Subdual, Naked Singularity, Reality
-    Twist, Deep Water, Quarum Trench Gnomes.)
+    type." (Infernal Darkness, Ritual of Subdual, Contamination, Naked
+    Singularity, Reality Twist, Pulse of Llanowar; the records of Deep Water,
+    Pale Moon, Chaos Moon, Harvest Mage, Hall of Gemstone and False Dawn.)
 
     CR 106.12b: a replacement effect that applies if a permanent "is tapped for
     mana" modifies the mana production event **while the mana ability is
@@ -887,38 +912,29 @@ def _substitute_land_mana(game, payload: dict) -> ReplacementOutcome | None:
 
     The event is not consumed: mana is still produced and the land is still
     tapped for mana, so every trigger that watches for that still fires
-    (CR 106.12a). What changes is ``payload["produced"]`` — the symbol the
-    seam moves the produced mana onto once its own production has run, which
-    is what makes "instead of any **other** type" mean what it says whether
-    the land ran a compiled mana ability or fell through to its printed
-    summary.
+    (CR 106.12a). What changes is ``payload["substitutions"]`` — each applied
+    effect appended in the order CR 616.1 applies them, which the seam carries
+    out on what its own production put in the pool once that has run
+    (``land_mana_swaps.substitute_production``, one effect after another).
+    That is what makes "instead of any **other** type" mean what it says
+    whether the land ran a compiled mana ability or fell through to its
+    printed summary — and what makes two of them come out as the one applied
+    last, which CR 616.1f says they do.
 
-    Which symbol is ``engine/land_mana_swaps.py``'s question, not this one's.
-    Three different producers print this sentence — a battlefield static, a
-    per-seat record and a per-permanent record — and they reduce to one symbol
-    there, so the payment planner can ask what a land will make without
-    applying a replacement to find out.
+    One registration standing for every effect that prints this sentence
+    (``instances``): a battlefield static and a per-seat record are both
+    substitutions in ``engine/land_mana_swaps.py``, so the payment planner can
+    ask what a land will make without applying a replacement to find out.
+    (Quarum Trench Gnomes' per-permanent record is read inside
+    ``effective_produced_mana`` instead, ahead of every one of these.)
+    *instance* is the one this round applies; None (asked with no event in
+    hand) applies them all.
     """
-    from ..land_mana_swaps import swapped_production
-
-    # "…one mana of **a color of your choice**…" (Harvest Mage) is named by the
-    # tapper for this one event, so the colour the seam was asked for travels
-    # with the event and answers it. Every fixed swap ignores it.
-    substitution = swapped_production(
-        game, payload["land"], requested=payload.get("requested"),
-        tapper=_land_mana_tapper(game, payload),
-    )
-    if substitution is None:
+    applied = [
+        substitution for substitution in _land_mana_substitutions(game, payload)
+        if instance is None or substitution.key == instance
+    ]
+    if not applied:
         return None
-    payload["produced"] = substitution.produced
-    # "…instead of any other type **and amount**." (Contamination.) The
-    # sentence replaces how much as well as which, so the whole production
-    # becomes one mana rather than however many the land made. Carried as the
-    # *amount* rather than as a second flag, because that is what the seam
-    # spends it on and a flag would have to be turned back into a number
-    # somewhere.
-    payload["produced_amount"] = 1 if substitution.replaces_amount else None
-    # "…instead of any other **color**." (Hall of Gemstone.) The {C} a land
-    # makes is not of any colour (CR 106.1a), so the seam leaves it alone.
-    payload["colors_only"] = bool(substitution.colors_only)
+    payload.setdefault("substitutions", []).extend(applied)
     return ReplacementOutcome()

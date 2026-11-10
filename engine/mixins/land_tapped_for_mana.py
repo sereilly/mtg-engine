@@ -192,13 +192,15 @@ class LandTappedForManaMixin:
         #
         # No `restart` thunk: a land is tapped for mana part-way through paying
         # a cost (CR 601.2g), before the spell it pays for is on the stack, so
-        # there is no moment at which a CR 616.1e choice could be answered and
-        # nothing to re-run it against.
+        # there is no moment at which a CR 616.1e prompt could be answered and
+        # nothing to re-run it against. The choice is made **before the tap**
+        # instead: the symbol the seat asked for picks the order the
+        # substitutions apply in (``land_mana_swaps.ordered_substitutions``) —
+        # Infernal Darkness beside a Deep Water record is {B} or {U}, as asked.
         _, mana_event = apply_replacements(
             self, "land_mana_produced",
             {
-                "land": land, "player": player, "produced": None,
-                "produced_amount": None,
+                "land": land, "player": player, "substitutions": [],
                 # The colour the seat asked this land for. "…it produces one
                 # mana of **a color of your choice** instead…" (Harvest Mage)
                 # is chosen per tap, and this request is that choice — the
@@ -206,12 +208,8 @@ class LandTappedForManaMixin:
                 "requested": chosen_color,
             },
         )
-        swapped_to = mana_event.get("produced")
-        # "…instead of any other type **and amount**." (Contamination.) None is
-        # every other substitution, which replaces the type and leaves the
-        # count alone — an Ancient Tomb under Infernal Darkness makes {B}{B}
-        # and under Contamination makes {B}.
-        swapped_amount = mana_event.get("produced_amount")
+        # Each applied substitution, in the order CR 616.1 applied them.
+        substitutions = tuple(mana_event.get("substitutions") or ())
         # Every bucket, not only the open pool: mana a "spend this mana only…"
         # clause narrowed is written into its own bucket (CR 106.6), and a
         # snapshot of the pool alone let it escape every swap — Mishra's
@@ -225,29 +223,32 @@ class LandTappedForManaMixin:
         self.log.append(f"{player.name} tapped {land_name} for mana")
         mana_symbol = produce()
 
-        if swapped_to:
-            # Whatever the land already put in under the swapped symbol itself
-            # counts toward the replaced amount: a Swamp under Contamination
-            # made its own {B}, and the sentence says the whole production is
-            # one {B} rather than one more. Each bucket keeps its own mana, so a
+        shown = None
+        for substitution in substitutions:
+            # One effect after another, each on what the one before it left
+            # (CR 616.1f). Whatever the land already put in under the swapped
+            # symbol itself counts toward the replaced amount: a Swamp under
+            # Contamination made its own {B}, and "…instead of any other type
+            # **and amount**" says the whole production is one {B} rather than
+            # one more — where Infernal Darkness leaves the count alone, so an
+            # Ancient Tomb makes {B}{B}. Each bucket keeps its own mana, so a
             # restricted production stays restricted (CR 106.6).
-            colors_only = bool(mana_event.get("colors_only"))
             moved = substitute_production(
-                player, pool_before, swapped_to,
-                None if swapped_amount is None else int(swapped_amount),
-                colors_only=colors_only,
+                player, pool_before, substitution.produced,
+                1 if substitution.replaces_amount else None,
+                colors_only=substitution.colors_only,
             )
             if moved:
-                self.log.append(
-                    f"{land_name} produced {{{swapped_to}}} instead"
-                )
+                shown = substitution.produced
             # "One mana of any type **that land produced**" is what came out,
             # not what would have: a Mana Flare over a Ritual of Subdual board
             # matches the colourless the land really made. Except where a
             # colours-only swap moved nothing — Hall of Gemstone over a land
             # that made {C} changed nothing, and the {C} is what it made.
-            if moved or not colors_only:
-                mana_symbol = swapped_to
+            if moved or not substitution.colors_only:
+                mana_symbol = substitution.produced
+        if shown is not None:
+            self.log.append(f"{land_name} produced {{{shown}}} instead")
 
 
         # What the land really made, across every bucket (CR 106.6: restricted
@@ -671,16 +672,20 @@ class LandTappedForManaMixin:
     def _tap_lands_sharing_produced_mana(
         self, instruction, tapping_seat: int, land, source
     ) -> None:
-        """Mana Web: tap every land that seat controls whose produced-mana set
-        overlaps the one just tapped for mana.
+        """Mana Web: "tap all lands that player controls that **could
+        produce** any type of mana that land could produce."
 
-        **Types, not colours** (CR 106.1b): a land that taps for {C} answers
-        "any type of mana", which is why the sets come off
-        ``Permanent.effective_produced_mana`` — the one place the engine asks
-        what a land makes, so a land whose types were replaced (Evil Presence),
-        whose production was swapped (Quarum Trench Gnomes) or which is a copy
-        of another land is compared by what it makes now rather than by what it
-        was printed as.
+        **CR 106.7's sets** — "which types of mana … that land could produce
+        using any of its mana abilities, not merely the one the player just
+        used" (its ruling, 2008-04-01) — read off the fixpoint
+        (``mana_could_produce.lands_could_produce``), which takes a land whose
+        types were replaced (Evil Presence), whose production was swapped
+        (Quarum Trench Gnomes; a substitution in any order) or which is a copy
+        of another land by what it could make now. **Types, not colours** (CR
+        106.1b): a land that taps for {C} answers "any type of mana". They came
+        off each land's ``effective_produced_mana``, so an opponent's
+        Reflecting Pool — five colours by its summary — shared a type with
+        every land its controller had, whatever those lands made.
 
         The land that was tapped is in the set it describes, and is skipped
         rather than tapped again — it is already tapped, so nothing changes
@@ -691,10 +696,13 @@ class LandTappedForManaMixin:
         ``controller: that_player`` names and what the lowering refuses any
         other value of.
         """
-        produced = {
-            str(symbol).upper()
-            for symbol in (land.effective_produced_mana or ())
-        }
+        from ..mana_could_produce import (lands_could_produce,
+                                          types_that_land_could_produce)
+
+        could = lands_could_produce(self)
+        produced = set(types_that_land_could_produce(
+            self, land, seat=tapping_seat, could=could,
+        ))
         if not produced:
             return
         described = {
@@ -712,10 +720,7 @@ class LandTappedForManaMixin:
                 observer=tapping_seat, source=source,
             ):
                 continue
-            if not produced & {
-                str(symbol).upper()
-                for symbol in (candidate.effective_produced_mana or ())
-            }:
+            if not produced & could.get(candidate.permanent_id, frozenset()):
                 continue
             self.become_tapped(candidate)
             tapped.append(candidate.card.name)

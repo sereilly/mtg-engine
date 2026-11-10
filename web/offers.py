@@ -25,7 +25,8 @@ from engine.ai_text_changes import ability_text_change_mode, announced_text_chan
 from engine.board_payment import board_can_pay, tap_alone_symbols
 from engine.cost_modifiers import cast_mana_charge
 from engine.cost_x_definitions import cost_x_is_defined
-from engine.mana_could_produce import ability_colors_on_offer, types_that_land_could_produce
+from engine.mana_could_produce import (ability_colors_on_offer, lands_could_produce,
+                                       types_that_land_could_produce)
 from engine.models import Permanent
 from engine.noted_mana import noted_mana
 from engine.oracle import compile_card_oracle
@@ -284,10 +285,14 @@ def _decided_ability_mana(game: Game, perm: Permanent, instruction) -> dict | No
     if payload.get("colored_symbols_of_record"):
         return {"symbols": [], "choice": False}
     if payload.get("any_type_from") is not None:
+        # CR 106.7's fixpoint once for the board, read per land the cost could
+        # name — the handler's own reader (``types_that_land_could_produce``).
+        could = lands_could_produce(game)
         by_cost = {
             str(land.permanent_id): list(types)
             for land in game.all_permanents()
-            if land.has_type("land") and (types := types_that_land_could_produce(land))
+            if land.has_type("land")
+            and (types := types_that_land_could_produce(game, land, could=could))
         }
         union = _ordered(symbol for types in by_cost.values() for symbol in types)
         return {"symbols": union, "choice": len(union) >= 2, "symbols_by_cost": by_cost}
