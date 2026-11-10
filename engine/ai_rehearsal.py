@@ -350,15 +350,19 @@ def pays_before_the_blocks(first: "Rehearsal | None", fought: "Rehearsal | None"
     return fought.lasting > max(0.0, floor) + _NO_SWING
 
 
-def run_out_the_turn(game, *, through_combat: bool = False) -> frozenset:
+def run_out_the_turn(
+    game, *, through_combat: bool = False, seat: "int | None" = None,
+) -> frozenset:
     """Take *game* — a scratch copy (``ai_scratch_copy.scratch_copy``) — to
     the end of its turn the way a rehearsal does: with its combat fought first if
     *through_combat* (the active seat's attack and the blocks declared by
     the policies that would declare them), then CR 514's cleanup. For a
     reader that makes a cast for real and wants it priced as a rehearsal
-    would price it. Returns the blocks the fight declared
+    would price it — *seat*, the seat whose cast it is, answering its
+    priority after the blocks as a rehearsal's seat does
+    (:func:`_fight_priority_driver`). Returns the blocks the fight declared
     (``ai_combat.CombatOutcome.blocks_declared``)."""
-    return _run_out_the_turn(game, through_combat=through_combat)
+    return _run_out_the_turn(game, through_combat=through_combat, seat=seat)
 
 
 def _in_a_block(game, seat: int) -> bool:
