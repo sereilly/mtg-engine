@@ -240,6 +240,13 @@ class SimulationReport:
     #: as clean as it does now. The refusals among them are beside it.
     special_actions_taken: Counter[str] = field(default_factory=Counter)
     refused_special_actions: Counter[str] = field(default_factory=Counter)
+    #: The part of ``special_actions_taken`` taken **in response** to another
+    #: seat's object (`ai_priority.act_at_priority`'s ``"response"`` window,
+    #: `ai_special_actions.choose_response_special_action`), by the offer's
+    #: kind — a morph turned face up over a spell. **Empty in every run before
+    #: kg5**: only the seat's own main phase asked, so Mischievous Quanar
+    #: never copied the spell it is printed to copy.
+    special_actions_in_response: Counter[str] = field(default_factory=Counter)
     #: Spells cast **face down** for a morph cost (CR 702.37c), by the card
     #: each one hid. Its partner is ``special_actions_taken["turn_face_up"]``
     #: (CR 702.37e): one counts the morphs put on the table, the other the
@@ -1029,6 +1036,8 @@ def _answer_priority(
         return _record_graveyard_activation(game, seat, act, report, game_index, turn)
     if act.kind == "hand":
         return _record_hand_activation(game, seat, act, report, game_index, turn)
+    if act.kind == "special":
+        return _record_response_special_action(game, seat, act, report, game_index, turn)
     card, action, result = act.card, act.action, act.result
     when = _when_at_priority(game, act.answering, act.in_combat)
     modes_named = _modes_named(card, action)
@@ -1100,6 +1109,27 @@ def _record_hand_activation(
         return False
     report.activations_at_instant_speed[act.window] += 1
     report.activations_from_hand_at_instant_speed[action.card_name] += 1
+    return True
+
+
+def _record_response_special_action(
+    game: Game, seat: int, act: PriorityAct, report: SimulationReport,
+    game_index: int, turn: int,
+) -> bool:
+    """Record a special action `act_at_priority` took in response (a morph
+    turned face up over another seat's spell): True when it was taken — its
+    "turned face up" trigger, if it has one, is then on the stack."""
+    choice, result = act.action, act.result
+    report.log_lines.append(
+        f"G{game_index} T{turn} {game.players[seat].name} special action "
+        f"{choice.kind} ({choice.name}) -> {result.details} "
+        f"[{_when_at_priority(game, act.answering, act.in_combat)}]"
+    )
+    if not result.supported:
+        report.refused_special_actions[f"{choice.name}: {result.details}"] += 1
+        return False
+    report.special_actions_taken[choice.kind] += 1
+    report.special_actions_in_response[choice.kind] += 1
     return True
 
 
