@@ -72,7 +72,15 @@ Tests are organized by subject — put new tests in the matching subfolder:
 convention guards), `tests/rules/` (Comprehensive Rules sections and the casual
 variants — ante, Commander, Brawl), `tests/sets/` (per-card tests for a specific
 set), `tests/regressions/` (in-game bug regressions). Shared fixtures live in
-`tests/conftest.py` and helpers in `tests/helpers.py`. A web test that means
+`tests/conftest.py` and helpers in `tests/helpers.py`. A test that reads the
+board after something resolves calls `tests.helpers.settle(game)` (prompts
+answered by default or by `answers=`, the stack resolved through
+`resolve_next_object`, state-based actions performed, until nothing moves;
+`defaults=False` returns the first owed prompt); `resolve_stack` is only the
+safe swap for a bare drain loop. A combat is walked with
+`drive_combat(game, through=...)`, whose default leaves the end of combat step
+so its triggers fire. Both are held by
+`tests/engine/test_settle_and_drive_combat_helpers.py`. A web test that means
 "seat 0 acts first" on a table created without the pregame calls
 `tests.helpers.seat_plays_first(sid)`: that deal plays first whoever its flip
 names.

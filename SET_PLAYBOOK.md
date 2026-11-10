@@ -191,13 +191,22 @@ And when writing one:
   two types) was meant, and the printed subject said so. Rulings come from
   `bulk_rulings.py CODE <out>` (Scryfall's bulk file, one download; the
   per-card fetch is rate-limited).
-- **Put the test pitfalls in the common brief**, not in a mid-wave
-  broadcast: a step-popped trigger leaves its offer queued with an empty
-  stack (`resolve_stack` does not answer it —
-  `auto_resolve_pending_choices` does); `resolve_stack` auto-answers an
-  interactive seat's prompt and runs no state-based actions; a combat drive
-  that stops at end of combat never fires the delayed triggers leaving it
-  fires. Three Mirrodin groups lost a round to them.
+- **Put the test helpers in the common brief**, not in a mid-wave
+  broadcast. A test reads the board after `tests.helpers.settle(game)` —
+  every owed prompt answered (its default, or `answers={kind: fn}`), the
+  stack resolved with CR 704.3's check between objects, state-based actions
+  performed, until nothing moves — never after `resolve_stack`, which answers
+  only what blocks the stack (an offer a step's trigger left on an empty
+  stack stays owed) and performs no state-based actions;
+  `settle(game, defaults=False)` returns the first owed prompt instead of
+  answering it. A combat is walked with `tests.helpers.drive_combat(game)`
+  after `declare_attack`: it settles each step before leaving it and by
+  default leaves end of combat, where the engine fires "at end of combat"
+  triggers; `through="combat_damage"` stops on arriving there. Three Mirrodin
+  groups lost a round each before these existed (forty-odd private copies
+  replaced since). A probe builds its board with
+  `scripts/integration/board.py`, and a client group sets up a live one with
+  `serve_board.py`.
 - **Grep ROADMAP for the mechanism before briefing the group that changes it**,
   and paste what it says: a recorded precondition belongs to whoever removes
   the thing it waits on.
@@ -1168,6 +1177,18 @@ entry is drained when the board it names is driven, as it names it** — kg2
 drained the colour-blind planner with a test on the neighbouring board (the
 Angel already face down), and Legions' Phase 5 found Onslaught's own board
 (the Angel cast face down) still stranding its turn-up.
+
+- **"At end of combat" triggers fire as the step is left, not as it begins**
+  (CR 511.2: "as the end of combat step begins"). `_enter_combat_step
+  ("end_of_combat")` gives the active player priority first, and the delayed
+  trigger goes on the stack only at `end_combat`: an Unsummon cast in that
+  window resolves before Time Elemental's trigger exists, and a source removed
+  there (Wall of Nets) would never trigger. Found by the speed round while
+  writing `drive_combat` (`scratch/speed/helpers/probe3.py`). *Clears:* any
+  turn-structure round. *Parts:* fire the step's "at end of combat" triggers
+  on entering it, before priority; `drive_combat`'s default still leaves the
+  step (its docstring says why), and `tests/engine/test_settle_and_drive_combat_helpers.py`'s
+  Time Elemental test pins today's order — re-read it with the fix.
 
 - **Four "next time" readings left beside CR 615.8's ruling.** kg4 settled
   CR 615.8 by the owner's ruling (2026-11-07): a source-keyed "next time" is
