@@ -362,3 +362,26 @@ def test_sorrows_path_with_a_blocker_whose_attacker_left(catalog_by_name):
     assert game.creatures_blocked_by(orphan) == [second]
     assert not partner.is_blocking, "removed from combat and not returned"
     assert second.blocked
+
+
+@pytest.mark.cr("510.4", "509.1g")
+def test_a_first_striker_blocking_nothing_still_gives_the_combat_a_first_strike_step(catalog_by_name):
+    """CR 510.4: "If at least one attacking or blocking creature has first
+    strike … as the combat damage step begins", there are two combat damage
+    steps. White Knight (first strike) blocked a Grizzly Bears that was
+    bolted; it is still a blocking creature, so the unblocked Bears beside it
+    deals its damage in the second step, not the first."""
+    game, (doomed, unblocked), (knight,) = _table(
+        catalog_by_name, attackers=["Grizzly Bears", "Grizzly Bears"],
+        blockers=["White Knight"], blocks={0: 0}, opponent_hand=["Lightning Bolt"],
+    )
+    _cast(game, 1, "Lightning Bolt", doomed)
+    assert knight.is_blocking and game.creatures_blocked_by(knight) == []
+
+    drive_combat(game, through="combat_damage")
+
+    assert game.players[1].life == 18
+    log = game.log
+    assert log.index("Resolved first strike combat damage") < log.index(
+        "D took 2 combat damage (life: 20 → 18)"
+    ), "the unblocked Bears struck in the second step"

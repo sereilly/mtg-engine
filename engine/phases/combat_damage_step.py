@@ -116,6 +116,20 @@ class CombatDamageStepMixin:
                     attacker
                 ) or self._participates_in_first_strike(blocker):
                     return True
+        # …and a blocker blocking nothing: CR 509.1g keeps it a blocking
+        # creature once its attackers have all left combat, and CR 510.4 asks
+        # of every attacking or blocking creature — so its first strike still
+        # gives the combat a first-strike step, in which it deals nothing
+        # (CR 510.1d). The loop above reaches blockers through attackers only.
+        for defending_index, blocker_map in self.combat_blockers.items():
+            if not (0 <= defending_index < len(self.players)):
+                continue
+            defender = self.players[defending_index]
+            for blocker_idx, attacker_idxs in blocker_map.items():
+                if attacker_idxs or not (0 <= blocker_idx < len(defender.battlefield)):
+                    continue
+                if self._participates_in_first_strike(defender.battlefield[blocker_idx]):
+                    return True
         return False
 
     def resolve_combat_damage(
