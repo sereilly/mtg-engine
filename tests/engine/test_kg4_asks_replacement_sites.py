@@ -69,9 +69,11 @@ _ONE_EFFECT = {
     ),
     ("mixins/land_tapped_for_mana.py", "_land_tapped_for_mana"): (
         ("land_mana_produced",),
-        "one registration; the several producers that print it (Infernal "
-        "Darkness, Deep Water …) reduce to one symbol by timestamp in "
-        "land_mana_swaps.swapped_production, asked mid-payment (CR 601.2g)",
+        "one registration standing for every substitution (Infernal Darkness, "
+        "a Deep Water record …) as a CR 616.1 candidate each (instances=); "
+        "the tap happens mid-payment (CR 601.2g) and cannot suspend, so the "
+        "616.1e choice is made before the tap, by the symbol the tapper asks "
+        "for (land_mana_swaps.ordered_substitutions)",
     ),
 }
 

@@ -226,7 +226,7 @@ def _gained_type_symbols(game, land) -> set[str]:
     return {str(symbol).upper() for symbol in game._gained_type_mana(land)}
 
 
-def lands_could_produce(game) -> dict[int, frozenset[str]]:
+def lands_could_produce(game, *, also=()) -> dict[int, frozenset[str]]:
     """CR 106.7's answer for every land on the battlefield: the mana types it
     could produce, as upper-case symbols, keyed by ``permanent_id``.
 
@@ -242,6 +242,16 @@ def lands_could_produce(game) -> dict[int, frozenset[str]]:
     Orchards facing each other with no other land come out empty. It terminates
     because the sets only grow and there are six types.
 
+    **"Taking into account any applicable replacement effects in any possible
+    order"** (CR 106.7): each land's answer is what its abilities would make
+    *after* the substitutions over its production — a Forest under
+    Contamination could produce {B} and nothing else, so an opponent's Fellwar
+    Stone offers {B} (its ruling, 2009-10-01, names Contamination), and a
+    Forest under Infernal Darkness beside a Deep Water record could produce {B}
+    or {U} (``land_mana_swaps.could_produce_under_substitutions``). It read the
+    land's summary, so a Forest under Ritual of Subdual offered a Fellwar
+    Stone {G} that no ability of it could make.
+
     **A land whose type an effect has set is not derived, whatever it prints**
     (CR 305.7): it has lost the ability that read a board and gained the basic
     one, which ``effective_produced_mana`` already answers — a Reflecting Pool
@@ -249,54 +259,73 @@ def lands_could_produce(game) -> dict[int, frozenset[str]]:
     for that: both readers below take the land's *effective* card, which is
     the land with its own text struck (``Permanent.effective_card``). They
     each asked the predicate themselves while that accessor did not.
+
+    *also* is ``((seat, permanent), …)``: lands **no longer on the
+    battlefield** to answer for as the board last stood (CR 608.2h's last
+    known information) — the sacrificed land "Sacrifice a land: Add one mana
+    of any type the sacrificed land could produce" (Squandered Resources)
+    names, standing beside the lands still there, under *seat*.
     """
+    from .land_mana_swaps import could_produce_under_substitutions
     from .subject_filters import subject_matches
 
     lands: list[tuple[int, object]] = []
-    answer: dict[int, set[str]] = {}
-    derived: dict[int, tuple[int, object, tuple[DerivedProduction, ...]]] = {}
     for seat in range(len(game.players)):
         for perm in game.controlled_by(seat):
-            if not perm.has_type("land"):
-                continue
+            if perm.has_type("land"):
+                lands.append((seat, perm))
+    for seat, perm in also:
+        if seat is not None and perm is not None and all(perm is not other for _, other in lands):
             lands.append((seat, perm))
-            productions = derived_productions(perm.effective_card)
-            if productions:
-                derived[perm.permanent_id] = (seat, perm, productions)
-                # What the land says outright, beside what it derives: a land
-                # printing "{T}: Add {C}." above a derived clause could produce
-                # {C} on an empty board. Read off its other mana abilities
-                # rather than off ``produced_mana``, which for a derived land
-                # is Scryfall's list of everything the clause could ever name.
-                #
-                # …and beside what a basic land type it **gained** gives it
-                # (CR 305.7's last sentence, CR 305.6): "Each land is a Swamp
-                # in addition to its other land types" hands a Reflecting
-                # Pool the intrinsic "{T}: Add {B}", which is no text at all
-                # and so in neither reading above. Left out, a Pool alone
-                # under a Blanket of Night could produce nothing — it read
-                # only itself, and itself as it was printed.
-                answer[perm.permanent_id] = _stated_symbols(
-                    perm.effective_card
-                ) | _gained_type_symbols(game, perm)
-                continue
-            amongs = _color_choice_amongs(perm.effective_card)
-            if amongs:
-                # Meteor Crater's shape: what it could produce is a colour of a
-                # permanent its controller has *now*, and with none it could
-                # produce nothing — where its printed summary says all five,
-                # which an opponent's Quirion Explorer or Fellwar Stone would
-                # then read as five colours on offer.
-                answer[perm.permanent_id] = (
-                    _stated_symbols(perm.effective_card)
-                    | _colors_chosen_among(game, seat, perm, amongs)
-                    | _gained_type_symbols(game, perm)
-                )
-            else:
-                answer[perm.permanent_id] = {
-                    str(symbol).upper() for symbol in perm.effective_produced_mana
-                }
 
+    # What each land's abilities would make before anything substitutes it,
+    # and — for a derived land — what grows as the lands it reads are answered.
+    made: dict[int, set[str]] = {}
+    derived: dict[int, tuple[int, object, tuple[DerivedProduction, ...]]] = {}
+    for seat, perm in lands:
+        productions = derived_productions(perm.effective_card)
+        if productions:
+            derived[perm.permanent_id] = (seat, perm, productions)
+            # What the land says outright, beside what it derives: a land
+            # printing "{T}: Add {C}." above a derived clause could produce
+            # {C} on an empty board. Read off its other mana abilities
+            # rather than off ``produced_mana``, which for a derived land
+            # is Scryfall's list of everything the clause could ever name.
+            #
+            # …and beside what a basic land type it **gained** gives it
+            # (CR 305.7's last sentence, CR 305.6): "Each land is a Swamp
+            # in addition to its other land types" hands a Reflecting
+            # Pool the intrinsic "{T}: Add {B}", which is no text at all
+            # and so in neither reading above. Left out, a Pool alone
+            # under a Blanket of Night could produce nothing — it read
+            # only itself, and itself as it was printed.
+            made[perm.permanent_id] = _stated_symbols(
+                perm.effective_card
+            ) | _gained_type_symbols(game, perm)
+            continue
+        amongs = _color_choice_amongs(perm.effective_card)
+        if amongs:
+            # Meteor Crater's shape: what it could produce is a colour of a
+            # permanent its controller has *now*, and with none it could
+            # produce nothing — where its printed summary says all five,
+            # which an opponent's Quirion Explorer or Fellwar Stone would
+            # then read as five colours on offer.
+            made[perm.permanent_id] = (
+                _stated_symbols(perm.effective_card)
+                | _colors_chosen_among(game, seat, perm, amongs)
+                | _gained_type_symbols(game, perm)
+            )
+        else:
+            made[perm.permanent_id] = {
+                str(symbol).upper() for symbol in perm.effective_produced_mana
+            }
+
+    def substituted(seat: int, perm) -> frozenset[str]:
+        return could_produce_under_substitutions(
+            game, perm, made[perm.permanent_id], seat=seat,
+        )
+
+    answer = {perm.permanent_id: substituted(seat, perm) for seat, perm in lands}
     changed = bool(derived)
     while changed:
         changed = False
@@ -314,10 +343,11 @@ def lands_could_produce(game) -> dict[int, frozenset[str]]:
                     contributed |= answer[other.permanent_id]
                 if production.colors_only:
                     contributed &= COLORS
-                if not contributed <= answer[land_id]:
-                    answer[land_id] |= contributed
+                if not contributed <= made[land_id]:
+                    made[land_id] |= contributed
+                    answer[land_id] = substituted(seat, perm)
                     changed = True
-    return {land_id: frozenset(types) for land_id, types in answer.items()}
+    return dict(answer)
 
 
 def could_produce_by_seat(game) -> dict[int, frozenset[str]]:
@@ -452,21 +482,45 @@ def exiled_card_colors(game, permanent) -> frozenset[str]:
     return frozenset(found & COLORS)
 
 
-def types_that_land_could_produce(land) -> tuple[str, ...]:
+def types_that_land_could_produce(
+    game, land, *, seat: "int | None" = None,
+    could: "dict[int, frozenset[str]] | None" = None,
+) -> tuple[str, ...]:
     """"…one mana of any type **that land** could produce" (Benthic Explorers)
-    / "…**the sacrificed land** could produce" (Squandered Resources): the
-    types the one land a cost named makes, as upper-case symbols in its own
-    order — read off its ``effective_produced_mana``, which last-known
-    information still answers once the land is gone (CR 608.2h).
+    / "…**the sacrificed land** could produce" (Squandered Resources) / "…any
+    type of mana that land could produce" (Mana Web): CR 106.7's answer for the
+    one land a cost or an event named, in WUBRG-then-{C} order.
 
-    One reader for the handler that adds the mana and the wire that asks which
-    type (``web/offers``), so the two cannot offer different sets. Not CR
-    106.7's fixpoint above: a derived land named this way (an opponent's
-    Reflecting Pool) answers with its printed summary.
+    **The fixpoint's answer, not the land's summary.** Read off
+    ``effective_produced_mana`` it was Scryfall's list of everything the land
+    could ever name: an opponent's Reflecting Pool untapped by Benthic
+    Explorers offered all five colours where the opponent's other lands
+    offered one (or none — a lone Pool could produce nothing), and a Forest
+    under Infernal Darkness offered the {G} the substitution never lets it
+    make ("take into account any applicable replacement effects", the
+    Explorers' ruling, 2009-10-01).
+
+    **A land already gone is answered as the board last stood** (CR 608.2h):
+    a sacrifice cost is paid before the ability resolves, so the sacrificed
+    land is put back beside the lands still there for the question, under
+    *seat* — the seat that controlled it (its sacrificer), its owner where
+    none is given. *could* is :func:`lands_could_produce` already computed
+    over this board, for a reader asking about many lands at once.
+
+    One reader for the handler that adds the mana, the wire that asks which
+    type (``web/offers``) and Mana Web's trigger, so the three cannot offer
+    different sets.
     """
     if land is None:
         return ()
-    return tuple(dict.fromkeys(str(symbol).upper() for symbol in land.effective_produced_mana))
+    if game.is_on_battlefield(land):
+        by_land = could if could is not None else lands_could_produce(game)
+    else:
+        if seat is None:
+            seat = game.owner_index_of(land)
+        by_land = lands_could_produce(game, also=((seat, land),))
+    found = by_land.get(land.permanent_id, frozenset())
+    return tuple(symbol for symbol in _OFFER_ORDER if symbol in found)
 
 
 def types_a_land_you_control_could_produce(game, seat: int) -> frozenset[str]:

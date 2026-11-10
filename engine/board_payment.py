@@ -288,7 +288,12 @@ def _under_a_swap(game: "Game", land: "Permanent", found: TapYield) -> TapYield:
     units = tuple(swapped(unit) for unit in found.units)
     if swap.replaces_amount:
         units = units[:1]
-    return TapYield(units, one_color=found.one_color and len(units) > 1)
+    # Every mana of one tap comes out as the one symbol the last substitution
+    # applied makes (CR 616.1f), so where contending substitutions offer
+    # several — Infernal Darkness beside a Deep Water record on an Ancient
+    # Tomb is {B}{B} or {U}{U}, never {B}{U} — the units are one choice.
+    shared = not swap.colors_only and len(colours) > 1
+    return TapYield(units, one_color=len(units) > 1 and (found.one_color or shared))
 
 
 def _aura_units(game: "Game", land: "Permanent") -> "tuple[frozenset[str], ...]":

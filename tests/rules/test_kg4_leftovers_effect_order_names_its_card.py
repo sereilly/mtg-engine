@@ -342,8 +342,13 @@ def test_a_land_mana_substitution_names_the_permanent_or_the_card_that_armed_it(
     """The static (Infernal Darkness: "If a land is tapped for mana, it
     produces {B} instead of any other type") names the permanent printing it;
     the per-seat record (Deep Water's "{U}: Until end of turn, … it produces
-    {U} instead") names the card whose ability armed it — the one that wins,
-    since the record is the newer (``swapped_production``)."""
+    {U} instead") names the card whose ability armed it. With both, the
+    registration stands for two CR 616.1 effects (kg5 ``mana``: its
+    ``instances``), each candidate naming its own source, and the registration
+    names both in the order they apply — the record last by default, so its
+    {U} is the symbol the default answer carries."""
+    from engine.replacements.registry import replacement_candidates
+
     game = _table(mine=["Infernal Darkness", "Forest", "Deep Water"])
     forest = _on(game, "Forest")
     event = {"land": forest, "player": game.players[0]}
@@ -356,7 +361,12 @@ def test_a_land_mana_substitution_names_the_permanent_or_the_card_that_armed_it(
     assert activated.supported, activated.details
     resolve_stack(game)
     assert option_text(game, event, substitution) == (
-        "The land produces the named type of mana instead (Deep Water)"
+        "The land produces the named type of mana instead (Infernal Darkness, Deep Water)"
     )
-    # …and the symbol the answer carries is still the record's.
+    candidates = replacement_candidates("land_mana_produced", game, event)
+    assert [option_text(game, event, c) for c in candidates] == [
+        "The land produces the named type of mana instead (Infernal Darkness)",
+        "The land produces the named type of mana instead (Deep Water)",
+    ]
+    # …and the symbol the default answer carries is still the record's.
     assert swapped_symbol(game, forest) == "U"
