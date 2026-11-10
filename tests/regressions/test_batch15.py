@@ -141,9 +141,13 @@ class TestCopyArtifactIsBothTypes:
         game.enforce_mana_costs = False
         game.cast_from_hand(0, "Copy Artifact", target_player_index=1)
         state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
+        # The wire names a copy by its copiable name (CR 707.2) and keeps the
+        # physical card's as ``printed_name`` (kg5 client).
         copy_entry = next(
-            p for p in state["players"][0]["battlefield"] if p["name"] == "Copy Artifact"
+            p for p in state["players"][0]["battlefield"]
+            if p["printed_name"] == "Copy Artifact"
         )
+        assert copy_entry["name"] == "Black Lotus"
         assert "artifact" in copy_entry["type"].lower()
         assert "enchantment" in copy_entry["type"].lower()
 
