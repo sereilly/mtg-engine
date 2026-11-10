@@ -189,7 +189,7 @@ def cause_seat(game: "Game", cause=RESOLVING) -> int | None:
 
 def mark_delayed_destruction(
     game: "Game", permanent: "Permanent", mark: str, value=True,
-    *, sacrificed_by: str | None = None, together=None,
+    *, sacrificed_by: str | None = None, together=None, cause=RESOLVING,
 ) -> None:
     """Create one delayed ability under *permanent*'s *mark*, recording who
     created it and from what.
@@ -216,6 +216,15 @@ def mark_delayed_destruction(
     *sacrificed_by* is ``"you"`` for a sacrifice the delayed ability's
     controller makes (:data:`CREATION_SACRIFICER`); *together* the
     permanents one effect marked as a set (:data:`CREATION_TOGETHER`).
+
+    *cause* is the seat that controls the delayed ability, for the one writer
+    with nothing resolving in ``Game.resolving_seats`` to ask: a permanent
+    spell becoming a permanent runs no instruction. Mirage's flash Auras —
+    "If you cast it any time a sorcery couldn't have been cast, the controller
+    of the permanent it becomes sacrifices it at the beginning of the next
+    cleanup step" — are CR 603.7g's case: a static ability that let a player
+    take an action created the delayed ability, so its controller is the
+    caster and its source the card (``Game._resolve_card`` passes both).
     """
     key = mark + DELAYED_CREATIONS_SUFFIX
     creations = list(permanent.metadata.get(key) or ()) if permanent.metadata.get(mark) else []
@@ -223,7 +232,7 @@ def mark_delayed_destruction(
     resolving = getattr(game, "resolving_items", None)
     members = tuple(together or ())
     creations.append({
-        CREATION_SEAT: cause_seat(game),
+        CREATION_SEAT: cause_seat(game, cause),
         CREATION_SOURCE: resolving[-1].card if resolving else None,
         CREATION_SACRIFICER: sacrificed_by,
         CREATION_TOGETHER: members if len(members) > 1 else None,

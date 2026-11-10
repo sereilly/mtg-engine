@@ -442,9 +442,9 @@ def _derived_static_claims(
     # becomes sacrifices it at the beginning of the next cleanup step."
     # (Mirage's five-Aura cycle; Necromancy prints it on an enchantment that is
     # not an Aura when it is cast.) CR 113.6b: the permission functions while
-    # the card is in a hand, and the rider is stamped by the cast path and swept
-    # by the cleanup step — so there is no instruction to produce, on any card
-    # type.
+    # the card is in a hand, and the rider is stamped by the cast path and announced
+    # by the cleanup step as a delayed ability — so there is no instruction to
+    # produce, on any card type.
     #
     # **The gate that asked this table was Aura-only**, and that is the whole of
     # what this row fixes. `mixins/stack/casting.py` stamps

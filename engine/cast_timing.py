@@ -35,11 +35,12 @@ been the second copy this codebase keeps finding on the wrong side of.
 The rider is enforced across three places, none of which knows the sentence:
 the cast path records whether a sorcery could have been cast
 (:data:`CAST_AT_INSTANT_SPEED`, a ``StackItem.choices`` key), the permanent
-spell's resolution copies that answer onto the permanent, and the cleanup step
-sacrifices what is marked. CR 514.1's cleanup step is where the rule puts it,
-and a sweep there rather than a delayed trigger for the reason every other
-sweep in this engine exists: there is no single fire site, and a permanent can
-reach the battlefield marked by more than one route.
+spell's resolution writes that answer onto the permanent through the one writer
+of a delayed mark (``destruction_events.mark_delayed_destruction``: CR 603.7g's
+delayed triggered ability, controlled by the caster, its source the card), and
+the cleanup step announces what is marked as that ability — it triggers as the
+step begins and goes on the stack at CR 514.3a's moment, where it can be
+answered (``phases/cleanup_step._cleanup_mark_firings``).
 """
 
 from __future__ import annotations

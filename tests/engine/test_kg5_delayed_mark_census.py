@@ -8,6 +8,10 @@ and for who makes a delayed sacrifice (CR 701.21a).
    begins, and the census asks for a ``carry_out_delayed_mark`` object on the
    stack under seat 1 with the permanent still on the battlefield. Backwards:
    on 59f133e63 every row is a permanent already gone and an empty stack.
+   The cleanup step's row (Mirage's flash-Aura sacrifice, kg5/cleanup) is read
+   where CR 514.3a gives the active player priority; on e245e624c a sweep
+   sacrificed the permanent as the step began and nobody was offered
+   priority.
 
 2. **"Sacrifice it" carries its actor.** Every compiled delayed sacrifice of
    a permanent other than the ability's own source — the end step's mark
@@ -40,6 +44,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine import delayed_triggers
+from engine.cast_timing import CAST_AT_INSTANT_SPEED
 from engine.destruction_events import mark_delayed_destruction
 from engine.faces import compilation_units
 from engine.legality import _iter_instruction_tree
@@ -56,7 +61,7 @@ CARRY_OUT_DELAYED_MARK = getattr(
 )
 
 
-#: Every mark the two steps act on, with the step that announces it.
+#: Every mark the three steps act on, with the step that announces it.
 _MARKS = (
     ("destroy_at_end_of_combat", "end of combat"),
     ("destroy_at_next_end_step", "end step"),
@@ -65,6 +70,11 @@ _MARKS = (
     ("destroy_if_attacked_eot", "end step"),
     ("sacrifice_at_next_end_step", "end step"),
     ("bounce_at_next_end_step", "end step"),
+    # "…the controller of the permanent it becomes sacrifices it at the
+    # beginning of the next cleanup step" (Mirage's flash Auras; kg5/cleanup).
+    # On e245e624c a sweep sacrificed it as the step began: no object, and
+    # nobody had priority.
+    (CAST_AT_INSTANT_SPEED, "cleanup"),
 )
 
 
@@ -96,7 +106,13 @@ def _announced(game) -> list:
 
 def _mark_and_begin_its_step(game, bears, mark, step, creations=1):
     """*mark* written on *bears* by *creations* resolutions of seat 1's, then
-    the step it names begun; the delayed-mark objects it announced."""
+    the step it names begun: the delayed-mark objects it announced, and
+    whether *bears* was still on the battlefield when they were.
+
+    The cleanup step settles what it puts on the stack before it returns
+    (nobody at this table holds priority through it), so that step is read
+    where CR 514.3a gives the active player priority — the first time the
+    table's ``priority_driver`` is asked, with the objects on the stack."""
     if mark == DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY:
         # "…at the beginning of **that turn's** end step" names the turn
         # being taken.
@@ -116,17 +132,28 @@ def _mark_and_begin_its_step(game, bears, mark, step, creations=1):
         game._set_phase_and_step("combat", "end_of_combat")
         with game.putting_triggers_on_stack():
             game._fire_end_of_combat_triggers()
+    elif step == "cleanup":
+        offered = []
+
+        def first_offer(table, seat):
+            if not offered:
+                offered.append((_announced(table), table.is_on_battlefield(bears)))
+            return False
+
+        game.priority_driver = first_offer
+        game.resolve_cleanup_step(0)
+        return offered[0] if offered else ([], game.is_on_battlefield(bears))
     else:
         game.resolve_end_step(0)
-    return _announced(game)
+    return _announced(game), game.is_on_battlefield(bears)
 
 
 @pytest.mark.parametrize("mark,step", _MARKS, ids=[mark for mark, _ in _MARKS])
 def test_every_mark_is_announced_as_a_stack_object(pool, mark, step):
     game, bears = _game(pool)
-    announced = _mark_and_begin_its_step(game, bears, mark, step)
+    announced, present = _mark_and_begin_its_step(game, bears, mark, step)
 
-    assert game.is_on_battlefield(bears), f"{mark}: carried out before anyone had priority"
+    assert present, f"{mark}: carried out before anyone had priority"
     assert [(item.caster_index, item.ability_instruction.payload["mark"])
             for item in announced] == [(1, mark)], game.log[-6:]
     assert mark not in bears.metadata, "CR 603.7b: the mark is spent as it triggers"
@@ -138,7 +165,7 @@ def test_two_creations_of_one_mark_are_two_delayed_abilities(pool, mark, step):
     two writes of one mark are two objects on the stack, each naming the
     permanent, and the announcement spends the mark and its record."""
     game, bears = _game(pool)
-    announced = _mark_and_begin_its_step(game, bears, mark, step, creations=2)
+    announced, _present = _mark_and_begin_its_step(game, bears, mark, step, creations=2)
 
     assert [
         (item.caster_index, item.ability_instruction.payload["mark"],

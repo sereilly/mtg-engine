@@ -10,7 +10,8 @@ P/T buffs, damage prevention pools, and the EOT metadata flags. Creatures exiled
 "until end of turn" return here (CR 610.3). No player normally receives priority.
 """
 
-from ..delayed_triggers import expire_delayed_triggers, fire_delayed_triggers
+from ..delayed_triggers import (delayed_mark_events, expire_delayed_triggers,
+                                fire_delayed_triggers)
 from ..cast_permissions import expire_end_of_turn as expire_end_of_turn_permissions
 from ..cast_timing import expire_end_of_turn as expire_end_of_turn_flash
 from ..cast_timing import CAST_AT_INSTANT_SPEED
@@ -95,15 +96,19 @@ class CleanupStepMixin:
             self._refresh_dynamic_creatures()
 
         # "…the controller of the permanent it becomes sacrifices it at the
-        # beginning of the next cleanup step" (Mirage's five flash Auras).
-        # CR 514.1's moment, and the *first* thing this step does, because the
-        # sentence says "at the beginning of". A sweep over the mark rather than
-        # a delayed trigger armed at the cast, for the reason every other sweep
-        # in this engine exists: the mark can arrive by more than one route (an
-        # Aura that becomes a permanent, and any later card that copies the
-        # sentence), and a rule with several fire sites is a rule that gets
-        # forgotten at one of them.
-        self._sacrifice_permanents_cast_at_instant_speed()
+        # beginning of the next cleanup step" (Mirage's flash Auras and
+        # Visions'). A delayed triggered ability — CR 603.7g: the static
+        # ability that let the spell be cast as though it had flash created it
+        # as the spell was cast — recorded as a mark on the permanent the
+        # spell became (``destruction_events.mark_delayed_destruction``, at
+        # ``Game._resolve_card``) and announced as a stack object
+        # (``delayed_triggers.delayed_mark_events``). It triggers **now**, as
+        # the step begins ("at the beginning of"), so what it names is read
+        # off the board before the discard and the sweeps below; it goes on
+        # the stack with everything else that triggered once those are done
+        # (CR 514.3a). It was a sweep here, sacrificing before anything else
+        # in the step and before anybody could answer it.
+        cleanup_marks = delayed_mark_events(self, self._cleanup_mark_firings())
 
         active_player = self.players[player_index]
         cleanup_completed = True
@@ -434,6 +439,12 @@ class CleanupStepMixin:
         # your cleanup step"), and "whenever an opponent discards a card"
         # (Megrim) fires off the same discard. Both waited on the stack into
         # the next turn while only the delayed triggers were settled here.
+        #
+        # The marks that triggered as the step began (above) go on the stack
+        # here with them, in the same batch order the end step uses: the
+        # marks first.
+        if cleanup_marks:
+            self._enqueue_triggered_batch(cleanup_marks)
         fired = fire_delayed_triggers(self, "next_cleanup_step")
         if fired or self.stack:
             self._settle()
@@ -460,34 +471,31 @@ class CleanupStepMixin:
         self._on_step_or_phase_end(phase, step)
         return cleanup_completed
 
-    def _sacrifice_permanents_cast_at_instant_speed(self) -> None:
-        """CR 514.1's half of Mirage's flash-Aura rider.
+    def _cleanup_mark_firings(self) -> list:
+        """Every delayed ability recorded as a mark that triggers as this
+        cleanup step begins, as ``(permanent, mark, rider)`` for
+        ``delayed_triggers.delayed_mark_events``: Mirage's flash-Aura rider
+        (:data:`~engine.cast_timing.CAST_AT_INSTANT_SPEED`).
 
-        "If you cast it any time a sorcery couldn't have been cast, the
-        controller of the permanent it becomes sacrifices it at the beginning of
-        the next cleanup step." The mark was frozen as the spell was announced
-        (`engine/cast_timing.py`) and copied onto the permanent as the spell
-        resolved, so nothing here has to reconstruct a timing question the board
-        can no longer answer.
+        A sacrifice with **no** sacrificer recorded: "**the controller of the
+        permanent it becomes** sacrifices it" is whoever controls the Aura as
+        the ability resolves, where "sacrifice it" would be the ability's own
+        controller (CR 701.21a; ``handlers/delayed.carry_out_delayed_mark``).
+        Sacrificed rather than destroyed: a regeneration shield does not save
+        it.
 
         **The next cleanup step, not this permanent's controller's.** CR 514.1
-        gives every turn one, and the sentence names the next one there is — so
-        an Aura flashed in on an opponent's turn dies at the end of that turn
-        rather than surviving to the caster's own.
+        gives every turn one, and the sentence names the next one there is —
+        so an Aura flashed in on an opponent's turn dies at the end of that
+        turn rather than surviving to the caster's own.
 
-        Sacrificed rather than destroyed: a regeneration shield does not save it
-        and it is its controller's own action (CR 701.21a).
+        Over each seat's permanents through the control seam, as the end
+        step's marks are (``_end_step_mark_firings``), so a phased-out
+        permanent's mark waits, as the sweep this replaces did.
         """
-        marked = [
-            perm for perm in self.all_permanents()
-            if perm.metadata.get(CAST_AT_INSTANT_SPEED)
+        return [
+            (permanent, CAST_AT_INSTANT_SPEED, {"action": "sacrifice"})
+            for controller in self.players
+            for permanent in self.controlled_by(controller)
+            if permanent.metadata.get(CAST_AT_INSTANT_SPEED)
         ]
-        for perm in marked:
-            seat = self.controller_index_of(perm)
-            if seat is None:
-                continue
-            self.log.append(
-                f"{self.players[seat].name} sacrifices {perm.card.name} "
-                "(cast when a sorcery couldn't have been)"
-            )
-            self.sacrifice_permanent(perm)

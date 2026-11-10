@@ -1399,8 +1399,14 @@ _DELAYED_MARKS = frozenset({
     # kg5: the mark records the seat and the card its delayed ability is
     # announced under (CR 603.7d-e).
     "sacrifice_at_next_end_step", "bounce_at_next_end_step",
+    # The cleanup step's sacrifice of a Mirage flash Aura (kg5/cleanup): a
+    # delayed ability since it stopped being a sweep, controlled by the caster
+    # (CR 603.7g). On e245e624c `Game._resolve_card` wrote it directly.
+    "cast_at_instant_speed",
 })
-_DELAYED_MARK_NAMES = frozenset({"DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY"})
+_DELAYED_MARK_NAMES = frozenset({
+    "DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY", "CAST_AT_INSTANT_SPEED",
+})
 
 
 def test_a_delayed_destruction_mark_is_written_only_with_its_cause():

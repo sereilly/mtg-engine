@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..cast_timing import CAST_AT_INSTANT_SPEED
 from ..delayed_triggers import (CARRY_OUT_DELAYED_MARK,
                                 DELAYED_MARK_PERMANENT_IDS, END_OF_TURN,
                                 WHILE_EXILED_THIS_WAY, DelayedTrigger,
@@ -393,12 +394,24 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+#: The step each mark is announced in, as its log lines name it; every mark
+#: not listed is the end step's. "The controller of the permanent it becomes
+#: sacrifices it at the beginning of the next cleanup step" (Mirage's flash
+#: Auras) is the cleanup step's.
+_MARK_STEPS = {
+    "destroy_at_end_of_combat": "end of combat",
+    CAST_AT_INSTANT_SPEED: "cleanup",
+}
+
+
 @effect_handler(CARRY_OUT_DELAYED_MARK)
 def carry_out_delayed_mark(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """A delayed triggered ability recorded as a **mark**, resolving (CR
     603.7): "destroy that creature at end of combat" (Cockatrice), "…at the
     beginning of the next end step" (Dragon Whelp's sacrifice, Berserk's and
-    Nettling Imp's destructions, Rakalite's return).
+    Nettling Imp's destructions, Rakalite's return), "…the controller of the
+    permanent it becomes sacrifices it at the beginning of the next cleanup
+    step" (Mirage's flash Auras).
 
     The step that names the mark announced it (``delayed_triggers.
     delayed_mark_events``); this is what it does when it resolves, and it is
@@ -421,7 +434,7 @@ def carry_out_delayed_mark(game: Game, instruction: OracleInstruction, context: 
     payload = instruction.payload
     mark = str(payload.get("mark", ""))
     action = str(payload.get("action", "destroy"))
-    when = "end of combat" if mark == "destroy_at_end_of_combat" else "end step"
+    when = _MARK_STEPS.get(mark, "end step")
     ids = (context.trigger_context or {}).get(DELAYED_MARK_PERMANENT_IDS) or ()
     victims = [
         permanent for permanent in (game.permanent_by_id(pid) for pid in ids)
@@ -477,13 +490,13 @@ def carry_out_delayed_mark(game: Game, instruction: OracleInstruction, context: 
                 controller = next(c for c, p in sacrificing if p is permanent)
                 game.log.append(
                     f"{game.players[controller].name} sacrificed "
-                    f"{permanent.card.name} at end step"
+                    f"{permanent.card.name} at {when}"
                 )
         elif action == "bounce":
             for permanent in victims:
                 owner = return_permanent_to_owners_hand(game, permanent)
                 game.log.append(
                     f"{permanent.card.name} returned to "
-                    f"{owner.name if owner is not None else 'its owner'}'s hand at end step"
+                    f"{owner.name if owner is not None else 'its owner'}'s hand at {when}"
                 )
     return True, "resolved"

@@ -23,7 +23,7 @@ from ...cast_costs import (CAST_COST_DISCARD_MANA_VALUE, KICKED,
 from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
 from ...color_changes import carry_spell_color_change
-from ...destruction_events import destruction_finished
+from ...destruction_events import destruction_finished, mark_delayed_destruction
 from ...enter_effects import COPY_DECLINED, copy_on_enter_type
 from ...events import emit
 from ...face_down import revealed_as_it_moves
@@ -1264,8 +1264,15 @@ class StackResolutionMixin:
             # the only moment CR 601.3d's timing can be read; carried onto the
             # permanent here because the permanent is what the sentence acts on
             # and the stack item is gone by the time the cleanup step looks.
+            # Through the one writer of a delayed mark, which records the
+            # delayed ability's controller and source: CR 603.7g's — the
+            # caster, and the card whose static ability let it be cast as
+            # though it had flash. Nothing is resolving in
+            # ``resolving_seats`` here to ask, so the caster is said.
             if (choices or {}).get(CAST_AT_INSTANT_SPEED):
-                permanent.metadata[CAST_AT_INSTANT_SPEED] = True
+                mark_delayed_destruction(
+                    self, permanent, CAST_AT_INSTANT_SPEED, cause=caster_index,
+                )
             # "As an additional cost to cast this spell, choose a creature
             # type." (Caller of the Hunt.) The word was chosen at CR 601.2b and
             # rode the stack item; it is copied onto the permanent here because
