@@ -575,18 +575,24 @@ class HandChoicesMixin:
             self.discard_pending_choice(choice)
 
     def _default_discard(self, choice: PendingChoice) -> None:
-        """Discard the *eligible* cards the seat least wants to hold, keeping
-        them in the graveyard (``ai_prompt_picks.discard_order``: a payable
-        madness card first, then by ``held_worth``, the card sparing a printed
-        penalty ahead of both — ``ai_prompts.order_discard``), hand order
-        between equals. The lowest-index cards were the discard.
+        """Discard the *eligible* cards the seat least wants to hold
+        (``ai_prompt_picks.discard_order``: a payable madness card first, then
+        by ``held_worth``, the card sparing a printed penalty ahead of both —
+        ``ai_prompts.order_discard``), hand order between equals. The
+        lowest-index cards were the discard.
+
+        Where the prompt offers Library of Leng's library top, each card goes
+        there as ``ai_prompt_picks.takes_library_top`` says — the answer the
+        Library's own offer gets on a discard the seat did not choose
+        (``replacements/zone_changes._leng_discard_default``). It declined the top
+        always: the graveyard was every default's.
 
         Which cards are candidates at all is not policy but the card's printed
         phrase, so it is read from the same list the interactive seat is
         offered. Re-read each time round, because each discard renumbers the
         hand behind it.
         """
-        from ....ai_prompt_picks import discard_order
+        from ....ai_prompt_picks import discard_order, takes_library_top
         from ....handlers.discards import _resolve_one_discard
 
         discarded = 0
@@ -612,8 +618,14 @@ class HandChoicesMixin:
                 )
                 if not eligible:
                     break
+                to_library = bool(choice.data.get("allow_top_of_library")) and (
+                    takes_library_top(
+                        self, choice.player_index,
+                        self.players[choice.player_index].hand[eligible[0]],
+                    )
+                )
                 if not _resolve_one_discard(
-                    self, choice.player_index, eligible[0], to_library=False,
+                    self, choice.player_index, eligible[0], to_library=to_library,
                     took=took,
                 ):
                     break
