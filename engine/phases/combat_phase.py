@@ -483,11 +483,24 @@ class CombatPhaseMixin:
             defender_index = self.combat_defending_player_index
             if defender_index is None:
                 defender_index = next(iter(self.combat_defending_players()), None)
-            if isinstance(defender_index, int):
-                if any(p.is_creature and not p.tapped for p in self.controlled_by(defender_index)):
-                    return  # awaiting the defender's pile assignment
-                self.resolve_camouflage_blocking(defender_index)
-            return
+            if not isinstance(defender_index, int):
+                return
+            if any(p.is_creature and not p.tapped for p in self.controlled_by(defender_index)):
+                return  # awaiting the defender's pile assignment
+            self.resolve_camouflage_blocking(defender_index)
+            if self.interactive_seats:
+                # The empty piles are the declaration (CR 509.1), and
+                # ``declare_blockers`` has given the active player priority
+                # (CR 509.2): at a table with a person that exchange is the
+                # table's, so the step stays and the next advance leaves it —
+                # as it does after any declaration.
+                return
+            # Nobody to ask: fall through and leave the step, as the lock below
+            # does once every defender is passed over. This returned at every
+            # table, and the simulator's combat walker
+            # (``ai_combat.run_ai_combat_phase``), seeing nothing move and
+            # nothing owed, left the turn in declare blockers with the attack's
+            # damage never dealt — a rehearsal of the combat the same.
         if self.current_step == "declare_blockers" and not self.combat_blockers_locked:
             # CR 802.4: each defending player declares blocks in APNAP order,
             # starting with the player after the active player. Auto-skip any
