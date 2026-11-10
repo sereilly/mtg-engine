@@ -20,6 +20,7 @@ from .session_store import Session
 from .prompts import auto_resolve_ai_prompts
 from .seats import (
     _ai_should_hold,
+    _has_human_opponent,
     _mark_interactive_seats,
     _seat_type,
     _self_should_hold,
@@ -592,6 +593,39 @@ def _finish_untap_step(session: Session, player_index: int) -> bool:
     return _resolve_upkeep_step(session, player_index)
 
 
+def _ai_turn_beside_a_person(session: Session, player_index: int) -> bool:
+    """Whether *player_index*'s beginning phase is an AI's turn at a table
+    with a person — where what the upkeep and the draw step put on the stack
+    goes round the table before it resolves (:func:`_stops_for_the_steps_objects`)."""
+    return _seat_type(session, player_index) == "ai" and _has_human_opponent(session)
+
+
+def _stops_for_the_steps_objects(session: Session, marker: str, player_index: int) -> bool:
+    """An AI's upkeep or draw step at a table with a person, run with the
+    active player's priority open (``defer_priority``): True when the step
+    stops — objects on the stack, or a person's question its leaving waits
+    on — and False once it has ended.
+
+    CR 503.1 / 504.2: once the step begins the active player gets priority,
+    and an object on the stack resolves only once every player has passed
+    (CR 117.4). The step ran its whole window in the engine
+    (``resolve_upkeep`` / ``resolve_draw_step``), so on an AI's turn its
+    triggers — Copper Tablet's damage, Mana Vault's — resolved with the
+    person never asked. With objects there the step stops with the AI's
+    priority open, and its next ``ai_step`` hands them round
+    (``game_flow._ai_answers_over_the_stack``); with none it ends here, its
+    leaving answering an AI seat's question and stopping on a person's
+    (:func:`_leave_step`, resumed by ``_resume_paused_beginning_phase``)."""
+    game = session.game
+    auto_resolve_ai_prompts(game, lambda seat: _seat_type(session, seat))
+    if game.stack:
+        return True
+    if _leave_step(session, game.close_beginning_step):
+        return False
+    session.paused_beginning_phase = (marker, player_index)
+    return True
+
+
 def _resolve_upkeep_step(session: Session, player_index: int) -> bool:
     """Run the upkeep step once the untap step is done, honoring the phase-rail
     holds and any interactive upkeep-trigger prompts.
@@ -654,6 +688,12 @@ def _resolve_upkeep_step(session: Session, player_index: int) -> bool:
         game.resolve_upkeep(player_index, defer_priority=True)
         return True
 
+    if _ai_turn_beside_a_person(session, player_index):
+        game.resolve_upkeep(player_index, defer_priority=True)
+        if _stops_for_the_steps_objects(session, "begin_turn", player_index):
+            return bool(game.stack)
+        return _finish_beginning_phase(session, player_index)
+
     game.resolve_upkeep(player_index)
     if _pause_beginning_phase(session, "begin_turn", player_index):
         return False
@@ -701,6 +741,13 @@ def _finish_beginning_phase(session: Session, player_index: int) -> bool:
     # (`game_flow._hold_at_flagged_step`).
     if _ai_should_hold(session, "draw") or _self_should_hold(session, "draw"):
         game.resolve_draw_step(player_index, defer_priority=True, pay_life_loss=pay_life_loss)
+        return True
+
+    if _ai_turn_beside_a_person(session, player_index):
+        game.resolve_draw_step(player_index, defer_priority=True, pay_life_loss=pay_life_loss)
+        if _stops_for_the_steps_objects(session, "main_phase", player_index):
+            return bool(game.stack)
+        game.enter_next_turn_phase("beginning")
         return True
 
     game.resolve_draw_step(player_index, pay_life_loss=pay_life_loss)

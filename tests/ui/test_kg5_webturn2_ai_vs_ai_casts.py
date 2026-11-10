@@ -29,7 +29,7 @@ def _ai_step(sid: str) -> None:
     assert response.status_code == 200, response.json()
 
 
-@pytest.mark.cr("505.1", "117.3c")
+@pytest.mark.cr("505.6", "117.3c")
 def test_an_ai_only_tables_ai_casts_both_spells_before_combat():
     """Seat 0 of an ``ai_vs_ai`` table: four Forests, two Grizzly Bears in
     hand. One ``ai_step`` from its precombat main phase casts both Bears
@@ -80,7 +80,7 @@ def _person_or_ai_step(sid: str) -> None:
     assert response.status_code == 200, (body, response.json())
 
 
-@pytest.mark.cr("505.1")
+@pytest.mark.cr("505.6")
 @pytest.mark.parametrize("mode, seed", [("ai_vs_ai", 3), ("ai_vs_ai", 17), ("human_vs_ai", 17)])
 def test_census_an_ai_leaves_its_main_phase_only_when_it_would_cast_nothing(monkeypatch, mode, seed):
     """Census over seeded web games — ``ai_vs_ai`` stepped by ``ai_step``
@@ -177,3 +177,44 @@ def test_the_ai_casts_what_its_own_resolved_search_fetched_in_the_same_main_phas
         len(lines),
     )
     assert hero < left, lines
+
+
+@pytest.mark.cr("505.6", "117.3a")
+def test_the_ai_casts_in_the_main_phase_its_held_upkeep_leads_into():
+    """A person's table, the AI's turn: the AI holds a graveyard ability
+    (Necrosavant, "Activate only during your upkeep"), so its upkeep stops
+    with its priority open (``turn_steps._resolve_upkeep_step``); its
+    ``ai_step`` there answers and leaves the upkeep, the draw step and into
+    the precombat main phase — where it casts its Grizzly Bears, before
+    combat. The step's ``_advance_ai_turn`` walked out of the main phase it
+    had just begun, so the Bears waited for the second one."""
+    created = client.post("/api/sessions", json={"mode": "human_vs_ai", "seed": 5}).json()
+    sid = created["session_id"]
+    session = seat_plays_first(sid, 0)
+    game = session.game
+    for player in game.players:
+        player.battlefield = []
+        player.graveyard = []
+        player.hand = []
+        player.library = [_CARDS["Plains"]] * 20
+    for _ in range(2):
+        game._put_permanent_onto_battlefield(1, Permanent(card=_CARDS["Forest"]), None)
+    game.players[1].hand = [_CARDS["Grizzly Bears"]]
+    game.players[1].graveyard = [_CARDS["Necrosavant"]]
+    start = len(game.log)
+
+    response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "end_turn"})
+    assert response.status_code == 200, response.json()
+    assert (game.active_player_index, game.current_step) == (1, "upkeep")
+    for _ in range(40):
+        state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+        if state["current_turn"] != 1:
+            break
+        action = "pass_priority" if state["priority_player"] == 0 else "ai_step"
+        response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": action})
+        assert response.status_code == 200, response.json()
+
+    lines = game.log[start:]
+    assert "Grizzly Bears added to stack" in lines, lines
+    declared = next(i for i, line in enumerate(lines) if "declared" in line and "attacker" in line)
+    assert lines.index("Grizzly Bears added to stack") < declared, lines

@@ -499,5 +499,15 @@ def _action_ai_step(session, req, seat_type):
         if _hold_at_flagged_step(session):
             return
         _advance_phase(session)
-        if session.current_turn == stepped_turn:
+        # Nor past a main phase that advance has just begun: the AI casts
+        # there, on its next `ai_step` (`_advance_ai_turn` stops on arriving
+        # at one, but leaves the one it starts in — the step the AI finished
+        # acting in). From a step the AI held priority in before its main
+        # phase — its upkeep for a graveyard ability or a rail flag, a draw
+        # step's or an end of combat's object — the walk left the main phase
+        # it had just entered, and the AI cast nothing in it.
+        if (
+            session.current_turn == stepped_turn
+            and session.game.current_step not in ("precombat_main", "postcombat_main")
+        ):
             _advance_ai_turn(session)
