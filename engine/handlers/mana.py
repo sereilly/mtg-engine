@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from ..mana_combination import MANA_COMBINATION, default_split, normalized_split
 from ..oracle_types import MANA_COLOR_OF_CHOICE
 from .registry import effect_handler
-from ._amounts import count_from_payload, resolve_amount
+from ._amounts import _paid_object_mana_value, count_from_payload, resolve_amount
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -340,7 +340,15 @@ def sacrifice_creature_for_mana(game: Game, instruction: OracleInstruction, cont
         game.log.append(f"{caster.name} sacrificed no creature for {context.card.name}")
         return True, "resolved"
     sacrificed = sacrificed_perm.card
-    amount = int(sacrificed.cmc) + int(instruction.payload.get("bonus", 0))
+    # The mana value it **last had on the battlefield** (CR 608.2h), through
+    # layer 1 — the read ``_amounts``' sacrificed-for-a-cost channel makes —
+    # not its printed card's: a Copy Artifact that was a Juggernaut pays four
+    # (CR 707.2), and a face-down creature pays nothing (CR 708.2a) although
+    # its card is the revealed one by now. It read ``card.cmc``, so the copy
+    # paid two and a face-down Exalted Angel six.
+    amount = _paid_object_mana_value(sacrificed_perm) + int(
+        instruction.payload.get("bonus", 0)
+    )
     payload_color = instruction.payload.get("color")
     if payload_color:
         symbol = str(payload_color)

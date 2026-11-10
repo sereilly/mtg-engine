@@ -1021,8 +1021,11 @@ class AdditionalCastCostsMixin:
                     # read at all and the default went instead.
                     chosen = claim(candidates)
                     owner_index = self.owner_index_of(chosen)
-                    exiled_card = chosen.card
                     self.remove_from_battlefield(chosen)
+                    # Read after the removal: a face-down creature is revealed
+                    # as it leaves (CR 708.9) and exile gets the card it hid,
+                    # not the stand-in (the activation's exile cost, beside).
+                    exiled_card = chosen.card
                     self.put_card_into_exile(
                         owner_index if owner_index is not None else caster_index,
                         exiled_card,

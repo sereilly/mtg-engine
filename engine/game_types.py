@@ -118,8 +118,12 @@ CHOICE_KEYS = (
     # What a printed **exile** cost ate (City of Shadows, Necropolis). Same
     # channel and same reason as the three above: the object is out of the game
     # before the ability reaches the stack, and "where X is **the exiled card's**
-    # mana value" is asked once it is (CR 608.2h). A ``CardDefinition``, not a
-    # ``Permanent``, because the graveyard spelling of the cost never had one.
+    # mana value" is asked once it is (CR 608.2h). What the cost ate **as it
+    # last existed**: a ``CardDefinition`` for a graveyard, hand or library
+    # exile, which never had a permanent, and the departed ``Permanent`` for a
+    # battlefield exile (Food Chain's "the exiled creature's mana value" is a
+    # copy's copied one, CR 707.2) — the shape ``sacrificed_for_cost`` and the
+    # cast's own exile cost (Soul Exchange) record.
     "exiled_for_cost",
     # Every card a **counted** exile cost ate ("Exile two creature cards from a
     # single graveyard", Night Soil). A list beside ``exiled_for_cost``'s single
