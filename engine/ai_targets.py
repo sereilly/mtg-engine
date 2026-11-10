@@ -36,6 +36,7 @@ from .ai_target_sides import (
     best_counted_target_seat,
     entry_trigger_target_side,
     host_effect_side,
+    host_trigger_side,
     spell_denies_its_own_target,
     spell_target_side,
 )
@@ -276,6 +277,31 @@ def _aura_harms_its_host(card: CardDefinition) -> bool:
         _HARMFUL_AURA_MARKER_WORDS.search(text) is not None
         or _HARMFUL_AURA_PATTERN.search(text) is not None
         or _host_abilities_harm_it(card)
+        or _host_triggers_harm_it(card, text)
+    )
+
+
+#: An Aura's printed gift to its host — "Enchanted creature gets +3/+3"
+#: (Spinal Graft, Unstable Mutation), "…has first strike and trample"
+#: (Aggression): the boon a host-harming trigger beside it is the price of,
+#: so such an Aura stays on its controller's side.
+_HOST_GIFT = re.compile(r"\benchanted [a-z]+ (?:gets \+|has |gains )")
+
+
+def _host_triggers_harm_it(card: CardDefinition, text: str) -> bool:
+    """Whether *card*'s triggered abilities work against its host
+    (``ai_target_sides.host_trigger_side``: "When enchanted land becomes
+    tapped, destroy it", Kudzu and Blight; "Whenever enchanted creature
+    becomes tapped, put a -0/-2 counter on it", Spirit Shackle) while its
+    text gives the host nothing (:data:`_HOST_GIFT`). No marker above reads
+    a destruction, so the AI cast Kudzu on its own Forest — and destroyed the
+    land the first time it tapped it for mana (kg5). Read off the compiled
+    program, so it names no card."""
+    if _HOST_GIFT.search(text):
+        return False
+    return any(
+        host_trigger_side(trigger.instruction) == "opponent"
+        for trigger in compile_card_oracle(card).triggered_abilities
     )
 
 
@@ -355,6 +381,13 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
     if noun is None:
         return None
     harmful = _aura_harms_its_host(card)
+    if not harmful and enchant_noun_seat(noun) != "you":
+        # A gift whose own ability can shrink its host to nothing ("{1}:
+        # Enchanted creature gets +1/-1 or -1/+1", Pemmin's Aura) is removal
+        # on an opponent's creature that ability can kill.
+        killed = _host_its_ability_kills(game, caster_index, card, noun)
+        if killed is not None:
+            return killed
     target_player_index = choose_attack_target(game, caster_index) if harmful else caster_index
     # "Enchant creature **you control**" (Cocoon): however "harmful" the text
     # reads, the clause forbids an opponent's permanent — the same gate the
@@ -391,6 +424,90 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
     if not legal:
         return None
     return target_player_index, min(legal)[1]
+
+
+def _host_shrink(card: CardDefinition) -> "tuple[int, dict] | None":
+    """``(toughness, mana)`` — the most toughness one activation of *card*'s
+    own host abilities takes from its host, and that activation's mana — for
+    an ability that costs mana and nothing else (so it can be repeated) and
+    whose effect lands on the host alone, by a mode or a step: "{1}:
+    Enchanted creature gets +1/-1 or -1/+1" (Pemmin's Aura), "{R}: Enchanted
+    creature gets +1/-1" (Flowstone Blade). None for every other Aura."""
+    from dataclasses import replace
+
+    best = None
+    for ability in compile_card_oracle(card).activated_abilities:
+        cost = ability.cost
+        if ability.instruction is None or cost is None or not any(cost.mana.values()):
+            continue
+        if replace(cost, mana={}) != type(cost)(mana={}):
+            continue
+        taken = _toughness_taken(ability.instruction)
+        if taken and (best is None or taken > best[0]):
+            best = (taken, {symbol: int(n) for symbol, n in cost.mana.items() if n})
+    return best
+
+
+def _toughness_taken(instruction) -> int:
+    """The most toughness *instruction* takes from the host: a host P/T step
+    (``pump_enchanted_creature``) with a negative toughness, read through
+    ``choose_one``'s modes and a sequence's steps."""
+    payload = getattr(instruction, "payload", None) or {}
+    if instruction.kind == "choose_one":
+        return max(
+            (_toughness_taken(mode["instruction"]) for mode in payload.get("modes") or ()
+             if isinstance(mode, dict) and mode.get("instruction") is not None),
+            default=0,
+        )
+    if instruction.kind == "sequence":
+        return sum(_toughness_taken(step) for step in payload.get("steps") or ())
+    toughness = payload.get("toughness")
+    if instruction.kind == "pump_enchanted_creature" and isinstance(toughness, int) and toughness < 0:
+        return -toughness
+    return 0
+
+
+def _host_its_ability_kills(game: Game, caster_index: int, card: CardDefinition, noun):
+    """``(seat, slot)`` of the opponent's creature *card*'s host shrink
+    (:func:`_host_shrink`) kills with **one** activation once it enchants it
+    — its toughness left no more than one activation takes, the caster's
+    lands able to pay for one — the most valuable such creature first
+    (``permanent_worth``), or None. A legal host by the cast path's own gates
+    (``forbidden_target``, ``_can_be_targeted``, the enchant noun). The kill
+    is the activation chooser's to make later, which rehearses a host P/T
+    trade on the host it finds (``ai_target_sides.host_effect_by_the_moment``)
+    one activation at a time — so a host several activations would kill, each
+    a gift until the last, is not one it would finish."""
+    shrink = _host_shrink(card)
+    if shrink is None:
+        return None
+    taken, mana = shrink
+    colours = [symbol for symbol in mana if symbol != "generic"]
+    paying = [
+        permanent for permanent in game.controlled_by(caster_index)
+        if permanent.has_type("land") and (
+            not colours
+            or set(colours) <= set(game._land_payment_colors(permanent) or ())
+        )
+    ]
+    activations = len(paying) // max(1, sum(mana.values()))
+    if activations <= 0:
+        return None
+    seat = choose_attack_target(game, caster_index)
+    best = None
+    for slot, permanent in enumerate(game.players[seat].battlefield):
+        if not permanent.is_creature or not permanent_matches_enchant_noun(permanent, noun):
+            continue
+        if forbidden_target(game, card, permanent, caster_index):
+            continue
+        if not game._can_be_targeted(permanent, card, caster_index=caster_index):
+            continue
+        if permanent.effective_toughness - permanent.damage_marked > taken:
+            continue
+        worth = permanent_worth(permanent, now=False)
+        if best is None or worth > best[0]:
+            best = (worth, slot)
+    return None if best is None else (seat, best[1])
 
 
 def _preferred_role_option(

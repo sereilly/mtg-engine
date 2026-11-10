@@ -1552,6 +1552,104 @@ def discard_spares_a_penalty(card: CardDefinition | None) -> "tuple[dict, bool] 
     return walk(roots)
 
 
+#: The steps a "for each … card discarded this way" count pays to the
+#: sentence's "you": life, cards.
+_CAUSE_GAIN_KINDS = frozenset({"target_gains_life"})
+_CAUSE_DRAW_KINDS = frozenset({"draw_cards", "draw_controller_cards"})
+
+
+@dataclass(frozen=True)
+class DiscardPayoff:
+    """What a discard pays the seat that caused it, per card that passes the
+    test (:func:`discard_pays_its_cause`): ``matches(card, game, owner)``
+    tests a discarded card, and ``worth(game, cause_seat)`` is what one such
+    card pays the cause on the standing's scale (``ai_standing``) — 0.0 for a
+    payoff this does not price (an untap), which then only breaks ties."""
+
+    matches: object
+    worth: object
+
+
+def discard_pays_its_cause(card: CardDefinition | None) -> "DiscardPayoff | None":
+    """What *card*'s sentence pays its controller — the seat that caused the
+    discard — for each discarded card that passes a test, or None, read off
+    the compiled steps that test it.
+
+    "Target player discards two cards. You gain 3 life for each land card
+    discarded this way." (Gerrard's Verdict: a ``per_each`` over the
+    ``discarded_this_way`` record on a gain for the caster — three life a
+    land.) "…then discards a card. If that player discards an artifact card
+    this way, untap this creature." (Lumengrid Augur: an ``if_then`` on the
+    card's types, unpriced.) The discarder's choice decides the payoff
+    (``ai_prompt_picks.discard_order``). :func:`discard_spares_a_penalty` is
+    the same record read for a penalty on the discarder."""
+    if card is None:
+        return None
+    from .ai_standing import CARD_WORTH, life_worth
+    from .handlers._filters import _card_matches_filter
+
+    program = compile_card_oracle(card)
+    roots = (
+        tuple(program.instructions)
+        + tuple(a.instruction for a in program.activated_abilities if a.instruction is not None)
+        + tuple(t.instruction for t in program.triggered_abilities if t.instruction is not None)
+    )
+
+    def counted(instruction, payload):
+        described = dict(payload["per_each"].get("filter") or {})
+        amount = payload.get("amount")
+        amount = amount if isinstance(amount, int) and not isinstance(amount, bool) else 0
+
+        def matches(discarded, game, owner) -> bool:
+            return bool(_card_matches_filter(discarded, described, game=game, owner=owner))
+
+        def worth(game, cause_seat: int) -> float:
+            if instruction.kind in _CAUSE_DRAW_KINDS:
+                return CARD_WORTH * amount
+            life = game.players[cause_seat].life
+            return life_worth(life + amount) - life_worth(life)
+
+        return DiscardPayoff(matches, worth)
+
+    def typed(condition):
+        types = tuple(str(each).lower() for each in condition.get("card_types") or ())
+        if not types:
+            return None
+        every = condition.get("type_match") == "all"
+
+        def matches(discarded, game, owner) -> bool:
+            printed = set((discarded.type_line or "").lower().split("—")[0].split())
+            held = [kind in printed for kind in types]
+            return all(held) if every else any(held)
+
+        return DiscardPayoff(matches, lambda game, cause_seat: 0.0)
+
+    def walk(instructions):
+        for instruction in instructions:
+            payload = getattr(instruction, "payload", None) or {}
+            each = payload.get("per_each")
+            if (
+                isinstance(each, dict) and each.get("recorded_cards") == "discarded_this_way"
+                and instruction.kind in _CAUSE_GAIN_KINDS | _CAUSE_DRAW_KINDS
+                and payload.get("recipient") == "caster"
+            ):
+                return counted(instruction, payload)
+            condition = payload.get("condition") or {}
+            if instruction.kind == "if_then" and condition.get("kind") == "discarded_this_way":
+                found = typed(condition)
+                if found is not None:
+                    return found
+            for key in ("steps", "then", "else", "action", "otherwise", "effect"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)):
+                    found = walk(nested)
+                    if found is not None:
+                        return found
+        return None
+
+    return walk(roots)
+
+
 __all__ = [
     "GRAVEYARD_DENIAL_KINDS",
     "SELF_PAYMENT_KINDS",
@@ -1562,6 +1660,8 @@ __all__ = [
     "color_most_worth_sweeping",
     "chosen_name_is_read_off_the_targets_library",
     "denied_graveyard_pile",
+    "DiscardPayoff",
+    "discard_pays_its_cause",
     "discard_spares_a_penalty",
     "exiled_search_pile_comes_back",
     "exiled_search_pile_comes_back_one_at_a_time",

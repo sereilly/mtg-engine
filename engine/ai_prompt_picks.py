@@ -130,7 +130,7 @@ def balance_discards(game, seat: int, owed: int) -> list[int]:
     the last slots)."""
     hand = game.players[seat].hand
     ranked = sorted(
-        range(len(hand)), key=lambda slot: (held_worth(game, seat, hand[slot]), -slot),
+        range(len(hand)), key=lambda slot: (discard_worth(game, seat, hand[slot]), -slot),
     )
     return sorted(ranked[:max(0, owed)])
 
@@ -141,47 +141,116 @@ def hand_size_discards(game, seat: int, excess: int) -> list[int]:
     whose madness cost the seat's board can pay (CR 702.35a: discarded, it is
     offered for that cost rather than lost — the card a discard costs least,
     the weight ``ai_abilities._madness_discard_index`` gives a discard cost),
-    then the cards it least wants to hold, hand order between equals. The
-    first cards in hand were the discard (``hand.pop(0)``), so an AI kept a
-    seventh land over a spell."""
+    then the cards it least wants to lose (:func:`discard_worth`), hand order
+    between equals. The first cards in hand were the discard
+    (``hand.pop(0)``), so an AI kept a seventh land over a spell."""
     hand = game.players[seat].hand
 
     def rank(slot: int) -> tuple:
         return (not _madness_is_payable(game, seat, hand[slot]),
-                held_worth(game, seat, hand[slot]), slot)
+                discard_worth(game, seat, hand[slot]), slot)
 
     return sorted(sorted(range(len(hand)), key=rank)[:max(0, excess)])
 
 
-def discard_order(game, seat: int, slots, source_card, memo: dict | None = None) -> list[int]:
+def discard_order(
+    game, seat: int, slots, source_card, memo: dict | None = None,
+    *, cause_seat: "int | None" = None,
+) -> list[int]:
     """*slots* (hand positions) in the order a seat nobody asks discards
     them ("Target player discards two cards", Mind Rot; "each player discards
     a card", Liliana's +1; Bazaar of Baghdad's three): the cleanup discard's
     order (:func:`hand_size_discards` — a card with a payable **madness**
-    cost first, then the cards least worth holding, hand order between
+    cost first, then the cards least worth losing, hand order between
     equals) under the program's own preference
     (``ai_prompts.order_discard``: the card that spares a printed penalty
     first, Strongarm Tactics). The first cards in hand were the discard, so
     a seat holding three lands it could not play and a Shivan Dragon it
     could discarded the Dragon if it came first.
 
+    **What the discard pays its cause** (*cause_seat*, whose spell or ability
+    asked for it: ``ai_prompt_readers.discard_pays_its_cause``) is part of
+    what a card costs to discard: "You gain 3 life for each land card
+    discarded this way" (Gerrard's Verdict) makes each land an opponent of
+    the caster discards cost it what three life is worth to the caster —
+    so a spare land still goes before a Shivan Dragon, and a card worth
+    little more than a land goes first — and the caster's own discard of
+    one gain it. A payoff this does not price breaks ties only.
+
     *memo* carries what each card was worth across one answer's discards —
     one card at a time, the hand re-read between them — so the hand is
     weighed once rather than once per card discarded."""
+    from .ai_prompt_readers import discard_pays_its_cause
     from .ai_prompts import order_discard
 
-    hand = game.players[seat].hand
+    player = game.players[seat]
+    hand = player.hand
     memo = {} if memo is None else memo
+    pays = discard_pays_its_cause(source_card) if cause_seat is not None else None
+    for_itself = cause_seat == seat
 
     def worth(card: CardDefinition) -> tuple:
         if card.name not in memo:
+            cost = discard_worth(game, seat, card)
+            paying = pays is not None and pays.matches(card, game, player)
+            if paying:
+                gain = pays.worth(game, cause_seat)
+                cost += -gain if for_itself else gain
             memo[card.name] = (
-                not _madness_is_payable(game, seat, card), held_worth(game, seat, card),
+                not _madness_is_payable(game, seat, card), cost,
+                pays is not None and paying != for_itself,
             )
         return memo[card.name]
 
     ranked = sorted(slots, key=lambda slot: (*worth(hand[slot]), slot))
     return order_discard(game, seat, ranked, source_card)
+
+
+#: The share of a card's worth it keeps once discarded when it has a road back
+#: out of the graveyard (:func:`graveyard_keeps`): it is cast or returned again
+#: later and at a higher price — a flashback cost (CR 702.34a), a return's
+#: activation — so half of it: a weight, like every other here.
+GRAVEYARD_KEPT_SHARE = 0.5
+
+#: The steps that bring an ability's own card back out of the graveyard.
+RETURNS_ITS_OWN_CARD = frozenset({"return_self_from_graveyard"})
+
+
+def discard_worth(game, seat: int, card: CardDefinition) -> float:
+    """What discarding *card* from *seat*'s hand costs it: what holding it is
+    worth (:func:`held_worth`), less the share it keeps in the graveyard when
+    it has a road back from there (:func:`graveyard_keeps`). A Firebolt
+    discarded is a Firebolt cast later for {4}{R}; a Lightning Bolt
+    discarded is gone — and the worth order alone kept the Firebolt and
+    discarded the Bolt beside it. The one discard reading of the three
+    choosers here (a discard prompt, the cleanup discard, Balance's)."""
+    held = held_worth(game, seat, card)
+    if graveyard_keeps(game, seat, card):
+        held -= GRAVEYARD_KEPT_SHARE * max(0.0, held)
+    return held
+
+
+def graveyard_keeps(game, seat: int, card: CardDefinition) -> bool:
+    """Whether *card*, in *seat*'s graveyard, is a card *seat* still has —
+    the graveyard's road back, read off the program: it can be cast from
+    there (flashback, printed or granted: ``flashback.has_flashback``), or an
+    ability of its own functions from there (``activation_zones.
+    ability_functions_from``, CR 113.6b) and returns the card itself —
+    "Return this card from your graveyard to your hand" (Eternal Dragon)."""
+    from .activation_zones import GRAVEYARD, ability_functions_from
+    from .ai_weighed_cast import _effect_steps
+    from .flashback import has_flashback
+
+    if has_flashback(card, game=game, owner_seat=seat):
+        return True
+    return any(
+        ability.supported and ability.instruction is not None
+        and ability_functions_from(ability) == GRAVEYARD
+        and any(
+            step.kind in RETURNS_ITS_OWN_CARD for step in _effect_steps(ability.instruction)
+        )
+        for ability in compile_card_oracle(card).activated_abilities
+    )
 
 
 def _madness_is_payable(game, seat: int, card: CardDefinition) -> bool:

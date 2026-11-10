@@ -20,10 +20,19 @@ creature this turn if able" trigger is weighed by the same answer.
 
 The fight is estimated the way the combat damage step deals it — first strike
 and double strike in two steps (CR 510.4), deathtouch as one point of lethal
-damage (CR 702.2c), indestructible and a regeneration shield as survival, a
-prevention shield as damage that may not arrive (``ai_combat._would_be_prevented``,
-the attacker's own damage chooser's question) — because a provoke that sends
-a 2/2 into a first-striking 2/2 is the provoke a seat must not take.
+damage (CR 702.2c), indestructible and a regeneration as survival
+(:func:`survives_destruction`), a prevention shield as damage that may not
+arrive (``ai_combat._would_be_prevented``, the attacker's own damage chooser's
+question) — because a provoke that sends a 2/2 into a first-striking 2/2 is
+the provoke a seat must not take.
+
+**A regeneration is not indestructible.** A creature that regenerates is
+removed from combat (CR 701.19a, CR 506.4), so a shielded creature that
+first-strike damage would destroy deals no regular damage, and the creature
+it was fighting assigns none to it either (CR 510.1c-d). Read as
+indestructible, a shielded River Boa blocking a first striker "killed" it,
+and a first striker blocking a shielded attacker "died" to damage it was
+never dealt.
 """
 
 from __future__ import annotations
@@ -32,7 +41,7 @@ from typing import TYPE_CHECKING
 
 from .ai_standing import permanent_worth
 from .ai_weighed_cast import _effect_steps
-from .combat_assignment import combat_damage_assigned_by
+from .combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE, combat_damage_assigned_by
 
 if TYPE_CHECKING:
     from .game import Game
@@ -58,6 +67,38 @@ _STALEMATE = -0.5
 #: creature then cannot block the attacker at all: it is free to block a
 #: different one.
 _UNTAPPED_FOR_NOTHING_SHARE = 0.25
+
+#: How a creature survives damage that would destroy it
+#: (:func:`survives_destruction`): **indestructible** (CR 702.12b) — the
+#: damage stays marked and it fights on…
+STAYS = "stays"
+#: …or **regenerated** (CR 701.19a-b): tapped, its damage removed, and
+#: removed from combat (CR 506.4), so it deals no combat damage in a later
+#: step and is dealt none.
+REGENERATES = "regenerates"
+
+
+def survives_destruction(game: "Game", permanent: "Permanent", dealt_by=()) -> "str | None":
+    """How *permanent* survives combat damage from *dealt_by* that would
+    destroy it — :data:`STAYS`, :data:`REGENERATES` — or None when it does not.
+
+    The engine's own questions (``engine/regeneration.py``): a shield spent
+    on the next destruction (CR 701.19a) or the static "If this creature would
+    be destroyed, regenerate it" (CR 701.19b), neither while "can't be
+    regenerated" holds (CR 701.19c) — set already, or set by the damage
+    itself when a dealer denies it (Bone Shaman's grant)."""
+    from .regeneration import cant_be_regenerated, denies_regeneration, regenerates_itself
+
+    if game._has_keyword(permanent, "indestructible"):
+        return STAYS
+    if cant_be_regenerated(permanent) or any(
+        denies_regeneration(source) and combat_damage_assigned_by(source) > 0
+        for source in dealt_by
+    ):
+        return None
+    if permanent.regeneration_shield > 0 or regenerates_itself(permanent):
+        return REGENERATES
+    return None
 
 
 def compels_a_block_on_source(instruction: "OracleInstruction | None") -> bool:
@@ -179,8 +220,8 @@ def _ganged_on(game: "Game", attacker: "Permanent", blocker: "Permanent") -> boo
     creature *blocker*'s controller has that could block it too, would be
     destroyed: their combat damage together (each as the damage step deals
     it, a prevention shield read as damage that may not arrive) against what
-    destroys it — none where it is indestructible or has a regeneration
-    shield, one point from deathtouch (CR 702.2c).
+    destroys it — none where it survives destruction
+    (:func:`survives_destruction`), one point from deathtouch (CR 702.2c).
 
     The defender's blocks are its own to declare later, and a gang that
     kills the attacker is the block a defender makes; nothing here is a
@@ -188,14 +229,14 @@ def _ganged_on(game: "Game", attacker: "Permanent", blocker: "Permanent") -> boo
     resolution, where no copy can be run."""
     from .ai_combat import _would_be_prevented
 
-    if game._has_keyword(attacker, "indestructible") or attacker.regeneration_shield:
-        return False
     seat = game.controller_index_of(blocker)
     gang = [blocker] + [
         other for other in game.controlled_by(seat)
         if other is not blocker and other.is_creature and not other.tapped
         and game._can_block_attacker(other, attacker)
     ]
+    if survives_destruction(game, attacker, dealt_by=gang) is not None:
+        return False
     if len(gang) < 2:
         return False
     needed = max(0, attacker.effective_toughness - attacker.damage_marked)
@@ -223,21 +264,39 @@ def _evasion_damage_worth(game: "Game", attacker: "Permanent", blocker: "Permane
 
 def fight_outcome(game: "Game", attacker: "Permanent", blocker: "Permanent") -> "tuple[bool, bool]":
     """``(attacker destroys blocker, blocker destroys attacker)`` if the two
-    fight alone — the combat damage step's two steps (CR 510.4) estimated."""
+    fight alone — the combat damage step's two steps (CR 510.4) estimated.
+
+    Each is fighting, destroyed, or **out** — regenerated, so removed from
+    combat (:data:`REGENERATES`): neither deals the other damage in a later
+    step (CR 510.1c-d). An indestructible one (:data:`STAYS`) fights on.
+
+    **And a creature that leaves the fight as the blocks are made**
+    (``ai_combat_triggers.leaves_the_fight``: Goblin Cadets' "Whenever this
+    creature blocks or becomes blocked, target opponent gains control of
+    it") deals and is dealt nothing, and is lost to its side — read as
+    destroyed, the reading every caller here weighs it by."""
     from .ai_combat import _would_be_prevented
+    from .ai_combat_triggers import leaves_the_fight
+
+    attacker_leaves = leaves_the_fight(game, attacker, blocking=False)
+    blocker_leaves = leaves_the_fight(game, blocker, blocking=True)
+    if attacker_leaves or blocker_leaves:
+        return blocker_leaves, attacker_leaves
+    pumped = block_pair_pumps(game, attacker, blocker)
 
     def dealt(source, recipient) -> int:
         amount = combat_damage_assigned_by(source)
+        if pumped[id(source)][0] and not source.metadata.get(ASSIGNS_NO_COMBAT_DAMAGE):
+            amount = max(0, source.effective_power + pumped[id(source)][0])
         if amount and _would_be_prevented(game, source, recipient, amount):
             return 0
         return amount
 
-    def lethal(source, recipient) -> int | None:
-        """Damage from *source* that destroys *recipient*, or None if none
-        does this combat."""
-        if game._has_keyword(recipient, "indestructible") or recipient.regeneration_shield:
-            return None
-        remaining = max(0, recipient.effective_toughness - recipient.damage_marked)
+    def lethal(source, recipient) -> int:
+        """Damage from *source* that would destroy *recipient*."""
+        remaining = max(
+            0, recipient.effective_toughness + pumped[id(recipient)][1] - recipient.damage_marked,
+        )
         if remaining > 0 and game._has_keyword(source, "deathtouch"):
             return 1
         return remaining
@@ -249,18 +308,32 @@ def fight_outcome(game: "Game", attacker: "Permanent", blocker: "Permanent") -> 
 
     to_blocker, to_attacker = dealt(attacker, blocker), dealt(blocker, attacker)
     kill_blocker, kill_attacker = lethal(attacker, blocker), lethal(blocker, attacker)
+    blocker_saved = survives_destruction(game, blocker, dealt_by=(attacker,))
+    attacker_saved = survives_destruction(game, attacker, dealt_by=(blocker,))
     attacker_first, attacker_regular = strikes(attacker)
     blocker_first, blocker_regular = strikes(blocker)
 
     on_blocker = on_attacker = 0
-    blocker_dead = attacker_dead = False
+    fighting, dead, out = "fighting", "dead", "out"
+    blocker_state = attacker_state = fighting
+    # A pump that leaves no toughness puts the creature in the graveyard
+    # before any damage (CR 704.5f): a 2/1 blocking a flanker.
+    if blocker.effective_toughness + pumped[id(blocker)][1] <= 0:
+        blocker_state = dead
+    if attacker.effective_toughness + pumped[id(attacker)][1] <= 0:
+        attacker_state = dead
+
+    def destroyed(saved: "str | None") -> str:
+        if saved == STAYS:
+            return fighting
+        return out if saved == REGENERATES else dead
 
     def settle() -> None:
-        nonlocal blocker_dead, attacker_dead
-        if kill_blocker is not None and on_blocker > 0 and on_blocker >= kill_blocker:
-            blocker_dead = True
-        if kill_attacker is not None and on_attacker > 0 and on_attacker >= kill_attacker:
-            attacker_dead = True
+        nonlocal blocker_state, attacker_state
+        if blocker_state == fighting and on_blocker > 0 and on_blocker >= kill_blocker:
+            blocker_state = destroyed(blocker_saved)
+        if attacker_state == fighting and on_attacker > 0 and on_attacker >= kill_attacker:
+            attacker_state = destroyed(attacker_saved)
 
     if attacker_first or blocker_first:
         if attacker_first:
@@ -268,12 +341,95 @@ def fight_outcome(game: "Game", attacker: "Permanent", blocker: "Permanent") -> 
         if blocker_first:
             on_attacker += to_attacker
         settle()
-    if attacker_regular and not attacker_dead:
+    both = attacker_state == fighting and blocker_state == fighting
+    if attacker_regular and both:
         on_blocker += to_blocker
-    if blocker_regular and not blocker_dead:
+    if blocker_regular and both:
         on_attacker += to_attacker
     settle()
-    return blocker_dead, attacker_dead
+    return blocker_state == dead, attacker_state == dead
+
+
+#: The trigger conditions on each side of a block whose P/T changes the fight
+#: before its damage: the attacker's "becomes blocked" (flanking's -1/-1 on
+#: the blocker, Pygmy Troll's +1/+1) and the blocker's "blocks".
+_BLOCKED_PUMP_CONDITIONS = frozenset({"creature_becomes_blocked", "creature_blocks_or_blocked_by"})
+_BLOCKS_PUMP_CONDITIONS = frozenset({
+    "creature_blocks", "creature_blocks_or_blocked_by", "creature_attacks_or_blocks",
+})
+
+
+def block_pair_pumps(game: "Game", attacker: "Permanent", blocker: "Permanent") -> dict:
+    """``{id(creature): (power, toughness)}`` for the two — what their own
+    triggers on this block add before combat damage: "Whenever this creature
+    becomes blocked by a creature without flanking, the blocking creature
+    gets -1/-1" (flanking, CR 702.25a: ``pump_block_pair``), "…becomes
+    blocked by a creature, this creature gets +1/+1" (Pygmy Troll:
+    ``pump_self``), and the blocker's own "Whenever this creature blocks"
+    pumps. Which blocker a trigger fires for is the engine's own question
+    (``events.trigger_subject_matches`` on its ``blocker`` subject). Steps
+    behind a condition or a choice are left out; nothing is added once the
+    attacker is blocked — the triggers have fired."""
+    from .events import trigger_subject_matches
+    from .trigger_utils import matching_triggers
+
+    found = {id(attacker): [0, 0], id(blocker): [0, 0]}
+    if getattr(attacker, "blocked", False):
+        return {key: tuple(value) for key, value in found.items()}
+    sides = (
+        (attacker, blocker, _BLOCKED_PUMP_CONDITIONS, True),
+        (blocker, attacker, _BLOCKS_PUMP_CONDITIONS, False),
+    )
+    for source, other, conditions, attacking in sides:
+        seat = game.controller_index_of(source)
+        for trigger in matching_triggers(source.effective_card, condition_kinds=conditions):
+            if attacking and trigger.condition.payload.get("blocker_filter") and not (
+                trigger_subject_matches(
+                    game, trigger, "blocker", blocker, observer=seat, source=attacker,
+                )
+            ):
+                continue
+            for step in _plain_steps(trigger.instruction):
+                payload = step.payload or {}
+                if step.kind == "pump_self":
+                    receiver = source
+                elif step.kind == "pump_block_pair":
+                    receiver = other
+                else:
+                    continue
+                power = _one_on_one(payload.get("power"), payload)
+                toughness = _one_on_one(payload.get("toughness"), payload)
+                if power is not None and toughness is not None:
+                    found[id(receiver)][0] += power
+                    found[id(receiver)][1] += toughness
+    return {key: tuple(value) for key, value in found.items()}
+
+
+def _one_on_one(amount, payload: dict) -> "int | None":
+    """A pump's printed amount, or "+1/+1 … for each creature blocking it"
+    (Elvish Berserker: ``times_x`` over a ``blocking_source`` count) with the
+    one blocker a fight here has. None for any other amount."""
+    if isinstance(amount, int) and not isinstance(amount, bool):
+        return amount
+    count = payload.get("x_from_count") or {}
+    if isinstance(amount, dict) and isinstance(amount.get("times_x"), int) and count.get(
+        "blocking_source"
+    ):
+        return amount["times_x"]
+    return None
+
+
+def _plain_steps(instruction) -> list:
+    """*instruction*'s steps, a ``sequence`` opened and nothing else — what
+    happens whenever the ability resolves."""
+    if instruction is None:
+        return []
+    if instruction.kind == "sequence":
+        return [
+            leaf for child in (instruction.payload or {}).get("steps") or ()
+            for leaf in _plain_steps(child)
+        ]
+    return [instruction]
 
 
 def compelled_blocks(game: "Game", defending_player_index: int) -> "dict[int, int]":
@@ -355,10 +511,14 @@ def compelled_block_declined(game: "Game", player_index: int, entry: dict) -> bo
 
 
 __all__ = [
+    "REGENERATES",
+    "STAYS",
     "best_compelled_blocker",
+    "block_pair_pumps",
     "compelled_block_declined",
     "compelled_blocks",
     "compelled_block_worth",
     "compels_a_block_on_source",
     "fight_outcome",
+    "survives_destruction",
 ]

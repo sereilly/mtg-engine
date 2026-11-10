@@ -34,6 +34,8 @@ left ``ai_abilities`` for the same reason.
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 from .activation_prohibitions import activation_prohibition
 from .activation_zones import GRAVEYARD, ability_functions_from
 from .ai_actions import GraveyardActivationAction
@@ -43,6 +45,7 @@ from .ai_standing import permanent_worth
 from .ai_scoring import SWING_CAP, _score_activation, _worth_proposing
 from .ai_target_sides import ability_seat_side, ability_target_side
 from .ai_valuation import is_mana_ability
+from .mana_wants import bringing_back
 from .cost_pickers import spec_is_a_cost
 from .game import Game
 from .oracle import compile_card_oracle
@@ -149,7 +152,12 @@ def _candidate(
     # one).
     required = dict(ability.cost.mana)
     if game.enforce_mana_costs and any(required.values()):
-        plan = _plan_land_taps(game, game.players[seat], required)
+        # What the ability brings back wants paying for next (an Eternal
+        # Dragon returned to the hand, its {5}{W}{W}): the plan spares it
+        # (``mana_wants.bringing_back``).
+        returned = _returns_its_card_to(ability)
+        with bringing_back(card, returned) if returned else nullcontext():
+            plan = _plan_land_taps(game, game.players[seat], required)
         if plan is None:
             return None
         land_taps, tap_colors = plan
@@ -200,6 +208,20 @@ def _candidate(
         land_tap_colors=candidate.land_tap_colors,
         cost_hand_index=candidate.cost_hand_index,
     )
+
+
+def _returns_its_card_to(ability) -> "str | None":
+    """Where *ability* — one a card activates from its graveyard — puts that
+    card: ``"hand"`` or ``"battlefield"`` ("Return this card from your
+    graveyard to your hand", ``return_self_from_graveyard``'s ``to``), or
+    None for any other effect."""
+    from .ai_weighed_cast import _effect_steps
+
+    for step in _effect_steps(ability.instruction):
+        if step.kind == "return_self_from_graveyard":
+            zone = (step.payload or {}).get("to") or "hand"
+            return "battlefield" if zone == "battlefield" else "hand"
+    return None
 
 
 def _discard_pick(game: Game, seat: int, cost) -> "int | None":
