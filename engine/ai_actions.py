@@ -155,6 +155,13 @@ class CastAction:
     # it) or none is taken; named where several apply (a morph card's
     # face-down {3} beside Dream Halls' discard), or the cast is refused.
     alternative_cost_index: int | None = None
+    # Which permanent pays a printed additional sacrifice (CR 601.2b), by id —
+    # the cast path's ``cost_permanent_ids``. None is the engine's
+    # deterministic pick (the smallest), every cast but one whose effect reads
+    # what the sacrifice ate ("X is the sacrificed artifact's mana value",
+    # Forge Armor), where the victim is weighed by rehearsal
+    # (`ai_casts._cast_naming_its_sacrifice`).
+    cost_permanent_ids: list[int] | None = None
 
 
 @dataclass(frozen=True)
@@ -326,6 +333,9 @@ def cast_announcement(action: CastAction) -> dict:
         "new_color": action.new_color,
         # CR 118.9a: which alternative cost, where several apply.
         "alternative_cost_index": action.alternative_cost_index,
+        # CR 601.2b: which permanent pays the sacrifice (see
+        # `CastAction.cost_permanent_ids`).
+        "cost_permanent_ids": action.cost_permanent_ids,
     }
 
 

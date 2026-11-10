@@ -817,3 +817,52 @@ def test_w1g12_a_creature_casts_at_its_printed_size(set_pool, name, size):
     assert (perm.effective_power, perm.effective_toughness) == size
 
 # ==== end W1G12 ======================================================
+
+
+# ==== W2G5 ==========================================================
+# W2G5's tests go between this line and the "end W2G5" line.
+#
+# The AI pile. Dross Scorpion: "Whenever this creature or another artifact
+# creature dies, you may untap target artifact." A seat nobody asks aims the
+# untap at a tapped artifact on its side (`ai_target_sides.untap_target_order`);
+# it took the first one offered, untapped or not.
+
+from engine import Game as _w2g5_Game
+from engine import PlayerState as _w2g5_PlayerState
+from engine.models import Permanent as _w2g5_Permanent
+from tests.helpers import _nosick as _w2g5_nosick
+from tests.helpers import resolve_stack as _w2g5_resolve_stack
+
+
+def _w2g5_table(set_pool, mine, theirs=()):
+    """Seat 0 (A) in its first main phase, mana off."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    card = lambda name: mrd[name] if name in mrd else lea[name]  # noqa: E731
+    game = _w2g5_Game(players=[
+        _w2g5_PlayerState("A", library=[card("Forest")] * 10),
+        _w2g5_PlayerState("B", library=[card("Island")] * 10),
+    ])
+    game.enforce_mana_costs = False
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _w2g5_nosick(_w2g5_Permanent(card=card(name)))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            placed[seat].append(permanent)
+    game.start_turn(0)
+    game._settle()
+    return game, placed[0], placed[1]
+
+
+def test_w2g5_dross_scorpion_untaps_the_tapped_artifact(set_pool):
+    game, (_scorpion, thopter, gold, leaden), _ = _w2g5_table(
+        set_pool, ["Dross Scorpion", "Ornithopter", "Gold Myr", "Leaden Myr"],
+    )
+    leaden.tapped = True
+    assert game.sacrifice_permanent(thopter) is not None
+    _w2g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert "Dross Scorpion: targets Leaden Myr" in game.log
+    assert not leaden.tapped and not gold.tapped
+
+# ==== end W2G5 ======================================================

@@ -30,6 +30,7 @@ that asks.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from .models import CardDefinition
@@ -462,6 +463,48 @@ def offer_trade(steps) -> OfferTrade | None:
     return None
 
 
+#: CR 607.2a's two phrases: an ability printed on an object that refers to
+#: "the exiled card(s)" or to cards "exiled with [this object]" is linked to
+#: the ability of that object that exiled them.
+_LINKED_EXILE_PHRASE = re.compile(
+    r"\bthe exiled cards?\b|\bexiled with (?:this|that) ", re.IGNORECASE,
+)
+
+
+def offers_a_hand_imprint(steps, source) -> bool:
+    """Whether an offer is an **imprint** taken out of the taker's hand: its
+    whole accept branch is "you may exile <a card> from your hand", and
+    *source* — the permanent whose ability made the offer — prints another
+    ability linked to that exile (CR 607.2a).
+
+    "Imprint — When this artifact enters, you may exile a nonartifact,
+    nonland card from your hand. / {T}: Add one mana of any of **the exiled
+    card's** colors." (Chrome Mox; Isochron Scepter and Soul Foundry print the
+    same pair.) The exile is the leading step of the offer and a payment out
+    of the seat's own hand, so "make no trades" declined every one — and the
+    purchase is not in the offer at all but in the linked ability, which with
+    nothing exiled does nothing: a Chrome Mox that taps for no mana, an
+    Isochron Scepter that copies nothing, every game.
+
+    The link is read as CR 607.2a states it, off the other abilities the
+    permanent has (its *effective* card's lines, so a copy of one is read as
+    what it copies). An offer whose purchase follows in the same branch
+    (Forsaken City's untap, Ice Cauldron's cast permission) is not this
+    shape: there the price and the purchase are both in front of the
+    reader (:func:`offer_trade`).
+    """
+    steps = [step for step in steps or () if getattr(step, "kind", None)]
+    if len(steps) != 1 or steps[0].kind not in _HAND_CARD_PRICE_KINDS:
+        return False
+    if source is None:
+        return False
+    program = compile_card_oracle(source.effective_card)
+    return any(
+        _LINKED_EXILE_PHRASE.search(line)
+        for line in (program.normalized_text or "").splitlines()
+    )
+
+
 #: The alternatives whose whole effect is to give one permanent a keyword, or
 #: take one away, and whose recipient a resolution context names: the source
 #: itself, or the object the ability was announced with (CR 602.2b).
@@ -511,6 +554,31 @@ def offered_alternative_changes_nothing(game, instruction, context) -> bool:
     if kind in _REMOVES_FROM_TARGET:
         return not any(held)
     return all(held)
+
+
+def offered_untap_changes_nothing(game, entry: dict) -> bool:
+    """Whether what an offer buys is an untap of the announced target, and
+    that target is untapped — a purchase that leaves the board as it is.
+
+    "Whenever a player casts a red spell, you may pay {3}. If you do, untap
+    target permanent." (the Mirage Talismans.) The target is announced as the
+    trigger goes on the stack (CR 603.3d) and the price is asked as it
+    resolves (CR 608.2d); a seat with nothing tapped on its side still had to
+    name something, and the gift rule then tapped three lands to untap a
+    permanent that was untapped. Read off the accept branch the offer was
+    armed with, so it answers for any offer whose whole purchase is that
+    untap (``ai_target_sides.UNTAP_TARGET_KINDS``) and for nothing else.
+    """
+    from .ai_target_sides import UNTAP_TARGET_KINDS
+    from .game_types import single_chosen_id
+
+    steps = [step for step in entry.get("_on_accept") or () if getattr(step, "kind", None)]
+    if not steps or not all(step.kind in UNTAP_TARGET_KINDS for step in steps):
+        return False
+    context = entry.get("_context")
+    announced = single_chosen_id(getattr(context, "target_permanent_id", None))
+    target = game.permanent_by_id(announced) if isinstance(announced, int) else None
+    return target is not None and game.is_on_battlefield(target) and not target.tapped
 
 
 def threatening_color(game, seat: int) -> str | None:

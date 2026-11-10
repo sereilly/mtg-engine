@@ -137,7 +137,16 @@ def proposal(card, mode, world: str) -> "dict | None":
         for permanent in map(game.permanent_by_id, action.target_permanent_ids or ())
         if permanent is not None
     ]
-    said = cast_announcement(replace(action, target_permanent_ids=None))
+    # …and the permanent a sacrifice cost is named to be paid with (MRD W2G5,
+    # `CastAction.cost_permanent_ids`), by seat and slot for the same reason.
+    paid_with = [
+        (game.controller_index_of(permanent), game.battlefield_index_of(permanent))
+        for permanent in map(game.permanent_by_id, action.cost_permanent_ids or ())
+        if permanent is not None
+    ]
+    said = cast_announcement(
+        replace(action, target_permanent_ids=None, cost_permanent_ids=None)
+    )
     # A role's permanent by seat and slot too (`ai_targets.role_ref`).
     said["target_role_refs"] = [
         (
@@ -150,7 +159,7 @@ def proposal(card, mode, world: str) -> "dict | None":
         for ref in said.get("target_role_refs") or ()
     ] or None
     return {
-        **said, "named": named, "score": action.score,
+        **said, "named": named, "paid_with": paid_with, "score": action.score,
         "taps": (action.land_tap_indices, action.land_tap_colors),
     }
 
