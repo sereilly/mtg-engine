@@ -350,7 +350,8 @@ def _attacks_its_held_trick_wins(
     with deliberating():
         for idx in held_home:
             trial = sorted(set(chosen) | {idx})
-            name = game.players[seat].battlefield[idx].card.name
+            creature = game.permanent_at(seat, idx)
+            name = creature.card.name if creature is not None else "a creature"
             rehearsal = rehearse(
                 game, seat, declaring(trial), spell_name=None, leaves_hand=False,
                 label=f"attacking with {name}", key=("attack", seat, tuple(trial)),

@@ -229,7 +229,19 @@ def test_an_ai_seat_aims_its_burn_at_the_flagbearer_and_holds_its_pump():
     pump, _mine, _theirs = _duel([_BEARS], [_bannerman()], hand0=[_GROWTH])
     assert choose_cast_action(pump, 0) is None
     own, _mine, _theirs = _duel([_BEARS, _bannerman()], [_bannerman()], hand0=[_GROWTH])
-    aimed = choose_cast_action(own, 0)
+    # Where the pump is aimed is the question, so the fight it is read
+    # through is the one with nothing done after the blocks: since kg5 a
+    # rehearsal's fight lets the seat cast it there
+    # (``ai_rehearsal._fight_priority_driver``), and held for the blocks the
+    # main phase would not cast it at all.
+    from unittest import mock
+
+    from engine import ai_rehearsal
+
+    with mock.patch.object(
+        ai_rehearsal, "_fight_priority_driver", lambda table, seat: (lambda game, asked: False),
+    ):
+        aimed = choose_cast_action(own, 0)
     assert aimed is not None
     named = own.permanent_at(aimed.target_player_index, aimed.target_permanent_index)
     assert aimed.target_player_index == 0 and named.has_type("flagbearer")
