@@ -24,7 +24,7 @@ import re
 from ..effect_ordering import CAP, MULTIPLIER
 from ..damage_redirects import _is_permanent, event_dealing_moment
 from ..next_damage import (DAMAGE_DOUBLED_NEXT, armed_for_event,
-                           spend_for_event)
+                           names_for_event, spend_for_event)
 from .registry import (
     COMBAT_DAMAGE_DOUBLER, DAMAGE_MULTIPLIER, DAMAGE_SOURCE_CAP,
     DAMAGE_SOURCE_DELTA, LIFE_FLOOR, NEXT_DAMAGE_DOUBLED, SOURCE_TYPE_SHIELD,
@@ -1140,11 +1140,15 @@ def _applies_next_damage_doubled(game, payload: dict) -> bool:
 
 
 def _next_damage_doubled_sources(game, payload: dict) -> list:
-    """The source carrying the "deals double the next time" marker: the
-    marker records no arming card, so the option names the object it is on.
-    Pure."""
-    source = payload.get("source")
-    return [] if source is None else [source]
+    """The cards that armed the "deals double the next time" riders answering
+    this event (Desperate Gambit's winning flip, Impulsive Maneuvers'), by the
+    name record beside the count (``next_damage.names_key``) — not the source
+    the rider sits on, which is what it watches. Pure."""
+    return names_for_event(
+        payload.get("source"), DAMAGE_DOUBLED_NEXT,
+        combat=bool(payload.get("combat")),
+        moment=event_dealing_moment(game, payload),
+    )
 
 
 @replacement_effect(

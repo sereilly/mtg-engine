@@ -1747,7 +1747,8 @@ def _arm_next_damage_rider(
     card_name = getattr(context.card, "name", "an effect")
     source = game.permanent_by_id(recorded) if isinstance(recorded, int) else None
     combat_only = bool(instruction.payload.get("combat_only"))
-    if source is None or not arm(source, rider_key(key, combat_only=combat_only)):
+    by = getattr(context.card, "name", None)
+    if source is None or not arm(source, rider_key(key, combat_only=combat_only), by=by):
         game.log.append(
             f"{card_name}: "
             + ("that creature is gone" if source_from == "event_subject"
