@@ -449,18 +449,34 @@ def keep_face_down_after_departure(game, permanent: "Permanent") -> None:
         entry[HANDED_TO_REGISTER] = True
 
 
-def forget_exiler_entries(game, owner_index: int, card) -> None:
+def forget_linked_entries(game, owner_index: int, card) -> None:
     """*card* has just left seat *owner_index*'s exile: drop every entry
-    naming it that records who exiled it (``EXILER_KEY``).
+    naming it, from every permanent that holds one.
 
-    Those entries are read by derivation — "cards they exiled with this
-    enchantment" is a scan of the record for a card still in exile — and CR
-    400.7 is the rule a derivation breaks: a card cast from exile that later
-    comes back to exile (the same object, when no exile holds it) is a new
-    object the permanent never exiled. Left behind, the entry would hand its
-    exiler the card again and hide it from everyone else. Called by the one
-    departure seam (``Game.take_card_from_exile``); a phased-out permanent's
-    record is cleaned too, since it is still the object it was (CR 702.26d).
+    CR 400.7: the card that left is a new object wherever it went, and one
+    that comes back to exile later — the same ``CardDefinition`` object, when
+    no exile holds it — is a new object again, which no permanent exiled.
+    An entry left behind speaks for it all the same, because every reader of
+    the record matches by identity: "cards they exiled with this enchantment"
+    (Shared Fate's exiler, ``EXILER_KEY``) handed its exiler the card again,
+    and a **face-down** entry (:func:`face_down_exiled_cards`) hid it. That
+    second one is the common board: Necropotence's "Put that card into your
+    hand at the beginning of your next end step" moves its card by the
+    delayed ability, not by draining the entry, so every card it ever handed
+    over stayed "face down" on Necropotence's record — and the first of them
+    discarded (Necropotence's own trigger then exiles it from the graveyard,
+    face up) read face down to every seat, its owner included.
+
+    A linked ability that moves its own cards drains its entries first
+    (:func:`take_linked_entries` and its siblings) and holds the dicts it
+    took, so dropping what is left here cannot take anything from it. Called
+    by the one departure seam (``Game.take_card_from_exile``); a phased-out
+    permanent's record is cleaned too, since it is still the object it was
+    (CR 702.26d). A permanent that has left keeps its record — its face-down
+    facts went to the game's register as it left
+    (:func:`keep_face_down_after_departure`), which the seam retires — and no
+    reader scans a departed permanent but its own linked abilities, which ask
+    the exile for each card.
     """
     holders = list(game.all_permanents()) + [
         permanent for player in game.players for permanent in player.phased_out
@@ -470,8 +486,7 @@ def forget_exiler_entries(game, owner_index: int, card) -> None:
         kept = [
             entry for entry in held
             if not (
-                EXILER_KEY in entry
-                and entry.get("card") is card
+                entry.get("card") is card
                 and int(entry.get("owner_index", -1)) == owner_index
             )
         ]
