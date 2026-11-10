@@ -35,6 +35,7 @@ from dataclasses import replace
 import re
 import weakref
 
+from . import ai_cast_trace as cast_trace
 from .ai_weighed_cast import SPELL_TYPES, cast_weighed, spell_text
 from .ai_target_sides import (
     entry_trigger_seat_side,
@@ -326,11 +327,13 @@ def _rehearse_announcement(
     # here, for the casts whose program sets the top up
     # (`ai_valuation.library_top_setups`), as a change that lasts.
     if rehearsal is not None and rehearsal.accepted and not _IN_THE_ABSTRACT.get():
+        parts = []
         worth = _chosen_draw_worth(game, seat, card, announcement.get("x_value"))
         if worth:
             rehearsal = replace(
                 rehearsal, now=rehearsal.now + worth, lasting=rehearsal.lasting + worth,
             )
+            parts.append(("chosen draws", worth, worth))
         # ...and **the words a text change rewrites on a permanent** (CR
         # 612): a Circle of Protection's colour, a protection, a landwalk
         # are a standing's same number whichever word they name, and worth
@@ -343,6 +346,9 @@ def _rehearse_announcement(
                 rehearsal, now=rehearsal.now + now_worth,
                 lasting=rehearsal.lasting + lasting_worth,
             )
+            parts.append(("text change's words", now_worth, lasting_worth))
+        if parts:
+            cast_trace.rehearsal_parts(rehearsal, parts)
     return rehearsal
 
 
@@ -470,7 +476,7 @@ def _arrives_to_stay(rehearsal: Rehearsal | None) -> bool:
 def _worth_proposing(rehearsal: Rehearsal | None) -> bool:
     """Whether a rehearsed cast is one to propose: the engine took it, it
     changed something **that outlasts the turn**, and it did not leave its
-    caster plainly worse off.
+    caster plainly worse off — `not_worth_proposing` found no reason not to.
 
     A cast whose every trace is gone by the end of the turn
     (``Rehearsal.fleeting``) changed something and bought nothing: a pump on
@@ -483,13 +489,27 @@ def _worth_proposing(rehearsal: Rehearsal | None) -> bool:
 
     A cast nobody could rehearse (None) is proposed as it always was.
     """
+    return not_worth_proposing(rehearsal) is None
+
+
+def not_worth_proposing(rehearsal: Rehearsal | None) -> "str | None":
+    """Why `_worth_proposing` turns *rehearsal* down, or None where it does
+    not — one reading, so the reason a candidate was dropped is the test it
+    failed (``ai_cast_trace.dropped``)."""
     if rehearsal is None:
-        return True
-    if not (rehearsal.accepted and rehearsal.changed):
-        return False
+        return None
+    if not rehearsal.accepted:
+        return f"the engine refused the rehearsed cast: {rehearsal.refusal or 'no reason given'}"
+    if not rehearsal.changed:
+        return "the rehearsed cast changed nothing"
     if _leaves_nothing(rehearsal):
-        return False
-    return rehearsal.swing >= HARM_FLOOR
+        return "nothing the rehearsed cast did outlasts the turn"
+    if not rehearsal.swing >= HARM_FLOOR:
+        return (
+            f"the rehearsal left its caster worse off: swing {rehearsal.swing:+.2f}"
+            f" under HARM_FLOOR {HARM_FLOOR}"
+        )
+    return None
 
 
 def _weighed_through_the_fight(
@@ -869,7 +889,30 @@ def _score_cast(
     game: Game, caster_index: int, card: CardDefinition, target_index: int,
     x_value: int | None, rehearsal: Rehearsal | None = None,
 ) -> float:
-    """What a cast is worth against the other casts the seat could make.
+    """What a cast is worth against the other casts the seat could make: the
+    sum of `cast_score_terms`, added in the order they are listed."""
+    return summed_terms(cast_score_terms(
+        game, caster_index, card, target_index, x_value, rehearsal,
+    ))
+
+
+def summed_terms(terms: "list[tuple[str, float]]") -> float:
+    """The score *terms* add up to, added one after another from the first —
+    the order the scorer always added them in, so a score summed from its
+    terms is the same float it was (``sum`` compensates, and would not be)."""
+    total = 0.0
+    for _name, value in terms:
+        total += value
+    return total
+
+
+def cast_score_terms(
+    game: Game, caster_index: int, card: CardDefinition, target_index: int,
+    x_value: int | None, rehearsal: Rehearsal | None = None,
+) -> "list[tuple[str, float]]":
+    """`_score_cast`'s answer as the named terms it is the sum of — what
+    ``ai_cast_trace`` records and ``ai_cast_explain`` prints, and what the
+    score is added up from, so the two cannot disagree.
 
     **A spell is worth what it does**: `SPELL_BASE_SCORE` and the swing its
     rehearsal measured (*rehearsal*; a spell nobody could rehearse scores the
@@ -887,29 +930,35 @@ def _score_cast(
             for perm in game.controlled_by(caster)
             if perm.has_type("land") and not perm.tapped
         )
-        return 1.0 if untapped_lands < 4 else 0.2
+        return [("land drop", 1.0 if untapped_lands < 4 else 0.2)]
 
+    terms: "list[tuple[str, float]]" = []
     if card.primary_type in SPELL_TYPES:
-        score = SPELL_BASE_SCORE
+        terms.append(("spell base", SPELL_BASE_SCORE))
         if rehearsal is not None and rehearsal.accepted:
-            score += max(-SWING_CAP, min(SWING_CAP, rehearsal.swing))
+            terms.append((
+                "rehearsal swing", max(-SWING_CAP, min(SWING_CAP, rehearsal.swing)),
+            ))
         elif rehearsal is None:
             # Nobody has measured it: a card being weighed where it lies (a
             # search's pick, the top of a library) rather than as a cast.
-            score += _score_spell_target(card, caster_index, target_index, game, x_value)
+            terms.append((
+                "seat weighed unrehearsed",
+                _score_spell_target(card, caster_index, target_index, game, x_value),
+            ))
     else:
-        score = 1.5
+        terms.append(("permanent base", 1.5))
         if card.primary_type == "creature":
             power, toughness = _cast_body(game, caster_index, card)
-            score += 1.2
-            score += power * 0.7
-            score += toughness * 0.4
+            terms.append(("creature", 1.2))
+            terms.append(("power", power * 0.7))
+            terms.append(("toughness", toughness * 0.4))
             if target_index == caster_index:
-                score += 1.0
+                terms.append(("its own seat named", 1.0))
         if card.primary_type in {"artifact", "enchantment"}:
-            score += 0.8
+            terms.append(("artifact or enchantment", 0.8))
         if x_value is not None:
-            score += min(4.0, x_value * 0.6)
+            terms.append(("X", min(4.0, x_value * 0.6)))
 
     # A mana source is worth playing early when there is something to spend the
     # mana on, and worth nothing at all when mana costs are not enforced. True
@@ -917,11 +966,11 @@ def _score_cast(
     if mana_ability_amount(card) is not None:
         if game.enforce_mana_costs:
             hand_nonlands = sum(1 for hand_card in caster.hand if hand_card.primary_type != "land")
-            score += 2.0 if hand_nonlands >= 2 else 0.5
+            terms.append(("mana source", 2.0 if hand_nonlands >= 2 else 0.5))
         else:
-            score -= 2.0
+            terms.append(("mana source, costs unenforced", -2.0))
 
-    return score
+    return terms
 
 
 def _score_activation(

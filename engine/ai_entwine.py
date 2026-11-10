@@ -26,6 +26,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from . import ai_cast_trace as cast_trace
 from .entwine import entwine_cost
 from .oracle import compile_card_oracle
 from .targeting import derive_cast_spec
@@ -116,22 +117,38 @@ def entwined_cast(
     (``ai_weighed_cast.casting_under``, held by the caller): the price, the
     rehearsal's trip out of the pile and the zone's bonus read it, so the
     entwined cast and the single modes are one reading of one card wherever
-    it is cast from.
+    it is cast from — and it is scored where they are
+    (``ai_cast_score.finished_cast_candidate``).
     """
-    from .ai_actions import cast_announcement
-    from .ai_cast_gates import _printed_costs_are_payable
-    from .ai_casts import zone_cast_bonus
-    from .ai_weighed_cast import cast_weighed
-    from .ai_payment import _cost_for, _plan_land_taps
-    from .ai_scoring import (_rehearse_announcement, _score_cast,
-                             _weighed_through_the_fight, _worth_proposing)
-
     offer = _entwine_offer(card)
     if offer is None or best is None:
         return None
     program = compile_card_oracle(card)
     if not program.modes:
         return None
+    with cast_trace.attempt(
+        game, player_index, card, variant="entwined", offers={offer.key: 1},
+        from_zone=from_zone, zone_index=best.hand_index,
+    ):
+        return _entwined(
+            game, player_index, card, built, best, offer, program,
+            from_zone=from_zone, extra_generic=extra_generic,
+        )
+
+
+def _entwined(
+    game: "Game", player_index: int, card: "CardDefinition",
+    built: "list[CastAction]", best: "CastAction", offer, program,
+    *, from_zone: str, extra_generic: int,
+) -> "CastAction | None":
+    """`entwined_cast` for a card that prints an entwine and modes."""
+    from .ai_actions import cast_announcement
+    from .ai_cast_gates import _printed_costs_are_payable
+    from .ai_cast_score import finished_cast_candidate
+    from .ai_payment import _cost_for, _plan_land_taps
+    from .ai_scoring import (_rehearse_announcement, _weighed_through_the_fight,
+                             not_worth_proposing)
+
     by_mode = {candidate.mode_index: candidate for candidate in built}
     announceable = set(game.announceable_modes(player_index, card))
     entries = []
@@ -139,7 +156,9 @@ def entwined_cast(
         if index not in announceable:
             # CR 700.2a: a mode with no legal announcement cannot be chosen,
             # and an entwined cast chooses every one.
-            return None
+            return cast_trace.dropped(
+                f"mode {index} has no legal announcement now (CR 700.2a)"
+            )
         candidate = by_mode.get(index)
         if candidate is None:
             # A mode the seat would not cast **alone** may still be worth
@@ -152,7 +171,9 @@ def entwined_cast(
             if derive_cast_spec(
                 card, program, from_zone=from_zone, mode_index=index,
             ) is not None:
-                return None
+                return cast_trace.dropped(
+                    f"mode {index} targets, and was not worth casting alone"
+                )
             entries.append({"index": index})
             continue
         if (
@@ -160,19 +181,26 @@ def entwined_cast(
             or candidate.alternative_cost
             or candidate.x_value != best.x_value
         ):
-            return None
+            return cast_trace.dropped(
+                f"mode {index} was built with an offer, an alternative cost or"
+                " another X"
+            )
         entry = _mode_entry(candidate)
         if entry is None:
-            return None
+            return cast_trace.dropped(
+                f"mode {index}'s targets do not fit one mode's announcement"
+            )
         entries.append(entry)
     taken = {offer.key: 1}
     hand_index = best.hand_index
     if not _printed_costs_are_payable(
         game, player_index, card, hand_index, from_zone, best.x_value, taken=taken,
     ):
-        return None
+        return cast_trace.dropped("the entwine's printed cost cannot be paid")
     if not _price_is_spare(game, player_index, card, offer):
-        return None
+        return cast_trace.dropped(
+            "the entwine's price is not spare (ENTWINE_LANDS_KEPT, or not mana)"
+        )
     player = game.players[player_index]
     tap_indices: tuple = ()
     tap_colors: tuple = ()
@@ -183,7 +211,7 @@ def entwined_cast(
                 required[symbol] = required.get(symbol, 0) + amount
         plan = _plan_land_taps(game, player, required)
         if plan is None:
-            return None
+            return cast_trace.dropped("unaffordable with the entwine's mana on top")
         tap_indices, tap_colors = plan
     action = replace(
         best,
@@ -204,16 +232,13 @@ def entwined_cast(
     rehearsal = _weighed_through_the_fight(
         game, player_index, card, announcement, rehearsal, planned=action,
     )
-    if not _worth_proposing(rehearsal):
-        return None
-    # Comparable with *best*'s score, which carries the zone's bonus
-    # (`ai_casts.zone_cast_bonus`: a cast under a permission that ends, or
-    # from the command zone): where the cast is made from is the same for
-    # every mode and for all of them together.
-    score = _score_cast(
-        game, player_index, card, best.target_player_index, best.x_value, rehearsal,
-    ) + zone_cast_bonus(from_zone, cast_weighed(card))
-    return replace(action, score=score)
+    if (refused := not_worth_proposing(rehearsal)) is not None:
+        return cast_trace.dropped(refused)
+    # Comparable with *best*'s score, because it is finished where *best* was
+    # (`ai_cast_score.finished_cast_candidate`): the zone's bonus — a cast under a
+    # permission that ends, or from the command zone — is the same for every
+    # mode and for all of them together.
+    return finished_cast_candidate(game, player_index, card, action, rehearsal)
 
 
 __all__ = ["ENTWINE_LANDS_KEPT", "entwined_cast"]

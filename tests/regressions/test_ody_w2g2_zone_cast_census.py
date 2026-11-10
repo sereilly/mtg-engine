@@ -131,7 +131,7 @@ TWIN_PARTS = tuple(range(STRIDE)) if full_census() else (0,)
 #: * *Wail of the Nim* (Mirrodin's promotion): entwined from the hand, one
 #:   bullet from an opened graveyard — the entwined cast was scored without
 #:   the bonus every single mode carries under a permission that ends
-#:   (``ai_casts.zone_cast_bonus``), and priced outside that permission.
+#:   (``ai_cast_score.zone_cast_bonus``), and priced outside that permission.
 PINNED = frozenset({"Wail of the Nim"})
 
 #: Twin rows that differ for a reason the card prints — measured over the whole
