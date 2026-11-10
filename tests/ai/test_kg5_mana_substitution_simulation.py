@@ -22,8 +22,11 @@ from engine.card_loader import manifest_set_path
 
 @pytest.mark.full
 def test_the_ai_taps_a_dual_under_naked_singularity_for_either_colour():
+    # Seed 5151 made both colours until kg5's AI merges (aiact's sacrifice
+    # weighing onward) moved its games: its Tundras were then asked only for
+    # {R}. 5155-5157 each make both on the merged tree; 5155 is the row.
     report = run_ai_simulation(
-        [manifest_set_path("LEA"), manifest_set_path("ICE")], games=4, seed=5151,
+        [manifest_set_path("LEA"), manifest_set_path("ICE")], games=4, seed=5155,
         required_cards=("Naked Singularity", "Tundra", "Tundra", "Taiga", "Savannah"),
     )
     assert report.games_completed == report.games_requested == 4

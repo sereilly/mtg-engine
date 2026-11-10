@@ -30,8 +30,11 @@ from engine.card_loader import manifest_set_path
 #: its mana value (before, the X was the most the lands paid and the
 #: rehearsal was refused), so no Soul Net saw the Forest die. Of 38-72 only
 #: 69 has a creature round take a Forest with Soul Net's life gained after it
-#: (50, 52, 60 and 67 take one, and no life is gained).
-SEED = 69
+#: (50, 52, 60 and 67 take one, and no life is gained). 141 since kg5's
+#: AI branches merged together (aiact, airesp, aicast, aivalue): seed 69's
+#: games no longer reach a creature round; 141 passes every assertion here
+#: on the merged tree (70-140 were not searched).
+SEED = 141
 
 
 @pytest.mark.full
