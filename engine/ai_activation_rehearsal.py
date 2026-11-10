@@ -25,6 +25,7 @@ from .ai_standing import LOST
 from .ai_text_changes import WORTH_FLOOR, ability_text_change_worth
 from .ai_valuation import source_becomes_an_aura
 from .game import Game
+from .game_types import single_slot
 
 
 def _rehearse_activation(
@@ -478,9 +479,9 @@ def _sacrifice_priced_activation(
 
     from .ai_sacrifice_victims import activation_sacrifice_choices, eats_a_land_it_needs
 
+    slot = single_slot(candidate.target_permanent_index)
     aimed = (
-        game.permanent_at(candidate.target_player_index, candidate.target_permanent_index)
-        if isinstance(candidate.target_permanent_index, int) else None
+        game.permanent_at(candidate.target_player_index, slot) if slot is not None else None
     )
     choices = activation_sacrifice_choices(game, seat, permanent, ability, spare=aimed)
     if not choices:
