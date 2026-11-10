@@ -23,6 +23,7 @@ from .seats import (
     _mark_interactive_seats,
     _seat_type,
     _self_should_hold,
+    _sitter_type,
 )
 from .pregame import _pregame_auto_advance
 
@@ -454,27 +455,83 @@ def _untap_land_selection_requirement(session: Session) -> int:
 def _begin_turn(
     session: Session, player_index: int, defer_untap_selection: bool | None = None,
 ) -> bool:
-    # Reset the per-turn counters (creatures died, damage taken, lands played)
-    # exactly as the headless start_turn flow does — without this, Scavenging
-    # Ghoul's end-step trigger fires on deaths from previous turns.
+    """*player_index*'s turn would begin: Time Vault's skip is asked first
+    (:func:`_asks_to_skip_the_turn`), and otherwise the turn is taken
+    (:func:`_take_the_turn`). *defer_untap_selection* False is a caller's
+    "ask nobody anything" (the turn runs on defaults), the skip included."""
+    if defer_untap_selection is not False and _asks_to_skip_the_turn(session, player_index):
+        return False
+    return _take_the_turn(session, player_index, defer_untap_selection)
+
+
+def _asks_to_skip_the_turn(session: Session, player_index: int) -> bool:
+    """Whether the turn stops, before it begins, for Time Vault's question:
+    "If you would begin your turn while this artifact is tapped, you may skip
+    that turn instead. If you do, untap this artifact." True with the
+    question armed (``Session.time_vault_pending``), answered by the
+    ``time_vault_skip`` / ``time_vault_decline`` actions; the AI never skips.
+
+    **Asked as the turn would begin, before its bookkeeping** — the card's
+    ruling: "The choice of whether or not to skip a turn is made as that turn
+    would begin" — because a skip is a replacement of the turn's beginning
+    (CR 614.10) and a skipped turn is proceeded past "as though it didn't
+    exist" (CR 500.11). It was asked after ``begin_turn_bookkeeping``, so the
+    skipped turn was counted: ``seat_turn_counts`` rose for a turn nobody
+    took (a Turtle that attacked in its controller's last turn attacked again
+    after the skip), the records of the turn before were folded as the
+    skipped seat's (Arboria read "nothing cast during their last turn"), and
+    a control waiting for the seat's next turn started and had to be handed
+    back. Nothing of the turn has begun when this asks, so no control has
+    started either: the seat's own sitter decides (CR 723.1b).
+    """
+    game = session.game
+    options = (
+        game.get_begin_turn_untap_options(player_index)
+        if _sitter_type(session, player_index) == "human" else []
+    )
+    session.time_vault_pending = list(options)
+    if not options:
+        return False
+    game._set_phase_and_step("beginning", "untap")
+    return True
+
+
+def _take_the_turn(
+    session: Session, player_index: int, defer_untap_selection: bool | None = None,
+) -> bool:
+    """The turn begins (``begin_turn_bookkeeping``: the per-turn counters —
+    creatures died, damage taken, lands played — reset exactly as the
+    headless ``start_turn`` does, without which Scavenging Ghoul's end-step
+    trigger fires on deaths from previous turns) and runs from its first
+    decision (:func:`_turn_after_its_bookkeeping`). The road Time Vault's
+    decline takes too: each turn's bookkeeping runs once."""
     session.game.begin_turn_bookkeeping(player_index)
     return _turn_after_its_bookkeeping(session, player_index, defer_untap_selection)
+
+
+def _skip_the_turn(session: Session, skipped: int) -> None:
+    """*skipped*'s turn, which had not begun, is skipped (Time Vault): the
+    seat after it in the rotation begins its turn instead
+    (``Game.seat_after_skipped_turn``, CR 500.11) — under the same turn
+    number, since the skipped turn never existed, and asked its own skip if
+    it holds a tapped Time Vault."""
+    session.current_turn = session.game.seat_after_skipped_turn(skipped)
+    _begin_turn(session, session.current_turn)
 
 
 def _turn_after_its_bookkeeping(
     session: Session, player_index: int, defer_untap_selection: bool | None = None,
 ) -> bool:
-    """The turn from its first decision on — Time Vault's skip, then the
-    untap step, the upkeep and the draw step — once ``begin_turn_bookkeeping``
-    has run for it.
+    """The turn from its first decision on — the untap step, the upkeep and
+    the draw step — once ``begin_turn_bookkeeping`` has run for it.
 
-    Split out of :func:`_begin_turn` so Time Vault's decline resumes the turn
-    here (``action_turn._action_time_vault_decline``). It called
-    ``_begin_turn``, so a person declining the skip ran the turn's bookkeeping
-    a second time: ``seat_turn_counts`` rose by two, and "your last turn" and
-    "its controller's next turn" — ordinals against that counter (Giant
-    Turtle, Wall of Dust, ``engine/turn_state.py``) — named the wrong turns,
-    so a Turtle that attacked last turn attacked again and a creature Wall of
+    Split out of :func:`_begin_turn` so a resume enters the turn here, never
+    at its beginning. Time Vault's decline called ``_begin_turn``, so a
+    person declining the skip ran the turn's bookkeeping a second time:
+    ``seat_turn_counts`` rose by two, and "your last turn" and "its
+    controller's next turn" — ordinals against that counter (Giant Turtle,
+    Wall of Dust, ``engine/turn_state.py``) — named the wrong turns, so a
+    Turtle that attacked last turn attacked again and a creature Wall of
     Dust blocked was free. Each turn's bookkeeping runs once, on every road.
     """
     game = session.game
@@ -484,22 +541,6 @@ def _turn_after_its_bookkeeping(
     # asked, and a person an AI controls is not.
     if defer_untap_selection is None:
         defer_untap_selection = _seat_type(session, player_index) == "human"
-
-    # Time Vault: "If you would begin your turn while this is tapped, you may skip
-    # that turn instead. If you do, untap it." Prompt a human controller at the very
-    # start of their turn (once); the AI never skips. Resolved via the
-    # time_vault_skip / time_vault_decline actions.
-    if (
-        defer_untap_selection
-        and session.time_vault_resolved_turn != game.turn
-        and _seat_type(session, player_index) == "human"
-    ):
-        options = game.get_begin_turn_untap_options(player_index)
-        if options:
-            game._set_phase_and_step("beginning", "untap")
-            session.time_vault_pending = list(options)
-            return False
-    session.time_vault_pending = []
 
     if defer_untap_selection:
         # Storage Matrix: "each player chooses artifact, creature, or land

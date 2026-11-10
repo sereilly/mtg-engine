@@ -112,20 +112,30 @@ def test_a_skipped_turn_does_not_spend_the_control(set_pool):
     assert game.decider_of(1) == 0
 
 
-@pytest.mark.cr("723.1b")
-def test_a_turn_skipped_once_begun_hands_the_control_on(set_pool):
-    """Time Vault's skip is decided as the turn begins — after the control
-    started with it. The control waits for the next turn actually taken."""
-    game = _table(set_pool)
+@pytest.mark.cr("723.1b", "614.10")
+def test_a_turn_time_vault_skips_leaves_the_control_waiting(set_pool):
+    """Time Vault's skip is decided as the turn would begin (the card's
+    ruling), before the turn's bookkeeping — so the control waiting for it
+    never starts, and waits for the next turn the player actually takes
+    (``Game.seat_after_skipped_turn``; the web asks it in
+    ``turn_steps._begin_turn``)."""
+    game = _table(set_pool, seats=3)
     vault = _put(game, 1, set_pool("LEA")["Time Vault"])
     vault.tapped = True
     _slave(game, set_pool, 0, 1)
     game.turn += 1
-    game.begin_turn_bookkeeping(1)
-    assert game.decider_of(1) == 0
     assert game.untap_for_skip(1, "Time Vault")
+    assert game.seat_after_skipped_turn(1) == 2
+    game.begin_turn_bookkeeping(2)    # P3's turn begins in P2's place
     assert game.decider_of(1) == 1
+    assert game.player_controls == {}
     assert game.player_controls_waiting == {1: 0}
+    game.start_next_turn()            # P1
+    resolve_stack(game)
+    game.start_next_turn()            # P2's next turn actually taken
+    resolve_stack(game)
+    assert game.active_player_index == 1
+    assert game.decider_of(1) == 0
 
 
 @pytest.mark.cr("723.3")

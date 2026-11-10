@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from ..game_over_guard import goes_no_further
-from ..player_control import return_skipped_control
 
 """Beginning phase (CR 501).
 
@@ -78,10 +77,34 @@ class BeginningPhaseMixin:
             return False
         self.become_untapped(permanent)
         self.log.append(f"{player.name} skipped their turn to untap {permanent_name}")
-        # A control that began with this turn waits for the next turn the
-        # player actually takes (CR 723.1b).
-        return_skipped_control(self, player_index)
         return True
+
+    def seat_after_skipped_turn(self, skipped: int) -> int:
+        """The seat whose turn begins instead of *skipped*'s, which a
+        replacement skipped as it would have begun (Time Vault's "you may skip
+        that turn instead"; the web asks it before the turn's bookkeeping,
+        ``web/turn_steps._begin_turn``).
+
+        CR 500.11: to skip a turn is to proceed past it "as though it didn't
+        exist", and CR 614.10 makes the skip a replacement of the turn's
+        beginning — so the skipped turn begins nothing (no
+        ``begin_turn_bookkeeping``: no turn count, no fold of the last turn's
+        records, no control starting) and takes no number, and the rotation
+        goes on from the skipped seat as the engine's own skips do
+        (``_compute_next_active_player`` spending ``skip_turn_counts``): the
+        next seat in turn order, an extra turn still owed first (CR 500.7),
+        and a skip charge on that seat spent in turn.
+
+        The turn that ended before the skip stays the active player's for the
+        next bookkeeping, which folds that turn's records (Arboria's "during
+        their last turn") — the rotation alone is asked from the skipped seat.
+        """
+        ended = self.active_player_index
+        self.active_player_index = skipped
+        try:
+            return self._compute_next_active_player()
+        finally:
+            self.active_player_index = ended
 
     @goes_no_further(True)
     def close_beginning_step(self) -> bool:

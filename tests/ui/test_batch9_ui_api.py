@@ -283,7 +283,10 @@ def test_time_vault_prompt_surfaces_and_skip_advances_turn():
     )
     assert resp.status_code == 200
     assert vault.tapped is False             # untapped
-    assert game.turn > turn_before           # the turn was skipped (advanced)
+    # The turn was skipped: the next seat's begins in its place, under the
+    # same number — a skipped turn never existed (CR 500.11).
+    assert (session.current_turn, game.active_player_index) == (1, 1)
+    assert game.turn == turn_before
     assert game.skip_turn_counts.get(0, 0) == 0  # no double-skip
     assert session.time_vault_pending == []
 

@@ -150,12 +150,11 @@ class Session:
     # opened straight in turn 1's precombat main phase, so a Free-For-All's
     # starting player never drew on turn 1 and no upkeep trigger fired.
     first_turn_owed: bool = False
-    # Time Vault: the begin-of-turn "skip your turn to untap" decision. Holds the
-    # permanent names offering the skip while the human decides; cleared once they
-    # skip or decline. `time_vault_resolved_turn` records the turn already decided
-    # so the prompt isn't re-shown after a decline.
+    # Time Vault: the "skip your turn to untap" decision, asked as the turn
+    # would begin (`turn_steps._asks_to_skip_the_turn`). Holds the permanent
+    # names offering the skip while the human decides; cleared once they skip
+    # or decline.
     time_vault_pending: list[str] = field(default_factory=list)
-    time_vault_resolved_turn: int | None = None
     # Debug toggle: when True, the AI declares every legal attacker each combat
     # instead of its normal risk-weighted choice. Set via the in-game Debug Menu.
     force_ai_attack_all: bool = False
@@ -845,7 +844,6 @@ class SessionStore:
         session.optional_untap_pending = []
         session.paused_beginning_phase = None
         session.time_vault_pending = []
-        session.time_vault_resolved_turn = None
         session.first_turn_owed = False
         session.force_ai_attack_all = False
         session.history = GameHistory()

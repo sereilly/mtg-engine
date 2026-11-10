@@ -28,9 +28,9 @@ The record is two ``Game`` fields:
   been spent (``_compute_next_active_player``), so the effect waits for the
   next turn the player actually takes (CR 723.1b). Dropped as the next turn
   begins (CR 723.1: "the effect doesn't end until the beginning of the next
-  turn"). Stamped with the turn number, so a turn skipped once it has begun
-  (Time Vault) hands the control on to the next turn actually taken
-  (:func:`return_skipped_control`).
+  turn"). A turn Time Vault skips is skipped as it would begin, before that
+  hook (``web/turn_steps._begin_turn``, ``Game.seat_after_skipped_turn``), so
+  the control waits for the next turn actually taken by construction.
 
 Neither field is bookkeeping for ``ai_rehearsal.position_digest``: the pending
 record is the whole of what resolving the effect does, and the control in
@@ -71,17 +71,6 @@ def begin_controlled_turn(game, seat: int) -> None:
         f"{game.players[controller].name} controls "
         f"{game.players[seat].name} during this turn (CR 723)"
     )
-
-
-def return_skipped_control(game, seat: int) -> None:
-    """*seat*'s turn, already begun, is skipped (Time Vault's "you may skip
-    that turn instead"): a control that started with it waits for the next
-    turn the player actually takes (CR 723.1b)."""
-    entry = game.player_controls.get(seat)
-    if entry is None or entry[1] != game.turn:
-        return
-    del game.player_controls[seat]
-    game.player_controls_waiting.setdefault(seat, entry[0])
 
 
 def decider_of(game, seat: int) -> int:
@@ -135,5 +124,4 @@ __all__ = [
     "decided_by",
     "decider_of",
     "record_player_control",
-    "return_skipped_control",
 ]
