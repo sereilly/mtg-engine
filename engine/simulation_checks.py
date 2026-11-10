@@ -176,24 +176,27 @@ def _assert_expected(
     # permanent; only the honesty check was lying, in the direction that costs
     # an investigation rather than a game.
     #
-    # Unsummon's twin was right **by accident** -- no land creature exists in
-    # this pool, so "creature" is always ``primary_type``'s answer for one --
-    # and it is routed through the same function anyway, so the next reader of
-    # this pair does not have to work out which of the two was safe.
+    # And a permanent's type is not its card's (CR 613.1d): Living Lands makes
+    # every Forest a 1/1 creature that is still a land, so an Unsummon that
+    # bounced one read as "did not remove one target creature" beside the
+    # defender's printed creatures, counted alike before and after (kg5,
+    # LEA+ATQ seed 70). The clones belong to no game and no layer reaches them,
+    # so each is counted by the types the table gave it when it was snapshot
+    # (``_snapped_type``).
     if card.name == "Unsummon" and any(
-        card_has_type(perm.card, "creature") for perm in before_target.battlefield
+        _snapped_type(perm, "creature") for perm in before_target.battlefield
     ):
         creature_before = sum(
-            1 for perm in before_target.battlefield if card_has_type(perm.card, "creature")
+            1 for perm in before_target.battlefield if _snapped_type(perm, "creature")
         )
         creature_after = sum(
-            1 for perm in after_target.battlefield if card_has_type(perm.card, "creature")
+            1 for perm in after_target.battlefield if _snapped_type(perm, "creature")
         )
         if creature_after != creature_before - 1:
             return "Unsummon did not remove one target creature"
 
     def _artifact_or_enchantment(perm) -> bool:
-        return card_has_type(perm.card, "artifact") or card_has_type(perm.card, "enchantment")
+        return _snapped_type(perm, "artifact") or _snapped_type(perm, "enchantment")
 
     if card.name == "Disenchant" and any(
         _artifact_or_enchantment(perm) for perm in before_target.battlefield
@@ -204,6 +207,30 @@ def _assert_expected(
             return "Disenchant did not destroy one target artifact or enchantment"
 
     return None
+
+
+#: The clone's metadata key holding the card types ``_assert_expected`` counts
+#: by, as CR 613's layer 4 gave them to the permanent when it was snapshot.
+_SNAPPED_TYPES = "_simulation_snapshot_types"
+_COUNTED_TYPES = ("creature", "artifact", "enchantment")
+
+
+def _layer_four_types(perm: Permanent) -> frozenset:
+    """*perm*'s card types among ``_COUNTED_TYPES``, read through the layers
+    while it is still on the table (``Permanent.is_creature``, ``has_type``)."""
+    return frozenset(
+        card_type for card_type in _COUNTED_TYPES
+        if (perm.is_creature if card_type == "creature" else perm.has_type(card_type))
+    )
+
+
+def _snapped_type(perm: Permanent, card_type: str) -> bool:
+    """Whether the snapshot *perm* is a clone from had *card_type* — its
+    recorded layer-4 types (``_clone_player``), else its card's (CR 205.2b)."""
+    snapped = perm.metadata.get(_SNAPPED_TYPES)
+    if snapped is None:
+        return card_has_type(perm.card, card_type)
+    return card_type in snapped
 
 
 def _clone_player(game: Game, player: PlayerState) -> PlayerState:
@@ -219,7 +246,7 @@ def _clone_player(game: Game, player: PlayerState) -> PlayerState:
                 power_bonus=perm.power_bonus,
                 toughness_bonus=perm.toughness_bonus,
                 regeneration_shield=perm.regeneration_shield,
-                metadata=dict(perm.metadata),
+                metadata={**perm.metadata, _SNAPPED_TYPES: _layer_four_types(perm)},
             )
             for perm in game.controlled_by(player)
         ],
