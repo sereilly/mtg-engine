@@ -171,6 +171,13 @@ def _doors_spent(session: Session) -> set:
     return session.ai_doors_spent[1]
 
 
+#: The bound on an AI-only table's cast loop in one main phase — the
+#: simulator's (``ai_simulator._MAX_CASTS_PER_MAIN_PHASE``): a turn's mana in a
+#: limited deck does not reach it, so a spell that untaps lands or returns
+#: itself cannot loop.
+_MAX_CASTS_A_MAIN_PHASE = 8
+
+
 def _ai_step(session: Session) -> bool:
     """Run one AI action for the current turn.
 
@@ -253,8 +260,18 @@ def _ai_step(session: Session) -> bool:
     if not sorcery_speed_ok:
         return not _ai_answers_priority(session, seat)
 
-    cast_action = choose_cast_action(game, seat) if sorcery_speed_ok else None
-    if cast_action is not None:
+    # **At a table of AI seats alone, the cast door is a loop**, the
+    # simulator's own main phase (`ai_simulator._play_casts`): cast until the
+    # chooser proposes nothing, bounded as that loop is bounded. A settling
+    # cast hands nobody priority, so there is no round to pause for — and
+    # this door cast once and went on, so an `ai_vs_ai` web AI holding two
+    # Grizzly Bears and four Forests cast the second Bears in its second main
+    # phase, every main phase of every game. At a table with a person each
+    # cast pauses for the round below and the next `ai_step` comes back here.
+    cast_action = choose_cast_action(game, seat)
+    for _cast in range(_MAX_CASTS_A_MAIN_PHASE):
+        if cast_action is None:
+            break
         # `hand_index` indexes the zone `from_zone` names — the hand, the
         # command zone for a commander cast (CR 903.8), or a graveyard, an
         # exile or a library an effect has opened (CR 601.3: a flashback card)
@@ -306,11 +323,14 @@ def _ai_step(session: Session) -> bool:
                 # on an AI seat no client action can ever advance.
                 _run_priority_exchange(session, seat)
                 return False  # paused — human has priority over the spell on the stack
-        else:
-            game.cast_from_hand(
-                seat, card_to_cast.name, **cast_announcement(cast_action),
-            )
-            _auto_resolve_ai_pending(session)
+            break
+        result = game.cast_from_hand(
+            seat, card_to_cast.name, **cast_announcement(cast_action),
+        )
+        _auto_resolve_ai_pending(session)
+        if not result.supported or game.is_game_over():
+            break
+        cast_action = choose_cast_action(game, seat)
 
     # The activation doors below take the engine's **queue** form at a table
     # with a person — the object stays on the stack and priority goes round
