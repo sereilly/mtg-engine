@@ -188,7 +188,7 @@ def evaluate_record_condition(
         excluded = [str(t) for t in (payload.get("excluded_types") or ())]
         if excluded and any(t in line for t in excluded):
             return bool(payload.get("negated"))
-        if not wanted:
+        if not wanted and not payload.get("subtypes"):
             # An exclusion on its own is satisfied by anything the exclusion
             # did not name, which is what "nonland card" means.
             answer = bool(excluded)
@@ -197,7 +197,12 @@ def evaluate_record_condition(
         # "creature **or** land card" is a union; "artifact creature" is one
         # object that is both. The same distinction `type_match` draws
         # everywhere else, carried here so the two cannot disagree.
-        if payload.get("type_match") == "all":
+        if not wanted:
+            # "If it's a **Goblin** card" — a creature type and no card type
+            # (CR 205.3m): every card passes this half, and the subtype test
+            # below is the whole question.
+            answer = True
+        elif payload.get("type_match") == "all":
             answer = len(matches) == len(wanted)
         else:
             answer = bool(matches)
@@ -602,15 +607,29 @@ def evaluate_record_condition(
         if target is None:
             return False
         wanted = [str(t) for t in (payload.get("card_types") or ())]
-        if not wanted:
+        # "If it's a **Goblin**" (a creature type and no card type, CR 205.3m):
+        # the permanent's subtypes through layer 4 (``Permanent.has_type``
+        # answers a subtype as readily as a card type), so a Kindred artifact
+        # of the type is one and a creature a Conspiracy retyped answers as its
+        # new type.
+        subtypes = [str(t).lower() for t in (payload.get("subtypes") or ())]
+        if not wanted and not subtypes:
             return False
-        matches = [t for t in wanted if target.has_type(t)]
-        # "artifact creature" is one object that is both; "creature or land" is
-        # a union. The same distinction `type_match` draws everywhere else.
-        if payload.get("type_match") == "all":
-            answer = len(matches) == len(wanted)
+        if wanted:
+            matches = [t for t in wanted if target.has_type(t)]
+            # "artifact creature" is one object that is both; "creature or
+            # land" is a union. The same distinction `type_match` draws
+            # everywhere else.
+            if payload.get("type_match") == "all":
+                answer = len(matches) == len(wanted)
+            else:
+                answer = bool(matches)
         else:
-            answer = bool(matches)
+            held = [t for t in subtypes if target.has_type(t)]
+            answer = (
+                len(held) == len(subtypes)
+                if payload.get("subtype_match") == "all" else bool(held)
+            )
         return (not answer) if payload.get("negated") else answer
 
     if kind == "target_card_shares_type_with_cost_card":

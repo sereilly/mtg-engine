@@ -44,12 +44,13 @@ found, and a card of neither the type nor a Kindred of it is not.
 
 Onto the battlefield no card in the pool prints the phrase ("a Goblin
 **permanent** card" is what the pool prints, and is read). A Kindred instant
-of the type is a "<type> card" that CR 400.4a leaves where it is, which none
-of the handlers says, so each road refuses the shape — a search, a targeted
-reanimation from your graveyard and from any graveyard, a sweep reanimation,
-Clear the Land's sorted reveal, Animal Magnetism's opponent's pick, a
-reveal-until (Gamekeeper's) — where it used to read a creature card. The same
-sentences with "creature card" are still read.
+of the type is a "<type> card" that CR 400.4a leaves where it is; each road
+refused the shape here (kg4) until its handler said so, and since kg5 every
+road asks ``permanent_cards`` before the card leaves its zone, so the shapes
+compile — a search, a targeted reanimation from your graveyard and from any
+graveyard, a sweep reanimation, Clear the Land's sorted reveal, Animal
+Magnetism's opponent's pick, a reveal-until (Gamekeeper's). Their boards are
+``test_kg5_kindred_cant_enter.py``.
 
 The readers of "<creature type> spell(s)" never paired the subtype with the
 creature type (each asks ``object_creature_types.card_creature_types``); they
@@ -407,17 +408,18 @@ def test_conspicuous_snoop_has_a_kindred_goblin_artifacts_activated_abilities():
     assert granted_top_abilities(game, snoop) == ()
 
 
-# --- onto the battlefield: refused ------------------------------------------
+# --- onto the battlefield ------------------------------------------------------
 #
 # No card in the pool puts a "<creature type> card" onto the battlefield; the
-# pool prints "a Goblin **permanent** card" (CR 110.4a's union, read since
-# kg4 targets). A creature type alone names any card with it, a Kindred instant
+# pool prints "a Goblin **permanent** card" (CR 110.4a's union, read since kg4
+# targets). A creature type alone names any card with it, a Kindred instant
 # among them, and CR 400.4a ("If an instant or sorcery card would enter the
-# battlefield, it remains in its previous zone") is what happens to that one —
-# which no handler these roads lower to says. So each road refuses the shape,
-# where on the base it read a creature card; the same sentence printing
-# "creature card" is still read. Invented sentences, each in a shape a real
-# card prints with a card type.
+# battlefield, it remains in its previous zone") is what happens to that one.
+# kg4 refused each road here until a handler said so; kg5's roads ask
+# ``permanent_cards`` before the card leaves its zone, so each sentence reads,
+# beside the same sentence printing "creature card". The boards — the Kindred
+# card staying where it was on each road — are test_kg5_kindred_cant_enter.py.
+# Invented sentences, each in a shape a real card prints with a card type.
 
 
 def _sorcery(name: str, text: str) -> CardDefinition:
@@ -439,11 +441,11 @@ _ONTO_THE_BATTLEFIELD = (
 
 @pytest.mark.cr("109.2a", "205.3m", "400.4a")
 @pytest.mark.parametrize("text", _ONTO_THE_BATTLEFIELD)
-def test_a_creature_type_card_put_onto_the_battlefield_refuses(text):
+def test_a_creature_type_card_put_onto_the_battlefield_is_read(text):
     from engine.oracle import compile_card_oracle
 
     program = compile_card_oracle(_sorcery("Test Kindred Muster", text))
-    assert not program.supported, program
+    assert program.supported, program
     for word in ("Goblin", "Zombie"):
         text = text.replace(f"{word} card", f"{word} creature card")
     assert compile_card_oracle(_sorcery("Test Creature Muster", text)).supported, text

@@ -21,6 +21,7 @@ from ..aura_attachment import (PUT_ONTO_BATTLEFIELD_BY, is_aura_card,
                                returning_aura_hosts)
 from ..keywords import grant_keyword
 from ..models import Permanent
+from ..permanent_cards import is_permanent_card, stays_out_of_battlefield
 from ..replacements.zone_changes import EXILE_ON_LEAVING_BATTLEFIELD
 from ..resumption import run_resumable
 from ..search_filters import card_has_any_type, card_has_type
@@ -507,6 +508,23 @@ def _complete_reanimation(
             else f"{source_name}: no {_type_noun(card_type)} card to return from a graveyard"
         )
 
+    if (
+        isinstance(idx, int)
+        and _holds_a_reanimable_card(source_player, idx, card_filter, card_type)
+        and not is_permanent_card(source_player.graveyard[idx])
+    ):
+        # "Return target **Zombie** card from your graveyard to the
+        # battlefield": the named card is a Kindred instant, a legal target
+        # CR 400.4a leaves in the graveyard. The seam below would say so and
+        # return nothing; said here instead, so the "no card to return" line
+        # nothing-found writes does not follow it. Nothing arrived, so
+        # nothing is recorded (the zeroes below, for their reason).
+        stays_out_of_battlefield(
+            game, source_player.graveyard[idx], source_player, "graveyard",
+        )
+        context.results[REANIMATED_PERMANENTS] = ()
+        context.results["its_mana_value"] = 0
+        return True, "resolved"
     reanimated = game._reanimate_creature_to_battlefield(
         caster, source_player, idx, card_filter=card_filter, card_type=card_type,
         entering_as=_entering_characteristics(instruction.payload, context),
@@ -1130,8 +1148,14 @@ def reanimate_graveyard_position(game: Game, instruction: OracleInstruction, con
     caster_index = game.players.index(context.caster)
     moved = []
     # Highest index first: the positions were found against the pile as it
-    # stands, and removing a lower one renumbers every position above it.
+    # stands, and removing a lower one renumbers every position above it. A
+    # card CR 400.4a keeps off the battlefield is the card named and stays
+    # where it is (``permanent_cards``).
     for index in sorted(taken, reverse=True):
+        if stays_out_of_battlefield(
+            game, victim.graveyard[index], victim, "graveyard",
+        ):
+            continue
         moved.append(victim.graveyard.pop(index))
     # One event (CR 603.6a).
     with game.entering_together():
@@ -1167,13 +1191,20 @@ def move_random_graveyard_card(game: Game, instruction: OracleInstruction, conte
     if not pile or not list(game.opponents_of(caster_index)):
         game.log.append(f"{context.card.name}: no card was chosen")
         return True, "resolved"
-    card = pile.pop(random.randrange(len(pile)))
+    slot = random.randrange(len(pile))
+    card = pile[slot]
     if card_has_type(card, str(payload.get("card_type") or "creature")):
+        # The type the sentence tests is the card's to answer; whether it can
+        # enter is CR 400.4a's, asked before it leaves the pile.
+        if stays_out_of_battlefield(game, card, caster, "graveyard"):
+            return True, "resolved"
+        pile.pop(slot)
         game._put_permanent_onto_battlefield(
             caster_index, Permanent(card=card), None, from_zone="graveyard"
         )
         game.log.append(f"{context.card.name} put {card.name} onto the battlefield")
     else:
+        pile.pop(slot)
         game.put_card_into_exile(caster, card)
         game.log.append(f"{context.card.name} exiled {card.name}")
     return True, "resolved"
@@ -1226,10 +1257,12 @@ def reanimate_announced_cards(game: Game, instruction: OracleInstruction, contex
 
     def _eligible(card) -> bool:
         # The picker's own predicate, asked here so the resolution and the
-        # announcement cannot disagree about which cards were legal.
+        # announcement cannot disagree about which cards were legal — and then
+        # CR 400.4a, asked before the slot is taken: a legal target that
+        # cannot enter stays in the pile (``permanent_cards``).
         return graveyard_card_matches(
             instruction.payload, card, game=game, owner=caster,
-        )
+        ) and not stays_out_of_battlefield(game, card, caster, "graveyard")
 
     # **Re-located from the stamps now, not at the top of the resolution.**
     # "When this creature dies, **exile it, then** return up to two target
@@ -1383,6 +1416,16 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
         if destroyed_only:
             taken = _destroyed_this_way_slots(player, taken, context)
         if destination == "battlefield":
+            # "Return all **Zombie** cards from your graveyard to the
+            # battlefield": a Kindred instant of the type is one of them, and
+            # CR 400.4a leaves it in the graveyard — taken out of the plan
+            # before anything moves, so it never leaves the pile.
+            taken = [
+                index for index in taken
+                if not stays_out_of_battlefield(
+                    game, player.graveyard[index], player, "graveyard",
+                )
+            ]
             for index in list(taken):
                 card = player.graveyard[index]
                 if not is_aura_card(card):
@@ -1660,6 +1703,11 @@ def sacrifice_and_return_targets(
         game.log.append(f"{context.card.name}: a chosen target is gone")
         return True, "resolved"
     actor = game.players[stamp.seat]
+    if stays_out_of_battlefield(game, actor.graveyard[slot], actor, "graveyard"):
+        # CR 400.4a: the chosen card cannot enter and stays in the pile; the
+        # sacrifice still happens (CR 609.3).
+        game.sacrifice_permanent(artifact)
+        return True, "resolved"
     # Out of the pile first — see the docstring: the sacrifice below puts a
     # card into this very graveyard, and "simultaneously" means the return may
     # not see it.

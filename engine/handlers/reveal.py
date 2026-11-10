@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 from ..faces import has_name
 from ..linked_exile import until_leaves_has_ended
 from ..models import Permanent
+from ..permanent_cards import stays_out_of_battlefield
 from ..oracle_types import REVEALED_HAND_CARDS, REVEALED_TOP_CARDS_BY_SEAT
 # The runtime class. The bare name is a TYPE_CHECKING-only import below, and
 # the handlers here *build* instructions for an optional payment's branches.
@@ -356,7 +357,7 @@ def _place_sorted_reveal(game, caster, revealed, payload, matches) -> tuple[list
     """
     match_zone = str(payload.get("match_zone", "hand"))
     rest_zone = str(payload.get("rest_zone", "graveyard"))
-    matched, rest, bottomed = [], [], []
+    matched, rest, bottomed, stayed = [], [], [], []
     # One event (CR 603.6a): the finds enter together.
     with game.entering_together():
         for card in revealed:
@@ -365,6 +366,17 @@ def _place_sorted_reveal(game, caster, revealed, payload, matches) -> tuple[list
             zone = match_zone if found else rest_zone
             if zone == "library_bottom":
                 bottomed.append(card)
+                continue
+            if zone == "battlefield" and stays_out_of_battlefield(
+                game, card, caster, "library",
+            ):
+                # "…put all **Goblin** cards revealed this way onto the
+                # battlefield": a Kindred instant of the type is one of them,
+                # and not "the rest" — CR 400.4a leaves it in the library it
+                # was revealed in (CR 701.20b), on top, where the reveal found
+                # it. Laid back for the bottom's reason below: a card that
+                # never left has come from nowhere.
+                stayed.append(card)
                 continue
             if zone == "hand":
                 game.put_card_into_hand(caster, card)
@@ -387,6 +399,8 @@ def _place_sorted_reveal(game, caster, revealed, payload, matches) -> tuple[list
                 game.put_card_into_exile(caster, card)
             else:
                 game.put_card_into_graveyard(caster, card, from_zone="library")
+    if stayed:
+        caster.library[0:0] = stayed
     if bottomed:
         caster.library.extend(bottomed)
         game.offer_library_bottom_order(caster, len(bottomed))
@@ -502,6 +516,11 @@ def put_revealed_card_onto_battlefield(game: Game, instruction: OracleInstructio
     for seat, player in enumerate(game.players):
         for index, held in enumerate(player.library):
             if held is card:
+                # "If it's a **Goblin** card, put it onto the battlefield": a
+                # Kindred instant of the type passes the test, and CR 400.4a
+                # leaves it on top of the library it was revealed in.
+                if stays_out_of_battlefield(game, card, player, "library"):
+                    return True, "resolved"
                 player.library.pop(index)
                 game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
                 game.log.append(
@@ -612,9 +631,18 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
         game.log.append(f"{player.name} revealed {found.name}")
         game.record_reveal(seat, [found.name])
         if payload.get("destination") == "battlefield":
-            game._put_permanent_onto_battlefield(
-                seat, Permanent(card=found), None, from_zone="library",
-            )
+            if stays_out_of_battlefield(game, found, player, "library"):
+                # "…until you reveal a **Goblin** card. Put that card onto the
+                # battlefield": the run stopped on a Kindred instant of the
+                # type, which CR 400.4a leaves in the library (CR 701.20b: the
+                # reveal never moved it) — laid back on top, above the cards
+                # turned over before it, before "the rest" go where the card
+                # sends them (CR 609.3).
+                player.library.insert(0, found)
+            else:
+                game._put_permanent_onto_battlefield(
+                    seat, Permanent(card=found), None, from_zone="library",
+                )
         else:
             game.put_card_into_hand(player, found)
     else:
@@ -1255,6 +1283,12 @@ def put_revealed_top_cards_onto_battlefield(game: Game, instruction: OracleInstr
         for seat in game.apnap_seats(by_seat, include_lost=True):
             card = by_seat[seat]
             owner = game.players[seat]
+            # CR 400.4a, asked before the card leaves its library
+            # (``permanent_cards``); the others still enter.
+            if any(held is card for held in owner.library) and (
+                stays_out_of_battlefield(game, card, owner, "library")
+            ):
+                continue
             for index, held in enumerate(owner.library):
                 if held is card:
                     owner.library.pop(index)

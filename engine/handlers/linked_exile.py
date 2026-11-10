@@ -29,6 +29,7 @@ from ..linked_exile import face_down_exiled_cards
 # How the public log names a card leaving a face-down pile (CR 406.3).
 from ..linked_exile import entry_name_for_the_log, is_exiled_face_down
 from ..models import Permanent
+from ..permanent_cards import stays_out_of_battlefield
 from ..oracle_types import EXILED_BY_SEAT, PUT_INTO_HAND_THIS_WAY
 from ..resumption import run_resumable
 from ._filters import _card_matches_filter, permanent_matches_filter
@@ -167,6 +168,16 @@ def put_exiled_this_way(game: Game, instruction: OracleInstruction, context: Ora
                 hidden = any(
                     held is card for held in face_down_exiled_cards(game, seat)
                 )
+                # CR 400.4a, asked before the card leaves exile: whatever the
+                # exile in front took, a card that cannot enter stays exiled
+                # (``permanent_cards``).
+                if zone == "battlefield" and any(
+                    held is card for held in player.exile
+                ) and stays_out_of_battlefield(
+                    game, card, player, "exile",
+                    shown="a face-down card" if hidden else None,
+                ):
+                    continue
                 if not game.take_card_from_exile(player, card):
                     game.log.append(
                         f"{context.card.name}: "
@@ -973,6 +984,18 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
     with game.entering_together():
         for card in cards:
             for owner in seats:
+                # CR 400.4a, asked before the card leaves exile
+                # (``permanent_cards``): a card that cannot enter stays there.
+                if destination == "battlefield" and any(
+                    held is card for held in owner.exile
+                ) and stays_out_of_battlefield(
+                    game, card, owner, "exile",
+                    shown=(
+                        "a face-down card"
+                        if any(held is card for held in face_down) else None
+                    ),
+                ):
+                    break
                 # Through the departure seam, which locates the copy by identity and
                 # retires the exile record with it — a stale record is inert until
                 # the *same* card is exiled again by something else, when it would

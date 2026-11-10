@@ -45,7 +45,6 @@ from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, dropped_narrowings, _describe_several_targets,
     _describe_targets, _filter_payload, _is_source, _is_target,
     _names_several_targets, _restrictions_beyond, _targets_only,
-    CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, creature_type_card,
     graveyard_position_payload, refuse_untestable
 )
 
@@ -850,11 +849,19 @@ def _lower_put_onto_battlefield(
             )
         # "target **Zombie** card from a graveyard": the Aura's shape above
         # with a *creature* type, which a Kindred card of any type carries
-        # (CR 205.3m) — searched by that word, a Kindred instant would be put
-        # onto the battlefield, where CR 400.4a leaves it in the graveyard. No
-        # card in the pool prints it.
-        if creature_type_card(filt):
-            raise LoweringError(CREATURE_TYPE_CARD_ONTO_BATTLEFIELD, node=node)
+        # (CR 205.3m) — so a Kindred instant is a legal target, and CR 400.4a
+        # leaves it in the graveyard as the effect resolves: the move asks
+        # ``permanent_cards`` before the card leaves its pile
+        # (``Game._reanimate_creature_to_battlefield``).
+        #
+        # With no card type the subtype is the word the handler *searches*
+        # by (below), and it searches by one: "a Zombie or Skeleton card" read
+        # that way would find only Zombies, so a union refuses.
+        if not filt.card_types and len(filt.subtypes) > 1:
+            raise LoweringError(
+                "the reanimation searches by one subtype when no card type is "
+                "printed", node=node,
+            )
         # **Whose pile**, asked of every possessive the noun parser can hand
         # over rather than of its absence alone. ``any_graveyard`` used to be
         # ``zone_owner is None``, so every *printed* owner read as "your": Ashen

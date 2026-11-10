@@ -20,6 +20,7 @@ import random
 from ....linked_exile import link_exiled_card, shuffle_linked_pile
 from ....pending_choices import ChoiceSpec, PendingChoice
 from ....oracle_types import SEARCHED_PERMANENTS
+from ....permanent_cards import stays_out_of_battlefield
 from ....search_filters import (landing_seat, search_matches,
                                 search_names_a_quality, search_slots,
                                 search_zone_cards, searched_seat,
@@ -138,6 +139,28 @@ class LibrarySearchChoicesMixin:
             choice.data.setdefault("revealed_names", []).append(card.name)
             self.log.append(f"{caster.name} searched {zone} and revealed {card.name}")
             self.shuffle_library_of(caster)
+            self._record_search_reveal(choice)
+            self.discard_pending_choice(choice)
+            return True
+        # "Search your library for a **Goblin** card, put it onto the
+        # battlefield": a Kindred instant of the type is a find (CR 701.23a
+        # reads the description), and CR 400.4a leaves it where it was found.
+        # Asked before it is taken out, so it never left; the search then ends
+        # as every search does — revealed if the card says so, the library
+        # shuffled (CR 609.3). Named only where the table could see it.
+        if choice.data.get("destination", "hand") == "battlefield" and (
+            stays_out_of_battlefield(
+                self, card, caster, zone,
+                shown=(
+                    card.name if self.find_is_public(choice.data, zone, zone)
+                    else "a card"
+                ),
+            )
+        ):
+            if choice.data.get("reveal"):
+                choice.data.setdefault("revealed_names", []).append(card.name)
+            if zone == "library":
+                self.shuffle_library_of(caster)
             self._record_search_reveal(choice)
             self.discard_pending_choice(choice)
             return True
@@ -431,6 +454,27 @@ class LibrarySearchChoicesMixin:
             game=self, owner=choice.player_index,
         ):
             return False
+        # "Search your library for up to two **Goblin** cards, put them onto
+        # the battlefield": where every printed slot is the battlefield, a find
+        # CR 400.4a keeps off it stays where it was found — asked before
+        # anything is taken (the single find's reason). A search that also
+        # sends finds elsewhere asks the finder which goes where only after
+        # they have left their zones; the lowering refuses that split over a
+        # card phrase that can name an instant or sorcery
+        # (``lowering/search.MIXED_SLOTS_ADMIT_A_NONPERMANENT``).
+        staying: list = []
+        if slots and all(destination == "battlefield" for destination, _ in slots):
+            kept = []
+            for zone, index, card in found:
+                shown = (
+                    card.name if self.find_is_public(choice.data, zone, zone)
+                    else "a card"
+                )
+                if stays_out_of_battlefield(self, card, caster, zone, shown=shown):
+                    staying.append(card)
+                else:
+                    kept.append((zone, index, card))
+            found = kept
         # Highest index first so the earlier picks still address the cards
         # they named (the two zones do not renumber each other).
         for zone, index, _card in sorted(found, key=lambda entry: entry[1], reverse=True):
@@ -440,7 +484,9 @@ class LibrarySearchChoicesMixin:
         # search, recorded now — the finds are known even while where each
         # lands is still being asked.
         if choice.data.get("reveal"):
-            choice.data["revealed_names"] = [card.name for card in cards]
+            choice.data["revealed_names"] = [
+                card.name for card in (*cards, *staying)
+            ]
         # **Who searched** is the seat that answered, which is not always the
         # seat whose zones were opened (Jester's Cap; Guided Passage's opponent
         # choosing out of the caster's library) — the single-find path has said
@@ -459,7 +505,8 @@ class LibrarySearchChoicesMixin:
             f"{searcher.name} searched {whose}" + " and ".join(zones)
             + " and found "
             + (
-                ", ".join(card.name for card in cards) if everywhere_public
+                (", ".join(card.name for card in cards) or "nothing to put down")
+                if everywhere_public
                 else f"{len(cards)} card(s)"
             )
         )

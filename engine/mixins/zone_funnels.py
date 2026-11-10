@@ -744,6 +744,15 @@ class ZoneFunnelsMixin:
         owner_index = int(entry["owner_index"])
         owner = self.players[owner_index]
         card = entry["card"]
+        if zone == "battlefield" and any(
+            held is card for held in owner.exile
+        ):
+            from ..permanent_cards import stays_out_of_battlefield
+
+            # CR 400.4a, asked before the card leaves exile: a card that
+            # cannot enter stays exiled (``permanent_cards``).
+            if stays_out_of_battlefield(self, card, owner, "exile"):
+                return None
         if not self.take_card_from_exile(owner_index, card):
             return None
         if zone == "hand":

@@ -62,6 +62,7 @@ from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WA
 from ...subject_filters import card_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
+from ..vocabulary import CREATURE_TYPES
 from ._common import _filter_payload, _is_source, _restrictions_beyond
 from ._events import COUNTED_NUMBER
 # The one name this file shares with the table that declares it: which key a
@@ -210,22 +211,37 @@ def lower_record_condition(
             # asking the question of whichever half of the resolution context
             # happened to hold something.
             if referent == "permanent":
+                # "If it's a **Goblin**, …": a bare creature type names a
+                # permanent with the subtype (CR 205.3m, 308.2 — a Kindred
+                # artifact is one, through layer 4), the reading every other
+                # bare type on the battlefield takes since kg4. Creature types
+                # only, which is what ``creature_type_only`` admits.
+                creature_type_only = _names_creature_types_only(condition.filter)
                 leftover = _restrictions_beyond(
-                    condition.filter, {"card_types", "is_card", "type_match"}
+                    condition.filter,
+                    {"card_types", "is_card", "type_match"}
+                    | ({"subtypes", "subtype_match"} if creature_type_only else set()),
                 )
-                if leftover or not condition.filter.card_types:
+                if leftover or not (condition.filter.card_types or creature_type_only):
                     raise LoweringError(
                         "'it's …' reads a printed type line here too: "
                         + ", ".join(leftover or ("no type at all",)),
                         node=condition,
                     )
-                return {
+                payload = {
                     "kind": "target_is_type",
                     "card_types": list(condition.filter.card_types),
                     "type_match": condition.filter.type_match,
                     "negated": condition.negated,
                     "target": referent,
                 }
+                if creature_type_only:
+                    # Emitted only when printed, so every payload written
+                    # before this stays byte-identical.
+                    payload["subtypes"] = list(condition.filter.subtypes)
+                    if len(condition.filter.subtypes) > 1:
+                        payload["subtype_match"] = condition.filter.subtype_match
+                return payload
             raise LoweringError(
                 "'it' with nothing in this effect that revealed a card",
                 node=condition,
@@ -253,7 +269,16 @@ def lower_record_condition(
                 + ", ".join(leftover),
                 node=condition,
             )
-        if not condition.filter.card_types and not condition.filter.excluded_types:
+        # "If it's a **Goblin** card, put it onto the battlefield": a creature
+        # type with no card type is any card with the subtype (CR 205.3m,
+        # 308.2), a Kindred instant among them — which the put behind it leaves
+        # in the library (CR 400.4a, ``permanent_cards``), and a put into a hand
+        # takes like any other card. Asked through the subtype reader below.
+        if (
+            not condition.filter.card_types
+            and not condition.filter.excluded_types
+            and not _names_creature_types_only(condition.filter)
+        ):
             raise LoweringError(
                 "'it's …' reads a card's printed type line", node=condition
             )
@@ -1000,4 +1025,14 @@ def lower_record_condition(
         }
     raise LoweringError(
         f"no lowering for condition {type(condition).__name__}", node=condition
+    )
+
+
+def _names_creature_types_only(filt: ast.ObjectFilter) -> bool:
+    """Whether *filt* prints creature types and no card type — "a **Goblin**
+    card", "a **Griffin**" — the phrase "it's …" asks of a card's or a
+    permanent's subtypes (CR 205.3m) rather than of its card types."""
+    return bool(
+        filt.subtypes and not filt.card_types
+        and all(word in CREATURE_TYPES for word in filt.subtypes)
     )
