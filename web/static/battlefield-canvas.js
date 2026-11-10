@@ -2665,6 +2665,20 @@ class BattlefieldCanvas {
     return null;
   }
 
+  // The {seat, idx} members of the identity pile the given card is drawn in
+  // (`kind: "pile"`: identical permanents drawn as one card), FRONT FIRST — the
+  // fully visible card is the pile's last key — or [] when it is in none. An
+  // Aura fan is a stack too, of different cards, and is not one.
+  getPileMembers(seat, idx) {
+    const key = `${seat}-${idx}`;
+    const pile = this.stacks.find((s) => s.kind === "pile" && s.keys.includes(key));
+    if (!pile) return [];
+    return [...pile.keys].reverse().map((k) => {
+      const item = this.cardItems.find((c) => c.key === k);
+      return item ? { seat: item.seat, idx: item.idx } : null;
+    }).filter(Boolean);
+  }
+
   // Returns all {seat, idx} pairs in the same stack as the given card, or just the card if not stacked.
   getStackMembers(seat, idx) {
     const key = `${seat}-${idx}`;

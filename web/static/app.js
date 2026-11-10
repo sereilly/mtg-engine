@@ -4608,6 +4608,9 @@ function getFaceDownLookInfo(state = currentState) {
 //   playerSeats    seats whose name/life pill may be clicked
 //   selectedKeys   permanents already picked (multi-pick prompts), for the
 //                  canvas' "selected" highlight
+//   isFull         (idx) => true once a multi-pick takes no more picks of the
+//                  kind the permanent at idx is (forced sacrifice's count,
+//                  Balance's lands or creatures); absent, never full
 //   onPermanent / onPlayer  what a legal click submits
 //   stackIndices   top-first stack positions that may be clicked (a trigger
 //                  whose target is a spell — Mystic Snake); onStack submits one
@@ -4620,12 +4623,42 @@ function promptTargeting(spec) {
     playerSeats: new Set(spec.playerSeats || []),
     stackIndices: new Set(spec.stackIndices || []),
     selectedKeys: spec.selectedKeys || [],
+    // A prompt that picks several (it keeps `selectedKeys`) — the one kind a
+    // click on a grouped stack walks through (`nextUnpickedPileMember`) —
+    // and whether it can take another pick for the permanent at a slot.
+    multiPick: Array.isArray(spec.selectedKeys),
+    isFull: spec.isFull || (() => false),
     onPermanent: spec.onPermanent || (() => {}),
     onPlayer: spec.onPlayer || (() => {}),
     onStack: spec.onStack || (() => {}),
     fallThroughOnInvalid: !!spec.fallThroughOnInvalid,
     invalidHint: spec.invalidHint || "That isn't a legal choice for this prompt.",
   };
+}
+
+// The slot a click on a grouped stack picks during a multi-pick.
+//
+// "Sacrifice three Forests" (8ED's Primeval Force) over the canvas's ×3
+// Forest stack: the stack is ONE card on screen, its other members thin
+// strips behind the front, so a click on it toggled the front card and the
+// person had to find the strips for the rest — "Selected 2/3" said it worked,
+// and nothing said where the next card was. A click on a stack member that is
+// already picked now picks the stack's next unpicked member the prompt
+// offers, front to back, while the prompt can take another
+// (`isFull(idx)`); a click on an unpicked member picks it, as always, and once
+// nothing in the stack is left to pick (or the prompt is full) the click
+// toggles what it hit — which is how a pick is taken back. Only an identity
+// pile walks (`getPileMembers`): an Aura fan's members are different cards.
+function nextUnpickedPileMember(cardSeat, permanentIndex, { offered, picked, isFull }) {
+  const key = `${cardSeat}-${permanentIndex}`;
+  if (!picked.has(key) || !battlefieldCanvas?.getPileMembers || isFull(permanentIndex)) {
+    return permanentIndex;
+  }
+  for (const member of battlefieldCanvas.getPileMembers(cardSeat, permanentIndex)) {
+    const memberKey = `${member.seat}-${member.idx}`;
+    if (member.seat === cardSeat && offered(memberKey) && !picked.has(memberKey)) return member.idx;
+  }
+  return permanentIndex;
 }
 
 // Submit a prompt answer, surfacing a rejection as an action hint rather than an
@@ -4795,6 +4828,7 @@ function getPromptBoardTargeting(state = currentState) {
         else if (sacrificeSelection.length < need) sacrificeSelection.push(id);
         refreshPromptSelection(state);
       },
+      isFull: () => sacrificeSelection.length >= need,
       invalidHint: "That permanent can't be sacrificed.",
     });
   }
@@ -6475,6 +6509,10 @@ function balanceBoardTargeting(state, info) {
       if (at >= 0) picks.splice(at, 1);
       else if (picks.length < need[kind]) picks.push(id);
       refreshPromptSelection(state);
+    },
+    isFull: (idx) => {
+      const kind = kindByIndex.get(Number(idx));
+      return !kind || balanceSelection[kind].length >= need[kind];
     },
     invalidHint: "Balance only takes the highlighted lands and creatures.",
   });
@@ -27426,7 +27464,14 @@ function initBattlefieldCanvas() {
         const boardTargeting = activePromptBoardTargeting(currentState);
         if (boardTargeting && boardTargeting.permanentKeys.size) {
           if (boardTargeting.permanentKeys.has(`${cardSeat}-${permanentIndex}`)) {
-            boardTargeting.onPermanent(cardSeat, permanentIndex);
+            const pick = boardTargeting.multiPick
+              ? nextUnpickedPileMember(cardSeat, permanentIndex, {
+                offered: (key) => boardTargeting.permanentKeys.has(key),
+                picked: new Set(boardTargeting.selectedKeys),
+                isFull: boardTargeting.isFull,
+              })
+              : permanentIndex;
+            boardTargeting.onPermanent(cardSeat, pick);
             return;
           }
           if (!boardTargeting.fallThroughOnInvalid) {
@@ -27463,12 +27508,28 @@ function initBattlefieldCanvas() {
             permanentIndex,
           });
           if (!valid) { updateActionHint("That is not a valid target.", true); return; }
+          // Several targets out of one grouped stack ("destroy two target
+          // lands" over a ×3 Forest stack) walk it as a multi-pick prompt does.
+          const castPicks = (picks, full) => nextUnpickedPileMember(cardSeat, permanentIndex, {
+            offered: (key) => !pendingCastTarget.validKeys || pendingCastTarget.validKeys.has(key),
+            picked: new Set((picks || []).map((t) => `${t.seat}-${t.idx}`)),
+            isFull: () => full,
+          });
           if (pendingCastTarget.targetKind === "divided") {
-            toggleDividedCreatureTarget(cardSeat, permanentIndex);
+            toggleDividedCreatureTarget(
+              cardSeat,
+              castPicks(pendingCastTarget.dividedTargets, dividedPicksAreFull(pendingCastTarget)),
+            );
             return;
           }
           if (pendingCastTarget.targetKind === "several") {
-            toggleSeveralTarget(cardSeat, permanentIndex);
+            toggleSeveralTarget(
+              cardSeat,
+              castPicks(
+                pendingCastTarget.severalTargets,
+                pendingCastTarget.severalTargets.length >= pendingCastTarget.maxTargets,
+              ),
+            );
             return;
           }
           if (pendingCastTarget.targetKind === "roles") {
