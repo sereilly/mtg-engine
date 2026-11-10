@@ -230,7 +230,12 @@ def test_black_lotus_is_classified_supported(all_cards):
     assert classification.supported
 
 
-def test_forcefield_caps_next_damage_to_one(all_cards):
+def test_forcefield_with_no_attacker_named_leaves_a_bolt_whole(all_cards):
+    """"The next time an unblocked creature of your choice would deal **combat**
+    damage to you" — the charge an activation naming no attacker arms answers
+    an unblocked creature's combat damage, not a burn spell (it capped this
+    Bolt to 1 until kg5; ``tests/rules/test_kg5_prevent_share_of_the_instance.py``
+    drives the combat it does cap)."""
     forcefield = _get(all_cards, "Forcefield")
     bolt = _mk_card("Bolt Test", "Instant", "Bolt Test deals 3 damage to any target.")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=forcefield)], life=20)
@@ -242,7 +247,7 @@ def test_forcefield_caps_next_damage_to_one(all_cards):
 
     assert activation.supported
     assert result.supported
-    assert p1.life == 19
+    assert p1.life == 17
 
 
 def test_kormus_bell_animates_swamps(all_cards):

@@ -43,7 +43,7 @@ derived on every read, so they cannot disagree with the shields.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 # ---------------------------------------------------------------------------
@@ -399,6 +399,14 @@ class Shield:
     #: dealing finishes. Set by :meth:`spend`; None until then, and for every
     #: shield spent outside a dealing.
     occasion: SharedNextTime | None = None
+    #: A **share** shield's running account of the instance it is spending
+    #: (``half``, ``leave``: Dark Sphere, Forcefield): the dealing, what this
+    #: shield was handed of the instance there so far, and what it took of
+    #: it. CR 615.8's instance is the whole dealing, so "half that damage" is
+    #: half the instance's total, not of each chunk (:meth:`would_prevent`).
+    share_moment: Any = field(default=None, repr=False)
+    share_seen: int = 0
+    share_taken: int = 0
 
     @property
     def color(self) -> str | None:
@@ -432,31 +440,60 @@ class Shield:
             return True
         return self.occasion is not None and self.occasion.open_at(moment, source)
 
-    def would_prevent(self, amount: int) -> int:
+    def would_prevent(self, amount: int, *, moment=None, rest: int = 0) -> int:
         """Points this shield would remove from an event of *amount*.
 
         Pure — this is the half CR 616.1's applicability predicate is allowed to
         call. 0 means the shield has nothing to do with this event, which is
         also how "prevent all but 1" declines a 1-point event.
+
+        A **share** shield — "prevent **half** that damage" (Dark Sphere), "all
+        **but 1** of that damage" (Forcefield) — takes its share of CR 615.8's
+        whole instance, everything the source deals in one dealing *moment*:
+        of what it was handed of the instance there already
+        (:attr:`share_seen`), this event's *amount* and *rest*, the instance's
+        chunks still to be dealt at this recipient
+        (``simultaneous_damage.still_to_come``), less what it took already
+        (:attr:`share_taken`). Cuombajj Witches' two points at a Dark Sphere's
+        controller are one instance of 2, so 1 is prevented — half of each
+        chunk is 0. Within one event two such shields still apply one after
+        the other to what the first left (Dark Sphere's ruling, 2013-04-15).
         """
-        available = amount - self.leave
-        if self.half is not None:
-            # "…prevent half that damage, **rounded down**" (Dark Sphere).
-            # Computed here rather than at the arming, because the event's size
-            # is what is being halved and no arming knows it.
-            available = -(-available // 2) if self.half == "up" else available // 2
+        if self.half is None and not self.leave:
+            available = amount
+        else:
+            seen, taken = (
+                (self.share_seen, self.share_taken)
+                if moment is not None and moment is self.share_moment else (0, 0)
+            )
+            share = seen + amount + max(0, int(rest or 0)) - self.leave
+            if self.half is not None:
+                # "…prevent half that damage, **rounded down**" (Dark Sphere).
+                # Computed here rather than at the arming, because the
+                # instance's size is what is being halved and no arming knows it.
+                share = -(-share // 2) if self.half == "up" else share // 2
+            available = min(amount, share - taken)
         if self.amount is not None:
             available = min(available, self.amount)
         return max(0, available)
 
-    def spend(self, prevented: int, *, moment=None, source=None) -> None:
+    def spend(
+        self, prevented: int, *, moment=None, source=None, presented: int = 0,
+    ) -> None:
         """Charge *prevented* points against the shield. The mutating half.
 
         *moment* is the simultaneous dealing the chunk is part of
         (``damage_redirects.dealing_moment``) and *source* its source. A
         one-use shield's last use spent inside a dealing opens its
         :attr:`occasion` there, and a later chunk of that instance charges no
-        further use (CR 615.8: the whole instance, whatever its size)."""
+        further use (CR 615.8: the whole instance, whatever its size).
+        *presented* is the event's amount as it reached this shield, which a
+        share shield adds to its account of the instance (:meth:`would_prevent`)."""
+        if moment is not None and (self.half is not None or self.leave):
+            if self.share_moment is not moment:
+                self.share_moment, self.share_seen, self.share_taken = moment, 0, 0
+            self.share_seen += presented
+            self.share_taken += prevented
         if self.amount is not None:
             self.amount -= prevented
         instance_open = (
@@ -804,14 +841,25 @@ def make_counting_pool(
 
 
 def make_capped_source(source, source_name: str | None = None) -> Shield:
+    """Forcefield: "The next time an unblocked creature of your choice would
+    deal **combat** damage to you this turn, prevent all but 1 of that
+    damage." The chosen attacker's combat damage alone (``combat_only``) — a
+    ping it makes is noncombat damage and goes through."""
     return make_chosen_source_shield(
-        PREVENT_ALL_BUT, source, source_name, leave=1, lifetime=END_OF_COMBAT
+        PREVENT_ALL_BUT, source, source_name, leave=1, lifetime=END_OF_COMBAT,
+        combat_only=True,
     )
 
 
 def make_capped_charge(source_name: str | None = None) -> Shield:
+    """The same shield with no attacker named (an AI or headless activation):
+    the next **combat** damage an **unblocked** creature deals you — not the
+    next damage of any kind, which capped a Lightning Bolt to 1, and not a
+    blocked trampler's ("This can't be used to prevent damage caused by a
+    blocked creature with Trample ability", its ruling, 2004-10-04)."""
     return make_chosen_source_shield(
-        PREVENT_ALL_BUT, source_name=source_name, leave=1, lifetime=END_OF_COMBAT
+        PREVENT_ALL_BUT, source_name=source_name, leave=1, lifetime=END_OF_COMBAT,
+        combat_only=True, source_filter={"unblocked_only": True},
     )
 
 

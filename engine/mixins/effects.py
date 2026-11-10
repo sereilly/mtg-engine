@@ -609,7 +609,7 @@ class EffectsMixin:
                 restart=restart, asks=asks, unpreventable=unpreventable,
                 cant_be_prevented=cant_be_prevented, source_seat=source_seat,
             ),
-            combat=combat, source=source,
+            combat=combat, source=source, amount=amount,
         ):
             return 0
         # Illusionary Mask: turn a face-down creature face up when damage would
@@ -1107,7 +1107,7 @@ class EffectsMixin:
                 target, amount, source, then=then, restart=restart, asks=asks,
                 cant_be_prevented=cant_be_prevented, combat=combat,
             ),
-            combat=combat, source=source,
+            combat=combat, source=source, amount=amount,
         ):
             return 0
         # Illusionary Mask: a face-down creature that would deal damage (e.g.

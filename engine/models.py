@@ -1444,7 +1444,8 @@ PlayerState.combat_damage_cap_one_charges = _shields.charge_view(
     _shields.PREVENT_ALL_BUT,
     _shields.make_capped_charge,
     """Forcefield shields armed without a chosen attacker (AI / headless
-    activations): the next damage event from any source is capped to 1."""
+    activations): the next combat damage an unblocked creature would deal is
+    capped to 1."""
 )
 PlayerState.forcefield_capped_sources = _shields.list_view(
     _shields.PREVENT_ALL_BUT,

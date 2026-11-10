@@ -509,8 +509,10 @@ def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
     source = event.get("source")
     # CR 615.8: a one-use "next time" shield spent on a chunk of a
     # simultaneous dealing is open for that source's other chunks of it
-    # (``Shield.open_for``) — the dealing is the moment it is asked about.
+    # (``Shield.open_for``) — the dealing is the moment it is asked about, and
+    # a share shield's share is of the instance's total (``rest``).
     moment = event_dealing_moment(game, event)
+    rest = simultaneous_damage.still_to_come(game, event)
     # The recipient's own collection, plus — when the recipient is a permanent
     # — the class-scoped shields sitting on a *seat* whose printed phrase names
     # it. A team shield covers its holder as well as the phrase ("**you** and/or
@@ -551,7 +553,7 @@ def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
             # between the *resolving object* and the recipient, and only the
             # event knows who the recipient is.
             continue
-        if shield.would_prevent(amount) <= 0:
+        if shield.would_prevent(amount, moment=moment, rest=rest) <= 0:
             continue
         yield shield
 
@@ -656,11 +658,12 @@ def _spend(
     used: list[Shield] = []
     source = event.get("source")
     moment = event_dealing_moment(game, event)
+    rest = simultaneous_damage.still_to_come(game, event)
     for shield in list(_live(game, event, kind, chosen=chosen)):
-        take = shield.would_prevent(remaining)
+        take = shield.would_prevent(remaining, moment=moment, rest=rest)
         if take <= 0:
             continue
-        shield.spend(take, moment=moment, source=source)
+        shield.spend(take, moment=moment, source=source, presented=remaining)
         used.append(shield)
         prevented += take
         remaining -= take
@@ -1037,8 +1040,9 @@ def _half_prevention_chosen_source(game, event: dict) -> PreventionOutcome | Non
     """Dark Sphere: "The next time a source of your choice would deal damage to
     you this turn, prevent half that damage, rounded down."
 
-    Half of *this* event, computed by the shield when the event exists — see
-    ``Shield.would_prevent``. A 1-damage event therefore prevents nothing and
+    Half of the instance, computed by the shield when the event exists — see
+    ``Shield.would_prevent``: a split sentence's two chunks at you are one
+    instance, halved once. A lone 1-damage event therefore prevents nothing and
     leaves the shield armed, the same reading ``_forcefield_chosen_attacker``
     takes of the same situation and for the same reason.
     """

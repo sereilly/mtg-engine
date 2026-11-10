@@ -139,9 +139,9 @@ def _assert_expected(
     # the gain as a floor, because a cast trigger adding life on top is the
     # very thing that fooled it.
     if card.name == "Lightning Bolt":
+        # A Forcefield charge is not read: it answers an unblocked creature's
+        # combat damage, never a Bolt's (``shields.make_capped_charge``).
         base_damage = 3
-        if before_target.combat_damage_cap_one_charges > 0 and base_damage > 1:
-            base_damage = 1
         expected_damage = (
             0 if named_a_permanent
             else max(0, base_damage - before_target.damage_prevention_pool)
