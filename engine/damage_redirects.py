@@ -698,10 +698,15 @@ def applicable_redirect(
 
     Oldest first, which is the order they were armed in: with two records
     watching one recipient CR 616.1 would let the affected player choose, and
-    the *default* choice this makes is the earlier one. A second contending
-    redirect on one recipient does not occur in this pool; when one does, it
-    wants an order of its own in ``engine/replacements/registry.py`` rather than a
-    second reading here.
+    the *default* choice this makes is the earlier one. Since Jade Monolith's
+    record joined this collection (kg5) two can watch one creature — Jade
+    Monolith's beside Daughter of Autumn's, Shimian Night Stalker's or an
+    en-Kor's — and they are one candidate, so CR 616.1e's choice between them
+    is not offered: that wants the recorded redirect registered with
+    ``instances=`` (one candidate per applicable record), which a damage
+    event's contention set does not expand yet
+    (``damage_events.damage_candidates`` gathers ``replacement_candidates``
+    without the game and event).
 
     *combat* is the event's own CR 510.2 flag, and the one fact about a damage
     event neither matcher above can be asked for — a record printed "all combat

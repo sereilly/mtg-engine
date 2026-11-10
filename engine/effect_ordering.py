@@ -303,9 +303,12 @@ def choose_effect(game, chooser_index: int | None, candidates: list[Candidate]) 
     multiplier goes ahead of a cap it contends with.
 
     What a non-interactive seat takes, and what every seat takes on an event
-    that cannot suspend to ask. Any single order is a legal set of 616.1e
-    choices, so this is a correct game; the orders are picked so that it is
-    also the game the affected player would have chosen.
+    that cannot suspend to ask — except a **damage** event's first contended
+    round, whose default is measured on scratch copies
+    (``engine/measured_effect_order.py``) and is this on a tie. Any single
+    order is a legal set of 616.1e choices, so this is a correct game; the
+    orders are picked so that it is also the game the affected player would
+    have chosen.
 
     **One static number cannot say that for a cap and a multiplier.** A cap
     sits at order 5, ahead of the prevention shields (a shield spent on the
