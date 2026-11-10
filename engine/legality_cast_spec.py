@@ -28,6 +28,7 @@ from .cast_costs import (
     costs_charged_from,
     kicker_costs,
 )
+from .cost_pickers import _cost_picker_spec
 from .divided_damage import divided_entry
 from .entwine import entwine_cost
 from .faces import is_multi_face
@@ -254,6 +255,18 @@ class CastTargetSpecMixin:
                 if offered:
                     modal["cost_offers"] = offered
                     modal["entwine"] = entwine
+                    # "Entwine—Sacrifice three lands." (Betrayal of Flesh,
+                    # Solar Tide): the picker that price needs once taken —
+                    # which lands is the caster's choice (CR 601.2b), answered
+                    # on ``cost_permanent_ids``, which the cast's charger reads
+                    # and ``_named_cast_cost_refusal`` holds to the count. This
+                    # spec returns before any cost picker is derived, so it
+                    # rides here beside the offer; absent for a mana entwine.
+                    picker = self._entwine_cost_picker(
+                        caster_index, card, entwine, from_zone=from_zone,
+                    )
+                    if picker is not None:
+                        modal["entwine_cost_spec"] = picker
             return modal
         # The compiled program answers in full — the kind *and* the flags that
         # narrow the picker (own_only, stack filters, sacrifice_cost, ...).
@@ -708,6 +721,31 @@ class CastTargetSpecMixin:
                 permanent.effective_card.oracle_text or ""
             ) == cost:
                 return permanent.card.name
+        return None
+
+    def _entwine_cost_picker(
+        self, caster_index: int, card: CardDefinition, entwine: str, *,
+        from_zone: str = "hand",
+    ) -> dict | None:
+        """The picker *card*'s entwine price needs when it is taken, with its
+        candidates enumerated — or None for a price that chooses nothing (a
+        mana entwine).
+
+        Asked of the entwine cost alone (its ``optional_key`` is the offer's
+        key) through the one picker derivation the cast side uses
+        (``cost_pickers._cost_picker_spec``), so a mandatory additional cost
+        on the same card can never stand in for it."""
+        for cost in costs_charged_from(card, from_zone):
+            if getattr(cost, "optional_key", None) != entwine:
+                continue
+            picker = _cost_picker_spec(cost, announced={entwine: 1})
+            if picker is None:
+                return None
+            picker = dict(picker)
+            picker["valid_targets"] = self._enumerate_targets(
+                caster_index, card, picker, for_cast=True,
+            )
+            return picker
         return None
 
     def cast_cost_offers(
