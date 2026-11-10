@@ -131,8 +131,8 @@ def test_cruel_revival_names_the_zombie_card_and_returns_it():
 
 
 def test_cruel_revival_at_instant_speed_names_the_card_too():
-    """The instant-speed chooser builds the same announcement
-    (`ai_policy._combat_instant_candidate`): in the opponent's end step, with
+    """The instant-speed chooser builds the same announcement (since kg5 with
+    the same builder, `ai_casts._priced_candidate`): in the opponent's end step, with
     the creature to destroy and the card to return."""
     game = _table(
         (_seat("A", library="Swamp"), ["Grizzly Bears"]),

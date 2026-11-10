@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import pytest
 
-from engine import Game, PlayerState, ai_actions, ai_policy
+from engine import Game, PlayerState, ai_actions, ai_casts, ai_policy
 from engine.card_loader import load_catalog
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
@@ -82,8 +82,9 @@ def test_the_proposal_was_bare_before_the_chooser_asked_for_roles(_by_name, monk
     is never cast. The announcement the chooser would make names no permanent,
     the engine refuses it for the count — and the policy, which rehearses a
     cast before it proposes one, proposes nothing the engine refuses. (Before
-    the rehearsal the same refused proposal came back at every window.)"""
-    monkeypatch.setattr(ai_policy, "_choose_role_targets", lambda *args, **kwargs: None)
+    the rehearsal the same refused proposal came back at every window.) The
+    question is the one builder's both choosers ask (``ai_casts``) since kg5."""
+    monkeypatch.setattr(ai_casts, "_choose_role_targets", lambda *args, **kwargs: None)
     game = _response_window(_by_name, "Shower of Sparks")
 
     action = ai_policy.choose_combat_instant_cast_action(game, 0)

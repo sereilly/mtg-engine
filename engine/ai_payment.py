@@ -346,9 +346,14 @@ class _PaymentContext:
     reason: `_plan_land_taps` is reached through the cast candidates'
     builders, which take a card and a board and know nothing of where the card
     is or what its cast will be charged. Set around the one call that builds a
-    candidate (`ai_policy.choose_cast_action`); None is every other plan — an ability's
-    cost, a toll, an instant in combat — and reads exactly as plans always
-    did.
+    candidate (`ai_casts._priced_candidate`), which both cast choosers ask —
+    the main phase's and the instant-speed one, so a response is paid for
+    with the restricted mana and the sacrificed sources a main-phase cast of
+    the same spell would be (until kg5 the instant-speed chooser built its
+    candidates with no context: a cost of its being a second builder, not a
+    rule — nothing about a response forbids a Lotus Petal). None is every
+    other plan — an ability's cost, a toll — and reads exactly as plans
+    always did.
     """
 
     #: The spell being cast. What a "spend this mana only to cast …" land's

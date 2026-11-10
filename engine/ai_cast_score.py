@@ -2,9 +2,9 @@
 whichever builder made it.
 
 A builder (``ai_casts._cast_candidate_announcing`` for one mode at one answer
-to the optional costs, ``ai_entwine.entwined_cast`` for every mode at once,
-``ai_policy._combat_instant_candidate`` for an instant weighed at instant
-speed) settles what the cast announces and rehearses it, and hands the
+to the optional costs, ``ai_entwine.entwined_cast`` for every mode at once —
+at either speed, since kg5 made the instant-speed chooser ask the main one's
+builder) settles what the cast announces and rehearses it, and hands the
 finished announcement here: :func:`finished_cast_candidate` sums what the
 cast does (``ai_scoring.cast_score_terms``) and what the zone and the moment
 add — :func:`zone_cast_bonus`, :func:`stack_response_bonus` — which no builder
@@ -31,6 +31,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from . import ai_cast_trace as cast_trace
+from .ai_actions import weighed_at_instant_speed
 from .ai_scoring import cast_score_terms, summed_terms
 from .ai_weighed_cast import cast_weighed
 
@@ -107,9 +108,9 @@ def finished_cast_candidate(
 ) -> "CastAction":
     """*action* with its score: **the one place a cast candidate is scored**,
     whichever builder made it — one mode
-    (``ai_casts._cast_candidate_announcing``), the entwined cast
-    (``ai_entwine.entwined_cast``), an instant at instant speed
-    (``ai_policy._combat_instant_candidate``).
+    (``ai_casts._cast_candidate_announcing``) or the entwined cast
+    (``ai_entwine.entwined_cast``), weighed in a main phase or at instant
+    speed. At instant speed each then asks `kept_above_the_floor`.
 
     The score is `ai_scoring.cast_score_terms` — what the cast does, or what
     the permanent is — and then **what the moment and the zone add**, which
@@ -138,10 +139,34 @@ def finished_cast_candidate(
     return finished
 
 
+#: The least a cast weighed **at instant speed** scores to be made at all
+#: (``ai_actions.weighed_at_instant_speed``). A seat is given priority dozens
+#: of times a turn, and a cast it makes in one of them is mana and a card it
+#: no longer has for the next; its own main phase has no floor beyond what
+#: the rehearsal asks.
+INSTANT_SCORE_FLOOR = 2.0
+
+
+def kept_above_the_floor(finished: "CastAction") -> "CastAction | None":
+    """*finished* — a candidate `finished_cast_candidate` scored — or None
+    when it is weighed at instant speed and scores under
+    `INSTANT_SCORE_FLOOR`; the reason is recorded for whoever is listening
+    (``ai_cast_trace.dropped``). Asked by every builder after it finishes a
+    candidate, so a single mode and an entwined cast are held to one floor."""
+    if weighed_at_instant_speed() and finished.score < INSTANT_SCORE_FLOOR:
+        return cast_trace.dropped(
+            f"its score {finished.score:.2f} is under the instant-speed floor"
+            f" {INSTANT_SCORE_FLOOR}"
+        )
+    return finished
+
+
 __all__ = [
     "COMMAND_ZONE_CAST_BONUS",
     "EXPIRING_PERMISSION_BONUS",
+    "INSTANT_SCORE_FLOOR",
     "finished_cast_candidate",
+    "kept_above_the_floor",
     "stack_response_bonus",
     "zone_cast_bonus",
 ]

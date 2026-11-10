@@ -142,12 +142,13 @@ def _entwined(
     *, from_zone: str, extra_generic: int,
 ) -> "CastAction | None":
     """`entwined_cast` for a card that prints an entwine and modes."""
-    from .ai_actions import cast_announcement
+    from .ai_actions import cast_announcement, weighed_at_instant_speed
     from .ai_cast_gates import _printed_costs_are_payable
-    from .ai_cast_score import finished_cast_candidate
+    from .ai_cast_score import finished_cast_candidate, kept_above_the_floor
     from .ai_payment import _cost_for, _plan_land_taps
     from .ai_scoring import (_rehearse_announcement, _weighed_through_the_fight,
-                             not_worth_proposing)
+                             held_at_instant_speed, not_worth_proposing,
+                             read_at_instant_speed)
 
     by_mode = {candidate.mode_index: candidate for candidate in built}
     announceable = set(game.announceable_modes(player_index, card))
@@ -232,13 +233,27 @@ def _entwined(
     rehearsal = _weighed_through_the_fight(
         game, player_index, card, announcement, rehearsal, planned=action,
     )
+    # At instant speed, read as the single modes were (`read_at_instant_speed`,
+    # `held_at_instant_speed`, the floor): the entwined cast is one more
+    # candidate of the same builder.
+    instant = weighed_at_instant_speed()
+    if instant:
+        rehearsal, held = read_at_instant_speed(
+            game, player_index, card, action, rehearsal,
+        )
+        if held is not None:
+            return cast_trace.dropped(held)
     if (refused := not_worth_proposing(rehearsal)) is not None:
         return cast_trace.dropped(refused)
+    if instant and (held := held_at_instant_speed(rehearsal)) is not None:
+        return cast_trace.dropped(held)
     # Comparable with *best*'s score, because it is finished where *best* was
     # (`ai_cast_score.finished_cast_candidate`): the zone's bonus — a cast under a
     # permission that ends, or from the command zone — is the same for every
     # mode and for all of them together.
-    return finished_cast_candidate(game, player_index, card, action, rehearsal)
+    return kept_above_the_floor(
+        finished_cast_candidate(game, player_index, card, action, rehearsal)
+    )
 
 
 __all__ = ["ENTWINE_LANDS_KEPT", "entwined_cast"]
