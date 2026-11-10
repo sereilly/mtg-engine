@@ -668,7 +668,20 @@ def _characteristic_of_object(
         # cast fire site. Read here rather than off the stack top: by the time
         # the trigger resolves, anything could be above the spell that caused
         # it, and the stack top is a different object.
-        cast_card = (context.trigger_context or {}).get("cast_card")
+        #
+        # **Its mana value on the stack** (CR 202.3e: an {X} in the cost is the
+        # number chosen for it there), off the stack object the fire site froze
+        # beside the card — the reader the counters already share
+        # (``targeting.stack_object_mana_value``). It was the card's printed
+        # ``cmc``, which holds X as 0: a Spell Blast cast for X=3 under In the
+        # Eye of Chaos was asked for {1} where the card says {4}.
+        frozen = context.trigger_context or {}
+        cast_item = frozen.get("cast_item")
+        if cast_item is not None:
+            from ..targeting import stack_object_mana_value
+
+            return max(0, stack_object_mana_value(cast_item) + offset)
+        cast_card = frozen.get("cast_card")
         if cast_card is None:
             return 0
         return max(0, int(getattr(cast_card, "cmc", 0) or 0) + offset)
@@ -716,6 +729,20 @@ def _characteristic_of_object(
         if perm is None:
             return 0
     else:
+        # "Counter target spell unless its controller pays {X}, where X is
+        # **its** mana value." (Rethink.) The target is a spell, which the
+        # battlefield read below cannot find: it answered "no permanent", the
+        # record below was absent, and X was 0 — "A pays {0}; Craw Wurm is not
+        # countered by Rethink". A spell's mana value is the stack object's
+        # (CR 202.3e: an {X} in its cost is the number chosen for it).
+        stack_target = getattr(context, "stack_target", None)
+        if (
+            stack_target is not None and name == "mana_value"
+            and _targets_a_spell(instruction)
+        ):
+            from ..targeting import stack_object_mana_value
+
+            return max(0, stack_object_mana_value(stack_target) + offset)
         perm = resolve_target_permanent(
             game, context, predicate=lambda p: True, fallback_on_invalid_choice=False
         )
@@ -1330,6 +1357,12 @@ def _paid_object_mana_value(paid) -> int:
     if hasattr(paid, "effective_card"):
         return _permanent_mana_value(paid)
     return int(getattr(paid, "cmc", 0) or 0)
+
+
+def _targets_a_spell(instruction) -> bool:
+    """Whether *instruction*'s printed target is a spell (``targets.kind``)."""
+    targets = (getattr(instruction, "payload", None) or {}).get("targets") or {}
+    return targets.get("kind") == "spell"
 
 
 def _pile_seat(game, card, owner, spec) -> "int | None":

@@ -195,3 +195,51 @@ def test_kg5_layers_juxtapose_weighs_a_clone_at_the_copied_mana_value():
     assert game.controller_index_of(clone) == 1
     assert game.controller_index_of(elemental) == 0
     assert game.controller_index_of(bears) == 0
+
+
+# --- a spell's mana value, from the same reader --------------------------------
+#
+# The census's two neighbours on ``_characteristic_of_object``: the spell a
+# trigger names ("…counter it unless that player pays {X}, where X is its mana
+# value", In the Eye of Chaos, Invoke Prejudice, Veiled Sentry, Pure
+# Reflection) read the card's printed ``cmc``, which holds an {X} as 0 where
+# CR 202.3e makes it the chosen number on the stack; and a spell a counter
+# *targets* (Rethink) was looked for on the battlefield, found nowhere, and
+# read as 0 — "A pays {0}; Craw Wurm is not countered by Rethink".
+
+
+def _spell_table(*, mine=(), hand=(), opponent_hand=()):
+    game = Game(players=[
+        PlayerState("A", library=[_POOL["Forest"]] * 10, hand=[_POOL[n] for n in hand]),
+        PlayerState("B", library=[_POOL["Forest"]] * 10, hand=[_POOL[n] for n in opponent_hand]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    for name in mine:
+        permanent = Permanent(card=_POOL[name])
+        game._put_permanent_onto_battlefield(0, permanent, None)
+    game._sync_control()
+    game.start_turn(0)
+    settle(game)
+    return game
+
+
+def test_kg5_layers_rethink_asks_for_the_targeted_spells_mana_value():
+    game = _spell_table(hand=["Craw Wurm"], opponent_hand=["Rethink"])
+    assert game.queue_from_hand(0, "Craw Wurm").supported
+    assert game.queue_from_hand(1, "Rethink", target_stack_index=0).supported
+    owed = settle(game, defaults=False)
+    assert owed is not None and owed.kind == "mana_payment"
+    assert owed.data["amount"] == 6
+    assert "Rethink: A must pay {6} or Craw Wurm is countered" in game.log
+
+
+def test_kg5_layers_in_the_eye_of_chaos_counts_an_x_spells_chosen_x():
+    """Power Sink cast for X=3 has mana value 4 on the stack (CR 202.3e)."""
+    game = _spell_table(mine=["In the Eye of Chaos"], hand=["Craw Wurm"], opponent_hand=["Power Sink"])
+    assert game.queue_from_hand(0, "Craw Wurm").supported
+    assert game.queue_from_hand(1, "Power Sink", target_stack_index=0, x_value=3).supported
+    owed = settle(game, defaults=False)
+    assert owed is not None and owed.kind == "mana_payment"
+    assert owed.data["amount"] == 4
+    assert "In the Eye of Chaos: B must pay {4} or Power Sink is countered" in game.log
