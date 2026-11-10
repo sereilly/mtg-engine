@@ -186,7 +186,24 @@ def base_tree(sha: str) -> Path:
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         tar.extractall(tree, filter="data")
     (tree / ".complete").write_text(sha, encoding="utf-8")
+    _prune_bases(cache, keep=tree)
     return tree
+
+
+#: Bases kept in the cache (~40 MB each; a round's meetings name one apiece).
+KEEP_BASES = 8
+
+
+def _prune_bases(cache: Path, keep: Path) -> None:
+    """Drop all but the newest :data:`KEEP_BASES` extracted bases."""
+    import shutil
+
+    bases = sorted(
+        (d for d in cache.iterdir() if d.is_dir() and d != keep),
+        key=lambda d: d.stat().st_mtime, reverse=True,
+    )
+    for stale in bases[KEEP_BASES - 1:]:
+        shutil.rmtree(stale, ignore_errors=True)
 
 
 def base_registries(sha: str) -> dict:
