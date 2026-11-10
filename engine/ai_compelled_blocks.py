@@ -235,14 +235,21 @@ def _ganged_on(game: "Game", attacker: "Permanent", blocker: "Permanent") -> boo
         if other is not blocker and other.is_creature and not other.tapped
         and game._can_block_attacker(other, attacker)
     ]
-    if survives_destruction(game, attacker, dealt_by=gang) is not None:
-        return False
     if len(gang) < 2:
         return False
-    needed = max(0, attacker.effective_toughness - attacker.damage_marked)
+    # The block's own triggers first (:func:`gang_block_pumps`), as
+    # `ai_declarations._gang_kills` reads the gang the defender will make.
+    pumps = gang_block_pumps(game, attacker, gang)
+    if pumped_toughness(attacker, pumps) <= 0:
+        return True
+    if survives_destruction(game, attacker, dealt_by=gang) is not None:
+        return False
+    needed = max(0, pumped_toughness(attacker, pumps) - attacker.damage_marked)
     dealt = 0
     for member in gang:
-        amount = combat_damage_assigned_by(member)
+        if pumped_toughness(member, pumps) <= 0:
+            continue
+        amount = pumped_combat_damage(member, pumps)
         if not amount or _would_be_prevented(game, member, attacker, amount):
             continue
         if game._has_keyword(member, "deathtouch"):
@@ -285,18 +292,14 @@ def fight_outcome(game: "Game", attacker: "Permanent", blocker: "Permanent") -> 
     pumped = block_pair_pumps(game, attacker, blocker)
 
     def dealt(source, recipient) -> int:
-        amount = combat_damage_assigned_by(source)
-        if pumped[id(source)][0] and not source.metadata.get(ASSIGNS_NO_COMBAT_DAMAGE):
-            amount = max(0, source.effective_power + pumped[id(source)][0])
+        amount = pumped_combat_damage(source, pumped)
         if amount and _would_be_prevented(game, source, recipient, amount):
             return 0
         return amount
 
     def lethal(source, recipient) -> int:
         """Damage from *source* that would destroy *recipient*."""
-        remaining = max(
-            0, recipient.effective_toughness + pumped[id(recipient)][1] - recipient.damage_marked,
-        )
+        remaining = max(0, pumped_toughness(recipient, pumped) - recipient.damage_marked)
         if remaining > 0 and game._has_keyword(source, "deathtouch"):
             return 1
         return remaining
@@ -318,9 +321,9 @@ def fight_outcome(game: "Game", attacker: "Permanent", blocker: "Permanent") -> 
     blocker_state = attacker_state = fighting
     # A pump that leaves no toughness puts the creature in the graveyard
     # before any damage (CR 704.5f): a 2/1 blocking a flanker.
-    if blocker.effective_toughness + pumped[id(blocker)][1] <= 0:
+    if pumped_toughness(blocker, pumped) <= 0:
         blocker_state = dead
-    if attacker.effective_toughness + pumped[id(attacker)][1] <= 0:
+    if pumped_toughness(attacker, pumped) <= 0:
         attacker_state = dead
 
     def destroyed(saved: "str | None") -> str:
@@ -366,56 +369,113 @@ def block_pair_pumps(game: "Game", attacker: "Permanent", blocker: "Permanent") 
     gets -1/-1" (flanking, CR 702.25a: ``pump_block_pair``), "…becomes
     blocked by a creature, this creature gets +1/+1" (Pygmy Troll:
     ``pump_self``), and the blocker's own "Whenever this creature blocks"
-    pumps. Which blocker a trigger fires for is the engine's own question
-    (``events.trigger_subject_matches`` on its ``blocker`` subject). Steps
-    behind a condition or a choice are left out; nothing is added once the
-    attacker is blocked — the triggers have fired."""
+    pumps. The one-blocker case of :func:`gang_block_pumps`."""
+    return gang_block_pumps(game, attacker, [blocker])
+
+
+def gang_block_pumps(game: "Game", attacker: "Permanent", members) -> dict:
+    """``{id(creature): (power, toughness)}`` for *attacker* and each of
+    *members* blocking it together — what their own triggers on this block
+    add before combat damage, each fired as ``phases/block_triggers`` fires
+    it: the attacker's bare "becomes blocked" once for the creature (CR
+    509.3c), its "becomes blocked **by** a creature …" once for each member
+    the phrase admits (CR 509.3d: flanking shrinks every blocker in a gang,
+    Pygmy Troll grows once per blocker) or once for the declaration where it
+    prints "one or more" (CR 509.3e), and each member's own "Whenever this
+    creature blocks" — "…blocks **a creature with flying**" (Snarespinner)
+    only where the attacker is one (CR 509.3b). "…for each creature blocking
+    it" (Elvish Berserker) is the gang's size, "…beyond the first" (Johtull
+    Wurm) one less. Which blocker a trigger fires for is the engine's own
+    question (``events.trigger_subject_matches`` on its ``blocker`` subject,
+    and on ``blocked`` for the blocker's own trigger).
+    Steps behind a condition or a choice are left out; nothing is added once
+    the attacker is blocked — the triggers have fired."""
     from .events import trigger_subject_matches
+    from .phases.block_triggers import _threshold_blockers
     from .trigger_utils import matching_triggers
 
-    found = {id(attacker): [0, 0], id(blocker): [0, 0]}
-    if getattr(attacker, "blocked", False):
+    members = list(members)
+    found = {id(attacker): [0, 0], **{id(member): [0, 0] for member in members}}
+    if not members or getattr(attacker, "blocked", False):
         return {key: tuple(value) for key, value in found.items()}
-    sides = (
-        (attacker, blocker, _BLOCKED_PUMP_CONDITIONS, True),
-        (blocker, attacker, _BLOCKS_PUMP_CONDITIONS, False),
-    )
-    for source, other, conditions, attacking in sides:
-        seat = game.controller_index_of(source)
-        for trigger in matching_triggers(source.effective_card, condition_kinds=conditions):
-            if attacking and trigger.condition.payload.get("blocker_filter") and not (
-                trigger_subject_matches(
-                    game, trigger, "blocker", blocker, observer=seat, source=attacker,
+    seat = game.controller_index_of(attacker)
+    for trigger in matching_triggers(
+        attacker.effective_card, condition_kinds=_BLOCKED_PUMP_CONDITIONS,
+    ):
+        if trigger.condition.payload.get("blocker_filter"):
+            firings = _threshold_blockers(trigger, [
+                member for member in members
+                if trigger_subject_matches(
+                    game, trigger, "blocker", member, observer=seat, source=attacker,
                 )
+            ])
+        else:
+            firings = members[:1]
+        for blocker in firings:
+            _add_block_pumps(found, trigger, attacker, blocker, len(members))
+    for member in members:
+        member_seat = game.controller_index_of(member)
+        for trigger in matching_triggers(
+            member.effective_card, condition_kinds=_BLOCKS_PUMP_CONDITIONS,
+        ):
+            if trigger.condition.payload.get("blocked_filter") and not _threshold_blockers(
+                trigger, [attacker] if trigger_subject_matches(
+                    game, trigger, "blocked", attacker, observer=member_seat, source=member,
+                ) else [],
             ):
                 continue
-            for step in _plain_steps(trigger.instruction):
-                payload = step.payload or {}
-                if step.kind == "pump_self":
-                    receiver = source
-                elif step.kind == "pump_block_pair":
-                    receiver = other
-                else:
-                    continue
-                power = _one_on_one(payload.get("power"), payload)
-                toughness = _one_on_one(payload.get("toughness"), payload)
-                if power is not None and toughness is not None:
-                    found[id(receiver)][0] += power
-                    found[id(receiver)][1] += toughness
+            _add_block_pumps(found, trigger, member, attacker, 1)
     return {key: tuple(value) for key, value in found.items()}
 
 
-def _one_on_one(amount, payload: dict) -> "int | None":
+def _add_block_pumps(found: dict, trigger, source, other, blockers: int) -> None:
+    """Add one firing of *trigger* (printed on *source*, about *other*) to
+    *found*: ``pump_self`` on *source*, ``pump_block_pair`` on *other*."""
+    for step in _plain_steps(trigger.instruction):
+        payload = step.payload or {}
+        if step.kind == "pump_self":
+            receiver = source
+        elif step.kind == "pump_block_pair":
+            receiver = other
+        else:
+            continue
+        power = _one_on_one(payload.get("power"), payload, blockers)
+        toughness = _one_on_one(payload.get("toughness"), payload, blockers)
+        if power is not None and toughness is not None:
+            found[id(receiver)][0] += power
+            found[id(receiver)][1] += toughness
+
+
+def pumped_combat_damage(source: "Permanent", pumps: dict) -> int:
+    """The combat damage *source* assigns once its block pumps (*pumps*,
+    :func:`gang_block_pumps`) have resolved: its power with theirs added,
+    unless it assigns none (``ASSIGNS_NO_COMBAT_DAMAGE``)."""
+    amount = combat_damage_assigned_by(source)
+    power = pumps.get(id(source), (0, 0))[0]
+    if power and not source.metadata.get(ASSIGNS_NO_COMBAT_DAMAGE):
+        amount = max(0, source.effective_power + power)
+    return amount
+
+
+def pumped_toughness(creature: "Permanent", pumps: dict) -> int:
+    """*creature*'s toughness once its block pumps (*pumps*) have resolved; a
+    creature left with none is put into its graveyard before any damage
+    (CR 704.5f)."""
+    return creature.effective_toughness + pumps.get(id(creature), (0, 0))[1]
+
+
+def _one_on_one(amount, payload: dict, blockers: int = 1) -> "int | None":
     """A pump's printed amount, or "+1/+1 … for each creature blocking it"
     (Elvish Berserker: ``times_x`` over a ``blocking_source`` count) with the
-    one blocker a fight here has. None for any other amount."""
+    *blockers* the fight has — "…beyond the first" (Johtull Wurm) the count's
+    ``offset`` less, never below none. None for any other amount."""
     if isinstance(amount, int) and not isinstance(amount, bool):
         return amount
     count = payload.get("x_from_count") or {}
     if isinstance(amount, dict) and isinstance(amount.get("times_x"), int) and count.get(
         "blocking_source"
     ):
-        return amount["times_x"]
+        return amount["times_x"] * max(0, blockers + int(count.get("offset") or 0))
     return None
 
 
@@ -515,6 +575,9 @@ __all__ = [
     "STAYS",
     "best_compelled_blocker",
     "block_pair_pumps",
+    "gang_block_pumps",
+    "pumped_combat_damage",
+    "pumped_toughness",
     "compelled_block_declined",
     "compelled_blocks",
     "compelled_block_worth",
