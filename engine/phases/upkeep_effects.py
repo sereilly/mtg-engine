@@ -421,10 +421,13 @@ class UpkeepEffectsMixin:
         if payload.get("discard") and controller.hand:
             discarded = controller.hand.pop(0)
             # Through the one discard seam, not a bare graveyard append: this
-            # skipped Library of Leng's CR 701.9c replacement *and* the card's
-            # own discard trigger, which is what a second spelling of a move
-            # always costs.
-            self._discard_card(controller, discarded)
+            # skipped the card's own discard trigger, which is what a second
+            # spelling of a move always costs. **As a cost** (CR 118.12a: "…
+            # deals 3 damage to you unless you discard a card" is "you may
+            # discard a card; if you don't, it deals 3 damage to you"), so
+            # Library of Leng, whose "if an effect causes you to discard" it
+            # used to answer, does not take it ("costs aren't effects").
+            self._discard_card(controller, discarded, as_cost=True)
             self.log.append(
                 f"{controller.name} discarded {discarded.name} to {permanent.card.name}"
             )

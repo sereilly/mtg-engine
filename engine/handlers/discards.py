@@ -187,7 +187,7 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
         count=actual,
         **({"up_to": True} if ceiling else {}),
         **({"filter": described} if described else {}),
-        allow_top_of_library=game._controls_top_of_library_discard(target),
+        **_library_top_offer(game, target, instruction),
         # The scratchpad rides the prompt: how many cards actually went is not
         # known until the seat answers, and `_after_discard_answered` is the one
         # place both answer paths (a seat's own picks and the non-interactive
@@ -199,6 +199,26 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
         else f"{target.name} must choose {actual} card(s) to discard"
     )
     return True, "pending_discard"
+
+
+def paid_as_cost(instruction: OracleInstruction) -> bool:
+    """Whether this discard is **a cost paid at resolution** (CR 118.12): the
+    action of "sacrifice this creature unless you discard a card" (Masticore),
+    marked by the offer's lowering (``lowering/control_flow
+    .COST_PAYABLE_DISCARD_KINDS``)."""
+    return bool(instruction.payload.get("as_cost"))
+
+
+def _library_top_offer(game: Game, player, instruction: OracleInstruction) -> dict:
+    """The ``discard`` prompt's Library of Leng fields for *player*'s chosen
+    discard: the library top offered when they control the Library — and never
+    for a discard that pays a cost, which the prompt carries as ``_as_cost``
+    for its answer to hand to the discard seam (``_resolve_one_discard``).
+    "If **an effect** causes you to discard a card": "costs aren't effects"
+    (Library of Leng, 2004-10-04)."""
+    if paid_as_cost(instruction):
+        return {"allow_top_of_library": False, "_as_cost": True}
+    return {"allow_top_of_library": game._controls_top_of_library_discard(player)}
 
 
 def record_discards(results: "dict | None", seat: int, count: int, took) -> None:
@@ -380,6 +400,14 @@ def _resolve_one_discard(
     caller whose prompt is not the ``discard`` kind this function looks up — an
     opponent's pick out of a revealed hand (Coercion) is a different prompt
     armed by the same resolution. None reads it off the ``discard`` prompt.
+
+    **A discard that pays a cost** (``_as_cost`` on the prompt — the action of
+    "sacrifice this creature unless you discard a card", CR 118.12a) is still
+    a discard (CR 701.9a: madness, Megrim and Necropotence see it), but no
+    effect caused it, so Library of Leng does not take it and no seat caused
+    it (Dodecapod, Psychic Purge — ``Game.discard_cause_seat``): the seam's
+    ``as_cost``, which the four cost-paying modules pass for a cost paid on
+    the way to the stack.
     """
     if not (0 <= player_index < len(game.players)):
         return False
@@ -389,6 +417,7 @@ def _resolve_one_discard(
     card = player.hand.pop(hand_index)
     choice = game.pending_choice_of("discard", player_index)
     allow_top = bool(choice is not None and choice.data.get("allow_top_of_library"))
+    as_cost = bool(choice is not None and choice.data.get("_as_cost"))
     if cause_seat is None and choice is not None:
         cause_seat = choice.data.get("_cause_seat")
     if to_library and allow_top:
@@ -423,13 +452,13 @@ def _resolve_one_discard(
         # Mephistopheles' — is still an effect's discard, and the Library
         # applies to it whoever controls the effect (its 2004-10-04 ruling),
         # so the process offers it there.
-        cause = game.discard_cause_seat(cause_seat)
+        cause = game.discard_cause_seat(cause_seat, as_cost=as_cost)
         deck = len(player.library)
         announced_by_effect = game.discard_effect_applies(
-            player, card, cause, leng_declined=allow_top,
+            player, card, cause, as_cost=as_cost, leng_declined=allow_top,
         )
         landed = game.discarded_card_destination(
-            player, card, cause, leng_declined=allow_top,
+            player, card, cause, as_cost=as_cost, leng_declined=allow_top,
         )
         if landed:
             # The object the graveyard now holds is what "that card" names
@@ -460,7 +489,9 @@ def _resolve_one_discard(
     # `arm_pending_choice` from the resolving stack): by the time a prompt is
     # answered the resolution that armed it has returned, so `resolving_seats`
     # is empty and reading it here would say "nobody caused this".
-    game._announce_discard_triggers(player, card, cause_seat=cause_seat)
+    game._announce_discard_triggers(
+        player, card, cause_seat=cause_seat, as_cost=as_cost,
+    )
     # …and the board's watchers (Necropotence). The second of the two discard
     # seams: a watcher announced on one path only would fire for a random
     # discard and not for a chosen one, which is half the cards in the pool.
@@ -556,6 +587,10 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
     # read the same to a rider, and writing it is what says this step answered.
     took = context.results.setdefault(DISCARDED_THIS_WAY, [])
     landed = context.results.setdefault(DISCARDED_INTO_GRAVEYARD, [])
+    # "Sacrifice it unless you discard a card at random" (Balduvian Horde) is a
+    # cost paid at resolution (CR 118.12a): Library of Leng does not take it,
+    # and no spell or ability caused it (``paid_as_cost``).
+    as_cost = paid_as_cost(instruction)
     # One event: a discard an opponent causes can put the card onto the
     # battlefield instead (Dodecapod), and every such card enters together
     # (CR 603.6a).
@@ -563,7 +598,8 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
         for i in sorted(indices, reverse=True):
             discarded = target.hand.pop(i)
             pile, deck = len(target.graveyard), len(target.library)
-            game._discard_card(target, discarded)  # Library of Leng -> top of library
+            # Library of Leng -> top of library, for an effect's discard.
+            game._discard_card(target, discarded, as_cost=as_cost)
             # CR 701.9c: a card discarded into a *hidden* zone unrevealed has
             # undefined characteristics, so "a creature card" is not something it
             # was. It still counts as a discard below.
@@ -1051,7 +1087,7 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
         # before "any number of" existed arms a byte-identical choice.
         **({"up_to": True} if ceiling else {}),
         filter=described,
-        allow_top_of_library=game._controls_top_of_library_discard(caster),
+        **_library_top_offer(game, caster, instruction),
         # The live scratchpad, so the answer can record how many were actually
         # discarded for the steps queued behind this prompt (see
         # ``_after_discard_answered``). Private: it holds engine objects and is

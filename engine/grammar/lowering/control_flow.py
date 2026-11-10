@@ -409,6 +409,69 @@ def _offered(step: OracleInstruction) -> OracleInstruction:
     return OracleInstruction(step.kind, step.value, {**step.payload, "optional": True})
 
 
+#: The discard kinds whose handler knows a discard can be **a cost paid at
+#: resolution** (CR 118.12): "sacrifice this creature unless you discard a
+#: card" (Masticore) is CR 118.12a's "you may discard a card. If you don't,
+#: sacrifice this creature", and "the action [do something] is a cost". A
+#: cost is not an effect, so Library of Leng's "if an effect causes you to
+#: discard" does not reach it (its 2004-10-04 ruling: "costs aren't effects"),
+#: and no spell or ability *causes* it — Psychic Purge's ruling: "Only
+#: discarding as an effect will trigger the ability." Each handler hands the
+#: mark to the discard seam (``Game._discard_card(..., as_cost=True)``, or the
+#: ``discard`` prompt's ``_as_cost`` for a chosen discard).
+#:
+#: Exactly the kinds the pool prints in that position;
+#: ``tests/engine/test_kg5_costs_resolution_discard_costs.py`` fails on a
+#: discard of any other kind in an offer's cost.
+COST_PAYABLE_DISCARD_KINDS = frozenset({
+    "discard_controller_cards", "discard_target_cards", "discard_x_target_cards",
+})
+
+
+def _paid_as_cost(step: OracleInstruction) -> OracleInstruction:
+    """*step*, the action of an offer whose sentence prints what happens if the
+    player does or doesn't take it, with every discard in it marked as the
+    cost CR 118.12 makes it — see :data:`COST_PAYABLE_DISCARD_KINDS`.
+
+    Into the action's own structure — "unless that player sacrifices a
+    permanent of their choice **or discards a card**" (Forbidden Ritual) is a
+    ``choose_one`` whose second mode is the discard — but never into a nested
+    offer, whose own lowering has already said which of its steps is a cost.
+    """
+    if step.kind == "may":
+        return step
+    payload = step.payload
+    changed: dict = {}
+    for key, value in payload.items():
+        if isinstance(value, OracleInstruction):
+            marked = _paid_as_cost(value)
+            if marked is not value:
+                changed[key] = marked
+        elif isinstance(value, tuple) and any(
+            isinstance(item, (OracleInstruction, dict)) for item in value
+        ):
+            marked = tuple(_paid_as_cost_item(item) for item in value)
+            if any(new is not old for new, old in zip(marked, value)):
+                changed[key] = marked
+    if step.kind in COST_PAYABLE_DISCARD_KINDS:
+        changed["as_cost"] = True
+    if not changed:
+        return step
+    return OracleInstruction(step.kind, step.value, {**payload, **changed})
+
+
+def _paid_as_cost_item(item):
+    """One member of a payload tuple: a step, or a ``choose_one`` mode (a
+    dict carrying its ``instruction``)."""
+    if isinstance(item, OracleInstruction):
+        return _paid_as_cost(item)
+    if isinstance(item, dict) and isinstance(item.get("instruction"), OracleInstruction):
+        marked = _paid_as_cost(item["instruction"])
+        if marked is not item["instruction"]:
+            return {**item, "instruction": marked}
+    return item
+
+
 #: Offered actions that are **a pick out of a hidden zone**, so that taking the
 #: offer does not yet mean the action happened: the seat may hold nothing
 #: eligible, or decline the pick itself. For these — and only these — "If you
@@ -1086,6 +1149,17 @@ def _lower_may(
         # above are what turn "that player" into the record the fire site froze
         # — a step told the printed word would ask a seat nobody wrote down.
         payload["action"] = tuple(_performed_by(step, actor) for step in action)
+        if then or otherwise:
+            # CR 118.12: "[A player] may [do something]. If [that player]
+            # [does, doesn't], [effect]" — and CR 118.12a's "[do something]
+            # unless [a player does something else]" — make the offered action
+            # **a cost, paid when the spell or ability resolves**. Only where
+            # the sentence printed that consequence: "you may discard any
+            # number of land cards. Put that many +1/+1 counters …" (Nantuko
+            # Cultivator) prints no "if you do" — its ``then`` is a later
+            # sentence folded in after this lowering — so its discard stays an
+            # effect, which Library of Leng applies to.
+            payload["action"] = tuple(_paid_as_cost(step) for step in payload["action"])
         # "At the beginning of your upkeep, **you may return this card from
         # your graveyard** to your hand." (Squee, Goblin Nabob; Bladewing's
         # Thrall; the Scourge Dragon Auras.) CR 113.6m: an ability whose effect
