@@ -18,10 +18,12 @@ arm), and the census reads:
   resolved / fizzled", read in the activation's own window), a trigger's
   announcement ("… triggered on attack (added to stack)"), the state-based
   actions' lines ("… died (704.5g: …)"), regeneration, removal from combat,
-  and the combat declarations' refusals.
+  phasing out, turning face down, an Equipment's attachment, and the combat
+  declarations' refusals.
 
 None of them may name the copier ("Clone", "Sculpting Steel"). Over the whole
-pool (the full pass) that is 3,226 copies, 3,446 activations and 7,498 lines.
+pool (the full pass) that is some 3,200 copies, 3,400 activations and 7,500
+lines.
 Not in scope, and left by the census on purpose: the **effect handlers' own
 sentences** ("Clone dealt 1 damage to P1", "Lightning Bolt dealt 3 damage to
 Clone", "Clone created a delayed triggered ability"), which name an ability's
@@ -59,7 +61,8 @@ EVERY = 40
 #: the object is the copy's ability (see ``LIFECYCLE``).
 LIFECYCLE = re.compile(
     r"^(?P<who>[^:]+?) (?:ability (?:added to stack|resolved|fizzled:"
-    r"|is resolving, awaiting a choice)|finished resolving$)"
+    r"|is resolving, awaiting a choice|was removed from the stack:|did nothing:)"
+    r"|finished resolving$)"
 )
 MACHINERY_LINES = (
     # A trigger's announcement, and its removal or miss (CR 603.3d, 603.4).
@@ -74,7 +77,11 @@ MACHINERY_LINES = (
         r"|put into graveyard|became unattached|sacrificed) "
         r"\((?:\d{3}\.\d+[a-z]?:|its |it has |what its |nothing its |controls none )"
     ),
-    re.compile(r"^(?P<who>[^:]+?) (?:regenerated|was removed from combat)$"),
+    re.compile(
+        r"^(?P<who>[^:]+?) (?:regenerated|was removed from combat|phased out"
+        r"|was turned face down)$"
+    ),
+    re.compile(r"^(?P<who>[^:]+?) is now attached to "),
 )
 
 

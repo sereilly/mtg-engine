@@ -315,7 +315,7 @@ class GameHelpersMixin:
         for perm in moving:
             perm.metadata["phased_out"] = True
             self.players[controller].phased_out.append(perm)
-            self.log.append(f"{perm.card.name} phased out")
+            self.log.append(f"{perm.effective_card.name} phased out")
         self._recompute_continuous_effects()
         return True
 

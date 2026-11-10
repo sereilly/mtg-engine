@@ -416,9 +416,9 @@ def attach_equipment(game: "Game", equipment: "Permanent", creature: "Permanent"
         return False
     if current is not None:
         detach_aura(equipment, current)
-        game.log.append(f"{equipment.card.name} became unattached from {current.card.name}")
+        game.log.append(f"{equipment.effective_card.name} became unattached from {current.effective_card.name}")
     attach_aura(equipment, creature)
-    game.log.append(f"{equipment.card.name} is now attached to {creature.card.name}")
+    game.log.append(f"{equipment.effective_card.name} is now attached to {creature.effective_card.name}")
     game._recompute_continuous_effects()
     return True
 

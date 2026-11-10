@@ -883,7 +883,7 @@ class StackResolutionMixin:
         # longer true" whether or not that permanent was also what it targeted.
         if self._intervening_if_is_no_longer_true(item):
             self.log.append(
-                f"{item.card.name} ability did nothing: its condition is no longer true"
+                f"{source_name(item)} ability did nothing: its condition is no longer true"
             )
             return
         # CR 608.2b, asked once for the whole object before any of it runs.
