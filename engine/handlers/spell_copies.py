@@ -101,9 +101,9 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
     made: list[StackItem] = []
 
     def step(position) -> None:
-        # The answer to the copy before this one, if it was asked through the
-        # prompt that suspends (a card in a graveyard, a spell), exactly once.
-        _apply_copy_new_target(game, context, made, caster_index)
+        # Every copy before this one whose offer has ended unannounced. A copy
+        # asked through the prompt that suspends (``retarget_choice``) is
+        # announced by its own offer's last step, which runs before this one.
         _settle_unasked_copies(game, made, caster_index)
         if position is None:
             return
@@ -124,17 +124,18 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
             copy_number=position + 1, copy_count=copies,
         )
 
-    # One step per copy and a last one that takes the final answer. The loop
+    # One step per copy and a last one that settles the final copy. The loop
     # is the last thing this handler does (``engine/resumption.py``): a copy
-    # whose new target is a card in a graveyard or a spell is asked through
-    # ``retarget_choice``, which suspends the resolution until it is answered.
+    # whose new targets are asked through ``retarget_choice`` (a card in a
+    # graveyard, a spell, several targets, a mode's) suspends the resolution
+    # until they are answered, inside its own offer's loop.
     run_resumable(game, [*range(copies), None], step)
     return True, "resolved"
 
 
-#: Where a ``retarget_choice`` armed for a copy writes its answer, in the
-#: resolution's records, for the next step of the copy loop to read.
-_COPY_NEW_TARGET = "_copy_new_target"
+#: Where a ``retarget_choice`` armed for one slot of a copy writes its answer,
+#: in the resolution's records, for the next step of that copy's offer to read.
+_COPY_SLOT_PICK = "_copy_slot_pick"
 
 
 def _settle_unasked_copies(game: Game, made: list, seat: int) -> None:
@@ -157,28 +158,36 @@ def _offer_copy_new_target(
     game: Game, context: OracleExecutionContext, copy: StackItem, seat: int,
     *, copy_number: int | None = None, copy_count: int | None = None,
 ) -> None:
-    """Offer *seat* the new target CR 707.10c lets it choose for *copy*.
+    """Offer *seat* the new targets CR 707.10c lets it choose for *copy*.
 
-    **A permanent or a player** goes through the prompt Chain Lightning's copy
-    already uses (``copy_spell_target``), answered onto the copy directly — for
-    every seat, its default keeping the original's unless the seat is one
-    nobody asks and re-aiming it measures better (``ai_prompts.choose_copy_target``).
+    **One permanent or one player** goes through the prompt Chain Lightning's
+    copy already uses (``copy_spell_target``), answered onto the copy directly
+    — for every seat, its default keeping the original's unless the seat is
+    one nobody asks and re-aiming it measures better
+    (``ai_prompts.choose_copy_target``).
 
-    **A card in a graveyard or a spell** — Reaping the Graves' "target
-    creature card from your graveyard", Hindering Touch's "target spell" —
-    goes through CR 115.7's change: ``stack_targets.change_slots`` enumerates
-    what the copy could have chosen through the picker's own list, and
-    ``retarget_choice`` (Psychic Battle's prompt) offers "keep" beside each.
-    Before this a storm copy of Reaping the Graves could only return the card
-    its original named, and every copy after the first did nothing. Asked of an
-    interactive seat; any other seat's answer is measured, as
-    ``copy_spell_target``'s default measures it (``ai_prompts.choose_copy_retarget``:
-    each option rehearsed against keeping the original's), and applied here
-    at once, since no prompt is armed for it.
+    **Everything else** goes through CR 115.7's slots
+    (``stack_targets.change_slots``: what each target could have been, read
+    through the picker's own list): a card in a graveyard or a spell
+    (Reaping the Graves, Hindering Touch), **several targets** — "two target
+    creatures" (Reckless Spite), a division (Arc Lightning: CR 115.7f keeps
+    each share with its slot) — and **a modal spell's** (CR 115.8: the mode
+    stays, its targets may move — a Forked Funeral Charm, each mode of a
+    "choose one or more" spell). CR 115.7d makes it slot by slot: "The player
+    may leave any number of the targets unchanged … the new targets must be
+    legal and must not cause any unchanged targets to become illegal"
+    (``stack_targets.new_target_options``). An interactive seat is asked once
+    per slot that has somewhere to go, in announcement order, "keep" beside
+    every one (``retarget_choice``, :func:`_ask_copy_new_targets`); any other
+    seat's answer is measured slot by slot
+    (``ai_prompts.choose_copy_new_targets``) and written at once. Every one of
+    these kept its original's targets on every road before kg5 — the one-slot
+    offer declined them, and ``change_slots`` refused a modal spell.
 
-    One target only, as ``copy_spell_target`` asks: a copy that chose several
-    keeps them all, which is the offer declined rather than a list for the
-    wrong slot.
+    Still refused, and so kept (an under-offer, never a target the copy could
+    not have chosen): an announcement printing "target" twice with one spec
+    (Consume Strength) and a roles announcement (Donate) — see
+    ``change_slots``.
 
     *copy_number* of *copy_count* is which copy this is, for the prompt's
     words ("copy 2 of 4"); it changes nothing about what is offered.
@@ -190,79 +199,122 @@ def _offer_copy_new_target(
             # Nothing to change to: the copy keeps the original's targets.
             game.announce_copy_put_onto_stack(copy, chooser=seat)
         return
-    from ..stack_targets import (apply_target_change, change_options, change_slots,
-                                 target_label)
-    from .retargeting import _target_option
+    from ..stack_targets import change_slots, new_target_options
 
     slots = change_slots(game, copy)
-    if isinstance(slots, str) or len(slots) != 1:
-        game.announce_copy_put_onto_stack(copy, chooser=seat)
-        return
-    if slots[0].current.kind not in ("graveyard", "stack"):
-        game.announce_copy_put_onto_stack(copy, chooser=seat)
-        return
-    options = change_options(slots, [])
-    if not options:
+    if isinstance(slots, str) or not any(
+        new_target_options(slots, [], position) for position in range(len(slots))
+    ):
         game.announce_copy_put_onto_stack(copy, chooser=seat)
         return
     if not game.asks_a_person(seat):
-        from ..ai_prompts import choose_copy_retarget
+        from ..ai_prompts import choose_copy_new_targets
 
-        pick = choose_copy_retarget(game, seat, copy, slots, options)
-        moved = pick is not None and apply_target_change(game, copy, slots, [pick])
-        if moved:
-            game.log.append(f"{copy.card.name} (copy) targets {target_label(game, pick)}")
-        game.announce_copy_put_onto_stack(copy, chooser=seat, chose=moved)
+        _write_copy_new_targets(
+            game, copy, slots, choose_copy_new_targets(game, seat, copy, slots), seat,
+        )
         return
+    _ask_copy_new_targets(
+        game, context, copy, seat, slots,
+        copy_number=copy_number, copy_count=copy_count,
+    )
+
+
+def _write_copy_new_targets(game: Game, copy: StackItem, slots, picks, seat: int) -> None:
+    """Re-aim *copy*'s slots at *picks* (one per slot, None for a slot kept)
+    and announce it once, now its controller has decided (CR 707.10c) — kept
+    or moved. The picks are written together (``apply_target_change``), and a
+    pick whose object left between the question and this step leaves the copy
+    as it was."""
+    from ..stack_targets import apply_target_change, target_label
+
+    changed = [(slot, pick) for slot, pick in zip(slots, picks) if pick is not None]
+    moved = bool(changed) and apply_target_change(
+        game, copy, [slot for slot, _ in changed], [pick for _, pick in changed],
+    )
+    if moved:
+        for _slot, pick in changed:
+            game.log.append(f"{copy.card.name} (copy) targets {target_label(game, pick)}")
+    game.announce_copy_put_onto_stack(copy, chooser=seat, chose=moved)
+
+
+def _ask_copy_new_targets(
+    game: Game, context: OracleExecutionContext, copy: StackItem, seat: int, slots,
+    *, copy_number: int | None = None, copy_count: int | None = None,
+) -> None:
+    """Ask an interactive *seat* where each of *copy*'s *slots* goes — one
+    ``retarget_choice`` per slot with somewhere to go, "keep" first on every
+    one (CR 115.7d) and its default (``default_keeps``) — then write the
+    answers and announce the copy (:func:`_write_copy_new_targets`).
+
+    A loop of one step per slot and a last one that writes, each prompt
+    suspending the resolution until it is answered (``engine/resumption.py``):
+    **the last thing its caller does**, nested inside the copy loop that made
+    the copy. Each slot is offered against the answers already given
+    (``new_target_options``), so two slots of one "target" never end on one
+    object; a slot whose object an earlier answer took is offered no "keep"
+    (``may_keep_target`` — the exchange CR 115.7e allows)."""
+    from ..stack_targets import may_keep_target, new_target_options, target_label
+    from .retargeting import _target_option
+
+    picks: list = [None] * len(slots)
+    asked: dict = {}
     name = copy.card.name
     which = (
         f"copy {copy_number} of {copy_count} of {name}"
         if copy_count is not None and copy_number is not None and copy_count > 1
         else f"the copy of {name}"
     )
-    game.arm_retarget_choice(
-        seat,
-        card_name=name,
-        prompt=(
-            f"Choose a new target for {which} "
-            f"(now {target_label(game, slots[0].current)}), or keep it."
-        ),
-        result_key=_COPY_NEW_TARGET,
-        options=[{"kind": "keep", "name": "Keep the original's target"}]
-        + [_target_option(game, option) for option in options],
-        context=context,
-        # Taken by default (a test's drain, an abandoned seat), the offer is
-        # declined, as ``copy_spell_target``'s is.
-        default_keeps=True,
-    )
-    context.results[f"{_COPY_NEW_TARGET}_slots"] = slots
 
+    def absorb() -> None:
+        # The answer to the slot before this step, exactly once. "Keep", or
+        # every candidate gone by the answer (CR 115.7a's unchanged target),
+        # leaves that slot where it was.
+        if _COPY_SLOT_PICK not in context.results:
+            return
+        answer = context.results.pop(_COPY_SLOT_PICK)
+        position = asked.pop("position", None)
+        target = answer.get("_target") if isinstance(answer, dict) else None
+        if position is not None and target is not None:
+            picks[position] = target
 
-def _apply_copy_new_target(
-    game: Game, context: OracleExecutionContext, made: list, seat: int,
-) -> None:
-    """Write the answer :func:`_offer_copy_new_target` asked through
-    ``retarget_choice`` onto the copy it was asked about — the last one made —
-    once. "Keep", or an answer whose object has gone (CR 115.7a: the target is
-    then unchanged), changes nothing."""
-    if _COPY_NEW_TARGET not in context.results:
-        return
-    from ..stack_targets import apply_target_change, target_label
+    def step(position) -> None:
+        absorb()
+        if position is None:
+            _write_copy_new_targets(game, copy, slots, picks, seat)
+            return
+        options = new_target_options(slots, picks, position)
+        if not options:
+            return
+        keeps = may_keep_target(slots, picks, position)
+        if not keeps and len(options) == 1:
+            # An earlier slot took what this one names, and one object is
+            # left for it: a choice with one answer is not a question.
+            picks[position] = options[0]
+            return
+        current = target_label(game, slots[position].current)
+        place = "" if len(slots) == 1 else f": target {position + 1} of {len(slots)}"
+        asked["position"] = position
+        game.arm_retarget_choice(
+            seat,
+            card_name=name,
+            prompt=(
+                f"Choose a new target for {which}{place} (now {current}), or keep it."
+                if keeps else
+                f"Choose a new target for {which}{place} (now {current}: "
+                "another target of it now names that)."
+            ),
+            result_key=_COPY_SLOT_PICK,
+            options=(
+                [{"kind": "keep", "name": "Keep the original's target"}] if keeps else []
+            ) + [_target_option(game, option) for option in options],
+            context=context,
+            # Taken by default (a test's drain, an abandoned seat), the offer is
+            # declined, as ``copy_spell_target``'s is — where it may be.
+            default_keeps=keeps,
+        )
 
-    answer = context.results.pop(_COPY_NEW_TARGET)
-    slots = context.results.pop(f"{_COPY_NEW_TARGET}_slots", None)
-    if not made:
-        return
-    copy = made[-1]
-    pick = answer.get("_target") if isinstance(answer, dict) else None
-    moved = bool(slots) and pick is not None and apply_target_change(
-        game, copy, slots, [pick],
-    )
-    if moved:
-        game.log.append(f"{copy.card.name} (copy) targets {target_label(game, pick)}")
-    # Announced once, now its controller has answered (CR 707.10c) — kept or
-    # moved.
-    game.announce_copy_put_onto_stack(copy, chooser=seat, chose=moved)
+    run_resumable(game, [*range(len(slots)), None], step)
 
 
 def _copy_of_spell(copied: StackItem, controller_index: int) -> StackItem:
@@ -335,10 +387,15 @@ def _copy_reaim_is_one_slot(game: Game, copy: StackItem) -> bool:
     if copy.chosen_mode_index is not None or copy.chosen_modes:
         return False
     chosen = chosen_targets(game, copy)
+    # On the scalar fields that prompt writes. A divided spell's one target
+    # rides its division (CR 115.7f keeps the share with it), which the
+    # scalar write never reached: a Forked Fireball "re-aimed" there logged
+    # its new target and dealt its damage to the old one (kg5).
     return (
         chosen is not None
         and len(chosen) == 1
         and chosen[0].kind in ("permanent", "player")
+        and chosen[0].channel in ("item", "player")
     )
 
 
@@ -475,15 +532,14 @@ def offer_new_targets(
     measured answer for one nobody asks), the answer written onto the copy,
     and the copy announced once its targets are decided.
 
-    A loop of one offer and the step that takes its answer, because a copy
-    whose new target is a card in a graveyard or a spell is asked through
-    ``retarget_choice``, which suspends the resolution until it is answered
-    (``engine/resumption.py``): **the last thing its caller does**."""
+    A loop of one offer and a step that settles it, because a copy whose new
+    targets are asked through ``retarget_choice`` suspends the resolution
+    until they are answered (``engine/resumption.py``): **the last thing its
+    caller does**."""
     made = [copy]
 
     def step(position) -> None:
         if position is None:
-            _apply_copy_new_target(game, context, made, seat)
             _settle_unasked_copies(game, made, seat)
             return
         _offer_copy_new_target(game, context, copy, seat)

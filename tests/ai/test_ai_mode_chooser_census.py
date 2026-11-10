@@ -681,8 +681,11 @@ def weighed(
     # not to be cast on whatever randomness a combat here happened to use.
     sequence = random.getstate()
     try:
-        run_out_the_turn(untouched_fought, through_combat=True)
-        run_out_the_turn(fought, through_combat=True)
+        # The caster answers its priority after the blocks on both copies,
+        # as the rehearsal's seat does (``ai_rehearsal._fight_priority_driver``,
+        # kg5): a regeneration the cast granted is raised there.
+        run_out_the_turn(untouched_fought, through_combat=True, seat=ME)
+        run_out_the_turn(fought, through_combat=True, seat=ME)
     finally:
         random.setstate(sequence)
     left = standing_swing(

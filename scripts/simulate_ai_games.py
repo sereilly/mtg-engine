@@ -185,6 +185,14 @@ def main() -> int:
             f"Special actions taken: {sum(report.special_actions_taken.values())}"
             + (f" ({by_kind})" if by_kind else "")
         )
+        if report.special_actions_in_response:
+            print(
+                "  in response to another seat's object: "
+                + ", ".join(
+                    f"{count} {kind}"
+                    for kind, count in sorted(report.special_actions_in_response.items())
+                )
+            )
         for reason, count in report.refused_special_actions.most_common(5):
             print(f"  {count}x declined: {reason}")
 

@@ -245,6 +245,12 @@ class _Announcement:
     holder: object
     mode: int | None = None
     instruction: object = None
+    #: For a modal **spell**, the chosen mode's position in the card's
+    #: ``OracleProgram.modes`` (``ChosenMode.index``, or the item's
+    #: ``chosen_mode_index``): what the enumeration of this announcement's
+    #: legal targets is asked about (``_enumerate_targets(mode_index=…)``),
+    #: and whose printed words are counted for its instances of "target".
+    printed_mode: int | None = None
 
 
 def announcements(item: "StackItem") -> "tuple[_Announcement, ...] | None":
@@ -307,7 +313,10 @@ def announcements(item: "StackItem") -> "tuple[_Announcement, ...] | None":
                 spec = _from_instructions((option.instruction,))
                 if _spec_targets(spec) and names_a_target(option.label):
                     found.append(
-                        _Announcement(spec, holder, mode=position, instruction=option.instruction)
+                        _Announcement(
+                            spec, holder, mode=position, instruction=option.instruction,
+                            printed_mode=index,
+                        )
                     )
             return tuple(found)
         spec = derive_cast_spec(
@@ -787,6 +796,9 @@ def _candidates(
     entries = game._enumerate_targets(
         item.caster_index, card, spec,
         for_cast=not is_ability,
+        # A modal spell's targets are its chosen mode's (CR 115.8): the
+        # per-candidate probe reads that mode's sentence, not the first one's.
+        mode_index=None if is_ability else announcement.printed_mode,
         ability_instruction=(
             targeting_instruction(instruction) if is_ability and instruction is not None else None
         ),
@@ -828,6 +840,48 @@ def _candidates(
     return found
 
 
+def _one_description_for_every_instance(item: "StackItem", instances: int) -> bool:
+    """Whether a spell printing "target" *instances* times describes every
+    instance alike — a slot list (``target_descriptions.slot_list_is_exact``'s
+    shape) with one slot per instance and every slot's restriction the same:
+    "Target creature gets +2/+2 until end of turn. **Another target
+    creature** gets -2/-2 until end of turn." (Consume Strength, Steal
+    Strength, Rookie Mistake). The one spec the announcement carries then
+    describes the second slot too, so its candidates are the first's (CR
+    115.3's "another" is the slots naming different objects, which every
+    reader of these slots keeps). So does a division whose every instance is
+    one of its slots ("…to any target, 2 damage to another target, and 3
+    damage to a third target", Cone of Flame). Slot lists whose restrictions differ are a
+    roles spec (``target_descriptions._slot_roles_spec``) and are refused
+    beside this. A spell only: an ability's instances are its own line's."""
+    from .oracle import compile_card_oracle
+
+    if getattr(item, "is_ability", False):
+        return False
+    card = spell_text_card(item)
+    if card is None:
+        return False
+    for instruction in compile_card_oracle(card).instructions:
+        described = (getattr(instruction, "payload", None) or {}).get("targets")
+        if not isinstance(described, dict):
+            continue
+        if described.get("quantifier") == "divided":
+            # "…deals 1 damage to any target, 2 damage to another target, and
+            # 3 damage to a third target" (Cone of Flame): every instance is
+            # one slot of the division, under the one description it carries.
+            return described.get("target_count") == instances
+        if not isinstance(described.get("filters"), list):
+            continue
+        filters = described["filters"]
+        return (
+            len(filters) == instances
+            and described.get("count") == instances
+            and all(each == filters[0] for each in filters)
+            and not described.get("optional_slots")
+        )
+    return False
+
+
 #: The channels :func:`apply_target_change` can rewrite. A **role** (two
 #: different descriptions in one announcement — Donate, Goblin Welder) is not
 #: among them: each role has its own candidate walk and relation test
@@ -846,13 +900,20 @@ def change_slots(game: "Game", item: "StackItem") -> "list[ChangeSlot] | str":
 
     * an object whose targets the engine cannot enumerate (see
       :func:`chosen_targets`), or that has none;
-    * a **modal spell** — its legal targets are the chosen mode's (CR 115.8),
-      and the cast gate this enumeration runs through reads the card's first
-      mode; a modal *triggered ability* is enumerated from its own mode's
-      instruction and is offered;
-    * an object printing **more than one instance** of "target", or a
+    * an announcement printing **more than one instance** of "target", or a
       **roles** announcement — see :func:`_printed_target_instances`;
     * a slot whose candidates cannot be enumerated.
+
+    **A modal spell is offered** (CR 115.8: "An effect that allows a player
+    to change the target(s) of a modal spell … doesn't allow that player to
+    change its mode"): each chosen mode is its own announcement, enumerated
+    through the chosen mode's own sentence (``_Announcement.printed_mode``,
+    ``_enumerate_targets(mode_index=…)``) and counted by its own words — so a
+    Charm's one target, and each mode's target of a "choose one or more"
+    spell, are slots. This refused every modal spell while the enumeration
+    read the card's first mode; a Forked Funeral Charm kept its original's
+    creature (kg5). The slots of several modes come in announcement order,
+    each with its own mode's candidates.
     """
     from .oracle import compile_card_oracle
 
@@ -863,28 +924,32 @@ def change_slots(game: "Game", item: "StackItem") -> "list[ChangeSlot] | str":
     targeted = [(announcement, targets) for announcement, targets in targeted if targets]
     if not targeted:
         return "it has no targets"
-    if len(targeted) != 1:
-        return "it chose targets for more than one mode"
-    announcement, targets = targeted[0]
-    if not getattr(item, "is_ability", False) and compile_card_oracle(
-        spell_text_card(item)
-    ).modes:
-        return "a modal spell's targets belong to its chosen mode"
-    instances = _printed_target_instances(item)
-    if instances is not None and instances != 1:
-        return "it uses the word \"target\" more than once"
-    if any(target.channel not in _CHANGEABLE_CHANNELS for target in targets):
-        return "its targets answer different descriptions"
     slots: list[ChangeSlot] = []
-    for current in targets:
-        candidates = _candidates(game, item, announcement, current)
-        if candidates is None:
-            return "its legal targets cannot be enumerated"
-        slots.append(ChangeSlot(
-            current,
-            tuple(candidate for candidate in candidates if not candidate.same_object(current)),
-            current_is_legal=any(candidate.same_object(current) for candidate in candidates),
-        ))
+    for announcement, targets in targeted:
+        if announcement.printed_mode is not None:
+            # One mode's words: a Charm prints "target" once per mode, and
+            # only the chosen mode's sentence is this announcement's.
+            modes = compile_card_oracle(spell_text_card(item)).modes
+            label = modes[announcement.printed_mode].label if 0 <= announcement.printed_mode < len(modes) else None
+            instances = _target_instances(label) if label else 0
+        else:
+            instances = _printed_target_instances(item)
+        if (
+            instances is not None and instances != 1
+            and not _one_description_for_every_instance(item, instances)
+        ):
+            return "it uses the word \"target\" more than once"
+        if any(target.channel not in _CHANGEABLE_CHANNELS for target in targets):
+            return "its targets answer different descriptions"
+        for current in targets:
+            candidates = _candidates(game, item, announcement, current)
+            if candidates is None:
+                return "its legal targets cannot be enumerated"
+            slots.append(ChangeSlot(
+                current,
+                tuple(candidate for candidate in candidates if not candidate.same_object(current)),
+                current_is_legal=any(candidate.same_object(current) for candidate in candidates),
+            ))
     return slots
 
 
@@ -1087,6 +1152,113 @@ def change_options(slots, picks: list) -> list[ChosenTarget]:
     ]
 
 
+def _one_instance(slots, position: int) -> list[int]:
+    """The positions of every *other* slot that answers the same instance of
+    "target" as slot *position* — the same announcement (one mode, or the
+    object itself) on the same channel. CR 115.3: one instance names each
+    object once; two instances (two modes) may name one object twice."""
+    here = slots[position].current
+    return [
+        other for other, slot in enumerate(slots)
+        if other != position
+        and slot.current.mode == here.mode
+        and slot.current.channel == here.channel
+    ]
+
+
+def _decided(slots, picks: list, position: int, before: int) -> list[ChosenTarget]:
+    """What every slot of *position*'s instance before slot *before* names
+    once decided: its pick, or (None) where it was — kept."""
+    return [
+        picks[other] if other < len(picks) and picks[other] is not None
+        else slots[other].current
+        for other in _one_instance(slots, position)
+        if other < before
+    ]
+
+
+def _fits(slots, position: int, candidate: ChosenTarget, taken: list) -> bool:
+    """Whether *candidate* may stand in slot *position* beside *taken*: no
+    object twice in one instance, and an object — never a face — on a slot
+    of an announcement holding several objects on the scalar channel (the one
+    seat that channel holds is the battlefield they share)."""
+    if any(candidate.same_object(other) for other in taken):
+        return False
+    several_on_the_scalar = bool(_one_instance(slots, position)) and (
+        slots[position].current.channel in ("item", "player")
+    )
+    return not (several_on_the_scalar and candidate.kind != "permanent")
+
+
+def _finishable(slots, picks: list, start: int) -> bool:
+    """Whether slots ``start..`` can each be kept or re-aimed so that the
+    whole set is legal behind *picks* (CR 115.7d's "must not cause any
+    unchanged targets to become illegal"). A depth-first search over few
+    slots: keeping first, then each candidate."""
+    if start >= len(slots):
+        return True
+    taken = _decided(slots, picks, start, start)
+    trial = list(picks) + [None] * (len(slots) - len(picks))
+    current = slots[start].current
+    if not any(current.same_object(other) for other in taken):
+        trial[start] = None
+        if _finishable(slots, trial, start + 1):
+            return True
+    for candidate in slots[start].candidates:
+        if _fits(slots, start, candidate, taken):
+            trial[start] = candidate
+            if _finishable(slots, trial, start + 1):
+                return True
+    return False
+
+
+def may_keep_target(slots, picks: list, position: int) -> bool:
+    """Whether slot *position* may be left where it is, given the slots
+    before it (*picks*: one entry per slot asked so far, None for one kept):
+    not when an earlier slot of its instance was re-aimed onto what it names
+    — the two would name one object (CR 115.3) — and not when keeping it
+    leaves a later slot nothing legal. CR 115.7e: "only the final set of
+    targets is evaluated", which is why an exchange is legal at all."""
+    taken = _decided(slots, picks, position, position)
+    if any(slots[position].current.same_object(other) for other in taken):
+        return False
+    trial = list(picks) + [None] * (len(slots) - len(picks))
+    trial[position] = None
+    return _finishable(slots, trial, position + 1)
+
+
+def new_target_options(slots, picks: list, position: int) -> list[ChosenTarget]:
+    """What slot *position* may be re-aimed at when its object's controller
+    "may choose new targets" (CR 115.7d, 707.10c) — a copy's — given *picks*
+    (one entry per slot already asked, in order: the new target chosen for
+    it, or None for a slot kept).
+
+    CR 115.7d: "The player may leave any number of the targets unchanged,
+    even if those targets would be illegal. If the player chooses to change
+    some or all of the targets, the new targets must be legal and must not
+    cause any unchanged targets to become illegal." So, unlike
+    :func:`change_options` (CR 115.7a's all-or-nothing change), keeping is an
+    answer (:func:`may_keep_target` says when it is not), and each candidate
+    is another legal target for its slot (``ChangeSlot.candidates``) that no
+    earlier slot of the same instance names (CR 115.3, :func:`_one_instance`)
+    and behind which every later slot can still be kept or moved
+    (:func:`_finishable`) — so two targets of one instance may be exchanged
+    (CR 115.7e), the later one then offered no "keep".
+    """
+    if not 0 <= position < len(slots):
+        return []
+    taken = _decided(slots, picks, position, position)
+    found = []
+    trial = list(picks) + [None] * (len(slots) - len(picks))
+    for candidate in slots[position].candidates:
+        if not _fits(slots, position, candidate, taken):
+            continue
+        trial[position] = candidate
+        if _finishable(slots, trial, position + 1):
+            found.append(candidate)
+    return found
+
+
 def _set_id_at(value, position: int, new: int) -> list:
     """The id channel *value* with *new* at slot *position* — a list always,
     padded with ``None`` up to it (``game_types.check_target_ids``)."""
@@ -1119,6 +1291,12 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
 
     Everything else the object announced — its controller, X, modes, the
     division of a divided effect (CR 115.7f) — is untouched.
+
+    A slot one of the object's ``chosen_modes`` holds (``ChosenTarget.mode``)
+    is written into that mode — the holder :func:`_read` read it off — and
+    never into the item's own fields, which are another mode's or nobody's.
+    Called with a **subset** of an object's slots (a copy's new targets,
+    CR 115.7d), it rewrites those and leaves the rest as they are.
     """
     from .divided_damage import stamped_entry
 
@@ -1134,22 +1312,28 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
         if pick.kind == "player" and game.players[pick.seat].lost:
             return False
 
+    modes = tuple(getattr(item, "chosen_modes", ()) or ())
+    written: list = []
     for slot, pick in zip(slots, picks):
         channel, position = slot.current.channel, slot.current.position
+        mode = slot.current.mode
+        holder = modes[mode] if mode is not None and 0 <= mode < len(modes) else item
+        if not any(holder is seen for seen in written):
+            written.append(holder)
         if channel == "stack":
             if pick.kind == "stack":
-                item.target_stack_item = pick.stack_item
+                holder.target_stack_item = pick.stack_item
             else:
                 # "Target spell or permanent" re-aimed from a spell onto a
                 # permanent: the stack reference goes and the id arrives.
-                item.target_stack_item = None
+                holder.target_stack_item = None
                 seat, permanent = game.find_permanent_by_id(pick.permanent_id)
-                item.target_player_index = seat
-                item.target_permanent_id = [pick.permanent_id]
+                holder.target_player_index = seat
+                holder.target_permanent_id = [pick.permanent_id]
             continue
         if channel == "graveyard":
-            item.target_graveyard_card = _set_at(item.target_graveyard_card, position, pick.stamp)
-            item.target_player_index = pick.stamp.seat
+            holder.target_graveyard_card = _set_at(holder.target_graveyard_card, position, pick.stamp)
+            holder.target_player_index = pick.stamp.seat
             continue
         if channel == "divided":
             divided = list(item.choices.get(DIVIDED_TARGETS) or ())
@@ -1165,25 +1349,26 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
             continue
         # "item" / "player": the scalar fields, or one slot of the id list.
         if pick.kind == "stack":
-            item.target_stack_item = pick.stack_item
-            item.target_permanent_id = None
+            holder.target_stack_item = pick.stack_item
+            holder.target_permanent_id = None
             continue
         if pick.kind == "player":
             # All three written together, whichever way the target points
             # (``change_target_spell_target``): a stale id would be resolved as
             # an object target by every handler that prefers it.
-            item.target_player_index = pick.seat
-            item.target_permanent_id = None
+            holder.target_player_index = pick.seat
+            holder.target_permanent_id = None
             continue
-        item.target_permanent_id = _set_id_at(
-            item.target_permanent_id, position, pick.permanent_id
+        holder.target_permanent_id = _set_id_at(
+            holder.target_permanent_id, position, pick.permanent_id
         )
 
-    if item.target_permanent_id is not None:
-        # The objects have one seat beside them only while they share a
-        # battlefield (``Game.announced_target_seat``) — always, for one; the
-        # resolutions that read several read the ids.
-        shared = game.announced_target_seat(item.target_permanent_id)
-        if shared is not None:
-            item.target_player_index = shared
+    for holder in written or [item]:
+        if holder.target_permanent_id is not None:
+            # The objects have one seat beside them only while they share a
+            # battlefield (``Game.announced_target_seat``) — always, for one;
+            # the resolutions that read several read the ids.
+            shared = game.announced_target_seat(holder.target_permanent_id)
+            if shared is not None:
+                holder.target_player_index = shared
     return True

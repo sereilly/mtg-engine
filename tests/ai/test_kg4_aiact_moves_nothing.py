@@ -200,16 +200,25 @@ def test_a_fight_the_pump_does_not_change_waits_for_the_blocks():
     assert game.players[1].life < 20 - 5, game.players[1].life
 
 
-def test_a_shield_that_makes_the_attack_is_still_bought_before_it():
-    """Zealous Inquisitor's redirect against a Grizzly Bears: without it the
-    2/2 stays home (a trade), with it the Bears does not block — an attack the
-    redirect adds (``Rehearsal.declarations_changed``), so it is bought
-    before the attack as before (the board SCG Phase 5 saw)."""
-    game, _report = _table(
+def test_a_shield_that_deters_the_block_is_held_for_after_it():
+    """Zealous Inquisitor's redirect against a Grizzly Bears. Bought before
+    the attack, it deters the block — and the rehearsal it was weighed
+    against, the copy with nothing bought, traded the 2/2 for the Bears,
+    because nobody on a copy answered priority after the blocks and the
+    redirect was never raised there (kg4). Since kg5 the copy's fight lets
+    the seat answer it (``ai_rehearsal._fight_priority_driver``) and holds
+    the mana the purchase would spend: the redirect is not bought before the
+    attack, and raised once the Bears has blocked — the Bears dies, the
+    Inquisitor lives."""
+    game, report = _table(
         ("Zealous Inquisitor", "Plains", "Plains"), step="precombat_main",
     )
-    action = choose_activation_action(game, 0)
-    assert action is not None and action.permanent_name == "Zealous Inquisitor", action
-    with deliberating():
-        fought = _rehearse_activation(game, 0, action, through_combat=True)
-    assert fought is not None and fought.declarations_changed
+    assert choose_activation_action(game, 0) is None
+    run_ai_combat_phase(game, 0)
+    raised = [
+        line for line in report.log_lines
+        if "activate Zealous Inquisitor" in line and "declare blockers" in line
+    ]
+    assert raised, report.log_lines
+    creatures = [p.card.name for seat in (0, 1) for p in game.controlled_by(seat) if p.is_creature]
+    assert creatures == ["Zealous Inquisitor"], game.log[-10:]

@@ -44,6 +44,20 @@ The defending seat is not asked: an Aura's "can't block" is ignored in the
 opponent's turn, between attackers and blockers, and a rehearsal that declares
 the defender's blocks from that step does not exist (``ai_rehearsal`` fights a
 combat only from a main phase).
+
+**In response** (:func:`choose_response_special_action`, asked by
+``ai_priority.act_at_priority`` in its ``"response"`` window — another seat's
+object on top of the stack): a special action needs only priority (CR 116.2b:
+"Turning a face-down creature face up is a special action. A player can take
+this action any time they have priority"), and a morph's turn-up is most of what an instant-speed answer
+is — "When this creature is turned face up, copy target instant or sorcery
+spell" (Mischievous Quanar), "counter target spell" (Voidmage Apprentice),
+"change the target of target spell or ability with a single target"
+(Willbender), "regenerate target creature" (Daru Mender), a body that no
+longer dies to the burn spell aimed at it. Only the main phase asked, so no AI
+seat ever turned one up over a spell (kg4). Weighed by the same rehearsal,
+against the table where the object resolves with nothing done
+(:data:`RESPONSE_OFFERS`).
 """
 
 from __future__ import annotations
@@ -79,6 +93,14 @@ WEIGHED_OFFERS = frozenset({
     # which is exactly what a rehearsal through combat reads.
     TURN_FACE_UP,
 })
+
+#: The offer kinds weighed **in response** to another seat's object
+#: (:func:`choose_response_special_action`): the ones whose good a rehearsal
+#: of that object's resolution can see. ``ignore_attached_static_until_eot``
+#: buys an attack, which no response is made before; a Licid's
+#: ``end_own_continuous_effect`` would be read here too (its host about to
+#: die), and is left for the round that measures it.
+RESPONSE_OFFERS = frozenset({TURN_FACE_UP})
 
 
 @dataclass(frozen=True)
@@ -146,6 +168,89 @@ def choose_special_action(game: Game, seat: int) -> SpecialActionChoice | None:
     return best
 
 
+def holds_a_response_special_action(game: Game, seat: int) -> bool:
+    """The cheap question before :func:`choose_response_special_action`:
+    whether *seat* controls a face-down permanent — the only kind of
+    permanent making a :data:`RESPONSE_OFFERS` offer — so a response window
+    with none costs no listing of the board's offers."""
+    from .face_down import is_face_down
+
+    return any(is_face_down(permanent) for permanent in game.controlled_by(seat))
+
+
+def choose_response_special_action(game: Game, seat: int) -> SpecialActionChoice | None:
+    """The special action *seat* takes **in response** to the object on top
+    of the stack — another seat's (``ai_priority.instant_speed_window``'s
+    ``"response"``) — or None.
+
+    What the engine offers it right now (``available_permanent_special_actions``,
+    the gate the action asks: priority, the morph cost payable), of the kinds
+    a response can price (:data:`RESPONSE_OFFERS`), each rehearsed against the
+    table where the stack resolves with nothing taken — the turn-up's trigger
+    put on the stack above the object it answers (CR 116.3, 603.3) and
+    resolved first; the best one that leaves the seat ahead is taken. In the
+    declare-attackers step before the blocks (``ai_rehearsal.blocks_owed``, an
+    attack trigger answered) the copies fight the rest of that combat, which
+    they owe once their stacks resolve; a declared combat's damage is dealt
+    on the way to the end of the turn either way.
+    """
+    if rehearsing() or not game.stack or game.stack[-1].caster_index == seat:
+        return None
+    if plays_for_another(game, seat):
+        return None
+    from .ai_rehearsal import blocks_owed
+
+    entries = [
+        entry for entry in available_permanent_special_actions(game, seat)
+        if entry["kind"] in RESPONSE_OFFERS
+    ]
+    if not entries:
+        return None
+    through_combat = blocks_owed(game)
+    best: SpecialActionChoice | None = None
+    with deliberating():
+        for entry in entries:
+            for x_value in _x_sizes(entry):
+                choice = _weighed(
+                    game, seat, entry, x_value, through_combat=through_combat,
+                )
+                if choice is not None and (best is None or choice.worth > best.worth):
+                    best = choice
+    return best
+
+
+def special_action_in_response(
+    game: Game, seat: int,
+) -> "tuple[SpecialActionChoice, _Taken] | None":
+    """Ask :func:`choose_response_special_action` for *seat* and take what it
+    chooses: ``(choice, result)`` — the result in the shape every door of
+    ``ai_priority.act_at_priority`` answers with (``supported``,
+    ``details``) — or None when it chose nothing.
+
+    **The seat asked holds priority** (CR 116.2b). The engine's priority
+    round asks its driver ``(game, seat)`` without writing the seat into
+    ``priority_player_index`` (``Game.offer_priority``), and the offer's gate
+    asks that field (``special_actions.permanent_special_action_refusal``): so while
+    the round is being driven, or with nobody recorded, the field names the
+    seat for the length of this question and is put back exactly as it was
+    afterwards — :func:`special_action_before_combat`'s arrangement. Recorded
+    for another seat outside a driven round, the seat is not asked."""
+    held = (game.priority_player_index, game.priority_pass_count)
+    if held[0] not in (None, seat) and not game.driving_priority:
+        return None
+    if held[0] != seat:
+        game.start_priority_window(seat)
+    try:
+        choice = choose_response_special_action(game, seat)
+        if choice is None:
+            return None
+        refusal = take_chosen_special_action(game, seat, choice)
+        return choice, _Taken(refusal is None, refusal or "taken")
+    finally:
+        if held[0] != seat:
+            game.priority_player_index, game.priority_pass_count = held
+
+
 def _x_sizes(entry: dict) -> "tuple[int | None, ...]":
     """The X values *entry* is rehearsed at: ``(None,)`` for a price printing
     no ``{X}``; otherwise the largest the seat can pay (``max_x``, which the
@@ -211,9 +316,12 @@ def _sacrifice_pick(game: Game, seat: int, entry: dict) -> "int | None | bool":
 
 def _weighed(
     game: Game, seat: int, entry: dict, x_value: "int | None" = None,
+    *, through_combat: bool = True,
 ) -> SpecialActionChoice | None:
     """*entry* rehearsed through the turn's fight (at X = *x_value* for a
-    price printing ``{X}``), or None when it is not worth taking."""
+    price printing ``{X}``), or None when it is not worth taking.
+    *through_combat* False reads it without a fight declared on the way — a
+    response, whose good is what the stack's resolution leaves."""
     victim_id = _sacrifice_pick(game, seat, entry)
     if victim_id is False:
         return None
@@ -241,9 +349,9 @@ def _weighed(
             label=f"{entry['name']}'s special action",
             key=(
                 "special_action", seat, entry["permanent_id"], entry["kind"],
-                victim_id, x_value,
+                victim_id, x_value, through_combat,
             ),
-            through_combat=True,
+            through_combat=through_combat,
         )
     if rehearsal is None or not rehearsal.accepted or not rehearsal.changed:
         return None
@@ -344,9 +452,13 @@ def take_chosen_special_action(
 
 
 __all__ = [
+    "RESPONSE_OFFERS",
     "SpecialActionChoice",
     "WEIGHED_OFFERS",
+    "choose_response_special_action",
     "choose_special_action",
+    "holds_a_response_special_action",
     "special_action_before_combat",
+    "special_action_in_response",
     "take_chosen_special_action",
 ]

@@ -42,6 +42,10 @@ from .ai_policy import (
     holds_an_instant_it_could_pay_for,
 )
 from .ai_rehearsal import blocks_still_to_come
+from .ai_special_actions import (
+    holds_a_response_special_action,
+    special_action_in_response,
+)
 from .ai_scratch_copy import mid_resolution
 from .ai_player_control import plays_for_another
 
@@ -120,8 +124,10 @@ class PriorityAsk:
 @dataclass(frozen=True)
 class PriorityAct:
     """What :func:`act_at_priority` did: ``kind`` is ``"cast"``,
-    ``"activate"``, ``"hand"`` (an ability of a card in the hand — a cycle)
-    or ``"graveyard"``; ``action`` the chooser's action;
+    ``"activate"``, ``"special"`` (a CR 116 special action — a morph turned
+    face up in response, ``action`` its ``SpecialActionChoice``), ``"hand"``
+    (an ability of a card in the hand — a cycle) or ``"graveyard"``;
+    ``action`` the chooser's action;
     ``result`` the engine's answer; ``card`` the spell cast (a cast only);
     ``answering`` the top of the stack as the seat acted (None on an empty
     stack); ``in_combat`` / ``off_turn`` where the seat acted."""
@@ -146,8 +152,11 @@ def act_at_priority(
     """*seat* has priority: cast what
     `ai_policy.choose_combat_instant_cast_action` chooses or, with no spell
     worth casting, activate what `ai_policy.choose_instant_speed_activation`
-    chooses, then an ability of a card in the hand
-    (`ai_hand_activations.choose_hand_activation_action`: a cycle whose
+    chooses, then — in a response — a special action
+    (`ai_special_actions.special_action_in_response`: a face-down
+    creature turned face up over another seat's spell, Mischievous Quanar
+    copying it, Voidmage Apprentice countering it), then an ability of a card
+    in the hand (`ai_hand_activations.choose_hand_activation_action`: a cycle whose
     trigger pays now — Decree of Silence's counter in response to a spell),
     then one of a card in the graveyard
     (`ai_graveyard_activations.choose_graveyard_activation_action`) — and
@@ -202,6 +211,14 @@ def act_at_priority(
             if activation is not None:
                 result = activate_chosen_ability(game, seat, activation)
                 return PriorityAct(window, "activate", activation, result, **where)
+        # CR 116.2b: a face-down creature is turned face up "any time they
+        # have priority". Asked in a response alone — only the main phase
+        # asked, so no turn-up ever answered a spell (kg4: Mischievous Quanar).
+        if window == "response" and holds_a_response_special_action(game, seat):
+            taken = special_action_in_response(game, seat)
+            if taken is not None:
+                special, result = taken
+                return PriorityAct(window, "special", special, result, **where)
         if window != "declare_attackers" and holds_a_hand_ability(game, seat):
             cycle = choose_hand_activation_action(game, seat, at_instant_speed=True)
             if cycle is not None:

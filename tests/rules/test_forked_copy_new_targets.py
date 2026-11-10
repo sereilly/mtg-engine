@@ -187,11 +187,16 @@ def test_707_10_a_copy_resolves_at_every_target_the_original_named(
     own, the copy had the list, and the copy's arm of the resolution did not
     read it - so the copy went wherever a spell with no target named goes.
     Found by a person Forking a Shower of Coals aimed at two creatures and
-    watching the copy burn the opponent's face."""
+    watching the copy burn the opponent's face.
+
+    The forker is a person who keeps each of the copy's targets where it
+    was: since kg5 a copy of a several-target spell is offered new targets
+    slot by slot (CR 115.7d), and a seat nobody asks would measure them."""
     me = PlayerState(name="P0", life=20, library=[catalog_by_name["Forest"]] * 5)
     you = PlayerState(name="P1", life=20, library=[catalog_by_name["Forest"]] * 5)
     game = Game(players=[me, you])
     game.enforce_mana_costs = False
+    game.interactive_seats = {0}
     wurms = []
     for _ in range(2):
         wurm = Permanent(card=catalog_by_name["Scaled Wurm"])
@@ -205,6 +210,11 @@ def test_707_10_a_copy_resolves_at_every_target_the_original_named(
     assert game.queue_from_hand(0, "Fork", target_stack_index=0).supported
 
     game.resolve_top_of_stack()  # Fork: the copy goes on the stack
+    asked = 0
+    while game.pending_choice_of("retarget_choice", 0) is not None:
+        assert game.confirm_retarget_choice(0, 0)  # "Keep the original's target"
+        asked += 1
+    assert asked == 2
     copy = game.stack[-1]
     assert copy.is_copy and copy.card.name == spell
     game.resolve_top_of_stack()  # the copy

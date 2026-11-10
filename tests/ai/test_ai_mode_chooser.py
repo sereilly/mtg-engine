@@ -746,12 +746,15 @@ def _planeshift_games(games: int):
 def test_whole_games_with_planeshifts_modal_spells_pinned():
     """The seeded Planeshift run deals two-colour decks, so its three-colour
     Charms are almost never cast and the run cannot show a mode. Pinned into
-    both decks of six games they are cast in every position: 47 modes named,
-    26 of them not the first bullet, none refused. (Floors well under what
-    the seed gives, so another card's play does not move them.)"""
-    report = _planeshift_games(6)
+    both decks of eight games they are cast in every position: 48 modes
+    named, 36 of them not the first bullet, none refused. (Floors well under
+    what the seed gives, so another card's play does not move them. Six
+    games until kg5, whose attack changes — a trick held for after the
+    blocks — moved the one game casting Hull Breach's third mode to the
+    eighth.)"""
+    report = _planeshift_games(8)
 
-    assert report.games_completed == 6
+    assert report.games_completed == 8
     assert report.issues == [], [issue.message for issue in report.issues]
     assert not report.steps_left_owing, dict(report.steps_left_owing)
     refused = [

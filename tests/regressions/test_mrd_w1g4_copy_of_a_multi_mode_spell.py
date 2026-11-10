@@ -46,8 +46,11 @@ def test_a_forked_sublime_epiphany_performs_every_chosen_mode():
     forked = game.queue_from_hand(0, "Fork", target_stack_index=0)
     assert forked.supported, forked.details
     resolve_stack(game)
-    # The copy bounced the creature the original named (it was still there
-    # for the copy, which resolved first) and drew; the original then found
-    # its target gone and drew.
-    assert [c.name for c in game.players[1].hand] == ["Grizzly Bears"], game.log
+    # The copy performed both modes it copied (CR 707.10): it bounced a
+    # creature and drew. Since kg5 its controller, a seat nobody asks, is
+    # offered new targets for each mode (CR 115.8, 707.10c) and aims the
+    # bounce at the Hill Giant, so the original still finds its Bears and
+    # bounces them: both are in B's hand, and A drew once per object.
+    assert sorted(c.name for c in game.players[1].hand) == ["Grizzly Bears", "Hill Giant"], game.log
+    assert "Sublime Epiphany (copy) targets B's Hill Giant" in game.log
     assert len(game.players[0].hand) == 2, game.log

@@ -254,6 +254,7 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         )
 
     chosen = list(forced)
+    held_home: list[int] = []
     for idx in legal_attackers_list:
         if idx in chosen:
             continue
@@ -264,8 +265,15 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         # Attack when the best possible block is not clearly profitable for the opponent.
         if best_defender_score <= _permanent_value(attacker):
             chosen.append(idx)
+        else:
+            held_home.append(idx)
     chosen = _obeying_declaration(
         game, attacking_player_index, chosen, against=opponent_index
+    )
+    # …unless what the seat holds for after the blocks makes that block a
+    # loss for the blocker (:func:`_attacks_its_held_trick_wins`).
+    chosen = _attacks_its_held_trick_wins(
+        game, attacking_player_index, chosen, held_home, opponent_index,
     )
 
     # Go all-in when lethal is on the table — through the same prune, because a
@@ -284,6 +292,72 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         )
 
     return sorted(chosen)
+
+
+def _attacks_its_held_trick_wins(
+    game: Game, seat: int, chosen: list[int], held_home: list[int], against: int,
+) -> list[int]:
+    """*chosen*, with each creature of *held_home* added whose attack is
+    worth more **with the seat's instant-speed tricks held for after the
+    blocks** than staying home — read by rehearsing the declaration through
+    the fight (``ai_rehearsal.rehearse``, ``through_combat``), where the seat
+    answers its priority in the declare-blockers step
+    (``ai_rehearsal._fight_priority_driver``: the pump, the redirect, the
+    regeneration it holds mana for), against declaring *chosen* alone.
+
+    :func:`_score_block_pair` reads printed bodies, so a creature whose best
+    blocker beats it stayed home whatever the seat held behind it — Zealous
+    Inquisitor's "{1}{W}: The next 1 damage that would be dealt to it this
+    turn is dealt to target creature instead" never sent it into a Hill
+    Giant it trades with once the redirect is raised (kg4, the Known-gaps
+    "AI leftovers" entry). Asked only in the declare-attackers step of a
+    game nobody is rehearsing (a rehearsal's copy declares by the printed
+    bodies, as before), and only of a seat that holds an ability it could
+    activate (``ai_policy.holds_an_ability_it_could_activate`` — the fight's
+    driver activates abilities, not spells): every creature asked is one
+    copy of the game fought out."""
+    from .ai_rehearsal import deliberating, rehearse, rehearsing
+
+    if not held_home or rehearsing():
+        return chosen
+    if not (
+        game.current_turn_phase == "combat"
+        and game.current_step == "declare_attackers"
+        and not game.combat_attackers_locked
+    ):
+        return chosen
+    from .ai_policy import holds_an_ability_it_could_activate
+
+    if not holds_an_ability_it_could_activate(game, seat):
+        return chosen
+
+    class _Declared:
+        def __init__(self, ok: bool, details: str) -> None:
+            self.supported, self.details = ok, details
+
+    def declaring(indices):
+        def declare(table, _carried=None):
+            from .ai_combat import _declare_obeying
+
+            ok, why = _declare_obeying(table, seat, list(indices), against)
+            return _Declared(bool(ok), str(why))
+        return declare
+
+    with deliberating():
+        for idx in held_home:
+            trial = sorted(set(chosen) | {idx})
+            creature = game.permanent_at(seat, idx)
+            name = creature.card.name if creature is not None else "a creature"
+            rehearsal = rehearse(
+                game, seat, declaring(trial), spell_name=None, leaves_hand=False,
+                label=f"attacking with {name}", key=("attack", seat, tuple(trial)),
+                without=lambda table, carried: declaring(chosen)(table),
+                without_key=("attack", seat, tuple(chosen)),
+                through_combat=True,
+            )
+            if rehearsal is not None and rehearsal.accepted and rehearsal.lasting > 1e-9:
+                chosen = trial
+    return chosen
 
 
 def _legal_block_declaration(

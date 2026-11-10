@@ -337,7 +337,12 @@ def test_w2g6_a_simulated_seat_skips_the_turn_a_card_takes_from_it():
     report = run_ai_simulation(
         _w2g6_path("TMP"), games=4, seed=7, max_turns=14, required_cards=["Meditate"],
     )
-    resolved = sum("cast Meditate -> resolved" in line for line in report.log_lines)
+    # Cast at either speed: an instant-speed cast is logged "-> queued [...]"
+    # (seed 7's fourth game casts one in response since kg5's attack changes).
+    resolved = sum(
+        "cast Meditate -> resolved" in line or "cast Meditate -> queued" in line
+        for line in report.log_lines
+    )
     takers = _w2g6_turn_takers(report)
     twice_running = sum(1 for first, second in zip(takers, takers[1:]) if first == second)
 

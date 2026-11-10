@@ -156,7 +156,20 @@ def test_a_shrink_on_the_host_is_used_on_a_persons_creature_and_not_the_ais(set_
         attach_aura(_on(game, 0, "Manacles of Decay"), _on(game, host_seat, "Grizzly Bears"))
         game._recompute_continuous_effects()
         _main_phase(game)
-        action = choose_activation_action(game, 0)
+        # Which side is the question, so the fight the shrink is read
+        # through is the one with nothing done after the blocks: since kg5 a
+        # rehearsal's fight lets the seat activate it there
+        # (``ai_rehearsal._fight_priority_driver``), and held for the blocks
+        # the main phase would not activate it at all.
+        from unittest import mock
+
+        from engine import ai_rehearsal
+
+        with mock.patch.object(
+            ai_rehearsal, "_fight_priority_driver",
+            lambda table, seat: (lambda game, asked: False),
+        ):
+            action = choose_activation_action(game, 0)
         found = action is not None and action.permanent_name == "Manacles of Decay"
         assert found is proposed, (host_seat, action)
 
