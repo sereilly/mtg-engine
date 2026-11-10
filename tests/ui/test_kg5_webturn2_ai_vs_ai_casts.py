@@ -88,10 +88,10 @@ def test_census_an_ai_leaves_its_main_phase_only_when_it_would_cast_nothing(monk
     each time an AI's main phase is closed
     (``Game._close_current_priority_step``), the cast chooser is asked what
     it would cast there — it must be nothing. The floor: main phases closed
-    and examined, and at least one precombat main phase closed with two or
-    more spells cast in it (the door's loop, or the person's table's
-    ``ai_step`` coming back to the door, exercised). The AI-only rows fail
-    on the tree before; the person's table held already."""
+    and examined, and a precombat main phase closed with spells cast in it.
+    The AI-only rows fail on the tree before; the person's table held
+    already, but for an AI's own resolved search (the Eladamri's Call
+    board below)."""
     created = client.post("/api/sessions", json={"mode": mode, "seed": seed}).json()
     sid = created["session_id"]
     session = seat_plays_first(sid, 0)
@@ -126,4 +126,54 @@ def test_census_an_ai_leaves_its_main_phase_only_when_it_would_cast_nothing(monk
 
     assert len(examined) >= 10, examined
     assert not left_with_a_cast, left_with_a_cast
-    assert any(step == "precombat_main" and spells >= 2 for _t, step, spells in examined), examined
+    # What the door's loop exercised: a precombat main phase closed with two
+    # spells cast in it at the AI-only table; one at the person's, whose
+    # web game is not the same game from one process to the next (the
+    # second spell there is the Eladamri's Call board's, below).
+    most = 2 if mode == "ai_vs_ai" else 1
+    assert any(step == "precombat_main" and spells >= most for _t, step, spells in examined), examined
+
+
+@pytest.mark.cr("117.3b", "608.2")
+def test_the_ai_casts_what_its_own_resolved_search_fetched_in_the_same_main_phase():
+    """A person's table, the AI's precombat main phase: Eladamri's Call
+    (search for a creature card, put it into your hand) with three lands,
+    Benalish Hero the creature in its library. The person passes over the
+    Call; it resolves, the AI answers its search — and the resolution over,
+    the active player receives priority (CR 117.3b), so the AI casts the Hero
+    before combat. The round passed the AI's priority on as its search was
+    answered, the person's pass over an empty stack ended the main phase, and
+    the Hero waited for the second one."""
+    created = client.post("/api/sessions", json={"mode": "human_vs_ai", "seed": 5}).json()
+    sid = created["session_id"]
+    session = seat_plays_first(sid, 1)
+    game = session.game
+    for player in game.players:
+        player.battlefield = []
+        player.graveyard = []
+        player.hand = []
+        player.library = [_CARDS["Plains"]] * 20
+    for name in ("Plains", "Plains", "Forest"):
+        game._put_permanent_onto_battlefield(1, Permanent(card=_CARDS[name]), None)
+    game.players[1].hand = [_CARDS["Eladamri's Call"]]
+    game.players[1].library = [_CARDS["Benalish Hero"]] + [_CARDS["Plains"]] * 19
+    assert (game.active_player_index, game.current_step) == (1, "precombat_main")
+    start = len(game.log)
+
+    for _ in range(12):
+        state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+        if state["current_step"] != "precombat_main" or state["current_turn"] != 1:
+            break
+        action = "pass_priority" if state["priority_player"] == 0 else "ai_step"
+        response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": action})
+        assert response.status_code == 200, response.json()
+
+    lines = game.log[start:]
+    assert "Eladamri's Call added to stack" in lines, lines
+    assert "Benalish Hero added to stack" in lines, lines
+    hero = lines.index("Benalish Hero added to stack")
+    left = next(
+        (i for i, line in enumerate(lines) if "attacker" in line or "combat" in line.lower()),
+        len(lines),
+    )
+    assert hero < left, lines

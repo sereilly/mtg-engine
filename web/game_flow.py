@@ -721,16 +721,27 @@ def _priority_round(session: Session, result: str | None, *, leave_step: bool = 
         if result == "awaiting_choice":
             # The resolution stopped to ask somebody something, so nobody has
             # priority until they answer (CR 117.3b) and the object stays on the
-            # stack. An AI chooser's prompt was answered by
-            # _auto_resolve_ai_pending above — the object has left the stack —
-            # so priority can go round again on its behalf. A human's is still
-            # owed: stop here and surface it. Asking the queue rather than the
-            # optional-pay list is what makes that true of the search, the
-            # discard and the mode choice as well.
-            chooser = session.game.priority_player_index
-            still_owed = chooser is not None and session.game.waiting_prompt(chooser)
-            if not still_owed and chooser is not None and _seat_type(session, chooser) == "ai":
-                result = session.game.pass_priority(chooser)
+            # stack. A person's question is still owed: stop here and surface
+            # it. Asking the queue rather than the optional-pay list is what
+            # makes that true of the search, the discard and the mode choice
+            # as well.
+            if session.game.waiting_prompt() is not None:
+                break
+            # An AI seat's was answered by _auto_resolve_ai_pending above, and
+            # the answer finished the resolution: the object has left the
+            # stack and the **active player** receives priority (CR 117.3b,
+            # ``_release_stack_item``) — asked as any seat receiving priority
+            # is, below, and on its own turn over an empty stack left to its
+            # next ``ai_step``. This passed that priority on unasked, so an AI
+            # that cast Eladamri's Call in its main phase never cast the
+            # Benalish Hero it fetched: the person's pass ended the phase.
+            holder = session.game.priority_player_index
+            if (
+                holder is not None
+                and _seat_type(session, holder) == "ai"
+                and (holder != session.current_turn or bool(session.game.stack))
+            ):
+                result = _ai_respond_to_priority(session, holder)
                 continue
             break
 
