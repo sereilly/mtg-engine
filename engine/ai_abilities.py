@@ -899,9 +899,7 @@ def _activation_candidate(
         alternative_cost_index=alternative_cost_index,
     )
     if x_symbols:
-        return _sized_x_activation(
-            game, player_index, permanent, ability, candidate, x_symbols,
-        )
+        return _sized_x_activation(game, player_index, permanent, ability, candidate)
     if word_choices:
         return _text_change_activation(game, player_index, candidate, word_choices)
     # A land's ability, an ability whose whole effect is what its own source

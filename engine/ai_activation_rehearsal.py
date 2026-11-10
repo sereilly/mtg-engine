@@ -315,36 +315,41 @@ X_ACTIVATION_SIZES = 8
 
 def _sized_x_activation(
     game: Game, seat: int, permanent, ability, candidate: ActivationAction,
-    x_symbols: int,
 ) -> ActivationAction | None:
     """*candidate* with the X its "{X}…:" cost announces (CR 107.3a), or None
     when no X is worth activating for.
 
     Every X from 1 up to what the board pays (and :data:`X_ACTIVATION_SIZES`)
-    is planned — {X} charged as generic, or as the colour "Spend only red mana
-    on X" names, as the activation path charges it — and rehearsed through
+    is planned at **the price the activation will charge for it**
+    (``Game.activation_mana_charge``, CR 601.2f via 602.2b: the printed
+    symbols, X per {X} — as the colour "Spend only red mana on X" names —
+    then every increase and reduction in force) and rehearsed through
     `_land_ability_worth`; the X leaving the seat furthest ahead is proposed,
     the smaller of two equals. So Silklash Spider pays enough to kill the
     opponent's fliers, and nothing where it would kill more of its own.
+
+    This priced X off the printed symbols alone (kg5): under Gloom's "{3}
+    more" a Testament of Faith planned X lands for a charge of X+3, and the
+    activation was refused with the lands tapped; under Heartstone's "{1}
+    less" a Silklash Spider on four Forests sized X at 2, where the same four
+    pay X=3 and kill a 3/3 flier.
     """
     from dataclasses import replace
 
-    from .oracle_types import x_spend_colors_from_text
-
     player = game.players[seat]
-    colors = x_spend_colors_from_text(ability.source_line or "")
-    x_symbol = colors[0] if len(colors) == 1 else "generic"
     best: ActivationAction | None = None
     best_worth = 0.0
     for x_value in range(1, X_ACTIVATION_SIZES + 1):
         taps: tuple[int, ...] = ()
         tap_colors: tuple[str, ...] = ()
         if game.enforce_mana_costs:
-            required = {
-                symbol: int(amount or 0) for symbol, amount in ability.cost.mana.items()
-            }
-            required[x_symbol] = required.get(x_symbol, 0) + x_value * x_symbols
-            plan = _plan_land_taps(game, player, required, paying_for=permanent)
+            charge = game.activation_mana_charge(
+                seat, permanent, ability, x_value=x_value,
+                alternative_cost_index=candidate.alternative_cost_index,
+            )
+            if isinstance(charge, str):
+                break
+            plan = _plan_land_taps(game, player, dict(charge[0]), paying_for=permanent)
             if plan is None:
                 break
             taps, tap_colors = plan
