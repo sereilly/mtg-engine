@@ -268,8 +268,20 @@ def fight_outcome(game: "Game", attacker: "Permanent", blocker: "Permanent") -> 
 
     Each is fighting, destroyed, or **out** — regenerated, so removed from
     combat (:data:`REGENERATES`): neither deals the other damage in a later
-    step (CR 510.1c-d). An indestructible one (:data:`STAYS`) fights on."""
+    step (CR 510.1c-d). An indestructible one (:data:`STAYS`) fights on.
+
+    **And a creature that leaves the fight as the blocks are made**
+    (``ai_combat_triggers.leaves_the_fight``: Goblin Cadets' "Whenever this
+    creature blocks or becomes blocked, target opponent gains control of
+    it") deals and is dealt nothing, and is lost to its side — read as
+    destroyed, the reading every caller here weighs it by."""
     from .ai_combat import _would_be_prevented
+    from .ai_combat_triggers import leaves_the_fight
+
+    attacker_leaves = leaves_the_fight(game, attacker, blocking=False)
+    blocker_leaves = leaves_the_fight(game, blocker, blocking=True)
+    if attacker_leaves or blocker_leaves:
+        return blocker_leaves, attacker_leaves
 
     def dealt(source, recipient) -> int:
         amount = combat_damage_assigned_by(source)

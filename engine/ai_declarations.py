@@ -33,7 +33,7 @@ from .aura_restrictions import aura_restriction_active
 from .combat_permissions import MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT
 from .models import Permanent
 from .ai_combat_triggers import (attack_is_worth_its_trigger, block_is_worth_its_trigger,
-                                 expected_attack_damage)
+                                 expected_attack_damage, turned_on_its_controller)
 from .ai_compelled_blocks import STAYS, compelled_blocks, fight_outcome, survives_destruction
 from .ai_standing import life_worth, permanent_worth
 from .ai_scoring import choose_attack_target, _permanent_value
@@ -1051,7 +1051,7 @@ def _estimated_unblocked_damage(
         attacker = game.permanent_at(attacker_seat, attacker_idx)
         if attacker is None:
             continue
-        power = max(0, attacker.effective_power)
+        power = _damage_coming(game, attacker)
         blockers = blockers_of.get(attacker_idx)
         if not blockers:
             total += power
@@ -1087,7 +1087,7 @@ def _score_block_pair(blocker: Permanent, attacker: Permanent) -> float:
 def _estimated_damage_prevented(game: Game, defending_player_index: int, attacker_idx: int, blocker_idx: int) -> int:
     attacker = game.players[game.active_player_index].battlefield[attacker_idx]
     blocker = game.players[defending_player_index].battlefield[blocker_idx]
-    power = max(0, attacker.effective_power)
+    power = _damage_coming(game, attacker)
     if game._has_keyword(attacker, "trample"):
         return min(power, max(0, blocker.effective_toughness - blocker.damage_marked))
     return power
@@ -1103,5 +1103,16 @@ def _estimated_incoming_player_damage(game: Game, defending_player_index: int) -
         if attacker_idx < 0 or attacker_idx >= len(game.players[game.active_player_index].battlefield):
             continue
         attacker = game.players[game.active_player_index].battlefield[attacker_idx]
-        total += max(0, attacker.effective_power)
+        total += _damage_coming(game, attacker)
     return total
+
+
+def _damage_coming(game: Game, attacker: Permanent) -> int:
+    """The combat damage *attacker* would deal the seat it attacks: its power
+    — none where its next combat damage is armed to be dealt to its own
+    controller (``ai_combat_triggers.turned_on_its_controller``: Goblin
+    Psychopath's lost flip), blocked or not. Read as its power, a defender at
+    five life chump-blocked a 5/5 whose five were never coming."""
+    if turned_on_its_controller(game, attacker):
+        return 0
+    return max(0, attacker.effective_power)
