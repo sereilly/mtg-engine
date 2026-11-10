@@ -816,10 +816,18 @@ class BattlefieldCanvas {
   }
 
   // Cards involved in combat (or carrying damage) are pulled out of piles so
-  // they stay individually visible until combat wraps up.
+  // they stay individually visible until combat wraps up. A blocker is one
+  // while it blocks — by its controller field, not the index: a blocker whose
+  // attacker has left combat goes on blocking (CR 509.1g) with no attacker to
+  // index, and the wire sends it index null with the attacking seat set.
   _isCombatActive(card) {
     if (!card) return false;
-    return Boolean(card.attacking) || Number(card.damage_marked) > 0 || card.blocking_attacker_index != null;
+    return (
+      Boolean(card.attacking)
+      || Number(card.damage_marked) > 0
+      || card.blocking_attacker_index != null
+      || card.blocking_attacker_controller != null
+    );
   }
 
   // ---------------------------------------------------------------------------
