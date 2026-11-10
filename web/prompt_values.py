@@ -19,6 +19,7 @@ from engine.grammar.vocabulary import CREATURE_TYPES, LAND_TYPES
 from engine.mana_payment import mana_cost_label
 from engine.pending_choices import public_data
 from engine.provoke import PROVOKE_REMINDER, is_provoke
+from engine.text_changes import spell_text_card
 
 from .prompt_registry import PromptContext, prompt_renderer
 
@@ -742,14 +743,14 @@ def _ignore_coin(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]
     data = choice.data
     wins = bool(data.get("wins", True))
-    # The object on the stack the flip is part of — a spell or an ability, not
-    # a permanent (CR 111, 113), so its card is the text there is.
+    # The object on the stack the flip is part of — an ability's printed line,
+    # or a spell's text as any text change left it (CR 612, ``spell_text_card``).
     stack_item = data.get("_stack_item")
     effect_text = None
     if stack_item is not None:
         effect_text = (
             stack_item.ability_text if stack_item.is_ability
-            else stack_item.card.oracle_text
+            else spell_text_card(stack_item).oracle_text
         ) or None
     up, down = ("won", "lost") if wins else ("heads", "tails")
     return {
