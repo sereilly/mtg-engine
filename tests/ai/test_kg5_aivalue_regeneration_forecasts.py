@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from engine import faces
 from engine.ai_combat import run_ai_combat_phase
 from engine.ai_compelled_blocks import (REGENERATES, STAYS, fight_outcome,
                                         survives_destruction)
@@ -174,16 +175,17 @@ def _self_shielding_creatures() -> list:
     block triggers included (Cadaverous Knight's flanking, Pygmy Troll's
     +1/+1 on becoming blocked: ``ai_compelled_blocks.block_pair_pumps``)."""
     found = []
-    for card in sorted(_catalog().values(), key=lambda each: each.name):
-        if "Creature" not in (card.type_line or ""):
+    cards = sorted(_catalog().values(), key=lambda each: each.name)
+    for unit in faces.compilation_units(cards):
+        if "Creature" not in (unit.type_line or ""):
             continue
-        program = compile_card_oracle(card)
+        program = compile_card_oracle(unit)
         if program.supported and any(
             ability.instruction is not None
             and ability.instruction.kind == "grant_regeneration_to_self"
             for ability in program.activated_abilities
         ):
-            found.append(card)
+            found.append(unit)
     return found
 
 
