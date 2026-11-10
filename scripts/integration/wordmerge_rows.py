@@ -28,7 +28,11 @@ for line in base_text.splitlines():
     if m:
         base_rows.setdefault(m.group(1), line)
 
-pat = re.compile(r"<<<<<<< HEAD\r?\n(.*?)=======\r?\n(.*?)>>>>>>> " + re.escape(label) + r"\r?\n", re.S)
+# Each marker anchored to the start of its line: a section marker or a table
+# rule can end in a run of "=", and an unanchored "=======" split one region
+# inside such a line at Mirrodin's W2G1 merge.
+pat = re.compile(r"^<<<<<<< HEAD\r?\n(.*?)^=======\r?\n(.*?)^>>>>>>> " + re.escape(label) + r"\r?\n",
+                 re.S | re.M)
 
 
 def key(line):
