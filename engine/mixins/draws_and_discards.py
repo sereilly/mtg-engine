@@ -479,10 +479,20 @@ class DrawsAndDiscardsMixin:
             )
         return card
 
-    def discard_cause_seat(self, cause_seat: int | None = None) -> int | None:
+    def discard_cause_seat(
+        self, cause_seat: int | None = None, *, as_cost: bool = False,
+    ) -> int | None:
         """Which seat's spell or ability is causing a discard happening *now*
         (CR 109.5), or None when nothing is — a cleanup-step discard, a cost
         the player chose to pay.
+
+        *as_cost* is that last case, said rather than inferred: a discard that
+        pays a cost is caused by nobody **even inside another seat's
+        resolution**. "Target player discards two cards unless they discard an
+        artifact card" (Wrench Mind) makes the artifact discard a cost, paid as
+        the spell resolves (CR 118.12a) — and "Only discarding as an effect
+        will trigger the ability" (Psychic Purge, 2004-10-04): the caster's
+        seat is resolving, and it caused nothing.
 
         One reader, because two cards ask and must agree: Psychic Purge's
         "**when** a spell or ability an opponent controls causes you to discard
@@ -494,6 +504,8 @@ class DrawsAndDiscardsMixin:
         the resolution that asked has returned and ``resolving_seats`` is
         empty, which would read as "nothing caused this".
         """
+        if as_cost:
+            return None
         if isinstance(cause_seat, int):
             return cause_seat if 0 <= cause_seat < len(self.players) else None
         return self.resolving_seats[-1] if self.resolving_seats else None
@@ -525,7 +537,7 @@ class DrawsAndDiscardsMixin:
         (``tests/engine/test_discard_cost_seam.py``); a cycled card went back
         on top of its library and the cycling ability drew it again.
         """
-        cause = self.discard_cause_seat(cause_seat)
+        cause = self.discard_cause_seat(cause_seat, as_cost=as_cost)
         landed = self.discarded_card_destination(player, card, cause, as_cost=as_cost)
         # The card **has been discarded** whichever way its destination is
         # settled (CR 701.9a), and even while its player is still choosing it
@@ -533,7 +545,9 @@ class DrawsAndDiscardsMixin:
         # The board's watchers hear of the object the graveyard now holds when
         # it got there ("exile **that card** from your graveyard",
         # Necropotence — CR 400.7, ``put_card_into_graveyard``).
-        self._announce_discard_triggers(player, card, cause_seat=cause_seat)
+        self._announce_discard_triggers(
+            player, card, cause_seat=cause_seat, as_cost=as_cost,
+        )
         self.announce_discard(player, landed or card)
 
     def discarded_card_destination(
@@ -691,7 +705,8 @@ class DrawsAndDiscardsMixin:
         self._enqueue_triggered_batch(events)
 
     def _announce_discard_triggers(
-        self, player: PlayerState, card, cause_seat: int | None = None
+        self, player: PlayerState, card, cause_seat: int | None = None,
+        *, as_cost: bool = False,
     ) -> None:
         """CR 113.6: a triggered ability of the discarded card itself.
 
@@ -721,9 +736,10 @@ class DrawsAndDiscardsMixin:
         *cause_seat* is for the discard that happens when a **prompt** is
         answered: the resolution that armed it has already returned, so
         `resolving_seats` is empty by then and the caller passes the seat it
-        read off the choice's own stack item instead.
+        read off the choice's own stack item instead. *as_cost* is a discard
+        that paid a cost, which nothing caused (``discard_cause_seat``).
         """
-        causer = self.discard_cause_seat(cause_seat)
+        causer = self.discard_cause_seat(cause_seat, as_cost=as_cost)
         if causer is None:
             return
         # By identity, not `players.index`: PlayerState is a value-compared

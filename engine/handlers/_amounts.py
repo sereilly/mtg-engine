@@ -283,7 +283,14 @@ def count_from_payload(
             # Nothing printed the pair while the only card here was Necropolis'
             # unadorned "the exiled card's mana value", which is why the
             # asymmetry cost nothing until it did.
-            return max(0, _scaled(int(getattr(exiled, "cmc", 0) or 0), spec))
+            #
+            # **A card, or the permanent it was** (CR 608.2h): a graveyard,
+            # hand or library exile records the card (Necropolis, Phyrexian
+            # Devourer — printed, CR 202.3), a battlefield exile the departed
+            # ``Permanent`` (Food Chain: a Clone that was a Craw Wurm is 6,
+            # CR 707.2; a face-down creature 0, CR 708.2a). It read ``cmc`` off
+            # the exiled *card*, so the Clone counted 4.
+            return max(0, _scaled(_paid_object_mana_value(exiled), spec))
         return 0
     # "…where X is **the sacrificed creature's mana value**" (Burnt Offering).
     # The branch above one zone over: what the spell's own additional cost ate

@@ -122,7 +122,9 @@ _COST_PRODUCES: dict[type, str] = {
 #: tapped permanent is carried as the ``Permanent``, so its computed P/T is
 #: there (CR 608.2h's last-known information for the sacrifice; a plain read for
 #: the tap); an exiled or a discarded *card* has no computed characteristics at
-#: all (CR 613.1) and keeps only its printed mana value (CR 202.3).
+#: all (CR 613.1) and keeps only its printed mana value (CR 202.3). (A
+#: battlefield exile records the departed permanent, whose mana value the
+#: evaluator reads through layer 1 — Food Chain's Clone — and only that.)
 #:
 #: One table, so every family that spends a cost record asks the same question
 #: of it: the damage lowering's per-channel readability sets are read off these

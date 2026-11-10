@@ -19,6 +19,11 @@ The cost-paying modules are the four the stack's cost steps live in (CR
 601.2h, 602.2b): the activation charges, the cast's additional and
 alternative costs, and a card's own hand activation (cycling). A discard
 anywhere else in them is a cost by construction, so every one is checked.
+
+The other half is the cost CR 118.12 pays **at resolution** ("sacrifice this
+creature unless you discard a card", Masticore): the offer's lowering marks
+its discard ``as_cost`` and the discard handlers hand the mark to the same
+seam — held by ``tests/engine/test_kg5_costs_resolution_discard_costs.py``.
 """
 
 from __future__ import annotations

@@ -1363,8 +1363,10 @@ class ActivationChargesMixin:
     def _pay_exile_cost(
         self, choice, controller, controller_index: int, permanent
     ) -> list:
-        """Move what :meth:`_choose_exile_cost` chose into exile, returning the
-        cards it ate.
+        """Move what :meth:`_choose_exile_cost` chose into exile, returning what
+        it ate: the cards a hand or graveyard exile took, and the departed
+        ``Permanent`` objects a battlefield exile took (CR 608.2h's last known
+        information, which is what "the exiled creature" asks about).
 
         Called below the activation's last refusal, so a payment here is always
         for an activation that happens. The pile is read back by slot **and**
@@ -1414,15 +1416,26 @@ class ActivationChargesMixin:
         with self.entering_together(), self.leaving_together():
             for chosen in objects:
                 owner_index = self.owner_index_of(chosen)
-                card = chosen.card
                 self.remove_from_battlefield(chosen)
+                # The card read **after** the removal: a face-down permanent is
+                # revealed as it leaves (CR 708.9, ``face_down
+                # .reveal_departing``), and the card it hid is what exile gets
+                # — read before, the face-down stand-in went into exile and
+                # the creature card was never seen again.
                 taken.append(self.put_card_into_exile(
                     owner_index if owner_index is not None else controller_index,
-                    card,
+                    chosen.card,
                 ))
         self.log.append(
             f"{controller.name} exiled "
             + ", ".join(card.name for card in taken)
             + f" to activate {permanent.card.name}"
         )
-        return taken
+        # **What the cost ate is the permanent, as it last existed** (CR
+        # 608.2h): "1 plus **the exiled creature's** mana value" (Food Chain)
+        # is a creature's, so a Clone that was a Craw Wurm counts 6 (CR 707.2)
+        # and a face-down creature 0 (CR 708.2a) — the departed ``Permanent``
+        # still says both (``copies.FACE_DOWN_AS_IT_LEFT``). The sacrifice
+        # channels and the cast's exile cost (Soul Exchange) record the same
+        # shape; a zone exile above records the card, which is all it was.
+        return list(objects)
