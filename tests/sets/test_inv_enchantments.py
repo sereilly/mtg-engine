@@ -1990,12 +1990,14 @@ def _w1g8_instability_table(set_pool, *, active: int):
     """Seat 0 controls Tectonic Instability; each seat has two untapped basic
     lands and seat 1 a Grizzly Bears. *active* holds a Mountain to play."""
     game = _w1g8_enchantment_duel(set_pool, active=active)
-    _w1g8_enchantment_put(game, set_pool, 0, "Tectonic Instability", "INV")
     board = {
         "mine": [_w1g8_enchantment_put(game, set_pool, 0, "Island") for _ in range(2)],
         "theirs": [_w1g8_enchantment_put(game, set_pool, 1, "Forest") for _ in range(2)],
         "bears": _w1g8_enchantment_put(game, set_pool, 1, "Grizzly Bears"),
     }
+    # Last: "whenever a land enters" sees a land by any road (CR 603.6a), so
+    # out before the lands it would tap them as the table is laid.
+    _w1g8_enchantment_put(game, set_pool, 0, "Tectonic Instability", "INV")
     game.players[active].hand = [set_pool("LEA")["Mountain"]]
     return game, board
 
