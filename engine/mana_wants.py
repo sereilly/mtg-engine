@@ -73,10 +73,22 @@ own card (*paying_for*, ``Game._pay_planned_cost``): its turn-up is what the
 payment buys, so it is no want beside it — it was, a redundant first-tier
 want that outranked the rest of the hand — and its face-up abilities join the
 abilities' tier as a cast permanent's do.
+
+**And what a graveyard ability brings back** (:func:`bringing_back`): "Return
+this card from your graveyard to your hand" (Eternal Dragon, Hammer of
+Bogardan, CR 113.6m) is a payment for a card that will be in the hand once it
+resolves, and then wants what a held card wants — its mana cost, its hand
+abilities (the cards' tier); returned to the battlefield, its activated
+abilities (the abilities' tier). The card is in the graveyard while the
+payment is planned, where no reading above sees it, so its upkeep return
+paid {3}{W}{W} with four Plains and an Island and left seven Islands that
+could not cast the Dragon it had just bought back.
 """
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 from .activation_zones import HAND
@@ -89,6 +101,50 @@ from .targeting import usable_activated_abilities
 
 if TYPE_CHECKING:
     from .game import Game
+
+
+#: ``(card, zone)`` — the card a graveyard ability being paid for returns,
+#: and where to (:func:`bringing_back`).
+_BRINGING_BACK: ContextVar["tuple | None"] = ContextVar("mana_wants_bringing_back", default=None)
+
+
+@contextmanager
+def bringing_back(card, zone: str):
+    """Plan every payment in this block as one for an ability that returns
+    *card* to *zone* (``"hand"`` or ``"battlefield"``) — see the module's
+    note. A context variable for ``ai_payment._PaymentContext``'s reason: the
+    land plan (``ai_payment._plan_land_taps``) is reached by a caller that
+    knows what the ability does, and reads the wants without being told."""
+    token = _BRINGING_BACK.set((card, zone))
+    try:
+        yield
+    finally:
+        _BRINGING_BACK.reset(token)
+
+
+def _wants_of_the_returned() -> "tuple[list, list]":
+    """``(cards' tier, abilities' tier)`` of the card :func:`bringing_back`
+    names: in a hand, its castable faces' mana costs and its hand abilities;
+    on the battlefield, its activated abilities, a {T} one of a creature
+    without haste left out (CR 302.6)."""
+    held = _BRINGING_BACK.get()
+    if held is None:
+        return [], []
+    card, zone = held
+    if zone == "battlefield":
+        from .search_filters import card_has_type
+
+        return [], _abilities_brought(card, sick=card_has_type(card, "creature"))
+    cards: list = []
+    for face in castable_faces(card):
+        if face.primary_type == "land":
+            continue
+        cost = mana_cost_x_as_zero(face.mana_cost or "")
+        if cost:
+            cards.append(cost)
+    for ability in usable_activated_abilities(compile_card_oracle(card), zone=HAND):
+        _add_ability_cost(cards, ability)
+    return cards, []
 
 
 def mana_wants(
@@ -128,6 +184,9 @@ def mana_wants(
         wants.extend(cards)
         abilities.extend(brought)
     wants.extend(_permitted_cast_wants(game, seat, paying_for))
+    returned_cards, returned_abilities = _wants_of_the_returned()
+    wants.extend(returned_cards)
+    abilities.extend(returned_abilities)
     for permanent in game.controlled_by(seat):
         if is_face_down(permanent):
             if permanent is paying_for:
@@ -256,4 +315,4 @@ def _add_ability_cost(wants: list, ability) -> None:
         wants.append(mana)
 
 
-__all__ = ["mana_wants", "wants_brought_by", "wants_left_behind"]
+__all__ = ["bringing_back", "mana_wants", "wants_brought_by", "wants_left_behind"]
