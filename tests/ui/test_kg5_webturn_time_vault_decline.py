@@ -126,10 +126,9 @@ def test_declining_time_vaults_skip_keeps_last_turn_and_next_turn_honest():
     for attacker in (turtle, bears):
         refused = _act(sid, 0, action="declare_attackers",
                        attacker_ids=[attacker.permanent_id], target_seat=1)
-        assert refused.status_code == 400 or not attacker.attacking, (
-            attacker.card.name, refused.json(), game.log[-6:],
-        )
-        assert not game.combat_attackers_locked or not attacker.attacking
+        assert refused.status_code == 400, (attacker.card.name, refused.json(), game.log[-6:])
+        assert "cannot attack" in refused.json()["detail"]
+        assert not attacker.attacking
 
 
 def test_a_decline_with_no_skip_asked_is_refused():
