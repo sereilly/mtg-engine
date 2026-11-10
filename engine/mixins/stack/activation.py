@@ -38,6 +38,7 @@ from ...targeting import GRAVEYARD_TARGET_KIND, derive_activation_spec
 from ...target_roles import ROLE_SEATS
 from ...mana_payment import answer_color_choices, is_mana_ability
 from ...events import emit
+from ...graveyard_order import graveyard_object_of
 from ...game_types import (as_graveyard_stamps, as_target_ids,
                            as_target_slots, chosen_damage_source,
                            OracleExecutionContext, OracleStateMachine,
@@ -870,7 +871,10 @@ class AbilityActivationMixin:
                 OracleExecutionContext(
                     caster=controller,
                     target=target_player,
-                    card=permanent.card,
+                    # "This card" once a cost sacrificed it (Black Lotus):
+                    # the object its graveyard holds, as the queued path's
+                    # context reads it (``resolution._ability_execution_context``).
+                    card=graveyard_object_of(permanent),
                     source_permanent=permanent,
                     # **And the X the activator announced** (CR 601.2b), for
                     # that same reason one field over: this context was built

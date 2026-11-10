@@ -30,6 +30,7 @@ from ..destruction_events import (RESOLVING, announce_destroyed,
 from ..delayed_triggers import fire_delayed_triggers
 from ..events import emit, trigger_subject_matches
 from ..faces import whole_card
+from ..graveyard_order import CARD_IN_GRAVEYARD
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN
@@ -184,6 +185,15 @@ class DeathsMixin:
         # (``put_card_into_graveyard``) — and the permanent's own card for a
         # token, whose card reaches no pile and so is found nowhere.
         graveyard_card = permanent.card if is_token else landed
+        # …and kept on the permanent, for a holder made **before** this
+        # arrival that will ask later: an ability whose cost sacrificed its own
+        # source (Tempest Efreet), a trigger whose source this death binned.
+        # Each was made about the permanent's card, and reads "this card"
+        # through ``graveyard_order.graveyard_object_of``. Only where the two
+        # differ, so a death into a pile that never held the card's object
+        # writes nothing.
+        if graveyard_card is not permanent.card:
+            permanent.metadata[CARD_IN_GRAVEYARD] = graveyard_card
         # "Whenever a land is put into a graveyard from the battlefield…"
         # (Dingus Egg). Announced here, on the one seam every land death
         # already passes through, not from the destruction paths: it used to be

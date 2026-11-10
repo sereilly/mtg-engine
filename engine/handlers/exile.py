@@ -669,13 +669,20 @@ def exile_cost_sacrifices(game: Game, instruction: OracleInstruction, context: O
     A cost that ate nothing but the source exiles just the source, which is what
     "any number of creatures" and none of them means.
     """
+    # Each as the object its graveyard holds for it
+    # (``graveyard_order.graveyard_object_of``): two creatures sacrificed
+    # together as copies of one card, or one beside an older copy already in a
+    # graveyard, land as distinct objects (CR 400.7), and the permanent's own
+    # card names only the first of them.
+    from ..graveyard_order import graveyard_object_of
+
     cards = [
-        permanent.card
+        graveyard_object_of(permanent)
         for permanent in ((context.choices or {}).get("sacrificed_set_for_cost") or ())
     ]
     source = context.source_permanent
     if source is not None:
-        cards.append(source.card)
+        cards.append(graveyard_object_of(source))
     exiled: list[str] = []
     for card in cards:
         for player in game.players:
