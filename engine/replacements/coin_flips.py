@@ -4,11 +4,11 @@
     (Krark's Thumb.)
 
 **The event is one flip by one player** (``coin_flip``: ``{player, coins,
-exclude_sources}``), raised by the two seams a flip goes through —
-``handlers/_common.flip_coin_for`` (a flip its flipper wins or loses, CR 705.2)
-and ``handlers/_common.flip_face_for`` (a flip that only comes up heads or
-tails). Each seam asks this registry for how many coins the one flip becomes,
-flips them all, and keeps one: the flipper's choice of which to ignore.
+exclude_sources}``), raised by the one seam a flip goes through —
+``handlers/_common.flip_coins_for``, for a flip its flipper wins or loses and
+for one that only comes up heads or tails (CR 705.2) alike. The seam asks this
+registry for how many coins the one flip becomes and flips them all; which one
+is kept is the flipper's choice of which to ignore.
 
 The ruling (2019-01-25): "If an effect tells you to flip more than one coin at
 once, this replaces each individual coin flip" — which is why the event is one
@@ -19,14 +19,14 @@ Thumb doubles the two flips the first made — four coins, three ignored — and
 each Thumb is excluded from the coins it made by the same ``exclude_sources``
 key the draw doubler uses.
 
-**Which coin is ignored is not asked.** For a flip that is won or lost the
-flipper keeps a win whenever one came up; for a heads-or-tails flip, heads.
-Neither is a guess at a preference: every effect in the pool that reads a won
-flip rewards the win, and every reader of a face (Goblin Assassin's sacrifice,
-Mana Clash's damage) punishes tails, so the kept coin is the one a player
-would keep. A card that rewarded the other face would need the choice put to
-its flipper, and this module would have to arm a prompt mid-flip — which no
-flip site can suspend for.
+**Which coin is ignored is asked**, after every coin is flipped — the
+card's rulings: "You will know the results of all simultaneous flips before
+choosing which to ignore" (2019-01-25), "you can see your opponent's result
+before choosing which result to keep" (2004-10-04). The question is
+``handlers/coin_runs.flip_together``'s (the ``ignore_coin`` prompt), armed
+only where the coins disagree; a seat nobody asks keeps a win, or heads. Not
+every reader rewards the win: Puppet's Verdict's lost flip destroys the big
+creatures, Winter Sky's draws a card each.
 """
 
 from __future__ import annotations
@@ -58,6 +58,12 @@ def _coin_doublers(game, payload: dict) -> list:
     ]
 
 
+def coin_doubler_names(game, player) -> list[str]:
+    """The names of the permanents doubling *player*'s flips, once each —
+    what the ``ignore_coin`` prompt names as the reason it is asked."""
+    return source_names(_coin_doublers(game, {"player": player}))
+
+
 def _applies_two_coins(game, payload: dict) -> bool:
     return bool(_coin_doublers(game, payload))
 
@@ -86,4 +92,4 @@ def _flip_two_coins_instead(game, payload: dict) -> ReplacementOutcome | None:
     return ReplacementOutcome()
 
 
-__all__ = ["FLIP_TWO_COINS_TEXT"]
+__all__ = ["FLIP_TWO_COINS_TEXT", "coin_doubler_names"]

@@ -1234,61 +1234,65 @@ def _w1g11_rigged_coins(monkeypatch, results):
     return flips
 
 
+def _w1g11_flip_won_or_lost(game, player):
+    """One flip by *player* through the engine's flip seam, at a table nobody
+    sits at (a seat nobody asks keeps the win): whether the kept coin won."""
+    import engine.handlers.control_flow as _w1g11_control_flow
+    from engine.handlers.coin_runs import flip_won_or_lost
+
+    kept = []
+    flip_won_or_lost(
+        game, player, flip=_w1g11_control_flow.flip_coin, card_name="a flip",
+        then=kept.append,
+    )
+    assert len(kept) == 1
+    return kept[0]
+
+
 def test_w1g11_krarks_thumb_flips_two_coins_and_keeps_the_win(set_pool, monkeypatch):
     """Alice flips (a "flip a coin; if you win" ability): with the Thumb out,
-    two coins, the loss ignored."""
-    from engine.handlers._common import flip_coin_for
-
+    two coins, the loss ignored (Alice's seat is nobody's to ask, so it
+    keeps the win)."""
     mrd = set_pool("MRD")
     game, alice, _bob = _w1g11_table(set_pool)
     _w1g11_put(game, 0, mrd["Krark's Thumb"])
-    import engine.handlers.control_flow as _w1g11_control_flow
 
     flips = _w1g11_rigged_coins(monkeypatch, [False, True])
-    assert flip_coin_for(game, alice, flip=_w1g11_control_flow.flip_coin)
+    assert _w1g11_flip_won_or_lost(game, alice)
     assert len(flips) == 2
     assert any("flips 2 coins instead of 1" in line for line in game.log)
 
 
 def test_w1g11_krarks_thumb_both_coins_lost_is_a_loss(set_pool, monkeypatch):
-    from engine.handlers._common import flip_coin_for
-
     mrd = set_pool("MRD")
     game, alice, _bob = _w1g11_table(set_pool)
     _w1g11_put(game, 0, mrd["Krark's Thumb"])
-    import engine.handlers.control_flow as _w1g11_control_flow
 
     _w1g11_rigged_coins(monkeypatch, [False, False])
-    assert not flip_coin_for(game, alice, flip=_w1g11_control_flow.flip_coin)
+    assert not _w1g11_flip_won_or_lost(game, alice)
 
 
 def test_w1g11_krarks_thumb_is_only_its_controllers(set_pool, monkeypatch):
     """"If **you** would flip a coin": Bob's flips are one coin."""
-    from engine.handlers._common import flip_coin_for
-
     mrd = set_pool("MRD")
     game, _alice, bob = _w1g11_table(set_pool)
     _w1g11_put(game, 0, mrd["Krark's Thumb"])
-    import engine.handlers.control_flow as _w1g11_control_flow
 
     flips = _w1g11_rigged_coins(monkeypatch, [False, True])
-    assert not flip_coin_for(game, bob, flip=_w1g11_control_flow.flip_coin)
+    assert not _w1g11_flip_won_or_lost(game, bob)
     assert len(flips) == 1
 
 
 def test_w1g11_two_thumbs_flip_four_coins(set_pool, monkeypatch):
     """CR 614.5: each Thumb has the flip once, the second doubling the two
     flips the first made — four coins, three ignored."""
-    from engine.handlers._common import flip_coin_for
-
     mrd = set_pool("MRD")
     game, alice, _bob = _w1g11_table(set_pool)
     _w1g11_put(game, 0, mrd["Krark's Thumb"])
     _w1g11_put(game, 0, mrd["Krark's Thumb"])
-    import engine.handlers.control_flow as _w1g11_control_flow
 
     flips = _w1g11_rigged_coins(monkeypatch, [False, False, False, True])
-    assert flip_coin_for(game, alice, flip=_w1g11_control_flow.flip_coin)
+    assert _w1g11_flip_won_or_lost(game, alice)
     assert len(flips) == 4
 
 

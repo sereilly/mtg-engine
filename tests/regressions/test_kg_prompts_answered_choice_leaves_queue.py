@@ -886,6 +886,40 @@ def _game_of_chaos():
     return game
 
 
+def _puppets_verdict_under_the_thumb():
+    """One coin won and one lost: the flip's two coins disagree, so the
+    Thumb's controller is asked which to keep. The coin is rigged only while
+    the spell is cast and its flip made, through the name every coin-rigging
+    test patches."""
+    import engine.handlers.control_flow as control_flow
+
+    coins = iter([True, False])
+    real = control_flow.flip_coin
+    control_flow.flip_coin = lambda *_: next(coins, True)
+    try:
+        game = duel(
+            hands=(("Puppet's Verdict",), ()),
+            boards=(("Krark's Thumb", "Llanowar Elves"), ("Craw Wurm",)),
+        )
+        game.cast_from_hand(0, "Puppet's Verdict")
+        resolve_until_owed(game, "ignore_coin")
+    finally:
+        control_flow.flip_coin = real
+    return game
+
+
+# The loss kept: "destroy all creatures with power 3 or greater".
+scenario(
+    "ignore_coin", "Krark's Thumb",
+    answer=lambda g, c: {"keep": False},
+    wire=lambda g, c: {"option_index": 1},
+    then=lambda g: _assert(
+        names(g.players[1].graveyard) == ["Craw Wurm"]
+        and "Puppet's Verdict" in names(g.players[0].graveyard)
+    ),
+)(_puppets_verdict_under_the_thumb)
+
+
 @scenario(
     "repeat_process", "Forbidden Ritual",
     answer=lambda g, c: {"accept": False},

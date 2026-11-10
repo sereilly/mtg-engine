@@ -115,6 +115,8 @@ ActionKind = Literal[
     "confirm_mana_payment",
     "face_down_cast_confirm",
     "flip_again_confirm",
+    # Krark's Thumb: which coin of a flip is kept, as `option_index`.
+    "ignore_coin_confirm",
     "repeat_process_confirm",
     "exile_from_hand_confirm",
     "exile_hand_pile_confirm",

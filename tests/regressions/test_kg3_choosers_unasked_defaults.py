@@ -91,6 +91,7 @@ _DEFAULTS: dict[str, str] = {
     "graveyard_pile_choice": "worth",
     "hand_reveal": "stated",              # a dismissal
     "hand_to_library": "worth",           # the cards least worth holding
+    "ignore_coin": "stated",              # the win, or heads (what every flip kept before it was asked)
     "keep_permanents": "worth",
     "lamp_draw": "stated",
     "land_type_choice": "stated",         # stamped at arm

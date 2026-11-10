@@ -148,5 +148,6 @@ register_choices(
     spells.COPY_CAST_SPEC,
     card_names.GUESS_NAMED_CARD_SPEC,
     replacements.OPPONENT_LIBRARY_DRAW_SPEC,
+    numbers.IGNORE_COIN_SPEC,
     # Append a new kind here, at the bottom.
 )

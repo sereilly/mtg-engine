@@ -91,9 +91,10 @@ def coins_for_one_flip(game: Game, flipper) -> int:
 
     Asked of the ``coin_flip`` replacements (``replacements/coin_flips``,
     Krark's Thumb) before the coins are flipped. 1 where nothing applies, and
-    for a flip nobody makes. No *restart*: a flip happens part-way through a
-    resolution that cannot suspend for CR 616.1e's question, and the one
-    contender there is has no order to choose.
+    for a flip nobody makes. No *restart*: the one contender there is has no
+    order to choose (every Thumb doubles the coins once, CR 614.5), so CR
+    616.1e never asks; the question a Thumb does put — which coin to keep —
+    comes after the coins are flipped (``coin_runs.flip_together``).
     """
     if flipper is None or flipper not in game.players:
         return 1
@@ -105,38 +106,21 @@ def coins_for_one_flip(game: Game, flipper) -> int:
     return max(1, int(payload.get("coins", 1) or 1))
 
 
-def flip_face_for(game: Game, flipper, *, flip=None) -> bool:
-    """A heads-or-tails flip by *flipper* (CR 705.2's flip nobody wins):
-    True for heads.
+def flip_coins_for(game: Game, flipper, *, flip=None) -> list[bool]:
+    """The coins one flip by *flipper* becomes, flipped and not yet read
+    (CR 705.1 under CR 614): True for a coin that came up a win — or heads,
+    for a flip nobody wins (CR 705.2).
 
-    The seam for the flips :func:`flip_coin_for` does not make — "each player
-    flips a coin" (Goblin Assassin), Mana Clash's two coins — so a Krark's
-    Thumb its flipper controls replaces these too: the flip becomes its coins
-    and the flipper keeps heads when any came up, since every reader of a
-    face in the pool punishes tails (``replacements/coin_flips``). One draw
-    from *flip* (the caller's own coin, for :func:`flip_coin_for`'s reason)
-    where nothing applies.
-    """
-    coin = flip or flip_coin
-    return any([coin() for _ in range(coins_for_one_flip(game, flipper))])
-
-
-def flip_coin_for(game: Game, flipper, *, flip=None) -> bool:
-    """A coin flip *flipper* **wins or loses** (CR 705.2), announced.
-
-    The seam for every flip a player can win. CR 705.2 draws the line this
-    function is named for: an effect that "cares only about whether the coin
-    comes up heads or tails" (Mana Clash) has no winner — it goes on calling
-    :func:`flip_coin` — and for every other flip "only the player who flips the
-    coin wins or loses". So the announcement carries one seat, the flipper's,
-    and "Whenever **you** win a coin flip" (Chance Encounter) hears exactly the
-    flips its controller made and won, which is the card's own ruling ("Your
-    opponent losing a flip does not count as you winning one").
-
-    One draw from the same RNG, in the same place the bare call made it, so a
-    seeded game replays the flips it always did. The trigger goes on the stack
-    behind the object that is resolving, as every event announced part-way
-    through a resolution does.
+    The seam every flip goes through. The CR 614 replacements make the one
+    flip several coins first (:func:`coins_for_one_flip`: Krark's Thumb's
+    "instead flip two coins and ignore one"), and **which coin is kept is the
+    flipper's choice, made seeing every coin** — the Thumb's rulings
+    (2019-01-25: "You will know the results of all simultaneous flips before
+    choosing which to ignore"). That choice is ``coin_runs.flip_together``'s
+    question, asked of a seat a person decides for; this only flips. With
+    nothing replacing the flip it is one draw from *flip*, in the place the
+    bare call always made it, so a seeded game replays the coins it always
+    did.
 
     *flip* is the **caller's own coin** — each handler module passes the
     ``flip_coin`` it imported. That is not decoration: a module's ``flip_coin``
@@ -146,23 +130,30 @@ def flip_coin_for(game: Game, flipper, *, flip=None) -> bool:
     patches is an interface, exactly as a log line is.
     """
     coin = flip or flip_coin
-    # "If you would flip a coin, instead flip two coins and ignore one."
-    # (Krark's Thumb.) The flip becomes however many coins the CR 614
-    # replacements make of it — one with none in play, so a seeded game draws
-    # exactly the coins it always drew — and the flipper keeps a win when any
-    # came up (``replacements/coin_flips``: the ignored coin is the loss).
-    results = [coin() for _ in range(coins_for_one_flip(game, flipper))]
-    won = any(results)
-    if won and flipper is not None:
-        seat = next(
-            (index for index, player in enumerate(game.players) if player is flipper),
-            None,
-        )
-        if seat is not None:
-            from ..events import emit
+    return [coin() for _ in range(coins_for_one_flip(game, flipper))]
 
-            emit(game, "you_win_coin_flip", seat=seat)
-    return won
+
+def announce_won_flip(game: Game, flipper) -> None:
+    """A flip *flipper* won, announced as theirs (CR 705.2).
+
+    "Whenever **you** win a coin flip" (Chance Encounter) hears exactly the
+    flips its controller made and won, which is the card's own ruling ("Your
+    opponent losing a flip does not count as you winning one"): CR 705.2 says
+    "only the player who flips the coin wins or loses the flip", so the event
+    carries one seat, the flipper's. Announced for the coin the flipper
+    **kept** — after the choice of which to ignore — and never for a flip
+    that only comes up heads or tails (Mana Clash, Goblin Assassin), which
+    nobody wins. The trigger goes on the stack behind the object that is
+    resolving, as every event announced part-way through a resolution does.
+    """
+    seat = next(
+        (index for index, player in enumerate(game.players) if player is flipper),
+        None,
+    )
+    if seat is not None:
+        from ..events import emit
+
+        emit(game, "you_win_coin_flip", seat=seat)
 
 
 def apply_temp_pt_boost(

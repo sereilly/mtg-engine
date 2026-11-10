@@ -326,6 +326,22 @@ def _action_flip_again_confirm(session, req, seat_type):
     if not session.game.confirm_flip_again(req.seat, req.accept is not False):
         raise HTTPException(status_code=400, detail="invalid coin-flip answer")
 
+@action_handler("ignore_coin_confirm")
+def _action_ignore_coin_confirm(session, req, seat_type):
+    # Krark's Thumb: which of a flip's coins the flipper keeps, by index into
+    # the prompt's two options (Abundance's shape): 0 keeps the win (heads),
+    # 1 the loss (tails). Only the flipper owes it.
+    pending = session.game.pending_choice_of("ignore_coin", req.seat)
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no coin to keep is pending for you")
+    if req.option_index is None:
+        raise HTTPException(status_code=400, detail="option_index is required")
+    option = int(req.option_index)
+    if option not in (0, 1):
+        raise HTTPException(status_code=400, detail="option_index is out of range")
+    if not session.game.confirm_ignore_coin(req.seat, option == 0):
+        raise HTTPException(status_code=400, detail="invalid coin to keep")
+
 @action_handler("guess_named_card_confirm")
 def _action_guess_named_card_confirm(session, req, seat_type):
     # Liar's Pendulum: the targeted seat guesses whether a card with the

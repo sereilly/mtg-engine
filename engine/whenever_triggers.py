@@ -1525,12 +1525,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # them is only ever as complete as the last card that touched it — the
     # argument `draws_card` is dispatched with, one record over.
     ("you_lose_life",               r"whenever you lose life"),
-    # "Whenever you win a coin flip …" (Chance Encounter). Announced from the
-    # one seam a player-won flip goes through (``handlers/_common.
-    # flip_coin_for``), carrying the flipper's seat — CR 705.2: "only the
+    # "Whenever you win a coin flip …" (Chance Encounter). Announced for the
+    # coin a player-won flip kept (``handlers/_common.
+    # announce_won_flip``), carrying the flipper's seat — CR 705.2: "only the
     # player who flips the coin wins or loses the flip". A flip nobody can win
-    # (Mana Clash's heads-or-tails) does not go through that seam and is not
-    # announced.
+    # (Mana Clash's heads-or-tails) is kept without that announcement and is
+    # not announced.
     ("you_win_coin_flip",           r"whenever you win a coin flip"),
     # "Whenever a spell or ability causes a player to shuffle their library,
     # …" (Psychogenic Probe.) CR 701.24's event, announced from the one seam

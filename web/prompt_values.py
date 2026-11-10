@@ -723,6 +723,47 @@ def _flip_again(ctx: PromptContext, choices: list) -> dict:
     return prompt
 
 
+@prompt_renderer("ignore_coin")
+def _ignore_coin(ctx: PromptContext, choices: list) -> dict:
+    """"If you would flip a coin, instead flip two coins and ignore one."
+    (Krark's Thumb.) Which coin the flipper keeps, asked only where the coins
+    disagree, so there are always exactly two answers.
+
+    Everything the rulings say the chooser knows, and it is all public: every
+    coin this flip became (``coins``: "won" / "lost", or "heads" / "tails"
+    for a flip nobody wins, CR 705.2), every other coin flipped at the same
+    time and what each earlier chooser kept (``others``; 2004-10-04: "you can
+    see your opponent's result before choosing which result to keep"), the
+    permanents that made the extra coins (``ignored_by``), and the text of
+    the spell or ability that is flipping (``effect_text``), which says what
+    each result does. Answered with ``option_index`` into ``options``: 0
+    keeps a win (heads), 1 a loss (tails).
+    """
+    choice = choices[0]
+    data = choice.data
+    wins = bool(data.get("wins", True))
+    held = data.get("_stack_item")
+    effect_text = None
+    if held is not None:
+        effect_text = (
+            held.ability_text if held.is_ability else held.card.oracle_text
+        ) or None
+    up, down = ("won", "lost") if wins else ("heads", "tails")
+    return {
+        "player_seat": choice.player_index,
+        "card_name": data.get("card_name", ""),
+        "wins": wins,
+        "coins": list(data.get("coins") or ()),
+        "others": [dict(other) for other in data.get("others") or ()],
+        "ignored_by": list(data.get("ignored_by") or ()),
+        "effect_text": effect_text,
+        "options": [
+            {"result": up, "label": "Keep the win" if wins else "Keep heads"},
+            {"result": down, "label": "Keep the loss" if wins else "Keep tails"},
+        ],
+    }
+
+
 @prompt_renderer("guess_named_card")
 def _guess_named_card(ctx: PromptContext, choices: list) -> dict:
     """Liar's Pendulum: the targeted seat guesses whether a card with the

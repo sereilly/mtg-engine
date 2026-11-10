@@ -182,7 +182,7 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "you_cast_spell": "whenever you cast a spell",
     # Chance Encounter. CR 705.2: only the player who flipped wins a flip, so
     # the event is the flipper's and is announced by the one seam that flips
-    # for a seat (`handlers/_common.flip_coin_for`).
+    # for a seat's kept win (`handlers/_common.announce_won_flip`).
     "you_win_coin_flip": "whenever you win a coin flip",
     # Psychogenic Probe. CR 701.24's event, announced by the one seam an
     # effect's shuffle goes through (`Game.shuffle_library_of`).
