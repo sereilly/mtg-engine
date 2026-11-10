@@ -378,11 +378,19 @@ def _in_a_block(game, seat: int) -> bool:
 def _fight_priority_driver(table, seat: int):
     """The priority driver a scratch copy fights its combat with
     (:func:`_fight_the_combat`): *seat* — the seat the rehearsal is for —
-    answers its priority in the declare-blockers step, once the blocks are
-    in and the stack is empty, as it would in the game
-    (``ai_priority.act_at_priority``'s ``"combat"`` window: the pump on a
+    activates in the declare-blockers step, once the blocks are in and the
+    stack is empty, what it would there in the game
+    (``ai_policy.choose_instant_speed_activation``, the activation door of
+    ``ai_priority.act_at_priority``'s ``"combat"`` window: the pump on a
     blocked attacker, the redirect that wins a block, the regeneration in
     front of a lethal one), **once per combat**.
+
+    **Abilities, not spells.** An instant held for after the blocks is a
+    card the main phase could spend another way, and the cast chooser does
+    not price that: with the copy casting Healing Salve's shield after the
+    blocks, the shield mode was held — and the life mode, read with no fight
+    behind it, was cast for three life in its place (measured, kg5). An
+    ability costs no card, so holding it gives nothing else up.
 
     A copy's priority was passed by everybody (the simulator's driver
     answers only for its own table), so a rehearsal through a fight read the
@@ -419,14 +427,21 @@ def _fight_priority_driver(table, seat: int):
         if combat in answered or not _in_a_block(game, seat):
             return False
         answered.add(combat)
-        from .ai_priority import act_at_priority
+        from .ai_player_control import plays_for_another
+        from .ai_policy import (activate_chosen_ability, choose_instant_speed_activation,
+                                holds_an_ability_it_could_activate)
         from .ai_prompt_picks import _one_level_deeper
 
         with _one_level_deeper():
-            if rehearsing():
+            if rehearsing() or plays_for_another(game, seat):
                 return False
-            act = act_at_priority(game, seat)
-        return act is not None and act.supported
+            if not holds_an_ability_it_could_activate(game, seat):
+                return False
+            action = choose_instant_speed_activation(game, seat)
+            if action is None:
+                return False
+            result = activate_chosen_ability(game, seat, action)
+        return bool(getattr(result, "supported", False))
 
     return drive
 

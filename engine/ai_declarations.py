@@ -312,10 +312,9 @@ def _attacks_its_held_trick_wins(
     Giant it trades with once the redirect is raised (kg4, the Known-gaps
     "AI leftovers" entry). Asked only in the declare-attackers step of a
     game nobody is rehearsing (a rehearsal's copy declares by the printed
-    bodies, as before), and only of a seat that holds an instant it could
-    pay for or an ability it could activate
-    (``ai_policy.holds_an_instant_it_could_pay_for``,
-    ``holds_an_ability_it_could_activate``): every creature asked is one
+    bodies, as before), and only of a seat that holds an ability it could
+    activate (``ai_policy.holds_an_ability_it_could_activate`` — the fight's
+    driver activates abilities, not spells): every creature asked is one
     copy of the game fought out."""
     from .ai_rehearsal import deliberating, rehearse, rehearsing
 
@@ -327,12 +326,9 @@ def _attacks_its_held_trick_wins(
         and not game.combat_attackers_locked
     ):
         return chosen
-    from .ai_policy import holds_an_ability_it_could_activate, holds_an_instant_it_could_pay_for
+    from .ai_policy import holds_an_ability_it_could_activate
 
-    if not (
-        holds_an_ability_it_could_activate(game, seat)
-        or holds_an_instant_it_could_pay_for(game, seat)
-    ):
+    if not holds_an_ability_it_could_activate(game, seat):
         return chosen
 
     class _Declared:
