@@ -254,19 +254,25 @@ def test_a_cant_is_never_offered_as_a_contender():
 def test_the_continuation_runs_once_after_the_entry_is_settled(interactive):
     """What a caller does once the permanent is there (``then``) runs exactly
     once: at once for a seat nobody asks, at the answer for a person — never
-    for an entry still waiting on its question."""
+    for an entry still waiting on its question. And the identity a caller
+    reads as the call returns ("if you do, sacrifice **it**") is the one the
+    answer keeps (CR 400.7)."""
     game = _game(interactive)
     _put(game, 0, "Forest")
     _put(game, 1, "Living Plane")
     _put(game, 1, "Containment Priest")
     lake = Permanent(card=_POOL["Lake of the Dead"])
+    built = lake.permanent_id
     ran: list[bool] = []
     game._put_permanent_onto_battlefield(
         0, lake, None, then=lambda: ran.append(game.is_on_battlefield(lake)),
     )
     if interactive:
         assert _asked(game) and ran == []
+        recorded = lake.permanent_id
+        assert recorded != built, "a new object's identity is stamped as the call returns"
         _answer(game, 1)
+        assert lake.permanent_id == recorded
     settle(game)
     assert ran == [False]
     assert _where(game, "Lake of the Dead") == (

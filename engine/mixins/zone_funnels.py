@@ -1332,14 +1332,22 @@ class ZoneFunnelsMixin:
             # cast — asked of a person. Nothing has happened to the entry
             # when the question is armed, so the answer re-runs it from the
             # top and the caller's continuation behind it.
+            stamp = {"id": stamp_id}
             restart = answered_restart(
                 self, "would_enter_battlefield", event,
-                lambda: self._enter_answered_entry(put, stamp_id=stamp_id),
+                lambda: self._enter_answered_entry(put, stamp_id=stamp["id"]),
             )
             consumed, _ = apply_replacements(
                 self, "would_enter_battlefield", event, restart=restart,
             )
             suspended = consumed and self._entry_question_owed(restart)
+            if suspended and stamp_id:
+                # The identity the permanent will have, now (CR 400.7): a
+                # caller that records what it put down ("if you do,
+                # sacrifice **it**", Flash) reads it as the call returns —
+                # the arrangement an open event's hand-in already makes.
+                permanent.permanent_id = next_permanent_id()
+                stamp["id"] = False
         if consumed:
             if judged:
                 # The fold asked the board's statics about a permanent that
