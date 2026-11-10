@@ -24,7 +24,7 @@ from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
 from ...color_changes import carry_spell_color_change
 from ...destruction_events import destruction_finished
-from ...enter_effects import copy_on_enter_type
+from ...enter_effects import COPY_DECLINED, copy_on_enter_type
 from ...events import emit
 from ...face_down import revealed_as_it_moves
 from ...faces import whole_card
@@ -1164,7 +1164,14 @@ class StackResolutionMixin:
             # ``target_permanent_ids`` and no slot recorded nothing here, and
             # a Clone aimed at a Brass Herald copied whatever creature came
             # first on the board (a Soul Warden).
-            if (
+            #
+            # **A declined copy is a choice too** (``enter_effects.
+            # COPY_DECLINED``): "You can choose not to copy anything", and a
+            # cast that said so entered as a copy of the first creature on the
+            # board all the same, because no target read as "nobody chose".
+            if (choices or {}).get(COPY_DECLINED):
+                permanent.metadata[COPY_DECLINED] = True
+            elif (
                 target_permanent_index is not None
                 or first_target_id(target_permanent_id) is not None
             ):

@@ -54,7 +54,7 @@ from ..enter_effects import (ENTERED_BATTLEFIELD_TURN,
                              chooses_card_name_on_enter,
                              chooses_opponent_on_enter,
                              chooses_opponent_and_card_name_on_enter,
-                             copy_on_enter_type,
+                             COPY_DECLINED, copy_on_enter_type,
                              ENTERS_TAPPED, enters_with_counted_pt_counters,
                              enters_with_x_pt_counters,
                              enters_with_x_named_counters,
@@ -1155,7 +1155,19 @@ class PermanentStateMixin:
         # of the one reader the cast-time picker asks, so the picker and the
         # copy cannot disagree about which cards offer one or what they offer.
         copied = copy_on_enter_type(program.normalized_text or "")
+        declined = bool(permanent.metadata.pop(COPY_DECLINED, False))
         if copied is None:
+            return
+        if declined:
+            # "You can choose not to copy anything. In that case, Clone enters
+            # as a 0/0 Shapeshifter creature" (Clone, 2025-10-02); "Sculpting
+            # Steel stays on the battlefield as an artifact that doesn't do
+            # much of anything" (2007-07-15). The cast announced the decline
+            # (``enter_effects.COPY_DECLINED``), so there is no fallback.
+            permanent.metadata.pop("copy_target", None)
+            self.log.append(
+                f"{permanent.card.name} entered as itself, copying nothing"
+            )
             return
         # Honor the permanent the player chose when casting; fall back to the
         # first one of the type for AI/untargeted casts.

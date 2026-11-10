@@ -943,8 +943,9 @@ def _attach_flip_stakes_to_loop(
 def _parse_deferred_search_shuffle(
     stream: TokenStream, steps: list[ast.Statement]
 ) -> bool:
-    """``Then shuffle.`` behind a search whose shuffle was left for it —
-    consumed, or False with the cursor unmoved.
+    """``Then shuffle.`` (or ``Then shuffle your library.``) behind a search
+    whose shuffle was left for it — consumed, or False with the cursor
+    unmoved.
 
     "Search your library for any number of artifact cards, exile them, then
     create that many 1/1 colorless Myr artifact creature tokens. **Then
@@ -975,6 +976,12 @@ def _parse_deferred_search_shuffle(
     if not stream.accept_word("shuffle"):
         stream.reset(mark)
         return False
+    # "…exile them in a face-down pile, and shuffle that pile. **Then shuffle
+    # your library.**" (Mangara's Tome, Parallel Thoughts.) The older
+    # template's spelling of the same sentence (``effects.search.
+    # TRAILING_SEARCH_SHUFFLES``): the library named is the searcher's, the
+    # one the search looked through and its answer shuffles.
+    stream.accept_phrase("your", "library")
     if not (stream.exhausted or stream.at_punct(".")):
         stream.reset(mark)
         return False

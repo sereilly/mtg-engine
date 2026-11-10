@@ -739,6 +739,14 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
     ),
     # Natural Selection's confirm flow carries the shuffle flag.
     "reorder_target_library_top": ("you may have that player shuffle",),
+    # "…exile them in a face-down pile, and shuffle that pile. Then shuffle
+    # your library." (Mangara's Tome, Parallel Thoughts.) The search's own
+    # shuffle (CR 701.24a), performed by the search prompt's answer
+    # (``choices/search._resolve_search_exile``) and read by the grammar as
+    # the search's deferred shuffle (``riders._parse_deferred_search_shuffle``)
+    # — the sentence changes no payload, so the first sentence alone
+    # reproduces the parse and this one is the handler's to claim.
+    "search_and_exile_matching": ("then shuffle your library",),
     # Nettling Imp / Siren's Call handler arms must-attack + delayed destroy.
     "mark_non_wall_target_to_attack": (
         "that creature attacks this turn if able",

@@ -538,8 +538,9 @@ def test_w1g9_confusion_in_the_ranks_exchanges_the_entering_creature(set_pool):
 def test_w1g9_confusion_in_the_ranks_entering_permanents_controller_chooses(set_pool):
     """"**Its controller** chooses": when P1's Elves enter, the choice is
     P1's — an interactive P1 is asked, offered P0's creatures only (not the
-    enchantment, which shares no type with the Elves), and the trigger waits
-    on the stack until the answer."""
+    enchantment, which shares no type with the Elves). Asked as the ability
+    goes on the stack since MRD W2G4 (CR 603.3d: the printed "target" is an
+    announcement), so the answer is the stacked ability's target."""
     game = _w1g9_confusion_game(
         set_pool, mine=["Grizzly Bears", "Hill Giant"],
         hands=((), ["Llanowar Elves"]),
@@ -548,13 +549,13 @@ def test_w1g9_confusion_in_the_ranks_entering_permanents_controller_chooses(set_
     game.active_player_index = 1
     game.cast_from_hand(1, "Llanowar Elves")
     assert [(c.kind, c.player_index) for c in game.pending_choices] == [
-        ("permanent_choice", 1)
+        ("trigger_target", 1)
     ]
-    offered = game.live_permanent_choices(game.pending_choices[0])
-    assert sorted(p.card.name for p in offered) == ["Grizzly Bears", "Hill Giant"]
+    offered = game.pending_choices[0].data["targets"]
+    assert sorted(entry["name"] for entry in offered) == ["Grizzly Bears", "Hill Giant"]
     assert [item.card.name for item in game.stack] == ["Confusion in the Ranks"]
     giant = _w1g9_named(game, "Hill Giant")
-    assert game.confirm_permanent_choice(1, giant.permanent_id) is True
+    assert game.confirm_trigger_target(1, permanent_id=giant.permanent_id) is True
     _w1g9_resolve_stack(game)
     game._settle()
     assert _w1g9_seats(game) == {
@@ -1033,3 +1034,126 @@ def test_w2g3_the_equip_picker_still_refuses_a_creature_it_may_not_target(set_po
 
 
 # ==== end W2G3 ======================================================
+
+
+# ==== W2G4 ==========================================================
+# Confusion in the Ranks announces its target (CR 603.3d with the seat the
+# card names): "its controller chooses target permanent another player
+# controls that shares a card type with it" is chosen by the entering object's
+# controller as the ability goes on the stack, out of exactly the permanents
+# the two relations admit, and re-checked as it resolves (CR 608.2b; the
+# ruling, 2004-12-01: "The permanents have to share a permanent type both when
+# the target is chosen and when the ability resolves").
+from engine import Game as _w2g4_Game
+from engine import PlayerState as _w2g4_PlayerState
+from engine.control import change_control as _w2g4_change_control
+from engine.models import Permanent as _w2g4_Permanent
+from tests.helpers import resolve_stack as _w2g4_resolve_stack
+
+
+def _w2g4_confusion(set_pool, boards, hand, *, seats=2, interactive=()):
+    """Confusion in the Ranks on seat 0's battlefield; *boards* maps a seat to
+    the LEA permanents on it; *hand* is ``(seat, name)``, the LEA creature that
+    seat holds and is active to cast."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    players = []
+    for seat in range(seats):
+        battlefield = [_w2g4_Permanent(card=lea[n]) for n in boards.get(seat, ())]
+        if seat == 0:
+            battlefield.insert(0, _w2g4_Permanent(card=mrd["Confusion in the Ranks"]))
+        players.append(_w2g4_PlayerState(
+            name=f"P{seat}", battlefield=battlefield,
+            hand=[lea[hand[1]]] if hand[0] == seat else [],
+            library=[lea["Island"]] * 5,
+        ))
+    game = _w2g4_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = hand[0]
+    game._sync_control()
+    return game
+
+
+def _w2g4_named(game, name):
+    return next(p for p in game.all_permanents() if p.card.name == name)
+
+
+def test_w2g4_confusion_names_its_target_on_the_stack(set_pool):
+    """The target is the stacked ability's before anything resolves — a seat
+    nobody asks names the one creature another player controls."""
+    from engine.stack_targets import chosen_targets
+
+    game = _w2g4_confusion(
+        set_pool, {1: ["Hill Giant", "Sol Ring"]}, (0, "Grizzly Bears"),
+    )
+    assert game.queue_from_hand(0, "Grizzly Bears").supported
+    # Resolve the Bears alone: the trigger goes on the stack above nothing.
+    game.resolve_top_of_stack()
+    assert [item.card.name for item in game.stack] == ["Confusion in the Ranks"]
+    giant = _w2g4_named(game, "Hill Giant")
+    assert [t.permanent_id for t in chosen_targets(game, game.stack[-1])] == [
+        giant.permanent_id
+    ], game.log
+
+
+def test_w2g4_confusion_target_taken_by_the_chooser_in_response_is_illegal(set_pool):
+    """CR 608.2b: the announced Hill Giant comes under the chooser's control
+    before the ability resolves, so it is no longer a permanent "another
+    player controls" — the one target is illegal and nothing is exchanged."""
+    game = _w2g4_confusion(
+        set_pool, {1: ["Hill Giant"]}, (0, "Grizzly Bears"),
+    )
+    assert game.queue_from_hand(0, "Grizzly Bears").supported
+    game.resolve_top_of_stack()
+    assert [item.card.name for item in game.stack] == ["Confusion in the Ranks"]
+    giant = _w2g4_named(game, "Hill Giant")
+    _w2g4_change_control(giant, 0, source="response")
+    game._sync_control()
+
+    _w2g4_resolve_stack(game)
+    bears = _w2g4_named(game, "Grizzly Bears")
+    assert game.controller_index_of(bears) == 0
+    assert game.controller_index_of(giant) == 0
+    assert any("is controlled by the player who chose it" in line for line in game.log), game.log
+
+
+def test_w2g4_confusion_another_player_is_measured_from_the_chooser(set_pool):
+    """Three seats: P1's Elves enter, so P1 announces, offered P0's and P2's
+    creatures and never its own Bears — "another player" against the chooser,
+    not against the ability's controller (P0)."""
+    game = _w2g4_confusion(
+        set_pool,
+        {0: ["Hill Giant"], 1: ["Grizzly Bears"], 2: ["Craw Wurm", "Sol Ring"]},
+        (1, "Llanowar Elves"), seats=3, interactive={1},
+    )
+    assert game.queue_from_hand(1, "Llanowar Elves").supported
+    game.resolve_top_of_stack()
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("trigger_target", 1)
+    ]
+    offered = sorted(e["name"] for e in game.pending_choices[0].data["targets"])
+    assert offered == ["Craw Wurm", "Hill Giant"]
+    wurm = _w2g4_named(game, "Craw Wurm")
+    assert game.confirm_trigger_target(1, permanent_id=wurm.permanent_id) is True
+    _w2g4_resolve_stack(game)
+    elves = _w2g4_named(game, "Llanowar Elves")
+    assert game.controller_index_of(elves) == 2
+    assert game.controller_index_of(wurm) == 1
+
+
+def test_w2g4_confusion_refuses_an_answer_the_relations_exclude(set_pool):
+    """The answer is held to the offer: the chooser's own creature and a
+    permanent sharing no type with the Elves are refused."""
+    game = _w2g4_confusion(
+        set_pool, {0: ["Hill Giant", "Sol Ring"], 1: ["Grizzly Bears"]},
+        (1, "Llanowar Elves"), interactive={1},
+    )
+    assert game.queue_from_hand(1, "Llanowar Elves").supported
+    game.resolve_top_of_stack()
+    own = _w2g4_named(game, "Grizzly Bears")
+    ring = _w2g4_named(game, "Sol Ring")
+    assert game.confirm_trigger_target(1, permanent_id=own.permanent_id) is False
+    assert game.confirm_trigger_target(1, permanent_id=ring.permanent_id) is False
+    assert [c.kind for c in game.pending_choices] == ["trigger_target"]
+
+# ==== end W2G4 ======================================================

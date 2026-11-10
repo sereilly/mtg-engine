@@ -1342,6 +1342,13 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # ``targets`` key — a row that answered only the seat would have taken that
     # card's prompt away.
     "skip_next_untap": _matching_sweep_spec,
+    # …and the same sentence read as a lock on the targeted player's step
+    # (Misstep, Exhaustion, Mana Vapors — ``lowering.untap_restrictions.
+    # _targeted_seat_step_lock``): the seat rides the noun phrase's
+    # ``controller`` key, so "target opponent" announces an opponent only.
+    # Blinding Beam's "target player's next untap step" carries no such key
+    # and falls through to its ``targets`` description, as it did unrowed.
+    "lock_next_untap_step": _matching_sweep_spec,
     # Corrosion's rust counters: the same printed noun phrase as Simoon's, so
     # the same reader — what is being *chosen* is a seat, whatever the sweep
     # then does to that seat's permanents.

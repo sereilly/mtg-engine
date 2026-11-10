@@ -933,6 +933,16 @@ def _from_targets_payload(targets) -> dict | None:
         # a spec that dropped it would hand the choice to the ability's
         # controller — the one seat the card says does not make it.
         flags = {**flags, "chooser": targets["chooser"]}
+        # "…**its controller** chooses target permanent **another player
+        # controls that shares a card type with it**." (Confusion in the
+        # Ranks.) Two relations measured from the announcing seat and from the
+        # firing event's object — neither a property of one permanent, so
+        # neither is a filter key — carried with the chooser they are measured
+        # against (``lowering.exchanges._fused_event_object_exchange``; the
+        # trigger picker narrows its offer by them).
+        for relation in ("not_controlled_by", "relative_to", "shares_type_with_relative"):
+            if targets.get(relation):
+                flags = {**flags, relation: targets[relation]}
     type_filter = filt.get("type_filter")
     if not type_filter:
         # "X target **Mountains**" (Volcanic Eruption) prints no card type at
