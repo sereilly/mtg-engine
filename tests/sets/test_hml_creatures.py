@@ -371,7 +371,17 @@ def test_the_ai_points_daughter_of_autumn_at_its_own_creature(set_pool):
     game.players[0].battlefield.append(mine)
     game._settle()
 
-    action = choose_activation_action(game, 0)
+    # Where it is aimed is the question: the fight read without the seat
+    # answering after the blocks, where since kg5 the shield would be held
+    # for (``ai_rehearsal._fight_priority_driver``).
+    from unittest import mock
+
+    from engine import ai_rehearsal
+
+    with mock.patch.object(
+        ai_rehearsal, "_fight_priority_driver", lambda table, seat: (lambda game, asked: False),
+    ):
+        action = choose_activation_action(game, 0)
 
     assert action is not None and action.permanent_name == "Daughter of Autumn"
     assert action.target_player_index == 0, "it shields its own controller's board"
