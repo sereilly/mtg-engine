@@ -39,8 +39,8 @@ from ..oracle_types import (SEPARATE_DEALINGS, ATTACHED_PERMANENT_CONTROLLER,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..mana_payment import generic_cost
 from ._amounts import per_recipient_amount, resolve_amount
-from ._common import (apply_damage_to_creature, damage_dealer, flip_coin,
-                      flip_face_for)
+from ._common import apply_damage_to_creature, damage_dealer, flip_coin
+from .coin_runs import flip_together
 from ._filters import (permanent_matches_filter, seats_controlling,
                        seats_matching_deed)
 from ._targets import (departed_object_said, damaged_end_seat, divided_target_permanent, recorded_permanent_ids,
@@ -1225,6 +1225,11 @@ def coin_flip_damage_loop(
     used to deal without asking, on the stated ground that a restart would
     re-flip the coins; the restart never reached the flips.
 
+    **A round's coins may stop to ask too**: a player whose Krark's Thumb made
+    their flip two coins that disagree chooses which to keep, seeing the other
+    player's coin first (the Thumb's 2004-10-04 ruling), through
+    ``coin_runs.flip_together`` — whose last step is the rest of the round.
+
     Rounds are played in a ``while`` rather than by recursion, so a long run of
     tails costs no stack: the next-round step only *re-enters* :func:`play`
     when it runs from an answer, after the loop that recorded it had returned.
@@ -1248,38 +1253,14 @@ def coin_flip_damage_loop(
         )
 
     def play() -> None:
-        """Flip rounds until both coins come up heads, or until a round's
-        damage stops to ask — whose answer comes back through the round's
-        last step and calls this again."""
+        """Flip rounds until both coins come up heads, or until a round stops
+        to ask — a coin to keep, or a damage event's order — whose answer
+        comes back through the round's last step and calls this again."""
         while True:
             if rounds["flipped"] >= 1000:
                 finish()
                 return
             rounds["flipped"] += 1
-            # Each coin through the heads-or-tails seam, so a Krark's Thumb
-            # its flipper controls has the flip (CR 614.1a over CR 705.2).
-            caster_heads = flip_face_for(game, caster, flip=flip_coin)
-            opponent_heads = flip_face_for(game, opponent, flip=flip_coin)
-            game.log.append(
-                f"{card.name}: {caster.name} flipped "
-                f"{'heads' if caster_heads else 'tails'}, {opponent.name} flipped "
-                f"{'heads' if opponent_heads else 'tails'}"
-            )
-            if caster_heads and opponent_heads:
-                finish()
-                return
-            # "…1 damage to each player whose coin comes up tails" — dealt
-            # at once, so asked in APNAP order (CR 616.1's last sentence).
-            # **Not** one simultaneous dealing, though: the card's ruling
-            # (2004-10-04) is that "Each point of damage is dealt separately,
-            # so if you are damaged twice by this spell, each time is
-            # considered a separate time this source deals damage" — so each
-            # point is its own event, announced whole as it is dealt
-            # (``engine/simultaneous_damage.py``).
-            tails = [
-                player for player, heads in
-                ((caster, caster_heads), (opponent, opponent_heads)) if not heads
-            ]
             here = {"inline": True, "next_round": False}
 
             def next_round(here=here) -> None:
@@ -1288,17 +1269,48 @@ def coin_flip_damage_loop(
                 else:
                     play()
 
-            run_resumable(
-                game, in_apnap_order(game, tails),
-                lambda player: game._deal_damage_to_player(
-                    player, damage, source=damage_dealer(context), asks=True,
-                ),
-                then=next_round,
+            def flipped(kept: list[bool], next_round=next_round) -> None:
+                caster_heads, opponent_heads = kept
+                game.log.append(
+                    f"{card.name}: {caster.name} flipped "
+                    f"{'heads' if caster_heads else 'tails'}, {opponent.name} flipped "
+                    f"{'heads' if opponent_heads else 'tails'}"
+                )
+                if caster_heads and opponent_heads:
+                    finish()
+                    return
+                # "…1 damage to each player whose coin comes up tails" — dealt
+                # at once, so asked in APNAP order (CR 616.1's last sentence).
+                # **Not** one simultaneous dealing, though: the card's ruling
+                # (2004-10-04) is that "Each point of damage is dealt
+                # separately, so if you are damaged twice by this spell, each
+                # time is considered a separate time this source deals damage"
+                # — so each point is its own event, announced whole as it is
+                # dealt (``engine/simultaneous_damage.py``).
+                tails = [
+                    player for player, heads in
+                    ((caster, caster_heads), (opponent, opponent_heads)) if not heads
+                ]
+                run_resumable(
+                    game, in_apnap_order(game, tails),
+                    lambda player: game._deal_damage_to_player(
+                        player, damage, source=damage_dealer(context), asks=True,
+                    ),
+                    then=next_round,
+                )
+
+            # Both coins of the round at once, each through the one flip seam,
+            # so a Krark's Thumb its flipper controls has the flip (CR 614.1a
+            # over CR 705.2) and its two coins are its flipper's to choose
+            # between. Heads or tails: nobody wins this flip (CR 705.2).
+            flip_together(
+                game, [caster, opponent], flip=flip_coin, card_name=card.name,
+                wins=False, then=flipped,
             )
             here["inline"] = False
             if not here["next_round"]:
-                # A damage event stopped to ask: the round's last step is
-                # recorded, and the answer runs it.
+                # The round stopped to ask: its last step is recorded, and the
+                # answer runs it.
                 return
 
     play()

@@ -540,6 +540,11 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # is whether the rest of the resolution happens at all, and the round it
         # starts arms the next offer.
         "flip_again",
+        # "If you would flip a coin, instead flip two coins and ignore one."
+        # (Krark's Thumb.) "If you win the flip, …" is a later step of the
+        # same resolution and reads exactly the coin kept, so nothing behind
+        # the flip may run before the answer.
+        "ignore_coin",
         # "You may repeat this process any number of times." (Forbidden
         # Ritual.) The answer is whether the rest of the resolution happens at
         # all — the round it starts is the whole printed process again, and

@@ -5,7 +5,9 @@ of "any amount", Shapeshifter's chosen number, Goblin Game's secret numbers
 (recorded and shown to nobody until the last answer), and the life auction's
 rounds of bids. With them, the two unbounded offers to run a printed paragraph
 again — a coin flip at double the stake (Game of Chaos) and a process repeated
-"any number of times" (Forbidden Ritual) — whose stated default is to stop.
+"any number of times" (Forbidden Ritual) — whose stated default is to stop;
+and which of a flip's coins is kept when Krark's Thumb made it two that
+disagree, whose stated default is the win (or heads).
 """
 
 from __future__ import annotations
@@ -611,6 +613,69 @@ class NumberChoicesMixin:
         """
         self._resolve_flip_again(choice, False)
 
+    # -- Which of a flip's coins is kept ------------------------------------
+
+    def confirm_ignore_coin(self, player_index: int, keep: bool) -> bool:
+        """Answer "flip two coins and ignore one" (Krark's Thumb) with the coin
+        kept: True keeps a win (or heads), False a loss (or tails)."""
+        return self.resolve_pending_choice("ignore_coin", player_index, keep=keep)
+
+    def _resolve_ignore_coin(self, choice: PendingChoice, keep) -> bool:
+        """Keep a coin that came up *keep* and ignore the rest.
+
+        The choice is among the coins flipped, never a free pick of the
+        outcome: an answer that is not a yes or a no, or that names a result
+        none of the coins came up, is refused and the prompt stays owed. The
+        kept coin is written into the flip's own list (``_kept``), which the
+        flip's last step reads as the resolution resumes
+        (``handlers/coin_runs.flip_together``). The keep is public — so is
+        every coin flipped — and logged for every seat.
+        """
+        from ....handlers.coin_runs import coin_label
+
+        if not isinstance(keep, bool):
+            return False
+        data = choice.data
+        wins = bool(data.get("wins", True))
+        coins = list(data.get("coins") or ())
+        label = coin_label(keep, wins=wins)
+        if label not in coins:
+            return False
+        self.discard_pending_choice(choice)
+        kept = data.get("_kept")
+        position = data.get("_position")
+        if isinstance(kept, list) and isinstance(position, int) and 0 <= position < len(kept):
+            kept[position] = keep
+        player = self.players[choice.player_index]
+        card_name = data.get("card_name", "an effect")
+        sources = ", ".join(data.get("ignored_by") or ())
+        because = f" ({sources})" if sources else ""
+        if wins:
+            won = coins.count("won")
+            self.log.append(
+                f"{card_name}: {player.name} won {won} of {len(coins)} coins and "
+                f"keeps {'the win' if keep else 'the loss'}{because}"
+            )
+        else:
+            self.log.append(
+                f"{card_name}: {player.name} flipped {coins.count('heads')} heads "
+                f"and {coins.count('tails')} tails and keeps {label}{because}"
+            )
+        return True
+
+    def _default_ignore_coin(self, choice: PendingChoice) -> None:
+        """The stated policy: **keep the win** — or heads, for a flip nobody
+        wins.
+
+        The coin every flip kept before the question was asked, so a seat
+        nobody asks (AI and headless play) draws and keeps exactly what it
+        always did. Not a valuation: a seat that should keep the loss (its
+        Puppet's Verdict against bigger creatures) wants a reading of the
+        sentences behind the flip, in ``engine/ai_valuation.py``, not a branch
+        here.
+        """
+        self._resolve_ignore_coin(choice, True)
+
     # -- Whether a printed process is run again ------------------------------
 
     def confirm_repeat_process(self, player_index: int, accept: bool = True) -> bool:
@@ -810,5 +875,26 @@ REPEAT_PROCESS_SPEC = ChoiceSpec(
     # taking it where the question stands is what keeps AI and headless play
     # from holding a resolution open on a decision nobody will make.
     default_at_arm=True,
+    spectator_visible=True,
+)
+
+IGNORE_COIN_SPEC = ChoiceSpec(
+    "ignore_coin",
+    resolve=lambda game, choice, r: game._resolve_ignore_coin(choice, r.get("keep")),
+    default=lambda game, choice: game._default_ignore_coin(choice),
+    action="ignore_coin_confirm",
+    prompt_key="ignore_coin",
+    blocked_detail="choose which coin to keep before other actions",
+    # "If you win the flip, …" is a later step of the same resolution and reads
+    # exactly the coin kept — and a run's next flip, Mana Clash's damage and a
+    # combat creature's removal wait on it too — so nothing behind the flip
+    # may run before the answer exists (CR 608.2).
+    suspends=True,
+    # A non-interactive seat never queues it: the stated default (the win, or
+    # heads) is taken where the coins are flipped, which is what keeps AI and
+    # headless play keeping the coin they always kept.
+    default_at_arm=True,
+    # Every coin flipped is public, and so is whose choice it is.
+    hidden_for_ai=False,
     spectator_visible=True,
 )

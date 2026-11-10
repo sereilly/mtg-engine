@@ -4318,6 +4318,17 @@ function getFlipAgainInfo(state = currentState) {
   return info;
 }
 
+// Krark's Thumb: which of a flip's coins its flipper keeps — asked only where
+// the coins disagree, so `options` is always two (web/prompt_values
+// `_ignore_coin`): 0 keeps the win (heads), 1 the loss (tails).
+function getIgnoreCoinInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.ignore_coin;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
 // Forbidden Ritual: whether the spell's controller runs the printed process
 // again. No stake and no count — "any number of times" names neither.
 function getRepeatProcessInfo(state = currentState) {
@@ -10737,6 +10748,68 @@ function applyFlipAgainPrompt(info) {
   });
 }
 
+// "If you would flip a coin, instead flip two coins and ignore one." (Krark's
+// Thumb.) Everything the rulings say the chooser sees before choosing: every
+// coin this flip became, the other players' coins flipped at the same time
+// and what each earlier chooser kept, and the text of what is flipping, which
+// says what each result does. A button per option, in the server's order.
+function applyIgnoreCoinPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  if (!panel || !title || !body || !steps) return;
+  panel.classList.remove("hidden");
+  okBtn?.classList.add("hidden");
+  customRow?.classList.add("hidden");
+  cancelBtn?.classList.add("hidden");
+  if (cancelBtn) cancelBtn.disabled = true;
+  if (customOkBtn) customOkBtn.disabled = true;
+
+  const coins = Array.isArray(info.coins) ? info.coins.map(String) : [];
+  const because = Array.isArray(info.ignored_by) && info.ignored_by.length
+    ? info.ignored_by.map(String).join(", ")
+    : "A replacement effect";
+  title.textContent = `${info.card_name || "Coin flip"} — keep which coin?`;
+  body.textContent =
+    `${because}: your flip became ${coins.length} coins, which came up ` +
+    `${coins.join(", ")}. Keep one; the other${coins.length > 2 ? "s are" : " is"} ignored.`;
+  const others = Array.isArray(info.others) ? info.others : [];
+  const otherLines = others.map((other) => {
+    const theirs = Array.isArray(other?.coins) ? other.coins.map(String) : [];
+    const kept = other?.kept ? ` — kept ${String(other.kept)}` : "";
+    return `<div class="prompt-subnote">${escapeHtml(String(other?.name ?? "Another player"))}`
+      + `'s coin${theirs.length === 1 ? "" : "s"}: ${escapeHtml(theirs.join(", "))}${escapeHtml(kept)}</div>`;
+  });
+  const text = info.effect_text ? String(info.effect_text) : "";
+  steps.innerHTML =
+    (text ? `<div class="prompt-subnote">${escapeHtml(text)}</div>` : "") +
+    otherLines.join("") +
+    '<div class="prompt-choice-column">' +
+    info.options
+      .map((option, index) =>
+        `<button type="button" class="prompt-choice-btn" data-ignore-coin="${index}">`
+        + `${escapeHtml(String(option?.label ?? option?.result ?? index))}</button>`)
+      .join("") +
+    "</div>";
+  steps.querySelectorAll("[data-ignore-coin]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const index = Number(btn.dataset.ignoreCoin);
+      try {
+        await sendAction({ seat, action: "ignore_coin_confirm", option_index: index });
+        const label = String(info.options[index]?.label ?? "Keep that coin");
+        updateActionHint(`${info.card_name || "Coin flip"}: ${label.replace(/^Keep/, "kept")}.`);
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
+  });
+}
+
 function applyRepeatProcessPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -14687,6 +14760,12 @@ function renderActivationPrompt() {
   const flipAgainInfo = getFlipAgainInfo();
   if (flipAgainInfo) {
     applyFlipAgainPrompt(flipAgainInfo);
+    return;
+  }
+
+  const ignoreCoinInfo = getIgnoreCoinInfo();
+  if (ignoreCoinInfo) {
+    applyIgnoreCoinPrompt(ignoreCoinInfo);
     return;
   }
 

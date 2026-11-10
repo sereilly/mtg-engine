@@ -44,15 +44,13 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 from .. import simultaneous_damage
-from ..oracle_types import (COIN_FLIPS_MADE, COIN_FLIPS_WON, ONE_DEALING,
-                            PER_OBJECT_SEAT_RECORDS, OracleInstruction,
-                            STACK_TARGET_CONTROLLER)
+from ..oracle_types import (ONE_DEALING, PER_OBJECT_SEAT_RECORDS,
+                            OracleInstruction, STACK_TARGET_CONTROLLER)
 from ..resumption import run_resumable
 from ..mana_payment import mana_cost_label
 from ..models import Permanent
 from ._color_conditions import evaluate_color_condition
-from ._common import (COIN_FACES_BY_SEAT, damage_dealer, flip_coin,
-                      flip_coin_for, flip_face_for)
+from ._common import damage_dealer, flip_coin
 from ._conditions import evaluate_state_condition
 from ._filters import permanent_matches_filter
 from ._record_conditions import evaluate_record_condition
@@ -580,11 +578,11 @@ def count_objects(game: Game, instruction: OracleInstruction, context: OracleExe
 def flip_a_coin(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Flip a coin." (CR 705.1.)
 
-    One draw from the RNG, recorded in this resolution's scratchpad. The
-    sentences after it read that record through ``if_then``'s ``coin_flip``
-    condition, which is what makes "If you win the flip, … If you lose the flip,
-    …" (Bottle of Suleiman) *one* coin rather than two: CR 705.2 says only the
-    player who flipped wins or loses that flip, so there is one result and both
+    One flip, recorded in this resolution's scratchpad. The sentences after it
+    read that record through ``if_then``'s ``coin_flip`` condition, which is
+    what makes "If you win the flip, … If you lose the flip, …" (Bottle of
+    Suleiman) *one* coin rather than two: CR 705.2 says only the player who
+    flipped wins or loses that flip, so there is one result and both
     sentences read it.
 
     A control-flow handler rather than a board one because the flip has no
@@ -598,52 +596,19 @@ def flip_a_coin(game: Game, instruction: OracleInstruction, context: OracleExecu
     behind it read as neither a win nor a loss.
 
     ``flipper: each_player`` is "**each player** flips a coin" (Goblin
-    Assassin): one coin per seat, recorded as each seat's face.
+    Assassin): one coin per seat, recorded as each seat's face
+    (``COIN_FACES_BY_SEAT``) — a flip nobody wins or loses (the card's
+    2004-10-04 ruling; CR 705.2's heads-or-tails flip), so nothing is
+    announced and nothing written under ``coin_flip``.
+
+    The flip is ``coin_runs.flip_together``'s: a flipper whose Krark's Thumb
+    made two coins that disagree is asked which to keep, and the record is
+    written once the coin is kept (``coin_runs.flip_a_coin``). This module's
+    ``flip_coin`` is the coin, so a test rigging it rigs these flips.
     """
-    flipper = context.caster
-    if instruction.payload.get("flipper") == "each_player":
-        # "**Each player** flips a coin." (Goblin Assassin.) One coin per seat
-        # still in the game, in APNAP order (CR 101.4) so a seeded game draws
-        # the same coins for the same seats, and a flip nobody wins or loses
-        # (the card's 2004-10-04 ruling; CR 705.2's heads-or-tails flip) — so
-        # the bare coin, never the announcement of a win `flip_coin_for`
-        # makes, and nothing written under ``coin_flip``: "if you win the
-        # flip" behind this reads neither a win nor a loss. What the sentences
-        # after it read is each seat's face (``COIN_FACES_BY_SEAT``).
-        faces: dict[int, str] = {}
-        for seat in game.apnap_seats():
-            faces[seat] = (
-                "heads"
-                if flip_face_for(game, game.players[seat], flip=flip_coin)
-                else "tails"
-            )
-            game.log.append(
-                f"{context.card.name}: {game.players[seat].name} flipped "
-                f"{faces[seat]}"
-            )
-        context.results[COIN_FACES_BY_SEAT] = faces
-        return True, "resolved"
-    if instruction.payload.get("flipper") == "event_subject_player":
-        seat = (context.trigger_context or {}).get("event_subject_player")
-        if not isinstance(seat, int) or not 0 <= seat < len(game.players):
-            game.log.append(
-                f"{context.card.name}: no player to flip the coin"
-            )
-            return True, "resolved"
-        flipper = game.players[seat]
-        won = flip_coin_for(game, flipper, flip=flip_coin)
-        context.results["coin_flip"] = won
-        game.log.append(
-            f"{context.card.name}: {flipper.name} "
-            f"{'won' if won else 'lost'} the coin flip"
-        )
-        return True, "resolved"
-    won = flip_coin_for(game, flipper, flip=flip_coin)
-    context.results["coin_flip"] = won
-    game.log.append(
-        f"{context.card.name}: {'won' if won else 'lost'} the coin flip"
-    )
-    return True, "resolved"
+    from .coin_runs import flip_a_coin as flip
+
+    return flip(game, instruction, context, flip=flip_coin)
 
 
 @effect_handler("flip_coins_until_loss")
@@ -671,48 +636,18 @@ def flip_coins_until_loss(game: Game, instruction: OracleInstruction, context: O
     **No** ``amount_from`` is "flip a coin **until you lose a flip**" (Crazed
     Firecat): the first loss is the only bound. A third record says how many
     flips were won (``COIN_FLIPS_WON``), which "for each flip you won" reads.
-    A run that has not lost by :data:`_UNBOUNDED_FLIP_GUARD` flips stops
+    A run that has not lost by ``coin_runs.UNBOUNDED_FLIP_GUARD`` flips stops
     there: the rules put no ceiling on it, but a coin a test or a future
     effect rigs to always win must not hang the game.
+
+    The run is ``coin_runs``': each flip may stop to ask which coin a
+    Krark's Thumb keeps, and the run carries on from the answer.
     """
+    from .coin_runs import flip_until_loss, flip_until_loss_or_stop
+
     if instruction.payload.get("may_stop"):
-        from .coin_runs import flip_until_loss_or_stop
-
         return flip_until_loss_or_stop(game, instruction, context)
-    bounded = instruction.payload.get("amount_from") is not None
-    limit = (
-        max(0, int(context.results.get(str(instruction.payload["amount_from"]), 0) or 0))
-        if bounded else _UNBOUNDED_FLIP_GUARD
-    )
-    card_name = getattr(context.card, "name", "an effect")
-    made = 0
-    clean = True
-    while made < limit and clean:
-        clean = flip_coin_for(game, context.caster, flip=flip_coin)
-        made += 1
-        game.log.append(
-            f"{card_name}: {'won' if clean else 'lost'} the coin flip"
-        )
-    context.results["coin_flip"] = clean
-    context.results[COIN_FLIPS_MADE] = made
-    context.results[COIN_FLIPS_WON] = made if clean else made - 1
-    if bounded:
-        game.log.append(
-            f"{card_name}: {made} of {limit} flip(s) made, "
-            + ("every one won" if clean else "the last one lost")
-        )
-    else:
-        game.log.append(
-            f"{card_name}: won {context.results[COIN_FLIPS_WON]} flip(s) "
-            "before losing one"
-        )
-    return True, "resolved"
-
-
-#: Where an unbounded run of flips ("until you lose a flip") gives up. Not a
-#: rule — CR 705 sets no ceiling — but the probability of a fair coin reaching
-#: it is 2**-1000, so only a rigged coin ever does.
-_UNBOUNDED_FLIP_GUARD = 1000
+    return flip_until_loss(game, instruction, context, flip=flip_coin)
 
 
 @effect_handler("coin_flip_stakes_loop")
@@ -734,41 +669,13 @@ def coin_flip_stakes_loop(game: Game, instruction: OracleInstruction, context: O
     A resolution with no opponent to point at does nothing: "target opponent"
     is chosen at announcement (CR 601.2c), and a spell whose only target is
     gone has nobody to stake against.
+
+    The round is ``coin_runs.flip_for_stakes``: the flip may stop to ask
+    which coin a Krark's Thumb keeps, and the stake moves once it is kept.
     """
-    caster = context.caster
-    opponent = context.target
-    card_name = getattr(context.card, "name", "an effect")
-    if opponent is None or opponent is caster:
-        game.log.append(f"{card_name}: no opponent to play against")
-        return True, "resolved"
-    stake = max(0, int(instruction.payload.get("stake", 1)))
-    won = flip_coin_for(game, caster, flip=flip_coin)
-    context.results["coin_flip"] = won
-    if won:
-        game._gain_life(caster, stake, card_name)
-        opponent.life -= stake
-        decider = caster
-    else:
-        caster.life -= stake
-        game._gain_life(opponent, stake, card_name)
-        decider = opponent
-    game.log.append(
-        f"{card_name}: {caster.name} {'won' if won else 'lost'} the flip "
-        f"for {stake} life"
-    )
-    # "Double the life stakes with each flip." Applied to what the *next* round
-    # would run at, not to this one: the first flip is for the printed number.
-    next_stake = stake * 2 if instruction.payload.get("doubling") else stake
-    game.arm_pending_choice(
-        "flip_again", game.players.index(decider),
-        card_name=card_name,
-        stake=next_stake,
-        _again=OracleInstruction(
-            instruction.kind, "", {**instruction.payload, "stake": next_stake}
-        ),
-        _context=context,
-    )
-    return True, "resolved"
+    from .coin_runs import flip_for_stakes
+
+    return flip_for_stakes(game, instruction, context, flip=flip_coin)
 
 
 @effect_handler("if_then")

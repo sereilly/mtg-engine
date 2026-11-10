@@ -19,6 +19,7 @@ from engine.grammar.vocabulary import CREATURE_TYPES, LAND_TYPES
 from engine.mana_payment import mana_cost_label
 from engine.pending_choices import public_data
 from engine.provoke import PROVOKE_REMINDER, is_provoke
+from engine.text_changes import spell_text_card
 
 from .prompt_registry import PromptContext, prompt_renderer
 
@@ -721,6 +722,50 @@ def _flip_again(ctx: PromptContext, choices: list) -> dict:
     if "flips_won" in choice.data:
         prompt["flips_won"] = int(choice.data["flips_won"])
     return prompt
+
+
+@prompt_renderer("ignore_coin")
+def _ignore_coin(ctx: PromptContext, choices: list) -> dict:
+    """"If you would flip a coin, instead flip two coins and ignore one."
+    (Krark's Thumb.) Which coin the flipper keeps, asked only where the coins
+    disagree, so there are always exactly two answers.
+
+    Everything the rulings say the chooser knows, and it is all public: every
+    coin this flip became (``coins``: "won" / "lost", or "heads" / "tails"
+    for a flip nobody wins, CR 705.2), every other coin flipped at the same
+    time and what each earlier chooser kept (``others``; 2004-10-04: "you can
+    see your opponent's result before choosing which result to keep"), the
+    permanents that made the extra coins (``ignored_by``), and the text of
+    the spell or ability that is flipping (``effect_text``), which says what
+    each result does. Answered with ``option_index`` into ``options``: 0
+    keeps a win (heads), 1 a loss (tails).
+    """
+    choice = choices[0]
+    data = choice.data
+    wins = bool(data.get("wins", True))
+    # The object on the stack the flip is part of — an ability's printed line,
+    # or a spell's text as any text change left it (CR 612, ``spell_text_card``).
+    stack_item = data.get("_stack_item")
+    effect_text = None
+    if stack_item is not None:
+        effect_text = (
+            stack_item.ability_text if stack_item.is_ability
+            else spell_text_card(stack_item).oracle_text
+        ) or None
+    up, down = ("won", "lost") if wins else ("heads", "tails")
+    return {
+        "player_seat": choice.player_index,
+        "card_name": data.get("card_name", ""),
+        "wins": wins,
+        "coins": list(data.get("coins") or ()),
+        "others": [dict(other) for other in data.get("others") or ()],
+        "ignored_by": list(data.get("ignored_by") or ()),
+        "effect_text": effect_text,
+        "options": [
+            {"result": up, "label": "Keep the win" if wins else "Keep heads"},
+            {"result": down, "label": "Keep the loss" if wins else "Keep tails"},
+        ],
+    }
 
 
 @prompt_renderer("guess_named_card")

@@ -20,7 +20,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ._common import flip_coin, flip_coin_for
+from ._common import flip_coin
+from .coin_runs import flip_won_or_lost
 from ._targets import (recorded_permanent_ids, attached_host,
                        block_pair_permanents, resolve_own_combatant,
                        resolve_role_permanent, resolve_target_permanent,
@@ -48,23 +49,38 @@ def coin_flip_remove_attacker_and_tap(game: Game, instruction: OracleInstruction
     """Mijae Djinn: "Whenever this creature attacks, flip a coin. If you lose
     the flip, remove this creature from combat and tap it." Fired per-attacker
     by _fire_creature_attacks_triggers, which records the attacker as the
-    object the ability is about (``StackItem.about_permanent_id``)."""
+    object the ability is about (``StackItem.about_permanent_id``).
+
+    What the flip does is its kept coin's (``coin_runs.flip_won_or_lost``): a
+    Krark's Thumb's two coins that disagree are its controller's to choose
+    between, and the attacker is looked up again by id once the coin is kept."""
     combatant = resolve_own_combatant(game, context)
     if combatant is None:
         return True, "resolved"
-    controller, idx, permanent = combatant
-    if flip_coin_for(game, controller, flip=flip_coin):
-        game.log.append(f"{context.card.name} won the coin flip")
-        return True, "resolved"
-    # Through the one transition rather than by popping the attacker map.
-    # CR 506.4: "a creature that's removed from combat stops being an attacking,
-    # blocking, blocked, and/or unblocked creature" — and popping the map alone
-    # left `permanent.attacking` stamped True, its `defending_player_index` set
-    # and any blocker still holding its slot. Every filter asking "attacking"
-    # went on admitting it for the rest of the turn.
-    game.remove_from_combat(permanent)
-    game.become_tapped(permanent)
-    game.log.append(f"{context.card.name} lost the coin flip: removed from combat and tapped")
+    controller = combatant[0]
+
+    def kept(won: bool) -> None:
+        if won:
+            game.log.append(f"{context.card.name} won the coin flip")
+            return
+        still = resolve_own_combatant(game, context)
+        if still is None:
+            return
+        permanent = still[2]
+        # Through the one transition rather than by popping the attacker map.
+        # CR 506.4: "a creature that's removed from combat stops being an
+        # attacking, blocking, blocked, and/or unblocked creature" — and
+        # popping the map alone left `permanent.attacking` stamped True, its
+        # `defending_player_index` set and any blocker still holding its slot.
+        # Every filter asking "attacking" went on admitting it for the rest of
+        # the turn.
+        game.remove_from_combat(permanent)
+        game.become_tapped(permanent)
+        game.log.append(f"{context.card.name} lost the coin flip: removed from combat and tapped")
+
+    flip_won_or_lost(
+        game, controller, flip=flip_coin, card_name=context.card.name, then=kept,
+    )
     return True, "resolved"
 
 
@@ -76,23 +92,33 @@ def coin_flip_remove_blocker(game: Game, instruction: OracleInstruction, context
     this combat become unblocked." Fired per-blocker by
     _fire_creature_blocks_triggers. "Can't block this turn" needs no extra
     flag: this engine only declares blockers once per combat, so removal
-    already prevents it from blocking again."""
+    already prevents it from blocking again. The flip is
+    ``coin_runs.flip_won_or_lost``'s, Mijae Djinn's way."""
     combatant = resolve_own_combatant(game, context)
     if combatant is None:
         return True, "resolved"
-    controller, idx, _permanent = combatant
-    if flip_coin_for(game, controller, flip=flip_coin):
-        game.log.append(f"{context.card.name} won the coin flip")
-        return True, "resolved"
-    controller_index = game.players.index(controller)
-    # Ydwen Efreet prints ", …creatures it was blocking that had become blocked
-    # by only this creature this combat become unblocked" — the clause that
-    # overrides CR 509.1h, which is why it is asked for here rather than
-    # inherited from the removal.
-    game._remove_blocker_from_combat(
-        controller_index, idx, frees_blocked_attackers=True
+    controller = combatant[0]
+
+    def kept(won: bool) -> None:
+        if won:
+            game.log.append(f"{context.card.name} won the coin flip")
+            return
+        still = resolve_own_combatant(game, context)
+        if still is None:
+            return
+        holder, idx, _permanent = still
+        # Ydwen Efreet prints ", …creatures it was blocking that had become
+        # blocked by only this creature this combat become unblocked" — the
+        # clause that overrides CR 509.1h, which is why it is asked for here
+        # rather than inherited from the removal.
+        game._remove_blocker_from_combat(
+            game.players.index(holder), idx, frees_blocked_attackers=True
+        )
+        game.log.append(f"{context.card.name} lost the coin flip: removed from combat")
+
+    flip_won_or_lost(
+        game, controller, flip=flip_coin, card_name=context.card.name, then=kept,
     )
-    game.log.append(f"{context.card.name} lost the coin flip: removed from combat")
     return True, "resolved"
 
 

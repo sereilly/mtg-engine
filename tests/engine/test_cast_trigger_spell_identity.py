@@ -162,7 +162,7 @@ def _flips(won: bool):
     board is set up, or the reader leaves before anything is cast. Read off the
     seeded RNG instead, the row passed or failed with the seed. Through the
     name every coin-rigging test patches (``handlers.control_flow.flip_coin``,
-    which ``flip_coin_for`` is handed).
+    which the flip seam is handed).
     """
     real = _control_flow.flip_coin
     _control_flow.flip_coin = lambda: won
