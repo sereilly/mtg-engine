@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**440 / 652 tracked rules covered (67%)** — 3572 tests, 0 unannotated.
+**440 / 652 tracked rules covered (67%)** — 3578 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -266,7 +266,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 115. Targets
 
-- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(38 tests, subrules abcd)*
+- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(41 tests, subrules abcd)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
 - [x] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe... *(13 tests)*
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
@@ -682,7 +682,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(15 tests, subrules ab)*
 - [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(62 tests, subrules ab)*
-- [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(3 tests)*
+- [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(4 tests)*
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
 - [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(52 tests, subrules acde)*
 
@@ -887,13 +887,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.8** Flash *(4 tests, subrules ab)*
 - [x] **702.9** Flying *(8 tests, subrules ab)*
 - [x] **702.10** Haste *(3 tests, subrules bc)*
-- [x] **702.11** Hexproof *(6 tests, subrules bd)*
+- [x] **702.11** Hexproof *(7 tests, subrules bd)*
 - [x] **702.12** Indestructible *(3 tests, subrules b)*
 - [x] **702.14** Landwalk *(18 tests, subrules abc)*
 - [x] **702.15** Lifelink *(12 tests, subrules be)*
-- [x] **702.16** Protection *(73 tests, subrules abcdefgmn)*
+- [x] **702.16** Protection *(75 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
-- [x] **702.18** Shroud *(11 tests, subrules a)*
+- [x] **702.18** Shroud *(14 tests, subrules a)*
 - [x] **702.19** Trample *(27 tests, subrules bcdf)*
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(52 tests, subrules abcdefghjk)*

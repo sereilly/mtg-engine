@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **6144**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **639**
+- With deletion-probe findings (ignored words): **638**
 
 ## Acknowledged simplifications
 
@@ -192,7 +192,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Ensnare | `tap all creatures` | all |
 | Epicenter | `target player sacrifices a land of their choice. each player sacrifice` | all |
 | Erg Raiders | `if this creature didn't attack this turn, it deals 2 damage to you unl` | creature |
-| Erithizon | `put a +1/+1 counter on target creature of defending player's choice` | target |
 | Errant Minion | `that player may pay any amount of mana. this aura deals 2 damage to th` | aura |
 | Escape Routes | `return target white or black creature you control to its owner's hand` | or |
 | Evacuation | `return all creatures to their owners' hands` | all |
