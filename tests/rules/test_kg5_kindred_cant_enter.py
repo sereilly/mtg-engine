@@ -168,6 +168,24 @@ def test_a_search_for_a_goblin_card_still_puts_a_goblin_creature_onto_the_battle
     assert shuffled == ["P0"]
 
 
+GOBLIN_BOMB = _card("Test Goblin Bomb", "Kindred Sorcery — Goblin",
+                    "Test Goblin Bomb deals 5 damage to any target.", "{4}{R}{R}")
+
+
+@pytest.mark.cr("400.4a", "701.23b")
+def test_a_seat_nobody_asks_finds_the_goblin_that_can_enter():
+    """The default search pick passes over a find the battlefield cannot take:
+    the costly Kindred sorcery would stay in the library, so the seat finds the
+    Goblin creature instead (CR 701.23b lets it find either, or nothing)."""
+    game = _duel(hand=[_SEARCH], library=[GOBLIN_BOMB, _POOL["Raging Goblin"]],
+                 interactive=())
+    _cast(game, _SEARCH)
+    settle(game)
+    assert _on_battlefield(game) == ["Raging Goblin"], game.log[-6:]
+    assert "Test Goblin Bomb" in _names(game.players[0].library)
+    assert not _stay_lines(game)
+
+
 _COUNTED = _spell(
     "Test Goblin Roundup",
     "Search your library for up to two Goblin cards, put them onto the "
@@ -437,14 +455,16 @@ _MAGNETISM = _spell(
 
 
 @pytest.mark.cr("400.4a", "608.2d", "609.3")
-@pytest.mark.parametrize("interactive", [False, True])
-def test_the_opponents_pick_of_a_kindred_instant_leaves_it_in_the_library(interactive):
-    """Animal Magnetism with "a Goblin card": the Kindred instant is a legal
-    pick — the opponent's, and the cheapest, which the default chooser names
-    for a card the revealer gets — and it stays on top of the library while
-    the rest go to the graveyard."""
+@pytest.mark.parametrize("interactive, kindred", [
+    (False, GOBLIN_TRICK), (False, GOBLIN_BOMB), (True, GOBLIN_TRICK),
+])
+def test_the_opponents_pick_of_a_kindred_instant_leaves_it_in_the_library(interactive, kindred):
+    """Animal Magnetism with "a Goblin card": the Kindred card is a legal pick
+    — the opponent's, and the one the default chooser names first, cheap or
+    not, since a card that cannot enter serves the revealer least of all — and
+    it stays on top of the library while the rest go to the graveyard."""
     game = _duel(hand=[_MAGNETISM], interactive=(1,) if interactive else (), library=[
-        GOBLIN_TRICK, _POOL["Goblin King"], _POOL["Grizzly Bears"],
+        kindred, _POOL["Goblin King"], _POOL["Grizzly Bears"],
     ])
     _cast(game, _MAGNETISM)
     if interactive:
@@ -454,7 +474,7 @@ def test_the_opponents_pick_of_a_kindred_instant_leaves_it_in_the_library(intera
         assert game.confirm_opponent_picks_revealed(1, 0)
     settle(game)
     assert _on_battlefield(game) == [], game.log[-6:]
-    assert game.players[0].library[0] is GOBLIN_TRICK
+    assert game.players[0].library[0] is kindred
     assert sorted(_names(game.players[0].graveyard)) == [
         "Goblin King", "Grizzly Bears", "Island", "Island", "Test Goblin Magnetism",
     ]

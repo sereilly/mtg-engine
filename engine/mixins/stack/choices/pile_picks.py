@@ -195,7 +195,16 @@ class PileChoicesMixin:
         if not slots:
             self.discard_pending_choice(choice)
             return
-        if str(choice.data.get("fate", "graveyard")) in ("hand", "battlefield"):
+        fate = str(choice.data.get("fate", "graveyard"))
+        if fate == "battlefield":
+            # A card CR 400.4a keeps off the battlefield (a Kindred instant an
+            # "a Goblin card" pick admits) is the least of all to the revealer:
+            # it stays in the library and nothing enters. Named first, then the
+            # cheapest.
+            best = min(
+                slots, key=lambda i: (is_permanent_card(cards[i]), cards[i].cmc, i)
+            )
+        elif fate == "hand":
             best = min(slots, key=lambda i: (cards[i].cmc, i))
         else:
             best = max(slots, key=lambda i: (cards[i].cmc, -i))

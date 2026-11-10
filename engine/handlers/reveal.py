@@ -620,30 +620,30 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
 
     revealed: list = []
     found = None
+    # The run stops on the match **without taking it**: it is still the top
+    # card when the sentence moves it (CR 701.20b), so a card the move cannot
+    # make is a card that never left.
     while player.library:
-        card = player.library.pop(0)
-        if matches(card):
-            found = card
+        if matches(player.library[0]):
+            found = player.library[0]
             break
-        revealed.append(card)
+        revealed.append(player.library.pop(0))
 
     if found is not None:
         game.log.append(f"{player.name} revealed {found.name}")
         game.record_reveal(seat, [found.name])
         if payload.get("destination") == "battlefield":
-            if stays_out_of_battlefield(game, found, player, "library"):
-                # "…until you reveal a **Goblin** card. Put that card onto the
-                # battlefield": the run stopped on a Kindred instant of the
-                # type, which CR 400.4a leaves in the library (CR 701.20b: the
-                # reveal never moved it) — laid back on top, above the cards
-                # turned over before it, before "the rest" go where the card
-                # sends them (CR 609.3).
-                player.library.insert(0, found)
-            else:
+            # "…until you reveal a **Goblin** card. Put that card onto the
+            # battlefield": the run may stop on a Kindred instant of the type,
+            # which CR 400.4a leaves on top of the library, above "the rest",
+            # which still go where the card sends them (CR 609.3).
+            if not stays_out_of_battlefield(game, found, player, "library"):
+                player.library.pop(0)
                 game._put_permanent_onto_battlefield(
                     seat, Permanent(card=found), None, from_zone="library",
                 )
         else:
+            player.library.pop(0)
             game.put_card_into_hand(player, found)
     else:
         game.log.append(f"{player.name} revealed their library and found nothing")

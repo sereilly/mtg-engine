@@ -295,6 +295,7 @@ def choose_search_cards(
     resolver will consume it — an AI that kept offering a used name would
     submit an answer the engine then refuses, which is the fail-to-find.
     """
+    from .permanent_cards import is_permanent_card
     from .search_filters import (landing_seat, name_key, search_slots,
                                  search_zone_cards, slot_assignment)
 
@@ -322,6 +323,18 @@ def choose_search_cards(
         and all(place == "hand" for place in destinations)
     )
     sign = -1.0 if handing_over else 1.0
+    # **A find the battlefield cannot take is no find.** Where every find is
+    # bound for the battlefield, a card CR 400.4a leaves where it was found (a
+    # Kindred instant a "Goblin card" names, ``permanent_cards``) is a legal
+    # answer that puts nothing down — so a seat choosing for itself passes it
+    # over, as it would a card it could not use.
+    to_battlefield = all(place == "battlefield" for place in destinations)
+
+    def findable(card) -> bool:
+        if to_battlefield and not is_permanent_card(card):
+            return False
+        return search_matches(card, working, game=game, owner=player_index)
+
     if search_slots(working):
         # "a land card **of each basic land type**" (Gaea's Balance): one find
         # per printed description. Best card first, each kept only while the
@@ -334,7 +347,7 @@ def choose_search_cards(
             (zone, index, card)
             for zone in tuple(working.get("zones", ("library",)))
             for index, card in enumerate(search_zone_cards(player, zone))
-            if search_matches(card, working, game=game, owner=player_index)
+            if findable(card)
         ]
         entries.sort(
             key=lambda entry: -sign * _score_tutor_choice(game, player_index, entry[2])
@@ -356,9 +369,7 @@ def choose_search_cards(
         for zone in tuple(working.get("zones", ("library",))):
             cards = search_zone_cards(player, zone)
             for index, card in enumerate(cards):
-                if (zone, index) in taken or not search_matches(
-                    card, working, game=game, owner=player_index,
-                ):
+                if (zone, index) in taken or not findable(card):
                     continue
                 score = sign * _score_tutor_choice(game, player_index, card)
                 if best is None or score > best_score:
