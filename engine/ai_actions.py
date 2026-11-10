@@ -205,10 +205,10 @@ class ActivationAction:
     # The word a "Choose flying, first strike, trample, or shadow" cost
     # announces (Phyrexian Splicer, CR 601.2b). None is the engine's default
     # (`Game.announced_chosen_keyword`); the policy names one when the default's
-    # walk has no chain on the boards it wants (`ai_abilities._keyword_walk_order`).
+    # walk has no chain on the boards it wants (`ai_activation_targets._keyword_walk_order`).
     chosen_keyword: str | None = None
     # The X an "{X}{G}{G}: …" cost announces (CR 107.3a via CR 602.2b), sized
-    # by rehearsal (`ai_abilities._sized_x_activation`). None for an ability
+    # by rehearsal (`ai_activation_rehearsal._sized_x_activation`). None for an ability
     # whose cost prints no {X} — every action this policy made before it
     # announced one, since an ability with {X} in its cost was not proposed.
     x_value: int | None = None
@@ -227,6 +227,14 @@ class ActivationAction:
     # ability printing one cost, and the engine's default
     # (`activation_cost_alternatives.default_alternative_index`) otherwise.
     alternative_cost_index: int | None = None
+    # Which permanents pay a "Sacrifice a Goblin" cost (CR 602.2b through
+    # 601.2b), by id — the activation path's ``cost_permanent_ids``, and
+    # `CastAction.cost_permanent_ids`' twin. None is the engine's
+    # deterministic pick; named for every sacrifice the chooser weighs
+    # (`ai_activation_rehearsal._sacrifice_priced_activation`): the cheapest
+    # to lose, or the reading the effect is measured by ("damage equal to the
+    # sacrificed artifact's mana value", Bosh).
+    cost_permanent_ids: list[int] | None = None
 
 
 @dataclass(frozen=True)
@@ -347,7 +355,7 @@ def activation_announcement(action: ActivationAction) -> dict:
     **The one place an `ActivationAction` becomes an activation**, for
     `cast_announcement`'s reason. There were five executors — the simulator's
     main phase and its foreign activation, the web AI step's two, and the
-    rehearsal's queue (`ai_abilities._queue_activation`, which the
+    rehearsal's queue (`ai_activation_rehearsal._queue_activation`, which the
     instant-speed executor shares) — each spelling the forwarding out for
     itself, and they had drifted: the web's foreign executor forwarded no
     role answer, no keyword and no X, and none of them a text change's two
@@ -371,6 +379,9 @@ def activation_announcement(action: ActivationAction) -> dict:
         "mana_color": action.new_color,
         # Which printed activation cost ("{3}, {T} or {U}, {T}") is paid.
         "alternative_cost_index": action.alternative_cost_index,
+        # CR 601.2b via 602.2b: which permanents pay the sacrifice (see
+        # `ActivationAction.cost_permanent_ids`).
+        "cost_permanent_ids": action.cost_permanent_ids,
     }
 
 

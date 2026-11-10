@@ -166,7 +166,7 @@ def test_the_executors_all_make_the_whole_announcement():
     and spell out no keyword of their own — the web's foreign executor had
     dropped the role answer, the keyword and the X, and all five the words."""
     root = Path(__file__).resolve().parents[2]
-    abilities = ast.parse((root / "engine/ai_abilities.py").read_text(encoding="utf-8"))
+    abilities = ast.parse((root / "engine/ai_activation_rehearsal.py").read_text(encoding="utf-8"))
     queue = next(
         node for node in ast.walk(abilities)
         if isinstance(node, ast.FunctionDef) and node.name == "_queue_activation"
@@ -174,7 +174,7 @@ def test_the_executors_all_make_the_whole_announcement():
     trees = [
         (relative, ast.parse((root / relative).read_text(encoding="utf-8")))
         for relative in ("engine/ai_simulator.py", "web/game_flow.py")
-    ] + [("engine/ai_abilities.py::_queue_activation", queue)]
+    ] + [("engine/ai_activation_rehearsal.py::_queue_activation", queue)]
     found = 0
     for relative, tree in trees:
         for node in _executor_calls(tree):

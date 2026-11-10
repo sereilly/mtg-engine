@@ -45,6 +45,13 @@ _TRANSITION = frozenset({"remove_from_battlefield", "remove_all_from_battlefield
 
 #: Functions that reach the transition but are not a departure of their own.
 _NOT_DEPARTURES = {
+    "_give_up_the_source": (
+        "a one-shot's own \"Sacrifice / Exile / Return this permanent\" paid "
+        "on a rehearsal's scratch copy with nothing activated "
+        "(``ai_activation_rehearsal._rehearse_activation(cost_neutral=True)``, "
+        "kg5): one permanent on a copy of its own, never the table's — the "
+        "loops that rehearse several candidates each rehearse on a new copy."
+    ),
     "phase_out_permanent": (
         "phasing out is not a zone change (CR 702.26d): it calls the "
         "transition with ``zone_change=False``, which records nothing and "

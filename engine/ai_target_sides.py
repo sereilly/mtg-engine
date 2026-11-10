@@ -277,6 +277,42 @@ def _pt_delta_sign(instruction: OracleInstruction) -> int:
     return (total > 0) - (total < 0)
 
 
+#: The targeted kinds whose ``power`` / ``toughness`` payload **sets** the
+#: target's base P/T (CR 613.4b) to a printed number: "Until end of turn,
+#: target creature has base power 1 or base toughness 1" (Vhati il-Dal),
+#: "…has base power and toughness 0/2" (Sorceress Queen), "Target creature
+#: with flying has base power 0" (Island of Wak-Wak). The target carries no
+#: ``targets`` payload: the kind is the target.
+_BASE_PT_SET_KINDS = frozenset({"set_base_pt_target_until_eot"})
+
+#: The base power and toughness a rewrite to printed numbers is weighed
+#: against (:func:`_base_pt_set_sign`): a 2/2. A chooser aims at the largest
+#: creature on the side it is told, so a rewrite to less than this erases
+#: most of what it lands on and is a penalty, one to more is a gift. A tuning
+#: weight, not a rule: every rewrite in both manifest roles prints 0, 1 or 2.
+BASE_PT_REFERENCE = 2
+
+
+def _base_pt_set_sign(instruction: OracleInstruction) -> int:
+    """+1 / -1 / 0: whether a base P/T **rewrite** (:data:`_BASE_PT_SET_KINDS`)
+    to printed numbers gives its target more than :data:`BASE_PT_REFERENCE` or
+    less, summed over the characteristics it sets — 0 for any other kind, an
+    X, or a rewrite to the reference itself.
+
+    The category read every one as ``pump`` — "you" — so Vhati il-Dal shrank
+    its controller's biggest creature, Sorceress Queen made the AI's own best
+    creature a 0/2 and Island of Wak-Wak zeroed its own flier (kg5)."""
+    if instruction.kind not in _BASE_PT_SET_KINDS:
+        return 0
+    payload = instruction.payload or {}
+    total = 0
+    for key in ("power", "toughness"):
+        value = payload.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            total += (value > BASE_PT_REFERENCE) - (value < BASE_PT_REFERENCE)
+    return (total > 0) - (total < 0)
+
+
 def instruction_target_side(instruction: OracleInstruction) -> str | None:
     """Whose permanent the object *instruction* targets should be — "you",
     "opponent", or None for no preference.
@@ -290,6 +326,16 @@ def instruction_target_side(instruction: OracleInstruction) -> str | None:
     """
     targets = (instruction.payload or {}).get("targets")
     described = targets.get("filter") if isinstance(targets, dict) else None
+    if instruction.kind in _BASE_PT_SET_KINDS:
+        # The rewrite carries its noun phrase's seat on the payload itself:
+        # "target creature **you control** gains flying and has base
+        # toughness 1" (Chariot of the Sun), "target creature **you cast this
+        # turn**" (Cycle of Life) — the activator's own either way.
+        payload = instruction.payload or {}
+        described = {
+            "controller": "you" if payload.get("cast_by_you_this_turn")
+            else payload.get("controller"),
+        }
     controller = (described or {}).get("controller")
     if controller in _PRINTED_SEATS:
         return _PRINTED_SEATS[controller]
@@ -308,7 +354,7 @@ def _effect_side(instruction: OracleInstruction) -> str | None:
     """
     if instruction.kind in _NO_SIDE_KINDS:
         return None
-    sign = _pt_delta_sign(instruction)
+    sign = _pt_delta_sign(instruction) or _base_pt_set_sign(instruction)
     if sign:
         return "you" if sign > 0 else "opponent"
     if _silences_its_object(instruction):
@@ -779,7 +825,7 @@ def ability_seat_side(instruction: OracleInstruction | None) -> str | None:
 
     :func:`ability_target_side` is the question for an object; this is the one
     for a face. The policy answered it with a list of three instruction kinds
-    (``ai_abilities._choose_target_for_instruction``), two of which no handler has —
+    (``ai_activation_targets._choose_target_for_instruction``), two of which no handler has —
     ``gain_life`` and ``prevent_damage`` are what those effects were called
     before the grammar lowered them to ``target_gains_life`` and
     ``grant_prevention_shield``. A kind name nothing compiles is a claim about
@@ -1052,9 +1098,13 @@ def ability_target_side(instruction: OracleInstruction | None) -> str | None:
     """
     if instruction is None:
         return None
+    # A step names its target in a ``targets`` payload — or *is* one: a base
+    # P/T rewrite (:data:`_BASE_PT_SET_KINDS`) carries none, so Vhati il-Dal's
+    # two modes were read as naming nothing and its ability had no side.
     steps = [
         step for step in _side_steps(instruction)
         if isinstance((step.payload or {}).get("targets"), dict)
+        or step.kind in _BASE_PT_SET_KINDS
     ]
     sides = {instruction_target_side(step) for step in steps} - {None}
     if "opponent" in sides:
