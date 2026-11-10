@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**435 / 643 tracked rules covered (67%)** — 3555 tests, 0 unannotated.
+**440 / 652 tracked rules covered (67%)** — 3564 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -96,6 +96,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [707. Copying Objects](#707-copying-objects) | 6/14 | 42% |
 | [708. Face-Down Spells and Permanents](#708-face-down-spells-and-permanents) | 7/12 | 58% |
 | [709. Split Cards](#709-split-cards) | 4/4 | 100% |
+| [723. Controlling Another Player](#723-controlling-another-player) | 5/9 | 55% |
 | [724. Ending Turns and Phases](#724-ending-turns-and-phases) | 1/2 | 50% |
 | [733. Handling Illegal Actions](#733-handling-illegal-actions) | 2/2 | 100% |
 | [800. General](#800-general) | 2/7 | 28% |
@@ -978,6 +979,18 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **709.3** A player chooses which half of a split card they are casting before putting it onto the stack. *(20 tests, subrules ab)*
 - [x] **709.4** In every zone except the stack, the characteristics of a split card are those of its two halves c... *(10 tests, subrules abc)*
 
+### 723. Controlling Another Player
+
+- [x] **723.1** Some cards allow a player to control another player during that player’s next turn. This effect a... *(4 tests, subrules ab)*
+- [ ] **723.2** Two cards (Word of Command and Opposition Agent) allow a player to control another player for a l...
+- [x] **723.3** Only control of the player changes. All objects are controlled by their normal controllers. A pla... *(1 tests)*
+- [ ] **723.4** If information about an object in the game would be visible to the player being controlled, it’s ...
+- [x] **723.5** While controlling another player, a player makes all choices and decisions the controlled player ... *(5 tests)*
+- [ ] **723.6** The controller of another player can’t make that player concede. A player may concede the game at...
+- [ ] **723.7** The effect that gives control of a player to another player may restrict the actions the controll...
+- [x] **723.8** A player who controls another player also continues to make their own choices and decisions. *(1 tests)*
+- [x] **723.9** An effect may give a player control of themselves. That player will make their own decisions and ... *(1 tests)*
+
 ### 724. Ending Turns and Phases
 
 - [x] **724.1** Some cards end the turn. When an effect ends the turn, follow these steps in order, as they diffe... *(9 tests, subrules bcde)*
@@ -1043,4 +1056,3 @@ Listed rather than dropped — see `EXCLUDED` in `scripts/rules_progress.py`. A 
 - **702.33** Keyword Abilities (13 tests)
 - **702.34** Keyword Abilities (22 tests)
 - **702.35** Keyword Abilities (12 tests)
-- **723.5** Controlling Another Player (3 tests)
