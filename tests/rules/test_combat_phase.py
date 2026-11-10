@@ -563,11 +563,13 @@ def test_blocker_leaving_battlefield_is_removed_from_combat():
     assert game.combat_blockers == {}
 
 
-@pytest.mark.cr("506.4")
-def test_removed_creature_stops_being_attacking_and_blocking():
+@pytest.mark.cr("506.4", "509.1g")
+def test_removed_attacker_stops_attacking_and_its_blocker_goes_on_blocking():
     # 506.4: a creature removed from combat stops being an attacking, blocking,
-    # blocked, and/or unblocked creature. When the attacker leaves the
-    # battlefield, the surviving blocker stops being a blocking creature.
+    # blocked, and/or unblocked creature — the creature removed, and only it.
+    # When the attacker leaves the battlefield, the surviving blocker is still
+    # a blocking creature (509.1g: "until it's removed from combat or the
+    # combat phase ends"), blocking nothing.
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
     p1 = PlayerState(name="P1", battlefield=[attacker])
@@ -586,10 +588,13 @@ def test_removed_creature_stops_being_attacking_and_blocking():
     p1.battlefield.remove(attacker)
     game._prune_combat_state()
 
-    # The attacker is gone from combat; the blocker no longer blocks anything.
+    # The attacker is gone from combat; the blocker blocks nothing and is
+    # still blocking.
     assert game.combat_attackers == {}
-    assert game.combat_blockers == {}
+    assert game.combat_blockers == {1: {0: []}}
     assert blocker.blocking_attacker_index is None
+    assert blocker.is_blocking
+    assert game.creatures_blocked_by(blocker) == []
     assert blocker.blocked is False
 
 

@@ -808,7 +808,9 @@ class DeclareBlockersStepMixin:
         return [blocker_idx for blocker_idx, a_idxs in blocker_map.items() if attacker_idx in a_idxs]
 
     def _is_blocking_creature(self, permanent: Permanent) -> bool:
-        """True if *permanent* is currently blocking an attacker (Righteousness)."""
+        """True if *permanent* is a blocking creature (Righteousness, Piety) —
+        read off the combat record, which keeps a blocker whose attackers have
+        all left combat (CR 509.1g), so it agrees with ``Permanent.is_blocking``."""
         for defending_index, blocker_map in self.combat_blockers.items():
             if not (0 <= defending_index < len(self.players)):
                 continue

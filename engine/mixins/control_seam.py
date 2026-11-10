@@ -1450,10 +1450,10 @@ class ControlSeamMixin:
                     for attacker in attackers
                     if (moved := shift_attacker(attacker)) is not None
                 ]
-                # A blocker whose every attacker has gone is no longer blocking
-                # anything; dropping it keeps "is this creature blocking?" true.
-                if moved_attackers:
-                    rebuilt[moved_blocker] = moved_attackers
+                # A blocker whose every attacker has gone is still a blocking
+                # creature (CR 509.1g: until *it* is removed from combat or the
+                # phase ends), blocking nothing — so it is kept with none.
+                rebuilt[moved_blocker] = moved_attackers
             if rebuilt:
                 rebuilt_blockers[defender_seat] = rebuilt
         self.combat_blockers = rebuilt_blockers

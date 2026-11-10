@@ -592,6 +592,26 @@ class Permanent:
         return _shields.shields_on(self)
 
     @property
+    def is_blocking(self) -> bool:
+        """Whether this is a blocking creature (CR 509.1g) — the state word
+        "blocking" ("target blocking creature", "as long as it's blocking").
+
+        The combat record (``Game.combat_blockers``) keeps a blocker for as
+        long as CR 509.1g does — "until it's removed from combat or the combat
+        phase ends" — *with none* of its attackers once they have all left, and
+        ``_prune_combat_state`` projects it here: ``blocking_attacker_controller``
+        is the attacking seat, set for every creature the record holds, and
+        ``blocking_attacker_index`` a representative attacker it is blocking
+        now, None when it is blocking nothing. So the controller is the state
+        and the index is not; the index is asked too because a block written
+        by hand (a test, a pasted board) names only it.
+        """
+        return (
+            self.blocking_attacker_controller is not None
+            or self.blocking_attacker_index is not None
+        )
+
+    @property
     def effective_produced_mana(self) -> tuple[str, ...]:
         """Mana this permanent produces, honoring a land-type override.
 

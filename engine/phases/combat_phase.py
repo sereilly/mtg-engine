@@ -940,12 +940,15 @@ class CombatPhaseMixin:
                 if not blocker.is_creature:
                     continue
                 # Keep only attackers still valid AND still aimed at this defender.
-                kept = [
+                # The blocker is kept with none: CR 509.1g, "it remains a
+                # blocking creature until it's removed from combat or the
+                # combat phase ends" — its attackers leaving is neither, so
+                # "target blocking creature" still names it. Blocking nothing,
+                # it assigns no combat damage (CR 510.1d; ``blocker_chunks``).
+                kept_for_defender[blocker_idx] = [
                     a for a in attacker_idxs
                     if self.combat_attackers.get(a) == defending_idx
                 ]
-                if kept:
-                    kept_for_defender[blocker_idx] = kept
             if kept_for_defender:
                 pruned_blockers[defending_idx] = kept_for_defender
         self.combat_blockers = pruned_blockers
@@ -1092,14 +1095,10 @@ class CombatPhaseMixin:
     def creature_blocking_alone(self, permanent: Permanent) -> bool:
         """CR 506.5: a creature is *blocking alone* if it's blocking but no
         other creatures are. Returns False if the permanent isn't itself
-        blocking."""
-        if permanent.blocking_attacker_index is None:
+        blocking — the state ``Permanent.is_blocking`` reads (CR 509.1g)."""
+        if not permanent.is_blocking:
             return False
-        blocking = sum(
-            1
-            for perm in self.all_permanents()
-            if perm.blocking_attacker_index is not None
-        )
+        blocking = sum(1 for perm in self.all_permanents() if perm.is_blocking)
         return blocking == 1
 
     def creatures_blocking(self, permanent: Permanent) -> list[Permanent]:
