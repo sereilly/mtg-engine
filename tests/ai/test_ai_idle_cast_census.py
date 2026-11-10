@@ -95,6 +95,13 @@ ALWAYS = frozenset({
     "Drain Power", "Debt of Loyalty",
     # Coin flips, whose verdict is the rehearsal's sample (kg4; see `LOSSES`).
     "Game of Chaos", "Desperate Gambit",
+    # An own goal at Mirrodin's promotion, the first full pass to sweep it:
+    # "-1/-1 … for each artifact you control" lowers its sign inside the
+    # amount (``{"times_x": -1}``), which ``ai_target_sides._pt_delta_sign``
+    # did not read, so the shrink was read as the ``pump`` category's gift
+    # and aimed at the caster's own Bait Black (0.0) with its twin opposite
+    # measuring 3.0. Swept every run since the sign is read.
+    "Irradiate",
 })
 
 #: A cast is a loss when it leaves its caster this much worse off: half a

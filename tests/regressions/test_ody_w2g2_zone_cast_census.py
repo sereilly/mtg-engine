@@ -125,6 +125,14 @@ STRIDE = 10
 #: Which shares run: the first when this file is named, every one — each its
 #: own test, which the full pass's workers share — under the full census.
 TWIN_PARTS = tuple(range(STRIDE)) if full_census() else (0,)
+#: Spells the first share sweeps whatever their digest: each a finding a whole
+#: sweep made and a fix answered, so naming this file keeps examining it.
+#:
+#: * *Wail of the Nim* (Mirrodin's promotion): entwined from the hand, one
+#:   bullet from an opened graveyard — the entwined cast was scored without
+#:   the bonus every single mode carries under a permission that ends
+#:   (``ai_casts.zone_cast_bonus``), and priced outside that permission.
+PINNED = frozenset({"Wail of the Nim"})
 
 #: Twin rows that differ for a reason the card prints — measured over the whole
 #: pool and left (the module docstring has each one's story). A finding on any
@@ -459,8 +467,11 @@ def twin_census(stride: int = STRIDE, part: int = 0) -> list[dict]:
             # Shared out by the spell's name, not its place in the pool (see
             # ``tests.helpers.stable_sample``): this pool holds the measured
             # set, so every card a round supported shifted every spell behind
-            # it one place, and the sample moved at every merge.
-            if stable_part(spell.name, stride) != part:
+            # it one place, and the sample moved at every merge. The first
+            # share sweeps `PINNED` too.
+            if stable_part(spell.name, stride) != part and not (
+                part == 0 and spell.name in PINNED
+            ):
                 continue
             if not compile_card_oracle(spell).supported:
                 continue

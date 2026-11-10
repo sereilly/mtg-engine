@@ -571,7 +571,22 @@ _OWN_ONLY = "its side is the opponent's and its one target is the caster's own; 
 #: own 2/2; at one it attacks for three. Sized by what each size does only
 #: where the X is life (``ai_casts._cast_candidate_sized``).
 _MANA_X = "an X in mana is the largest affordable, and +X/-X at that kills the attacker"
+#: Awe Strike, "The next time target creature would deal damage this turn,
+#: prevent that damage. You gain life equal to the damage prevented this
+#: way.": its side is the opponent's, since it stops what its target deals
+#: (``ai_target_sides._silences_its_object``; MRD W1G12's seeded games, with
+#: the side read as the gift shield's "you", cast it at the seat's own
+#: attacker and prevented its own damage to the opponent). Aimed at the
+#: caster's own Bear walled by a 0/4 that survives the block, the damage
+#: prevented is two life (1.0) — a use the opposing side cannot weigh, and
+#: the opposing Wall deals nothing to prevent. Pinned at Mirrodin's
+#: promotion, whose full pass first swept it.
+_OWN_DAMAGE_FOR_LIFE = (
+    "its side is the opponent's (it stops what its target deals); the life "
+    "from its own walled attacker's prevented damage is a use that side does not weigh"
+)
 HELD: dict = {
+    ("Awe Strike", None, "wall"): _OWN_DAMAGE_FOR_LIFE,
     ("About Face", None, "wall"): _SWITCH,
     ("Transmutation", None, "wall"): _SWITCH,
     ("Afflict", None, "open"): _OWN_ONLY,

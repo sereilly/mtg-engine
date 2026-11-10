@@ -111,9 +111,17 @@ def entwined_cast(
     mode the seat would not cast on its own (nothing on the side its effect
     wants) is a mode the entwined cast would have to aim anyway. A mode that
     names no target is announced bare, and the rehearsal says what it adds.
+
+    Asked inside the permission *built* was weighed under
+    (``ai_weighed_cast.casting_under``, held by the caller): the price, the
+    rehearsal's trip out of the pile and the zone's bonus read it, so the
+    entwined cast and the single modes are one reading of one card wherever
+    it is cast from.
     """
     from .ai_actions import cast_announcement
     from .ai_cast_gates import _printed_costs_are_payable
+    from .ai_casts import zone_cast_bonus
+    from .ai_weighed_cast import cast_weighed
     from .ai_payment import _cost_for, _plan_land_taps
     from .ai_scoring import (_rehearse_announcement, _score_cast,
                              _weighed_through_the_fight, _worth_proposing)
@@ -198,9 +206,13 @@ def entwined_cast(
     )
     if not _worth_proposing(rehearsal):
         return None
+    # Comparable with *best*'s score, which carries the zone's bonus
+    # (`ai_casts.zone_cast_bonus`: a cast under a permission that ends, or
+    # from the command zone): where the cast is made from is the same for
+    # every mode and for all of them together.
     score = _score_cast(
         game, player_index, card, best.target_player_index, best.x_value, rehearsal,
-    )
+    ) + zone_cast_bonus(from_zone, cast_weighed(card))
     return replace(action, score=score)
 
 

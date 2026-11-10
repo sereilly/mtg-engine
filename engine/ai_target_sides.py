@@ -237,8 +237,17 @@ def _pt_delta_sign(instruction: OracleInstruction) -> int:
     The sign is what decides the side for the P/T families, whose category
     (``pump``, ``counters``) is right about the family and silent about the
     direction: "Target creature gets +3/+3" (Giant Growth) and "…gets -5/-0"
-    (Shrink) are one instruction kind. Three payload spellings: printed numbers,
-    an X with its ``*_negative`` flag, and a counter's own "+1/+1" / "-1/-0".
+    (Shrink) are one instruction kind. Four payload spellings: printed numbers,
+    an X with its ``*_negative`` flag, a repetition with its sign inside it
+    (``{"times_x": n}``), and a counter's own "+1/+1" / "-1/-0".
+
+    The repetition is how "-1/-1 **for each** artifact you control"
+    (Irradiate) and a negated variable ("-X/-X", Chill Haunting) lower
+    (``grammar/lowering/_common._signed``, ``_amounts._per_each_amount``):
+    the sign rides in the amount so every resolver applies it. Unread here,
+    both summed to nothing and fell through to the ``pump`` category's "you"
+    — an AI seat shrank its own creature with its twin opposite a legal
+    target (the idle-cast census's own goal, at Mirrodin's promotion).
     """
     from .pt import pt_counter_deltas
 
@@ -250,6 +259,14 @@ def _pt_delta_sign(instruction: OracleInstruction) -> int:
         value = payload.get(key)
         if isinstance(value, int) and not isinstance(value, bool):
             total += value
+        elif isinstance(value, dict) and isinstance(value.get("times_x"), int):
+            total += (value["times_x"] > 0) - (value["times_x"] < 0)
+        elif value == "x":
+            # A bare X is positive unless a flag says otherwise: the lowering
+            # that writes the repetition above for "-X" writes the letter for
+            # "+X" (`_signed`), so -X/+X (Belbe's Armor) sums to the trade it
+            # is rather than to a shrink.
+            total += -1 if payload.get(f"{key}_negative") else 1
         elif value is not None and payload.get(f"{key}_negative") is not None:
             total += -1 if payload.get(f"{key}_negative") else 1
     counter = payload.get("counter")

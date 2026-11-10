@@ -140,6 +140,25 @@ COMMAND_ZONE_CAST_BONUS = 4.0
 EXPIRING_PERMISSION_BONUS = COMMAND_ZONE_CAST_BONUS
 
 
+def zone_cast_bonus(from_zone: str, under: "PermittedCast | None") -> float:
+    """What a cast out of *from_zone* under *under* is worth over the same
+    cast from hand: `COMMAND_ZONE_CAST_BONUS` from the command zone,
+    `EXPIRING_PERMISSION_BONUS` under a permission that ends, else nothing.
+
+    A fact about **where the cast is made from**, not about what the spell
+    does, so every candidate of one card in one zone carries it alike — a
+    single mode and the entwined cast of every mode (``ai_entwine``) are
+    compared on what each does, and an entwined cast scored without it lost
+    to its own best bullet out of an opened graveyard while it won from the
+    hand (Wail of the Nim, the zone-cast census at Mirrodin's promotion).
+    """
+    if from_zone == "command":
+        return COMMAND_ZONE_CAST_BONUS
+    if under is not None and under.zone != "hand" and under.expires:
+        return EXPIRING_PERMISSION_BONUS
+    return 0.0
+
+
 def _priced_candidate(
     game: Game, seat: int, spell: CardDefinition, zone_index: int, *,
     from_zone: str = "hand", extra_generic: int = 0,
@@ -494,10 +513,15 @@ def _cast_candidate_in_each_mode(
     if built:
         # CR 702.42a: every mode for the entwine on top, cast only where its
         # rehearsal beats the best single mode (`ai_entwine.entwined_cast`).
-        entwined = entwined_cast(
-            game, player_index, card, built, best,
-            from_zone=from_zone, extra_generic=extra_generic,
-        )
+        # Weighed under the permission the single modes were (CR 601.3): the
+        # price (`ai_payment._cost_for`: nothing under a waiver, so only the
+        # entwine is planned), the rehearsal's trip out of the pile and whose
+        # pile it is, and the zone's bonus (`zone_cast_bonus`) all read it.
+        with casting_under(under):
+            entwined = entwined_cast(
+                game, player_index, card, built, best,
+                from_zone=from_zone, extra_generic=extra_generic,
+            )
         if entwined is not None and entwined.score > best.score:
             return entwined
     return best
@@ -1373,8 +1397,5 @@ def _cast_candidate_announcing(
         )):
             return None
     score = _score_cast(game, player_index, card, target, x_value, rehearsal)
-    if from_zone == "command":
-        score += COMMAND_ZONE_CAST_BONUS
-    elif under is not None and under.zone != "hand" and under.expires:
-        score += EXPIRING_PERMISSION_BONUS
+    score += zone_cast_bonus(from_zone, under)
     return replace(action, score=score)

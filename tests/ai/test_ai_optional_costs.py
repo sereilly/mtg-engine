@@ -18,6 +18,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
+from engine.ai_actions import cast_announcement
 from engine.ai_casts import (
     BUYBACK_LIFE_RESERVE,
     BUYBACK_PERMANENTS_KEPT,
@@ -63,18 +64,18 @@ def _w2g6_table(
 
 
 def _w2g6_cast(game: Game, action):
-    """Carry *action* out the way both executors do: tap, then announce."""
+    """Carry *action* out the way every executor does: tap, then announce
+    **everything** it announces (`ai_actions.cast_announcement`, the one place
+    a `CastAction` becomes a cast).
+
+    This forwarded seven of the fields by hand, and so dropped the mode list:
+    an entwined Solar Tide or Promise of Power (CR 702.42a) reached the cast
+    path as "entwine paid, no mode named, a seat named on the cast", which the
+    engine rightly refuses — it will not guess which mode a cast-level target
+    was meant for (``entwine.entwined_mode_choices``). Every executor that
+    plays a game sends the list, and the engine takes it."""
     tap_planned_lands(game, 0, action)
-    result = game.cast_from_hand(
-        0, action.card_name,
-        target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
-        target_permanent_ids=action.target_permanent_ids,
-        x_value=action.x_value,
-        alternative_cost=action.alternative_cost,
-        divided_targets=action.divided_targets,
-        optional_cost_payments=action.optional_cost_payments,
-    )
+    result = game.cast_from_hand(0, action.card_name, **cast_announcement(action))
     resolve_stack(game)
     game.auto_resolve_pending_choices()
     return result
