@@ -201,3 +201,45 @@ def test_the_controller_of_the_permanent_it_becomes_sacrifices_it(pool):
     assert seen is not None and [item.caster_index for item in seen[1]] == [0]
     assert not game.is_on_battlefield(permanent)
     assert "P2 sacrificed Soar at cleanup" in game.log
+
+
+#: Every card in the pool printing a static timing permission an enchantment
+#: in the census can be cast by, with which of the census's cards it covers.
+_OTHER_PERMISSIONS = [
+    # "Any player may cast creature and enchantment spells as though they had
+    # flash." Every one of them, and for the opponent too.
+    ("Vernal Equinox", 1, lambda card: True),
+    # "You may cast Aura spells with enchant creature as though they had
+    # flash." Not Relic Ward (enchant artifact), Parapet or Necromancy (not
+    # Auras as they are cast).
+    ("Rootwater Shaman", 0, lambda card: "Aura" in card.type_line
+     and "Enchant artifact" not in (card.oracle_text or "")),
+]
+
+
+@pytest.mark.parametrize("permission,controller,covers", _OTHER_PERMISSIONS,
+                         ids=[row[0] for row in _OTHER_PERMISSIONS])
+@pytest.mark.parametrize("card", _RIDERS, ids=[card.name for card in _RIDERS])
+def test_cast_by_another_effects_permission_it_is_not_sacrificed(
+    pool, card, permission, controller, covers,
+):
+    """"The sacrifice occurs only if you cast it using its own ability. If you
+    cast it using some other effect (for example, if another effect allowed
+    you to cast it as though it had flash), then it won't be sacrificed." (the
+    cycle's rulings, 2022-12-08.) With another permission open the caster uses
+    it — the one with no price, derived as Invasion's flash surcharge is — so
+    a covered card is not marked and stays; a card the permission does not
+    cover is still cast by its own sentence and still goes. Backwards: on
+    9627a81eb every covered row was marked and sacrificed."""
+    game, host = _table(pool, card, active=0, caster=0)
+    granter = Permanent(card=pool[permission])
+    game._put_permanent_onto_battlefield(controller, granter, None)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    permanent = _cast(game, card, 0, host)
+
+    covered = covers(card)
+    assert bool(permanent.metadata.get(CAST_AT_INSTANT_SPEED)) is not covered
+    game.resolve_cleanup_step(0)
+    settle(game)
+    assert game.is_on_battlefield(permanent) is covered, game.log[-6:]
