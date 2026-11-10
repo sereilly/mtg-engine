@@ -12,6 +12,8 @@ The door is a loop there now, bounded as the simulator's is.
 
 from __future__ import annotations
 
+import random
+
 import pytest
 
 from engine.ai_policy import choose_cast_action
@@ -92,6 +94,13 @@ def test_census_an_ai_leaves_its_main_phase_only_when_it_would_cast_nothing(monk
     The AI-only rows fail on the tree before; the person's table held
     already, but for an AI's own resolved search (the Eladamri's Call
     board below)."""
+    # The session's seed builds its decks and flips its coin; a shuffle or any
+    # other draw in the game reads the module RNG, which the tests run before
+    # this one in the same process have moved — so the game, and the floor
+    # below, depended on the run's order (kg5 integration: green in a meeting
+    # run, red in a folder run of the same tree). Seeded here as
+    # ``run_ai_simulation`` seeds it, the row is one game in every order.
+    random.seed(seed)
     created = client.post("/api/sessions", json={"mode": mode, "seed": seed}).json()
     sid = created["session_id"]
     session = seat_plays_first(sid, 0)
