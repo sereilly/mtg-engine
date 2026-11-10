@@ -104,7 +104,10 @@ def test_every_toll_is_answered_before_the_first_discard_when_nobody_is_asked():
     settle(game)
     caster = game.players[0]
     given_up = [card.name for card in caster.graveyard if card.name != "Read the Runes"]
-    assert len(given_up) == 3, game.log[-10:]
+    # A card the seat keeps on top under the Library (``ai_prompt_picks.
+    # takes_library_top``) is given up as a discard all the same.
+    kept_on_top = sum("to the top of their library" in line for line in game.log)
+    assert len(given_up) + kept_on_top == 3, game.log[-10:]
     declined = [i for i, line in enumerate(game.log) if "declined Read the Runes" in line]
     discarded = [i for i, line in enumerate(game.log) if " discarded " in line]
     assert len(declined) == 3 and len(discarded) == 3, game.log[-12:]
