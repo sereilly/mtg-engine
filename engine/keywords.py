@@ -179,9 +179,12 @@ ALL_ABILITIES_REMOVED = "all_abilities_removed"
 #: granted "Flanking" line is folded into the effective card, compiles to a
 #: keyword line, and lands back in the word set — which is what lets Agility's
 #: enchanted creature both trigger and count as "with flanking" for the next
-#: flanker's filter. Cumulative upkeep is deliberately absent: no card in the
-#: pool grants or removes it, and a row here with nothing behind it is a claim
-#: nothing checks.
+#: flanker's filter. Cumulative upkeep is deliberately absent: the six pool
+#: cards that grant it *quote* the line (Balduvian Shaman, Breath of Dreams,
+#: Mana Chains, Decomposition, Dreams of the Dead, Splintering Wind's token), so
+#: it arrives on the line channel already and the seed names it back (round
+#: kg5); none grants the bare word or removes it, and a row here with nothing
+#: behind it is a claim nothing checks.
 #:
 #: Provoke (CR 702.39a, `engine/provoke.py`) is the third, and the first a
 #: **lord** grants: "All Sliver creatures have provoke" (Hunter Sliver). The

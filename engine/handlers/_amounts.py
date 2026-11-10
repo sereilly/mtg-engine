@@ -288,15 +288,20 @@ def count_from_payload(
     # "…where X is **the sacrificed creature's mana value**" (Burnt Offering).
     # The branch above one zone over: what the spell's own additional cost ate
     # (CR 601.2b), off the record the payment path kept. The channel carries a
-    # `Permanent`, so the mana value is read through its card.
+    # `Permanent`, and its mana value is the one it **last had on the
+    # battlefield** (CR 608.2h) — through layer 1 like every other
+    # characteristic (:func:`_permanent_mana_value`), so a Clone that was a
+    # Craw Wurm pays six (CR 707.2) and a face-down Exalted Angel pays nothing
+    # (CR 708.2a; ``copies.FACE_DOWN_AS_IT_LEFT``). It was read off the
+    # Permanent's *card*: the Clone paid four, and the Angel — whose card is
+    # the hidden one again once it has left, revealed — paid six.
     cost_sacrifice = spec.get("cost_sacrifice_characteristic")
     if cost_sacrifice is not None:
         sacrificed = (context.choices or {}).get("sacrificed_for_cost")
-        card = getattr(sacrificed, "card", None) or sacrificed
-        if card is None:
+        if sacrificed is None:
             return 0
         if cost_sacrifice == "mana_value":
-            return max(0, _scaled(int(getattr(card, "cmc", 0) or 0), spec))
+            return max(0, _scaled(_paid_object_mana_value(sacrificed), spec))
         # "…equal to half **the sacrificed creature's power**, rounded down"
         # (Freyalise Supplicant). The *effective* P/T the permanent last had on
         # the battlefield (CR 608.2h), read off the `Permanent` the payment path
@@ -320,8 +325,7 @@ def count_from_payload(
         if tapped is None:
             return 0
         if cost_tap == "mana_value":
-            card = getattr(tapped, "card", None) or tapped
-            return max(0, _scaled(int(getattr(card, "cmc", 0) or 0), spec))
+            return max(0, _scaled(_paid_object_mana_value(tapped), spec))
         if cost_tap in ("power", "toughness"):
             value = getattr(tapped, f"effective_{cost_tap}", None)
             return max(0, _scaled(int(value or 0), spec))
@@ -637,11 +641,14 @@ def _characteristic_of_object(
     not — a toughness belongs to a permanent, not to a player.
 
     The three characteristics are one lookup because the clause reads them the
-    same way. Where they differ is *what* answers: CR 202.3 makes mana value a
-    characteristic of the card, unaffected by anything on the battlefield, so
-    it comes off the printed cost; CR 613 makes power and toughness computed,
-    so they come through the layer accessors and a pumped creature answers with
-    the number it currently has.
+    same way, and all three answer for the permanent rather than its printed
+    card. Power and toughness come through the layer accessors, so a pumped
+    creature answers with the number it currently has (CR 613); mana value
+    comes off the mana cost the permanent *has* (CR 202.3), which is its
+    copiable values' after layer 1 (:func:`_permanent_mana_value`) — a Clone
+    that is a Craw Wurm has mana value 6 (CR 707.2) and a face-down creature
+    has 0 (CR 708.2a). It was read off ``perm.card``, the card as printed, so
+    Subdue on that Clone gave +0/+4.
 
     The offset is applied before the floor, so "its toughness minus 1" on a 0/1
     is 0 rather than -1 — an amount is never negative here, and the sign a
@@ -661,7 +668,20 @@ def _characteristic_of_object(
         # cast fire site. Read here rather than off the stack top: by the time
         # the trigger resolves, anything could be above the spell that caused
         # it, and the stack top is a different object.
-        cast_card = (context.trigger_context or {}).get("cast_card")
+        #
+        # **Its mana value on the stack** (CR 202.3e: an {X} in the cost is the
+        # number chosen for it there), off the stack object the fire site froze
+        # beside the card — the reader the counters already share
+        # (``targeting.stack_object_mana_value``). It was the card's printed
+        # ``cmc``, which holds X as 0: a Spell Blast cast for X=3 under In the
+        # Eye of Chaos was asked for {1} where the card says {4}.
+        frozen = context.trigger_context or {}
+        cast_item = frozen.get("cast_item")
+        if cast_item is not None:
+            from ..targeting import stack_object_mana_value
+
+            return max(0, stack_object_mana_value(cast_item) + offset)
+        cast_card = frozen.get("cast_card")
         if cast_card is None:
             return 0
         return max(0, int(getattr(cast_card, "cmc", 0) or 0) + offset)
@@ -681,7 +701,7 @@ def _characteristic_of_object(
             return max(0, int(perm.effective_power) + offset)
         if name == "toughness":
             return max(0, int(perm.effective_toughness) + offset)
-        return max(0, int(getattr(perm.card, "cmc", 0) or 0) + offset)
+        return max(0, _permanent_mana_value(perm) + offset)
     if spec.get("object") == "attached":
         # "…deals damage equal to **that creature's power**…" (Unnatural
         # Hunger). The permanent the ability's source is attached to, through
@@ -695,7 +715,7 @@ def _characteristic_of_object(
             return max(0, int(host.effective_power) + offset)
         if name == "toughness":
             return max(0, int(host.effective_toughness) + offset)
-        return max(0, int(getattr(host.card, "cmc", 0) or 0) + offset)
+        return max(0, _permanent_mana_value(host) + offset)
     # "…where X is the power of **that blocked creature**" (Glyph of Delusion).
     # A sentence naming two targets of different kinds cannot be asked for "the
     # target": the clause said which, the lowering matched the printed words to
@@ -709,6 +729,20 @@ def _characteristic_of_object(
         if perm is None:
             return 0
     else:
+        # "Counter target spell unless its controller pays {X}, where X is
+        # **its** mana value." (Rethink.) The target is a spell, which the
+        # battlefield read below cannot find: it answered "no permanent", the
+        # record below was absent, and X was 0 — "A pays {0}; Craw Wurm is not
+        # countered by Rethink". A spell's mana value is the stack object's
+        # (CR 202.3e: an {X} in its cost is the number chosen for it).
+        stack_target = getattr(context, "stack_target", None)
+        if (
+            stack_target is not None and name == "mana_value"
+            and _targets_a_spell(instruction)
+        ):
+            from ..targeting import stack_object_mana_value
+
+            return max(0, stack_object_mana_value(stack_target) + offset)
         perm = resolve_target_permanent(
             game, context, predicate=lambda p: True, fallback_on_invalid_choice=False
         )
@@ -730,7 +764,7 @@ def _characteristic_of_object(
     elif name == "toughness":
         value = int(perm.effective_toughness)
     else:
-        value = int(getattr(perm.card, "cmc", 0) or 0)
+        value = _permanent_mana_value(perm)
     return max(0, value + offset)
 
 
@@ -1306,8 +1340,29 @@ _MANA_VALUE_AGGREGATES = {
 def _permanent_mana_value(perm) -> int:
     """CR 202.3's mana value of a permanent: its mana cost through layer 1
     (``effective_card``), so a copy reads the copied card and a face-down
-    permanent the blank 2/2 it is (CR 708.2a)."""
+    permanent the blank 2/2 it is (CR 708.2a).
+
+    Asked of a permanent that has **left** too, which is its last known
+    information (CR 608.2h): the object keeps the copy effect it had (copy
+    effects are layer 1 of the object as it last existed), and a face-down one
+    reads its face-down values (``copies.FACE_DOWN_AS_IT_LEFT``) although its
+    card is the revealed one."""
     return int(getattr(perm.effective_card, "cmc", 0) or 0)
+
+
+def _paid_object_mana_value(paid) -> int:
+    """The mana value of what a cost was paid with: a permanent's as it last
+    existed on the battlefield (:func:`_permanent_mana_value`), a card's as
+    printed (CR 202.3 — a card in a zone has no layers, CR 613.1)."""
+    if hasattr(paid, "effective_card"):
+        return _permanent_mana_value(paid)
+    return int(getattr(paid, "cmc", 0) or 0)
+
+
+def _targets_a_spell(instruction) -> bool:
+    """Whether *instruction*'s printed target is a spell (``targets.kind``)."""
+    targets = (getattr(instruction, "payload", None) or {}).get("targets") or {}
+    return targets.get("kind") == "spell"
 
 
 def _pile_seat(game, card, owner, spec) -> "int | None":

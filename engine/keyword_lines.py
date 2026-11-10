@@ -150,19 +150,28 @@ def _protection_clause_modelled(clause: str) -> bool:
     return bool(qualities) and all(_protection_quality_word(q) for q in qualities)
 
 
-def _qualified_keyword_part(part: str) -> bool:
+def _argument_keyword_ability(part: str) -> str | None:
+    """The keyword one keyword-line *part* is when it carries an **argument**
+    — a number or a cost — named as layer 6 holds it ("cumulative upkeep" for
+    "cumulative upkeep {1}"), or None when the part is no such keyword the
+    engine can carry out.
+
+    Each is admitted by the reader that implements it, so what this names and
+    what :func:`_qualified_keyword_part` admits are one answer: a part this
+    returns a name for is a part the gate admits, and nothing else is.
+    """
     # Rampage carries a number rather than a quality (CR 702.23a: "Rampage N"),
     # and the number is the whole of it — so the reader that *implements* it is
     # the one that admits it, exactly as the protection arm below admits only
     # the qualities `_protection_qualities` models.
     if rampage_amount(part) is not None:
-        return True
+        return "rampage"
     # Amplify carries a number too (CR 702.38a: "Amplify N"), and is admitted
     # the same way: by the reader the entry state reveals with
     # (`engine/amplify.py`), so an amplify it cannot read keeps the line refused
     # rather than shipping a creature that enters without its counters.
     if amplify_amount(part) is not None:
-        return True
+        return "amplify"
     # Cumulative upkeep carries a cost rather than a quality (CR 702.24a), and
     # the cost is the whole of it. Same rule as rampage one line up: the reader
     # that *implements* the keyword admits it, so a cost `engine/
@@ -171,7 +180,7 @@ def _qualified_keyword_part(part: str) -> bool:
     from .cumulative_upkeep import cumulative_upkeep_cost
 
     if cumulative_upkeep_cost(part) is not None:
-        return True
+        return "cumulative upkeep"
     # Madness carries a cost too (CR 702.35a), and is admitted the same way:
     # by the reader that charges it (`engine/madness.py`), so a cost it cannot
     # express — an {X}, a hybrid pip — keeps the line refused instead of
@@ -179,7 +188,7 @@ def _qualified_keyword_part(part: str) -> bool:
     from .madness import madness_cost_text
 
     if madness_cost_text(part) is not None:
-        return True
+        return "madness"
     # Morph carries a cost as well (CR 702.37a), and is admitted the same way
     # once more: by the reader that charges it (`engine/face_down.py`), which
     # is also the reader the CR 702.37e special action and the {3}
@@ -191,6 +200,44 @@ def _qualified_keyword_part(part: str) -> bool:
     from .face_down import morph_cost_text
 
     if morph_cost_text(part) is not None:
+        return "morph"
+    # Storm (CR 702.40a) carries no argument, and is admitted by its reader
+    # all the same rather than listed in `IMPLEMENTED_KEYWORDS`: that set means
+    # "implemented everywhere the CR says it applies", and storm on a permanent
+    # spell (whose copies become tokens, CR 707.10f) is not built. The compiler
+    # refuses that half by card type (`storm.unread_storm_line`), which a
+    # line-only gate like this one cannot see.
+    if is_storm(part):
+        return "storm"
+    return None
+
+
+def keyword_part_ability(part: str) -> str | None:
+    """The keyword ability one normalized keyword-line *part* states, **named
+    by a word** — the word itself for an implemented keyword ("lifelink",
+    "shroud"), the keyword without its argument for one that carries a number
+    or a cost (:func:`_argument_keyword_ability`) — or None.
+
+    What layer 6 is seeded with off a keyword line
+    (``printed_characteristics._printed_abilities_cached``), which is how a
+    keyword *granted as a line* reads as the keyword (CR 613.1f): Balduvian
+    Shaman's "That enchantment gains "Cumulative upkeep {1}."" is folded into
+    the enchantment's text, and this is what makes its own "that doesn't have
+    cumulative upkeep" refuse the enchantment afterwards. A keyword named by its
+    **quality** — protection, hexproof from, bands with other, a qualified
+    landwalk — is None here: the name is built from the printed quality, and
+    the seed reads each of those with the reader that enforces it.
+    """
+    if part in IMPLEMENTED_KEYWORDS:
+        return part
+    return _argument_keyword_ability(part)
+
+
+def _qualified_keyword_part(part: str) -> bool:
+    # The keywords that carry a number or a cost, and storm: each is admitted
+    # by the reader that implements it, and :func:`_argument_keyword_ability`
+    # holds why for each.
+    if _argument_keyword_ability(part) is not None:
         return True
     # "Bands with other legendary creatures" (CR 702.22b). The quality is a
     # printed noun phrase rather than a word from a list, so what admits the
@@ -212,14 +259,6 @@ def _qualified_keyword_part(part: str) -> bool:
     from .landwalk import is_landwalk
 
     if is_landwalk(part):
-        return True
-    # Storm (CR 702.40a) carries no argument, and is admitted by its reader
-    # all the same rather than listed in `IMPLEMENTED_KEYWORDS`: that set means
-    # "implemented everywhere the CR says it applies", and storm on a permanent
-    # spell (whose copies become tokens, CR 707.10f) is not built. The compiler
-    # refuses that half by card type (`storm.unread_storm_line`), which a
-    # line-only gate like this one cannot see.
-    if is_storm(part):
         return True
     # Both clauses split the same way (CR 702.16g's shorthand), and the split
     # lives in :func:`_protection_clause_modelled` — the one the static-line gate
