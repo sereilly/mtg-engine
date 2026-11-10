@@ -522,7 +522,10 @@ def test_w2g5_a_one_shot_permanent_is_still_cracked(set_pool):
          "Elvish Warrior", "Wirewood Elf", "Elvish Vanguard"],
         ["Birchlore Rangers: tapped"], 11,
     ),
-    (["Slice and Dice", "Butcher Orgg", "Risky Move"], ["Butcher Orgg divides"], 11),
+    # Seed 11 until kg5, when sacrifice costs began to be weighed (Goblin
+    # Sledder, Starlit Sanctum) and seed 11's eight games no longer reached a
+    # seven-mana Orgg on the battlefield; seed 12 divides in nine places.
+    (["Slice and Dice", "Butcher Orgg", "Risky Move"], ["Butcher Orgg divides"], 12),
     # Seed 11 until kg4, when the AI's activations moved (a permanent's later
     # abilities weighed, every ability held to the "moves nothing" rehearsal)
     # and no Entrancer connected in its eight games; seed 12 exercises both.
@@ -533,7 +536,7 @@ def test_w2g5_a_one_shot_permanent_is_still_cracked(set_pool):
 ])
 def test_w2g5_seeded_onslaught_games_use_the_policy(pinned, exercised, seed):
     """Each piece is exercised in the seeded ONS games it was measured in
-    (seed 11 — 12 for the Entrancer since kg4 — eight games, the cards
+    (seed 11 — 12 for the Entrancer since kg4 and the Orgg since kg5 — eight games, the cards
     pinned) — floors of one, never counts — and nothing rehearsed raises. On
     the base each of these lines was absent: no Rangers mana, no Orgg
     division, no Entrancer steal, no Wheel and Deal cast
