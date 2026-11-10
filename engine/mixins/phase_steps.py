@@ -174,9 +174,10 @@ class PhaseStepsMixin:
         phased out), the draw (CR 704.5b), each declaration (an attacker's tap
         ending an "as long as it's untapped" lord, a life payment to block),
         combat damage, and cleanup (CR 514.3a: an "until end of turn" pump or
-        control change ending) — and so do the upkeep and the end step, which
-        carry out "at the beginning of …" effects inline before their windows
-        open. The declarations went straight to ``start_priority_window`` and
+        control change ending) — and so do the upkeep, which carries out "at
+        the beginning of …" effects inline before its window opens, and the
+        end step, which did until its delayed marks became stack objects
+        (kg5). The declarations went straight to ``start_priority_window`` and
         cleanup checked only when something had triggered, so a creature the
         attack had just made lethal was still there when the attacker got
         priority, a defender at 0 life could resolve a trigger that saved

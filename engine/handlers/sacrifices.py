@@ -73,6 +73,28 @@ def sacrifice_self(game: Game, instruction: OracleInstruction, context: OracleEx
     if source is None or not game.is_on_battlefield(source):
         game.log.append(f"{context.card.name}: nothing left to sacrifice")
         return True, "resolved"
+    # CR 701.21a: "A player can't sacrifice … a permanent they don't
+    # control." The bare imperative is the controller of the ability
+    # resolving (CR 603.3a, and CR 603.7d–e for a delayed one), so a source
+    # that changed hands since the ability triggered stays where it is — Time
+    # Elemental's ruling (2007-09-16): "If Time Elemental attacks or blocks,
+    # but you no longer control it at end of combat, you can't sacrifice it.
+    # However, it will still deal 5 damage to you." It was sacrificed by
+    # whoever controlled it then. Asked of the stack object rather than of
+    # ``context.caster``, which a "may" another player answered (Longhorn
+    # Firebeast's "any opponent may … If a player does, sacrifice this
+    # creature") hands to the answering seat; with no stack object resolving
+    # there is no ability to ask, and nothing is refused.
+    resolving = game.resolving_stack_item or (
+        game.resolving_items[-1] if game.resolving_items else None
+    )
+    controller = getattr(resolving, "caster_index", None)
+    if isinstance(controller, int) and game.controller_index_of(source) != controller:
+        game.log.append(
+            f"{context.card.name}: {game.players[controller].name} doesn't "
+            f"control {source.card.name} and can't sacrifice it"
+        )
+        return True, "resolved"
     if game.sacrifice_permanent(source) is not None:
         context.results["sacrificed_self"] = True
         game.log.append(f"{context.card.name} was sacrificed")

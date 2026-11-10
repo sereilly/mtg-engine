@@ -16,8 +16,8 @@ from ..combat_assignment import (BLOCKED_WITHOUT_BLOCKERS,
                                  DEFENDER_ASSIGNS_AS_UNBLOCKED)
 from ..attack_tapping import clear_attack_tap_exemptions
 from ..combat_permissions import MUST_BLOCK_ATTACKERS_THIS_COMBAT
-from ..destruction_events import delayed_destruction_cause
-from ..delayed_triggers import (expire_combat_delayed_triggers,
+from ..delayed_triggers import (delayed_mark_events,
+                                expire_combat_delayed_triggers,
                                 fire_delayed_triggers)
 from ..keywords import (clear_granted_ability_lines, clear_granted_keywords,
                         clear_removed_ability_keywords,
@@ -213,8 +213,8 @@ class EndOfCombatStepMixin:
         effect needs captured now — the blockers of the firing attacker, by
         id — as the step begins (``_begin_end_of_combat_step``), so the board
         they describe is the one the step began with. Then the destructions
-        Cockatrice's kin marked for this step
-        (``_resolve_end_of_combat_destruction``).
+        Cockatrice's kin marked for this step, as delayed triggered abilities
+        in the same batch (``delayed_triggers.delayed_mark_events``).
         """
         events = []
         for controller_index, permanent, trig in iter_triggered_abilities(
@@ -279,9 +279,18 @@ class EndOfCombatStepMixin:
                     trigger_context=trigger_context,
                 )
             )
+        # "…destroy that creature at end of combat" (Cockatrice, Thicket
+        # Basilisk, Infinite Authority): the delayed abilities their block
+        # triggers recorded as marks, each its own stack object controlled by
+        # whoever created it (CR 603.7d–e) — answerable here, where the sweep
+        # that destroyed them inline was not.
+        events.extend(delayed_mark_events(self, [
+            (permanent, "destroy_at_end_of_combat", {"action": "destroy"})
+            for player in self.players
+            for permanent in self.controlled_by(player)
+            if permanent.metadata.get("destroy_at_end_of_combat")
+        ]))
         self._enqueue_triggered_batch(events)
-
-        self._resolve_end_of_combat_destruction()
 
     def _attacked_or_blocked_this_combat(
         self, controller_index: int, permanent: Permanent
@@ -304,56 +313,3 @@ class EndOfCombatStepMixin:
             permanent.metadata.get("attacked_this_combat")
             or permanent.metadata.get("blocked_this_combat")
         )
-
-    def _resolve_end_of_combat_destruction(self) -> None:
-        """Destroy creatures marked by a "destroy at end of combat" trigger.
-
-        Used by Cockatrice / Thicket Basilisk, whose joined block condition is
-        fired by the two dispatchers in block_triggers.py. Honors
-        regeneration shields like any other destruction.
-
-        **And indestructibility, like any other destruction** (CR 702.12b: "A
-        permanent with indestructible can't be destroyed"). This sweep passed
-        ``respect_indestructible=False`` from the day the sweep loops were
-        consolidated — a faithful copy of a loop written before the keyword
-        existed here — so a Basilisk's block destroyed an indestructible
-        creature. The end step's twin was the same and was fixed a set
-        earlier ("an indestructible creature that stayed home was destroyed
-        by Nettling Imp"); this is the half that was left. Found by the
-        destroy census's negatives, which ask of every destroy path whether
-        an indestructible permanent survives it.
-        """
-        def _on_regenerate(permanent: Permanent) -> None:
-            permanent.damage_marked = 0
-            self.log.append(f"{permanent.card.name} regenerated")
-
-        any_died = False
-        for player in self.players:
-            def _on_destroy(permanent: Permanent, _died: bool, player=player) -> None:
-                # "…**if that creature was destroyed this way**" (Infinite
-                # Authority) is asked at the next end step, by which time the
-                # creature is a card in a graveyard. Recorded here, where the
-                # destruction actually happens, rather than inferred later from
-                # absence — a creature that regenerated or left in between is
-                # not one this sweep destroyed.
-                self.destroyed_at_end_of_combat_this_turn.append(
-                    permanent.permanent_id
-                )
-                self.log.append(f"{permanent.card.name} was destroyed at end of combat")
-
-            destroyed = self._destroy_swept_permanents(
-                player,
-                lambda p: p.metadata.pop("destroy_at_end_of_combat", False),
-                on_regenerate=_on_regenerate,
-                on_destroy=_on_destroy,
-                # A delayed triggered ability's destruction, and its controller
-                # is whoever controlled the block trigger that created it
-                # (CR 603.7e) — recorded with the mark, since no spell or
-                # ability is resolving at this step.
-                cause=lambda p: delayed_destruction_cause(
-                    p, "destroy_at_end_of_combat"
-                ),
-            )
-            any_died = any_died or bool(destroyed)
-        if any_died:
-            self._recalculate_lord_buffs()

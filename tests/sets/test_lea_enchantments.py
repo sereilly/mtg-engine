@@ -2042,6 +2042,7 @@ def test_sirens_call_destroys_non_attackers_at_end_step(all_cards):
     assert ok
 
     game.resolve_end_step(1)
+    game._settle()   # its delayed marks resolve (CR 603.7)
 
     names = [perm.card.name for perm in p2.battlefield]
     assert "Eager Bear" in names

@@ -974,6 +974,93 @@ def fire_delayed_triggers(
     return len(fired)
 
 
+#: The instruction a **mark** becomes when the step it names announces it.
+#:
+#: Some delayed abilities are recorded as a mark on the permanent they are
+#: about rather than as a :class:`DelayedTrigger` — "destroy that creature at
+#: end of combat" (Cockatrice), "sacrifice this creature at the beginning of the
+#: next end step" (Dragon Whelp), Berserk's and Nettling Imp's conditional
+#: destructions, Rakalite's return — written by the one writer
+#: (``destruction_events.mark_delayed_destruction``) with the seat and the card
+#: that created them. The steps used to carry each one out inline, as a sweep,
+#: before anybody had priority; CR 603.7 makes each a delayed triggered ability
+#: that triggers as the step begins and goes on the stack (CR 603.3), where it
+#: can be answered — a regeneration shield made in response, the creature
+#: bounced first. :func:`delayed_mark_events` builds those stack objects and
+#: this kind carries one out (``handlers/delayed.carry_out_delayed_mark``).
+CARRY_OUT_DELAYED_MARK = "carry_out_delayed_mark"
+
+#: The trigger-context key the marked permanents ride under, by id (CR
+#: 603.7c: one that left the battlefield and came back is a new object the
+#: ability no longer names).
+DELAYED_MARK_PERMANENT_IDS = "delayed_mark_permanent_ids"
+
+
+def delayed_mark_events(game: "Game", firings) -> list[dict]:
+    """The ``_enqueue_triggered_ability`` kwargs for *firings* — ``(permanent,
+    mark, rider)`` triples, *rider* the payload that mark's action needs (its
+    condition, who sacrifices) — one delayed triggered ability per creating
+    effect.
+
+    "Destroy **each of those creatures** that didn't attack this turn"
+    (Maddening Imp) is one ability over a set, so the marks one effect made
+    together (``DELAYED_TOGETHER_SUFFIX``) are one stack object acting on all
+    of them at once, as the sweep did. Every other mark is one permanent's,
+    and one object: two Krovikan Elementalist activations are two abilities.
+
+    The controller is the seat the mark recorded (CR 603.7d–e); a mark with
+    none (written by a test, or by nothing resolving) is its permanent's
+    controller's. Each mark is spent as it is announced: a delayed ability
+    with no stated duration triggers once (CR 603.7b).
+    """
+    from .destruction_events import (DELAYED_CAUSE_SUFFIX,
+                                     DELAYED_SACRIFICER_SUFFIX,
+                                     DELAYED_SOURCE_SUFFIX,
+                                     DELAYED_TOGETHER_SUFFIX)
+    from .oracle_types import OracleInstruction
+
+    groups: dict[tuple, dict] = {}
+    for permanent, mark, rider in firings:
+        metadata = permanent.metadata
+        seat = metadata.get(mark + DELAYED_CAUSE_SUFFIX)
+        if not isinstance(seat, int) or isinstance(seat, bool):
+            seat = game.controller_index_of(permanent)
+        if seat is None:
+            continue
+        source = metadata.get(mark + DELAYED_SOURCE_SUFFIX) or permanent.card
+        rider = dict(rider)
+        if metadata.get(mark + DELAYED_SACRIFICER_SUFFIX):
+            rider["sacrificed_by"] = metadata[mark + DELAYED_SACRIFICER_SUFFIX]
+        together = metadata.get(mark + DELAYED_TOGETHER_SUFFIX) or (
+            permanent.permanent_id,
+        )
+        for key in (mark, mark + DELAYED_CAUSE_SUFFIX, mark + DELAYED_SOURCE_SUFFIX,
+                    mark + DELAYED_SACRIFICER_SUFFIX, mark + DELAYED_TOGETHER_SUFFIX):
+            metadata.pop(key, None)
+        key = (mark, seat, id(source), tuple(sorted(rider.items())), tuple(together))
+        group = groups.setdefault(key, {
+            "seat": seat, "source": source, "mark": mark, "rider": rider, "ids": [],
+        })
+        group["ids"].append(permanent.permanent_id)
+    events = []
+    for group in groups.values():
+        source = group["source"]
+        entry = DelayedTrigger(
+            controller_index=group["seat"],
+            event="",
+            instruction=OracleInstruction(
+                CARRY_OUT_DELAYED_MARK, "", {"mark": group["mark"], **group["rider"]},
+            ),
+            source_name=source.name,
+            card=source,
+            ability_text=delayed_ability_text(getattr(source, "oracle_text", "")),
+        )
+        events.append(entry.trigger_event(
+            trigger_context={DELAYED_MARK_PERMANENT_IDS: tuple(group["ids"])},
+        ))
+    return events
+
+
 #: The durations a turn ends. Both are CR 603.7b's "stated duration"; neither
 #: can outlive the turn it was armed in, and the shorter one is listed here as
 #: well as swept at end of combat because a combat that never happened (a turn

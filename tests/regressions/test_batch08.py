@@ -52,7 +52,7 @@ import pytest
 
 from engine import Game, PlayerState, load_cards
 from engine.models import Permanent
-from tests.helpers import _game
+from tests.helpers import _game, settle
 from tests.helpers import CARDS_BY_NAME as _C
 
 
@@ -635,6 +635,7 @@ class TestMoreCombatAndAbilities:
             game.activate_permanent_ability(0, "Dragon Whelp", permanent_index=0)
         assert dw.metadata.get("sacrifice_at_next_end_step") is True
         game.resolve_end_step(0)
+        settle(game)
         assert not any(p.card.name == "Dragon Whelp" for p in p1.battlefield)
         assert any(c.name == "Dragon Whelp" for c in p1.graveyard)
 
@@ -646,6 +647,7 @@ class TestMoreCombatAndAbilities:
         for _ in range(3):
             game.activate_permanent_ability(0, "Dragon Whelp", permanent_index=0)
         game.resolve_end_step(0)
+        settle(game)
         assert any(p.card.name == "Dragon Whelp" for p in p1.battlefield)
 
     def test_jade_statue_animates_and_can_attack(self, cards):
@@ -706,6 +708,7 @@ class TestMoreCombatAndAbilities:
         assert bear.effective_power == 4  # +X/+0 where X = power (2)
         assert bear.metadata.get("destroy_if_attacked_eot") is True
         game.resolve_end_step(0)
+        settle(game)
         assert not any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
 
     def test_berserk_does_not_destroy_a_creature_that_did_not_attack(self, cards):
@@ -714,6 +717,7 @@ class TestMoreCombatAndAbilities:
         game = _game(p1, PlayerState(name="P2"))
         game.cast_from_hand(0, "Berserk", target_player_index=0, target_permanent_index=0)
         game.resolve_end_step(0)
+        settle(game)
         assert any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
 
     def test_personal_incarnation_redirects_one_damage_to_owner(self, cards):

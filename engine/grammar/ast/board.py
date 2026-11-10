@@ -831,6 +831,13 @@ class DelayedSelfAction:
     # second node, because the delay — the whole content of this sentence — is
     # identical either way and only the referent differs.
     subject: str = "source"   # source | bound
+    # "**Its controller** sacrifices it …" (Celestial Sword, Goblin Ski
+    # Patrol, Cauldron Dance) against the bare "Sacrifice it …" (Krovikan
+    # Elementalist): who does the sacrificing. The bare imperative is the
+    # delayed ability's controller, and CR 701.21a lets a player sacrifice only
+    # what they control — so the two differ exactly when the permanent changed
+    # hands before the step. Only a sacrifice prints the actor.
+    by_controller: bool = False
 
 
 @dataclass(frozen=True)

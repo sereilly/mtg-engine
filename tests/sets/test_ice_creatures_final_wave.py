@@ -833,6 +833,7 @@ def test_w3g2_ski_patrol_is_sacrificed_at_the_next_end_step(set_pool):
     assert patrol.metadata["sacrifice_at_next_end_step"] is True
 
     game.resolve_end_step(0)
+    game._settle()   # its delayed marks resolve (CR 603.7)
 
     assert "Goblin Ski Patrol" not in [
         perm.card.name for perm in game.controlled_by(game.players[0])
@@ -870,6 +871,7 @@ def test_w3g2_barbarian_guides_returns_its_target_at_the_end_step(set_pool):
     assert not guides.metadata.get("bounce_at_next_end_step")
 
     game.resolve_end_step(0)
+    game._settle()   # its delayed marks resolve (CR 603.7)
 
     assert "Balduvian Bears" in [c.name for c in game.players[0].hand]
     assert "Barbarian Guides" in [

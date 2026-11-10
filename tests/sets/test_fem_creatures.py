@@ -84,6 +84,7 @@ def test_farrelite_priest_adds_white_and_clocks_itself_on_the_fourth_use(set_poo
     assert priest.metadata.get("sacrifice_at_next_end_step") is True
 
     game.resolve_end_step(0)
+    game._settle()   # its delayed marks resolve (CR 603.7)
     assert [p.card.name for p in player.battlefield] == []
     assert [c.name for c in player.graveyard] == ["Farrelite Priest"]
 
@@ -131,6 +132,7 @@ def test_initiates_of_the_ebon_hand_is_the_same_sentence_in_black(set_pool):
     assert player.mana_pool["B"] == 4
     assert player.mana_pool["W"] == 0
     game.resolve_end_step(0)
+    game._settle()   # its delayed marks resolve (CR 603.7)
     assert [c.name for c in player.graveyard] == ["Initiates of the Ebon Hand"]
 
 

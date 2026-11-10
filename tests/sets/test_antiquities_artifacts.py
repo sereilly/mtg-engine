@@ -501,6 +501,7 @@ def test_rakalite_prevents_one_damage_and_returns_itself(set_pool):
     )
 
     game.resolve_end_step(0)
+    game._settle()   # its delayed marks resolve (CR 603.7)
 
     assert "Rakalite" not in {perm.card.name for perm in game.all_permanents()}
     assert [card.name for card in p1.hand] == ["Rakalite"]

@@ -16,11 +16,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..delayed_triggers import (END_OF_TURN, WHILE_EXILED_THIS_WAY,
-                                DelayedTrigger, arm_delayed_trigger,
-                                delayed_ability_text)
+from ..delayed_triggers import (CARRY_OUT_DELAYED_MARK,
+                                DELAYED_MARK_PERMANENT_IDS, END_OF_TURN,
+                                WHILE_EXILED_THIS_WAY, DelayedTrigger,
+                                arm_delayed_trigger, delayed_ability_text)
 from ..text_changes import spell_text_card
 from ..tokens import CREATED_TOKEN_RESULT_KEY
+from ._common import return_permanent_to_owners_hand
 from ._chosen import (COLOR_CHOSEN_THIS_WAY_KEY,
                       resolve_color_chosen_in_resolution)
 from ._targets import attached_host, block_pair_permanents, bound_permanent
@@ -388,4 +390,100 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         nontoken=bool(payload.get("nontoken")),
     ))
     game.log.append(f"{context.card.name} created a delayed triggered ability")
+    return True, "resolved"
+
+
+@effect_handler(CARRY_OUT_DELAYED_MARK)
+def carry_out_delayed_mark(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """A delayed triggered ability recorded as a **mark**, resolving (CR
+    603.7): "destroy that creature at end of combat" (Cockatrice), "…at the
+    beginning of the next end step" (Dragon Whelp's sacrifice, Berserk's and
+    Nettling Imp's destructions, Rakalite's return).
+
+    The step that names the mark announced it (``delayed_triggers.
+    delayed_mark_events``); this is what it does when it resolves, and it is
+    what the step's inline sweep used to do before anybody had priority:
+
+    * **CR 603.7c** — the permanents it names are the ones the mark was on, by
+      id; one that left the battlefield is a new object and is not affected.
+    * ``if_attacked`` is the printed condition — "destroy that creature **if it
+      attacked this turn**" (Berserk, True), "…**if it didn't attack this
+      turn**" (Nettling Imp, False) — asked as the ability resolves.
+    * ``destroy`` is CR 701.8 (regeneration and indestructible answer it, and
+      the cause is this ability's controller, CR 603.7d–e); ``sacrifice`` is
+      CR 701.21a, and ``sacrificed_by: "you"`` is the bare imperative — this
+      ability's controller sacrifices it, and cannot if they no longer control
+      it; ``bounce`` returns it to its owner's hand.
+
+    Several permanents (one effect marked a set, Maddening Imp) leave in one
+    event (CR 603.10a).
+    """
+    payload = instruction.payload
+    mark = str(payload.get("mark", ""))
+    action = str(payload.get("action", "destroy"))
+    when = "end of combat" if mark == "destroy_at_end_of_combat" else "end step"
+    ids = (context.trigger_context or {}).get(DELAYED_MARK_PERMANENT_IDS) or ()
+    victims = [
+        permanent for permanent in (game.permanent_by_id(pid) for pid in ids)
+        if permanent is not None and game.controller_index_of(permanent) is not None
+    ]
+    condition = payload.get("if_attacked")
+    if condition is not None:
+        victims = [
+            permanent for permanent in victims
+            if bool(permanent.metadata.get("attacked_this_turn")) == bool(condition)
+        ]
+    if not victims:
+        game.log.append(f"{context.card.name}: nothing to {action} at {when}")
+        return True, "resolved"
+    seat = game.players.index(context.caster) if context.caster in game.players else None
+    with game.leaving_together():
+        if action == "destroy":
+            by_seat: dict[int, list] = {}
+            for permanent in victims:
+                by_seat.setdefault(game.controller_index_of(permanent), []).append(permanent)
+            for controller, doomed in by_seat.items():
+                def _on_destroy(permanent, _died) -> None:
+                    if mark == "destroy_at_end_of_combat":
+                        # "…**if that creature was destroyed this way**"
+                        # (Infinite Authority), asked at the next end step: the
+                        # destruction is recorded where it happens, not
+                        # inferred later from absence.
+                        game.destroyed_at_end_of_combat_this_turn.append(
+                            permanent.permanent_id
+                        )
+                    game.log.append(f"{permanent.card.name} was destroyed at {when}")
+
+                game._destroy_swept_permanents(
+                    game.players[controller],
+                    lambda candidate, doomed=doomed: any(candidate is p for p in doomed),
+                    on_destroy=_on_destroy,
+                )
+        elif action == "sacrifice":
+            sacrificing = []
+            for permanent in victims:
+                controller = game.controller_index_of(permanent)
+                if payload.get("sacrificed_by") == "you" and controller != seat:
+                    # CR 701.21a: "A player can't sacrifice … a permanent they
+                    # don't control" — Sneak Attack's ruling (2020-08-07): "You
+                    # sacrifice the creature only if you still control it."
+                    game.log.append(
+                        f"{context.card.name}: {context.caster.name} doesn't "
+                        f"control {permanent.card.name} and can't sacrifice it"
+                    )
+                    continue
+                sacrificing.append((controller, permanent))
+            for permanent in game.sacrifice_permanents([p for _c, p in sacrificing]):
+                controller = next(c for c, p in sacrificing if p is permanent)
+                game.log.append(
+                    f"{game.players[controller].name} sacrificed "
+                    f"{permanent.card.name} at end step"
+                )
+        elif action == "bounce":
+            for permanent in victims:
+                owner = return_permanent_to_owners_hand(game, permanent)
+                game.log.append(
+                    f"{permanent.card.name} returned to "
+                    f"{owner.name if owner is not None else 'its owner'}'s hand at end step"
+                )
     return True, "resolved"
