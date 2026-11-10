@@ -2,7 +2,8 @@
 holds it (CR 117.3d), and hands nobody anything once every player has passed
 (CR 117.4).
 
-``seats._hold_priority_for_human`` is what a step the person flagged on the
+``game_flow._hold_at_flagged_step`` (``seats._hold_priority_for_human`` when
+this was written) is what a step the person flagged on the
 rail does on the AI's turn: the active AI passes, and the person holds
 priority. It passed once and answered True whatever the pass said. At a
 three-player table the seat after the active AI may be another AI — a seat
@@ -22,7 +23,7 @@ import pytest
 from engine.card_loader import load_catalog
 from engine.models import Permanent
 from tests.helpers import client, seat_plays_first
-from web.seats import _hold_priority_for_human
+from web.game_flow import _hold_at_flagged_step
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -110,7 +111,8 @@ def test_a_person_who_has_left_the_game_is_handed_nothing():
     game.check_state_based_actions()
     assert game.players[0].lost and not game.is_game_over()
 
-    assert _hold_priority_for_human(session) is False
+    session.opponent_stop_steps = set(_EVERY_STEP)
+    assert _hold_at_flagged_step(session) is False
     for _ in range(40):
         if _state(sid)["current_turn"] != 1:
             break

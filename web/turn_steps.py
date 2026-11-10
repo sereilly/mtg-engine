@@ -20,7 +20,6 @@ from .session_store import Session
 from .prompts import auto_resolve_ai_prompts
 from .seats import (
     _ai_should_hold,
-    _hold_priority_for_human,
     _mark_interactive_seats,
     _seat_type,
     _self_should_hold,
@@ -577,26 +576,21 @@ def _resolve_upkeep_step(session: Session, player_index: int) -> bool:
     # activatable now: "only during your upkeep" is not yet true of a step
     # that has not begun, and the answer asks CR 602.5 itself.
     #
-    # **Before the person's hold, not after it**: the active player receives
-    # priority first (CR 117.3a). The hold below passed the AI's priority on
-    # unasked, so a person flagging the AI's upkeep cost it its Necrosavant;
-    # now the AI answers first and the person's hold follows from that same
-    # `ai_step` (`action_turn._action_ai_step`, `game_flow._hold_at_flagged_step`).
-    if _seat_type(session, player_index) == "ai" and any(
-        True for _ability in graveyard_abilities(game, player_index)
-    ):
-        game.resolve_upkeep(player_index, defer_priority=True)
-        return True
-
-    # On the AI's turn, pause to hand a human priority at the upkeep step if flagged.
-    if _ai_should_hold(session, "upkeep"):
-        game.resolve_upkeep(player_index, defer_priority=True)
-        _hold_priority_for_human(session)
-        return True
-
-    # On the human's own turn, open a priority window at upkeep if flagged on the
-    # phase rail, instead of resolving straight through to the main phase.
-    if _self_should_hold(session, "upkeep"):
+    # **A step flagged on the phase rail stops the same way**, with the
+    # active player's priority open, whoever flagged it — the active player
+    # receives priority first (CR 117.3a). On an AI's turn its next `ai_step`
+    # answers that priority and then hands it round to the person through the
+    # one hold every flagged step of an AI's turn goes through
+    # (`action_turn._action_ai_step`, `game_flow._hold_at_flagged_step`),
+    # which asks each AI seat it reaches on the way (CR 117.3d). The hold
+    # used to be made here, passing the AI's priority on unasked — a person
+    # flagging the AI's upkeep cost it its Necrosavant — and every AI seat's
+    # between it and the person. On a person's turn the person answers it
+    # (a pass goes round through `game_flow._run_priority_exchange`).
+    if (
+        _seat_type(session, player_index) == "ai"
+        and any(True for _ability in graveyard_abilities(game, player_index))
+    ) or _ai_should_hold(session, "upkeep") or _self_should_hold(session, "upkeep"):
         game.resolve_upkeep(player_index, defer_priority=True)
         return True
 
@@ -641,12 +635,11 @@ def _finish_beginning_phase(session: Session, player_index: int) -> bool:
     # Nafs Asp answers collected during upkeep; consumed exactly once here.
     pay_life_loss = _consume_draw_step_life_loss(session)
 
-    if _ai_should_hold(session, "draw"):
-        game.resolve_draw_step(player_index, defer_priority=True, pay_life_loss=pay_life_loss)
-        _hold_priority_for_human(session)
-        return True
-
-    if _self_should_hold(session, "draw"):
+    # A draw step flagged on the phase rail stops with the active player's
+    # priority open, as the upkeep's does (`_resolve_upkeep_step`): on an AI's
+    # turn its next `ai_step` answers it and hands it round
+    # (`game_flow._hold_at_flagged_step`).
+    if _ai_should_hold(session, "draw") or _self_should_hold(session, "draw"):
         game.resolve_draw_step(player_index, defer_priority=True, pay_life_loss=pay_life_loss)
         return True
 

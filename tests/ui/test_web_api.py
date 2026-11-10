@@ -2404,6 +2404,16 @@ def test_ai_holds_priority_for_human_at_upkeep_on_turn_start():
     payload = resp.json()
     assert payload["current_turn"] == 1  # now the AI's turn
     assert payload["current_step"] == "upkeep"
+    # The active player receives priority first (CR 117.3a); the AI's step
+    # answers it and hands it on (`game_flow._hold_at_flagged_step`).
+    assert payload["priority_player"] == 1
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "ai_step", "stop_steps": ["upkeep"]},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["current_step"] == "upkeep"
     assert payload["priority_player"] == 0  # human holds priority at the AI's upkeep
 
 
