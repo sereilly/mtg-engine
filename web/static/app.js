@@ -23306,6 +23306,11 @@ function renderZoneCards(
           updateActionHint("Finish the current cast before starting another.", true);
           return;
         }
+        // The play leaves the panel: what it asks next (a target, a mode, the
+        // payment) is on the board the panel covers, and once the card is
+        // played the panel stood over the piles listing what was left
+        // ("Opponent Exile (0)"). A graveyard target re-opens it on its own.
+        closeZoneReveal();
         // The card a madness offer is about: its cast answers the offer, so it
         // goes out as `madness_cast_confirm` rather than as a `cast` the
         // server would refuse mid-resolution.
@@ -23540,32 +23545,104 @@ async function beginZoneCast(card, zone, entry = null, way = null, { madnessSlot
 // closing again once the target is picked or the cast is cancelled.
 let zoneRevealAutoOpened = false;
 
+// Which section of the panel shows *zoneSeat*'s zone: the viewer's own
+// ("self-"), the classic opponent's ("opp-", the static sections in
+// index.html), or — in a Free-For-All — a corner seat's own ("seat<N>-",
+// built per seat by `renderFfaZoneSections`). Every opponent used to share
+// "opp-", which renders the classic opponent's cards: a click on a corner
+// seat's exile pile opened "Opponent Exile" listing somebody else's exile,
+// and a graveyard target in a corner seat's pile was never shown at all.
 function zoneRevealSectionFor(zoneSeat, kind) {
-  const side = zoneSeat === seat ? "self" : "opp";
-  return `${side}-${kind}`;
+  if (zoneSeat === seat) return `self-${kind}`;
+  if (zoneSeat === classicOppSeat(currentState, seat ?? 0)) return `opp-${kind}`;
+  return `seat${zoneSeat}-${kind}`;
+}
+
+const ZONE_REVEAL_KIND_LABELS = {
+  graveyard: "Graveyard",
+  exile: "Exile",
+  ante: "Ante",
+  command: "Command Zone",
+  sideboard: "Cards Outside the Game",
+};
+
+// Whose zone a section is, as a player reads it: "Your", or — where more
+// than one opponent could be meant (a Free-For-All) — the seat's name, else
+// "Opponent".
+function zoneRevealOwnerLabel(section, state = currentState) {
+  const side = String(section).split("-")[0];
+  if (side === "self") return "Your";
+  const ownerSeat = side === "opp"
+    ? classicOppSeat(state, seat ?? 0)
+    : Number(side.slice("seat".length));
+  const players = Array.isArray(state?.players) ? state.players : [];
+  if (side === "opp" && players.length <= 2) return "Opponent";
+  return `${players[ownerSeat]?.name || `Seat ${ownerSeat + 1}`}'s`;
+}
+
+function zoneRevealTitleFor(section, state = currentState) {
+  const kind = String(section).split("-").slice(1).join("-");
+  return `${zoneRevealOwnerLabel(section, state)} ${ZONE_REVEAL_KIND_LABELS[kind] || "Zone"}`;
+}
+
+// The panel's sections for every seat that is neither the viewer nor the
+// classic opponent: a Free-For-All's corner seats, one section per zone the
+// canvas draws a pile for. Built here rather than in index.html because how
+// many there are is the table's; dropped again when the seat is no longer
+// one (a two-seat game has none). Their graveyard and exile are clickable
+// exactly as the classic opponent's are (a cast permission over another
+// player's exile, a graveyard target).
+const FFA_ZONE_REVEAL_KINDS = ["graveyard", "exile", "command", "ante"];
+
+function renderFfaZoneSections(state, viewerSeat, oppSeat) {
+  const host = q("zoneRevealSections");
+  if (!host) return;
+  const players = Array.isArray(state.players) ? state.players : [];
+  const extra = players.map((_, idx) => idx).filter((idx) => idx !== viewerSeat && idx !== oppSeat);
+  const wanted = new Set(extra.flatMap((idx) => FFA_ZONE_REVEAL_KINDS.map((kind) => `seat${idx}-${kind}`)));
+  host.querySelectorAll(".zone-reveal-section[data-ffa-seat]").forEach((el) => {
+    if (!wanted.has(el.dataset.zone)) el.remove();
+  });
+  for (const idx of extra) {
+    const player = players[idx] || {};
+    for (const kind of FFA_ZONE_REVEAL_KINDS) {
+      const zone = `seat${idx}-${kind}`;
+      let section = host.querySelector(`.zone-reveal-section[data-zone="${zone}"]`);
+      if (!section) {
+        section = document.createElement("div");
+        section.className = "zone-reveal-section hidden";
+        section.dataset.zone = zone;
+        section.dataset.ffaSeat = String(idx);
+        section.innerHTML =
+          `<p class="side-label"><span class="zone-reveal-owner"></span> ${ZONE_REVEAL_KIND_LABELS[kind]}` +
+          ` (<span class="zone-reveal-count">0</span>)</p>` +
+          `<div id="ffaZoneCards_${idx}_${kind}" class="zone-cards"></div>`;
+        host.appendChild(section);
+      }
+      const cards = (kind === "command" ? player.command_zone : player[kind]) || [];
+      section.querySelector(".zone-reveal-owner").textContent = zoneRevealOwnerLabel(zone, state);
+      section.querySelector(".zone-reveal-count").textContent = String(cards.length);
+      const opened = kind === "graveyard" || kind === "exile";
+      renderZoneCards(`ffaZoneCards_${idx}_${kind}`, cards, opened ? { zoneSeat: idx, zoneKind: kind } : {});
+    }
+  }
+  // The classic opponent's static sections say whose they are too, once
+  // "Opponent" could mean more than one seat.
+  document.querySelectorAll('[data-zone-owner="opp"]').forEach((el) => {
+    el.textContent = zoneRevealOwnerLabel("opp-graveyard", state);
+  });
 }
 
 function openZoneReveal(sections, { auto = false } = {}) {
   const overlay = q("zoneRevealOverlay");
   if (!overlay || !sections || !sections.length) return;
-  const titles = {
-    "self-graveyard": "Your Graveyard",
-    "self-exile": "Your Exile",
-    "self-ante": "Your Ante",
-    "self-command": "Your Command Zone",
-    "self-sideboard": "Your Cards Outside the Game",
-    "opp-graveyard": "Opponent Graveyard",
-    "opp-exile": "Opponent Exile",
-    "opp-ante": "Opponent Ante",
-    "opp-command": "Opponent Command Zone",
-  };
   overlay.querySelectorAll(".zone-reveal-section").forEach((el) => {
     el.classList.toggle("hidden", !sections.includes(el.dataset.zone));
   });
   q("zoneRevealTitle").textContent =
-    sections.length === 1 ? (titles[sections[0]] || "Zone") : "Graveyards";
+    sections.length === 1 ? zoneRevealTitleFor(sections[0]) : "Graveyards";
   // Anchor near the matching pile column: opponent zones top-left, own bottom-left.
-  const anchorTop = sections[0].startsWith("opp-");
+  const anchorTop = !sections[0].startsWith("self-");
   overlay.classList.toggle("zone-reveal--top", anchorTop);
   overlay.classList.toggle("zone-reveal--bottom", !anchorTop);
   overlay.classList.remove("hidden");
@@ -26202,6 +26279,7 @@ function renderBoard(state) {
   renderZoneCards("oppExileCards", opp.exile || [], { zoneSeat: oppSeat, zoneKind: "exile" });
   renderZoneCards("oppAnteCards", opp.ante || []);
   renderZoneCards("oppCommandCards", opp.command_zone || []);
+  renderFfaZoneSections(state, viewerSeat, oppSeat);
 
   renderMana("selfMana", me.mana_pool, seat, me.restricted_mana);
   renderMana("oppMana", opp.mana_pool, oppSeat, opp.restricted_mana);
