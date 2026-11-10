@@ -64,6 +64,31 @@ _SELF_NOUNS = frozenset({
 })
 
 
+def accept_until_source_leaves(stream: TokenStream) -> bool:
+    """Consume "until this <noun> leaves the battlefield", or nothing.
+
+    The window tied to the ability's own source rather than to a step of the
+    turn — a land-type change's (Gaea's Liege, ``effects/types``) and a
+    phase-out's (Oubliette, ``subject_verb``). The source is named as the card
+    names itself anywhere: "this <permanent noun>", or its own name, which the
+    lexer collapsed to one SELF token — never a bare "it", which after a target
+    is that target. A spell or a card is on no battlefield to leave, so those
+    two self-words are not read. All or nothing.
+    """
+    mark = stream.mark()
+    if stream.accept_word("until"):
+        named = stream.accept_kind(SELF) is not None
+        if not named and stream.accept_word("this"):
+            noun = stream.peek_word()
+            if noun in _SELF_NOUNS and noun not in ("spell", "card"):
+                stream.advance()
+                named = True
+        if named and stream.accept_phrase("leaves", "the", "battlefield"):
+            return True
+    stream.reset(mark)
+    return False
+
+
 
 
 #: The ``ObjectFilter`` fields that make a phrase name **one** object rather

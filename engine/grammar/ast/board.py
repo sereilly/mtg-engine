@@ -490,6 +490,13 @@ class PhaseOut:
     parse cannot shed it."""
     subject: Recipient
     cant_phase_in_until_your_next_turn: bool = False
+    #: "…phases out **until this enchantment leaves the battlefield**."
+    #: (Oubliette.) When it phases back in: as the source leaves (CR 610.3's
+    #: window, applied to phasing), not at its controller's next untap step.
+    until_source_leaves: bool = False
+    #: "**Tap that creature as it phases in this way.**" (Oubliette.) The
+    #: rider on that window's phase-in, so it is recorded only beside it.
+    tapped_as_it_phases_in: bool = False
 
 
 @dataclass(frozen=True)

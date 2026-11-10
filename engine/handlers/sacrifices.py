@@ -408,7 +408,12 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
                 # The printed count is indivisible for a player told to pay
                 # it: one of the two Swamps sacrifices neither, and the "if
                 # you can't" branch behind this step is what the card says
-                # happens instead (Infernal Denizen).
+                # happens instead (Infernal Denizen). CR 118.12: in "[do
+                # something]. If [a player] can't, [effect]" the action is a
+                # *cost* paid as the ability resolves, and CR 118.3: a cost
+                # is paid fully or not at all. Not CR 609.3's "as much as
+                # possible", which is about an effect — the each-seat
+                # sacrifice below, which prints no such branch.
                 return
             # …but "each player sacrifices **four** lands" has no such
             # branch, and a player holding three sacrifices the three (CR

@@ -279,6 +279,15 @@ class SearchLibrary:
     #: find — :class:`SearchAndExile`'s field of the same name, read by the
     #: same rider. The search answer shuffles either way.
     shuffle_deferred: bool = False
+    #: "Search your library for a Plains card. If …, you may search your
+    #: library for an additional Plains card. Reveal those cards, put them
+    #: into your hand, **then shuffle**." (Tithe.) The search ends with
+    #: **no** shuffle of its own, because the effect searches again before it
+    #: says to shuffle — CR 701.23h: one search, so one shuffle, and that is a
+    #: statement the production appends behind both (``ShuffleLibrary``).
+    #: Unlike ``shuffle_deferred`` above, the answer does not shuffle; the
+    #: payload says so (``no_shuffle``).
+    no_own_shuffle: bool = False
 
 @dataclass(frozen=True)
 class LookAtLibraryTop:

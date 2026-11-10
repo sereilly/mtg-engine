@@ -41,6 +41,7 @@ from .conjuncts import (_with_attack_conjunct, _with_cant_be_conjunct,
 from .imperatives import parse_imperative
 from .nouns import parse_object_filter
 from .player_verbs import parse_player_subject_verb
+from .readers import accept_until_source_leaves
 from .records import accept_player_deed
 from .references import _parse_further_subjects, parse_recipient
 from .stream import TokenStream
@@ -570,6 +571,29 @@ def parse_subject_verb(
             # back in is a strictly smaller effect.
             stream.advance()
             stream.expect_word("out")
+            # "…phases out **until this enchantment leaves the battlefield**.
+            # **Tap that creature as it phases in this way.**" (Oubliette.)
+            # The window and its rider are both read here, for the reason the
+            # Teferi rider below is: a phase-out that came back at the next
+            # untap step, or came back untapped, is a smaller effect than the
+            # card prints. The rider is read only after the window — it names
+            # "this way", which no other phase-in is.
+            if accept_until_source_leaves(stream):
+                tapped = False
+                rider = stream.mark()
+                if stream.accept_punct(".") and stream.accept_phrase("tap", "that"):
+                    if stream.accept_word("creature", "permanent") and stream.accept_phrase(
+                        "as", "it", "phases", "in", "this", "way",
+                    ):
+                        tapped = True
+                    else:
+                        stream.reset(rider)
+                else:
+                    stream.reset(rider)
+                return ast.PhaseOut(
+                    source_spec, until_source_leaves=True,
+                    tapped_as_it_phases_in=tapped,
+                )
             blocked = False
             mark2 = stream.mark()
             if stream.accept_punct("."):

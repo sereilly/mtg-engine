@@ -65,6 +65,9 @@ TRIGGERED_LABELS: dict[str, str] = {
     "pump_enchanted_creature": "triggered_pump",
     "untap_and_tap_matching": "triggered_tap",
     "phase_out_target": "triggered_phasing",
+    # Oubliette's entry, read by the grammar since kg5 (its card hook went):
+    # the same phasing, its phase-in bound to the source's departure.
+    "phase_out_target_creature_until_source_leaves": "triggered_phasing",
     "destroy_event_subject": "triggered_destruction",
     "exile_event_subject": "triggered_destruction",
     # No Quarter's two lines: the other half of the block pair, destroyed the

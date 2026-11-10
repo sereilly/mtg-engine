@@ -820,7 +820,7 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
         ):
             on_decline = _steps(instruction, "otherwise")
             if on_decline:
-                _run(game, on_decline, context)
+                game.run_penalty(on_decline, context)
             return True, "resolved"
 
     # A named seat rebinds for the same reason every member of `_EACH_ACTORS`
@@ -1072,7 +1072,7 @@ def _offer_to_seat(
     # be read as a free one.
     if _derived_cost_is_unpayable(instruction.payload.get("cost"), context, game):
         if on_decline:
-            _run(game, on_decline, context)
+            game.run_penalty(on_decline, context)
         return
 
     # An offer the player cannot afford is never made; its decline branch (a
@@ -1103,7 +1103,7 @@ def _offer_to_seat(
         "life_alternative": int(instruction.payload.get("life_alternative", 0) or 0),
     }):
         if on_decline:
-            _run(game, on_decline, context)
+            game.run_penalty(on_decline, context)
         return
 
     # The same rule for an *action* cost ("you may sacrifice another
@@ -1131,7 +1131,7 @@ def _offer_to_seat(
     on_accept = action_steps + _steps(instruction, "then")
     if not offerable:
         if on_decline:
-            _run(game, on_decline, context)
+            game.run_penalty(on_decline, context)
         return
 
     # "…may pay {1} **or {2}**. If that player doesn't, … If that player pays
@@ -1671,8 +1671,11 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
         run_resumable(game, items, run_one, then=then)
 
     def held(then) -> None:
+        # …and a toll's penalty that sacrifices nothing waits for those
+        # sacrifices (``penalties_after``; Read the Runes' ruling).
         game.sacrificing_together_through(
-            context, lambda performed: plain(_both(performed, then))
+            context, lambda performed: plain(_both(performed, then)),
+            penalties_after=then is None,
         )
 
     loop = held if holds else plain

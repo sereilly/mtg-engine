@@ -54,6 +54,8 @@ def _lower_phase_out(
     Time's −3) and a swept set belonging to a targeted opponent with the
     can't-phase-in rider (Teferi, Timeless Voyager's −8)."""
     subject = node.subject
+    if node.until_source_leaves:
+        return _lower_phase_out_until_source_leaves(node)
     # "…then **the chosen permanents** phase out." (Equipoise.) The set the step
     # in front of this one recorded, which is neither a target nor a sweep —
     # the tap family's "those creatures" one printed spelling over, and read the
@@ -224,6 +226,60 @@ def _lower_phase_out(
             )
         return (OracleInstruction("phase_out_block_pair", "", {}),)
     raise LoweringError("no handler phases out this subject", node=node)
+
+
+def _lower_phase_out_until_source_leaves(
+    node: ast.PhaseOut,
+) -> tuple[OracleInstruction, ...]:
+    """"When this enchantment enters, target creature phases out until this
+    enchantment leaves the battlefield. Tap that creature as it phases in this
+    way." (Oubliette.)
+
+    A phasing (CR 702.26d: no zone change) whose phase-in is the source's
+    departure rather than the untap step — ``phasing_locks.bind_phase_in_to_source``
+    is that record, and the handler writes it. The printed rider is the payload's
+    ``tapped``, so a card printing the window without it phases its creature
+    back in untapped.
+
+    One chosen creature, and the noun phrase is payload: the picker enumerates
+    it and the handler re-asks it (``subject_matches``, as ``phase_out_target``
+    does), so a narrowing ("target creature an opponent controls") is enforced
+    rather than shed. A narrowing the matcher cannot test refuses here. Every
+    other subject — the source itself, a sweep, a recorded set — has no handler
+    that binds its phase-in to the source, and refuses.
+    """
+    subject = node.subject
+    if node.cant_phase_in_until_your_next_turn:
+        raise LoweringError(
+            "the phase-in block rider only rides the opponent sweep", node=node
+        )
+    if not _is_target(subject):
+        raise LoweringError(
+            "only a chosen creature phases out until its source leaves", node=node
+        )
+    assert isinstance(subject, ast.TargetSpec)
+    if (
+        subject.filter.card_types != ("creature",)
+        or subject.count != 1
+        or subject.count_from_x
+        or subject.count_amount is not None
+    ):
+        raise LoweringError(
+            "the source-bound phase-out reads one target creature", node=node
+        )
+    payload: dict[str, object] = {}
+    _describe_targets(payload, subject)
+    described = (payload.get("targets") or {}).get("filter") or {}
+    refuse_untestable(
+        described, refusal="the source-bound phase-out cannot narrow by", node=node,
+    )
+    payload["tapped"] = node.tapped_as_it_phases_in
+    return (
+        OracleInstruction(
+            "phase_out_target_creature_until_source_leaves", "", payload
+        ),
+    )
+
 
 def _lower_simultaneous_phasing(
     node: ast.SimultaneousPhasing,

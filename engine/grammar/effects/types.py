@@ -27,8 +27,7 @@ from ..errors import GrammarError
 from ..keywords import parse_keyword_list
 from ..durations import _parse_duration
 from ..back_references import _parse_that_object
-from ..lexer import SELF
-from ..readers import _SELF_NOUNS
+from ..readers import accept_until_source_leaves
 from ..stream import TokenStream
 from ..vocabulary import (BASIC_LAND_WORDS, CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, LAND_TYPES,
                           SUBTYPE_INDEX, TYPE_LINE_SUPERTYPES, match_longest,
@@ -326,28 +325,21 @@ def _parse_land_type_window(stream: TokenStream) -> ast.Duration:
     four other sentences print these words with a reader of their own (the
     linked exiles, Oubliette's phase-out): a row there would hand them a
     duration their lowering has no sweep for, in place of the node they parse
-    today. The window joins the table when a second family prints it.
+    today. The phrase itself is one shared reader; the phase-out records it
+    as a field of its own node (``ast.PhaseOut.until_source_leaves``), because
+    what it times is a phase-in, not a continuous effect.
 
     The source is named as the card names itself anywhere - "this creature",
     or its own name, which the lexer has collapsed to one SELF token - and
-    never as a bare "it", which after a target is the land.
+    never as a bare "it", which after a target is the land
+    (``readers.accept_until_source_leaves``, which Oubliette's phase-out reads
+    as well).
     """
     window = _parse_duration(stream)
     if window.kind is not None:
         return window
-    mark = stream.mark()
-    if stream.accept_word("until"):
-        named = stream.accept_kind(SELF) is not None
-        if not named and stream.accept_word("this"):
-            # A permanent's word for itself: a spell or a card is on no
-            # battlefield to leave.
-            noun = stream.peek_word()
-            if noun in _SELF_NOUNS and noun not in ("spell", "card"):
-                stream.advance()
-                named = True
-        if named and stream.accept_phrase("leaves", "the", "battlefield"):
-            return ast.Duration(UNTIL_SOURCE_LEAVES)
-    stream.reset(mark)
+    if accept_until_source_leaves(stream):
+        return ast.Duration(UNTIL_SOURCE_LEAVES)
     return window
 
 

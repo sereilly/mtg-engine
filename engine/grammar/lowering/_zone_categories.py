@@ -375,6 +375,11 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "…and **that creature** phase out" (Dream Fighter): the creature the
     # block trigger bound, beside the sweep and the source above it.
     "phase_out_block_pair": "zones",
+    # "…target creature phases out until this enchantment leaves the
+    # battlefield" (Oubliette): the targeted phase-out above, its phase-in
+    # bound to the source's departure. A card hook until kg5, which is why the
+    # kind reached a handler with no category.
+    "phase_out_target_creature_until_source_leaves": "zones",
     # Teferi's Veil's delayed half and Ertai's Familiar's lock: the same
     # CR 702.26 family as every row above, on the object a delayed ability
     # bound and on the ability's own source.
