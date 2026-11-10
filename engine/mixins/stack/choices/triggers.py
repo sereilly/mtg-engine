@@ -315,7 +315,7 @@ class TriggerChoicesMixin:
             from ....divided_damage import DIVIDED_TARGETS
 
             item.choices[DIVIDED_TARGETS] = division
-        labels = [permanent.card.name for permanent in permanents]
+        labels = [permanent.effective_card.name for permanent in permanents]
         if division is not None:
             labels = [
                 label if entry[2] is None else f"{label} ({entry[2]})"
@@ -603,7 +603,7 @@ class TriggerChoicesMixin:
         item.target_player_index = controller
         item.target_permanent_id = [permanent_id]
         item.targets_chosen = self._trigger_target_was_a_choice()
-        self.log.append(f"{card_name}: targets {perm.card.name}")
+        self.log.append(f"{card_name}: targets {perm.effective_card.name}")
         self._announce_answered_targets(item, choice, queued)
         return True
 

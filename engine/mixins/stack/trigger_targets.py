@@ -19,6 +19,7 @@ from __future__ import annotations
 from ...game_types import StackItem, target_ids, target_slots
 from ...oracle import OracleInstruction
 from ...modal_triggers import modal_trigger_modes
+from ...stack_targets import source_name
 # Both owned by ``engine/targeting.py``: two callers ask whether a compiled
 # program announced a target — this picker (CR 603.3d) and the ``may``
 # handler deciding whether an offer may rebind the target its own trigger
@@ -205,13 +206,13 @@ class TriggerTargetsMixin:
         if not options:
             self.stack = [existing for existing in self.stack if existing is not item]
             self.log.append(
-                f"{item.card.name}'s triggered ability was removed from the stack: "
+                f"{source_name(item)}'s triggered ability was removed from the stack: "
                 "no mode could be chosen (700.2b)"
             )
             return
         self.arm_pending_choice(
             "mode_choice", item.caster_index,
-            card_name=item.card.name,
+            card_name=source_name(item),
             labels=[option["label"] for option in options],
             _options=tuple(options),
             _trigger_item=item,
@@ -359,7 +360,7 @@ class TriggerTargetsMixin:
             if self.sealed_graveyard_target_refusal(item) is not None:
                 self.stack = [existing for existing in self.stack if existing is not item]
                 self.log.append(
-                    f"{item.card.name}'s triggered ability was removed from the stack: "
+                    f"{source_name(item)}'s triggered ability was removed from the stack: "
                     "it has no legal target (603.3d)"
                 )
             return
@@ -830,7 +831,7 @@ class TriggerTargetsMixin:
                 "seat": candidate["seat"],
                 "permanent_index": candidate["index"],
                 "permanent_id": perm.permanent_id,
-                "name": perm.card.name,
+                "name": perm.effective_card.name,
                 "role": candidate["role"],
             })
         if any(
@@ -839,13 +840,13 @@ class TriggerTargetsMixin:
         ):
             self.stack = [existing for existing in self.stack if existing is not item]
             self.log.append(
-                f"{item.card.name}'s triggered ability was removed from the stack: "
+                f"{source_name(item)}'s triggered ability was removed from the stack: "
                 "it has no legal target (603.3d)"
             )
             return
         self.arm_pending_choice(
             "trigger_target", chooser_index,
-            card_name=item.card.name,
+            card_name=source_name(item),
             targets=offered,
             _trigger_item=item,
             max_targets=len(roles),
@@ -920,7 +921,7 @@ class TriggerTargetsMixin:
                 "seat": candidate["seat"],
                 "permanent_index": candidate["index"],
                 "permanent_id": perm.permanent_id,
-                "name": perm.card.name,
+                "name": perm.effective_card.name,
             })
         up_to = _target_is_up_to(getattr(instruction, "payload", None))
         # "…turn **any number of** target creatures with morph abilities …
@@ -968,7 +969,7 @@ class TriggerTargetsMixin:
                 return
             self.stack = [existing for existing in self.stack if existing is not item]
             self.log.append(
-                f"{item.card.name}'s triggered ability was removed from the stack: "
+                f"{source_name(item)}'s triggered ability was removed from the stack: "
                 "it has no legal target (603.3d)"
             )
             return
@@ -1031,7 +1032,7 @@ class TriggerTargetsMixin:
                         existing for existing in self.stack if existing is not item
                     ]
                     self.log.append(
-                        f"{item.card.name}'s triggered ability was removed from "
+                        f"{source_name(item)}'s triggered ability was removed from "
                         f"the stack: it needs {printed} targets and has "
                         f"{on_offer} (603.3d)"
                     )
@@ -1066,7 +1067,7 @@ class TriggerTargetsMixin:
             several["_graveyard_stamps"] = stamps
         self.arm_pending_choice(
             "trigger_target", chooser_index,
-            card_name=item.card.name,
+            card_name=source_name(item),
             targets=offered,
             _trigger_item=item,
             **several,
@@ -1121,7 +1122,7 @@ class TriggerTargetsMixin:
                 return
             self.stack = [existing for existing in self.stack if existing is not item]
             self.log.append(
-                f"{item.card.name}'s triggered ability was removed from the stack: "
+                f"{source_name(item)}'s triggered ability was removed from the stack: "
                 "it has no legal target (603.3d)"
             )
             return
@@ -1131,7 +1132,7 @@ class TriggerTargetsMixin:
         offered.sort(key=lambda existing: order[id(existing)], reverse=True)
         self.arm_pending_choice(
             "trigger_target", chooser_index,
-            card_name=item.card.name,
+            card_name=source_name(item),
             targets=[
                 {
                     "kind": "stack",

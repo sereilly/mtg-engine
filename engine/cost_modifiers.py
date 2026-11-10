@@ -566,7 +566,7 @@ def _tax_floored(
                 continue
             total += modifier.amount * repetitions
             floor = max(floor, modifier.floor)
-            names.append(permanent.card.name)
+            names.append(permanent.effective_card.name)
     return total, names, floor
 
 
@@ -773,7 +773,7 @@ def _symbol_modifiers(
                 continue
             for symbol, count in modifier.symbols:
                 total[symbol] = total.get(symbol, 0) + count
-            names.append(permanent.card.name)
+            names.append(permanent.effective_card.name)
     return total, names
 
 
@@ -803,7 +803,7 @@ def spell_life_tax(game, caster_index: int, targeted) -> tuple[int, list[str]]:
             ):
                 continue
             total += modifier.amount
-            names.append(permanent.card.name)
+            names.append(permanent.effective_card.name)
     return total, names
 
 
@@ -1158,7 +1158,7 @@ def keyword_cost_modifiers(
                 less += modifier.amount
             else:
                 more += modifier.amount
-            names.append(permanent.card.name)
+            names.append(permanent.effective_card.name)
     return more, less, names
 
 
@@ -1192,5 +1192,5 @@ def buyback_cost_reduction(game) -> tuple[int, list[str]]:
             if modifier.applies_to != "buyback" or not modifier.reduces:
                 continue
             total += modifier.amount
-            names.append(permanent.card.name)
+            names.append(permanent.effective_card.name)
     return total, names

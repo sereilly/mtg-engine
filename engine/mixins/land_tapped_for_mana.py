@@ -124,7 +124,6 @@ def _mana_made_since(player, before: dict) -> dict[str, int]:
 class LandTappedForManaMixin:
     def _land_tapped_for_mana(
         self, player_index: int, land, chosen_color: str | None, produce,
-        *, land_name: str | None = None,
     ) -> bool:
         """**A land was tapped for mana** (CR 106.12) — the one event.
 
@@ -161,8 +160,10 @@ class LandTappedForManaMixin:
         was tapped, and nothing watching for mana saw any.
         """
         player = self.players[player_index]
-        if land_name is None:
-            land_name = land.card.name
+        # What the land is named, which for a copy is what it copies (CR
+        # 707.2): Sculpting Steel copying an artifact land is tapped as that
+        # land, as the board shows it.
+        land_name = land.effective_card.name
 
         # "…each player who **tapped a land for mana this turn**" (Desolation).
         # The seat's own per-turn record, written at the one tap-for-mana seam
@@ -670,7 +671,7 @@ class LandTappedForManaMixin:
         self._deal_damage_to_player(
             player, amount, source=perm, asks=True,
             then=lambda damage: self.log.append(
-                f"{perm.card.name} triggered: {player.name} took {damage} damage"
+                f"{perm.effective_card.name} triggered: {player.name} took {damage} damage"
             ),
         )
 

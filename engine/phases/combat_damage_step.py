@@ -281,13 +281,13 @@ class CombatDamageStepMixin:
         # blocker while the life total fell.
         for attacker in sent_past_blockers:
             self.log.append(
-                f"{attacker.card.name} assigns its combat damage "
+                f"{attacker.effective_card.name} assigns its combat damage "
                 f"{AS_THOUGH_UNBLOCKED_LOG}"
             )
         # …and a division among defending player and creatures (Butcher Orgg).
         for attacker in assigned_this_pass:
             if attacker.permanent_id in divided_among:
-                self.log.append(f"{attacker.card.name} {DIVIDED_AMONG_DEFENDERS_LOG}")
+                self.log.append(f"{attacker.effective_card.name} {DIVIDED_AMONG_DEFENDERS_LOG}")
 
         # ------------------------------------------------------------------
         # Nothing below can be refused, and everything below can be suspended.

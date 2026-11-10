@@ -566,7 +566,7 @@ class CastAnnouncementMixin:
                 "seat": candidate["seat"],
                 "permanent_index": candidate["index"],
                 "permanent_id": perm.permanent_id,
-                "name": perm.card.name,
+                "name": perm.effective_card.name,
             })
         if not offered:
             # CR 601.2c names as many targets as the spell requires and no more.

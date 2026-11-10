@@ -366,12 +366,12 @@ class AttackRequirementsMixin:
             if not perm.is_creature or perm.tapped:
                 continue
             found.extend(
-                AttackRequirement(slot, perm.card.name)
+                AttackRequirement(slot, perm.effective_card.name)
                 for _ in range(self._attack_requirement_count(perm, board))
             )
             for triggers in self._conditional_attack_requirements(perm, creatures, board):
                 found.append(AttackRequirement(
-                    slot, perm.card.name,
+                    slot, perm.effective_card.name,
                     frozenset(slot_of[id(other)] for other in triggers),
                 ))
         if not found:

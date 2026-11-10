@@ -179,7 +179,7 @@ class CombatDamageAssignmentMixin:
         if not (0 <= defending_index < len(self.players)):
             return "that creature is not attacking a player"
         defender = self.players[defending_index]
-        name = attacker.card.name
+        name = attacker.effective_card.name
         assignable = combat_damage_assigned_by(attacker)
         blockers = [
             blocker_idx
@@ -456,7 +456,7 @@ class CombatDamageAssignmentMixin:
                 return False, "that creature is not attacking"
             if self.combat_attackers.get(attacker_idx) != defender_index:
                 return False, "that attacker isn't attacking this player"
-            name = attacker.card.name
+            name = attacker.effective_card.name
             chooser = self.unblocked_assignment_chooser(attacker_idx)
             if chooser is None:
                 return False, (
@@ -780,7 +780,7 @@ class CombatDamageAssignmentMixin:
             )
             if attacker_idx is None or attacker_idx not in self.combat_attackers:
                 return False, "that creature is not attacking"
-            name = attacker.card.name
+            name = attacker.effective_card.name
             if attacker.blocked and attacker.metadata.get(MUST_ASSIGN_AS_UNBLOCKED):
                 continue
             chooser = self.unblocked_assignment_chooser(attacker_idx)

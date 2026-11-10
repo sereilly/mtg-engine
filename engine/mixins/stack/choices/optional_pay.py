@@ -335,7 +335,7 @@ class OptionalPayChoicesMixin:
                 "seat": seat,
                 "permanent_index": index,
                 "permanent_id": self.permanent_id_of(perm),
-                "name": perm.card.name,
+                "name": perm.effective_card.name,
             })
         if not offered:
             self.log.append(

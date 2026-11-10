@@ -152,7 +152,7 @@ class BlockLegalityMixin:
             needed = declaration_company_required(blocker, "block")
             if needed is not None and len(declared_blockers) - 1 < needed:
                 return blocker, (
-                    f"{blocker.card.name} needs at least {needed} other "
+                    f"{blocker.effective_card.name} needs at least {needed} other "
                     "blocking creature(s)"
                 )
         # "…unless a creature with **greater power** also blocks." (Okk.) The
@@ -173,7 +173,7 @@ class BlockLegalityMixin:
                 for other in declared_blockers
             ):
                 return blocker, (
-                    f"{blocker.card.name} needs a blocking creature with "
+                    f"{blocker.effective_card.name} needs a blocking creature with "
                     "greater power beside it"
                 )
         # "…unless you tap an untapped creature you control not declared as a
@@ -187,7 +187,7 @@ class BlockLegalityMixin:
                 seat, declared_blockers, "block"
             ) is None:
                 return owing[-1], (
-                    f"{owing[-1].card.name} has no untapped creature left to tap "
+                    f"{owing[-1].effective_card.name} has no untapped creature left to tap "
                     "for its block"
                 )
         return None

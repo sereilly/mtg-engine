@@ -24,6 +24,7 @@ from .oracle import compile_card_oracle
 from .resolution_overrides import resolves_with_illegal_targets
 from .text_changes import spell_text_card
 from .modal_triggers import modal_trigger_modes
+from .stack_targets import source_name
 from .targeting import (
     derive_cast_spec,
     derive_instruction_spec,
@@ -768,7 +769,7 @@ class ResolutionTargetsMixin:
         ):
             return None
         return (
-            f"{item.card.name} was removed from the stack: "
+            f"{source_name(item)} was removed from the stack: "
             f"{self.players[seat].name} no longer answers the printed "
             "comparison, so its only target is illegal (608.2b)"
         )
@@ -871,7 +872,7 @@ class ResolutionTargetsMixin:
             from .target_immunity import graveyard_cards_untargetable
 
             return (
-                f"{item.card.name}{'' if aura_spell else ' ability'} was "
+                f"{source_name(item)}{'' if aura_spell else ' ability'} was "
                 f"removed from the stack: its target can't be targeted "
                 f"({graveyard_cards_untargetable(self)}, 608.2b)"
             )
@@ -881,7 +882,7 @@ class ResolutionTargetsMixin:
                 "is no longer in the graveyard (608.2b)"
             )
         return (
-            f"{item.card.name} ability was removed from the stack: its target "
+            f"{source_name(item)} ability was removed from the stack: its target "
             "is no longer in the graveyard (608.2b)"
         )
 
@@ -951,7 +952,7 @@ class ResolutionTargetsMixin:
         if "up to" in (item.ability_text or "").lower():
             return None
         return (
-            f"{item.card.name} ability was removed from the stack: its "
+            f"{source_name(item)} ability was removed from the stack: its "
             f"target can't be targeted ({sealed}, 608.2b)"
         )
 
@@ -1164,7 +1165,7 @@ class ResolutionTargetsMixin:
             # already read.
             return None
         return (
-            f"{item.card.name} ability was removed from the stack: "
+            f"{source_name(item)} ability was removed from the stack: "
             "every target is illegal (608.2b)"
         )
 

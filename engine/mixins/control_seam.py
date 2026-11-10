@@ -64,7 +64,7 @@ def _sacrifice_what_it_held(game, aura: Permanent, attached: Permanent) -> None:
     controller = game.players[controller_index]
     if game.sacrifice_permanent(attached) is not None:
         game.log.append(
-            f"{controller.name} sacrificed {attached.card.name} ({aura.card.name} left the battlefield)"
+            f"{controller.name} sacrificed {attached.effective_card.name} ({aura.effective_card.name} left the battlefield)"
         )
 
 
@@ -323,8 +323,8 @@ class ControlSeamMixin:
             now = self.controller_index_of(permanent)
             if now is not None and now != seat:
                 self.log.append(
-                    f"{permanent.card.name} returns to {self.players[now].name}'s control "
-                    f"({source.card.name} left the battlefield)"
+                    f"{permanent.effective_card.name} returns to {self.players[now].name}'s control "
+                    f"({source.effective_card.name} left the battlefield)"
                 )
 
     def permanents_controlled_via(self, source: Permanent) -> list[Permanent]:
@@ -401,7 +401,7 @@ class ControlSeamMixin:
                 permanent.blocking_attacker_controller = None
                 permanent.blocking_attacker_index = None
                 self.log.append(
-                    f"{permanent.card.name} left combat (it changed controllers)"
+                    f"{permanent.effective_card.name} left combat (it changed controllers)"
                 )
                 if slot is not None:
                     self._renumber_combat_after_removal({holding: [slot]})

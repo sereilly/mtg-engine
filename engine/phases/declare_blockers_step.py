@@ -112,18 +112,18 @@ class DeclareBlockersStepMixin:
             if not blocker.is_creature:
                 return False, "only creatures can block"
             if blocker.tapped:
-                return False, f"{blocker.card.name} is tapped"
+                return False, f"{blocker.effective_card.name} is tapped"
             if len(set(attacker_indices)) > self._max_blocks_for(blocker):
-                return False, f"{blocker.card.name} cannot block that many creatures"
+                return False, f"{blocker.effective_card.name} cannot block that many creatures"
             for attacker_idx in dict.fromkeys(attacker_indices):  # dedupe, keep order
                 if attacker_idx not in own_attackers:
                     return False, "blocker assigned to a creature not attacking this player"
                 attacker = attacker_controller.battlefield[attacker_idx]
                 resolved_attackers[attacker_idx] = attacker
                 if not self._can_block_attacker(blocker, attacker):
-                    return False, f"{blocker.card.name} cannot block {attacker.card.name}"
+                    return False, f"{blocker.effective_card.name} cannot block {attacker.effective_card.name}"
                 if self._left_right_block_illegal(attacker_idx, blocker_idx, blocker):
-                    return False, f"{blocker.card.name} is in the wrong pile to block {attacker.card.name}"
+                    return False, f"{blocker.effective_card.name} is in the wrong pile to block {attacker.effective_card.name}"
                 assignments.setdefault(blocker_idx, []).append(attacker_idx)
 
         # **How many creatures must block at once.** Menace (CR 702.111b) is
@@ -160,10 +160,10 @@ class DeclareBlockersStepMixin:
                     else:
                         del assignments[blocker_idx]
                 self.log.append(
-                    f"{attacker.card.name} {reason}; those blocks do not happen"
+                    f"{attacker.effective_card.name} {reason}; those blocks do not happen"
                 )
                 continue
-            return False, f"{attacker.card.name} {reason}"
+            return False, f"{attacker.effective_card.name} {reason}"
 
         for attacker_idx, count in menace_blocker_counts.items():
             attacker = resolved_attackers[attacker_idx]
@@ -186,10 +186,10 @@ class DeclareBlockersStepMixin:
                     else:
                         del assignments[blocker_idx]
                 self.log.append(
-                    f"{attacker.card.name} {reason}; those blocks do not happen"
+                    f"{attacker.effective_card.name} {reason}; those blocks do not happen"
                 )
                 continue
-            return False, f"{attacker.card.name} {reason}"
+            return False, f"{attacker.effective_card.name} {reason}"
 
         # CR 509.1b's restrictions on the **declaration as a whole** — the
         # block cap (Caverns of Despair), the company floor (Orcish Conscripts,
@@ -396,11 +396,11 @@ class DeclareBlockersStepMixin:
             if not blocker.is_creature:
                 return False, "only creatures can be put into piles"
             if blocker.tapped:
-                return False, f"{blocker.card.name} is tapped"
+                return False, f"{blocker.effective_card.name} is tapped"
             if any(p < 0 or p >= len(pile_lists) for p in distinct):
                 return False, f"pile numbers must be between 0 and {len(pile_lists) - 1}"
             if len(distinct) > self._max_blocks_for(blocker):
-                return False, f"{blocker.card.name} cannot be put into that many piles"
+                return False, f"{blocker.effective_card.name} cannot be put into that many piles"
             for pile_number in distinct:
                 pile_lists[pile_number].append(blocker_idx)
         return self._resolve_camouflage_piles(defender_index, pile_lists)

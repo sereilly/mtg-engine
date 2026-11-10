@@ -711,7 +711,7 @@ def _clause_entry(game: "Game", seat: int, offer: "SpecialActionOffer") -> dict:
             "verb": verb,
             "count": count,
             "choices": [
-                {"permanent_id": held.permanent_id, "name": held.card.name}
+                {"permanent_id": held.permanent_id, "name": held.effective_card.name}
                 for held in game._additional_cost_candidates(
                     seat, clauses, giving_up=verb,
                 )
@@ -927,7 +927,7 @@ def available_permanent_special_actions(game: "Game", seat: int) -> list[dict]:
             if permanent_special_action_refusal(game, seat, permanent, kind) is None:
                 entry = {
                     "permanent_id": permanent.permanent_id,
-                    "name": permanent.card.name,
+                    "name": permanent.effective_card.name,
                     "kind": kind,
                 }
                 # How many graveyard cards the price takes, so a client can ask
@@ -955,7 +955,7 @@ def available_permanent_special_actions(game: "Game", seat: int) -> list[dict]:
                 # a person could only take the engine's default pick.
                 if offer is not None and offer.sacrifice is not None:
                     entry["sacrifice_choices"] = [
-                        {"permanent_id": candidate.permanent_id, "name": candidate.card.name}
+                        {"permanent_id": candidate.permanent_id, "name": candidate.effective_card.name}
                         for candidate in _sacrificeable(game, seat, offer)
                     ]
                 # …and a price's clauses that are not mana (a morph cost, CR

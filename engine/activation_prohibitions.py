@@ -75,7 +75,9 @@ class ProhibitionRow:
 
 
 def _name(source) -> str:
-    card = getattr(source, "card", None)
+    # A permanent by its name — a copy's is the copied object's (CR 707.2);
+    # a card in a hand (a cycling ban) by its own.
+    card = getattr(source, "effective_card", None)
     return (card if card is not None else source).name
 
 
@@ -223,7 +225,7 @@ def _tap_abilities_shut_off(game, seat, source, ability):
                 continue
             return (
                 f"{_name(source)}'s activated abilities with {{T}} in "
-                f"their costs can't be activated ({watcher.card.name})"
+                f"their costs can't be activated ({watcher.effective_card.name})"
             )
     return None
 

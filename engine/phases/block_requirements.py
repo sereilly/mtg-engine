@@ -194,7 +194,7 @@ class BlockRequirementsMixin:
                         continue
                     found.append(BlockRequirement(
                         blocker_idx, attacker_idx,
-                        f"{blocker.card.name} must block {attacker.card.name} due to Lure",
+                        f"{blocker.effective_card.name} must block {attacker.effective_card.name} due to Lure",
                     ))
 
         # "This creature must be blocked if able." (Canopy Stalker.) The
@@ -208,7 +208,7 @@ class BlockRequirementsMixin:
                 if instr.kind == "must_be_blocked":
                     found.append(BlockRequirement(
                         None, attacker_idx,
-                        f"{attacker.card.name} must be blocked if able",
+                        f"{attacker.effective_card.name} must be blocked if able",
                     ))
 
         # "It blocks each attacking creature this turn if able." (Blaze of
@@ -220,7 +220,7 @@ class BlockRequirementsMixin:
                 found.extend(
                     BlockRequirement(
                         blocker_idx, attacker_idx,
-                        f"{blocker.card.name} must block {attacker.card.name} "
+                        f"{blocker.effective_card.name} must block {attacker.effective_card.name} "
                         "(Blaze of Glory)",
                     )
                     for _ in range(blazes)
@@ -248,7 +248,7 @@ class BlockRequirementsMixin:
                     found.extend(
                         BlockRequirement(
                             blocker_idx, attacker_idx,
-                            f"{blocker.card.name} must block {attacker.card.name} "
+                            f"{blocker.effective_card.name} must block {attacker.effective_card.name} "
                             f"{window} if able",
                         )
                         for _ in range(owed.count(attacker.permanent_id))
@@ -273,7 +273,7 @@ class BlockRequirementsMixin:
             found.extend(
                 BlockRequirement(
                     blocker_idx, None,
-                    f"{blocker.card.name} blocks each combat if able",
+                    f"{blocker.effective_card.name} blocks each combat if able",
                 )
                 for _ in range(sources)
             )

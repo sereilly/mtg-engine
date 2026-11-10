@@ -675,13 +675,36 @@ def stack_object_label(game: "Game", item) -> str:
         return "a spell"
     name = card.name
     if getattr(item, "is_ability", False):
-        name = f"{name} ability"
+        name = f"{source_name(item)} ability"
     elif getattr(item, "is_copy", False):
         name = f"{name} (copy)"
     seat = getattr(item, "caster_index", None)
     if isinstance(seat, int) and 0 <= seat < len(game.players):
         return f"{game.players[seat].name}'s {name}"
     return name
+
+
+def source_name(holder) -> str:
+    """The name of what *holder* — a stack object or an execution context —
+    comes from, as a log line or a prompt says it.
+
+    A spell's is its card's. An ability's ``card`` is its source permanent's
+    **printed** card (the activation and trigger builders hand it
+    ``permanent.card``), and a permanent is not named by its printed card:
+    a copy's name is the copied object's (CR 707.2), so Sculpting Steel
+    copying Iron Myr is an Iron Myr, and the board's name plate says so. The
+    source as it is — or, gone from the battlefield, as it last was (CR
+    113.7a, 608.2h): a permanent that left keeps the copy effects it had,
+    so ``effective_card`` reads its last name.
+
+    Only where the card *is* that permanent's own: an ability the source was
+    given by another card's text names what it names.
+    """
+    card = getattr(holder, "card", None)
+    source = getattr(holder, "source_permanent", None)
+    if source is not None and card is not None and source.card is card:
+        return source.effective_card.name
+    return getattr(card, "name", "")
 
 
 def _printed_target_instances(item: "StackItem") -> int | None:

@@ -28,6 +28,7 @@ from ....pending_choices import CHOICE_SPECS, PendingChoice, spec_for
 from ....replacement_choices import (CAUSE_SEAT, RESOLVING_TARGETS, pending_choices_for,
                                      stamp_draw_of, stamp_resolving)
 from ....resumption import resume_after_answer
+from ....stack_targets import source_name
 
 
 class PendingChoicesMixin:
@@ -382,7 +383,7 @@ class PendingChoicesMixin:
                     # graveyard", ``StackItem.ending_logged``), so it is the
                     # one line, not a second.
                     if not getattr(item, "ending_logged", False):
-                        self.log.append(f"{item.card.name} finished resolving")
+                        self.log.append(f"{source_name(item)} finished resolving")
                     # The resolution is over *now*, so what ``pass_priority``
                     # does after one that ran straight through happens here for
                     # one that stopped to ask: CR 704.3's check before anyone

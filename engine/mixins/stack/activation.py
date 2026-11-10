@@ -481,7 +481,7 @@ class AbilityActivationMixin:
         if cost_choice_refusal is not None:
             return refuse(
                 permanent.card.name, "unsupported",
-                f"{permanent.card.name}: {cost_choice_refusal}",
+                f"{permanent.effective_card.name}: {cost_choice_refusal}",
             )
         if alternative_cost_index is None:
             alternative_cost_index = default_alternative_index(
@@ -710,7 +710,7 @@ class AbilityActivationMixin:
         )
         if isinstance(sacrifice_tax_victims, str):
             details = (
-                f"{permanent.card.name}: {sacrifice_tax_victims} (CR 601.2h)"
+                f"{permanent.effective_card.name}: {sacrifice_tax_victims} (CR 601.2h)"
             )
             return refuse(permanent.card.name, "unsupported", details)
         # The price's own lines (a tax, a reduction), where the price was
@@ -730,13 +730,13 @@ class AbilityActivationMixin:
                 purpose=PaymentPurpose(ACTIVATE, source=permanent),
             ):
                 details = noting(
-                    f"insufficient mana to activate {permanent.card.name}",
+                    f"insufficient mana to activate {permanent.effective_card.name}",
                     price_notes,
                 )
                 return refuse(permanent.card.name, "unsupported", details)
         if has_alternative_costs(ability.cost):
             self.log.append(
-                f"{permanent.card.name}: activated for "
+                f"{permanent.effective_card.name}: activated for "
                 f"{mana_cost_text(announced_mana)}"
             )
         mana_spent_for_cost = {
@@ -1133,7 +1133,7 @@ class AbilityActivationMixin:
                 },
             )
         )
-        self.log.append(f"{permanent.card.name} ability added to stack")
+        self.log.append(f"{permanent.effective_card.name} ability added to stack")
         # "Whenever a player activates an ability of enchanted creature with
         # {T} in its activation cost that isn't a mana ability" (Imprison).
         #

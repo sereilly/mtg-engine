@@ -321,13 +321,13 @@ def activation_permission_denial(
         controller = game.controller_index_of(permanent)
         if controller is not None and activator_seat != controller:
             return (
-                f"{permanent.card.name}'s abilities can only be activated by "
+                f"{permanent.effective_card.name}'s abilities can only be activated by "
                 "its controller"
             )
         return None
     for entry in rows:
         if not entry.may_activate(game, activator_seat, permanent):
-            return f"{permanent.card.name}: {entry.denial}"
+            return f"{permanent.effective_card.name}: {entry.denial}"
     return None
 
 

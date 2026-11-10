@@ -201,7 +201,7 @@ class BlockTriggersMixin:
                     # record contradicting itself.
                     if pushed is not None:
                         self.log.append(
-                            f"{source.card.name} triggered on block (added to stack)"
+                            f"{source.effective_card.name} triggered on block (added to stack)"
                         )
             # "…whenever **this creature** blocks or becomes blocked by a
             # creature this combat, …" (Goblin Flotilla). The delayed spelling
@@ -254,8 +254,8 @@ class BlockTriggersMixin:
                     )
                 )
                 self.log.append(
-                    f"{attachment.card.name} triggered on "
-                    f"{blocker.card.name}'s block (added to stack)"
+                    f"{attachment.effective_card.name} triggered on "
+                    f"{blocker.effective_card.name}'s block (added to stack)"
                 )
 
     def _resolved_block_pairs(
@@ -379,7 +379,7 @@ class BlockTriggersMixin:
                     )
                 )
                 self.log.append(
-                    f"{source.card.name} triggered (attacked and wasn't blocked)"
+                    f"{source.effective_card.name} triggered (attacked and wasn't blocked)"
                 )
             # "Until end of turn, whenever a creature you control attacks and
             # isn't blocked, …" (Gaze of Pain.) A delayed ability belongs to no
@@ -668,7 +668,7 @@ class BlockTriggersMixin:
                 # for the reason the block fire site above gives.
                 if pushed is not None:
                     self.log.append(
-                        f"{source.card.name} triggered on becoming blocked (added to stack)"
+                        f"{source.effective_card.name} triggered on becoming blocked (added to stack)"
                     )
 
     def _fire_board_wide_block_triggers(

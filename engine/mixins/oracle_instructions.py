@@ -374,7 +374,7 @@ class OracleInstructionsMixin:
                 if perm.is_creature and self._has_keyword(perm, "prowess"):
                     add_pt_modifier(perm, 1, 1, until="end_of_turn")
                     self.log.append(
-                        f"{perm.card.name} gets +1/+1 until end of turn (prowess)"
+                        f"{perm.effective_card.name} gets +1/+1 until end of turn (prowess)"
                     )
 
     def _apply_spell_cast_any_triggers(

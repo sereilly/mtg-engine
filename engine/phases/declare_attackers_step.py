@@ -153,7 +153,7 @@ class DeclareAttackersStepMixin:
             if not self._is_creature(attacker):
                 return False, "only creatures can attack"
             if attacker.tapped:
-                return False, f"{attacker.card.name} is tapped"
+                return False, f"{attacker.effective_card.name} is tapped"
             if not self.can_attack(
                 attacker,
                 per_attacker_defender[idx],
@@ -162,7 +162,7 @@ class DeclareAttackersStepMixin:
                 # attacking "a player" (Arboria) must know the difference.
                 attacking_planeswalker=idx in per_attacker_walker,
             ):
-                return False, f"{attacker.card.name} cannot attack"
+                return False, f"{attacker.effective_card.name} cannot attack"
 
         # CR 508.1d: the requirements — every "attacks each combat if able",
         # each one-turn mark, the conditional ones (Ekundu Cyclops, Magnetic
@@ -851,7 +851,7 @@ class DeclareAttackersStepMixin:
                 # contradicting itself.
                 if pushed is not None:
                     self.log.append(
-                        f"{permanent.card.name} triggered on attack (added to stack)"
+                        f"{permanent.effective_card.name} triggered on attack (added to stack)"
                     )
 
     def _fire_creature_attacks_triggers(self, controller_index: int, attacker_indices: list[int]) -> None:
@@ -932,7 +932,7 @@ class DeclareAttackersStepMixin:
                 )
                 if pushed is not None:
                     self.log.append(
-                        f"{permanent.card.name} triggered on attack (added to stack)"
+                        f"{permanent.effective_card.name} triggered on attack (added to stack)"
                     )
             # "Whenever **enchanted creature** attacks or blocks" (Imprison),
             # "**When enchanted creature attacks**" (Contempt). The same events,
@@ -975,8 +975,8 @@ class DeclareAttackersStepMixin:
                     )
                 )
                 self.log.append(
-                    f"{attachment.card.name} triggered on "
-                    f"{permanent.card.name}'s attack (added to stack)"
+                    f"{attachment.effective_card.name} triggered on "
+                    f"{permanent.effective_card.name}'s attack (added to stack)"
                 )
 
     def _announce_attack_declaration(

@@ -560,7 +560,7 @@ class UntapStepMixin:
         ``index`` is its slot as offered."""
         player = self.players[player_index]
         return [
-            {"index": idx, "id": permanent.permanent_id, "name": permanent.card.name}
+            {"index": idx, "id": permanent.permanent_id, "name": permanent.effective_card.name}
             for idx, permanent in enumerate(player.battlefield)
             if permanent.tapped
             # Anchored per line through `self_untap_line`, not a substring over
@@ -612,7 +612,7 @@ class UntapStepMixin:
                 permanent.metadata.pop(RETURN_AT_NEXT_UNTAP_SEAT, None)
                 owner = return_permanent_to_owners_hand(self, permanent, untapping)
                 self.log.append(
-                    f"{permanent.card.name} returned to {owner.name}'s hand as "
+                    f"{permanent.effective_card.name} returned to {owner.name}'s hand as "
                     f"{untapping.name} untapped"
                 )
 

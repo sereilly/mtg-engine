@@ -85,7 +85,7 @@ def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
             owner_index if owner_index is not None else game.players.index(payload["player"])
         ]
         game.put_card_into_exile(owner, permanent.card)
-    game.log.append(f"{permanent.card.name} was exiled instead of dying")
+    game.log.append(f"{permanent.effective_card.name} was exiled instead of dying")
     return ReplacementOutcome(replaced=True)
 
 
@@ -143,7 +143,7 @@ def _exile_instead_of_leaving(game, payload: dict) -> ReplacementOutcome | None:
     ]
     game.put_card_into_exile(owner, permanent.card)
     game.log.append(
-        f"{permanent.card.name} was exiled instead of being put into "
+        f"{permanent.effective_card.name} was exiled instead of being put into "
         f"{payload.get('destination', 'another zone')}"
     )
     return ReplacementOutcome(replaced=True)
@@ -197,7 +197,7 @@ def _return_to_hand_instead_of_dying(game, payload: dict) -> ReplacementOutcome 
     if game.put_card_into_hand(owner, permanent.card, from_battlefield=permanent):
         lock_card_in_hand(game, owner_seat, permanent.card, permanent.card.name)
         game.log.append(
-            f"{permanent.card.name} returned to {owner.name}'s hand instead of dying, "
+            f"{permanent.effective_card.name} returned to {owner.name}'s hand instead of dying, "
             f"revealed and unplayable until their next turn"
         )
     return ReplacementOutcome(replaced=True)
@@ -258,7 +258,7 @@ def _top_of_library_instead_of_dying(game, payload: dict) -> ReplacementOutcome 
         owner, permanent.card, position="top", from_battlefield=permanent
     ):
         game.log.append(
-            f"{permanent.card.name} went on top of {owner.name}'s library "
+            f"{permanent.effective_card.name} went on top of {owner.name}'s library "
             f"instead of dying"
         )
     return ReplacementOutcome(replaced=True)
@@ -671,7 +671,7 @@ def _exile_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | Non
     card = payload["card"]
     source = _graveyard_exile_source(game, payload)
     by = (
-        source.card.name if source is not None
+        source.effective_card.name if source is not None
         else next(iter(recorded_name(
             getattr(player, "exile_cards_bound_for_graveyard_this_turn", None)
         )), None)

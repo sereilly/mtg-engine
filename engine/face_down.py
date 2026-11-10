@@ -607,7 +607,7 @@ def _announce_turned_face_up(
                 ability_text=trig.source_line,
                 x_value=x_value,
             )
-            game.log.append(f"{permanent.card.name} triggered (turned face up)")
+            game.log.append(f"{permanent.effective_card.name} triggered (turned face up)")
         # The permanent turned up is the object the event is about, frozen by
         # id (CR 400.7) for an effect that acts on it, and its controller for
         # one that names them (CR 603.10).
@@ -638,8 +638,10 @@ def turn_face_down(game: "Game", permanent: "Permanent") -> bool:
     card = getattr(permanent, "card", None)
     if card is None or is_face_down_card(card):
         return False
+    # Named as the table saw it go — a copy by what it copied (CR 707.2).
+    name = permanent.effective_card.name
     permanent.card = face_down_card(card)
-    game.log.append(f"{card.name} was turned face down")
+    game.log.append(f"{name} was turned face down")
     game._recompute_continuous_effects()
     return True
 

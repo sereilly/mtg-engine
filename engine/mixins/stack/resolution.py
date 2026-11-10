@@ -39,6 +39,7 @@ from ...oracle import OracleInstruction, compile_card_oracle
 from ...modal_triggers import modal_trigger_modes
 from ...prevention.shields import carry_spell_shields_onto_permanent
 from ...resumption import run_resumable
+from ...stack_targets import source_name
 from ...state_triggers import release_latch
 from ...target_descriptions import ANNOUNCED_SEAT
 from ...text_changes import (carry_spell_text_changes, spell_text_card,
@@ -800,11 +801,11 @@ class StackResolutionMixin:
         completion line is ``_release_stack_item``'s to write, once the last
         answer arrives."""
         if not supported:
-            self.log.append(f"{item.card.name} ability fizzled: {details}")
+            self.log.append(f"{source_name(item)} ability fizzled: {details}")
         elif self.choices_for_stack_item(item):
-            self.log.append(f"{item.card.name} ability is resolving, awaiting a choice")
+            self.log.append(f"{source_name(item)} ability is resolving, awaiting a choice")
         else:
-            self.log.append(f"{item.card.name} ability resolved")
+            self.log.append(f"{source_name(item)} ability resolved")
 
     def _intervening_if_is_no_longer_true(self, item: StackItem) -> bool:
         """CR 608.2a / CR 603.4: whether *item* is a triggered ability whose
@@ -883,7 +884,7 @@ class StackResolutionMixin:
         # longer true" whether or not that permanent was also what it targeted.
         if self._intervening_if_is_no_longer_true(item):
             self.log.append(
-                f"{item.card.name} ability did nothing: its condition is no longer true"
+                f"{source_name(item)} ability did nothing: its condition is no longer true"
             )
             return
         # CR 608.2b, asked once for the whole object before any of it runs.

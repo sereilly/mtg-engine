@@ -377,7 +377,10 @@ class TestVesuvanDoppelganger:
         game, p1, p2, dop = self._enter_as_copy(cards)
         triggers = game.get_optional_upkeep_triggers(0)
         recopy = next(t for t in triggers if t["kind"] == "upkeep_recopy")
-        assert recopy["card_name"] == "Vesuvan Doppelganger"
+        # Labelled by the name the Doppelganger has: it is a Craw Wurm now
+        # (CR 707.2), as its name plate says. The answer is keyed by its id.
+        assert recopy["card_name"] == "Craw Wurm"
+        assert recopy["permanent_id"] == dop.permanent_id
         assert recopy["needs_target"] == "creature"
         names = {t["name"] for t in recopy["valid_targets"]}
         assert names == {"Craw Wurm", "Black Knight"}

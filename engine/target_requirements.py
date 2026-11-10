@@ -285,7 +285,7 @@ def narrow_offer(game: "Game", chooser: int, spec: dict) -> dict:
             "seat": entry.get("seat"),
             "index": entry.get("index"),
             "id": permanent.permanent_id,
-            "name": permanent.card.name,
+            "name": permanent.effective_card.name,
         }
         for entry, permanent in required
     ]

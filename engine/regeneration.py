@@ -170,11 +170,11 @@ def regeneration_replaces_destruction(game: "Game", permanent: "Permanent") -> b
     if cant_be_regenerated(permanent):
         return False
     if regenerates_itself(permanent):
-        _apply(game, permanent, f"{permanent.card.name} regenerates itself (701.19b)")
+        _apply(game, permanent, f"{permanent.effective_card.name} regenerates itself (701.19b)")
         return True
     if permanent.regeneration_shield > 0:
         permanent.regeneration_shield -= 1
-        _apply(game, permanent, f"{permanent.card.name} regenerated")
+        _apply(game, permanent, f"{permanent.effective_card.name} regenerated")
         # "When it regenerates this way, that player may draw a card."
         # (Soldevi Sentry.) CR 603.7's delayed ability, announced here because
         # this is the one place a *shield* is spent — and only here: CR 701.19c
