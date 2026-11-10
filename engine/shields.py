@@ -198,8 +198,11 @@ class SharedNextTime:
       damage at the same time, or if either you or this card would be dealt
       damage from multiple sources at the same time, the redirection will
       apply to both chunks of damage" (ruling 2004-10-04) — so the first use
-      opens a **moment** (``damage_redirects.damage_moment``) and every chunk
-      dealt in that same moment moves too, from any source.
+      opens a **moment**, the simultaneous dealing the chunk is part of
+      (``damage_redirects.dealing_moment``), and every chunk dealt in that same
+      dealing moves too, from any source it joins. Two sentences of one
+      spell are two times (CR 608.2c; Illuminate kicked), and so is each of
+      Mana Clash's flips ("each point of damage is dealt separately").
     * **source-keyed** (``by_source``) — "The next time a source of your choice
       would deal damage this turn, prevent that damage." CR 615.8: "the next
       instance of damage from that source, regardless of how much damage that

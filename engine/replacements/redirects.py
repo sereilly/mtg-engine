@@ -24,7 +24,6 @@ from ..damage_redirects import (
     DamageRedirect,
     _is_permanent,
     applicable_redirect,
-    damage_moment,
     drop_spent,
     event_dealing_moment,
     live_recipient,
@@ -432,13 +431,11 @@ def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
     moved = redirect.moves(amount)
     if moved <= 0:  # pragma: no cover - `spent` already excludes an empty pool
         return None
-    # *moment* for a recipient-keyed shared occasion (Glarecaster), *dealing*
-    # for CR 615.8's source-keyed instance (Reflect Damage): a one-use record
-    # spent on a chunk of a simultaneous dealing moves the source's other
-    # chunks of it too.
+    # The chunk's dealing, for a recipient-keyed shared occasion (Glarecaster:
+    # every chunk dealt to it at that time) and for CR 615.8's source-keyed
+    # instance (Reflect Damage: the source's other chunks of it).
     redirect.spend(
-        moved, moment=damage_moment(game, bool(payload.get("combat"))),
-        dealing=event_dealing_moment(game, payload), source=source,
+        moved, dealing=event_dealing_moment(game, payload), source=source,
     )
     from_name = getattr(recipient, "name", None) or getattr(
         getattr(recipient, "card", None), "name", "it"

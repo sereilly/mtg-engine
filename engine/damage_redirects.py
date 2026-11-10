@@ -52,32 +52,12 @@ from .shields import END_OF_COMBAT, END_OF_TURN  # noqa: F401  (one duration voc
 from .shields import SharedNextTime  # noqa: F401
 
 
-#: The moment a combat damage step's simultaneous dealing is (CR 510.2): every
-#: chunk of that step's combat damage is dealt at once, so a "next time" spent
-#: on one of them is open for the rest — and closed by the step's tail
-#: (:func:`end_simultaneous_redirects`), so the next step's dealing is another
-#: time.
-COMBAT_DEALING = "combat damage dealing"
-
-
-def damage_moment(game, combat: bool):
-    """Which simultaneous dealing a damage event belongs to, or None.
-
-    Combat damage is one dealing per step (CR 510.2, :data:`COMBAT_DEALING`).
-    Damage a resolving spell or ability deals is that object's — one stack
-    object per resolution (``Game.resolving_items``), so a Hurricane hitting a
-    creature and its controller is one time. Anything else (no resolution
-    running) is a moment of its own.
-    """
-    if combat:
-        return COMBAT_DEALING
-    items = getattr(game, "resolving_items", None) or ()
-    return items[-1] if items else None
-
-
 def dealing_moment(game, *, combat: bool, source):
     """The simultaneous dealing a chunk from *source* is part of, or None — the
-    moment a **source-keyed** "next time" is spent at (CR 615.8).
+    moment every "next time" is spent at: CR 615.8's source-keyed instance, and
+    the recipient-keyed template's time (Glarecaster, Mirrorwood Treefolk:
+    "damage from one source at one time, but during combat it is possible for
+    multiple sources to damage the Treefolk at one time", ruling 2004-10-04).
 
     One instance of damage from a source is everything that source deals in
     one simultaneous dealing (the project owner's ruling, 2026-11-07): the open
@@ -86,8 +66,12 @@ def dealing_moment(game, *, combat: bool, source):
     ``deal_sentence``), or the combat damage step's, one per strike pass
     (CR 510.2, 510.4). **Not** the resolving stack object: a spell that deals
     damage in two sentences deals two instances (CR 608.2c — each sentence is
-    its own event, as Tracker's ruling has it), and only a dealing is one. A
-    chunk dealt alone, outside any dealing, is a moment of its own (None)."""
+    its own event, as Tracker's ruling has it), and only a dealing is one —
+    so Illuminate kicked with {2}{R} is two times, and Mana Clash's flips are
+    as many ("Each point of damage is dealt separately", its ruling,
+    2004-10-04). A chunk dealt alone, outside any dealing, is a moment of its
+    own (None). The combat damage step's dealing is one of these too, closed
+    as it finishes like any other (``simultaneous_damage.finish``)."""
     from .simultaneous_damage import joined
 
     return joined(game, combat=combat, source=source)
@@ -99,15 +83,6 @@ def event_dealing_moment(game, event: dict):
     return dealing_moment(
         game, combat=bool(event.get("combat")), source=event.get("source"),
     )
-
-
-def occasion_moment(game, occasion, *, combat: bool, source):
-    """The moment *occasion* is asked about for a chunk: the dealing for a
-    source-keyed occasion (:func:`dealing_moment`), the recipient-keyed
-    template's :func:`damage_moment` otherwise."""
-    if occasion is not None and occasion.by_source:
-        return dealing_moment(game, combat=combat, source=source)
-    return damage_moment(game, combat)
 
 
 @dataclass
@@ -237,7 +212,7 @@ class DamageRedirect:
             return max(0, amount)
         return max(0, min(self.amount, amount))
 
-    def spend(self, moved: int = 0, *, moment=None, dealing=None, source=None) -> None:
+    def spend(self, moved: int = 0, *, dealing=None, source=None) -> None:
         """Charge one instance, and *moved* points, against the record.
 
         The mutating half. Both counters are charged rather than one or the
@@ -245,11 +220,10 @@ class DamageRedirect:
         sentences — "the next **time**" against "the next **N damage**" — and a
         record that carried both would have to satisfy both to keep applying.
 
-        *moment* is the event's (:func:`damage_moment`), read by a
-        recipient-keyed shared occasion, which is spent at that moment for
-        every record sharing it. *dealing* (:func:`dealing_moment`) and
-        *source* are the chunk's dealing and source, read by CR 615.8's
-        source-keyed instance: the last use of a one-use record spent inside a
+        *dealing* (:func:`dealing_moment`) and *source* are the chunk's
+        dealing and source. A recipient-keyed shared occasion is spent at the
+        dealing for every record sharing it; CR 615.8's source-keyed instance
+        is the dealing too: the last use of a one-use record spent inside a
         dealing opens a ``by_source`` occasion there, and a later chunk of that
         instance charges nothing more.
         """
@@ -262,7 +236,7 @@ class DamageRedirect:
                 if self.occasion.moment is None:
                     self.occasion.use(dealing, source)
                 return
-            self.occasion.use(moment)
+            self.occasion.use(dealing)
             if self.uses is not None:
                 self.uses -= 1
             return
@@ -326,18 +300,6 @@ def drop_spent(recipient) -> None:
     records = getattr(recipient, _REDIRECTS_ATTR, None)
     if records:
         records[:] = [r for r in records if not r.spent]
-
-
-def end_simultaneous_redirects(game) -> None:
-    """The combat damage step's tail: its simultaneous dealing is over
-    (CR 510.2), so every shared "next time" it opened is spent — the next
-    step's damage is another time. ``prevention.static.end_simultaneous_damage``'s
-    twin, called beside it."""
-    for holder in (*game.players, *game.all_permanents()):
-        for record in redirects_on(holder):
-            if record.occasion is not None and record.occasion.moment is COMBAT_DEALING:
-                record.occasion.closed = True
-        drop_spent(holder)
 
 
 def clear_redirects(recipient, lifetime: str | None = None) -> None:
@@ -764,13 +726,12 @@ def applicable_redirect(
     ):
         if redirect.spent or redirect.applying:
             continue
-        # A shared "next time" already used at another moment is over for
+        # A shared "next time" already used in another dealing is over for
         # this event, though nothing has swept it yet (Glarecaster) — and a
         # source-keyed one (CR 615.8) is open only for the rest of its own
         # source's dealing.
         if redirect.occasion is not None and not redirect.occasion.open_at(
-            occasion_moment(game, redirect.occasion, combat=combat, source=source),
-            source,
+            dealing_moment(game, combat=combat, source=source), source,
         ):
             continue
         if redirect.combat_only and not combat:
