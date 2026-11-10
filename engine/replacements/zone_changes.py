@@ -430,11 +430,10 @@ def discarded_onto_battlefield(game, player, card, cause_seat) -> bool:
     its own text says a discard caused by *cause_seat* does that. Returns
     whether it did; False means the caller's default move still has to happen.
 
-    The whole effect in one place, because a card is discarded through two
-    seams and both must agree: ``Game._discard_card`` reaches this through the
-    ``discard`` event below, and the chosen-discard seam
-    (``handlers/discards._resolve_one_discard``) calls it directly, since that one
-    offers Library of Leng's destination itself and never raises the event.
+    The whole effect in one place, the ``discard`` event's body below, which
+    both discard seams raise (``Game.discarded_card_destination``): a discard
+    taken from the player (``Game._discard_card``) and one they chose
+    (``handlers/discards._resolve_one_discard``).
 
     The card has **still been discarded** (the card's ruling of 2022-12-08):
     the caller announces the discard exactly as it would have, and a sentence

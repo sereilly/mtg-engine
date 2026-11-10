@@ -30,7 +30,8 @@ from ..events import emit
 from ..models import PlayerState
 from ..pending_choices import spec_for
 from ..replacement_choices import DRAW_OF
-from ..replacements import answered_restart, apply_replacements
+from ..replacements import (answered_restart, apply_replacements,
+                            replacement_candidates)
 from ..replacements.zone_changes import TOP_OF_LIBRARY_DISCARD_TEXT
 from ..oracle import compile_card_oracle
 from ..trigger_utils import (battlefield_triggers, bound_event_seat,
@@ -565,11 +566,15 @@ class DrawsAndDiscardsMixin:
 
         Returns the object the graveyard now holds when the card went there
         (``put_card_into_graveyard``), and None when anything else took it.
+
+        Both discard seams settle the card here: a discard taken from the
+        player (``_discard_card``) and one the player chose
+        (``handlers/discards._resolve_one_discard``, with *leng_declined* when
+        its prompt offered the library top).
         """
-        event = {
-            "player": player, "card": card, "cause_seat": cause,
-            "as_cost": as_cost, "leng_declined": leng_declined,
-        }
+        event = self._discard_event(
+            player, card, cause, as_cost=as_cost, leng_declined=leng_declined,
+        )
         consumed, _ = apply_replacements(
             self, "discard", event,
             joined=(("put_into_graveyard", self.graveyard_event(player, card)),),
@@ -584,6 +589,38 @@ class DrawsAndDiscardsMixin:
         if not consumed:
             return self.put_card_into_graveyard(player, card) or None
         return None
+
+    @staticmethod
+    def _discard_event(
+        player: PlayerState, card, cause: int | None, *,
+        as_cost: bool = False, leng_declined: bool = False,
+    ) -> dict:
+        """The ``discard`` event :meth:`discarded_card_destination` raises —
+        one builder, so :meth:`discard_effect_applies` asks the predicates
+        about the very event the destination runs."""
+        return {
+            "player": player, "card": card, "cause_seat": cause,
+            "as_cost": as_cost, "leng_declined": leng_declined,
+        }
+
+    def discard_effect_applies(
+        self, player: PlayerState, card, cause: int | None, *,
+        as_cost: bool = False, leng_declined: bool = False,
+    ) -> bool:
+        """Whether an effect of the ``discard`` event itself — Dodecapod's
+        battlefield, madness's exile, Library of Leng's offer — applies to
+        this discard, before anything has: each of them names the card it
+        takes in its own line ("discarded X into exile (madness)"), so the
+        chosen discard writes its plain "discarded X" only for a card none of
+        them could take. Pure: the registry's predicates, asked of the event
+        :meth:`discarded_card_destination` would raise."""
+        event = self._discard_event(
+            player, card, cause, as_cost=as_cost, leng_declined=leng_declined,
+        )
+        return any(
+            candidate.applies(self, event)
+            for candidate in replacement_candidates("discard", self, event)
+        )
 
     def announce_discard(self, player: PlayerState, card) -> None:
         """CR 701.9a: a discard happened, for the permanents that watch one.
