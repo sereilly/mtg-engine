@@ -16,7 +16,7 @@ here drives that board, and passes on the base too). Beside it, two that
 did, both on the attacker's side:
 
 * a band member **removed from combat** dissolved its whole band
-  (``handlers/combat._take_permanent_out_of_combat`` dropped every band the
+  (``Game.remove_from_combat``, then in ``handlers/combat``, dropped every band the
   creature was in): a band of three that lost one member before blocks no
   longer spread a block to the other two, and the unspread one dealt its
   damage to the defending player;

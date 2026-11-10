@@ -62,7 +62,7 @@ def coin_flip_remove_attacker_and_tap(game: Game, instruction: OracleInstruction
     # left `permanent.attacking` stamped True, its `defending_player_index` set
     # and any blocker still holding its slot. Every filter asking "attacking"
     # went on admitting it for the rest of the turn.
-    _take_permanent_out_of_combat(game, permanent)
+    game.remove_from_combat(permanent)
     game.become_tapped(permanent)
     game.log.append(f"{context.card.name} lost the coin flip: removed from combat and tapped")
     return True, "resolved"
@@ -209,62 +209,6 @@ def randomize_blockers(game: Game, instruction: OracleInstruction, context: Orac
     game.camouflage_active_turn = game.turn
     game.log.append(f"{card.name} set up random pile blocking this turn")
     return True, "resolved"
-
-
-def _take_permanent_out_of_combat(
-    game: Game, perm: Permanent, *, frees_blocked_attackers: bool = False,
-) -> bool:
-    """Remove *perm* from combat, whichever role it holds (CR 506.4c).
-
-    Combat state is index-keyed (see the control-seam notes), so the slot is
-    derived once through the seam (``battlefield_index_of``) and every map
-    that carries it is pruned together — an attacker's entry, its
-    planeswalker assignment, its band, and any blocker's record of blocking
-    it. A blocker goes through ``_remove_blocker_from_combat``, which keeps
-    each attacker blocked (CR 509.1h) unless the card printed the sentence
-    that says otherwise — ``frees_blocked_attackers``, which is Imprison's
-    clause and not something removal does.
-    """
-    idx = game.battlefield_index_of(perm)
-    if idx is None:
-        return False
-    seat = game.controller_index_of(perm)
-    if seat == game.active_player_index and idx in game.combat_attackers:
-        # CR 702.22h: whatever blocks it blocks the rest of its band, and goes
-        # on doing so once it has gone.
-        game._keep_band_blocks_past({idx})
-        game.combat_attackers.pop(idx, None)
-        game.combat_attacked_planeswalkers.pop(idx, None)
-        # CR 702.22f: "An attacking creature that's removed from combat is
-        # also removed from the band it was in" — it, and not the band: this
-        # dropped every band it was in, so a band of three that lost one
-        # member stopped spreading its blocks to the other two. A band left
-        # with one creature is no band (``_prune_combat_state``'s rule).
-        game.combat_bands = [
-            kept for band in game.combat_bands
-            if len(kept := [member for member in band if member != idx]) >= 2
-        ]
-        for blocker_map in game.combat_blockers.values():
-            for blocked in blocker_map.values():
-                if idx in blocked:
-                    blocked.remove(idx)
-        game._apply_band_block_propagation()
-        # CR 506.4c: it stops being an attacking creature — the per-permanent
-        # state has to agree with the pruned maps, or a filter asking
-        # "attacking" between now and end of combat gets a different answer
-        # than the damage step does.
-        perm.attacking = False
-        perm.defending_player_index = None
-        perm.blocked = False
-        game.log.append(f"{perm.card.name} was removed from combat")
-        return True
-    if idx in game.combat_blockers.get(seat, {}):
-        game._remove_blocker_from_combat(
-            seat, idx, frees_blocked_attackers=frees_blocked_attackers
-        )
-        game.log.append(f"{perm.card.name} was removed from combat")
-        return True
-    return False
 
 
 def _blocked_attacker_indices(game: Game, defender_seat: int, blocker_index: int) -> list[int]:
@@ -531,7 +475,7 @@ def remove_from_combat(game: Game, instruction: OracleInstruction, context: Orac
         perm = game.permanent_by_id(permanent_id)
         if perm is None:
             continue
-        _take_permanent_out_of_combat(game, perm, frees_blocked_attackers=frees)
+        game.remove_from_combat(perm, frees_blocked_attackers=frees)
         removed.append(permanent_id)
     # What a sentence behind this one means by "it" (Reconnaissance's untap).
     # By id, never by object or slot (CR 400.7), and written whichever branch

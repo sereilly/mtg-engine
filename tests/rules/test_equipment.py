@@ -380,8 +380,12 @@ def test_301_5_only_a_creature_may_be_equipped_and_never_the_equipment_itself(se
 @pytest.mark.cr("301.5c")
 def test_301_5c_an_equipment_that_is_a_creature_cannot_equip():
     """An artifact creature with the Equipment subtype (and no reconfigure)
-    can't equip: the ability is refused rather than attaching a creature to a
-    creature."""
+    can't equip. Its equip ability may still be activated — "target creature
+    you control" is still a creature you control — and it does nothing (CR
+    701.3b; March of the Machines, ruling 2004-12-01: "You can activate the
+    Equipment's equip ability, but it won't do anything."). This test held the
+    activation refused until MRD W2G3; what it is about — no creature attached
+    to a creature — is unchanged."""
     golem = _equipment(
         "Living Blade", "Equipped creature gets +2/+0.\nEquip {1}",
         type_line="Artifact Creature — Equipment Golem",
@@ -394,8 +398,9 @@ def test_301_5c_an_equipment_that_is_a_creature_cannot_equip():
 
     assert golem.is_creature and is_equipment(golem)
     assert "is a creature" in equip_refusal(game, golem, bear)
-    assert not _equip(game, 0, golem, bear).supported
+    assert _equip(game, 0, golem, bear).supported
     assert equipped_creature(golem) is None
+    assert any("Living Blade doesn't move" in line for line in game.log)
     assert bear.effective_power == 2
 
 

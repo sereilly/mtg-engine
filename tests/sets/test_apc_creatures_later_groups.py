@@ -1549,8 +1549,6 @@ def test_w1g9_cromat_a_target_that_left_the_fight_is_not_destroyed(set_pool):
     """CR 608.2b: the target is asked again as the ability resolves. A blocker
     removed from combat in response is no longer "blocking Cromat", and the
     destroy does not go looking for somebody else."""
-    from engine.handlers.combat import _take_permanent_out_of_combat
-
     game, cromat, ally, blocker, bystander = _w1g9_cromat_blocked(set_pool)
     queued = game.queue_permanent_ability(
         0, "Cromat", permanent_index=0, ability_index=0,
@@ -1558,7 +1556,7 @@ def test_w1g9_cromat_a_target_that_left_the_fight_is_not_destroyed(set_pool):
     )
     assert queued.supported and len(game.stack) == 1
 
-    _take_permanent_out_of_combat(game, blocker, frees_blocked_attackers=False)
+    game.remove_from_combat(blocker, frees_blocked_attackers=False)
     _w1g9_resolve_stack(game)
 
     assert game.is_on_battlefield(blocker)

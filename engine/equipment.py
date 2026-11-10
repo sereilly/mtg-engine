@@ -21,7 +21,11 @@ Three rules, one module, because each is written in terms of the others:
   (301.5c), and never a creature with protection from the Equipment's quality
   (702.16d). The equip handler, the state-based sweep and the target picker all
   ask it, so what the ability may choose, what the resolution accepts and what
-  the sweep later tolerates cannot disagree.
+  the sweep later tolerates cannot disagree — with one difference, which is the
+  rules' own: an Equipment that is a creature has a legal target and simply
+  doesn't move (CR 301.5c; the March of the Machines ruling), so the picker and
+  the handler's target check ask :func:`equip_target_refusal`, which is this
+  predicate whenever the Equipment can equip at all.
 
 * **CR 701.3 says what attaching does**: :func:`attach_equipment` moves the
   Equipment from wherever it is (701.3a), does nothing when it is already there
@@ -265,6 +269,58 @@ def attachment_refusal(
     return None
 
 
+def attachment_target_refusal(
+    game: "Game", attachment: "Permanent", host: "Permanent"
+) -> str | None:
+    """Why *host* may not be **chosen** as the target of *attachment*'s attach
+    ability (CR 601.2c via 602.2b), or None when it may — the picker's half of
+    :func:`attachment_refusal`, which stays the resolution's half.
+
+    The two are one question except where the *attaching permanent* is the
+    problem rather than the host. An Equipment that is a creature can't equip
+    (CR 301.5c), but its equip ability still reads "Attach this permanent to
+    target creature you control", and nothing about a creature you control
+    stopped being that. The March of the Machines ruling (2004-12-01) says it
+    in as many words: "You can activate the Equipment's equip ability, but it
+    won't do anything." Asking :func:`equip_refusal` here refused every host
+    and emptied the picker, so the activation was refused with "no valid
+    target" — a smaller game than the printed one, in the direction nobody
+    reports. See :func:`equip_target_refusal`.
+    """
+    if is_equipment(attachment) and not attachment.has_type("aura"):
+        return equip_target_refusal(game, attachment, host)
+    return attachment_refusal(game, attachment, host)
+
+
+def equip_target_refusal(
+    game: "Game", equipment: "Permanent", creature: "Permanent"
+) -> str | None:
+    """Why *creature* is not a legal target for *equipment*'s equip ability.
+
+    :func:`equip_refusal` whenever the Equipment can equip at all — a creature
+    it may not be attached to (protection, CR 702.16b/d; itself) is a creature
+    the ability may not choose, and offering it would be offering an attach
+    that lands nowhere. When the Equipment is itself a creature (CR 301.5c),
+    nothing can be equipped and the target is asked only what the printed
+    words ask: a creature, on the battlefield, that the ability's source may
+    target (CR 702.16b — an artifact source and a creature with protection
+    from artifacts). Itself included: it is a creature its controller
+    controls, and the attach that follows does nothing (CR 701.3b) either way.
+    """
+    if not equipment.is_creature:
+        return equip_refusal(game, equipment, creature)
+    if creature is None or not game.is_on_battlefield(creature):
+        return "the equipped creature is no longer on the battlefield"
+    if not creature.is_creature:
+        return f"{creature.card.name} is not a creature (CR 301.5)"
+    if game._is_protected_from(creature, equipment):
+        return (
+            f"{creature.card.name} has protection from {equipment.card.name} "
+            "(CR 702.16b)"
+        )
+    return None
+
+
 def equipped_creature(equipment: "Permanent") -> "Permanent | None":
     """The creature *equipment* is attached to, or None (CR 301.5a)."""
     return equipment.metadata.get("attached_to")
@@ -273,11 +329,13 @@ def equipped_creature(equipment: "Permanent") -> "Permanent | None":
 def equip_refusal(game: "Game", equipment: "Permanent", creature: "Permanent") -> str | None:
     """Why *equipment* may not be attached to *creature*, or None when it may.
 
-    One predicate, read by the equip handler at resolution (CR 608.2b), by the
-    target picker as the ability is activated (CR 602.2b) and by the state-based
-    sweep afterwards (704.5n), so the three cannot drift: a creature the picker
-    offers is one the resolution attaches to, and one the sweep then leaves
-    alone.
+    One predicate, read by ``attach_equipment`` at resolution (CR 608.2b), by
+    the target picker as the ability is activated (CR 602.2b, through
+    :func:`equip_target_refusal`) and by the state-based sweep afterwards
+    (704.5n), so the three cannot drift: a creature the picker offers is one
+    the resolution attaches to, and one the sweep then leaves alone — unless
+    the Equipment is itself a creature, which no creature it could choose
+    would change.
 
     * CR 301.5 — the host must be a creature; "can't legally be attached to
       anything that isn't a creature".
@@ -420,8 +478,10 @@ def unattach_illegal_equipment(game: "Game") -> bool:
 __all__ = [
     "EQUIP_RULES_TEXT",
     "attach_equipment",
+    "attachment_target_refusal",
     "equip_line_parts",
     "equip_refusal",
+    "equip_target_refusal",
     "equipped_creature",
     "expand_equip_line",
     "expand_equip_lines",

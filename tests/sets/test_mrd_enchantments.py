@@ -952,3 +952,84 @@ def test_w2g2_the_wire_shows_the_card_to_its_exiler_alone(set_pool):
     assert exile_hidden_flags(game, bob, None, 1) == [True]
 
 # ==== end W2G2 ======================================================
+
+
+# ==== W2G3 ==========================================================
+# W2G3's tests go between this line and the "end W2G3" line.
+from engine import Game as _w2g3_Game, PlayerState as _w2g3_PlayerState
+from engine.equipment import equipped_creature as _w2g3_equipped_creature
+from engine.models import Permanent as _w2g3_Permanent
+from tests.helpers import _nosick as _w2g3_nosick, resolve_stack as _w2g3_resolve
+
+
+def _w2g3_marching_bonesplitter(set_pool):
+    """March of the Machines on the battlefield, so Bonesplitter is a 1/1
+    artifact creature; Grizzly Bears beside it. Seat 0's precombat main."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w2g3_Game(players=[
+        _w2g3_PlayerState(name=f"P{seat}", library=[lea["Island"]] * 10)
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    for _ in range(6):
+        if game.current_turn_phase == "precombat_main":
+            break
+        game._close_current_priority_step()
+    board = {}
+    for name, card in (
+        ("bears", lea["Grizzly Bears"]),
+        ("splitter", mrd["Bonesplitter"]),
+        ("march", mrd["March of the Machines"]),
+    ):
+        board[name] = _w2g3_nosick(_w2g3_Permanent(card=card))
+        game._put_permanent_onto_battlefield(0, board[name], None)
+    game._settle()
+    assert board["splitter"].is_creature
+    return game, board
+
+
+def test_w2g3_a_creature_equipment_can_activate_equip_and_it_does_nothing(set_pool):
+    """March of the Machines, 2004-12-01: "If an Equipment becomes a creature,
+    it can no longer equip a creature. … You can activate the Equipment's
+    equip ability, but it won't do anything." The activation was refused with
+    "no valid target" — the picker asked CR 301.5c's resolution question of
+    the target. Now the ability goes on the stack aimed at a creature its
+    controller controls, resolves, and the Equipment does not move."""
+    game, board = _w2g3_marching_bonesplitter(set_pool)
+    bears, splitter = board["bears"], board["splitter"]
+
+    queued = game.queue_permanent_ability(
+        0, "Bonesplitter", permanent_index=1,
+        target_permanent_ids=[bears.permanent_id],
+    )
+    assert queued.supported and queued.details == "queued", queued
+    _w2g3_resolve(game)
+
+    assert _w2g3_equipped_creature(splitter) is None
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+    assert (
+        "Bonesplitter doesn't move: Bonesplitter is a creature and can't "
+        "equip (CR 301.5c)"
+    ) in game.log
+
+
+def test_w2g3_the_equip_picker_still_refuses_a_creature_it_may_not_target(set_pool):
+    """What the picker gave up is only the Equipment-side refusal. A creature
+    that is no legal target stays refused: an opponent's creature (the printed
+    "you control") is not offered while March animates the Equipment."""
+    game, board = _w2g3_marching_bonesplitter(set_pool)
+    theirs = _w2g3_nosick(_w2g3_Permanent(card=set_pool("LEA")["Grizzly Bears"]))
+    game._put_permanent_onto_battlefield(1, theirs, None)
+    game._settle()
+
+    refused = game.queue_permanent_ability(
+        0, "Bonesplitter", permanent_index=1,
+        target_permanent_ids=[theirs.permanent_id],
+    )
+    assert not refused.supported, refused
+    assert not game.stack
+
+
+# ==== end W2G3 ======================================================

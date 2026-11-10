@@ -164,7 +164,7 @@ def _forms(kind: str, old: str, new: str) -> tuple[tuple[str, str], ...]:
     if kind == COLOR_WORD:
         # "**non**black" is an instance of the word "black", and Mind Bend's own
         # reminder text says so: "you may change 'nonblack creature' to
-        # 'nongreen creature'". ```` does not reach inside the compound —
+        # 'nongreen creature'". ``\b`` does not reach inside the compound —
         # there is no word boundary between "non" and "black" — so the bare
         # pattern fails there and every ``non<colour>`` in the pool survived a
         # change that names it. Naming the compound covers it, exactly as
