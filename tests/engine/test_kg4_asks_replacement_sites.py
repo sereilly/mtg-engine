@@ -55,6 +55,13 @@ _ONE_EFFECT = {
         "one effect (Dreams of the Dead's exile); a death asks it joined to "
         "the would-die and graveyard effects it meets there",
     ),
+    ("mixins/zone_funnels.py", "_begin_entry"): (
+        ("cant_enter_battlefield",),
+        "one effect (Worms of the Earth), and a CR 614.17 'can't', never a "
+        "contender (614.17c): asked before the entry's replacements and "
+        "alone. The ``would_enter_battlefield`` call beside it asks (kg5 "
+        "`asks`; tests/engine/test_kg5_asks_entry_asks.py holds it per kind)",
+    ),
     ("phases/untap_step.py", "resolve_untap_step"): (
         ("would_untap",),
         "one effect (Freyalise's Winds). Undiscovered Paradise's return was "
@@ -77,20 +84,10 @@ _ONE_EFFECT = {
 
 #: Contentions the pool can build that are measured and left (kg4 `asks`'s
 #: report names the parts). Each must still have two or more registrations —
-#: a declined site whose kind falls to one belongs in ``_ONE_EFFECT``.
-_DECLINED = {
-    ("mixins/zone_funnels.py", "_begin_entry"): (
-        ("would_enter_battlefield",),
-        "Land Equilibrium beside an Alliances land's unpayable toll (or "
-        "Containment Priest beside a toll on an uncast creature): the entry "
-        "seam's callers read False as 'replaced' and run their tails at "
-        "once, and Land Equilibrium's effect does not replace the entry "
-        "(the land still enters), so a suspended entry is not 'did not "
-        "enter' whatever is answered. (Worms of the Earth is a CR 614.17 "
-        "'can't', never a contender — 614.17c — and its order 0 already "
-        "says so.)",
-    ),
-}
+#: a declined site whose kind falls to one belongs in ``_ONE_EFFECT``. Empty
+#: since kg5 `asks`: the entry (``_begin_entry``'s ``would_enter_battlefield``)
+#: asks, its suspension told apart from "replaced" (``ENTRY_SUSPENDED``).
+_DECLINED: dict = {}
 
 
 def _name(call: ast.Call) -> str:

@@ -345,10 +345,11 @@ DRAW_RETURNS_FROM_GRAVEYARD = 33  # Forbidden Crypt
 DRAW_REVEALED_AND_TAXED = 34  # Breathstealer's Crypt
 EXTRA_PLUS1_COUNTER = 10  # Conclave Mentor
 EXILE_INSTEAD_OF_ENTERING = 10  # Containment Priest
-# Before it, and before every other entry replacement. CR 614.17c: an event that
+# Its own event kind (``cant_enter_battlefield``), asked before every entry
+# replacement and never one of their contenders. CR 614.17c: an event that
 # **can't** happen may only be replaced by a self-replacement effect, so nothing
-# else in the contention set is allowed to modify it — being asked first is how
-# a prohibition that is not itself a replacement effect keeps that promise here.
+# in the entry's contention set is allowed to modify it — and once that set is
+# asked of a person (CR 616.1e) an order alone could not keep that promise.
 LANDS_CANT_ENTER = 0  # Worms of the Earth
 # Between the two: an entry cost the controller cannot pay refuses the entry the
 # way Containment Priest's exile does, so it belongs with the consuming

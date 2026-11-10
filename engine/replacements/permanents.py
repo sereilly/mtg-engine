@@ -4,8 +4,10 @@
 ``would_enter_battlefield`` above all — a creature that was not cast exiled
 instead, an entry cost that cannot be paid sending the permanent to the
 graveyard instead, an optional discard toll, a sacrifice the permanent's entry
-requires, lands that can't enter at all, and the "then sacrifices a land" rider
-an entry replacement records (Land Equilibrium, ``apply_entry_riders``) — and
+requires, and the "then sacrifices a land" rider an entry replacement records
+(Land Equilibrium, ``apply_entry_riders``); before them all, and never one of
+their contenders, ``cant_enter_battlefield`` (lands that can't enter at all,
+a CR 614.17 "can't") — and
 beside it the events that happen to a permanent already there: ``would_untap``
 (counters removed or the permanent returned to hand instead of untapping),
 ``plus1_counters`` (one more, Conclave Mentor) and ``land_mana_produced``
@@ -562,7 +564,7 @@ def _applies_lands_cant_enter(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "would_enter_battlefield", LANDS_CANT_ENTER,
+    "cant_enter_battlefield", LANDS_CANT_ENTER,
     applies=_applies_lands_cant_enter,
     sources=_seats_printing(LANDS_CANT_ENTER_TEXT),
     label="The land doesn't enter the battlefield",
@@ -572,7 +574,11 @@ def _lands_cannot_enter(game, payload: dict) -> ReplacementOutcome | None:
 
     CR 614.17: a "can't" effect is not a replacement effect, but it follows the
     same rules, which is why it is registered here — this is the one place the
-    engine asks "may this permanent enter?" before it does. It is not the play
+    engine asks "may this permanent enter?" before it does. Under its own event
+    kind, ``cant_enter_battlefield``, asked before ``would_enter_battlefield``
+    and never among its contenders: an event that can't happen may be replaced
+    only by a self-replacement effect (614.17c), so CR 616.1e's choice is
+    never put between this and Land Equilibrium or an Alliances land's toll. It is not the play
     restriction beside it on the same card: that one (CR 305.1, enforced through
     ``Game._may_play_another_land``) is about the *action* of playing a land,
     and this one is about a land arriving from anywhere at all — a reanimation,
@@ -682,7 +688,11 @@ def _sacrifice_after_entering(game, payload: dict) -> ReplacementOutcome | None:
 
 def apply_entry_riders(game, permanent, controller_index: int) -> None:
     """The "…**then** X" half of an entry replacement, once the permanent is on
-    the battlefield.
+    the battlefield — or once a replacement applied after it took the entry
+    away (CR 616.1e lets the affected player apply Land Equilibrium ahead of
+    an Alliances land's unpaid toll; CR 614.6: the modified event, "puts that
+    land onto the battlefield then sacrifices a land", is what the toll then
+    modified, and only its entry).
 
     Called from the one entry path there is, for the same reason the entry
     replacement itself is asked there: a rider per caller is a rider forgotten

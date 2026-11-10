@@ -40,9 +40,10 @@ from ..continuous import next_timestamp
 from ..control import set_base_controller
 from ..enter_effects import CAST_THIS_TURN_STAMP
 from ..delayed_triggers import end_exhausted_exile_delays
-from ..entry_awaiting import (ENTRY_EVENT, DeferredEntry, EntryEvent,
-                              EntryInProgress, apnap_order, entered_together,
-                              entry_in_progress, entry_is_awaited)
+from ..entry_awaiting import (ENTRY_EVENT, ENTRY_SUSPENDED, DeferredEntry,
+                              EntryEvent, EntryInProgress, apnap_order,
+                              entered_together, entry_in_progress,
+                              entry_is_awaited)
 from ..exiled_records import (forget_record, newest_record_for,
                               record_exiled_card)
 from ..events import emit
@@ -1121,6 +1122,12 @@ class ZoneFunnelsMixin:
                 try:
                     for put in apnap_order(self, event.puts):
                         record = self._begin_entry(put, stamp_id=False)
+                        if record is ENTRY_SUSPENDED:
+                            # Its "would enter" replacements contend and its
+                            # player is being asked (CR 616.1e): it leaves
+                            # the event, and the answer finishes it alone —
+                            # the entry, then its ``then``.
+                            continue
                         if record is None:
                             replaced.append(put)
                         else:
@@ -1248,6 +1255,12 @@ class ZoneFunnelsMixin:
             event.puts.append(put)
             return True
         record = self._begin_entry(put, stamp_id=True)
+        if record is ENTRY_SUSPENDED:
+            # CR 616.1e is being asked: nothing of the entry has happened, and
+            # the answer performs it and runs *then* (``_enter_answered_entry``)
+            # — so this waits, exactly as an entry whose "as it enters" choice
+            # is owed does.
+            return True
         if record is None:
             return False
         return self._finish_or_await([record])
@@ -1256,7 +1269,10 @@ class ZoneFunnelsMixin:
         """Everything of one entry up to the battlefield append: the board's
         statics folded on, the "would enter" replacements, the stamps, and the
         entry state with the permanent in no zone (CR 614.12a). The record of
-        the entry on its way — or None when a replacement took it away.
+        the entry on its way — or None when a replacement took it away, or
+        ``ENTRY_SUSPENDED`` when its replacements contend and its affected
+        player is being asked which applies first (CR 616.1e): the answer
+        re-runs this from the top (``_enter_answered_entry``).
 
         *stamp_id* is False for an entry an open event was handed, whose id
         was stamped as it was handed in."""
@@ -1291,25 +1307,54 @@ class ZoneFunnelsMixin:
         # stamped, no layer contribution is made, no enters-the-battlefield
         # trigger is announced. A "when it enters, exile it" reading would let
         # every one of those happen first, which is a different card.
-        consumed, _ = apply_replacements(
-            self,
-            "would_enter_battlefield",
-            {
-                "permanent": permanent,
-                "controller_index": controller_index,
-                "was_cast": cast_as_a_spell,
-                # CR 616.1 asks the *affected* player to choose among contending
-                # effects; for an entry that is the seat the permanent would
-                # enter under.
-                "player": self.players[controller_index],
-            },
-        )
+        event = {
+            "permanent": permanent,
+            "controller_index": controller_index,
+            "was_cast": cast_as_a_spell,
+            # CR 616.1 asks the *affected* player to choose among contending
+            # effects; for an entry that is the seat the permanent would
+            # enter under.
+            "player": self.players[controller_index],
+        }
+        # **A "can't" first, and alone** (CR 614.17: "Lands can't enter the
+        # battlefield", Worms of the Earth). It is not a replacement effect,
+        # and an event that can't happen may be replaced only by a
+        # self-replacement effect (614.17c) — so it is never one of the
+        # contenders the affected player chooses among below, and a land
+        # Worms stops stays where it was whatever else would have applied.
+        consumed, _ = apply_replacements(self, "cant_enter_battlefield", event)
+        suspended = False
+        if not consumed:
+            # CR 616.1e: Land Equilibrium beside an Alliances land's toll its
+            # controller cannot pay (its ruling, 2009-10-01: "the player who
+            # will control that land chooses which replacement effect to
+            # apply"), Containment Priest beside a toll on a creature nobody
+            # cast — asked of a person. Nothing has happened to the entry
+            # when the question is armed, so the answer re-runs it from the
+            # top and the caller's continuation behind it.
+            restart = answered_restart(
+                self, "would_enter_battlefield", event,
+                lambda: self._enter_answered_entry(put, stamp_id=stamp_id),
+            )
+            consumed, _ = apply_replacements(
+                self, "would_enter_battlefield", event, restart=restart,
+            )
+            suspended = consumed and self._entry_question_owed(restart)
         if consumed:
             if judged:
                 # The fold asked the board's statics about a permanent that
                 # then never arrived; what it wrote on everything else is
                 # rebuilt from the board as it really is.
                 self._recompute_continuous_effects()
+            if suspended:
+                return ENTRY_SUSPENDED
+            # A rider an effect applied before another took the entry away
+            # (Land Equilibrium chosen ahead of an Alliances land's unpaid
+            # toll): the modified event still holds its "then sacrifices a
+            # land" (CR 614.6: "A modified event occurs instead"; 616.1f
+            # applied the toll to its entry alone). Unreachable in the order
+            # a seat nobody asks takes, which applies the toll first.
+            apply_entry_riders(self, permanent, controller_index)
             return None
         # "…if it **entered from your graveyard**" (Archfiend's Vessel). Stamped
         # on the permanent rather than kept on the game, because the question is
@@ -1382,6 +1427,37 @@ class ZoneFunnelsMixin:
             self._forget_entry(record)
             raise
         return record
+
+    def _entry_question_owed(self, restart) -> bool:
+        """Whether the entry whose re-run is *restart* stopped to ask CR
+        616.1e's question rather than being taken away — the ``effect_order``
+        prompt it armed carries that very re-run. ``apply_replacements``
+        reports both as consumed (its caller's one question is "do not carry
+        on"), and an entry has a second one: whether its ``then`` runs now,
+        for an entry that did not happen, or at the answer."""
+        return any(
+            choice.kind == "effect_order" and choice.data.get("_restart") is restart
+            for choice in self.pending_choices
+        )
+
+    def _enter_answered_entry(self, put: DeferredEntry, *, stamp_id: bool) -> None:
+        """The answer to an entry's CR 616.1e question: the entry performed
+        from the top — the replacements again, now with the answer recorded
+        (``answered_restart``), the stamps and the entry state — then the rest
+        of it, or the wait for an "as it enters" choice, and the caller's
+        *then* behind it: at once for an entry the answer took away or
+        completed, with the rest of the entry when it waits. Alone, as one
+        CR 603.3b window: an entry that left its event to ask is an event of
+        its own by the time it is answered."""
+        waits = False
+        with self.putting_triggers_on_stack():
+            record = self._begin_entry(put, stamp_id=stamp_id)
+            if record is ENTRY_SUSPENDED:
+                return
+            if record is not None:
+                waits = self._finish_or_await([record])
+        if not waits and put.then is not None:
+            put.then()
 
     def _finish_or_await(self, records) -> bool:
         """Complete the entries one event made, *records* — or wait.

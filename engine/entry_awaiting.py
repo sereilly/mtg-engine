@@ -83,6 +83,23 @@ from typing import Callable
 ENTRY_EVENT = "_entry_event"
 
 
+class _EntrySuspended:
+    """The type of :data:`ENTRY_SUSPENDED`; one instance."""
+
+    def __repr__(self) -> str:
+        return "ENTRY_SUSPENDED"
+
+
+#: What ``ZoneFunnelsMixin._begin_entry`` returns for an entry whose "would
+#: enter" replacements contend and whose affected player is being asked which
+#: applies first (CR 616.1e, the ``effect_order`` prompt). Neither a record
+#: (nothing of the entry has happened) nor None ("a replacement took it
+#: away"): the answer re-runs the entry from the top and runs the caller's
+#: ``then`` behind it (``ZoneFunnelsMixin._enter_answered_entry``). A newcomer
+#: of an event that suspends leaves the event and finishes alone at the answer.
+ENTRY_SUSPENDED = _EntrySuspended()
+
+
 @dataclass(eq=False)
 class EntryInProgress:
     """One permanent between "would enter" and "is on the battlefield".
@@ -181,6 +198,7 @@ def entry_is_awaited(game, permanent) -> bool:
 __all__ = [
     "DeferredEntry",
     "ENTRY_EVENT",
+    "ENTRY_SUSPENDED",
     "EntryEvent",
     "EntryInProgress",
     "apnap_order",
