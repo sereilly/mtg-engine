@@ -1089,7 +1089,7 @@ def _announced_candidate(
     # spell on the stack is only there to name at instant speed, or under a
     # cast a resolution offers (a madness counterspell); with none on it the
     # engine's gate above has already said no.
-    stack_target = _guarded_stack_target(game, player_index, card)
+    stack_target = _guarded_stack_target(game, player_index, card) if game.stack else None
     if stack_target == ():
         return cast_trace.dropped("no spell on the stack meets its guard")
 
@@ -1288,7 +1288,7 @@ def _announced_candidate(
     # each candidate spell is a rehearsal.
     if role_stack_index is not None:
         stack_target = role_stack_index
-    elif stack_target is None:
+    elif stack_target is None and game.stack:
         stack_target = _chosen_stack_target(game, player_index, card, target)
         if stack_target == ():
             return cast_trace.dropped("no spell on the stack worth naming")

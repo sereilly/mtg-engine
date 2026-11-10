@@ -198,6 +198,34 @@ def test_mishras_workshop_pays_for_a_flash_artifact(catalog_by_name):
     assert _on(game, ME, "Mishra's Workshop").tapped
 
 
+def test_fling_names_the_creature_it_is_about_to_lose(catalog_by_name):
+    """A Terror at this seat's Hill Giant, answered with Fling: the
+    sacrifice that pays for it is named (``ai_casts._cast_naming_its_sacrifice``)
+    — the doomed Giant, whose 3 power is the damage, not the engine's default
+    (the smallest power first: the Llanowar Elves, 1 damage and a creature
+    lost besides). The Terror has nothing left to destroy."""
+    game = _table(catalog_by_name, ["Fling"],
+                  ["Hill Giant", "Llanowar Elves", "Mountain", "Mountain"], ["Hill Giant"])
+    giant = _on(game, ME, "Hill Giant")
+    game.active_player_index = OPP
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    game.players[OPP].hand.append(catalog_by_name["Terror"])
+    game.players[OPP].mana_pool.update({"B": 2})
+    result = game.queue_from_hand(
+        OPP, "Terror", target_player_index=ME, target_permanent_ids=[giant.permanent_id],
+    )
+    assert result.supported, result.details
+
+    action = _cast_what_it_chooses(game)
+    settle(game)
+
+    assert action.cost_permanent_ids == [giant.permanent_id]
+    assert _on(game, ME, "Llanowar Elves") is not None
+    assert _names(game.players[ME].graveyard) == ["Fling", "Hill Giant"]
+    assert "Terror" in _names(game.players[OPP].graveyard)
+    assert game.players[OPP].life == 17 or _on(game, OPP, "Hill Giant") is None
+
+
 def test_the_x_a_target_fixes_is_announced(catalog_by_name):
     """Spell Blast at a Grizzly Bears: "with mana value X" makes X 2, not the
     most five Islands pay (which the cast gate refuses)."""
