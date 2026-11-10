@@ -355,7 +355,7 @@ def exile_hand_pile(game: Game, instruction: OracleInstruction, context: OracleE
         index for index, card in enumerate(caster.hand)
         if _card_matches_filter(card, described, game=game, owner=caster)
     ]
-    if payload.get("quantifier") == "any_number" and seat in game.interactive_seats:
+    if payload.get("quantifier") == "any_number" and game.asks_a_person(seat):
         if not slots:
             game.log.append(f"{caster.name} has no card to exile")
             return True, "resolved"
@@ -611,7 +611,7 @@ def _return_pile_with_aura_hosts(game, entries, context, controller_index) -> No
         if not legal:
             hosts[position] = None
             continue
-        if len(legal) > 1 and seat in game.interactive_seats:
+        if len(legal) > 1 and game.asks_a_person(seat):
             asks.append((position, seat, card, legal))
             continue
         hosts[position] = (

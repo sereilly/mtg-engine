@@ -1299,6 +1299,10 @@ def _hand_revealed_to_viewer(game: Game, viewer_seat: int | None, seat: int) -> 
         return False
     if hand_revealed_to(game, seat, viewer_seat):
         return True
+    # CR 723.4 (Mindslaver): what the controlled player could see, its
+    # controller sees too — its hand first of all (the rule's own example).
+    if seat != viewer_seat and game.decider_of(seat) == viewer_seat:
+        return True
     reveal = game.pending_hand_reveal
     if (
         reveal is not None

@@ -490,7 +490,7 @@ class ValueChoicesMixin:
         answered by default — a drain, a seat the table stopped waiting for —
         is answered with the defaults it carries, through the resolver an
         answer goes through."""
-        if choice.player_index not in self.interactive_seats:
+        if not self.asks_a_person(choice.player_index):
             self.discard_pending_choice(choice)
             return
         data = choice.data
@@ -520,7 +520,7 @@ class ValueChoicesMixin:
         # ``PermanentStateMixin._stamps_entry_default``), so the default kept is
         # the one the prompt carries. The colour beside an opponent (Jihad) is
         # not one of those shapes — an empty colour there is refused, below.
-        if player_index in self.interactive_seats:
+        if self.asks_a_person(player_index):
             data = choice.data
             if not data.get("opponents"):
                 mana_color = mana_color or data.get("default_color")

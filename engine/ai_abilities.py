@@ -81,6 +81,7 @@ from .ai_targets import (
     _aura_harms_its_host,
     _choose_damage_source,
 )
+from .ai_player_control import plays_for_another
 
 
 def _required_activation_target(
@@ -136,6 +137,10 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
     an attacking Krosan Warchief a person had blocked was passed over (it is
     tapped) with {1}{G} open and died unregenerated (SCG Phase 5, smoke game 2).
     """
+    # CR 723.5: a seat another player decides for plays nothing
+    # optional for itself (``ai_player_control``'s measured policy).
+    if plays_for_another(game, player_index):
+        return None
     player = game.players[player_index]
 
     best: ActivationAction | None = None

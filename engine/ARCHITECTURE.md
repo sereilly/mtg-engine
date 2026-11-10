@@ -517,6 +517,17 @@ handler / upkeep effect / entry replacement
   → confirm_*  → game.resolve_pending_choice(kind, seat, **response) → spec.resolve
 ```
 
+"Interactive" is asked of the seat that **decides** for the one that owes the
+choice: `game.asks_a_person(seat)` — `game.decider_of(seat)` (its controller
+during a turn another player controls, CR 723 / Mindslaver,
+`engine/player_control.py`) is in `interactive_seats`, which keeps meaning
+"a person sits here". The membership spelling `seat in game.interactive_seats`
+is held to that one function (`tests/engine/test_player_control_seam.py`); the
+web asks the same question through `web/seats._seat_type` (the decider's
+kind) and `_sitter_type` (who sits there). An AI deciding for another seat
+plays nothing optional for it and weighs its rehearsed picks by its own
+standing (`engine/ai_player_control.py`).
+
 The web layer loops over `game.iter_pending_prompts()` rather than naming each
 kind, and that iterator spans **both** queues — a suspended `ReplacementChoice`
 carries the same `kind`/`player_index`/`data` attributes, so no adapter is

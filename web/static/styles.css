@@ -5092,3 +5092,9 @@ pre {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* CR 723 (Mindslaver): who controls whom this turn (renderPlayerControlBanner). */
+.player-control-banner {
+  color: #f2c86b;
+  font-weight: 600;
+}

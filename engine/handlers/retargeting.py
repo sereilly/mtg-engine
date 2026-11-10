@@ -668,7 +668,7 @@ def change_event_object_targets(game: Game, instruction: OracleInstruction, cont
             item, chooser=chooser, silently_for=silently_for, newly_targeted=True,
         )
 
-    if chooser not in game.interactive_seats:
+    if not game.asks_a_person(chooser):
         from ..ai_prompts import choose_target_change
 
         chosen = choose_target_change(game, chooser, item, slots) if optional else None

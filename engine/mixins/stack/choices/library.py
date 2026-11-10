@@ -423,7 +423,7 @@ class LibraryChoicesMixin:
         seat = self.seat_index(owner)
         count = min(int(count), len(self.players[seat].library))
         chooser = seat if chooser_index is None else chooser_index
-        if count < 2 or chooser not in self.interactive_seats:
+        if count < 2 or not self.asks_a_person(chooser):
             return False
         self.arm_pending_choice(
             "reorder_library", chooser,
@@ -458,7 +458,7 @@ class LibraryChoicesMixin:
         seat = self.seat_index(owner)
         count = min(int(count), len(self.players[seat].library))
         chooser = seat if chooser_index is None else chooser_index
-        if count < 2 or chooser not in self.interactive_seats:
+        if count < 2 or not self.asks_a_person(chooser):
             return False
         self.arm_pending_choice(
             "reorder_library", chooser,

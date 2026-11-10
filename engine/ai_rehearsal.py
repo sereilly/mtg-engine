@@ -35,6 +35,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 
 from .ai_scratch_copy import _scratch, held_for_an_answer, mid_resolution
+from .ai_player_control import served_seat
 from .ai_standing import CARD_WORTH, standing_swing, standings, swing_worth
 from .ai_weighed_cast import permitted_casts
 from .text_changes import spell_text_card
@@ -1018,8 +1019,12 @@ def _rehearse(
             clone, seat, untouched["could_cast"], spell_name,
         )
         reading = _measured(clone, through_combat=through_combat)
-        now = standing_swing(untouched["now"], reading["now"], seat)
-        lasting = standing_swing(untouched["lasting"], reading["lasting"], seat)
+        # Weighed for the seat that makes *seat*'s decisions (CR 723.5): itself,
+        # unless another player controls it this turn (Mindslaver), whose
+        # standing a choice made for it is then measured by.
+        served = served_seat(game, seat)
+        now = standing_swing(untouched["now"], reading["now"], served)
+        lasting = standing_swing(untouched["lasting"], reading["lasting"], served)
         # The zone the spell's own trip starts in: the hand it is spent from,
         # or the one a permission let it be cast out of; none for a card the
         # seat does not hold.

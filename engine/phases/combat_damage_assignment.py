@@ -645,7 +645,7 @@ class CombatDamageAssignmentMixin:
         asked: list[int] = []
         for attacker_idx in sorted(self.combat_attackers):
             chooser = self.unblocked_assignment_chooser(attacker_idx)
-            if chooser is None or chooser not in self.interactive_seats:
+            if chooser is None or not self.asks_a_person(chooser):
                 continue
             if seat is not None and chooser != seat:
                 continue
@@ -731,7 +731,7 @@ class CombatDamageAssignmentMixin:
         asked: list[int] = []
         for attacker_idx in sorted(self.combat_attackers):
             assigner = self.combat_damage_assigner(attacker_idx)
-            if assigner is None or assigner not in self.interactive_seats:
+            if assigner is None or not self.asks_a_person(assigner):
                 continue
             if seat is not None and assigner != seat:
                 continue
@@ -915,7 +915,7 @@ class CombatDamageAssignmentMixin:
             if assigner == self.active_player_index:
                 return True
             if (
-                assigner in self.interactive_seats
+                self.asks_a_person(assigner)
                 and not self._defender_assignment_recorded(attacker_idx)
             ):
                 return True

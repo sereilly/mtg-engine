@@ -237,7 +237,7 @@ class PaymentChoicesMixin:
         for them to tap what they like (CR 605.3a; activating a mana ability
         is theirs to decide, CR 118.3c) and answer again, or to decline.
         """
-        return player_index in self.interactive_seats
+        return self.asks_a_person(player_index)
 
     def mana_payment_is_payable(self, choice: PendingChoice) -> bool:
         """Whether "pay" would be accepted for this counter-unless price right

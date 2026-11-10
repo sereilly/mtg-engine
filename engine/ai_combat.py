@@ -220,7 +220,7 @@ def choose_divided_assignments(game) -> "dict[int, dict]":
                                     may_divide_among_defenders)
 
     active = game.active_player_index
-    if active in game.interactive_seats:
+    if game.asks_a_person(active):
         return {}
     divided: dict[int, dict] = {}
     for slot in sorted(game.combat_attackers):
@@ -561,7 +561,7 @@ def announce_defender_assignments(game) -> int:
     """
     answered = 0
     for defender_index in sorted(game.combat_defending_players()):
-        if defender_index in game.interactive_seats:
+        if game.asks_a_person(defender_index):
             continue
         if not 0 <= defender_index < len(game.players):
             continue

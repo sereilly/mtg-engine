@@ -306,6 +306,16 @@ class Game(
     # is left has no such ambiguity, because a repeated phase is two entries.
     turn_phases_remaining: list[str] | None = None
     skip_turn_counts: dict[int, int] = field(default_factory=dict)
+    # CR 723 — controlling another player (Mindslaver), engine/player_control.py.
+    # ``{controlled seat: controller seat}`` waiting for the controlled seat's
+    # next turn actually taken (CR 723.1, 723.1a: a later effect overwrites),
+    # and ``{controlled seat: (controller seat, turn)}`` for the one in force
+    # during that turn. Read through ``decider_of`` / ``asks_a_person``. Not
+    # bookkeeping for a position digest: the pending record is the whole of
+    # what the effect does, and the one in force moves only at turn
+    # boundaries.
+    player_controls_waiting: dict[int, int] = field(default_factory=dict)
+    player_controls: dict[int, tuple[int, int]] = field(default_factory=dict)
     # CR 500.11's phase and step skips. Keyed by ``object`` rather than by
     # ``str`` because a skip that names a seat — and, for a phase, the turn its
     # card bounded it to — carries that in the key: an unseated record is spent

@@ -904,6 +904,12 @@ class GameActionRequest(BaseModel):
     # server opens a window at steps it would otherwise resolve itself (upkeep,
     # draw). Set via the phase-rail hold-priority toggles (left/own-turn halves).
     self_stop_steps: list[str] | None = None
+    # CR 723 (Mindslaver): the seat **sending** this action, when it acts for
+    # a seat it controls this turn — `seat` is then the controlled seat, whose
+    # action it is. Absent for a seat acting for itself. A controlled seat's
+    # own requests are refused but a concession (CR 723.6), and a concession
+    # is never sent by a controller (`web/actions.controlled_seat_refusal`).
+    controller_seat: int | None = Field(default=None, ge=0)
 
 
 class RawStateRequest(BaseModel):

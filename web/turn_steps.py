@@ -452,12 +452,20 @@ def _untap_land_selection_requirement(session: Session) -> int:
     return max(0, max_count)
 
 
-def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool) -> bool:
+def _begin_turn(
+    session: Session, player_index: int, defer_untap_selection: bool | None = None,
+) -> bool:
     game = session.game
     # Reset the per-turn counters (creatures died, damage taken, lands played)
     # exactly as the headless start_turn flow does — without this, Scavenging
     # Ghoul's end-step trigger fires on deaths from previous turns.
     game.begin_turn_bookkeeping(player_index)
+    # Whether a person is asked this turn's untap decisions is read *after*
+    # the bookkeeping, because a control over this seat's turn starts there
+    # (CR 723.1, Mindslaver): the person controlling an AI seat's turn is
+    # asked, and a person an AI controls is not.
+    if defer_untap_selection is None:
+        defer_untap_selection = _seat_type(session, player_index) == "human"
 
     # Time Vault: "If you would begin your turn while this is tapped, you may skip
     # that turn instead. If you do, untap it." Prompt a human controller at the very
@@ -664,8 +672,7 @@ def _start_next_turn(session: Session) -> None:
     session.game.active_player_index = session.current_turn
     session.game.turn += 1
     session.current_turn = session.game._compute_next_active_player()
-    should_defer_untap = _seat_type(session, session.current_turn) == "human"
-    _begin_turn(session, session.current_turn, defer_untap_selection=should_defer_untap)
+    _begin_turn(session, session.current_turn)
 
 
 def _begin_first_turn(session: Session) -> None:
@@ -694,11 +701,7 @@ def _begin_first_turn(session: Session) -> None:
     # person; a decision this phase owes a human is asked, not defaulted.
     _mark_interactive_seats(session)
     starting_player = session.current_turn
-    _begin_turn(
-        session,
-        starting_player,
-        defer_untap_selection=_seat_type(session, starting_player) == "human",
-    )
+    _begin_turn(session, starting_player)
 
 
 def _settle_pregame(session: Session) -> None:
