@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from ....linked_exile import link_exiled_card
 from ....models import Permanent
-from ....permanent_cards import is_permanent_card, stays_out_of_battlefield
+from ....permanent_cards import (cant_enter_sources, is_permanent_card,
+                                 stays_out_of_battlefield)
 from ....oracle_types import (CLAIMABLE_EXILED_CARDS, EXILED_THIS_WAY,
                               EXILED_THIS_WAY_OBJECTS, OracleInstruction)
 from .... import piles
@@ -78,13 +79,17 @@ class PileChoicesMixin:
                     continue
                 if (
                     target_zone == "battlefield" and from_zone != "held"
-                    and not is_permanent_card(shown)
+                    and (
+                        not is_permanent_card(shown)
+                        or cant_enter_sources(self, shown, self.seat_index(revealer))
+                    )
                     and any(held is shown for held in getattr(revealer, from_zone, ()))
                 ):
                     # "An opponent chooses a **Goblin** card from among them.
                     # Put that card onto the battlefield": a Kindred instant of
                     # the type is the opponent's to pick, and CR 400.4a leaves
                     # it where it was revealed — the rest still go (CR 609.3).
+                    # So does a land a "can't" stops (CR 614.17).
                     self.log.append(f"{chooser} chose {card.name}")
                     stays_out_of_battlefield(self, shown, revealer, from_zone)
                     continue

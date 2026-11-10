@@ -16,6 +16,8 @@ from ..cast_timing import expire_end_of_turn as expire_end_of_turn_flash
 from ..cast_timing import CAST_AT_INSTANT_SPEED
 from ..hand_size import maximum_hand_size
 from ..models import Permanent
+from ..entry_awaiting import entry_happened
+from ..permanent_cards import stays_out_of_battlefield
 from ..aura_restrictions import clear_ignored_restrictions
 from ..cast_bans import clear_ignored_play_bans
 from ..keywords import (clear_granted_ability_lines,
@@ -380,14 +382,30 @@ class CleanupStepMixin:
         with self.entering_together():
             for owner_idx, card_def in returned_from_exile:
                 owner = self.players[owner_idx]
+                # An animated land exiled as a creature is a land card in exile,
+                # and a "can't" (Worms of the Earth, CR 614.17) leaves it there —
+                # asked before it leaves (``permanent_cards``).
+                if any(held is card_def for held in owner.exile) and (
+                    stays_out_of_battlefield(self, card_def, owner, "exile")
+                ):
+                    continue
                 # Through the departure seam: it locates the copy by identity where
                 # ``card_def in owner.exile`` / ``.remove(card_def)`` compared by
                 # value and would have reached a look-alike printing, and it retires
                 # the exile register with the card (CR 400.7).
                 if self.take_card_from_exile(owner_idx, card_def):
                     new_perm = Permanent(card=card_def)
-                    self._put_permanent_onto_battlefield(owner_idx, new_perm, None)
-                    self.log.append(f"{card_def.name} returned from exile to {owner.name}'s battlefield")
+
+                    # Said once the event has put it there, and only if it did.
+                    def returned(new_perm=new_perm, card_def=card_def, owner=owner) -> None:
+                        if entry_happened(new_perm):
+                            self.log.append(
+                                f"{card_def.name} returned from exile to {owner.name}'s battlefield"
+                            )
+
+                    self._put_permanent_onto_battlefield(
+                        owner_idx, new_perm, None, then=returned,
+                    )
         self._reset_combat_state(clear_damage_marked=False)
         # CR 514.3a's first half: "the game checks to see if any state-based
         # actions would be performed" once 514.1's discard and 514.2's sweeps

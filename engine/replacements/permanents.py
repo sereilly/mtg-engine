@@ -585,11 +585,21 @@ def _lands_cannot_enter(game, payload: dict) -> ReplacementOutcome | None:
     a search that puts one onto the battlefield, a token.
 
     The land does not enter and nothing that watches entering sees it: no
-    permanent id, no layer contribution, no enters-the-battlefield trigger. It
-    stays a card in whatever zone the caller took it from, which is why nothing
-    is appended to a graveyard or an exile here — CR 614.17 removes the event
-    rather than redirecting it, and a destination this rule does not name would
-    be a card the effect quietly moved.
+    permanent id, no layer contribution, no enters-the-battlefield trigger.
+    Nothing is appended to a graveyard or an exile here — CR 614.17 removes the
+    event rather than redirecting it, and a destination this rule does not name
+    would be a card the effect quietly moved.
+
+    "The land will stay where it is" (the ruling, 2004-10-04) is answered
+    **before** the road takes the card out of its zone: every road onto the
+    battlefield asks this registration's predicate through
+    ``permanent_cards.stays_out_of_battlefield`` (``cant_enter_sources``) and
+    leaves the card where it was — so a land reaches this body only as an
+    object no zone holds (a token, which is then never created) or as one a
+    road could not judge beforehand (``tests/engine/test_kg5_entry2_cant_enter_roads.py``).
+    A permanent that becomes a land only through the copy it chooses as it
+    enters (a Clone of an animated land, the 2008-08-01 ruling) is asked
+    nothing yet: the copy is chosen in the entry state, after this.
     """
     game.log.append(
         f"{payload['permanent'].card.name} can't enter the battlefield"

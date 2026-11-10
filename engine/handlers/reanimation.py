@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from ..aura_attachment import (PUT_ONTO_BATTLEFIELD_BY, is_aura_card,
                                returning_aura_hosts)
+from ..entry_awaiting import entry_happened
 from ..keywords import grant_keyword
 from ..models import Permanent
 from ..permanent_cards import is_permanent_card, stays_out_of_battlefield
@@ -422,7 +423,12 @@ def _reanimate_onto_chosen_host(
             game, instruction, context, caster, source_player, position,
             only_that_card, card_type, host,
         )
-        if context.results.get(REANIMATED_PERMANENTS):
+        # Only for an arrival that entered (``entry_awaiting.entry_happened``).
+        if any(
+            entry_happened(arrival)
+            for arrival in map(game.permanent_by_id, context.results.get(REANIMATED_PERMANENTS) or ())
+            if arrival is not None
+        ):
             game.log.append(
                 f"{card.name} entered the battlefield attached to {host.card.name}"
             )
@@ -481,6 +487,11 @@ def _complete_reanimation(
         entry's ``then``: at the answer when an "as it enters" choice keeps
         it on its way (CR 614.12a), at once otherwise, and with None when
         nothing came back."""
+        if reanimated is not None and not entry_happened(reanimated):
+            # A replacement took the entry away and said where the card went
+            # (``entry_awaiting.entry_happened``): nothing is owed to it, and
+            # "no card to return" would be untrue too.
+            return
         # "It gains haste." — folded into the reanimation because the
         # permanent does not exist until this step runs, and read off the
         # arrival itself rather than off "the newest permanent the caster
@@ -656,6 +667,9 @@ def reanimate_aura_onto_source(game: Game, instruction: OracleInstruction, conte
     # Once it is there (the entry's ``then``: at the answer, when an "as it
     # enters" choice keeps it on its way, CR 614.12a).
     def arrived() -> None:
+        # Only for an entry that happened (a replacement wrote its own line).
+        if not entry_happened(arrival):
+            return
         attach_aura(arrival, host)
         # CR 704.5m is asked at once, the way the attach handler asks it:
         # layer contributions are computed on read, so nothing has to be
@@ -744,6 +758,10 @@ def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: Or
                 # control" names, found here rather than passed in because it is
                 # the graveyard scan that discovers it.
                 seat = owner_seat if to_owner else controller_seat
+                # An animated land that died is a land card in the graveyard,
+                # and a "can't" (Worms of the Earth, CR 614.17) leaves it there.
+                if stays_out_of_battlefield(game, card, player, "graveyard", seat=seat):
+                    break
                 player.graveyard.pop(found)
                 permanent = Permanent(card=card)
                 # CR 400.3: "under your control" moves control, never ownership, so
@@ -758,6 +776,9 @@ def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: Or
                 # The entry's ``then`` (CR 614.12a: at the answer, when an "as it
                 # enters" choice keeps it on its way).
                 def arrived(permanent=permanent, seat=seat, card=card) -> None:
+                    # Only for an entry that happened (a replacement wrote its own line).
+                    if not entry_happened(permanent):
+                        return
                     context.results["reanimated_bound_card"] = True
                     context.results[REANIMATED_PERMANENTS] = (
                         *context.results.get(REANIMATED_PERMANENTS, ()),
@@ -840,7 +861,7 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
             seat = owner
     host_key = instruction.payload.get("attached_to")
 
-    def stays_where_it_is(entering_seat) -> bool:
+    def stays_where_it_is(entering_seat, owner=None, zone: str = "") -> bool:
         """CR 303.4g, asked **before** the card moves: "If an Aura is entering
         the battlefield and there is no legal object or player for it to
         enchant, the Aura remains in its current zone." A host nobody could
@@ -855,6 +876,12 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
         was picked."""
         from ..aura_attachment import enchant_card_refusal
 
+        # CR 400.4a and 614.17 first, asked of the card in *owner*'s *zone*
+        # (``permanent_cards``): a card that can't enter stays there too.
+        if owner is not None and stays_out_of_battlefield(
+            game, card, owner, zone, seat=entering_seat,
+        ):
+            return True
         if not host_key:
             return False
         host = game.permanent_by_id(context.results.get(host_key))
@@ -883,7 +910,10 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
         owner_seat = base_controller(source) if source is not None else None
         if not isinstance(owner_seat, int):
             owner_seat = seat
-        if stays_where_it_is(owner_seat if owners_control else seat):
+        if stays_where_it_is(
+            owner_seat if owners_control else seat,
+            game.players[owner_seat], "exile",
+        ):
             return True, "resolved"
         if not game.take_card_from_exile(owner_seat, card):
             game.log.append(f"{card.name} was no longer in exile")
@@ -913,7 +943,7 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
         player, index = found
         if owners_control:
             seat = game.seat_index(player)
-        if stays_where_it_is(seat):
+        if stays_where_it_is(seat, player, "graveyard"):
             return True, "resolved"
         player.graveyard.pop(index)
 
@@ -937,6 +967,9 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
     # Once it is there — the entry's ``then``, run at the answer when an "as
     # it enters" choice keeps it on its way (CR 614.12a).
     def arrived() -> None:
+        # Only for an entry that happened (a replacement wrote its own line).
+        if not entry_happened(permanent):
+            return
         # "…return it to the battlefield under your control **and put a death
         # counter on it**." (Bogardan Phoenix.) The permanent this step
         # created, recorded by id for the sentence behind it — CR 400.7 makes
@@ -1035,6 +1068,11 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
                 f"({refusal})"
             )
             return True, "resolved"
+    if instruction.payload.get("to") != "hand" and stays_out_of_battlefield(
+        game, card, caster, zone,
+    ):
+        # CR 614.17 (and 400.4a), before the card leaves its zone.
+        return True, "resolved"
     pile.pop(found)
     # "…to your **hand**." (Whiteout.) The destination is payload rather than a
     # second handler, because everything above it — the object is the ability's
@@ -1053,6 +1091,9 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
     # Once it is there — the entry's ``then``, run at the answer when an "as
     # it enters" choice keeps it on its way (CR 614.12a).
     def returned() -> None:
+        # Only for an entry that happened (a replacement wrote its own line).
+        if not entry_happened(arrived):
+            return
         game.log.append(
             f"{card.name} returned from "
             + ("exile" if zone == "exile" else "the graveyard")
@@ -1199,10 +1240,17 @@ def move_random_graveyard_card(game: Game, instruction: OracleInstruction, conte
         if stays_out_of_battlefield(game, card, caster, "graveyard"):
             return True, "resolved"
         pile.pop(slot)
+        moved = Permanent(card=card)
+
+        def arrived() -> None:
+            # Only for an entry that happened (a replacement wrote its own line).
+            if not entry_happened(moved):
+                return
+            game.log.append(f"{context.card.name} put {card.name} onto the battlefield")
+
         game._put_permanent_onto_battlefield(
-            caster_index, Permanent(card=card), None, from_zone="graveyard"
+            caster_index, moved, None, from_zone="graveyard", then=arrived,
         )
-        game.log.append(f"{context.card.name} put {card.name} onto the battlefield")
     else:
         pile.pop(slot)
         game.put_card_into_exile(caster, card)
@@ -1283,10 +1331,16 @@ def reanimate_announced_cards(game: Game, instruction: OracleInstruction, contex
             permanent = Permanent(card=card)
             if tapped:
                 permanent.tapped = True
-            game._put_permanent_onto_battlefield(seat, permanent, None)
-            game.log.append(
-                f"{caster.name} returned {card.name} to the battlefield from the graveyard"
-            )
+
+            def arrived(permanent=permanent, card=card) -> None:
+                # Only for an entry that happened (a replacement wrote its own line).
+                if not entry_happened(permanent):
+                    return
+                game.log.append(
+                    f"{caster.name} returned {card.name} to the battlefield from the graveyard"
+                )
+
+            game._put_permanent_onto_battlefield(seat, permanent, None, then=arrived)
     if not picked:
         game.log.append(f"{context.card.name}: no announced card to return")
     return True, "resolved"
@@ -1562,6 +1616,9 @@ def _return_planned_cards(
                 # Once it is there — the entry's ``then``, run at the answer when
                 # an "as it enters" choice keeps it on its way (CR 614.12a).
                 def arrived(permanent=permanent, host=host, player=player, card=card) -> None:
+                    # Only for an entry that happened (a replacement wrote its own line).
+                    if not entry_happened(permanent):
+                        return
                     if host is not None:
                         # Attached as part of the same move, inside this
                         # resolution — the arrangement
@@ -1714,9 +1771,18 @@ def sacrifice_and_return_targets(
     returning = actor.graveyard.pop(slot)
     game.sacrifice_permanent(artifact)
     arrival = Permanent(card=returning)
-    game._put_permanent_onto_battlefield(stamp.seat, arrival, None)
-    game.log.append(
-        f"{context.card.name}: {actor.name} sacrifices {artifact.card.name} "
-        f"and returns {returning.name} to the battlefield"
-    )
+
+    # Said as it happened (``entry_awaiting.entry_happened``): a return a
+    # replacement took away (an artifact creature nobody cast, under
+    # Containment Priest) wrote its own line.
+    def arrived() -> None:
+        game.log.append(
+            f"{context.card.name}: {actor.name} sacrifices {artifact.card.name}"
+            + (
+                f" and returns {returning.name} to the battlefield"
+                if entry_happened(arrival) else ""
+            )
+        )
+
+    game._put_permanent_onto_battlefield(stamp.seat, arrival, None, then=arrived)
     return True, "resolved"

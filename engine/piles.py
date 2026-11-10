@@ -542,6 +542,7 @@ def _library_fates(game, session: PileSession, chosen_fate: str, other_fate) -> 
 def _graveyard_fates(game, session: PileSession, chosen_fate: str, other_fate) -> None:
     # "Return the other to the battlefield": every card the pile sends there, in
     # one event (CR 603.6a).
+    lines: list = []
     with game.entering_together():
         for group in session.groups:
             player = game.players[group.owner]
@@ -551,7 +552,7 @@ def _graveyard_fates(game, session: PileSession, chosen_fate: str, other_fate) -
                 for position in pile:
                     fate_of[group.items[position]] = fate
             exiled: list[str] = []
-            returned: list[str] = []
+            returned: list = []
             # Highest index first: taking a card out renumbers everything above
             # it and nothing below, and a creature that arrives and puts something
             # into this graveyard appends to the end.
@@ -572,14 +573,21 @@ def _graveyard_fates(game, session: PileSession, chosen_fate: str, other_fate) -
                         card_type=_arriving_type(card),
                     )
                     if arrived is not None:
-                        returned.append(card.name)
-            if exiled:
-                game.log.append(f"{session.card_name} exiled " + ", ".join(exiled))
-            if returned:
-                game.log.append(
-                    f"{session.card_name} returned " + ", ".join(returned)
-                    + " to the battlefield"
-                )
+                        returned.append((card.name, arrived))
+            lines.append((exiled, returned))
+    # Said once the event has closed (CR 603.6a): a newcomer a replacement took
+    # away wrote its own line and is not named (``entry_awaiting.entry_replaced``).
+    from .entry_awaiting import entry_replaced
+
+    for exiled, returned in lines:
+        if exiled:
+            game.log.append(f"{session.card_name} exiled " + ", ".join(exiled))
+        named = [name for name, arrival in returned if not entry_replaced(arrival)]
+        if named:
+            game.log.append(
+                f"{session.card_name} returned " + ", ".join(named)
+                + " to the battlefield"
+            )
 
 
 def _arriving_type(card) -> str:

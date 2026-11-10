@@ -21,7 +21,9 @@ from __future__ import annotations
 
 from ....exiled_records import record_exiled_card
 from ....linked_exile import link_exiled_card
+from ....entry_awaiting import entry_happened
 from ....models import Permanent
+from ....permanent_cards import stays_out_of_battlefield
 from ....grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
 from ....pending_choices import ChoiceSpec, PendingChoice
 from ....search_filters import search_matches
@@ -884,6 +886,14 @@ class HandChoicesMixin:
         if hand_index not in live:
             return False
         card = player.hand[hand_index]
+        if stays_out_of_battlefield(self, card, player, "hand"):
+            # Asked before the card leaves the hand (CR 614.17, 400.4a): a land
+            # picked under Worms of the Earth "will stay where it is" (its
+            # ruling, 2004-10-04). The pick is answered and nothing was put
+            # onto the battlefield, so a repeated round (Eureka) records no
+            # taken offer — "until no one puts a card onto the battlefield".
+            self.discard_pending_choice(choice)
+            return True
         player.hand = [c for i, c in enumerate(player.hand) if i != hand_index]
         # "…onto the battlefield **tapped**." (Terrain Generator.) CR 110.5b:
         # the entry state is the effect's to say, so it is set on the object
@@ -898,6 +908,11 @@ class HandChoicesMixin:
         # Once it is there — the entry's ``then``, run at the answer when an
         # "as it enters" choice keeps it on its way (CR 614.12a).
         def arrived() -> None:
+            # A replacement that took the entry away wrote its own line, and
+            # nothing of this is owed for an entry that never happened
+            # (``entry_awaiting.entry_happened``).
+            if not entry_happened(arrival):
+                return
             # "…onto the battlefield **attached to this creature**." (Academy
             # Researchers.) CR 303.4f: the Aura is attached as it enters. Done
             # here rather than by a step behind this one because the permanent

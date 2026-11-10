@@ -37,6 +37,34 @@ different object, and nothing in the pool makes one out of a card in a zone.
 ``tests/engine/test_kg5_kindred_entry_roads.py`` holds every caller of the
 battlefield funnel to this question: each asks it, or is listed with the
 reason its card is a permanent card by construction.
+
+**And the "can't" (CR 614.17), asked by the same roads at the same moment.**
+
+    614.17 Some effects state that something can't happen. These effects
+    aren't replacement effects, but follow similar rules.
+
+Worms of the Earth's "Lands can't enter the battlefield" stops a land card
+the same way 400.4a stops an instant, and its ruling (2004-10-04) says the
+same thing about where the card is: "an effect that 'puts a land onto the
+battlefield' won't do anything, and the land will stay where it is" — "You'll
+still do everything else the spell or ability tells you to do, such as
+shuffle the library." So :func:`stays_out_of_battlefield` answers both
+questions, one ask per road: the card is no permanent card, or an effect says
+it can't enter (:func:`cant_enter_sources`, the registry's own
+``cant_enter_battlefield`` predicates — the ones the battlefield funnel
+applies, ``ZoneFunnelsMixin._begin_entry``). Asked at the funnel alone, the
+answer came after the road had taken the card out of its zone, and a Show and
+Tell'd, searched-for or reanimated land went to no zone at all.
+
+The funnel still asks it, of the permanent as it would exist on the
+battlefield (CR 614.17d, after the board's statics are folded on): that is
+the answer for an object no zone holds — a token, a spell resolving — and for
+whatever a road could not know beforehand. A card in a zone is asked here
+by its printed types: no effect in the pool makes a land card enter as
+anything but a land, or another card enter as a land, except a copy chosen
+as it enters (CR 707.5), which no road can know before the entry state.
+``tests/engine/test_kg5_entry2_cant_enter_roads.py`` holds every road that
+can carry a land out of a zone to asking it.
 """
 
 from __future__ import annotations
@@ -63,21 +91,75 @@ def is_permanent_card(card) -> bool:
     return card is not None and card_has_any_type(card, PERMANENT_CARD_TYPES)
 
 
-def stays_out_of_battlefield(game, card, owner, zone: str, *, shown: str | None = None) -> bool:
-    """Ask CR 400.4a of *card* on its way out of *owner*'s *zone*: True — and
-    logged — when it cannot enter the battlefield, so the caller leaves it
-    where it is; False when it can, and nothing is written.
+def cant_enter_sources(game, card, seat: int | None) -> list[str]:
+    """The names of what says *card* can't enter the battlefield (CR 614.17)
+    under *seat*'s control — empty when nothing does.
+
+    Asked of the registry's ``cant_enter_battlefield`` predicates over the
+    event the funnel itself raises (``ZoneFunnelsMixin._begin_entry``), with a
+    provisional permanent of the card standing for the one that would enter:
+    one set of predicates, asked before a road takes the card and applied at
+    the funnel. The provisional object takes no id and no timestamp from the
+    game's counters (CR 400.7: nothing has entered)."""
+    from .effect_ordering import source_names
+    from .models import Permanent
+    from .replacements.registry import replacement_candidates
+
+    if card is None or not getattr(game, "players", None):
+        return []
+    if seat is None or not 0 <= seat < len(game.players):
+        seat = 0
+    event = {
+        "permanent": Permanent(card=card, permanent_id=0, timestamp=0),
+        "controller_index": seat,
+        "was_cast": False,
+        "player": game.players[seat],
+    }
+    names: list[str] = []
+    for candidate in replacement_candidates("cant_enter_battlefield", game, event):
+        if not candidate.applies(game, event):
+            continue
+        sources = candidate.sources(game, event) if candidate.sources else ()
+        for name in source_names(sources) or [candidate.label]:
+            if name not in names:
+                names.append(name)
+    return names
+
+
+def stays_out_of_battlefield(
+    game, card, owner, zone: str, *, shown: str | None = None,
+    seat: int | None = None,
+) -> bool:
+    """Ask CR 400.4a and CR 614.17 of *card* on its way out of *owner*'s
+    *zone*: True — and logged — when it cannot enter the battlefield, so the
+    caller leaves it where it is; False when it can, and nothing is written.
 
     *shown* is the name the table may be told (``game.log`` is every seat's):
     the card's own by default, which is right for a graveyard, a revealed card
     and a card a pick showed; a caller taking a card out of a hidden zone
     unrevealed passes "a card".
+
+    *seat* is the seat it would enter under, for a "can't" that names one;
+    its owner's by default.
     """
-    if is_permanent_card(card):
-        return False
     who = getattr(owner, "name", None) or "its owner"
+    name = shown if shown is not None else card.name
+    if not is_permanent_card(card):
+        game.log.append(
+            f"{name} can't enter the battlefield and stays in {who}'s {zone} "
+            f"({CANT_ENTER_RULE})"
+        )
+        return True
+    if seat is None and owner is not None:
+        seat = next(
+            (index for index, player in enumerate(game.players) if player is owner),
+            None,
+        )
+    stopping = cant_enter_sources(game, card, seat)
+    if not stopping:
+        return False
     game.log.append(
-        f"{shown if shown is not None else card.name} can't enter the "
-        f"battlefield and stays in {who}'s {zone} ({CANT_ENTER_RULE})"
+        f"{name} can't enter the battlefield and stays in {who}'s {zone} "
+        f"({', '.join(stopping)})"
     )
     return True

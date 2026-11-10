@@ -40,7 +40,8 @@ from ..continuous import next_timestamp
 from ..control import set_base_controller
 from ..enter_effects import CAST_THIS_TURN_STAMP
 from ..delayed_triggers import end_exhausted_exile_delays
-from ..entry_awaiting import (ENTRY_EVENT, ENTRY_SUSPENDED, DeferredEntry,
+from ..entry_awaiting import (ENTERED, ENTRY_EVENT, ENTRY_OUTCOME,
+                              ENTRY_SUSPENDED, REPLACED, DeferredEntry,
                               EntryEvent, EntryInProgress, apnap_order,
                               entered_together, entry_in_progress,
                               entry_is_awaited)
@@ -791,6 +792,10 @@ class ZoneFunnelsMixin:
         # "as it enters" choice keeps it on its way (CR 614.12a) — and then
         # whatever the caller does with it (*then*, called with the arrival).
         def arrived() -> None:
+            # Nothing of this is owed for an entry a replacement took away
+            # (``entry_awaiting.entry_happened``) — the caller's *then* included.
+            if arrival.metadata.get(ENTRY_OUTCOME) != ENTERED:
+                return
             if entry.get("tapped"):
                 arrival.tapped = True
             if entry.get("counters"):
@@ -844,13 +849,18 @@ class ZoneFunnelsMixin:
                 # means the Aura simply arrives, and CR 704.5n's sweep bins it.
                 # Attached once the Aura is there (the entry's ``then``).
                 host = returned if entry.get("attach_to_returned") else None
-                arrival = self.leave_linked_exile(
-                    entry, destination,
-                    then=(
-                        (lambda aura, host=host: attach_aura(aura, host))
-                        if host is not None else None
-                    ),
-                )
+
+                # Said once it is there, and only if it got there: the
+                # arrival's ``then`` runs for an entry that happened alone.
+                def back(arrival, host=host, card=card) -> None:
+                    self.log.append(
+                        f"{card.name} returns to the battlefield "
+                        f"({permanent.card.name} {why})"
+                    )
+                    if host is not None:
+                        attach_aura(arrival, host)
+
+                arrival = self.leave_linked_exile(entry, destination, then=back)
                 if arrival is None:
                     # A face-down entry going back to a hand is never shown
                     # (CR 406.3, 400.2), so the line counts it.
@@ -862,10 +872,6 @@ class ZoneFunnelsMixin:
                     continue
                 if host is None:
                     returned = arrival
-                self.log.append(
-                    f"{card.name} returns to the battlefield "
-                    f"({permanent.card.name} {why})"
-                )
         if entries:
             self._recompute_continuous_effects()
 
@@ -1254,6 +1260,9 @@ class ZoneFunnelsMixin:
         down ("if you do, sacrifice **it**", Flash) records the identity the
         permanent will have.
         """
+        # What becomes of *this* entry is not known yet (``entry_happened``):
+        # an object put back after an earlier entry starts again unanswered.
+        permanent.metadata.pop(ENTRY_OUTCOME, None)
         put = DeferredEntry(
             permanent, controller_index, target_player_index,
             was_cast=was_cast, from_zone=from_zone,
@@ -1291,6 +1300,7 @@ class ZoneFunnelsMixin:
         was_cast, from_zone = put.was_cast, put.from_zone
         played_as_land = put.played_as_land
         cast_as_a_spell = was_cast and not played_as_land
+        permanent.metadata.pop(ENTRY_OUTCOME, None)
         # A permanent object entering again is a new object (CR 400.7): the
         # face-down values it was last seen leaving with (CR 708.9,
         # ``face_down.reveal_departing``) are not what it is now.
@@ -1366,6 +1376,14 @@ class ZoneFunnelsMixin:
                 self._recompute_continuous_effects()
             if suspended:
                 return ENTRY_SUSPENDED
+            # Taken away (``entry_awaiting.entry_replaced``): what a caller's
+            # line about the entry asks before it claims one — unless the
+            # replacement itself put this very permanent onto the battlefield
+            # (Mox Diamond's toll paid by a seat nobody asks re-enters it
+            # inside the event, ``_resolve_entry_discard_toll``), which wrote
+            # its own outcome.
+            if permanent.metadata.get(ENTRY_OUTCOME) != ENTERED:
+                permanent.metadata[ENTRY_OUTCOME] = REPLACED
             # A rider an effect applied before another took the entry away
             # (Land Equilibrium chosen ahead of an Alliances land's unpaid
             # toll): the modified event still holds its "then sacrifices a
@@ -1527,6 +1545,10 @@ class ZoneFunnelsMixin:
         for record in records:
             permanent, controller_index = record.permanent, record.controller_index
             self.players[controller_index].battlefield.append(permanent)
+            # The entry happened (``entry_awaiting.entry_happened``) — what a
+            # caller's ``then`` asks, rather than whether the permanent is
+            # still there by the time it runs.
+            permanent.metadata[ENTRY_OUTCOME] = ENTERED
             # "…put a nontoken permanent onto the battlefield" (Arboria, CR
             # 506.3): the per-turn half of the last-own-turn record, folded
             # per seat at the turn boundary
@@ -1623,6 +1645,12 @@ class ZoneFunnelsMixin:
             # fire site that would have to know which cards care.
             event_subject_controller=controller_index,
         )
+        # "Whenever **a land enters**" (Ankh of Mishra, Tectonic Instability):
+        # the same event for a land, by any road (CR 603.6a). It was announced
+        # only where a land was *played*, so a Rampant Growth or a Planar Birth
+        # under an Ankh dealt no damage.
+        if permanent.has_type("land"):
+            self._process_land_enters(controller_index)
         # **And the permanent's own "when this enters" trigger**, for every entry
         # that is not a cast.
         #

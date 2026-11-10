@@ -25,6 +25,7 @@ from ...classifier import CardClassification, classify_card
 from ...color_changes import carry_spell_color_change
 from ...destruction_events import destruction_finished
 from ...enter_effects import COPY_DECLINED, copy_on_enter_type
+from ...entry_awaiting import entry_happened
 from ...events import emit
 from ...face_down import revealed_as_it_moves
 from ...faces import whole_card
@@ -1316,7 +1317,14 @@ class StackResolutionMixin:
                 # engine/replacements/ exists to avoid, one layer up from the
                 # interceptor - and the log line saying the permanent was put onto
                 # the battlefield is the same claim in the one place a player reads.
-                if not self.is_on_battlefield(permanent):
+                #
+                # **Whether the entry happened, not whether the permanent is
+                # still there** (``entry_happened``): a land Land Equilibrium's
+                # "then sacrifices a land" took straight back out entered, and
+                # a seat nobody asks has sacrificed it before this runs. Read
+                # as "it never entered", its play went unannounced and its log
+                # line unwritten.
+                if not entry_happened(permanent):
                     return
                 self.log.append(f"{caster.name} put {card.name} onto battlefield")
                 self._apply_global_buff(caster, card)
@@ -1402,6 +1410,7 @@ class StackResolutionMixin:
                     "Aura" in card.type_line
                     and aura_enchant_clause(text_card.oracle_text) is not None
                     and permanent.metadata.get("attached_to") is None
+                    and self.is_on_battlefield(permanent)
                 ):
                     holder = self.controller_index_of(permanent)
                     if holder is not None:
@@ -1413,7 +1422,6 @@ class StackResolutionMixin:
                 self._refresh_dynamic_creatures()
                 if primary_type == "land":
                     if self.enforce_mana_costs:
-                        self.lands_played_this_turn[caster_index] = self.lands_played_this_turn.get(caster_index, 0) + 1
                         if self.lands_played_this_turn.get(caster_index, 0) > 1:
                             # "…if it wasn't the first land you played this turn,
                             # ~ deals N damage to you". The rider is read off each
@@ -1443,12 +1451,13 @@ class StackResolutionMixin:
                                         f"{names} dealt {damage} damage to {caster.name}"
                                     ),
                                 )
-                    self._process_land_enters(caster_index)
                     # "Whenever an opponent **plays** a land" (Dirtcowl Wurm).
                     # CR 305.1's special action, announced here because here is
-                    # where it happens — `_process_land_enters` above is the
-                    # *entry*, which a land put onto the battlefield by an effect
-                    # also makes and this one does not.
+                    # where it happens — "whenever a land enters" (Ankh of
+                    # Mishra) is the *entry*, which a land put onto the
+                    # battlefield by an effect also makes and this one does
+                    # not, and is announced with every entry
+                    # (``ZoneFunnelsMixin._announce_entry``).
                     #
                     # ``event_subject_player`` beside ``seat``: the first is the
                     # one key every reader of a printed "**that player**" asks for
@@ -1472,12 +1481,33 @@ class StackResolutionMixin:
                     )
                     # "When **you play a card**" (Juju Bubble). CR 701.18b's other
                     # half: a land is played rather than cast, so the cast
-                    # announcement never reaches it. Beside `_process_land_enters`
-                    # rather than beside the `lands_played_this_turn` bump above,
+                    # announcement never reaches it. Beside the play's own
+                    # announcement rather than beside the `lands_played_this_turn` bump below,
                     # because that bump is inside the cost-enforcement branch and
                     # a land played in a game with costs off is still a land
                     # played.
                     emit(self, "you_play_card", subject=card, caster_index=caster_index)
+            if primary_type == "land" and self.enforce_mana_costs:
+                # **The land drop is spent by the play, whatever its entry
+                # does** (CR 305.2a counts "the number of lands they have
+                # already played this turn"; CR 116.2a: playing a land is a
+                # special action a player takes once). So it is counted here,
+                # as the action is taken, and not by ``arrived`` — which runs
+                # only for an entry that happened: a Lake of the Dead whose
+                # Swamp nobody could sacrifice goes to its owner's graveyard
+                # instead of entering (CR 614.6), and the play that sent it
+                # there was still the turn's land play. Counted it was not, and
+                # a Forest could follow it.
+                #
+                # What watches the *play* — "whenever a player plays a land"
+                # (Horn of Greed), Fastbond's "if it wasn't the first land" —
+                # stays with the entry in ``arrived``: CR 603.2g, "an event
+                # that's prevented or replaced won't trigger anything", and a
+                # land play is the land being put onto the battlefield (CR
+                # 701.18a). Fastbond's next one reads this count.
+                self.lands_played_this_turn[caster_index] = (
+                    self.lands_played_this_turn.get(caster_index, 0) + 1
+                )
             self._put_permanent_onto_battlefield(
                 caster_index, permanent, target_player_index,
                 was_cast=True, from_zone=cast_from_zone,

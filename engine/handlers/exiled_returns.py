@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 from ..aura_attachment import attach_aura, is_aura_card, returning_aura_hosts
 from ..exiled_records import (EXILED_THIS_WAY_RECORDS, record_exiled_card,
                               still_exiled)
+from ..entry_awaiting import entry_happened
 from ..models import Permanent
 from ..permanent_cards import stays_out_of_battlefield
 from ..oracle_types import EXILED_CARDS_WITH_OWNERS
@@ -246,13 +247,6 @@ def _return_record_to_battlefield(
                 f"{owner.name}'s exile"
             )
             return
-    # Logged as it happens, ahead of the departure: the seam may end the
-    # delayed ability as this last card leaves, and that line follows this one.
-    game.log.append(
-        f"{game.players[seat].name} returned {card.name} to the battlefield"
-        + (f" enchanting {host.card.name}" if host is not None else "")
-        + f" ({card_name})"
-    )
     game.take_card_from_exile(owner, card, record=record)
     arrival = Permanent(card=card)
     if seat != record.owner_index:
@@ -263,6 +257,18 @@ def _return_record_to_battlefield(
     # Attached once it is there — the entry's ``then``, at the answer when an
     # "as it enters" choice keeps it on its way (CR 614.12a).
     def arrived() -> None:
+        # Said once it is there, and only if it got there
+        # (``entry_awaiting.entry_happened``): a returning creature nobody cast
+        # is exiled again under Containment Priest, which says so itself. (The
+        # seam's "its delayed ability ends", for the last card leaving, is
+        # written as the card leaves, ahead of this.)
+        if not entry_happened(arrival):
+            return
+        game.log.append(
+            f"{game.players[seat].name} returned {card.name} to the battlefield"
+            + (f" enchanting {host.card.name}" if host is not None else "")
+            + f" ({card_name})"
+        )
         if host is not None:
             attach_aura(arrival, host)
         game._recompute_continuous_effects()

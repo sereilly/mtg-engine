@@ -22,6 +22,7 @@ import dataclasses
 import random
 from typing import TYPE_CHECKING
 
+from ..entry_awaiting import entry_happened
 from ..models import Permanent
 from ..resumption import ask_in_turn_order, run_resumable
 from ..oracle_types import (HAND_CARDS_TO_LIBRARY, REVEALED_HAND_CARDS,
@@ -78,6 +79,12 @@ def put_cards_from_hand_onto_battlefield(game: Game, instruction: OracleInstruct
         else eligible_cards[:count]
     )
     caster_index = game.players.index(caster)
+    # A land a "can't" stops (Worms of the Earth, CR 614.17) is named and
+    # stays in the hand — asked before the take, like 400.4a above.
+    chosen = [
+        card for card in chosen
+        if not stays_out_of_battlefield(game, card, caster, "hand", seat=caster_index)
+    ]
     # Together out of the hand, then each onto the battlefield: the cards enter
     # at the same time, so none is still in the hand while another's entry
     # replacement reads it (``_put_entrants``' reason, CR 702.38a's amplify).
@@ -85,8 +92,16 @@ def put_cards_from_hand_onto_battlefield(game: Game, instruction: OracleInstruct
     # One event (CR 603.6a): every newcomer sees every other enter.
     with game.entering_together():
         for card in chosen:
-            game._put_permanent_onto_battlefield(caster_index, Permanent(card=card), None)
-            game.log.append(f"{caster.name} put {card.name} onto the battlefield")
+            permanent = Permanent(card=card)
+
+            # Said once the event has put it there, and only if it did
+            # (``entry_happened``): a replacement that took the entry away
+            # wrote its own line.
+            def arrived(permanent=permanent, card=card) -> None:
+                if entry_happened(permanent):
+                    game.log.append(f"{caster.name} put {card.name} onto the battlefield")
+
+            game._put_permanent_onto_battlefield(caster_index, permanent, None, then=arrived)
     if not chosen:
         game.log.append(f"{caster.name} put no cards onto the battlefield")
     return True, "resolved"
@@ -731,6 +746,11 @@ def _put_entrants(game, context, entrants, hosts) -> None:
             # Once it is there — at the answer, when an "as it enters" choice
             # keeps it on its way (CR 614.12a, the entry's ``then``).
             def arrived(permanent=permanent, host=host, owner=owner, card=card) -> None:
+                # A replacement that took the entry away wrote its own line, and
+                # nothing of this is owed for an entry that never happened
+                # (``entry_awaiting.entry_happened``).
+                if not entry_happened(permanent):
+                    return
                 if host is not None:
                     attach_aura(permanent, host)
                     game.log.append(

@@ -530,6 +530,21 @@ class SpellCastingMixin:
             if refusal is not None:
                 details = refusal
                 return refuse(card.name, classification.effect_kind, details)
+        if card.primary_type == "land":
+            # A land a "can't" stops (Worms of the Earth's "Lands can't enter
+            # the battlefield", CR 614.17) is not played and stays in the hand
+            # — the question every road asks before it takes the card
+            # (``permanent_cards``). Worms' other line refuses the play above
+            # wherever costs are enforced; this is the answer where they are
+            # not, which took the land out of the hand into no zone.
+            from ...permanent_cards import cant_enter_sources
+
+            stopping = cant_enter_sources(self, card, caster_index)
+            if stopping:
+                return refuse(
+                    card.name, classification.effect_kind,
+                    f"{card.name} can't enter the battlefield ({', '.join(stopping)})",
+                )
 
         # **CR 601.3: no rule or effect prohibits this player from casting
         # it** (and CR 305.1's twin for a land being played). One predicate,

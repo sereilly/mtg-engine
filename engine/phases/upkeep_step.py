@@ -28,6 +28,8 @@ from ..copies import RECOPY_EACH_UPKEEP, grants_ability
 from ..land_types import MIRE_COUNTER, end_land_type_change
 from ..type_changes import end_type_changes
 from ..models import Permanent
+from ..entry_awaiting import entry_happened
+from ..permanent_cards import stays_out_of_battlefield
 from ..cast_permissions import expire_at_upkeep as expire_upkeep_permissions
 from ..phasing_locks import expire_phase_out_locks
 from ..pt import BASE_PT_UPKEEP_START_REVERT_KEY, clear_base_pt
@@ -1655,8 +1657,12 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         accepted_returns = [
             (grave_index, card)
             for grave_index, ordinal, card in self._graveyard_return_candidates(player_index)
-            if optional_choices is None
-            or bool(upkeep_subject_answer(optional_choices, card.name, ordinal))
+            if (
+                optional_choices is None
+                or bool(upkeep_subject_answer(optional_choices, card.name, ordinal))
+            )
+            # CR 400.4a / 614.17, asked before the card leaves the graveyard.
+            and not stays_out_of_battlefield(self, card, owner, "graveyard")
         ]
         # Remove highest index first, so popping one does not renumber the slots
         # of the ones still to come — the same ordering rule the several-card
@@ -1668,10 +1674,15 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # Then onto the battlefield in printed graveyard order, so the log reads
         # bottom-up as it always has.
         for _grave_index, card in accepted_returns:
-            self._put_permanent_onto_battlefield(player_index, Permanent(card=card), None)
-            self.log.append(
-                f"{owner.name} returned {card.name} to the battlefield from the graveyard"
-            )
+            returning = Permanent(card=card)
+
+            def returned(returning=returning, card=card) -> None:
+                if entry_happened(returning):
+                    self.log.append(
+                        f"{owner.name} returned {card.name} to the battlefield from the graveyard"
+                    )
+
+            self._put_permanent_onto_battlefield(player_index, returning, None, then=returned)
 
         # Vesuvan Doppelganger's upkeep re-copy: apply an accepted choice to the
         # player-chosen creature. Declined (or target-less) prompts do nothing;

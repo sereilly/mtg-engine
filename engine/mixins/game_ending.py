@@ -944,8 +944,8 @@ class GameEndingMixin:
                     # walk that kept the indices valid is gone with them.
                     for removed in reversed(perms[1:]):
                         self.remove_from_battlefield(removed)
-                        self._permanent_to_graveyard(player, removed)
-                        self.log.append(f"{name} put into graveyard (704.5j: legend rule)")
+                        died = self._permanent_to_graveyard(player, removed)
+                        self.log.append(f"{name} {'put into graveyard' if died else 'left the battlefield'} (704.5j: legend rule)")
                     changed = True
 
         # 704.5k: world rule — keep only the most recently timestamped world permanent
@@ -962,8 +962,8 @@ class GameEndingMixin:
             for player, perm in world_perms[:-1]:
                 if self.controls(player, perm):
                     self.remove_from_battlefield(perm)
-                    self._permanent_to_graveyard(player, perm)
-                    self.log.append(f"{perm.card.name} put into graveyard (704.5k: world rule)")
+                    died = self._permanent_to_graveyard(player, perm)
+                    self.log.append(f"{perm.card.name} {'put into graveyard' if died else 'left the battlefield'} (704.5k: world rule)")
             changed = True
 
         # 704.5m: Aura/Role not attached to a legal object → graveyard
@@ -1026,9 +1026,9 @@ class GameEndingMixin:
                     continue
                 if not cannot_be_enchanted(host, by_aura=perm):
                     continue
-                self._permanent_to_graveyard(player, perm)
+                died = self._permanent_to_graveyard(player, perm)
                 self.log.append(
-                    f"{perm.card.name} put into graveyard (704.5m: "
+                    f"{perm.card.name} {'put into graveyard' if died else 'left the battlefield'} (704.5m: "
                     f"{host.card.name} can't be enchanted by other Auras)"
                 )
                 changed = True
@@ -1058,9 +1058,9 @@ class GameEndingMixin:
                 noun = unsatisfied_enchant_clause(self, perm)
                 if noun is None:
                     continue
-                self._permanent_to_graveyard(player, perm)
+                died = self._permanent_to_graveyard(player, perm)
                 self.log.append(
-                    f"{perm.card.name} put into graveyard (704.5m: enchanted "
+                    f"{perm.card.name} {'put into graveyard' if died else 'left the battlefield'} (704.5m: enchanted "
                     f"permanent no longer satisfies the enchant {noun} clause)"
                 )
                 changed = True
@@ -1081,8 +1081,8 @@ class GameEndingMixin:
                     and self._cant_be_enchanted(attached_to)
                     and "can't be enchanted by other auras" not in perm.effective_card.oracle_text.lower()
                 ):
-                    self._permanent_to_graveyard(player, perm)
-                    self.log.append(f"{perm.card.name} put into graveyard (enchanted land can't be enchanted by other Auras)")
+                    died = self._permanent_to_graveyard(player, perm)
+                    self.log.append(f"{perm.card.name} {'put into graveyard' if died else 'left the battlefield'} (enchanted land can't be enchanted by other Auras)")
                     changed = True
                     departing.append(perm)
             self.remove_all_from_battlefield(departing)
@@ -1138,9 +1138,9 @@ class GameEndingMixin:
             for owner, perm in verdicts:
                 if owner is not player:
                     continue
-                self._permanent_to_graveyard(player, perm)
+                died = self._permanent_to_graveyard(player, perm)
                 self.log.append(
-                    f"{perm.card.name} put into graveyard (702.16c: enchanted permanent has protection)"
+                    f"{perm.card.name} {'put into graveyard' if died else 'left the battlefield'} (702.16c: enchanted permanent has protection)"
                 )
                 changed = True
                 departing.append(perm)
@@ -1254,8 +1254,8 @@ class GameEndingMixin:
                 for role_perm in roles[:-1]:
                     if self.controls(ctrl_player, role_perm):
                         self.remove_from_battlefield(role_perm)
-                        self._permanent_to_graveyard(ctrl_player, role_perm)
-                        self.log.append(f"{role_perm.card.name} put into graveyard (704.5z: role rule)")
+                        died = self._permanent_to_graveyard(ctrl_player, role_perm)
+                        self.log.append(f"{role_perm.card.name} {'put into graveyard' if died else 'left the battlefield'} (704.5z: role rule)")
                 changed = True
 
         return changed
