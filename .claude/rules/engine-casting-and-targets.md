@@ -36,7 +36,14 @@ and you can open this file directly whenever its subject is yours.
 ## Casting and activating
 
 - `engine/cast_costs.py` — additional costs (CR 601.2b, f–h), including buyback
-  and kicker as rewrites onto them. Whether a cost was paid rides
+  and kicker as rewrites onto them, and entwine (`engine/entwine.py`, the same
+  reader, mana and non-mana; a paid entwine is the choose-one-or-more cast
+  naming every mode, and a mode's graveyard target rides
+  `ChosenMode.target_graveyard_card`). An activated ability printing two costs
+  ("{3}, {T} or {U}, {T}", the Mirrodin Shards) is one ability whose activator
+  announces which (`alternative_cost_index`,
+  `engine/activation_cost_alternatives.py`); every tax and reduction then
+  applies to the one chosen. Whether a cost was paid rides
   `choices["additional_costs_paid"]`. "Kicked" has three readers at three times:
   a resolving spell (`was_kicked`), the permanent afterwards (`cast_costs.KICKED`
   / `KICKED_WITH`, since a card may print two kickers, CR 702.33b/f), and a cast

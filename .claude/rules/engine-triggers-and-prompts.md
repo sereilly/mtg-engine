@@ -32,7 +32,9 @@ and you can open this file directly whenever its subject is yours.
 - **A permanent's entry trigger is a stack object** (CR 603.3), on every road
   onto the battlefield. **A test that casts a permanent and asserts its entry
   effect must drain the stack first** (`tests.helpers.resolve_stack`). The
-  target is named as the permanent is cast (`announced_at_cast`) but is the
+  target is named as the permanent is cast (`announced_at_cast`) — except a
+  division, which the trigger makes once as it goes on the stack (Wurmskin
+  Forger, CR 603.3d) — but is the
   trigger's, never the spell's (a creature spell targets nothing, CR 115.1;
   `stack_targets.permanent_spell_targets_nothing`), and is held to what the
   trigger itself could choose (CR 603.3d,
@@ -53,8 +55,9 @@ and you can open this file directly whenever its subject is yours.
 - `engine/trigger_order.py` — a controller orders the triggers they put on the
   stack together (CR 603.3b). A re-entrant window
   (`Game.putting_triggers_on_stack`) wraps each unit of play; when the outermost
-  closes, each interactive seat with two or more distinguishable triggers is
-  asked (`order_triggers`). A seat nobody asks keeps the fire sites' order.
+  closes, each seat a person decides for (`Game.asks_a_person`: a person's
+  own seat, or a seat a person controls this turn, CR 723) with two or more
+  distinguishable triggers is asked (`order_triggers`). A seat nobody asks keeps the fire sites' order.
   **A trigger chooses its mode and targets as that window closes** (CR
   603.3d, 117.5): one pushed while a window is open and still owing a choice
   waits on `Game.unannounced_triggers` and is announced, oldest first, after

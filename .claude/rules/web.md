@@ -57,8 +57,11 @@ reading the registry, so a new prompt is covered by construction. **The client
 keeps no copy of that registry**: the payload carries `waiting_on_prompt`, which
 the auto-pass reads. AI-owned prompts are answered before **and after** an
 action's handler (a human's answer can arm one), and **an AI step never advances
-a human's turn** (`_advance_ai_turn` returns unless the active seat is an AI,
-nor in a step a person holds priority in).
+a human's turn** (`_advance_ai_turn` returns unless the active seat's
+*decider* is an AI — `web/seats._seat_type` answers who decides for a seat,
+`_sitter_type` who sits there, which differ for a turn Mindslaver controls
+(CR 723; the wire's `act_as`, `controller_seat`, `player_controls`) — nor in a
+step a person holds priority in).
 
 **What a card can do right now is sent, not re-derived by the client**: `ways`
 (each way a card may be cast from a permission-opened zone, its price, whether
@@ -73,7 +76,11 @@ decides; null for an ability that adds no mana), `ability_text_change` and a
 cast's `text_change` (the words a text change announces), `x_payable` /
 `ability_x_payable` (`{pool, board, colors}`: the payable X as the cast or
 activation path prices it), `cast_mana`, a card's `cost_before_modifiers`
-beside its charged price, `prompt_owed_by`
+beside its charged price, `ability_prices` (an ability's charged price where
+a modifier moved it, by ability index) and `ability_cost_alternatives` (a
+Shard's two printed costs; the activate action sends `alternative_cost_index`),
+a modal spec's `entwine` / `entwine_cost_spec`, `combat.blocker_ceilings`, a
+cast's `decline_copy` (a copy-as-it-enters "may" declined), `prompt_owed_by`
 (which seat owes the decision holding the game — the pending-choice queue's,
 else a session-held one, `state_view._SESSION_DECISIONS`),
 `abilities_lost`, `taps_for_mana`, `produced_mana`, a payment prompt's `payable`

@@ -362,7 +362,7 @@ def test_w1g8_crystal_shard_bounces_unless_the_creatures_controller_pays(set_poo
 
 
 def test_w1g8_skeleton_shard_returns_only_an_artifact_creature_card(set_pool):
-    """"target **artifact creature** card": both types (CR 205.2a). Read as a
+    """"target **artifact creature** card": both types (CR 205.2b). Read as a
     union the picker offered a Grizzly Bears and a Sol Ring and the default
     returned the Bears."""
     mrd, lea = set_pool("MRD"), set_pool("LEA")

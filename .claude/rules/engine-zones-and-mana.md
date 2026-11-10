@@ -58,8 +58,14 @@ and you can open this file directly whenever its subject is yours.
   holds that object (CR 400.7) — and the caller writes that down, so no exile
   holds one object twice and every record about an exiled card names one card.
   The Debug Menu's raw-state paste goes through it too
-  (`tests/engine/test_exile_arrival_seam.py`). A graveyard has no such seam
-  yet (ROADMAP).
+  (`tests/engine/test_exile_arrival_seam.py`). **So is arriving in a
+  graveyard** (Mirrodin W2G7): `put_card_into_graveyard` returns the object
+  the pile holds — a new, equal one on a collision
+  (`graveyard_order.distinct_graveyard_object`) — "put there from the
+  battlefield this turn" is an identity record retired at the object's next
+  arrival, and a permanent that died records the object it became
+  (`graveyard_order.CARD_IN_GRAVEYARD`), which an ability resolving after its
+  source left reads as "this card" (`graveyard_order.graveyard_object_of`).
 - **An entry that asks waits** (CR 614.12a): `_enter_battlefield` performs the
   entry state with the permanent in no zone (`engine/entry_awaiting.py`;
   `controller_index_of` answers its seat), and at a table that holds for
